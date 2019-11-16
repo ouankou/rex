@@ -1,5 +1,4 @@
 #include <rose_config.h>
-#include <rosePublicConfig.h>
 #include <StringUtility.h>
 #include <string.h>
 #include <iostream>
@@ -600,8 +599,6 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
           argument == "-MT" || argument == "-MQ" ||
           argument == "-outputdir" ||  // FMZ (12/22/1009) added for caf compiler
 
-       // DQ (9/19/2010): UPC support for upc_threads to define the "THREADS" variable.
-          argument == "-rose:upc_threads" ||
 
        // DQ (9/26/2011): Added support for detection of dangling pointers within translators built using ROSE.
           argument == "-rose:detect_dangling_pointers" ||   // Used to specify level of debugging support for optional detection of dangling pointers 
