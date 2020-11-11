@@ -36,6 +36,9 @@ CXXFLAGS += $(ROSE_OPTIMIZATION_LEVEL) $(ROSE_VERBOSE)
 omp_exprparser_lexer.lo: omp_exprparser_parser.hh omp_exprparser_lexer.cc
 omp_exprparser_parser.hh: omp_exprparser_parser.cc
 
+expression_lexer.lo: expression_parser.hh expression_lexer.cc
+expression_parser.hh: expression_parser.cc
+
 # Force sage.docs to be make by default
 # (if sage.docs.in is modified)
 all-local: roseh sage.docs 
