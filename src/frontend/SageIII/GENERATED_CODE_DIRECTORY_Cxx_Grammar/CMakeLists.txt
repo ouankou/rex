@@ -251,7 +251,7 @@ if(enable-smaller-generated-files)
     SgUpirNumUnitsField.C
     SgOmpOrderedClause.C
     SgOmpOrderedStatement.C
-    SgOmpParallelStatement.C
+    SgUpirSpmdStatement.C
     SgOmpPrivateClause.C
     SgOmpReductionClause.C
     SgOmpScheduleClause.C

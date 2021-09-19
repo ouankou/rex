@@ -318,7 +318,7 @@ namespace sg
     GEN_VISIT(SgFormatStatement)
     GEN_VISIT(SgFortranDo)
     GEN_VISIT(SgOmpMetadirectiveStatement)
-    GEN_VISIT(SgOmpParallelStatement)
+    GEN_VISIT(SgUpirSpmdStatement)
     GEN_VISIT(SgOmpTeamsStatement)
     GEN_VISIT(SgOmpCancellationPointStatement)
     GEN_VISIT(SgOmpDeclareMapperStatement)
