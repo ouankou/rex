@@ -248,7 +248,7 @@ if(enable-smaller-generated-files)
     SgOmpLastprivateClause.C
     SgOmpMasterStatement.C
     SgOmpNowaitClause.C
-    SgOmpNumThreadsClause.C
+    SgUpirNumUnitsField.C
     SgOmpOrderedClause.C
     SgOmpOrderedStatement.C
     SgOmpParallelStatement.C
