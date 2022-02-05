@@ -14,6 +14,8 @@ static void buildVariableList(SgOmpVariablesClause *);
 
 extern bool copyStartFileInfo(SgNode *, SgNode *);
 extern bool copyEndFileInfo(SgNode *, SgNode *);
+extern void replaceOmpPragmaWithOmpStatement(SgPragmaDeclaration *,
+                                             SgStatement *);
 extern SgExpression *checkOmpExpressionClause(SgExpression *, SgGlobal *,
                                               OmpSupport::omp_construct_enum);
 
@@ -58,15 +60,9 @@ convertOpenACCDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   }
 
   SageInterface::setOneSourcePositionForTransformation(result);
-  SgPragmaDeclaration* pdecl = current_OpenACCIR_to_SageIII.first;
-  copyStartFileInfo (pdecl, result);
-  copyEndFileInfo (pdecl, result);
-
-  //! For C/C++ replace OpenMP pragma declaration with an SgOmpxxStatement
-  SgScopeStatement* scope = pdecl ->get_scope();
-  ROSE_ASSERT(scope !=NULL);
-  SageInterface::moveUpPreprocessingInfo(result, pdecl); // keep #ifdef etc attached to the pragma
-  SageInterface::replaceStatement(pdecl, result);
+  copyStartFileInfo(current_OpenACCIR_to_SageIII.first, result);
+  copyEndFileInfo(current_OpenACCIR_to_SageIII.first, result);
+  replaceOmpPragmaWithOmpStatement(current_OpenACCIR_to_SageIII.first, result);
 
   return result;
 }
@@ -99,7 +95,7 @@ convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   }
   default: {
     printf("Unknown directive is found.\n");
-    assert(0);
+    ROSE_ASSERT(false);
   }
   }
   body->set_parent(result);
@@ -215,22 +211,22 @@ convertOpenACCClause(SgStatement *directive,
     }
   }
 
-  SgOmpClause::upir_data_mapping_enum data_mapping_type =
-      SgOmpClause::e_upir_data_mapping_unspecified;
+  SgOmpClause::omp_map_operator_enum map_type =
+      SgOmpClause::e_omp_map_unknown;
 
   switch (clause_kind) {
   case ACCC_copy: {
-    data_mapping_type = SgOmpClause::e_upir_data_mapping_tofrom;
+    map_type = SgOmpClause::e_omp_map_tofrom;
     printf("copy Clause added!\n");
     break;
   }
   case ACCC_copyin: {
-    data_mapping_type = SgOmpClause::e_upir_data_mapping_to;
+    map_type = SgOmpClause::e_omp_map_to;
     printf("copyin Clause added!\n");
     break;
   }
   case ACCC_copyout: {
-    data_mapping_type = SgOmpClause::e_upir_data_mapping_from;
+    map_type = SgOmpClause::e_omp_map_from;
     printf("copyout Clause added!\n");
     break;
   }
@@ -239,69 +235,20 @@ convertOpenACCClause(SgStatement *directive,
     ROSE_ASSERT(0);
   }
   }
+  ROSE_ASSERT(map_type != SgOmpClause::e_omp_map_unknown);
 
-  std::vector<SgVariableSymbol *> variables;
+  SgExprListExp *explist = SageBuilder::buildExprListExp();
+  SgOmpMapClause *map_clause = new SgOmpMapClause(explist, map_type);
+  ROSE_ASSERT(map_clause != NULL);
+  buildVariableList(map_clause);
+  map_clause->set_array_dimensions(array_dimensions);
+  explist->set_parent(map_clause);
 
-  for (std::vector<std::pair<std::string, SgNode *>>::iterator iter =
-           acc_variable_list->begin();
-       iter != acc_variable_list->end(); iter++) {
-    SgInitializedName *symbol = isSgInitializedName((*iter).second);
-    ROSE_ASSERT(symbol != NULL);
-    SgVariableSymbol *variable_symbol =
-        isSgVariableSymbol(symbol->get_symbol_from_symbol_table());
-    variables.push_back(variable_symbol);
-  }
+  SageInterface::setOneSourcePositionForTransformation(map_clause);
+  target->get_clauses().push_back(map_clause);
+  map_clause->set_parent(target);
 
-  Rose_STL_Container<SgOmpClause *> data_fields =
-      OmpSupport::getClause(target, V_SgUpirDataField);
-
-  SgUpirDataField *upir_data = NULL;
-  if (data_fields.size() == 0) {
-    upir_data = new SgUpirDataField();
-    std::list<SgUpirDataItemField *> data_items = upir_data->get_data();
-    SageInterface::setOneSourcePositionForTransformation(upir_data);
-    target->get_clauses().push_back(upir_data);
-    upir_data->set_parent(target);
-  } else {
-    ROSE_ASSERT(data_fields.size() == 1);
-    upir_data = isSgUpirDataField(data_fields[0]);
-    /*
-    if (isInUpirDataList(upir_data, data_item->get_symbol())) {
-      ROSE_ASSERT(0);
-      return upir_data;
-    }
-    */
-  };
-  std::list<SgUpirDataItemField *> data_items = upir_data->get_data();
-
-  for (size_t i = 0; i < variables.size(); i++) {
-    SgVariableSymbol *variable_symbol = isSgVariableSymbol(variables[i]);
-    assert(variable_symbol != NULL);
-    SgUpirDataItemField *upir_data_item =
-        new SgUpirDataItemField(variable_symbol);
-    std::list<std::list<SgExpression *>> upir_section =
-        upir_data_item->get_section();
-    std::vector<std::pair<SgExpression *, SgExpression *>> sections =
-        array_dimensions[variable_symbol];
-    for (size_t j = 0; j < sections.size(); j++) {
-      SgExpression *lower_bound = sections[j].first;
-      SgExpression *length = sections[j].second;
-      // ROSE/REX doesn't support stride yet, it is always set to 1 for now.
-      SgExpression *stride = SageBuilder::buildIntVal(1);
-      std::list<SgExpression *> section = {lower_bound, length, stride};
-      upir_section.push_back(section);
-    }
-    upir_data_item->set_section(upir_section);
-    upir_data_item->set_mapping_property(data_mapping_type);
-    upir_data_item->set_sharing_property(
-        SgOmpClause::e_upir_data_sharing_shared);
-    data_items.push_back(upir_data_item);
-    SageInterface::setOneSourcePositionForTransformation(upir_data_item);
-    upir_data_item->set_parent(upir_data);
-  }
-  upir_data->set_data(data_items);
-
-  result = upir_data;
+  result = map_clause;
   acc_variable_list->clear();
   array_dimensions.clear();
   return result;
