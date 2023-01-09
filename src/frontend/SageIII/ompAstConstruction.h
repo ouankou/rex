@@ -49,8 +49,8 @@ extern void parseOpenMPFortran(SgSourceFile *);
 extern bool isFortranPairedDirective(OpenMPDirective *node);
 inline std::map<SgPragmaDeclaration *, OpenMPDirective *>
     fortran_paired_pragma_dict;
-inline std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *,
-                              OpenMPDirective *>>
+inline std::vector<
+    std::tuple<SgLocatedNode *, PreprocessingInfo *, OpenMPDirective *>>
     fortran_omp_pragma_list;
 
 inline OpenMPDirective *ompparser_OpenMPIR = NULL;
