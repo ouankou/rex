@@ -75,6 +75,6 @@ target_sources(roseUtil INTERFACE
 
 ########### install files ###############
 install(FILES
-  processSupport.h rose_paths.h mlog.h FileSystem.h Unique.h
+  processSupport.h rose_paths.h logging.h mlog.h FileSystem.h Unique.h
   timing.h rose_getline.h rose_strtoull.h rose_isnan.h
   DESTINATION ${INCLUDE_INSTALL_DIR})
