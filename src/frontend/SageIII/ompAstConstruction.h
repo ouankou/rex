@@ -28,6 +28,10 @@ extern OpenMPDirective *parseOpenMP(const char *,
                                     void *_exprParse(const char *));
 extern OpenACCDirective *parseOpenACC(std::string);
 
+// the vector of pairs of OpenACC pragma and accparser IR.
+inline std::vector<std::pair<SgPragmaDeclaration *, OpenACCDirective *>>
+    OpenACCIR_list;
+inline OpenACCDirective *accparser_OpenACCIR = NULL;
 extern bool checkOpenACCIR(OpenACCDirective *);
 extern SgStatement *convertOpenACCDirective(
     std::pair<SgPragmaDeclaration *, OpenACCDirective *>);
@@ -43,7 +47,15 @@ extern void omp_exprparser_parser_init(SgNode *aNode, const char *str);
 // Fortran OpenMP parser interface
 extern void parseOpenMPFortran(SgSourceFile *);
 extern bool isFortranPairedDirective(OpenMPDirective *node);
+inline std::map<SgPragmaDeclaration *, OpenMPDirective *>
+    fortran_paired_pragma_dict;
+inline std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *,
+                              OpenMPDirective *>>
+    fortran_omp_pragma_list;
 
+inline OpenMPDirective *ompparser_OpenMPIR = NULL;
+inline bool use_ompparser = false;
+inline bool use_accparser = false;
 bool checkOpenMPIR(OpenMPDirective *);
 SgStatement *
 getOpenMPBlockBody(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
