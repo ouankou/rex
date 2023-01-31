@@ -63,7 +63,6 @@ CXX_TEMPLATE_REPOSITORY_PATH = .
 # EXTRA_DIST = preproc.lex preproc.C sageClasses.docs sage.docs.in docs
 # EXTRA_DIST = preproc.lex preproc.C astGraphTemplate.C docs
 # EXTRA_DIST = preproc.ll docs rtiHelpers.h attributeListMap.h
-#
 EXTRA_DIST = CMakeLists.txt preproc-c.ll docs rtiHelpers.h attributeListMap.h \
              advanced_preprocessing_hooks.h rose_attributes_list.h \
              sage3basic.hhh fileoffsetbits.h rosedll.h PolicyControl.txt Utf8.h  \
@@ -131,7 +130,8 @@ libsage3_la_SOURCES = $(libsage3Sources) preproc-c.ll omp_exprparser_lexer.ll om
 # nodist_libsage3_la_SOURCES = $(ROSETTA_GENERATED_SOURCE) $(top_builddir)/rose_config.h
 nodist_libsage3_la_SOURCES = $(ROSETTA_GENERATED_SOURCE) license_string.h
 
-libsage3_la_LIBADD_not_used= \
+if ROSE_USE_BOOST_WAVE
+libsage3_la_LIBADD= \
   astFixup/libastFixup.la \
   accparser/libaccparser.la \
   ompparser/libompparser.la \
