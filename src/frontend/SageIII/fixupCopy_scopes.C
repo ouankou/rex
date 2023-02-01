@@ -956,7 +956,6 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
        // DQ (3/2/2009): Make sure this is not the non-defining declaration since the defining declaration will not have been copied yet and so of course the files will not match.
        // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(copyDeclarationStatement->get_firstNondefiningDeclaration()) == SageInterface::getEnclosingSourceFile(copyDeclarationStatement));
        // if (copyDeclarationStatement->get_definingDeclaration() != NULL)
-
           // Also skip for orphaned declarations.
           if (!isOrphanedCopy &&
               copyDeclarationStatement->get_definingDeclaration() != NULL &&
