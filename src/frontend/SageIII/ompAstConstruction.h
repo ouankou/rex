@@ -18,10 +18,6 @@ public:
 
 void processOpenMP(SgSourceFile *sageFilePtr);
 
-// Special handling to wrap statements in between "target begin" and "target
-// end" OmpAttribute into a block. "target end" attribute will later be skipped
-// when creating dedicate OMP statement.
-void postParsingProcessing(SgSourceFile *sageFilePtr);
 } // namespace OmpSupport
 
 extern std::vector<std::pair<std::string, SgNode *>> omp_variable_list;
