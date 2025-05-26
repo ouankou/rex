@@ -392,8 +392,6 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
 
 #ifdef ROSE_BUILD_CPP_LANGUAGE_SUPPORT
   // reproduce the lost OpenMP pragma attached to a outlining target loop 
-  // The assumption is that OmpAttribute is attached to both the pragma and the affected loop
-  // in the frontend already.
   // Liao, 3/12/2009
   Rose_STL_Container <SgNode*>  loops = NodeQuery::querySubTree(func,V_SgForStatement);
 
@@ -405,7 +403,6 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
   {
     Rose_STL_Container <SgNode*>::iterator liter =loops.begin();
     SgForStatement* firstloop = isSgForStatement(*liter);
-//    OmpSupport::generatePragmaFromOmpAttribute(firstloop);
   }
 #endif
 
