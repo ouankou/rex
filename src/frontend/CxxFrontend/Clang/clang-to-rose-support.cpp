@@ -551,7 +551,6 @@ SgInitializedName::asm_register_name_enum ClangToSageTranslator::get_sgAsmRegist
    return result;
 }
 
-// Pei-Hung (05/27/2022) referece APIs from edgRose.C
 std::string ClangToSageTranslator::generate_source_position_string(clang::SourceLocation srcLoc)
 {
   clang::SourceManager& SM = p_compiler_instance->getSourceManager();

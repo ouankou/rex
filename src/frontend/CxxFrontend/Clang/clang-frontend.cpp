@@ -235,6 +235,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
 
+    // Create file manager first (needed for VFS)
+    compiler_instance->createFileManager();
+
     llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
     clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
     compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem(), diag_printer, true);
@@ -281,7 +284,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 #endif
     compiler_instance->setTarget(target_info);
 
-    compiler_instance->createFileManager();
     compiler_instance->createSourceManager(compiler_instance->getFileManager());
 
     // In LLVM 20, getFileRef returns Expected<FileEntryRef> instead of ErrorOr
@@ -300,8 +302,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (!compiler_instance->hasASTContext()) compiler_instance->createASTContext();
 
-    ClangToSageTranslator translator(compiler_instance, language);
-    compiler_instance->setASTConsumer(std::move(std::unique_ptr<clang::ASTConsumer>(&translator)));
+    auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language);
+    ClangToSageTranslator* translator = translator_ptr.get();
+    compiler_instance->setASTConsumer(std::move(translator_ptr));
 
     if (!compiler_instance->hasSema()) compiler_instance->createSema(clang::TU_Complete, NULL);
 
@@ -318,14 +321,14 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 //  printf ("Calling clang::ParseAST()\n");
 
     compiler_instance->getDiagnosticClient().BeginSourceFile(compiler_instance->getLangOpts(), &(compiler_instance->getPreprocessor()));
-    clang::ParseAST(compiler_instance->getPreprocessor(), &translator, compiler_instance->getASTContext());
+    clang::ParseAST(compiler_instance->getPreprocessor(), translator, compiler_instance->getASTContext());
     compiler_instance->getDiagnosticClient().EndSourceFile();
 
     // In LLVM 20, get error count from diagnostics directly
     unsigned numErrors = compiler_instance->getDiagnostics().getNumErrors();
 //  printf ("Clang found %d errors\n", numErrors);
 
-    SgGlobal * global_scope = translator.getGlobalScope();
+    SgGlobal * global_scope = translator->getGlobalScope();
 
   // 4 - Attach to the file
 
@@ -346,7 +349,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
   // 5 - Finish the AST (fixup phase)
 
-    finishSageAST(translator);
+    finishSageAST(*translator);
 
     return numErrors;
 }
@@ -648,6 +651,7 @@ NextPreprocessorToInsert * NextPreprocessorToInsert::next() {
     res->cursor = next.first;
     res->next_to_insert = next.second;
     res->candidat = candidat;
+    return res;
 }
 
 // class
@@ -665,7 +669,7 @@ NextPreprocessorToInsert * PreprocessorInserter::evaluateInheritedAttribute(SgNo
         return inheritedValue->next();
     }
 
-    
+    return inheritedValue;
 }
 
 // class SagePreprocessorRecord

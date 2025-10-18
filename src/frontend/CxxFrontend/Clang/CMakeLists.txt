@@ -1,5 +1,5 @@
 # CMakeLists.txt for Clang Frontend
-# This is the experimental Clang-based frontend for C/C++ analysis as an alternative to EDG
+# Clang/LLVM-based frontend for C language analysis (experimental)
 
 if(enable-clang-frontend)
   message(STATUS "Configuring Clang frontend...")

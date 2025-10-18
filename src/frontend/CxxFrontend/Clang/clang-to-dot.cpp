@@ -53,9 +53,9 @@ std::set<void*> graphNodeSet;
 
 
 // int clang_to_dot_main(int argc, char ** argv, SgSourceFile& sageFile) 
-int clang_to_dot_main(int argc, char ** argv) 
+int clang_to_dot_main(int argc, char ** argv)
    {
-  // DQ (9/6/2013): Build a dot graph of the EDG AST.
+  // Build a dot graph of the Clang AST.
 
   // Build filename...
      string filename = "clangGraph";
@@ -63,7 +63,7 @@ int clang_to_dot_main(int argc, char ** argv)
      string dot_header = filename;
      filename += ".dot";
 
-#if DEBUG_EDG_DOT_GRAPH_SUPPPORT
+#if DEBUG_CLANG_DOT_GRAPH_SUPPPORT
      printf ("In clang_to_dot_main(): filename = %s \n",filename.c_str());
 #endif
 
@@ -249,6 +249,9 @@ int clang_to_dot_main(int argc, char ** argv)
 
     clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
 
+    // Create file manager first (needed for VFS)
+    compiler_instance->createFileManager();
+
     llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
     clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
     compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem(), diag_printer, true);
@@ -295,7 +298,6 @@ int clang_to_dot_main(int argc, char ** argv)
 #endif
     compiler_instance->setTarget(target_info);
 
-    compiler_instance->createFileManager();
     compiler_instance->createSourceManager(compiler_instance->getFileManager());
 
     // In LLVM 20, getFileRef returns Expected<FileEntryRef> instead of ErrorOr
