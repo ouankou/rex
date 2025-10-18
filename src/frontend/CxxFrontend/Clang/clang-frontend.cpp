@@ -348,7 +348,13 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     global_scope->set_endOfConstruct(end_fi);
 
-  // 5 - Finish the AST (fixup phase)
+  // 6 - Initialize token subsequence map for unparsing
+  // The backend unparser expects this map to exist (even if empty) for token-based unparsing
+  // Note: Memory leak acceptable as this is cleaned up at program exit
+    std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+    sageFile.set_tokenSubsequenceMap(tokenMap);
+
+  // 7 - Finish the AST (fixup phase)
 
     finishSageAST(*translator);
 

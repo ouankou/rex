@@ -1,7 +1,9 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
 #include "clang-to-rose-support.hpp"
-#include <regex> 
+#include <regex>
+
+using llvm::isa;  // For LLVM type checking (isa<Type>)
 
 SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
     if (stmt == NULL)
