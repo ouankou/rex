@@ -2,16 +2,16 @@ include_directories(${Boost_INCLUDE_DIRS} ${ROSE_INCLUDES})
 
 add_executable(testTranslator testTranslator.C)
 add_dependencies(testTranslator roseUtil)
-target_link_libraries(testTranslator ROSE_DLL ${edg_lib} ${link_with_libraries})
+target_link_libraries(testTranslator ROSE_DLL ${link_with_libraries})
 
 add_executable(testGraphGeneration testGraphGeneration.C)
-target_link_libraries(testGraphGeneration ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testGraphGeneration ROSE_DLL ${link_with_libraries})
 
 add_executable(testTokenGeneration testTokenGeneration.C)
-target_link_libraries(testTokenGeneration ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testTokenGeneration ROSE_DLL ${link_with_libraries})
 
 add_executable(testAnalysis testAnalysis.C)
-target_link_libraries(testAnalysis ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testAnalysis ROSE_DLL ${link_with_libraries})
 
 option(with-ROSE_LONG_MAKE_CHECK_RULE "Specify longer internal testing" ON)
 

@@ -315,6 +315,12 @@ endif()
 # EDG (Edison Design Group) frontend C/C++ compiler
 ########################################################################################################################
 
+# Clang/LLVM frontend option (alternative to EDG)
+option(enable-clang-frontend "Enable Clang/LLVM frontend instead of EDG" OFF)
+if(enable-clang-frontend)
+  message(STATUS "Clang/LLVM frontend enabled - EDG will be skipped")
+endif()
+
 # Default EDG version
 set(EDG_VERSION "5.0" CACHE STRING "major.minor version number for EDG (e.g. 5.0).")
 string(SUBSTRING ${EDG_VERSION} 0 1 EDG_MAJOR_VERSION)
@@ -351,10 +357,10 @@ else()
 endif()
 
 # Check if we should download the EDG binary tarball. We only need to download it if we're not compiling the
-# EDG source code and ROSE is configured to analyze C (and C++).
+# EDG source code and ROSE is configured to analyze C (and C++) and NOT using Clang frontend.
 if(NOT have_EDG_source)
   set(BINARY_EDG 0)
-  if(enable-c)
+  if(enable-c AND NOT enable-clang-frontend)
     set(BINARY_EDG 1)
     if(NOT WIN32)
       message(STATUS "EDG - downloading EDG-${EDG_VERSION} binary tar file")

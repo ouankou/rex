@@ -1,5 +1,5 @@
 add_executable(roseTestMerge testMerge.C)
-target_link_libraries(roseTestMerge ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(roseTestMerge ROSE_DLL ${link_with_libraries})
 
 # This is a shortened list that tests more quickly.
 set(TESTCODES

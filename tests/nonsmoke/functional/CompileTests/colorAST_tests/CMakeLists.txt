@@ -1,5 +1,5 @@
 add_executable( testAstVisualization testAstVisualization.C )
-target_link_libraries(testAstVisualization ROSE_DLL EDG ${link_with_libraries} )
+target_link_libraries(testAstVisualization ROSE_DLL ${link_with_libraries} )
 install(TARGETS testAstVisualization DESTINATION bin)
 
 set(TESTCODES inputExample.C)

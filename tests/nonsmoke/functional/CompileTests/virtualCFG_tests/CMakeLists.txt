@@ -1,9 +1,9 @@
 add_executable(generateVirtualCFG generateVirtualCFG.C)
-target_link_libraries(generateVirtualCFG ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(generateVirtualCFG ROSE_DLL ${link_with_libraries})
 install(TARGETS generateVirtualCFG DESTINATION bin)
 
 add_executable(testVirtualCFG testVirtualCFG.C)
-target_link_libraries(testVirtualCFG ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testVirtualCFG ROSE_DLL ${link_with_libraries})
 
 # Some of these test codes reference A++ header fiels as part of their tests
 # Include the path to A++ and the transformation specification

@@ -12,7 +12,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(proFunSIG proFunSIG.C)
-  # target_link_libraries(proFunSIG ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(proFunSIG ROSE_DLL ${link_with_libraries})
   #
   # set(proFunSIG_SPECIMENS mf1.C mf3.C mf4.C mf5.C)
   # foreach(specimen ${proFunSIG_SPECIMENS})
@@ -24,7 +24,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(astProcessingTestInterproceduralCFG interproceduralCFG.C)
-  # target_link_libraries(astProcessingTestInterproceduralCFG ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(astProcessingTestInterproceduralCFG ROSE_DLL ${link_with_libraries})
   #
   # set(interproceduralCFG_SPECIMENS test11.C test12.C test13.C test14.C)
   # set(proFunSIG_SPECIMENS mf1.C mf3.C mf4.C mf5.C)
@@ -37,7 +37,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(f1 tfif1.C.maintest.C)
-  # target_link_libraries(f1 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(f1 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME f1_tf1.C
@@ -46,7 +46,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(f2 tfif2.C.maintest.C)
-  # target_link_libraries(f2 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(f2 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME f2_tf2.C
@@ -55,7 +55,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(f3 tfif3.C.maintest.C)
-  # target_link_libraries(f3 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(f3 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME f3_tf3.C
@@ -64,7 +64,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(f4 tfif4.C.maintest.C)
-  # target_link_libraries(f4 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(f4 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME f4_tf4.C
@@ -73,7 +73,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(ff1 tf1.C.maintest.C)
-  # target_link_libraries(ff1 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(ff1 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME ff1_tf1.C
@@ -82,7 +82,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(ff2 tf2.C.maintest.C)
-  # target_link_libraries(ff2 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(ff2 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME ff2_tf2.C
@@ -91,7 +91,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(ff3 tf3.C.maintest.C)
-  # target_link_libraries(ff3 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(ff3 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME ff3_tf3.C
@@ -100,7 +100,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   add_executable(astTraversalTest astTraversalTest.C)
-  target_link_libraries(astTraversalTest ROSE_DLL EDG ${link_with_libraries})
+  target_link_libraries(astTraversalTest ROSE_DLL ${link_with_libraries})
 
   add_test(
     NAME astTraversalTest_input1C
@@ -109,7 +109,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(strictGraphTest strictGraphTest.C)
-  # target_link_libraries(strictGraphTest ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(strictGraphTest ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME strictGraphTest
@@ -118,7 +118,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(strictGraphTest2 strictGraphTest2.C)
-  # target_link_libraries(strictGraphTest2 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(strictGraphTest2 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME strictGraphTest2
@@ -127,7 +127,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(strictGraphTest3 strictGraphTest3.C)
-  # target_link_libraries(strictGraphTest3 ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(strictGraphTest3 ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME strictGraphTest3
@@ -136,7 +136,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(smtlibParser smtlibParser.C)
-  # target_link_libraries(smtlibParser ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(smtlibParser ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME smtlibParser_test11.C
@@ -145,7 +145,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   # add_executable(sourcePTP sourcePTP.C)
-  # target_link_libraries(sourcePTP ROSE_DLL EDG ${link_with_libraries})
+  # target_link_libraries(sourcePTP ROSE_DLL ${link_with_libraries})
   #
   # add_test(
   #   NAME sourcePTP_test14.C
@@ -181,7 +181,7 @@ if (HAVE_SYS_TIME_H)
   if (enable-binary-analysis)
     #---------------------------------------------------------------------------
     add_executable(binaryPaths binaryPaths.C)
-    target_link_libraries(binaryPaths ROSE_DLL EDG ${link_with_libraries})
+    target_link_libraries(binaryPaths ROSE_DLL ${link_with_libraries})
 
     set(binaryPaths_SPECIMENS t1 t2 t3 t4)
     foreach(specimen ${binaryPaths_SPECIMENS})
@@ -193,7 +193,7 @@ if (HAVE_SYS_TIME_H)
 
     #---------------------------------------------------------------------------
     add_executable(bPTP bPTP.C)
-    target_link_libraries(bPTP ROSE_DLL EDG ${link_with_libraries})
+    target_link_libraries(bPTP ROSE_DLL ${link_with_libraries})
 
     set(bPTP_SPECIMENS t1 t2 t3 t4)
     foreach(specimen ${bPTP_SPECIMENS})
