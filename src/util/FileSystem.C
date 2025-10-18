@@ -146,11 +146,11 @@ copyFile(const Path &src, const Path &dst) {
     out <<in.rdbuf();
     if (in.fail()) {
         throw std::filesystem::filesystem_error("read failed", src,
-                                                  std::make_error_code(std::errc::io_error));
+                                                  std::error_code(errno, std::system_category()));
     }
     if (out.fail()) {
         throw std::filesystem::filesystem_error("write failed", dst,
-                                                  std::make_error_code(std::errc::io_error));
+                                                  std::error_code(errno, std::system_category()));
     }
 }
 

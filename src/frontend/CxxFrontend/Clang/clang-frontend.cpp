@@ -350,7 +350,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
   // 6 - Initialize token subsequence map for unparsing
   // The backend unparser expects this map to exist (even if empty) for token-based unparsing
-  // Note: Memory leak acceptable as this is cleaned up at program exit
+  // Note: Raw pointer allocation follows ROSE's standard memory management pattern (see tokenStreamMapping.C).
+  // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and persists
+  // for the program lifetime, consistent with ROSE's architecture for AST-related data structures.
     std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
     sageFile.set_tokenSubsequenceMap(tokenMap);
 
