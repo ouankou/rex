@@ -8,6 +8,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cassert>
+#include <cstdint>
 
 namespace Rose {
 namespace StringUtility {
