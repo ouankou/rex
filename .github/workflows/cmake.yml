@@ -43,7 +43,7 @@ jobs:
           clang-${{ matrix.llvm }} \
           curl \
           flex \
-          g++-13 \
+          g++ \
           gdb \
           ghostscript \
           git \

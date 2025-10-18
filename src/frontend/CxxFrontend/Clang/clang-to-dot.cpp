@@ -249,8 +249,9 @@ int clang_to_dot_main(int argc, char ** argv)
 
     clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
 
-    // In LLVM 20, createDiagnostics requires VFS parameter
-    compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem());
+    llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
+    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
+    compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem(), diag_printer, true);
 
     // In LLVM 20, invocation is accessed via getInvocation() not setInvocation()
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));

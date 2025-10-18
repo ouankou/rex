@@ -235,12 +235,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
 
-    // In LLVM 20, createDiagnostics requires VFS parameter (returns void)
-    compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem());
-    if (!compiler_instance->hasDiagnostics()) {
-        llvm::errs() << "Failed to create diagnostics\n";
-        ROSE_ABORT();
-    }
+    llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
+    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
+    compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem(), diag_printer, true);
 
     // In LLVM 20, invocation is accessed via getInvocation() not setInvocation()
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));

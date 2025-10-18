@@ -78,8 +78,6 @@ CC=clang CXX=clang++ cmake .. \
     -Denable-c=ON \
     -Denable-fortran=OFF \
     -Denable-java=OFF \
-    -Denable-php=OFF \
-    -Denable-python=OFF \
     -DCMAKE_CXX_STANDARD=17 \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
