@@ -315,8 +315,8 @@ endif()
 # EDG (Edison Design Group) frontend C/C++ compiler
 ########################################################################################################################
 
-# Clang/LLVM frontend option (alternative to EDG)
-option(enable-clang-frontend "Enable Clang/LLVM frontend instead of EDG" OFF)
+# Clang/LLVM frontend option (default since EDG is removed)
+option(enable-clang-frontend "Enable Clang/LLVM frontend instead of EDG" ON)
 if(enable-clang-frontend)
   message(STATUS "Clang/LLVM frontend enabled - EDG will be skipped")
   set(ROSE_USE_CLANG_FRONTEND 1)
