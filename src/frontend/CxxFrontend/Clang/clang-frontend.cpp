@@ -235,16 +235,17 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
 
-    // Create file manager first (needed for VFS)
-    compiler_instance->createFileManager();
-
+    // Create diagnostics with default real filesystem (before parsing args that might override it)
     llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
     clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
-    compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem(), diag_printer, true);
+    compiler_instance->createDiagnostics(*llvm::vfs::getRealFileSystem(), diag_printer, true);
 
-    // In LLVM 20, invocation is accessed via getInvocation() not setInvocation()
+    // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
     clang::CompilerInvocation::CreateFromArgs(compiler_instance->getInvocation(), argsArrayRef, compiler_instance->getDiagnostics());
+
+    // Now create file manager with FileSystemOptions from the parsed invocation
+    compiler_instance->createFileManager();
 
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
 
