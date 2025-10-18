@@ -331,8 +331,14 @@ if(enable-clang-frontend)
   message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
   # Get LLVM libraries needed for the Clang frontend
+  # Must include all components that Clang static libraries depend on
   llvm_map_components_to_libnames(LLVM_LIBS
-    support core irreader)
+    support core irreader
+    option mc mcparser
+    binaryformat bitreader bitwriter
+    profiledata
+    target targetparser
+    frontendopenmp)
 
   # Clang libraries needed
   set(CLANG_LIBS
