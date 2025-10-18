@@ -122,7 +122,8 @@ if(NOT enable-internalFrontendDevelopment)
 endif()
 
 # Add Clang frontend objects when enabled
-if(enable-clang-frontend)
+# Note: libroseClangFrontend is only created when both enable-c AND enable-clang-frontend are ON
+if(enable-c AND enable-clang-frontend)
   list(APPEND rose_LIB_SRCS
     $<TARGET_OBJECTS:libroseClangFrontend>)
 endif()
@@ -145,7 +146,8 @@ else()
 endif()
 
 # Link LLVM and Clang libraries when using Clang frontend
-if(enable-clang-frontend)
+# Note: Only link when both enable-c AND enable-clang-frontend are ON
+if(enable-c AND enable-clang-frontend)
   target_link_libraries(ROSE_DLL ${CLANG_LIBS} ${LLVM_LIBS})
 endif()
 
