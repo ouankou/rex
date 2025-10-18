@@ -8,7 +8,7 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
 
 
 /* Pei-Hung (08/29/2022) fieldDecl can be anonymous.
- * Following EDG's implementation to apply anonymous name to allow symbol lookup.
+ * Apply anonymous name to allow symbol lookup.
 */
     std::string declName = decl->getNameAsString();
 
@@ -827,7 +827,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
 
 
 /* Pei-Hung (08/29/2022) RecordDecl can be anonymous.
- * Following EDG's implementation to apply anonymous name to allow symbol lookup.
+ * Apply anonymous name to allow symbol lookup.
  * Need to check later if isAnonymousStructOrUnion is equivalent to Decl with empty name.
 */
     std::string recordDeclName = record_decl->getNameAsString();
