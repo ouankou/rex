@@ -65,10 +65,10 @@ echo ""
 echo -e "${YELLOW}[3/5] Configuring with CMake...${NC}"
 if [ -d "$BUILD_DIR" ]; then
     echo "Removing existing build directory..."
-    rm -rf "$BUILD_DIR"
+    rm -rf "$BUILD_DIR" || { echo -e "${RED}Failed to remove build directory${NC}"; exit 1; }
 fi
-mkdir -p "$BUILD_DIR"
-cd "$BUILD_DIR"
+mkdir -p "$BUILD_DIR" || { echo -e "${RED}Failed to create build directory${NC}"; exit 1; }
+cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 1; }
 
 # Configure with CMake (using Clang for LLVM 21 compatibility)
 CC=clang CXX=clang++ cmake .. \
