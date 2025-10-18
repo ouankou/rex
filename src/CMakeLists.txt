@@ -121,6 +121,12 @@ if(NOT enable-internalFrontendDevelopment)
     $<TARGET_OBJECTS:midend_loopproc>)
 endif()
 
+# Add Clang frontend objects when enabled
+if(enable-clang-frontend)
+  list(APPEND rose_LIB_SRCS
+    $<TARGET_OBJECTS:libroseClangFrontend>)
+endif()
+
 ########################################################################################################################
 # The ROSE library itself (librose.so, librose.a, librose.dll)
 ########################################################################################################################
@@ -136,6 +142,11 @@ if(enable-c)
   target_link_libraries(ROSE_DLL EDG ${link_with_libraries})
 else()
   target_link_libraries(ROSE_DLL ${link_with_libraries})
+endif()
+
+# Link LLVM and Clang libraries when using Clang frontend
+if(enable-clang-frontend)
+  target_link_libraries(ROSE_DLL ${CLANG_LIBS} ${LLVM_LIBS})
 endif()
 
 set_target_properties(ROSE_DLL PROPERTIES

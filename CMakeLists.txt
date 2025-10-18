@@ -319,6 +319,33 @@ endif()
 option(enable-clang-frontend "Enable Clang/LLVM frontend instead of EDG" OFF)
 if(enable-clang-frontend)
   message(STATUS "Clang/LLVM frontend enabled - EDG will be skipped")
+  set(ROSE_USE_CLANG_FRONTEND 1)
+  add_definitions(-DROSE_USE_CLANG_FRONTEND)
+
+  # Find LLVM/Clang (required for Clang frontend)
+  find_package(LLVM REQUIRED CONFIG)
+  find_package(Clang REQUIRED CONFIG)
+
+  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+  message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
+
+  # Get LLVM libraries needed for the Clang frontend
+  llvm_map_components_to_libnames(LLVM_LIBS
+    support core irreader)
+
+  # Clang libraries needed
+  set(CLANG_LIBS
+    clangFrontend
+    clangDriver
+    clangSerialization
+    clangParse
+    clangSema
+    clangAnalysis
+    clangEdit
+    clangAST
+    clangLex
+    clangBasic)
 endif()
 
 # Default EDG version

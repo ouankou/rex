@@ -7,6 +7,8 @@ if(enable-c)
   if(enable-clang-frontend)
     # Using Clang frontend, need dummy EDG stubs
     add_library(EDG STATIC edg-dummy.C)
+    # Add Clang frontend subdirectory
+    add_subdirectory(Clang)
   elseif(have_EDG_source)
     add_subdirectory(EDG)
   endif()

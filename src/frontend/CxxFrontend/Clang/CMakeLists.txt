@@ -51,6 +51,10 @@ if(enable-clang-frontend)
     ${LLVM_INCLUDE_DIRS}
   )
 
+  # Add LLVM definitions
+  target_compile_definitions(libroseClangFrontend PRIVATE
+    ${LLVM_DEFINITIONS})
+
   # Compiler flags
   target_compile_options(libroseClangFrontend PRIVATE
     -w  # Suppress warnings during initial development
