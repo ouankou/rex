@@ -236,8 +236,8 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
 
     // Create diagnostics with default real filesystem (before parsing args that might override it)
-    llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
-    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
+    clang::DiagnosticOptions *DiagOpts = new clang::DiagnosticOptions();
+    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts);
     compiler_instance->createDiagnostics(*llvm::vfs::getRealFileSystem(), diag_printer, true);
 
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
