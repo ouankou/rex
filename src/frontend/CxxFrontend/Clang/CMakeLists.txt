@@ -32,7 +32,7 @@ if(enable-clang-frontend)
   # Depend on ROSETTA-generated files (Cxx_Grammar.h etc.)
   add_dependencies(libroseClangFrontend rosetta_generated)
 
-  # Set C++17 standard (required by LLVM 21)
+  # Set C++17 standard (required by LLVM 20)
   set_target_properties(libroseClangFrontend PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON

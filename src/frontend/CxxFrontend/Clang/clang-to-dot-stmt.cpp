@@ -480,7 +480,7 @@ std::string ClangToDotTranslator::Traverse(clang::Stmt * stmt)
         case clang::Stmt::TypeTraitExprClass:
             ret_status = VisitTypeTraitExpr((clang::TypeTraitExpr *)stmt, node_desc);
             break;
-        // TypoExpr was removed in LLVM 21
+        // TypoExpr was removed in LLVM 20
         // case clang::Stmt::TypoExprClass:
         //     ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, node_desc);
         //     break;
@@ -6689,7 +6689,7 @@ bool ClangToDotTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr * type_trait,
 #endif
 
 #if 0
-// TypoExpr was removed in LLVM 21
+// TypoExpr was removed in LLVM 20
 bool ClangToDotTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** node) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToDotTranslator::VisitTypoExpr" << std::endl;
@@ -6703,7 +6703,7 @@ bool ClangToDotTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** 
 #endif
 
 #if 0
-// TypoExpr was removed in LLVM 21
+// TypoExpr was removed in LLVM 20
 bool ClangToDotTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, NodeDescriptor & node_desc) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToDotTranslator::VisitTypoExpr" << std::endl;

@@ -218,7 +218,7 @@ bool ClangToDotTranslator::VisitType(clang::Type * type, NodeDescriptor & node_d
 
      node_desc.kind_hierarchy.push_back("Type");
 
-     // In LLVM 21, Linkage became a scoped enum
+     // In LLVM 20, Linkage became a scoped enum
      switch (type->getLinkage())
         {
           case clang::Linkage::None:
@@ -1571,7 +1571,7 @@ bool ClangToDotTranslator::VisitSubstTemplateTypeParmType(clang::SubstTemplateTy
 
     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
-     // In LLVM 21, getReplacedParameter() returns const pointer, need const_cast for Traverse
+     // In LLVM 20, getReplacedParameter() returns const pointer, need const_cast for Traverse
      node_desc.successors.push_back(std::pair<std::string, std::string>("replaced_parameter", Traverse(const_cast<clang::TemplateTypeParmDecl*>(subst_template_type_parm_type->getReplacedParameter()))));
 
      node_desc.successors.push_back(
@@ -1781,7 +1781,7 @@ bool ClangToDotTranslator::VisitTemplateSpecializationType(clang::TemplateSpecia
     const clang::TemplateName & template_name = template_specialization_type->getTemplateName();
     VisitTemplateName(template_name, node_desc, "template_name");
 
-    // In LLVM 21, iterator API was removed, use template_arguments() instead
+    // In LLVM 20, iterator API was removed, use template_arguments() instead
     unsigned cnt = 0;
     for (const clang::TemplateArgument& arg : template_specialization_type->template_arguments()) {
         std::ostringstream oss;
@@ -1975,7 +1975,7 @@ bool ClangToDotTranslator::VisitTypeWithKeyword(clang::TypeWithKeyword * type_wi
 
     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
-    // In LLVM 21, use ElaboratedTypeKeyword enum
+    // In LLVM 20, use ElaboratedTypeKeyword enum
     switch (type_with_keyword->getKeyword()) {
         case clang::ElaboratedTypeKeyword::Struct:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("elaborated_type_keyword", "struct"));

@@ -29,9 +29,10 @@ namespace Rose {
     {
       if (argv[i]== option)
       {
-        pos1=i; 
-        pos2=pos1+1; 
+        pos1=i;
+        pos2=pos1+1;
         ASSERT_require (pos2<sz);
+        (void)sz;  // Suppress unused variable warning in release builds
         value = argv[pos2]; 
         break; 
       }

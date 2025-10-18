@@ -364,7 +364,7 @@ bool ClangToSageTranslator::VisitIncompleteArrayType(clang::IncompleteArrayType 
 
     SgType * type = buildTypeFromQualifiedType(incomplete_array_type->getElementType());
 
-    // In LLVM 21, ArraySizeModifier moved from ArrayType:: to clang:: namespace
+    // In LLVM 20, ArraySizeModifier moved from ArrayType:: to clang:: namespace
 
     clang::ArraySizeModifier sizeModifier = incomplete_array_type->getSizeModifier();
 
@@ -707,7 +707,7 @@ bool ClangToSageTranslator::VisitInjectedClassNameType(clang::InjectedClassNameT
     return VisitType(injected_class_name_type, node) && res;
 }
 
-// LocInfoType was removed in LLVM 21
+// LocInfoType was removed in LLVM 20
 /*
 bool ClangToSageTranslator::VisitLocInfoType(clang::LocInfoType * loc_info_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE
@@ -996,7 +996,7 @@ bool ClangToSageTranslator::VisitTypeOfType(clang::TypeOfType * type_of_type, Sg
 #endif
     bool res = true;
 
-    // In LLVM 21, getUnderlyingType() was renamed to getUnmodifiedType()
+    // In LLVM 20, getUnderlyingType() was renamed to getUnmodifiedType()
     SgType* underlyinigType = buildTypeFromQualifiedType(type_of_type->getUnmodifiedType());
 
     SgType* type = SageBuilder::buildTypeOfType(NULL,underlyinigType);
@@ -1066,7 +1066,7 @@ bool ClangToSageTranslator::VisitUnaryTransformType(clang::UnaryTransformType * 
     return VisitType(unary_transform_type, node) && res;
 }
 
-// DependentUnaryTransformType was removed/renamed in LLVM 21
+// DependentUnaryTransformType was removed/renamed in LLVM 20
 /*
 bool ClangToSageTranslator::VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE

@@ -550,7 +550,7 @@ class ClangToDotTranslator : public clang::ASTConsumer
        // virtual bool VisitObjCCStringLiteral
        // virtual bool VisitObjCSubscriptRefexpr
           virtual bool VisitOffsetOfExpr(clang::OffsetOfExpr * offset_of_expr, NodeDescriptor & node_desc);
-          // In LLVM 21, OMPArraySectionExpr was renamed to ArraySectionExpr
+          // In LLVM 20, OMPArraySectionExpr was renamed to ArraySectionExpr
           virtual bool VisitOMPArraySectionExpr(clang::ArraySectionExpr * omp_array_section_expr, NodeDescriptor & node_desc);
           virtual bool VisitOpaqueValueExpr(clang::OpaqueValueExpr * opaque_value_expr, NodeDescriptor & node_desc);
           virtual bool VisitOverloadExpr(clang::OverloadExpr * overload_expr, NodeDescriptor & node_desc);
@@ -569,7 +569,7 @@ class ClangToDotTranslator : public clang::ASTConsumer
           virtual bool VisitSubstNonTypeTemplateParmExpr(clang::SubstNonTypeTemplateParmExpr * subst_non_type_template_parm_expr, NodeDescriptor & node_desc);
           virtual bool VisitSubstNonTypeTemplateParmPackExpr(clang::SubstNonTypeTemplateParmPackExpr * subst_non_type_template_parm_pack_expr, NodeDescriptor & node_desc);
           virtual bool VisitTypeTraitExpr(clang::TypeTraitExpr * type_trait, NodeDescriptor & node_desc);
-          // TypoExpr was removed in LLVM 21
+          // TypoExpr was removed in LLVM 20
           // virtual bool VisitTypoExpr(clang::TypoExpr * typo_expr, NodeDescriptor & node_desc);
           virtual bool VisitUnaryExprOrTypeTraitExpr(clang::UnaryExprOrTypeTraitExpr * unary_expr_or_type_trait_expr, NodeDescriptor & node_desc);
           virtual bool VisitUnaryOperator(clang::UnaryOperator * unary_operator, NodeDescriptor & node_desc);
@@ -607,7 +607,7 @@ class ClangToDotTranslator : public clang::ASTConsumer
           virtual bool VisitFunctionNoProtoType(clang::FunctionNoProtoType * function_no_proto_type, NodeDescriptor & node_desc);
           virtual bool VisitFunctionProtoType(clang::FunctionProtoType * function_proass_symo_type, NodeDescriptor & node_desc);
           virtual bool VisitInjectedClassNameType(clang::InjectedClassNameType * injected_class_name_type, NodeDescriptor & node_desc);
-          // LocInfoType was removed in LLVM 21
+          // LocInfoType was removed in LLVM 20
         // virtual bool VisitLocInfoType(clang::LocInfoType * loc_info_type, NodeDescriptor & node_desc);
           virtual bool VisitMacroQualifiedType(clang::MacroQualifiedType * macro_qualified_type, NodeDescriptor & node_desc);
           virtual bool VisitMemberPointerType(clang::MemberPointerType * member_pointer_type, NodeDescriptor & node_desc);
@@ -637,7 +637,7 @@ class ClangToDotTranslator : public clang::ASTConsumer
           virtual bool VisitDependentTemplateSpecializationType(clang::DependentTemplateSpecializationType * dependent_template_specialization_type, NodeDescriptor & node_desc);
           virtual bool VisitElaboratedType(clang::ElaboratedType * elaborated_type, NodeDescriptor & node_desc);
           virtual bool VisitUnaryTransformType(clang::UnaryTransformType * unary_transform_type, NodeDescriptor & node_desc);
-          // DependentUnaryTransformType was removed/renamed in LLVM 21
+          // DependentUnaryTransformType was removed/renamed in LLVM 20
           // virtual bool VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, NodeDescriptor & node_desc);
           virtual bool VisitUnresolvedUsingType(clang::UnresolvedUsingType * unresolved_using_type, NodeDescriptor & node_desc);
           virtual bool VisitVectorType(clang::VectorType * vector_type, NodeDescriptor & node_desc);

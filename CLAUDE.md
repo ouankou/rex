@@ -13,7 +13,7 @@ This is a fork/variant called "REX" (ROSE-based EXascale compiler) maintained in
 **REX has migrated from the EDG frontend to an experimental Clang/LLVM frontend for C language analysis.**
 
 **Key Changes:**
-- **Frontend**: Now uses Clang/LLVM 21.x (EDG removed due to licensing)
+- **Frontend**: Now uses Clang/LLVM 20.x (EDG removed due to licensing)
 - **Language Support**: Currently **only C** (very experimental - may only compile "hello world")
 - **C++ Support**: Not implemented (future goal)
 - **Build System**: CMake only (Autotools deprecated and will be removed)
@@ -37,7 +37,7 @@ cmake --install .
 
 **ALWAYS use clang and clang++ as the C and C++ compilers for REX. Never use GCC.**
 
-The REX build system requires Clang/LLVM 21.x as the compiler (NOT just for the frontend, but for building the entire project):
+The REX build system requires Clang/LLVM 20.x as the compiler (NOT just for the frontend, but for building the entire project):
 
 ```bash
 # Always build with:
@@ -87,7 +87,7 @@ make install
 **Clang Frontend Options (New - 2025):**
 - `-Denable-clang-frontend=ON/OFF` - **Enable Clang/LLVM frontend** (default: OFF, **Required for REX**)
 - `-Denable-c=ON/OFF` - Enable C analysis with Clang (default: ON)
-- `-DCMAKE_CXX_STANDARD=17` - C++17 required by LLVM 21 (default: 17)
+- `-DCMAKE_CXX_STANDARD=17` - C++17 required by LLVM 20 (default: 17)
 
 **Legacy EDG Options (Deprecated):**
 - `-DEDG_VERSION=5.0` - EDG frontend version (EDG removed from REX)
@@ -127,7 +127,7 @@ make install
 ROSE follows a classic compiler architecture:
 
 **Frontend (src/frontend/)**: Parses source code into AST
-- **Clang/LLVM** (NEW): Experimental C parser using LLVM 21 (src/frontend/CxxFrontend/Clang/)
+- **Clang/LLVM** (NEW): Experimental C parser using LLVM 20 (src/frontend/CxxFrontend/Clang/)
 - **EDG (Edison Design Group)**: *REMOVED* - Commercial C/C++ parser (no longer available)
 - **Open Fortran Parser**: Fortran support (src/frontend/OpenFortranParser_SAGE_Connection/)
 - **SageIII**: The AST implementation (src/frontend/SageIII/)
@@ -284,7 +284,7 @@ SgExprStatement* stmt =
 
 **Boost version conflicts**: ROSE requires Boost >= 1.47.0. Specify with `-DBOOST_ROOT=` or `--with-boost=`.
 
-**LLVM/Clang requirement**: REX now requires LLVM/Clang 21.x or later. Install with `sudo apt-get install llvm-21 clang-21 libclang-21-dev` (Ubuntu/Debian).
+**LLVM/Clang requirement**: REX now requires LLVM/Clang 20.x or later. Install with `sudo apt-get install llvm-20 clang-20 libclang-20-dev` (Ubuntu/Debian).
 
 **Clang frontend limitations**: The Clang frontend is highly experimental. It may only successfully compile simple C programs. C++ is not supported.
 

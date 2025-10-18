@@ -610,7 +610,7 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             ret_status = VisitTypeTraitExpr((clang::TypeTraitExpr *)stmt, &result);
             ROSE_ASSERT(result != NULL);
             break;
-        // TypoExpr was removed in LLVM 21
+        // TypoExpr was removed in LLVM 20
         // case clang::Stmt::TypoExprClass:
         //     ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, &result);
         //     ROSE_ASSERT(result != NULL);
@@ -2888,7 +2888,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(clang::DesignatedInitExpr * 
         SgExpression * expr = NULL;
         clang::DesignatedInitExpr::Designator * D = designated_init_expr->getDesignator(it-1);
         if (D->isFieldDesignator()) {
-            // In LLVM 21, getField() was renamed to getFieldDecl()
+            // In LLVM 20, getField() was renamed to getFieldDecl()
             SgSymbol * symbol = GetSymbolFromSymbolTable(D->getFieldDecl());
             SgVariableSymbol * var_sym = isSgVariableSymbol(symbol);
             ROSE_ASSERT(var_sym != NULL);
@@ -3531,7 +3531,7 @@ bool ClangToSageTranslator::VisitPredefinedExpr(clang::PredefinedExpr * predefin
     SgName name;
 
  // (01/29/2020) Pei-Hung: change to getIndentKind.  And this list is incomplete for Clang 9
-    // In LLVM 21, enum is PredefinedIdentKind with values Func, Function, etc.
+    // In LLVM 20, enum is PredefinedIdentKind with values Func, Function, etc.
     switch (predefined_expr->getIdentKind()) {
         case clang::PredefinedIdentKind::Func:
         case clang::PredefinedIdentKind::FuncDName:
@@ -3742,7 +3742,7 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr * type_trait
 }
 
 
-// TypoExpr was removed in LLVM 21
+// TypoExpr was removed in LLVM 20
 /*
 bool ClangToSageTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** node) {
 #if DEBUG_VISIT_STMT

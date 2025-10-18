@@ -2213,7 +2213,7 @@ bool ClangToSageTranslator::VisitStaticAssertDecl(clang::StaticAssertDecl * prag
         std::cerr << "Runtime error: tmp_condition != NULL && condition == NULL" << std::endl;
         res = false;
     } else {
-      // In LLVM 21, getMessage() returns Expr*, need to cast to StringLiteral
+      // In LLVM 20, getMessage() returns Expr*, need to cast to StringLiteral
       std::string message_str = "";
       if (auto* msg_expr = pragma_static_assert_decl->getMessage()) {
         if (auto* str_lit = clang::dyn_cast<clang::StringLiteral>(msg_expr)) {

@@ -493,7 +493,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
                     virtual bool VisitSubstNonTypeTemplateParmExpr(clang::SubstNonTypeTemplateParmExpr * subst_non_type_template_parm_expr, SgNode ** node);
                     virtual bool VisitSubstNonTypeTemplateParmPackExpr(clang::SubstNonTypeTemplateParmPackExpr * subst_non_type_template_parm_pack_expr, SgNode ** node);
                     virtual bool VisitTypeTraitExpr(clang::TypeTraitExpr * type_trait, SgNode ** node);
-                    // TypoExpr was removed in LLVM 21
+                    // TypoExpr was removed in LLVM 20
                     // virtual bool VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** node);
                     virtual bool VisitUnaryExprOrTypeTraitExpr(clang::UnaryExprOrTypeTraitExpr * unary_expr_or_type_trait_expr, SgNode ** node);
                     virtual bool VisitUnaryOperator(clang::UnaryOperator * unary_operator, SgNode ** node);
@@ -532,7 +532,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
                 virtual bool VisitFunctionNoProtoType(clang::FunctionNoProtoType * function_no_proto_type, SgNode ** node);
                 virtual bool VisitFunctionProtoType(clang::FunctionProtoType * function_proass_symo_type, SgNode ** node);
             virtual bool VisitInjectedClassNameType(clang::InjectedClassNameType * injected_class_name_type, SgNode ** node);
-            // LocInfoType was removed in LLVM 21
+            // LocInfoType was removed in LLVM 20
             // virtual bool VisitLocInfoType(clang::LocInfoType * loc_info_type, SgNode ** node);
             virtual bool VisitMacroQualifiedType(clang::MacroQualifiedType * macro_qualified_type, SgNode ** node);
             virtual bool VisitMemberPointerType(clang::MemberPointerType * member_pointer_type, SgNode ** node);
@@ -562,7 +562,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
               virtual bool VisitDependentTemplateSpecializationType(clang::DependentTemplateSpecializationType * dependent_template_specialization_type, SgNode ** node);
               virtual bool VisitElaboratedType(clang::ElaboratedType * elaborated_type, SgNode ** node);
             virtual bool VisitUnaryTransformType(clang::UnaryTransformType * unary_transform_type, SgNode ** node);
-                // DependentUnaryTransformType was removed/renamed in LLVM 21
+                // DependentUnaryTransformType was removed/renamed in LLVM 20
                 // virtual bool VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, SgNode ** node);
             virtual bool VisitUnresolvedUsingType(clang::UnresolvedUsingType * unresolved_using_type, SgNode ** node);
             virtual bool VisitVectorType(clang::VectorType * vector_type, SgNode ** node);
