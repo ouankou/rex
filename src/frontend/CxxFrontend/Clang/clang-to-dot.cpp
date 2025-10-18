@@ -48,8 +48,8 @@ using namespace CLANG_ROSE_Graph;
 // We need to show the AST plus the edges that are specific to the source sequence lists (and which node's source sequence list they are associated with).
 std::set<void*> graphNodeSet;
 
-// #define DEBUG_CLANG_DOT_GRAPH_SUPPPORT 0
-// #define DEBUG_HEADER_GRAPH_SUPPPORT 0
+// #define DEBUG_CLANG_DOT_GRAPH_SUPPORT 0
+// #define DEBUG_HEADER_GRAPH_SUPPORT 0
 
 
 // int clang_to_dot_main(int argc, char ** argv, SgSourceFile& sageFile) 
@@ -63,7 +63,7 @@ int clang_to_dot_main(int argc, char ** argv)
      string dot_header = filename;
      filename += ".dot";
 
-#if DEBUG_CLANG_DOT_GRAPH_SUPPPORT
+#if DEBUG_CLANG_DOT_GRAPH_SUPPORT
      printf ("In clang_to_dot_main(): filename = %s \n",filename.c_str());
 #endif
 

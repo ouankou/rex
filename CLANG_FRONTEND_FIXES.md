@@ -120,7 +120,7 @@ return inheritedValue;
 ### 6. **EDG References Cleanup**
 
 **Files Modified**:
-- `clang-to-dot.cpp`: Changed "EDG AST" → "Clang AST"
+- `clang-to-dot.cpp`: Changed "EDG AST" → "Clang AST", fixed typo `DEBUG_CLANG_DOT_GRAPH_SUPPPORT` → `DEBUG_CLANG_DOT_GRAPH_SUPPORT`
 - `clang_graph.h`: Changed "EDG representation" → "Clang representation"
 - `clang-frontend-decl.cpp`: Removed "Following EDG's implementation" comments
 - `clang-to-rose-support.cpp`: Removed EDG reference comment
