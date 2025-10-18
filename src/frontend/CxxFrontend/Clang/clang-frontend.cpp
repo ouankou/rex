@@ -353,8 +353,20 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
   // Note: Raw pointer allocation follows ROSE's standard memory management pattern (see tokenStreamMapping.C).
   // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and persists
   // for the program lifetime, consistent with ROSE's architecture for AST-related data structures.
-    std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
-    sageFile.set_tokenSubsequenceMap(tokenMap);
+  //
+  // Check if a token map already exists (e.g., from a previous parse after deleteAST).
+  // If it exists, clear it for reuse. Otherwise, create a new one.
+    if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(&sageFile) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end()) {
+        // Map already exists (re-parsing after deleteAST) - clear it for reuse
+        std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* existingMap = Rose::tokenSubsequenceMapOfMapsBySourceFile[&sageFile];
+        if (existingMap != nullptr) {
+            existingMap->clear();
+        }
+    } else {
+        // First time parsing this file - create new map
+        std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+        sageFile.set_tokenSubsequenceMap(tokenMap);
+    }
 
   // 7 - Finish the AST (fixup phase)
 
