@@ -145,12 +145,12 @@ copyFile(const Path &src, const Path &dst) {
     std::ofstream out(dst.string().c_str(), std::ios::binary);
     out <<in.rdbuf();
     if (in.fail()) {
-        //throw std::filesystem::filesystem_error("read failed", src,
-        //                                          std::system::error_code(errno, std::system::generic_category()));
+        throw std::filesystem::filesystem_error("read failed", src,
+                                                  std::make_error_code(std::errc::io_error));
     }
     if (out.fail()) {
-        //throw std::filesystem::filesystem_error("write failed", dst,
-        //                                          std::system::error_code(errno, std::system::generic_category()));
+        throw std::filesystem::filesystem_error("write failed", dst,
+                                                  std::make_error_code(std::errc::io_error));
     }
 }
 
