@@ -6,6 +6,7 @@
 #include <chrono>
 #include <random>
 #include <system_error>
+#include <cerrno>
 
 namespace Rose {
 namespace FileSystem {
