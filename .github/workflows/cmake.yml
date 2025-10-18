@@ -15,56 +15,61 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
-        gnu: [9]
+        llvm: [20]
 
     runs-on: ${{ matrix.os }}
-    env:
-      LD_LIBRARY_PATH: /usr/lib/jvm/java-17-openjdk-amd64/lib/server
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: 'recursive'
-        token: ${{ secrets.SUBMODULE_TOKEN }}
 
     # NOTE: Ubuntu 24.04 ships antlr4 v4.9 but antlr4-cpp-runtime v4.10, which are API-incompatible; manually install the matching antlr4 v4.10.
     - uses: StoneMoe/setup-antlr4@v4.10.1
 
+    # CRITICAL: Install ONLY version-specific packages from official Ubuntu repos
+    # NEVER install generic "llvm" or "clang" packages - always use versioned packages (llvm-20, clang-20, etc.)
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          automake \
-          autotools-dev \
           bison \
           build-essential \
           cmake \
+          clang-${{ matrix.llvm }} \
           curl \
           flex \
-          g++-${{ matrix.gnu }} \
+          g++ \
           gdb \
-          gfortran-${{ matrix.gnu }} \
           ghostscript \
           git \
           graphviz \
           libantlr4-runtime-dev \
           libboost-all-dev \
+          libclang-${{ matrix.llvm }}-dev \
           libtool \
+          llvm-${{ matrix.llvm }} \
+          llvm-${{ matrix.llvm }}-dev \
           openjdk-17-jdk \
           python3-dev
 
-    - name: Configure
+    # Simplified build using build-rex.sh script
+    - name: Build and Install
+      env:
+        # Set up LLVM 20 paths so "clang" command resolves to clang-20
+        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
+        LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
+        CC: clang-${{ matrix.llvm }}
+        CXX: clang++-${{ matrix.llvm }}
       run: |
         cd $GITHUB_WORKSPACE
-        mkdir ../rex_build
-        cd ../rex_build
-        CC=gcc-${{ matrix.gnu }} CXX=g++-${{ matrix.gnu }} FC=gfortran-${{ matrix.gnu }} \
-          cmake -Denable-c=ON -Denable-fortran=ON -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install -Ddisable-tests-directory=ON $GITHUB_WORKSPACE
+        ./build-rex.sh $GITHUB_WORKSPACE/../rex_install
 
-    - name: Build
-      run: |
-        cd $GITHUB_WORKSPACE/../rex_build
-        cmake --build . -j2
-        make install -j2
-
-    # Currently, we don't have working tests for CMake builds.
+    # Note: Some tests are disabled due to removed boost graph headers (deBoost effort)
+    # See tests/nonsmoke/functional/roseTests/astProcessingTests/CMakeLists.txt for details

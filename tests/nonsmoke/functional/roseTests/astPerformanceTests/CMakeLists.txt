@@ -2,13 +2,13 @@
 # testPerformance -- tests how fast the "new" operator works
 ################################################################################
 add_executable(testPerformance testPerformance.C)
-target_link_libraries(testPerformance ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testPerformance ROSE_DLL ${link_with_libraries})
 
 ################################################################################
 # rosePerformanceTest
 ################################################################################
 add_executable(rosePerformanceTest rosePerformanceTest.C)
-target_link_libraries(rosePerformanceTest ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(rosePerformanceTest ROSE_DLL ${link_with_libraries})
 
 install(TARGETS testPerformance rosePerformanceTest DESTINATION bin)
 
@@ -29,7 +29,7 @@ endif()
 ################################################################################
 if (enable-binary-analysis AND HAVE_PTHREAD_H)
   add_executable(astThreadedCreation astThreadedCreation.C)
-  target_link_libraries(astThreadedCreation ROSE_DLL EDG ${link_with_libraries})
+  target_link_libraries(astThreadedCreation ROSE_DLL ${link_with_libraries})
 
   add_test(
     NAME astThreadedCreation

@@ -6,10 +6,10 @@ set(whiteSpaceTransformation_SRCS
     whiteSpaceTransformation.C)
 
 add_executable(TestUnparseHeadersUsingTokens ${TestUnparseHeadersUsingTokens_SRCS})
-target_link_libraries(TestUnparseHeadersUsingTokens ROSE_DLL EDG ${link_with_libraries} )
+target_link_libraries(TestUnparseHeadersUsingTokens ROSE_DLL ${link_with_libraries} )
 
 add_executable(whiteSpaceTransformation ${whiteSpaceTransformation_SRCS})
-target_link_libraries(whiteSpaceTransformation ROSE_DLL EDG ${link_with_libraries} )
+target_link_libraries(whiteSpaceTransformation ROSE_DLL ${link_with_libraries} )
 
 set(TESTCODES
   test1/Simple1.C test2/Simple2.C test3/Simple3.C

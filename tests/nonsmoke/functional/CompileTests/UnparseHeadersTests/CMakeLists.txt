@@ -2,7 +2,7 @@ set(TestUnparseHeaders_SRCS
     TestUnparseHeaders.C
     UnparseHeadersTransformVisitor.C)
 add_executable(TestUnparseHeaders ${TestUnparseHeaders_SRCS})
-target_link_libraries(TestUnparseHeaders ROSE_DLL EDG ${link_with_libraries} )
+target_link_libraries(TestUnparseHeaders ROSE_DLL ${link_with_libraries} )
 
 set(TESTCODES
   test1/Simple1.C test2/Simple2.C test3/Simple3.C test4/Simple4.C

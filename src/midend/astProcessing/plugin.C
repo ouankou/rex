@@ -24,16 +24,15 @@ namespace Rose {
   bool extractOptionWithParameter(vector<string>& argv, const string & option,  string& value)
   {
     int pos1=-1, pos2=-1; // the matched option offsets for option and value
-#ifndef NDEBUG
     int sz=argv.size();
-#endif
     for (size_t i=0; i< argv.size(); i++)
     {
       if (argv[i]== option)
       {
-        pos1=i; 
-        pos2=pos1+1; 
+        pos1=i;
+        pos2=pos1+1;
         ASSERT_require (pos2<sz);
+        (void)sz;  // Suppress unused variable warning in release builds
         value = argv[pos2]; 
         break; 
       }

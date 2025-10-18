@@ -67,7 +67,7 @@ set(TESTCODES
 #-------------------------------------------------------------------------------
 # Token Stream Mapping
 add_executable(tokenStreamMapping tokenStreamMapping.C)
-target_link_libraries(tokenStreamMapping ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(tokenStreamMapping ROSE_DLL ${link_with_libraries})
 
 foreach(file_to_test ${TESTCODES})
   add_test(

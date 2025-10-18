@@ -43,7 +43,8 @@ set(astPostProcessingSources
   markSharedDeclarationsForOutputInCodeGeneration.C
   fixupInitializers.C)
 
-if(NOT enable-c)
+# When not using EDG (either C disabled or using Clang frontend), include dummy.C for EDG stubs
+if(NOT enable-c OR enable-clang-frontend)
   set(astPostProcessingSources ${astPostProcessingSources} dummy.C)
 endif()
 

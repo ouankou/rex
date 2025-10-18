@@ -59,7 +59,7 @@ typedef enum MLOG_LEVEL{
 #define MLOG_EDG			"EDG"
 #define MLOG_EDG2SAGE		"EDG2SAGE"
 #define MLOG_OFP			"OFP"
-#define MLOG_OFP2SAGE		"OFP2SAGE"redirect stderr to cerr c++
+#define MLOG_OFP2SAGE		"OFP2SAGE"
 #define MLOG_OMPPARSER		"OMPPARSER"
 #define MLOG_OMP2SAGE		"OMP2SAGE"
 #define MLOG_ROSETTA		"ROSETTA"
