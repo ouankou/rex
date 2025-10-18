@@ -60,6 +60,16 @@ if(enable-clang-frontend)
     -w  # Suppress warnings during initial development
   )
 
+  # Copy builtin headers to staging directory for build-tree usage
+  # (Install tree headers are handled by install() commands below)
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/clang)
+  file(COPY
+    clang-builtin-c.h
+    clang-builtin-cpp.hpp
+    clang-builtin-cuda.hpp
+    clang-builtin-opencl.h
+    DESTINATION ${CMAKE_BINARY_DIR}/include-staging/clang)
+
   # Install headers
   install(FILES ${CLANG_FRONTEND_HEADERS}
     DESTINATION ${INCLUDE_INSTALL_DIR})

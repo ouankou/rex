@@ -9,6 +9,41 @@
 *.swp
 *.dump2
 *.o
+
+# C/C++/Fortran compiled and temporary files
+# Executables
+*.out
+a.out
+*.exe
+# Libraries
+*.so
+*.so.*
+*.a
+*.la
+*.lo
+*.dylib
+*.dll
+# Fortran module files
+*.mod
+*.smod
+# Preprocessed files
+*.i
+*.ii
+# Assembly files (generated)
+*.s
+# Dependency files
+*.d
+*.dep
+# Core dumps
+core
+core.*
+# ROSE generated unparsed files
+rose_*.c
+rose_*.cpp
+rose_*.f
+rose_*.f90
+rose_*.f95
+
 # /
 Makefile.in
 /aclocal.m4
