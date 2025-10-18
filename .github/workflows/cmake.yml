@@ -18,14 +18,6 @@ jobs:
         llvm: [20]
 
     runs-on: ${{ matrix.os }}
-    env:
-      # Set up LLVM 20 paths so "clang" command resolves to clang-20
-      PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:${{ github.env.PATH }}
-      LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
-      CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
-      LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
-      CC: clang-${{ matrix.llvm }}
-      CXX: clang++-${{ matrix.llvm }}
 
     defaults:
       run:
@@ -67,6 +59,14 @@ jobs:
 
     # Simplified build using build-rex.sh script
     - name: Build and Install
+      env:
+        # Set up LLVM 20 paths so "clang" command resolves to clang-20
+        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:$PATH
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
+        LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
+        CC: clang-${{ matrix.llvm }}
+        CXX: clang++-${{ matrix.llvm }}
       run: |
         cd $GITHUB_WORKSPACE
         ./build-rex.sh $GITHUB_WORKSPACE/../rex_install
