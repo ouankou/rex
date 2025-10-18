@@ -303,7 +303,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (!compiler_instance->hasASTContext()) compiler_instance->createASTContext();
 
-    auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language);
+    auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language, &sageFile);
     ClangToSageTranslator* translator = translator_ptr.get();
     compiler_instance->setASTConsumer(std::move(translator_ptr));
 
@@ -337,7 +337,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     sageFile.set_globalScope(global_scope);
 
-    global_scope->set_parent(&sageFile);
+    // Parent relationship already set up during global scope creation
 
     std::string file_name(input_file);
 
@@ -381,7 +381,7 @@ void finishSageAST(ClangToSageTranslator & translator) {
 
 SgGlobal * ClangToSageTranslator::getGlobalScope() { return p_global_scope; }
 
-ClangToSageTranslator::ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_) :
+ClangToSageTranslator::ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file) :
     clang::ASTConsumer(),
     p_decl_translation_map(),
     p_stmt_translation_map(),
@@ -391,6 +391,7 @@ ClangToSageTranslator::ClangToSageTranslator(clang::CompilerInstance * compiler_
     p_enum_type_decl_first_see_in_type(),
     p_compiler_instance(compiler_instance),
     p_sage_preprocessor_recorder(new SagePreprocessorRecord(&(p_compiler_instance->getSourceManager()))),
+    p_sage_source_file(sage_source_file),
     language(language_)
 {}
 

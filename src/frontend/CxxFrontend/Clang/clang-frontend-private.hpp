@@ -179,6 +179,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         clang::CompilerInstance  * p_compiler_instance;
         SagePreprocessorRecord   * p_sage_preprocessor_recorder;
+        SgSourceFile             * p_sage_source_file; // Parent file for connecting global scope
 
         Language language;
 
@@ -187,7 +188,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
 
     public:
-        ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_);
+        ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file);
 
         virtual ~ClangToSageTranslator();
 

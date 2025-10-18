@@ -2244,6 +2244,11 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(clang::TranslationUnitDecl 
 
     *node = p_global_scope = new SgGlobal();
 
+    // Set up parent relationship immediately so symbol insertion can access the project
+    if (p_sage_source_file != nullptr) {
+        p_global_scope->set_parent(p_sage_source_file);
+    }
+
     p_decl_translation_map.insert(std::pair<clang::Decl *, SgNode *>(translation_unit_decl, p_global_scope));
 
   // Traverse the children
