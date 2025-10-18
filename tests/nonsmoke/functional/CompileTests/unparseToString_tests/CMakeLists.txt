@@ -1,5 +1,5 @@
 add_executable(unparseToString unparseToString.C )
-target_link_libraries(unparseToString ROSE_DLL EDG ${link_with_libraries} )
+target_link_libraries(unparseToString ROSE_DLL ${link_with_libraries} )
 
 set(ROSE_FLAGS --edg:no_warnings -w --edg:restrict)
 

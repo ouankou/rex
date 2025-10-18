@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------
 add_executable(testQuery testQuery.C)
-target_link_libraries(testQuery ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testQuery ROSE_DLL ${link_with_libraries})
 
 add_test(
   NAME testQuery_input1.C
@@ -9,7 +9,7 @@ add_test(
 
 #-------------------------------------------------------------------------------
 add_executable(testQuery2 testQuery2.C)
-target_link_libraries(testQuery2 ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testQuery2 ROSE_DLL ${link_with_libraries})
 
 add_test(
   NAME testQuery2_input1.C
@@ -18,7 +18,7 @@ add_test(
 
 #-------------------------------------------------------------------------------
 add_executable(testQuery3 testQuery3.C)
-target_link_libraries(testQuery3 ROSE_DLL EDG ${link_with_libraries})
+target_link_libraries(testQuery3 ROSE_DLL ${link_with_libraries})
 
 add_test(
   NAME testQuery3_input1.C

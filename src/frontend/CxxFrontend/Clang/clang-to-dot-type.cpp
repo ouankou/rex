@@ -218,18 +218,21 @@ bool ClangToDotTranslator::VisitType(clang::Type * type, NodeDescriptor & node_d
 
      node_desc.kind_hierarchy.push_back("Type");
 
+     // In LLVM 20, Linkage became a scoped enum
      switch (type->getLinkage())
         {
-          case clang::NoLinkage:
+          case clang::Linkage::None:
                break;
-          case clang::InternalLinkage:
+          case clang::Linkage::Internal:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("linkage", "internal"));
                break;
-          case clang::UniqueExternalLinkage:
+          case clang::Linkage::UniqueExternal:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("linkage", "unique external"));
                break;
-          case clang::ExternalLinkage:
+          case clang::Linkage::External:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("linkage", "external"));
+               break;
+          default:
                break;
         }
 
@@ -1251,29 +1254,29 @@ bool ClangToDotTranslator::VisitInjectedClassNameType(clang::InjectedClassNameTy
 #endif
 
 #if 0
-bool ClangToDotTranslator::VisitLocInfoType(clang::LocInfoType * loc_info_type, SgNode ** node) {
-#if DEBUG_VISIT_TYPE
-    std::cerr << "ClangToDotTranslator::LocInfoType" << std::endl;
-#endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
-
-    return VisitType(loc_info_type, node) && res;
-}
+// bool ClangToDotTranslator::VisitLocInfoType(clang::LocInfoType * loc_info_type, SgNode ** node) {
+// #if DEBUG_VISIT_TYPE
+//     std::cerr << "ClangToDotTranslator::LocInfoType" << std::endl;
+// #endif
+//     bool res = true;
+// 
+//     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+// 
+//     return VisitType(loc_info_type, node) && res;
+// }
 #else
-bool ClangToDotTranslator::VisitLocInfoType(clang::LocInfoType * loc_info_type, NodeDescriptor & node_desc) {
-#if DEBUG_VISIT_TYPE
-    std::cerr << "ClangToDotTranslator::LocInfoType" << std::endl;
-#endif
-    bool res = true;
-
-     node_desc.kind_hierarchy.push_back("LocInfoType");
-
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
-
-    return VisitType(loc_info_type, node_desc) && res;
-}
+// bool ClangToDotTranslator::VisitLocInfoType(clang::LocInfoType * loc_info_type, NodeDescriptor & node_desc) {
+// #if DEBUG_VISIT_TYPE
+//     std::cerr << "ClangToDotTranslator::LocInfoType" << std::endl;
+// #endif
+//     bool res = true;
+// 
+//      node_desc.kind_hierarchy.push_back("LocInfoType");
+// 
+//     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+// 
+//     return VisitType(loc_info_type, node_desc) && res;
+// }
 #endif
 
 #if 0
@@ -1566,9 +1569,10 @@ bool ClangToDotTranslator::VisitSubstTemplateTypeParmType(clang::SubstTemplateTy
 
      node_desc.kind_hierarchy.push_back("SubstTemplateTypeParmType");
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
-     node_desc.successors.push_back(std::pair<std::string, std::string>("replaced_parameter", Traverse(subst_template_type_parm_type->getReplacedParameter())));
+     // In LLVM 20, getReplacedParameter() returns const pointer, need const_cast for Traverse
+     node_desc.successors.push_back(std::pair<std::string, std::string>("replaced_parameter", Traverse(const_cast<clang::TemplateTypeParmDecl*>(subst_template_type_parm_type->getReplacedParameter()))));
 
      node_desc.successors.push_back(
         std::pair<std::string, std::string>("replacement_type", Traverse(subst_template_type_parm_type->getReplacementType().getTypePtr())) );
@@ -1777,12 +1781,12 @@ bool ClangToDotTranslator::VisitTemplateSpecializationType(clang::TemplateSpecia
     const clang::TemplateName & template_name = template_specialization_type->getTemplateName();
     VisitTemplateName(template_name, node_desc, "template_name");
 
-    clang::TemplateSpecializationType::iterator it;
+    // In LLVM 20, iterator API was removed, use template_arguments() instead
     unsigned cnt = 0;
-    for (it = template_specialization_type->begin(); it != template_specialization_type->end(); it++) {
+    for (const clang::TemplateArgument& arg : template_specialization_type->template_arguments()) {
         std::ostringstream oss;
         oss << "template_argument[" << cnt++ << "]";
-        VisitTemplateArgument(*it, node_desc, oss.str());
+        VisitTemplateArgument(arg, node_desc, oss.str());
     }
 
     return VisitType(template_specialization_type, node_desc) && res;
@@ -1971,23 +1975,26 @@ bool ClangToDotTranslator::VisitTypeWithKeyword(clang::TypeWithKeyword * type_wi
 
     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
+    // In LLVM 20, use ElaboratedTypeKeyword enum
     switch (type_with_keyword->getKeyword()) {
-        case clang::ETK_Struct:
+        case clang::ElaboratedTypeKeyword::Struct:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("elaborated_type_keyword", "struct"));
             break;
-        case clang::ETK_Union:
+        case clang::ElaboratedTypeKeyword::Union:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("elaborated_type_keyword", "union"));
             break;
-        case clang::ETK_Class:
+        case clang::ElaboratedTypeKeyword::Class:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("elaborated_type_keyword", "class"));
             break;
-        case clang::ETK_Enum:
+        case clang::ElaboratedTypeKeyword::Enum:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("elaborated_type_keyword", "enum"));
             break;
-        case clang::ETK_Typename:
+        case clang::ElaboratedTypeKeyword::Typename:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("elaborated_type_keyword", "typename"));
             break;
-        case clang::ETK_None:
+        case clang::ElaboratedTypeKeyword::None:
+            break;
+        default:
             break;
     }
 
@@ -2116,29 +2123,29 @@ bool ClangToDotTranslator::VisitUnaryTransformType(clang::UnaryTransformType * u
 #endif
 
 #if 0
-bool ClangToDotTranslator::VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, SgNode ** node) {
-#if DEBUG_VISIT_TYPE
-    std::cerr << "ClangToDotTranslator::DependentUnaryTransformType" << std::endl;
-#endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
-
-    return VisitUnaryTransformType(dependent_unary_transform_type, node) && res;
-}
+// bool ClangToDotTranslator::VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, SgNode ** node) {
+// #if DEBUG_VISIT_TYPE
+//     std::cerr << "ClangToDotTranslator::DependentUnaryTransformType" << std::endl;
+// #endif
+//     bool res = true;
+// 
+//     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+// 
+//     return VisitUnaryTransformType(dependent_unary_transform_type, node) && res;
+// }
 #else
-bool ClangToDotTranslator::VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, NodeDescriptor & node_desc) {
-#if DEBUG_VISIT_TYPE
-    std::cerr << "ClangToDotTranslator::DependentUnaryTransformType" << std::endl;
-#endif
-    bool res = true;
-
-     node_desc.kind_hierarchy.push_back("DependentUnaryTransformType");
-
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
-
-    return VisitUnaryTransformType(dependent_unary_transform_type, node_desc) && res;
-}
+// bool ClangToDotTranslator::VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, NodeDescriptor & node_desc) {
+// #if DEBUG_VISIT_TYPE
+//     std::cerr << "ClangToDotTranslator::DependentUnaryTransformType" << std::endl;
+// #endif
+//     bool res = true;
+// 
+//      node_desc.kind_hierarchy.push_back("DependentUnaryTransformType");
+// 
+//     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+// 
+//     return VisitUnaryTransformType(dependent_unary_transform_type, node_desc) && res;
+// }
 #endif
 
 #if 0

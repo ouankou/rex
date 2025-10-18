@@ -364,21 +364,21 @@ bool ClangToSageTranslator::VisitIncompleteArrayType(clang::IncompleteArrayType 
 
     SgType * type = buildTypeFromQualifiedType(incomplete_array_type->getElementType());
 
-    // TODO clang::ArrayType::ArraySizeModifier
+    // In LLVM 20, ArraySizeModifier moved from ArrayType:: to clang:: namespace
 
-    clang::ArrayType::ArraySizeModifier sizeModifier = incomplete_array_type->getSizeModifier();
+    clang::ArraySizeModifier sizeModifier = incomplete_array_type->getSizeModifier();
 
-    if(sizeModifier == clang::ArrayType::ArraySizeModifier::Star)
+    if(sizeModifier == clang::ArraySizeModifier::Star)
     {
       SgExprListExp* exprListExp = SageBuilder::buildExprListExp(SageBuilder::buildNullExpression());
       *node = SageBuilder::buildArrayType(type, exprListExp);
     }
-    else if(sizeModifier == clang::ArrayType::ArraySizeModifier::Static)
+    else if(sizeModifier == clang::ArraySizeModifier::Static)
     {
-      // TODO check how to handle Static 
+      // TODO check how to handle Static
       *node = SageBuilder::buildArrayType(type);
     }
-    else  // clang::ArrayType::ArraySizeModifier::Normal
+    else  // clang::ArraySizeModifier::Normal
     {
       *node = SageBuilder::buildArrayType(type);
     }
@@ -707,16 +707,19 @@ bool ClangToSageTranslator::VisitInjectedClassNameType(clang::InjectedClassNameT
     return VisitType(injected_class_name_type, node) && res;
 }
 
+// LocInfoType was removed in LLVM 20
+/*
 bool ClangToSageTranslator::VisitLocInfoType(clang::LocInfoType * loc_info_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE
     std::cerr << "ClangToSageTranslator::LocInfoType" << std::endl;
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
     return VisitType(loc_info_type, node) && res;
 }
+*/
 
 bool ClangToSageTranslator::VisitMacroQualifiedType(clang::MacroQualifiedType * macro_qualified_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE
@@ -993,7 +996,8 @@ bool ClangToSageTranslator::VisitTypeOfType(clang::TypeOfType * type_of_type, Sg
 #endif
     bool res = true;
 
-    SgType* underlyinigType = buildTypeFromQualifiedType(type_of_type->getUnderlyingType());
+    // In LLVM 20, getUnderlyingType() was renamed to getUnmodifiedType()
+    SgType* underlyinigType = buildTypeFromQualifiedType(type_of_type->getUnmodifiedType());
 
     SgType* type = SageBuilder::buildTypeOfType(NULL,underlyinigType);
 
@@ -1062,16 +1066,19 @@ bool ClangToSageTranslator::VisitUnaryTransformType(clang::UnaryTransformType * 
     return VisitType(unary_transform_type, node) && res;
 }
 
+// DependentUnaryTransformType was removed/renamed in LLVM 20
+/*
 bool ClangToSageTranslator::VisitDependentUnaryTransformType(clang::DependentUnaryTransformType * dependent_unary_transform_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE
     std::cerr << "ClangToSageTranslator::DependentUnaryTransformType" << std::endl;
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
     return VisitUnaryTransformType(dependent_unary_transform_type, node) && res;
 }
+*/
 
 bool ClangToSageTranslator::VisitUnresolvedUsingType(clang::UnresolvedUsingType * unresolved_using_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE

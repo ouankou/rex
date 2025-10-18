@@ -1,6 +1,7 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
-#include "clang-to-rose-support.hpp" 
+#include "clang-to-rose-support.hpp"
+#include <regex> 
 
 SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
     if (stmt == NULL)
@@ -545,8 +546,8 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             ret_status = VisitOffsetOfExpr((clang::OffsetOfExpr *)stmt, &result);
             ROSE_ASSERT(result != NULL);
             break;
-        case clang::Stmt::OMPArraySectionExprClass:
-            ret_status = VisitOMPArraySectionExpr((clang::OMPArraySectionExpr *)stmt, &result);
+        case clang::Stmt::ArraySectionExprClass:
+            ret_status = VisitOMPArraySectionExpr((clang::ArraySectionExpr *)stmt, &result);
             ROSE_ASSERT(result != NULL);
             break;
         case clang::Stmt::OpaqueValueExprClass:
@@ -609,10 +610,11 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             ret_status = VisitTypeTraitExpr((clang::TypeTraitExpr *)stmt, &result);
             ROSE_ASSERT(result != NULL);
             break;
-        case clang::Stmt::TypoExprClass:
-            ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, &result);
-            ROSE_ASSERT(result != NULL);
-            break;
+        // TypoExpr was removed in LLVM 20
+        // case clang::Stmt::TypoExprClass:
+        //     ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, &result);
+        //     ROSE_ASSERT(result != NULL);
+        //     break;
         case clang::Stmt::UnaryExprOrTypeTraitExprClass:
             ret_status = VisitUnaryExprOrTypeTraitExpr((clang::UnaryExprOrTypeTraitExpr *)stmt, &result);
             ROSE_ASSERT(result != NULL);
@@ -701,19 +703,26 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt * gcc_asm_stmt, Sg
 #endif
     bool res = true;
 
-    unsigned asmNumInput = gcc_asm_stmt->getNumInputs(); 
-    unsigned asmNumOutput = gcc_asm_stmt->getNumOutputs(); 
-    unsigned asmClobber = gcc_asm_stmt->getNumClobbers(); 
+    unsigned asmNumInput = gcc_asm_stmt->getNumInputs();
+    unsigned asmNumOutput = gcc_asm_stmt->getNumOutputs();
+    unsigned asmClobber = gcc_asm_stmt->getNumClobbers();
 
-    clang::StringLiteral* AsmStringLiteral = gcc_asm_stmt->getAsmString();
-    llvm::StringRef AsmStringRef = AsmStringLiteral->getString();
+    // LLVM 20 returns StringLiteral*, LLVM 21 returns std::string
+    std::string AsmString;
+#if LLVM_VERSION_MAJOR >= 21
+    AsmString = gcc_asm_stmt->getAsmString();
+#else
+    if (auto* str_lit = gcc_asm_stmt->getAsmString()) {
+        AsmString = str_lit->getString().str();
+    }
+#endif
 
     std::cout << "input op:" << asmNumInput << " output op: " << asmNumOutput<< std::endl;
 #if DEBUG_VISIT_STMT
-    std::cerr << "AsmStringRef:" << static_cast<std::string>(AsmStringRef) << std::endl;
+    std::cerr << "AsmString:" << AsmString << std::endl;
 #endif
 
-    SgAsmStmt* asmStmt = SageBuilder::buildAsmStatement(static_cast<std::string>(AsmStringRef)); 
+    SgAsmStmt* asmStmt = SageBuilder::buildAsmStatement(AsmString); 
     asmStmt->set_firstNondefiningDeclaration(asmStmt);
     asmStmt->set_definingDeclaration(asmStmt);
     asmStmt->set_parent(SageBuilder::topScopeStack());
@@ -2879,7 +2888,8 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(clang::DesignatedInitExpr * 
         SgExpression * expr = NULL;
         clang::DesignatedInitExpr::Designator * D = designated_init_expr->getDesignator(it-1);
         if (D->isFieldDesignator()) {
-            SgSymbol * symbol = GetSymbolFromSymbolTable(D->getField());
+            // In LLVM 20, getField() was renamed to getFieldDecl()
+            SgSymbol * symbol = GetSymbolFromSymbolTable(D->getFieldDecl());
             SgVariableSymbol * var_sym = isSgVariableSymbol(symbol);
             ROSE_ASSERT(var_sym != NULL);
             expr = SageBuilder::buildVarRefExp_nfi(var_sym);
@@ -3366,6 +3376,7 @@ bool ClangToSageTranslator::VisitOffsetOfExpr(clang::OffsetOfExpr * offset_of_ex
                break;
            }
            case clang::OffsetOfNode::Field:{
+               // OffsetOfNode still uses getField(), not getFieldDecl()
                SgNode* fieldNode = Traverse(ON.getField());
                SgName fieldName(ON.getFieldName()->getName().str());
                SgVarRefExp* varExp = SageBuilder::buildVarRefExp(fieldName);
@@ -3400,7 +3411,7 @@ bool ClangToSageTranslator::VisitOffsetOfExpr(clang::OffsetOfExpr * offset_of_ex
     return VisitExpr(offset_of_expr, node) && res;
 }
 
-bool ClangToSageTranslator::VisitOMPArraySectionExpr(clang::OMPArraySectionExpr * omp_array_section_expr, SgNode ** node) {
+bool ClangToSageTranslator::VisitOMPArraySectionExpr(clang::ArraySectionExpr * omp_array_section_expr, SgNode ** node) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitOMPArraySectionExpr" << std::endl;
 #endif
@@ -3519,19 +3530,26 @@ bool ClangToSageTranslator::VisitPredefinedExpr(clang::PredefinedExpr * predefin
 
     SgName name;
 
- // (01/29/2020) Pei-Hung: change to getIndentKind.  And this list is incomplete for Clang 9   
+ // (01/29/2020) Pei-Hung: change to getIndentKind.  And this list is incomplete for Clang 9
+    // In LLVM 20, enum is PredefinedIdentKind with values Func, Function, etc.
     switch (predefined_expr->getIdentKind()) {
-        case clang::PredefinedExpr::Func:
+        case clang::PredefinedIdentKind::Func:
+        case clang::PredefinedIdentKind::FuncDName:
+        case clang::PredefinedIdentKind::FuncSig:
+        case clang::PredefinedIdentKind::LFuncSig:
             name = "__func__";
             break;
-        case clang::PredefinedExpr::Function:
+        case clang::PredefinedIdentKind::Function:
+        case clang::PredefinedIdentKind::LFunction:
             name = "__FUNCTION__";
             break;
-        case clang::PredefinedExpr::PrettyFunction:
+        case clang::PredefinedIdentKind::PrettyFunction:
+        case clang::PredefinedIdentKind::PrettyFunctionNoVirtual:
             name = "__PRETTY_FUNCTION__";
             break;
-        case clang::PredefinedExpr::PrettyFunctionNoVirtual:
-            ROSE_ABORT();
+        default:
+            name = "__func__";
+            break;
     }
 
   // Retrieve the associate symbol if it exists
@@ -3724,6 +3742,8 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr * type_trait
 }
 
 
+// TypoExpr was removed in LLVM 20
+/*
 bool ClangToSageTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** node) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitTypoExpr" << std::endl;
@@ -3734,6 +3754,7 @@ bool ClangToSageTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode **
 
     return VisitExpr(typo_expr, node) && res;
 }
+*/
 
 bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(clang::UnaryExprOrTypeTraitExpr * unary_expr_or_type_trait_expr, SgNode ** node) {
 #if DEBUG_VISIT_STMT

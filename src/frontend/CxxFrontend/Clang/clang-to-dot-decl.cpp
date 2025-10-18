@@ -797,7 +797,8 @@ bool ClangToDotTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_d
 
      node_desc.kind_hierarchy.push_back("NamespaceDecl");
 
-    node_desc.successors.push_back(std::pair<std::string, std::string>("original_namespace", Traverse(namespace_decl->getOriginalNamespace())));
+    // In LLVM 20, getOriginalNamespace() was removed, use getFirstDecl() instead
+    node_desc.successors.push_back(std::pair<std::string, std::string>("original_namespace", Traverse(namespace_decl->getFirstDecl())));
 
  // DQ (11/28/2020): this function no longer exists in Clang 10.
  // node_desc.successors.push_back(std::pair<std::string, std::string>("next_namespace", Traverse(namespace_decl->getNextNamespace())));
@@ -1765,7 +1766,8 @@ bool ClangToDotTranslator::VisitTemplateTypeParmDecl(clang::TemplateTypeParmDecl
 
     if (template_type_parm_decl->hasDefaultArgument())
         node_desc.successors.push_back(
-            std::pair<std::string, std::string>("default_argument", Traverse(template_type_parm_decl->getDefaultArgument().getTypePtr()))
+            // In LLVM 20, getDefaultArgument() returns TemplateArgumentLoc, need to extract Type*
+            std::pair<std::string, std::string>("default_argument", Traverse(template_type_parm_decl->getDefaultArgument().getArgument().getAsType().getTypePtr()))
         );
 
     ROSE_ASSERT(FAIL_TODO == 0); // TODO
@@ -2864,7 +2866,8 @@ bool ClangToDotTranslator::VisitNonTypeTemplateParmDecl(clang::NonTypeTemplatePa
      node_desc.kind_hierarchy.push_back("NonTypeTemplateParmDecl");
 
     if (non_type_template_param_decl->hasDefaultArgument())
-        node_desc.successors.push_back(std::pair<std::string, std::string>("default_argument", Traverse(non_type_template_param_decl->getDefaultArgument())));
+        // In LLVM 20, getDefaultArgument() returns TemplateArgumentLoc, use getSourceExpression() to get Expr*
+        node_desc.successors.push_back(std::pair<std::string, std::string>("default_argument", Traverse(non_type_template_param_decl->getDefaultArgument().getSourceExpression())));
 
     ROSE_ASSERT(FAIL_TODO == 0); // TODO
 

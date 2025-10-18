@@ -432,8 +432,8 @@ std::string ClangToDotTranslator::Traverse(clang::Stmt * stmt)
         case clang::Stmt::OffsetOfExprClass:
             ret_status = VisitOffsetOfExpr((clang::OffsetOfExpr *)stmt, node_desc);
             break;
-        case clang::Stmt::OMPArraySectionExprClass:
-            ret_status = VisitOMPArraySectionExpr((clang::OMPArraySectionExpr *)stmt, node_desc);
+        case clang::Stmt::ArraySectionExprClass:
+            ret_status = VisitOMPArraySectionExpr((clang::ArraySectionExpr *)stmt, node_desc);
             break;
         case clang::Stmt::OpaqueValueExprClass:
             ret_status = VisitOpaqueValueExpr((clang::OpaqueValueExpr *)stmt, node_desc);
@@ -480,9 +480,10 @@ std::string ClangToDotTranslator::Traverse(clang::Stmt * stmt)
         case clang::Stmt::TypeTraitExprClass:
             ret_status = VisitTypeTraitExpr((clang::TypeTraitExpr *)stmt, node_desc);
             break;
-        case clang::Stmt::TypoExprClass:
-            ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, node_desc);
-            break;
+        // TypoExpr was removed in LLVM 20
+        // case clang::Stmt::TypoExprClass:
+        //     ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, node_desc);
+        //     break;
         case clang::Stmt::UnaryExprOrTypeTraitExprClass:
             ret_status = VisitUnaryExprOrTypeTraitExpr((clang::UnaryExprOrTypeTraitExpr *)stmt, node_desc);
             break;
@@ -3974,16 +3975,16 @@ bool ClangToDotTranslator::VisitCharacterLiteral(clang::CharacterLiteral * chara
      node_desc.kind_hierarchy.push_back("CharacterLiteral");
 
     switch (character_literal->getKind()) {
-        case clang::CharacterLiteral::Ascii:
+        case clang::CharacterLiteralKind::Ascii:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "Ascii"));
             break;
-        case clang::CharacterLiteral::Wide:
+        case clang::CharacterLiteralKind::Wide:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "Wide"));
             break;
-        case clang::CharacterLiteral::UTF16:
+        case clang::CharacterLiteralKind::UTF16:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "UTF16"));
             break;
-        case clang::CharacterLiteral::UTF32:
+        case clang::CharacterLiteralKind::UTF32:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "UTF32"));
             break;
     }
@@ -4962,7 +4963,7 @@ bool ClangToDotTranslator::VisitDesignatedInitExpr(clang::DesignatedInitExpr * d
         SgExpression * expr = NULL;
         clang::DesignatedInitExpr::Designator * D = designated_init_expr->getDesignator(it);
         if (D->isFieldDesignator()) {
-            SgSymbol * symbol = GetSymbolFromSymbolTable(D->getField());
+            SgSymbol * symbol = GetSymbolFromSymbolTable(D->getFieldDecl());
             SgVariableSymbol * var_sym = isSgVariableSymbol(symbol);
             ROSE_ASSERT(var_sym != NULL);
             expr = SageBuilder::buildVarRefExp_nfi(var_sym);
@@ -5024,7 +5025,7 @@ bool ClangToDotTranslator::VisitDesignatedInitExpr(clang::DesignatedInitExpr * d
         SgExpression * expr = NULL;
         clang::DesignatedInitExpr::Designator * D = designated_init_expr->getDesignator(it);
         if (D->isFieldDesignator()) {
-            SgSymbol * symbol = GetSymbolFromSymbolTable(D->getField());
+            SgSymbol * symbol = GetSymbolFromSymbolTable(D->getFieldDecl());
             SgVariableSymbol * var_sym = isSgVariableSymbol(symbol);
             ROSE_ASSERT(var_sym != NULL);
             expr = SageBuilder::buildVarRefExp_nfi(var_sym);
@@ -5068,7 +5069,7 @@ bool ClangToDotTranslator::VisitDesignatedInitExpr(clang::DesignatedInitExpr * d
           oss << "designator[" << cnt++ << "]";
           if (it->isFieldDesignator()) {
               oss << " field";
-              node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(it->getField())));
+              node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(it->getFieldDecl())));
           }
          else if (it->isArrayDesignator()) {
             oss << " array";
@@ -5097,7 +5098,7 @@ bool ClangToDotTranslator::VisitDesignatedInitExpr(clang::DesignatedInitExpr * d
           if (it->isFieldDesignator()) 
              {
                oss << " field";
-               node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(it->getField())));
+               node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(it->getFieldDecl())));
              }
             else 
              {
@@ -5936,7 +5937,7 @@ bool ClangToDotTranslator::VisitOffsetOfExpr(clang::OffsetOfExpr * offset_of_exp
 #endif
 
 #if 0
-bool ClangToDotTranslator::VisitOMPArraySectionExpr(clang::OMPArraySectionExpr * omp_array_section_expr, SgNode ** node) {
+bool ClangToDotTranslator::VisitOMPArraySectionExpr(clang::ArraySectionExpr * omp_array_section_expr, SgNode ** node) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToDotTranslator::VisitOMPArraySectionExpr" << std::endl;
 #endif
@@ -5947,7 +5948,7 @@ bool ClangToDotTranslator::VisitOMPArraySectionExpr(clang::OMPArraySectionExpr *
     return VisitExpr(omp_array_section_expr, node) && res;
 }
 #else
-bool ClangToDotTranslator::VisitOMPArraySectionExpr(clang::OMPArraySectionExpr * omp_array_section_expr, NodeDescriptor & node_desc) {
+bool ClangToDotTranslator::VisitOMPArraySectionExpr(clang::ArraySectionExpr * omp_array_section_expr, NodeDescriptor & node_desc) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToDotTranslator::VisitOMPArraySectionExpr" << std::endl;
 #endif
@@ -6190,16 +6191,16 @@ bool ClangToDotTranslator::VisitPredefinedExpr(clang::PredefinedExpr * predefine
 
  // (01/29/2020) Pei-Hung: change to getIndentKind.  And this list is incomplete for Clang 9   
     switch (predefined_expr->getIdentKind()) {
-        case clang::PredefinedExpr::Func:
+        case clang::PredefinedIdentKind::Func:
             name = "__func__";
             break;
-        case clang::PredefinedExpr::Function:
+        case clang::PredefinedIdentKind::Function:
             name = "__FUNCTION__";
             break;
-        case clang::PredefinedExpr::PrettyFunction:
+        case clang::PredefinedIdentKind::PrettyFunction:
             name = "__PRETTY_FUNCTION__";
             break;
-        case clang::PredefinedExpr::PrettyFunctionNoVirtual:
+        case clang::PredefinedIdentKind::PrettyFunctionNoVirtual:
             ROSE_ABORT();
             break;
     }
@@ -6262,16 +6263,16 @@ bool ClangToDotTranslator::VisitPredefinedExpr(clang::PredefinedExpr * predefine
 
  // (01/29/2020) Pei-Hung: change to getIndentKind.  And this list is incomplete for Clang 9   
     switch (predefined_expr->getIdentKind()) {
-        case clang::PredefinedExpr::Func:
+        case clang::PredefinedIdentKind::Func:
             name = "__func__";
             break;
-        case clang::PredefinedExpr::Function:
+        case clang::PredefinedIdentKind::Function:
             name = "__FUNCTION__";
             break;
-        case clang::PredefinedExpr::PrettyFunction:
+        case clang::PredefinedIdentKind::PrettyFunction:
             name = "__PRETTY_FUNCTION__";
             break;
-        case clang::PredefinedExpr::PrettyFunctionNoVirtual:
+        case clang::PredefinedIdentKind::PrettyFunctionNoVirtual:
             ROSE_ABORT();
             break;
     }
@@ -6313,16 +6314,16 @@ bool ClangToDotTranslator::VisitPredefinedExpr(clang::PredefinedExpr * predefine
   // switch (predefined_expr->getIdentType()) 
      switch (predefined_expr->getIdentKind()) 
         {
-          case clang::PredefinedExpr::Func:
+          case clang::PredefinedIdentKind::Func:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "func"));
                break;
-          case clang::PredefinedExpr::Function:
+          case clang::PredefinedIdentKind::Function:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "function"));
                break;
-          case clang::PredefinedExpr::PrettyFunction:
+          case clang::PredefinedIdentKind::PrettyFunction:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "pretty_function"));
                break;
-          case clang::PredefinedExpr::PrettyFunctionNoVirtual:
+          case clang::PredefinedIdentKind::PrettyFunctionNoVirtual:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "pretty_function_no_virtual"));
                break;
         }
@@ -6688,6 +6689,7 @@ bool ClangToDotTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr * type_trait,
 #endif
 
 #if 0
+// TypoExpr was removed in LLVM 20
 bool ClangToDotTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** node) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToDotTranslator::VisitTypoExpr" << std::endl;
@@ -6698,7 +6700,10 @@ bool ClangToDotTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** 
 
     return VisitExpr(typo_expr, node) && res;
 }
-#else
+#endif
+
+#if 0
+// TypoExpr was removed in LLVM 20
 bool ClangToDotTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, NodeDescriptor & node_desc) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToDotTranslator::VisitTypoExpr" << std::endl;

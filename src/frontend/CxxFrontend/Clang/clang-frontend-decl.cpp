@@ -547,13 +547,20 @@ bool ClangToSageTranslator::VisitFileScopeAsmDecl(clang::FileScopeAsmDecl * file
 #endif
     bool res = true;
 
-    clang::StringLiteral* AsmStringLiteral = file_scope_asm_decl->getAsmString();
-    llvm::StringRef AsmStringRef = AsmStringLiteral->getString();
+    // LLVM 20 returns StringLiteral*, LLVM 21 returns std::string
+    std::string AsmString;
+#if LLVM_VERSION_MAJOR >= 21
+    AsmString = file_scope_asm_decl->getAsmString();
+#else
+    if (auto* str_lit = file_scope_asm_decl->getAsmString()) {
+        AsmString = str_lit->getString().str();
+    }
+#endif
 
 #if DEBUG_VISIT_DECL
-    std::cerr << "AsmStringRef:" << static_cast<std::string>(AsmStringRef) << std::endl;
+    std::cerr << "AsmString:" << AsmString << std::endl;
 #endif
-    SgAsmStmt* asmStmt = SageBuilder::buildAsmStatement(static_cast<std::string>(AsmStringRef)); 
+    SgAsmStmt* asmStmt = SageBuilder::buildAsmStatement(AsmString); 
     asmStmt->set_firstNondefiningDeclaration(asmStmt);
     asmStmt->set_definingDeclaration(asmStmt);
     asmStmt->set_parent(SageBuilder::topScopeStack());
@@ -836,13 +843,13 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
 
     SgClassDeclaration::class_types type_of_class;
     switch (record_decl->getTagKind()) {
-        case clang::TTK_Struct:
+        case clang::TagTypeKind::Struct:
             type_of_class = SgClassDeclaration::e_struct;
             break;
-        case clang::TTK_Class:
+        case clang::TagTypeKind::Class:
             type_of_class = SgClassDeclaration::e_class;
             break;
-        case clang::TTK_Union:
+        case clang::TagTypeKind::Union:
             type_of_class = SgClassDeclaration::e_union;
             break;
         default:
@@ -2206,7 +2213,14 @@ bool ClangToSageTranslator::VisitStaticAssertDecl(clang::StaticAssertDecl * prag
         std::cerr << "Runtime error: tmp_condition != NULL && condition == NULL" << std::endl;
         res = false;
     } else {
-      *node = SageBuilder::buildStaticAssertionDeclaration(condition, pragma_static_assert_decl->getMessage()->getString().str());
+      // In LLVM 20, getMessage() returns Expr*, need to cast to StringLiteral
+      std::string message_str = "";
+      if (auto* msg_expr = pragma_static_assert_decl->getMessage()) {
+        if (auto* str_lit = clang::dyn_cast<clang::StringLiteral>(msg_expr)) {
+          message_str = str_lit->getString().str();
+        }
+      }
+      *node = SageBuilder::buildStaticAssertionDeclaration(condition, message_str);
     }
 
     return VisitDecl(pragma_static_assert_decl, node) && res;

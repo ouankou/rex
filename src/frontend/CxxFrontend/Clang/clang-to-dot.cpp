@@ -251,13 +251,11 @@ int clang_to_dot_main(int argc, char ** argv)
 
     llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
     clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
-    compiler_instance->createDiagnostics(diag_printer, true);
+    compiler_instance->createDiagnostics(compiler_instance->getVirtualFileSystem(), diag_printer, true);
 
-    clang::CompilerInvocation * invocation = new clang::CompilerInvocation();
-    std::shared_ptr<clang::CompilerInvocation> invocation_shptr(std::move(invocation));
+    // In LLVM 20, invocation is accessed via getInvocation() not setInvocation()
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
-    clang::CompilerInvocation::CreateFromArgs(*invocation, argsArrayRef, compiler_instance->getDiagnostics());
-    compiler_instance->setInvocation(invocation_shptr);
+    clang::CompilerInvocation::CreateFromArgs(compiler_instance->getInvocation(), argsArrayRef, compiler_instance->getDiagnostics());
 
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
 
@@ -285,18 +283,30 @@ int clang_to_dot_main(int argc, char ** argv)
             ROSE_ABORT();
     }
 
+    // LLVM 20 requires shared_ptr, LLVM 21+ requires reference
+#if LLVM_VERSION_MAJOR >= 21
     clang::TargetOptions target_options;
     target_options.Triple = llvm::sys::getDefaultTargetTriple();
-    std::shared_ptr<clang::TargetOptions> targetOption_shptr = std::make_shared<clang::TargetOptions>(target_options);
-    clang::TargetInfo * target_info = clang::TargetInfo::CreateTargetInfo(compiler_instance->getDiagnostics(), targetOption_shptr);
+    clang::TargetInfo * target_info = clang::TargetInfo::CreateTargetInfo(compiler_instance->getDiagnostics(), target_options);
+#else
+    auto target_options = std::make_shared<clang::TargetOptions>();
+    target_options->Triple = llvm::sys::getDefaultTargetTriple();
+    clang::TargetInfo * target_info = clang::TargetInfo::CreateTargetInfo(compiler_instance->getDiagnostics(), target_options);
+#endif
     compiler_instance->setTarget(target_info);
 
     compiler_instance->createFileManager();
     compiler_instance->createSourceManager(compiler_instance->getFileManager());
 
-    llvm::ErrorOr<const clang::FileEntry *> ret  = compiler_instance->getFileManager().getFile(input_file);
-    const clang::FileEntry * input_file_entry = ret.get(); 
-    clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(input_file_entry, clang::SourceLocation(), compiler_instance->getSourceManager().getFileCharacteristic(clang::SourceLocation()));
+    // In LLVM 20, getFileRef returns Expected<FileEntryRef> instead of ErrorOr
+    llvm::Expected<clang::FileEntryRef> ret  = compiler_instance->getFileManager().getFileRef(input_file);
+    if (!ret) {
+        llvm::errs() << "Error opening file: " << input_file << "\n";
+        ROSE_ABORT();
+    }
+    clang::FileEntryRef input_file_entry = *ret;
+    // In LLVM 20, createFileID takes FileEntryRef instead of const FileEntry*
+    clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
 
     compiler_instance->getSourceManager().setMainFileID(mainFileID);
 
@@ -492,7 +502,12 @@ void ClangToDotPreprocessorRecord::InclusionDirective(clang::SourceLocation Hash
     unsigned ls = p_source_manager->getSpellingLineNumber(HashLoc, &inv_begin_line);
     unsigned cs = p_source_manager->getSpellingColumnNumber(HashLoc, &inv_begin_col);
 
-    std::string file = p_source_manager->getFileEntryForID(p_source_manager->getFileID(HashLoc))->getName().str();
+    // In LLVM 20, FileEntry uses tryGetRealPathName() instead of getName()
+    std::string file = "";
+    const clang::FileEntry* fileEntry = p_source_manager->getFileEntryForID(p_source_manager->getFileID(HashLoc));
+    if (fileEntry) {
+        file = fileEntry->tryGetRealPathName().str();
+    }
 
     std::cerr << "    In file  : " << file << std::endl;
     std::cerr << "    From     : " << ls << ":" << cs << std::endl;
@@ -744,7 +759,8 @@ void ClangToDotTranslator::VisitNestedNameSpecifier(clang::NestedNameSpecifier *
                 std::pair<std::string, std::string>(prefix + " type_specifier", Traverse(nested_name_specifier->getAsType()))
             );
             break;
-        case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+        // TypeSpecWithTemplate was removed in LLVM 20
+        // case clang::NestedNameSpecifier::TypeSpecWithTemplate:
             node_desc.successors.push_back(
                 std::pair<std::string, std::string>(prefix + " type_specifier_with_template", Traverse(nested_name_specifier->getAsType()))
             );
@@ -773,11 +789,10 @@ void ClangToDotTranslator::VisitTemplateName(const clang::TemplateName & templat
         case clang::TemplateName::QualifiedTemplate:
             oss << " qualified_template";
             VisitNestedNameSpecifier(template_name.getAsQualifiedTemplateName()->getQualifier(), node_desc, oss.str() + "nested_name_specifier");
+            // In LLVM 20, getDecl() and getTemplateDecl() were removed from QualifiedTemplateName
+            // Use getUnderlyingTemplate() instead
             node_desc.successors.push_back(
-                std::pair<std::string, std::string>(oss.str() + "declaration", Traverse(template_name.getAsQualifiedTemplateName()->getDecl()))
-            );
-            node_desc.successors.push_back(
-                std::pair<std::string, std::string>(oss.str() + "template_declaration", Traverse(template_name.getAsQualifiedTemplateName()->getTemplateDecl()))
+                std::pair<std::string, std::string>(oss.str() + "template_declaration", Traverse(template_name.getAsQualifiedTemplateName()->getUnderlyingTemplate().getAsTemplateDecl()))
             );
             break;
         case clang::TemplateName::DependentTemplate:
