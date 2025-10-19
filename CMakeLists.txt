@@ -331,30 +331,37 @@ if(enable-clang-frontend)
   message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
   # Prefer linking against shared LLVM library when available to avoid duplicate globals
-  # This setting tells llvm_map_components_to_libnames() to use libLLVM.so if it exists
-  set(LLVM_LINK_LLVM_DYLIB ON)
+  # Try two methods to detect if shared LLVM library exists:
+  # Method 1: Check if "LLVM" target is in LLVM_AVAILABLE_LIBS (works on many systems)
+  # Method 2: Set LLVM_LINK_LLVM_DYLIB=ON and check result of llvm_map_components_to_libnames
 
-  # Detect if LLVM was actually built with shared library support
-  # llvm_map_components_to_libnames respects LLVM_LINK_LLVM_DYLIB when the dylib exists
-  llvm_map_components_to_libnames(LLVM_LIBS
-    support core irreader
-    option mc mcparser
-    binaryformat bitreader bitwriter
-    profiledata
-    target targetparser
-    frontendopenmp)
-
-  # Check if we got the shared library or static components
-  if(LLVM_LIBS MATCHES "^LLVM(-[0-9.]+)?$")
-    # Successfully using shared LLVM library - avoids duplicate global objects and double-free errors
-    message(STATUS "Using shared LLVM library: ${LLVM_LIBS}")
+  # Method 1: Direct check for "LLVM" in available libraries list
+  if("LLVM" IN_LIST LLVM_AVAILABLE_LIBS)
+    # Use shared LLVM library to avoid duplicate global objects and double-free errors
+    set(LLVM_LIBS LLVM)
+    message(STATUS "Using shared LLVM library (detected via LLVM_AVAILABLE_LIBS): ${LLVM_LIBS}")
   else()
-    # Fall back to static component libraries (LLVM was built without -DLLVM_BUILD_LLVM_DYLIB=ON)
-    # Note: This may cause double-free errors at program exit with Clang frontend
-    # due to duplicate LLVM global objects in both librose.so and static LLVM archives
-    message(STATUS "Using static LLVM component libraries: ${LLVM_LIBS}")
-    message(WARNING "Static LLVM linking may cause double-free errors with Clang frontend. "
-                    "Recommend building LLVM with -DLLVM_BUILD_LLVM_DYLIB=ON for shared library support.")
+    # Method 2: Try using LLVM_LINK_LLVM_DYLIB with llvm_map_components_to_libnames
+    set(LLVM_LINK_LLVM_DYLIB ON)
+    llvm_map_components_to_libnames(LLVM_LIBS
+      support core irreader
+      option mc mcparser
+      binaryformat bitreader bitwriter
+      profiledata
+      target targetparser
+      frontendopenmp)
+
+    # Check if we got the shared library (will be "LLVM" or "LLVM-<version>")
+    # or static components (will be list like "LLVMSupport;LLVMCore;...")
+    if(LLVM_LIBS MATCHES "^LLVM(-[0-9.]+)?$")
+      message(STATUS "Using shared LLVM library (detected via llvm_map_components_to_libnames): ${LLVM_LIBS}")
+    else()
+      # No shared library available - using static components
+      # Note: This may cause double-free errors at program exit with Clang frontend
+      message(STATUS "Using static LLVM component libraries: ${LLVM_LIBS}")
+      message(WARNING "Static LLVM linking may cause double-free errors with Clang frontend. "
+                      "Recommend building LLVM with -DLLVM_BUILD_LLVM_DYLIB=ON for shared library support.")
+    endif()
   endif()
 
   # Clang libraries needed
