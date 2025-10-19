@@ -235,10 +235,21 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
 
-    // Create diagnostics with default real filesystem (before parsing args that might override it)
-    clang::DiagnosticOptions *DiagOpts = new clang::DiagnosticOptions();
-    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts);
-    compiler_instance->createDiagnostics(*llvm::vfs::getRealFileSystem(), diag_printer, true);
+    // Create diagnostics with instance-specific physical filesystem (avoids global singleton double-free)
+    // Use createPhysicalFileSystem() instead of getRealFileSystem() to avoid sharing the global singleton.
+    // getRealFileSystem() returns a static IntrusiveRefCntPtr that libLLVM.so's global destructor also
+    // tries to clean up, causing double-free. createPhysicalFileSystem() creates a new instance that
+    // CompilerInstance can safely own and destroy.
+    //
+    // Persist the VFS IntrusiveRefCntPtr so it lives beyond createDiagnostics() call.
+    // Otherwise the temporary unique_ptr is destroyed immediately, leaving a dangling reference.
+    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::createPhysicalFileSystem();
+
+    // Use stack allocation for DiagnosticOptions to avoid memory leak.
+    // TextDiagnosticPrinter does not take ownership, so heap allocation would leak.
+    clang::DiagnosticOptions DiagOpts;
+    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &DiagOpts);
+    compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
@@ -371,6 +382,18 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
   // 7 - Finish the AST (fixup phase)
 
     finishSageAST(*translator);
+
+  // 8 - Cleanup LLVM objects
+  //
+  // Now that we use createPhysicalFileSystem() instead of getRealFileSystem(),
+  // the CompilerInstance owns its own VFS instance rather than sharing the global singleton.
+  // This means we can safely delete the CompilerInstance without causing double-free errors.
+  //
+  // The translator is owned by CompilerInstance via unique_ptr<ASTConsumer>, so it will also
+  // be destroyed when CompilerInstance is deleted. The ROSE AST (global_scope, etc.) persists
+  // in sageFile and is NOT owned by the translator, so it remains valid after cleanup.
+
+    delete compiler_instance;
 
     return numErrors;
 }

@@ -465,23 +465,81 @@ SUCCESS: Output generated
 
 ## Future Work
 
-### 1. Fix Memory Cleanup Warning (Low Priority)
+### 1. Fix Memory Cleanup Warning (RESOLVED ✅)
 
-**Issue**: `munmap_chunk(): invalid pointer` during LLVM finalization
+**Issue**: `munmap_chunk(): invalid pointer` during LLVM finalization (exit code 134)
 
-**Investigation Needed**:
-- Determine if token map should use different allocation strategy
-- Check if there's a memory pool conflict between ROSE and LLVM allocators
-- Consider using ROSE's memory pool allocator instead of `new`
-- Investigate proper cleanup sequence for LLVM and ROSE objects
+**Root Cause Identified** (October 19, 2025):
 
-**Potential Solutions**:
-1. Use ROSE memory pool for token map allocation
-2. Add explicit cleanup before LLVM shutdown
-3. Investigate if token map should be stack-allocated or use shared_ptr
-4. Check if this is a known issue with LLVM 20.x integration
+ROSE was **statically linking** LLVM code into `librose.so`, creating duplicate global LLVM objects:
+- Both `librose.so` AND the shared LLVM library had their own copies of `llvm::StringMap` and other LLVM global destructors
+- During `__cxa_finalize` at program exit, BOTH destructors tried to free the same memory allocations
+- Valgrind trace showed: Block allocated by `_GLOBAL__sub_I_Assumptions.cpp` in librose.so, then freed twice
 
-**Impact**: Low - does not affect functionality, only produces warning after successful execution
+**THE FIX** ✅:
+
+Changed CMakeLists.txt to **prefer shared LLVM library** when available, with automatic fallback:
+
+```cmake
+# Before (WRONG - always static linking):
+llvm_map_components_to_libnames(LLVM_LIBS
+  support core irreader option mc mcparser
+  binaryformat bitreader bitwriter profiledata
+  target targetparser frontendopenmp)
+
+# After (CORRECT - prefer shared, auto-fallback to static):
+set(LLVM_LINK_LLVM_DYLIB ON)  # Tell LLVM to prefer shared library
+llvm_map_components_to_libnames(LLVM_LIBS ...)
+# Returns "LLVM" if shared lib exists, or component list if static-only
+
+if(LLVM_LIBS MATCHES "^LLVM(-[0-9.]+)?$")
+  message(STATUS "Using shared LLVM library")  # Success!
+else()
+  message(WARNING "Static LLVM linking - may cause double-free")
+endif()
+```
+
+**How it works**:
+- Setting `LLVM_LINK_LLVM_DYLIB=ON` tells LLVM's CMake to prefer the shared library
+- `llvm_map_components_to_libnames()` automatically returns `LLVM` if libLLVM.so exists
+- If no shared library exists, it falls back to static components automatically
+- Systems with static-only LLVM will still build, but with a warning about potential double-free
+
+**Note**: For best results, build LLVM with `-DLLVM_BUILD_LLVM_DYLIB=ON` to create the shared library.
+
+**Additional Fixes**:
+1. Changed `llvm::vfs::getRealFileSystem()` to `llvm::vfs::createPhysicalFileSystem()` in `clang-frontend.cpp` (during CompilerInstance VFS setup)
+   - Avoids sharing the global VFS singleton
+   - Persists the VFS pointer to prevent dangling reference
+   - Each CompilerInstance gets its own VFS instance
+2. Changed DiagnosticOptions from heap to stack allocation in `clang-frontend.cpp`
+   - Eliminates memory leak (TextDiagnosticPrinter doesn't take ownership)
+3. Added `delete compiler_instance;` cleanup in `clang-frontend.cpp` (before return)
+   - Now safe since we're not sharing global objects
+
+**Files Modified**:
+- `CMakeLists.txt` (line 333-336): Switch to shared LLVM linking
+- `src/frontend/CxxFrontend/Clang/clang-frontend.cpp` (line 238-245): Use createPhysicalFileSystem()
+- `src/frontend/CxxFrontend/Clang/clang-frontend.cpp` (line 379-391): Proper cleanup with delete
+
+**Verification**:
+```bash
+$ ./bin/rose-compiler test.c
+$ echo $?
+0  # ✅ Clean exit
+
+$ valgrind ./bin/rose-compiler test.c 2>&1 | grep "ERROR SUMMARY"
+ERROR SUMMARY: 0 errors from 0 contexts  # ✅ No double-free!
+
+$ cat rose_test.c && gcc rose_test.c && ./a.out && echo $?
+int main()
+{
+  return 0;
+}
+0  # ✅ Output correct
+```
+
+**Impact**: RESOLVED - Program now exits cleanly with code 0, no memory errors
 
 ### 2. Token Stream Population (Future Enhancement)
 
