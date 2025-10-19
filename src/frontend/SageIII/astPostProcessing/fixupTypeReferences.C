@@ -7,6 +7,13 @@ using namespace std;
 
 FixupTypeReferencesOnMemoryPool::~FixupTypeReferencesOnMemoryPool() {}
 
+// REX: Clang frontend doesn't require type reference fixup like EDG did
+// This was originally a workaround for EDG type reference issues
+// For now, keeping as no-op for compatibility
+void FixupTypeReferencesOnMemoryPool::visit(SgNode* node) {
+    (void)node;  // Suppress unused parameter warning
+}
+
 void fixupTypeReferences()
    {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.

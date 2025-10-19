@@ -47,7 +47,7 @@ set_tests_properties(pr_rewrite_test1.C_verify
 
 add_executable(finiteDifferencingTest finiteDifferencingTest.C)
 target_link_libraries(finiteDifferencingTest
-  ROSE_DLL EDG ${link_with_libraries})
+  ROSE_DLL ${link_with_libraries})
 
 set(files_to_test
   finitediff_test1.C finitediff_test2.C finitediff_test3.C)
@@ -100,7 +100,7 @@ add_test(
 
 add_executable(implicitCodeGenerationTest implicitCodeGenerationTest.C)
 target_link_libraries(implicitCodeGenerationTest
-  ROSE_DLL EDG ${link_with_libraries})
+  ROSE_DLL ${link_with_libraries})
 
 set(icg_SWITCHES
   -icg:defaultFunctionGenerator -icg:shortCircuitingTransformation

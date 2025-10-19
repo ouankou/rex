@@ -49,6 +49,73 @@ if(CCACHE_EXECUTABLE)
   endforeach()
 endif()
 
+#-----------------------------------------------------------------------------------------------------------------------
+# Enforce Clang/Clang++ compiler requirement for REX
+#-----------------------------------------------------------------------------------------------------------------------
+# REX requires Clang/Clang++ for building due to Clang frontend integration
+# Using GCC/G++ causes ABI incompatibilities with Clang/LLVM libraries
+
+# Helper function to generate consistent error messages for missing compilers
+function(fatal_compiler_not_found LANG COMPILER_NAME PREFERRED_VERSION CMAKE_VAR)
+  message(FATAL_ERROR
+    "REX requires ${COMPILER_NAME} as ${LANG} compiler but ${COMPILER_NAME} was not found.\n"
+    "Please install ${COMPILER_NAME} (preferably ${PREFERRED_VERSION}) or set ${CMAKE_VAR} to ${COMPILER_NAME} path.\n"
+    "Example: cmake -D${CMAKE_VAR}=${PREFERRED_VERSION} ..")
+endfunction()
+
+# If compilers not set, try to find clang-20/clang++-20 first, then fall back to clang/clang++
+if(NOT DEFINED CMAKE_C_COMPILER)
+  find_program(CLANG_20 NAMES clang-20)
+  if(CLANG_20)
+    set(CMAKE_C_COMPILER ${CLANG_20})
+    message(STATUS "Auto-detected C compiler: ${CMAKE_C_COMPILER}")
+  else()
+    find_program(CLANG NAMES clang)
+    if(CLANG)
+      set(CMAKE_C_COMPILER ${CLANG})
+      message(STATUS "Auto-detected C compiler: ${CMAKE_C_COMPILER}")
+    else()
+      fatal_compiler_not_found("C" "clang" "clang-20" "CMAKE_C_COMPILER")
+    endif()
+  endif()
+endif()
+
+if(NOT DEFINED CMAKE_CXX_COMPILER)
+  find_program(CLANGXX_20 NAMES clang++-20)
+  if(CLANGXX_20)
+    set(CMAKE_CXX_COMPILER ${CLANGXX_20})
+    message(STATUS "Auto-detected C++ compiler: ${CMAKE_CXX_COMPILER}")
+  else()
+    find_program(CLANGXX NAMES clang++)
+    if(CLANGXX)
+      set(CMAKE_CXX_COMPILER ${CLANGXX})
+      message(STATUS "Auto-detected C++ compiler: ${CMAKE_CXX_COMPILER}")
+    else()
+      fatal_compiler_not_found("C++" "clang++" "clang++-20" "CMAKE_CXX_COMPILER")
+    endif()
+  endif()
+endif()
+
+# Verify that GCC is not being used (common mistake)
+get_filename_component(C_COMPILER_NAME "${CMAKE_C_COMPILER}" NAME)
+get_filename_component(CXX_COMPILER_NAME "${CMAKE_CXX_COMPILER}" NAME)
+
+if(C_COMPILER_NAME MATCHES "^gcc")
+  message(FATAL_ERROR
+    "REX cannot be built with GCC as C compiler (found: ${CMAKE_C_COMPILER}).\n"
+    "REX requires Clang due to ABI compatibility with Clang/LLVM frontend libraries.\n"
+    "Please use: cmake -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 ..")
+endif()
+
+if(CXX_COMPILER_NAME MATCHES "^g\\+\\+")
+  message(FATAL_ERROR
+    "REX cannot be built with G++ as C++ compiler (found: ${CMAKE_CXX_COMPILER}).\n"
+    "REX requires Clang++ due to ABI compatibility with Clang/LLVM frontend libraries.\n"
+    "Please use: cmake -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 ..")
+endif()
+
+message(STATUS "Compiler enforcement: Using ${CMAKE_C_COMPILER} and ${CMAKE_CXX_COMPILER}")
+
 project(ROSE CXX C)
 
 # CMake 2.8.12 and newer has support for using @rpath in a target’s install name. This was enabled by setting the target
@@ -312,140 +379,73 @@ if(enable-c OR enable-fortran)
 endif()
 
 ########################################################################################################################
-# EDG (Edison Design Group) frontend C/C++ compiler
+########################################################################################################################
+# Clang/LLVM frontend (required when C/C++ support is enabled)
 ########################################################################################################################
 
-# Clang/LLVM frontend option (default since EDG is removed)
-option(enable-clang-frontend "Enable Clang/LLVM frontend instead of EDG" ON)
-if(enable-clang-frontend)
-  message(STATUS "Clang/LLVM frontend enabled - EDG will be skipped")
-  set(ROSE_USE_CLANG_FRONTEND 1)
-  add_definitions(-DROSE_USE_CLANG_FRONTEND)
+# REX uses Clang/LLVM frontend exclusively (EDG has been removed)
+# Only required when C/C++ analysis is enabled
+if(enable-c)
 
-  # Find LLVM/Clang (required for Clang frontend)
-  find_package(LLVM REQUIRED CONFIG)
-  find_package(Clang REQUIRED CONFIG)
+# Set ROSE_USE_CLANG_FRONTEND for backward compatibility with existing code
+set(ROSE_USE_CLANG_FRONTEND 1)
 
-  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-  message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
+# Find LLVM/Clang (required for C/C++ support)
+find_package(LLVM REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
 
-  # Prefer linking against shared LLVM library when available to avoid duplicate globals
-  # Try two methods to detect if shared LLVM library exists:
-  # Method 1: Check if "LLVM" target is in LLVM_AVAILABLE_LIBS (works on many systems)
-  # Method 2: Set LLVM_LINK_LLVM_DYLIB=ON and check result of llvm_map_components_to_libnames
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
-  # Method 1: Direct check for "LLVM" in available libraries list
-  if("LLVM" IN_LIST LLVM_AVAILABLE_LIBS)
-    # Use shared LLVM library to avoid duplicate global objects and double-free errors
-    set(LLVM_LIBS LLVM)
-    message(STATUS "Using shared LLVM library (detected via LLVM_AVAILABLE_LIBS): ${LLVM_LIBS}")
-  else()
-    # Method 2: Try using LLVM_LINK_LLVM_DYLIB with llvm_map_components_to_libnames
-    set(LLVM_LINK_LLVM_DYLIB ON)
-    llvm_map_components_to_libnames(LLVM_LIBS
-      support core irreader
-      option mc mcparser
-      binaryformat bitreader bitwriter
-      profiledata
-      target targetparser
-      frontendopenmp)
+# Prefer linking against shared LLVM library when available to avoid duplicate globals
+# Try two methods to detect if shared LLVM library exists:
+# Method 1: Check if "LLVM" target is in LLVM_AVAILABLE_LIBS (works on many systems)
+# Method 2: Set LLVM_LINK_LLVM_DYLIB=ON and check result of llvm_map_components_to_libnames
 
-    # Check if we got the shared library (will be "LLVM" or "LLVM-<version>")
-    # or static components (will be list like "LLVMSupport;LLVMCore;...")
-    if(LLVM_LIBS MATCHES "^LLVM(-[0-9.]+)?$")
-      message(STATUS "Using shared LLVM library (detected via llvm_map_components_to_libnames): ${LLVM_LIBS}")
-    else()
-      # No shared library available - using static components
-      # Note: This may cause double-free errors at program exit with Clang frontend
-      message(STATUS "Using static LLVM component libraries: ${LLVM_LIBS}")
-      message(WARNING "Static LLVM linking may cause double-free errors with Clang frontend. "
-                      "Recommend building LLVM with -DLLVM_BUILD_LLVM_DYLIB=ON for shared library support.")
-    endif()
-  endif()
-
-  # Clang libraries needed
-  set(CLANG_LIBS
-    clangFrontend
-    clangDriver
-    clangSerialization
-    clangParse
-    clangSema
-    clangAnalysis
-    clangEdit
-    clangAST
-    clangLex
-    clangBasic)
-endif()
-
-# Default EDG version
-set(EDG_VERSION "5.0" CACHE STRING "major.minor version number for EDG (e.g. 5.0).")
-string(SUBSTRING ${EDG_VERSION} 0 1 EDG_MAJOR_VERSION)
-string(SUBSTRING ${EDG_VERSION} 2 1 EDG_MINOR_VERSION)
-
-
-set(ROSE_EDG_MAJOR_VERSION_NUMBER ${EDG_MAJOR_VERSION})
-set(ROSE_EDG_MINOR_VERSION_NUMBER ${EDG_MINOR_VERSION})
-if("${EDG_MAJOR_VERSION}" VERSION_EQUAL "4")
-  if("${EDG_MINOR_VERSION}" VERSION_EQUAL "9")
-    set(ROSE_USE_EDG_VERSION_4_9 1)
-  endif()
-  if("${EDG_MINOR_VERSION}" VERSION_EQUAL "12")
-    set(ROSE_USE_EDG_VERSION_4_12 1)
-  endif()
-endif()
-if("${EDG_MAJOR_VERSION}" VERSION_EQUAL "5")
-  if("${EDG_MINOR_VERSION}" VERSION_EQUAL "0")
-    set(ROSE_USE_EDG_VERSION_5_0 1)
-  endif()
-endif()
-
-# Check whether we have the EDG source code. Even if we have it, we might pretend (for testing) that we don't.
-option(EDG_COMPILE "Compile EDG source code if available" TRUE)
-if(EXISTS "${PROJECT_SOURCE_DIR}/src/frontend/CxxFrontend/EDG/CMakeLists.txt")
-  if(EDG_COMPILE)
-    set(have_EDG_source TRUE)
-  else()
-    set(have_EDG_source FALSE)
-  endif()
+# Method 1: Direct check for "LLVM" in available libraries list
+if("LLVM" IN_LIST LLVM_AVAILABLE_LIBS)
+  # Use shared LLVM library to avoid duplicate global objects and double-free errors
+  set(LLVM_LIBS LLVM)
+  message(STATUS "Using shared LLVM library (detected via LLVM_AVAILABLE_LIBS): ${LLVM_LIBS}")
 else()
-  set(have_EDG_source FALSE)
-  set(EDG_COMPILE FALSE)
-endif()
+  # Method 2: Try using LLVM_LINK_LLVM_DYLIB with llvm_map_components_to_libnames
+  set(LLVM_LINK_LLVM_DYLIB ON)
+  llvm_map_components_to_libnames(LLVM_LIBS
+    support core irreader
+    option mc mcparser
+    binaryformat bitreader bitwriter
+    profiledata
+    target targetparser
+    frontendopenmp)
 
-# Check if we should download the EDG binary tarball. We only need to download it if we're not compiling the
-# EDG source code and ROSE is configured to analyze C (and C++) and NOT using Clang frontend.
-if(NOT have_EDG_source)
-  set(BINARY_EDG 0)
-  if(enable-c AND NOT enable-clang-frontend)
-    set(BINARY_EDG 1)
-    if(NOT WIN32)
-      message(STATUS "EDG - downloading EDG-${EDG_VERSION} binary tar file")
-      if(EXISTS "${PROJECT_BINARY_DIR}/src/frontend/CxxFrontend/EDG.tar.gz")
-        execute_process(COMMAND "tar" "-zxvf" "-C" "${PROJECT_BINARY_DIR}/src/frontend/CxxFrontend/EDG")
-      else()
-        # no need to display this message after the file has been downloaded
-        if(NOT EXISTS "${PROJECT_BINARY_DIR}/src/frontend/CxxFrontend/EDG/.libs")
-          message(WARNING
-            "At build time, CMake will attempt to download a required library tarball.\n"
-            "Please note that EDG binary tarballs are available for only certain configurations.")
-        endif()
-        include(${PROJECT_SOURCE_DIR}/cmake/DownloadEDG.cmake)
-      endif()
-    endif()
+  # Check if we got the shared library (will be "LLVM" or "LLVM-<version>")
+  # or static components (will be list like "LLVMSupport;LLVMCore;...")
+  if(LLVM_LIBS MATCHES "^LLVM(-[0-9.]+)?$")
+    message(STATUS "Using shared LLVM library (detected via llvm_map_components_to_libnames): ${LLVM_LIBS}")
+  else()
+    # No shared library available - using static components
+    # Note: This may cause double-free errors at program exit with Clang frontend
+    message(STATUS "Using static LLVM component libraries: ${LLVM_LIBS}")
+    message(WARNING "Static LLVM linking may cause double-free errors with Clang frontend. "
+                    "Recommend building LLVM with -DLLVM_BUILD_LLVM_DYLIB=ON for shared library support.")
   endif()
 endif()
 
-set(edg_lib EDG) # the compiled library, the downloaded library, or the dummy library
-if(have_EDG_source)
-  message(STATUS "EDG - will compile EDG-${EDG_VERSION} source code")
-elseif(BINARY_EDG)
-  message(STATUS "EDG - will use EDG-${EDG_VERSION} binary release (download)")
-else()
-  message(STATUS "EDG - not needed; using a nearly empty dummy library")
-endif()
+# Clang libraries needed
+set(CLANG_LIBS
+  clangFrontend
+  clangDriver
+  clangSerialization
+  clangParse
+  clangSema
+  clangAnalysis
+  clangEdit
+  clangAST
+  clangLex
+  clangBasic)
 
-
+endif() # enable-c
 
 ########################################################################################################################
 # System features

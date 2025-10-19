@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 add_executable(testSymbolTable testSymbolTable.C)
 target_link_libraries(testSymbolTable
-  ROSE_DLL EDG ${link_with_libraries})
+  ROSE_DLL ${link_with_libraries})
 
 add_test(
   NAME testSymbolTable_test1

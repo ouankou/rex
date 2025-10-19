@@ -71,10 +71,9 @@ mkdir -p "$BUILD_DIR" || { echo -e "${RED}Failed to create build directory${NC}"
 cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 1; }
 
 # Configure with CMake (using Clang for LLVM 20 compatibility)
-CC=clang CXX=clang++ cmake .. \
+cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-    -Denable-clang-frontend=ON \
     -Denable-c=ON \
     -Denable-fortran=OFF \
     -Denable-java=OFF \

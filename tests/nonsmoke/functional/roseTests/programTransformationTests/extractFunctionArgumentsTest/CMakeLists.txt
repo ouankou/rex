@@ -3,7 +3,7 @@
 include_directories(${CMAKE_SOURCE_DIR}/src/midend/programTransformation/extractFunctionArgumentsNormalization)
 add_executable(normalizationTranslator NormalizationTranslator.C)
 target_link_libraries(normalizationTranslator
-  ROSE_DLL EDG ${link_with_libraries})
+  ROSE_DLL ${link_with_libraries})
 
 # This populates the list ROSE__CXX_TESTS
 include(${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/Cxx_Testcodes.cmake)

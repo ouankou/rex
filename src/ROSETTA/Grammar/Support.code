@@ -6360,10 +6360,7 @@ public:
       //! function that removes options that should be used only in frontend from a command line
           static void stripTranslationCommandLineOptions ( std::vector<std::string> & argv );
 
-       // BP : 11/13/2001, modified to take compiler name
-          void build_EDG_CommandLine ( std::vector<std::string> & inputCommandLine, std::vector<std::string>& argv, int fileNameIndex );
-
-       // TV: 02/15/12, CLANG also need a command line builder
+       // TV: 02/15/12, CLANG frontend command line builder
           void build_CLANG_CommandLine ( std::vector<std::string> & inputCommandLine, std::vector<std::string>& argv, int fileNameIndex );
 
       //! Move this function from ROSE into the AST restructuring tool
@@ -16541,7 +16538,7 @@ SgFile::get_project()
      return project;
    }
 
-// Moved to sage_support.cpp: void SgFile::build_EDG_CommandLine ( vector<string> & inputCommandLine, vector<string> & argv, int fileNameIndex )
+// Removed: void SgFile::build_EDG_CommandLine() - EDG frontend has been removed
 // Moved to sage_support.cpp: void SgFile::usage ( int status )
 
 #ifdef _MSC_VER

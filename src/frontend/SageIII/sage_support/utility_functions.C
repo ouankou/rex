@@ -191,15 +191,15 @@ bool Rose::is_OpenCL_language     = false;
 // DQ (3/24/2016): Adding Robb's message logging mechanism to contrl output debug message from the EDG/ROSE connection code.
 
 // DQ (4/17/2010): This function must be defined if C++ support in ROSE is disabled.
-std::string edgVersionString()
+// REX: EDG has been replaced with Clang/LLVM frontend
+std::string frontendVersionString()
    {
 #ifdef ROSE_BUILD_CXX_LANGUAGE_SUPPORT
-     string edg_version = string("edg-") + StringUtility::numberToString(ROSE_EDG_MAJOR_VERSION_NUMBER) + "." + StringUtility::numberToString(ROSE_EDG_MINOR_VERSION_NUMBER);
-  // string edg_version = string("edg-") + StringUtility::numberToString(ROSE_EDG_MAJOR_VERSION_NUMBER) + "." + StringUtility::numberToString(ROSE_EDG_MINOR_VERSION_NUMBER) + " " + StringUtility::numberToString(__EDG_VERSION__);
+     string frontend_version = "Clang/LLVM 20 (experimental)";
 #else
-     string edg_version = "unknown (EDG is disabled)";
+     string frontend_version = "unknown (C/C++ is disabled)";
 #endif
-     return edg_version;
+     return frontend_version;
    }
 
 
@@ -273,8 +273,8 @@ std::string version_message() {
 
 #if defined(ROSE_BUILD_CPP_LANGUAGE_SUPPORT) || defined(ROSE_BUILD_C_LANGUAGE_SUPPORT)
     ss <<"  --- C/C++ analysis:             enabled\n";
-    extern string edgVersionString();
-    ss <<"  ---   C/C++ front-end:          " <<edgVersionString() <<"\n";
+    extern string frontendVersionString();
+    ss <<"  ---   C/C++ front-end:          " <<frontendVersionString() <<"\n";
 
     // This prints (originally and still now) the version of the C++ compiler instead of the C compiler. This is fine for the
     // normal case where both compilers come from the same compiler collection, but would be wrong, for instance, if the user
