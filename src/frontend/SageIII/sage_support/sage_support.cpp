@@ -1747,12 +1747,34 @@ SgProject::parse()
   // calling the backend on them. (If only the backend is used, this was
   // never called by SgFile::callFrontEnd either.)
   // if ( !get_fileList().empty() && !get_useBackendOnly() )
-#ifndef ROSE_USE_CLANG_FRONTEND
-     if ( (get_fileList().empty() == false) && (get_useBackendOnly() == false) )
+
+  // REX: Temporarily disable AstPostProcessing for Clang frontend until file ID issue is resolved.
+  // Clang triggers assertion in Sg_File_Info::get_file_id() about unregistered file IDs.
+  // See ASTPOSTPROCESSING_TODO.md for details and investigation plan.
+  // TODO: Fix Clang frontend file ID registration and enable AstPostProcessing for all frontends.
+     bool hasClangFrontendFiles = false;
+     for (int i = 0; i < numberOfFiles(); ++i)
+        {
+          SgFile* file = &(get_file(i));
+          SgSourceFile* sourceFile = isSgSourceFile(file);
+          if (sourceFile != NULL)
+             {
+            // In REX, all C/C++/UPC/CUDA/OpenCL files use Clang frontend (no EDG).
+            // Check if this is a source file that would use Clang.
+               if (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+                   sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
+                   sourceFile->get_OpenCL_only())
+                  {
+                    hasClangFrontendFiles = true;
+                    break;
+                  }
+             }
+        }
+
+     if ( (get_fileList().empty() == false) && (get_useBackendOnly() == false) && !hasClangFrontendFiles )
         {
           AstPostProcessing(this);
         }
-#endif
 #if 0
        else
         {
@@ -2435,21 +2457,11 @@ SgFile::callFrontEnd()
      if (get_C_only() || get_Cxx_only() || get_Cuda_only() || get_OpenCL_only() )
         {
 #ifdef BACKEND_CXX_IS_CLANG_COMPILER
-   #if ((ROSE_EDG_MAJOR_VERSION_NUMBER == 4) && (ROSE_EDG_MINOR_VERSION_NUMBER >= 9) ) || (ROSE_EDG_MAJOR_VERSION_NUMBER > 4)
-     // OK, we are supporting Clang using EDG 4.9 and greater.
-   #else
-        printf ("\nERROR: Clang compiler as backend to ROSE is not supported unless using EDG 4.9 version \n");
-        printf ("       or greater (use --enable-edg_version=4.9 or greater to configure ROSE). \n\n");
-        exit(1);
-   #endif
+     // REX: Clang backend is now supported with Clang frontend
 #endif
 
-#ifndef ROSE_USE_CLANG_FRONTEND
-       // printf ("Calling build_EDG_CommandLine() \n");
-          build_EDG_CommandLine (inputCommandLine,localCopy_argv,fileNameIndex );
-#else
+       // REX: Call Clang command line builder (EDG removed)
           build_CLANG_CommandLine (inputCommandLine,localCopy_argv,fileNameIndex );
-#endif
         }
        else
         {
@@ -4661,53 +4673,9 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
              }
 #endif
 
-#ifdef ROSE_USE_CLANG_FRONTEND
+  // REX: Always use Clang frontend (EDG removed)
      int clang_main(int, char *[], SgSourceFile & sageFile );
      int frontendErrorLevel = clang_main (c_cxx_argc, c_cxx_argv, *this);
-#else /* default to EDG */
-
-  // DQ (1/24/2017): We want to conditionally support C++11 input files. It is an error
-  // to violate this conditions.  Within the ROSE regression test we don't test C++11
-  // files if they would violate this conditions.
-#if ((ROSE_EDG_MAJOR_VERSION_NUMBER == 4) && (ROSE_EDG_MINOR_VERSION_NUMBER == 9))
-     #ifdef BACKEND_CXX_IS_GNU_COMPILER
-       // DQ (1/24/2017): Add restrictions to handle exclusigon of C++11 specific files when ROSE is configured using EDG 4.9 and GNU 4.9 as the backend.
-          #if ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4) && (BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER == 9))
-            // And if this is a C++11 file.
-               if (this->get_Cxx11_only() == true)
-                  {
-                    printf ("Note: C++11 input files to ROSE are NOT supported using EDG 4.9 configuration with GNU compilers 4.9 and greater (configure ROSE using EDG 4.12) \n");
-                    exit(1);
-                  }
-          #else
-               #if (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER >= 5)
-            // And if this is a C++11 file.
-               if (this->get_Cxx11_only() == true)
-                  {
-                    printf ("Note: C++11 input files to ROSE are NOT supported using EDG 4.9 configuration with GNU compilers 5.x and greater (configure ROSE using EDG 4.12) \n");
-                    exit(1);
-                  }
-               #endif
-          #endif
-     #else
-          #ifdef BACKEND_CXX_IS_CLANG_COMPILER
-               #if ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 3) && (BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER == 5))
-            // And if this is a C++11 file.
-               if (this->get_Cxx11_only() == true)
-                  {
-                    printf ("Note: C++11 input files to ROSE are NOT supported using EDG 4.9 configuration with Clang/LLVM compiler 3.5 (configure ROSE using EDG 4.12) \n");
-                    exit(1);
-                  }
-               #endif
-          #endif
-     #endif
-#else
-  // DQ (1/24/2017): C++, C++11, and C++14 files are allowed for EDG 4.12.
-#endif
-
-     int edg_main(int, char *[], SgSourceFile & sageFile );
-     int frontendErrorLevel = edg_main (c_cxx_argc, c_cxx_argv, *this);
-#endif /* clang or edg */
 
 #else
   // DQ (2/21/2016): Added "error: " to allow this to be caught by the ROSE Matrix Testing.

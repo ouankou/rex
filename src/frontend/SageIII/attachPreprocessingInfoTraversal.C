@@ -96,13 +96,8 @@ AttachPreprocessingInfoTreeTrav::~AttachPreprocessingInfoTreeTrav() {
 namespace EDG_ROSE_Translation
    {
   // DQ (9/18/2018): Declare this map so that we can use it for the unparse header files option.
-#if defined(ROSE_BUILD_CXX_LANGUAGE_SUPPORT) && !defined(ROSE_USE_CLANG_FRONTEND)
-  // DQ (12/11/2018): Use the definition in the EDG edgRose.C file if C/C++ support IS defined.
+  // REX: Declaration simplified - defined in sageInterface.C
      extern std::map<std::string, SgIncludeFile*> edg_include_file_map;
-#else
-  // DQ (12/11/2018): Allow this to be the definition if C/C++ support is NOT defined.
-     extern std::map<std::string, SgIncludeFile*> edg_include_file_map;
-#endif
    }
 
 // DQ (11/30/2008): Refactored this code out of the simpler function to isolate the Wave specific handling.
