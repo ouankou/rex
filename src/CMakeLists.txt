@@ -121,9 +121,8 @@ if(NOT enable-internalFrontendDevelopment)
     $<TARGET_OBJECTS:midend_loopproc>)
 endif()
 
-# Add Clang frontend objects when enabled
-# Note: libroseClangFrontend is only created when both enable-c AND enable-clang-frontend are ON
-if(enable-c AND enable-clang-frontend)
+# Add Clang frontend objects (always enabled for REX when C is enabled)
+if(enable-c)
   list(APPEND rose_LIB_SRCS
     $<TARGET_OBJECTS:libroseClangFrontend>)
 endif()
@@ -138,17 +137,11 @@ add_dependencies(ROSE_DLL roseUtil)
 
 set_target_properties(ROSE_DLL PROPERTIES OUTPUT_NAME "rose")
 
-# Link EDG library (either real EDG or dummy stubs when using Clang frontend)
+# Link Clang/LLVM libraries (required for REX)
 if(enable-c)
-  target_link_libraries(ROSE_DLL EDG ${link_with_libraries})
+  target_link_libraries(ROSE_DLL ${CLANG_LIBS} ${LLVM_LIBS} ${link_with_libraries})
 else()
   target_link_libraries(ROSE_DLL ${link_with_libraries})
-endif()
-
-# Link LLVM and Clang libraries when using Clang frontend
-# Note: Only link when both enable-c AND enable-clang-frontend are ON
-if(enable-c AND enable-clang-frontend)
-  target_link_libraries(ROSE_DLL ${CLANG_LIBS} ${LLVM_LIBS})
 endif()
 
 set_target_properties(ROSE_DLL PROPERTIES

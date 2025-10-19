@@ -43,13 +43,8 @@ namespace EDG_ROSE_Translation
   // DQ (6/3/2019): The case of outlining to a seperate file will have transformations
   // that this checking will fail on because it is for the typical case of checking the
   // AST for transformations after construction of the AST from an typical input file.
-#if defined(ROSE_BUILD_CXX_LANGUAGE_SUPPORT) && !defined(ROSE_USE_CLANG_FRONTEND)
-  // DQ (6/3/2019): Use the definition in the EDG edgRose.C file if C/C++ support IS defined.
-     extern bool suppress_detection_of_transformations;
-#else
-  // DQ (6/3/2019): Allow this to be the definition if C/C++ support is NOT defined.
+  // REX: Definition for Clang frontend (was extern for EDG)
      bool suppress_detection_of_transformations;
-#endif
    }
 
 // MS 2015: utility functions used in the implementation of SageBuilder functions, but are not exposed in the SageBuilder-Interface.

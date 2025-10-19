@@ -263,24 +263,12 @@
 /* Name of backend X10 compiler, including path */
 #define BACKEND_X10_COMPILER_NAME_WITH_PATH "${BACKEND_X10_COMPILER_NAME_WITH_PATH}"
 
-/* Internal EDG specific consistency tests. */
-//AS FIXME
-#define CHECKING 1
-
-
+/* REX: EDG-specific consistency tests removed - not applicable to Clang frontend */
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
-/* Internal EDG specific consistency tests. */
-//AS FIXME
-
-#undef CHECKING
-
 /* Include path for backend C++ compiler. */
 #cmakedefine CXX_INCLUDE_STRING @CXX_INCLUDE_STRING@
-
-/* -D options to hand to EDG C++ front-end. */
-#define CXX_SPEC_DEF {"-D__GNUG__=${BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER}", "-D__GNUC__=${BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER}", "-D__GNUC_MINOR__=${BACKEND_C_COMPILER_MINOR_VERSION_NUMBER}", "-D__GNUC_PATCHLEVEL__=${BACKEND_C_COMPILER_PATCH_LEVEL_NUMBER}", "--preinclude", "rose_edg_required_macros_and_functions.h"}
 
 /* Include path for backend C compiler. */
 #cmakedefine C_INCLUDE_STRING @C_INCLUDE_STRING@
@@ -488,16 +476,8 @@
 /* PATH on Windows, LD_LIBRARY_PATH everywhere else. */
 #define ROSE_SHLIBPATH_VAR "${ROSE_SHLIBPATH_VAR}"
 
-/* Whether to use the new EDG version 4.x */
-#cmakedefine ROSE_USE_EDG_VERSION_4
-
-/* Whether to use the new EDG version 4.4 */
-#cmakedefine ROSE_USE_EDG_VERSION_4_4
-
-/* Whether to use the new EDG version 4.7 */
-#cmakedefine ROSE_USE_EDG_VERSION_4_7
-
-/* Whether to use the Clang/LLVM frontend instead of EDG */
+/* REX: EDG frontend has been removed - Clang/LLVM is now the only frontend.
+ * This macro is always defined when C/C++ support is enabled for backward compatibility. */
 #cmakedefine ROSE_USE_CLANG_FRONTEND
 
 /* Use Valgrind calls in ROSE */
@@ -512,7 +492,7 @@
 //AS Not needed
 //#undef ROSE_WAVE_PATH
 
-/* Control use of SAGE within EDG. */
+/* REX: SAGE_TRANSFORM - legacy EDG setting, kept for backwards compatibility */
 //AS Need configure flag to control this variable
 #define SAGE_TRANSFORM 1
 
@@ -565,8 +545,7 @@
 //AS Don't know what to do with this
 //#undef USE_ROSE_DWARF_SUPPORT
 
-/* Controls if EDG Union/Struct debugging support is to be used. */
-#cmakedefine USE_ROSE_EDG_DEBUGGING_SUPPORT
+/* REX: EDG Union/Struct debugging support removed - not applicable to Clang frontend */
 
 /* Use of GCC OpenMP in ROSE. */
 //AS Don't know what to do with this
@@ -661,17 +640,10 @@
 #define ROSE_OFP_MINOR_VERSION_NUMBER 8
 #define ROSE_OFP_PATCH_VERSION_NUMBER 3
 
-/* EDG major version number */
-#define ROSE_EDG_MAJOR_VERSION_NUMBER @EDG_MAJOR_VERSION@
-
-/* EDG minor version number */
-#define ROSE_EDG_MINOR_VERSION_NUMBER @EDG_MINOR_VERSION@
+/* REX: EDG version numbers and BINARY_EDG removed - Clang/LLVM is now the only frontend */
 
 /* Defined if we're building using CMake */
 #cmakedefine USE_CMAKE
-
-/* Defined if we're using a prebuilt EDG library */
-#cmakedefine BINARY_EDG
 
 /* Build ROSE to support the Cuda langauge */
 #cmakedefine ROSE_BUILD_CUDA_LANGUAGE_SUPPORT

@@ -43,11 +43,6 @@ set(astPostProcessingSources
   markSharedDeclarationsForOutputInCodeGeneration.C
   fixupInitializers.C)
 
-# When not using EDG (either C disabled or using Clang frontend), include dummy.C for EDG stubs
-if(NOT enable-c OR enable-clang-frontend)
-  set(astPostProcessingSources ${astPostProcessingSources} dummy.C)
-endif()
-
 add_library(astPostProcessing OBJECT ${astPostProcessingSources})
 
 add_dependencies(astPostProcessing rosetta_generated)

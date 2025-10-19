@@ -367,12 +367,11 @@ Unparse_ExprStmt::unparseLambdaExpression(SgExpression* expr, SgUnparse_Info& in
               ASSERT_not_null(capt_var_expr);
 
           // TV (11/14/2018): ROSE-1525: Made a separated case when 'this' is captured to properly handle the changes in EDG 4.14
+          // REX: EDG removed - Clang frontend uses the modern behavior (EDG >= 4.14)
              if (isSgThisExp(capt_var_expr)) {
-#if ((ROSE_EDG_MAJOR_VERSION_NUMBER == 4) && (ROSE_EDG_MINOR_VERSION_NUMBER >= 14) ) || (ROSE_EDG_MAJOR_VERSION_NUMBER > 4)
                if (lambdaCapture->get_capture_by_reference() == false) {
                  curprint("*");
                }
-#endif
                curprint("this");
              } else {
                if (lambdaCapture->get_capture_by_reference() == true)

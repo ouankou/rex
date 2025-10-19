@@ -79,7 +79,7 @@ endforeach()
 
 add_executable(testUnparsingUsingTokenStream testUnparsingUsingTokenStream.C)
 target_link_libraries(testUnparsingUsingTokenStream
-  ROSE_DLL EDG ${link_with_libraries})
+  ROSE_DLL ${link_with_libraries})
 
 # Test code using -rose:verbose 2 to trigger output of evaluation files (*.c and *.dot files).
 add_test(
