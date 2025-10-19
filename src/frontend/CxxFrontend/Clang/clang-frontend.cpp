@@ -245,10 +245,11 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     // Otherwise the temporary unique_ptr is destroyed immediately, leaving a dangling reference.
     llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::createPhysicalFileSystem();
 
-    // Use stack allocation for DiagnosticOptions to avoid memory leak.
-    // TextDiagnosticPrinter does not take ownership, so heap allocation would leak.
-    clang::DiagnosticOptions DiagOpts;
-    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), &DiagOpts);
+    // Use IntrusiveRefCntPtr for DiagnosticOptions to manage lifetime properly.
+    // TextDiagnosticPrinter stores a pointer to DiagOpts, so it must outlive the function scope.
+    // IntrusiveRefCntPtr ensures proper reference counting and cleanup.
+    llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
+    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts.get());
     compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
