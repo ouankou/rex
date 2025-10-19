@@ -907,7 +907,7 @@ std::function<Rose_STL_Container<std::string>(SgNode*) > NameQuery::getFunction(
                ROSE_ABORT ();
              }
         } /* End switch-case */
-         return std::ptr_fun(__x);
+         return AstQueryNamespace::rex_ptr_fun(__x);
 
   }
 
@@ -932,7 +932,7 @@ std::function< Rose_STL_Container<std::string>(SgNode*, std::string) > NameQuery
                ROSE_ABORT ();
              }
         }
-         return std::ptr_fun(__x);
+         return AstQueryNamespace::rex_ptr_fun(__x);
   }
 
 
@@ -950,8 +950,8 @@ std::function< Rose_STL_Container<std::string>(SgNode*, std::string) > NameQuery
                     std::string traversal,
                     NameQuery::roseFunctionPointerTwoParameters querySolverFunction,
                     AstQueryNamespace::QueryDepth defineQueryType){
-                     return AstQueryNamespace::querySubTree(subTree, 
-                                  std::bind(std::ptr_fun(querySolverFunction), std::placeholders::_1, traversal), defineQueryType);
+                     return AstQueryNamespace::querySubTree(subTree,
+                                  std::bind(AstQueryNamespace::rex_ptr_fun(querySolverFunction), std::placeholders::_1, traversal), defineQueryType);
           };
           NameQuerySynthesizedAttributeType NameQuery::querySubTree
                   ( SgNode * subTree,
@@ -969,7 +969,7 @@ std::function< Rose_STL_Container<std::string>(SgNode*, std::string) > NameQuery
                  ( Rose_STL_Container< SgNode * >nodeList,
                    NameQuery::roseFunctionPointerOneParameter querySolverFunction){
                  return AstQueryNamespace::queryRange(nodeList.begin(), nodeList.end(),
-                                 std::ptr_fun(querySolverFunction));
+                                 AstQueryNamespace::rex_ptr_fun(querySolverFunction));
           };
           NameQuerySynthesizedAttributeType NameQuery::queryNodeList 
                  ( Rose_STL_Container<SgNode*> nodeList,
@@ -986,7 +986,7 @@ std::function< Rose_STL_Container<std::string>(SgNode*, std::string) > NameQuery
            ){
 
             return  AstQueryNamespace::querySubTree(subTree,
-                                  std::ptr_fun(elementReturnType),defineQueryType);
+                                  AstQueryNamespace::rex_ptr_fun(elementReturnType),defineQueryType);
 
           };
 
@@ -997,7 +997,7 @@ std::function< Rose_STL_Container<std::string>(SgNode*, std::string) > NameQuery
                    std::string targetNode,
                    NameQuery::roseFunctionPointerTwoParameters querySolverFunction ){
                 return AstQueryNamespace::queryRange(nodeList.begin(), nodeList.end(),
-                             std::bind(std::ptr_fun(querySolverFunction), std::placeholders::_1, targetNode));
+                             std::bind(AstQueryNamespace::rex_ptr_fun(querySolverFunction), std::placeholders::_1, targetNode));
 //                                  std::bind2nd(getFunction(elementReturnType),traversal), defineQueryType);
 
           };
@@ -1029,7 +1029,7 @@ NameQuerySynthesizedAttributeType
      NameQuery::roseFunctionPointerTwoParameters querySolverFunction, VariantVector* targetVariantVector)
    {
          return AstQueryNamespace::queryMemoryPool(
-                                  std::bind(std::ptr_fun(querySolverFunction), std::placeholders::_1, traversal), targetVariantVector);
+                                  std::bind(AstQueryNamespace::rex_ptr_fun(querySolverFunction), std::placeholders::_1, traversal), targetVariantVector);
 
    };
 
@@ -1049,7 +1049,7 @@ NameQuerySynthesizedAttributeType
      NameQuery::roseFunctionPointerOneParameter querySolverFunction, VariantVector* targetVariantVector)
    {
    return  AstQueryNamespace::queryMemoryPool(
-                                  std::ptr_fun(querySolverFunction),targetVariantVector);
+                                  AstQueryNamespace::rex_ptr_fun(querySolverFunction),targetVariantVector);
 
 
    };

@@ -109,8 +109,14 @@ namespace sg
   /// \tparam  SageSequenceContainer, a sage container that supports appending an element
   /// \details forwards actual insert to function family _append
   template <class SageSequenceContainer>
-  struct SageInserter : std::iterator<std::output_iterator_tag, void, void, void, void>
+  struct SageInserter
   {
+    using iterator_category = std::output_iterator_tag;
+    using value_type = void;
+    using difference_type = void;
+    using pointer = void;
+    using reference = void;
+
     typedef SageSequenceContainer Container;
 
     Container& container;

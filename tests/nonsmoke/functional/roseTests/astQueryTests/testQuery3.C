@@ -6,8 +6,11 @@
 
 using namespace std;
 
-class NodesInVector :  public std::binary_function<SgNode*, std::pair< VariantVector*, int*> , void* >{
+class NodesInVector {
     public:
+        using first_argument_type = SgNode*;
+        using second_argument_type = std::pair< VariantVector*, int*>;
+        using result_type = void*;
 	        result_type operator()(first_argument_type node, const second_argument_type accumulatedList ) const
 			{
 
@@ -18,8 +21,11 @@ class NodesInVector :  public std::binary_function<SgNode*, std::pair< VariantVe
 			};
 };
 
-class NodesInSubTree :  public std::binary_function<SgNode*,  std::pair<int*,int*>, void* >{
+class NodesInSubTree {
     public:
+        using first_argument_type = SgNode*;
+        using second_argument_type = std::pair<int*,int*>;
+        using result_type = void*;
 	        result_type operator()(first_argument_type node, const second_argument_type numberOfNodes ) const
 			{
 
@@ -50,12 +56,12 @@ main( int argc, char * argv[] )
 
 	 int numberOfStatementsInSimple = 0;
 	 int numberOfExpressionsInSimple= 0;
-	 AstQueryNamespace::querySubTree(project,std::bind2nd( nodesInTree,  std::pair< int*, int*>(&numberOfStatementsInSimple,&numberOfExpressionsInSimple)));
+	 AstQueryNamespace::querySubTree(project,std::bind(nodesInTree, std::placeholders::_1, std::pair<int*, int*>(&numberOfStatementsInSimple, &numberOfExpressionsInSimple)));
    
 	 //Check if the number of statements is the same using VariantVectors and a simple NodeQuery
 	 VariantVector v1(V_SgStatement);
 	 int numberOfStatements=0;
-     AstQueryNamespace::querySubTree(project,std::bind2nd( nodeRecognized,  std::pair< VariantVector*, int*>(&v1,&numberOfStatements)));
+     AstQueryNamespace::querySubTree(project,std::bind(nodeRecognized, std::placeholders::_1, std::pair<VariantVector*, int*>(&v1, &numberOfStatements)));
 
 	 if ( numberOfStatementsInSimple != numberOfStatements )
         {
@@ -67,7 +73,7 @@ main( int argc, char * argv[] )
 	 //Check if the number of expressions is the same using VariantVectors and a simple NodeQuery
 	 VariantVector v2(V_SgExpression);
 	 int numberOfExpressions=0;
-     AstQueryNamespace::querySubTree(project,std::bind2nd( nodeRecognized,  std::pair< VariantVector*, int*>(&v2,&numberOfExpressions)));
+     AstQueryNamespace::querySubTree(project,std::bind(nodeRecognized, std::placeholders::_1, std::pair<VariantVector*, int*>(&v2, &numberOfExpressions)));
 
 	 if ( numberOfExpressionsInSimple != numberOfExpressions )
         {
