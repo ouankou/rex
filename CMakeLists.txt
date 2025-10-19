@@ -330,8 +330,12 @@ if(enable-clang-frontend)
   message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
   message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
-  # Get LLVM libraries needed for the Clang frontend
-  # Must include all components that Clang static libraries depend on
+  # Prefer linking against shared LLVM library when available to avoid duplicate globals
+  # This setting tells llvm_map_components_to_libnames() to use libLLVM.so if it exists
+  set(LLVM_LINK_LLVM_DYLIB ON)
+
+  # Detect if LLVM was actually built with shared library support
+  # llvm_map_components_to_libnames respects LLVM_LINK_LLVM_DYLIB when the dylib exists
   llvm_map_components_to_libnames(LLVM_LIBS
     support core irreader
     option mc mcparser
@@ -339,6 +343,19 @@ if(enable-clang-frontend)
     profiledata
     target targetparser
     frontendopenmp)
+
+  # Check if we got the shared library or static components
+  if(LLVM_LIBS MATCHES "^LLVM(-[0-9.]+)?$")
+    # Successfully using shared LLVM library - avoids duplicate global objects and double-free errors
+    message(STATUS "Using shared LLVM library: ${LLVM_LIBS}")
+  else()
+    # Fall back to static component libraries (LLVM was built without -DLLVM_BUILD_LLVM_DYLIB=ON)
+    # Note: This may cause double-free errors at program exit with Clang frontend
+    # due to duplicate LLVM global objects in both librose.so and static LLVM archives
+    message(STATUS "Using static LLVM component libraries: ${LLVM_LIBS}")
+    message(WARNING "Static LLVM linking may cause double-free errors with Clang frontend. "
+                    "Recommend building LLVM with -DLLVM_BUILD_LLVM_DYLIB=ON for shared library support.")
+  endif()
 
   # Clang libraries needed
   set(CLANG_LIBS
