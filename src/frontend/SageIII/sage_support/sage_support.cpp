@@ -4173,6 +4173,30 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
      OpenFortranParser_globalFilePointer = const_cast<SgSourceFile*>(this);
      ASSERT_not_null(OpenFortranParser_globalFilePointer);
 
+  // Initialize token subsequence map for unparsing
+  // The backend unparser expects this map to exist (even if empty) for token-based unparsing
+  // Note: Raw pointer allocation follows ROSE's standard memory management pattern (see tokenStreamMapping.C).
+  // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and persists
+  // for the program lifetime, consistent with ROSE's architecture for AST-related data structures.
+  //
+  // Check if a token map already exists (e.g., from a previous parse after deleteAST).
+  // If it exists, clear it for reuse. Otherwise, create a new one.
+     if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(OpenFortranParser_globalFilePointer) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end()) {
+         // Map already exists (re-parsing after deleteAST) - clear it for reuse
+         std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* existingMap = Rose::tokenSubsequenceMapOfMapsBySourceFile[OpenFortranParser_globalFilePointer];
+         if (existingMap != nullptr) {
+             // Delete all TokenStreamSequenceToNodeMapping* values to avoid memory leak
+             for (auto &entry : *existingMap) {
+                 delete entry.second;
+             }
+             existingMap->clear();
+         }
+     } else {
+         // First time parsing this file - create new map
+         std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+         OpenFortranParser_globalFilePointer->set_tokenSubsequenceMap(tokenMap);
+     }
+
      if ( get_verbose() > 1 )
           printf ("Calling openFortranParser_main(): OpenFortranParser_globalFilePointer = %p \n",OpenFortranParser_globalFilePointer);
 

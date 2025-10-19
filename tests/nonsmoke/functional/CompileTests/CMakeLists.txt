@@ -38,6 +38,15 @@ if(enable-cuda)
   add_subdirectory(CudaTests)
 endif()
 
+# REX: Fortran tests are independent of which C/C++ compiler is used to build REX itself
+# Move Fortran test registration outside the Clang-specific if/else block
+if(enable-fortran)
+  add_subdirectory(Fortran_tests)
+  # DQ (7/14/2013): Temporarily commented out this test to evaluate
+  # progress on tests/nonsmoke/functional/CompileTests directory.
+  #add_subdirectory(CAF2_tests)
+endif()
+
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
    add_subdirectory(C_tests)
    add_subdirectory(C89_std_c89_tests)
@@ -55,52 +64,45 @@ else()
     endif()
   endif()
 
-  if(NOT "${EDG_VERSION}" EQUAL "4.3")
-    if(enable-c OR enable-fortran)
-      add_subdirectory(OpenMP_tests)
-    endif()
+  # REX: Removed EDG_VERSION check - EDG has been completely removed from REX
+  # TODO(#12): Re-enable Fortran OpenMP tests after fixing backend transformation for OpenMP in Fortran
+  if(enable-c)
+    add_subdirectory(OpenMP_tests)
+  endif()
 
-    if(enable-fortran)
-      add_subdirectory(Fortran_tests)
-      # DQ (7/14/2013): Temporarily commented out this test to evaluate
-      # progress on tests/nonsmoke/functional/CompileTests directory.
-      #add_subdirectory(CAF2_tests)
-    endif()
-
-    if(enable-c)
-      add_subdirectory(copyAST_tests)
+  if(enable-c)
+    add_subdirectory(copyAST_tests)
 # ROSE-1738
 #     add_subdirectory(RoseExample_tests)
-      add_subdirectory(colorAST_tests)
-      add_subdirectory(unparseToString_tests)
-      add_subdirectory(sourcePosition_tests)
-      # requires Valgrind
-      #add_subdirectory(uninitializedField_tests)
-      add_subdirectory(OvertureCode)
-      add_subdirectory(P++Tests)
-      add_subdirectory(A++Code)
-      add_subdirectory(ExpressionTemplateExample_tests)
-      add_subdirectory(hiddenTypeAndDeclarationListTests)
-      add_subdirectory(sizeofOperation_tests)
-      if (with-wine)
-        add_subdirectory(MicrosoftWindows_tests)
-      endif()
-      add_subdirectory(nameQualificationAndTypeElaboration_tests)
-      if(enable-new-edg-interface)
-        add_subdirectory(NewEDGInterface_C_tests)
-      endif()
-      add_subdirectory(UnparseHeadersTests)
-      add_subdirectory(UnparseHeadersUsingTokenStream_tests)
-
-      if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Xtensa")
-        add_subdirectory(mergeAST_tests)
-        add_subdirectory(ElsaTestCases)
-        add_subdirectory(virtualCFG_tests)
-        add_subdirectory(A++Tests)
-        add_subdirectory(staticCFG_tests)
-      endif()
+    add_subdirectory(colorAST_tests)
+    add_subdirectory(unparseToString_tests)
+    add_subdirectory(sourcePosition_tests)
+    # requires Valgrind
+    #add_subdirectory(uninitializedField_tests)
+    add_subdirectory(OvertureCode)
+    add_subdirectory(P++Tests)
+    add_subdirectory(A++Code)
+    add_subdirectory(ExpressionTemplateExample_tests)
+    add_subdirectory(hiddenTypeAndDeclarationListTests)
+    add_subdirectory(sizeofOperation_tests)
+    if (with-wine)
+      add_subdirectory(MicrosoftWindows_tests)
     endif()
-  endif() # end of !ROSE_USE_EDG_VERSION_4_3
+    add_subdirectory(nameQualificationAndTypeElaboration_tests)
+    if(enable-new-edg-interface)
+      add_subdirectory(NewEDGInterface_C_tests)
+    endif()
+    add_subdirectory(UnparseHeadersTests)
+    add_subdirectory(UnparseHeadersUsingTokenStream_tests)
+
+    if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Xtensa")
+      add_subdirectory(mergeAST_tests)
+      add_subdirectory(ElsaTestCases)
+      add_subdirectory(virtualCFG_tests)
+      add_subdirectory(A++Tests)
+      add_subdirectory(staticCFG_tests)
+    endif()
+  endif()
 
   if(enable-python)
      #add_subdirectory(Python_tests)
