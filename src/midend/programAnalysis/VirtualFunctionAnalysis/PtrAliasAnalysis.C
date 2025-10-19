@@ -31,8 +31,10 @@ struct FunctionFilter
         }
 };
 
-struct OnlyNonCompilerGenerated : public std::unary_function<bool, SgFunctionDeclaration*>
+struct OnlyNonCompilerGenerated
 {
+  using argument_type = SgFunctionDeclaration*;
+  using result_type = bool;
 
     bool operator() (SgFunctionDeclaration * node) const
     {

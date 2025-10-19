@@ -256,13 +256,13 @@ ASTtools::cutPreprocInfo (SgBasicBlock* b,
   ROSE_ASSERT (info);
   remove_copy_if (info->begin (), info->end (),
                   back_inserter (save_buf),
-                  bind2nd (ptr_fun (isNotRelPos), pos));
+                  [pos](const PreprocessingInfo* info) { return isNotRelPos(info, pos); });
 
 // DQ (9/26/2007): Commented out as part of move from std::list to std::vector
 // info->remove_if (bind2nd (ptr_fun (isRelPos), pos));
 // Liao (10/3/2007), implement list::remove_if for vector, which lacks sth. like erase_if
   AttachedPreprocessingInfoType::iterator new_end =
-	   remove_if(info->begin(),info->end(),bind2nd(ptr_fun (isRelPos), pos));
+	   remove_if(info->begin(),info->end(),[pos](const PreprocessingInfo* info) { return isRelPos(info, pos); });
   info->erase(new_end, info->end());
   
 }
@@ -318,7 +318,7 @@ ASTtools::moveBeforePreprocInfo (SgStatement* src, SgStatement* dest)
 // s_info->remove_if (bind2nd (ptr_fun (isRelPos), PreprocessingInfo::before));
 // Liao (10/3/2007), vectors do not support remove_if
   AttachedPreprocessingInfoType::iterator new_end =
-       remove_if(s_info->begin(),s_info->end(),bind2nd(ptr_fun (isRelPos), PreprocessingInfo::before));
+       remove_if(s_info->begin(),s_info->end(),[](const PreprocessingInfo* info) { return isRelPos(info, PreprocessingInfo::before); });
   s_info->erase(new_end, s_info->end());
 
 }
@@ -336,20 +336,18 @@ ASTtools::moveInsidePreprocInfo (SgBasicBlock* src, SgBasicBlock* dest)
   // Determine an insertion point.
   AttachedPreprocessingInfoType::iterator i =
     find_if (d_info->begin (), d_info->end (),
-             bind2nd (ptr_fun (isRelPos), PreprocessingInfo::inside));
+             [](const PreprocessingInfo* info) { return isRelPos(info, PreprocessingInfo::inside); });
 
   if (i == d_info->end ()) // Destination has no 'inside' preprocessing info.
     i = find_if (d_info->begin (), d_info->end (),
-                 bind2nd (ptr_fun (isRelPos), PreprocessingInfo::after));
+                 [](const PreprocessingInfo* info) { return isRelPos(info, PreprocessingInfo::after); });
 
   if (i == d_info->end ()) // Destination has no 'after' preprocessing info.
     remove_copy_if (s_info->begin (), s_info->end (), back_inserter (*d_info),
-                    bind2nd (ptr_fun (isNotRelPos),
-                             PreprocessingInfo::inside));
+                    [](const PreprocessingInfo* info) { return isNotRelPos(info, PreprocessingInfo::inside); });
   else // Insert before 'i'
     remove_copy_if (s_info->begin (), s_info->end (), inserter (*d_info, i),
-                    bind2nd (ptr_fun (isNotRelPos),
-                             PreprocessingInfo::inside));
+                    [](const PreprocessingInfo* info) { return isNotRelPos(info, PreprocessingInfo::inside); });
 
   // Erase from source.
 
@@ -358,7 +356,7 @@ ASTtools::moveInsidePreprocInfo (SgBasicBlock* src, SgBasicBlock* dest)
 // s_info->remove_if (bind2nd (ptr_fun (isRelPos), PreprocessingInfo::inside));
 // Liao (10/3/2007), vectors do not support remove_if
   AttachedPreprocessingInfoType::iterator new_end =
-       remove_if(s_info->begin(),s_info->end(),bind2nd(ptr_fun (isRelPos), PreprocessingInfo::inside));
+       remove_if(s_info->begin(),s_info->end(),[](const PreprocessingInfo* info) { return isRelPos(info, PreprocessingInfo::inside); });
   s_info->erase(new_end, s_info->end());
 
 }
@@ -377,14 +375,14 @@ ASTtools::moveAfterPreprocInfo (SgStatement* src, SgStatement* dest)
 
   remove_copy_if (s_info->begin (), s_info->end (),
                   back_inserter (*d_info),
-                  bind2nd (ptr_fun (isNotRelPos), PreprocessingInfo::after));
+                  [](const PreprocessingInfo* info) { return isNotRelPos(info, PreprocessingInfo::after); });
 
 // DQ (9/26/2007): Commented out as part of move from std::list to std::vector
 //   printf ("Commented out s_info->remove_if() as part of move from std::list to std::vector \n");
 // s_info->remove_if (bind2nd (ptr_fun (isRelPos), PreprocessingInfo::after));
 // Liao (10/3/2007), vectors do not support remove_if
   AttachedPreprocessingInfoType::iterator new_end =
-       remove_if(s_info->begin(),s_info->end(),bind2nd(ptr_fun (isRelPos), PreprocessingInfo::after));
+       remove_if(s_info->begin(),s_info->end(),[](const PreprocessingInfo* info) { return isRelPos(info, PreprocessingInfo::after); });
   s_info->erase(new_end, s_info->end());
 
 }

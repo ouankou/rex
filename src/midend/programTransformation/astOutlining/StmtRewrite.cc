@@ -78,7 +78,7 @@ ASTtools::appendStmtsCopy (const SgBasicBlock* a, SgBasicBlock* b)
       SgStatementPtrList src_stmts = a->get_statements ();
       for_each (src_stmts.begin (),
                 src_stmts.end (),
-                bind2nd (ptr_fun (appendCopy), b));
+                [b](const SgStatement* s) { appendCopy(s, b); });
     }
 }
 

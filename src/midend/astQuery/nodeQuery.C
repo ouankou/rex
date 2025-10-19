@@ -116,7 +116,7 @@ NodeQuery::getFunction(TypeOfQueryTypeOneParameter oneParam)
         ROSE_ABORT ();
       }
   } /* End switch-case */
-  return std::ptr_fun(__x);
+  return AstQueryNamespace::rex_ptr_fun(__x);
 
 }
 
@@ -163,7 +163,7 @@ NodeQuery::getFunction(TypeOfQueryTypeTwoParameters twoParam)
         ROSE_ABORT ();
       }
   }
-  return std::ptr_fun(__x);
+  return AstQueryNamespace::rex_ptr_fun(__x);
 }
 
 
@@ -947,7 +947,7 @@ NodeQuerySynthesizedAttributeType NodeQuery::querySubTree ( SgNode * subTree, Sg
 #if 0
      printf ("Inside of NodeQuery::querySubTree #2 \n");
 #endif
-     return AstQueryNamespace::querySubTree(subTree, std::bind(std::ptr_fun(querySolverFunction),std::placeholders::_1,traversal), defineQueryType);
+     return AstQueryNamespace::querySubTree(subTree, std::bind(querySolverFunction,std::placeholders::_1,traversal), defineQueryType);
    }
 
 NodeQuerySynthesizedAttributeType NodeQuery::querySubTree ( SgNode * subTree, SgNode * traversal, TypeOfQueryTypeTwoParameters elementReturnType, AstQueryNamespace::QueryDepth defineQueryType )
@@ -977,7 +977,7 @@ NodeQuery::querySubTree (SgNode * subTree, roseFunctionPointerOneParameter eleme
      printf ("Inside of NodeQuery::querySubTree #4 \n");
 #endif
 
-     return  AstQueryNamespace::querySubTree(subTree,std::ptr_fun(elementReturnType),defineQueryType);
+     return  AstQueryNamespace::querySubTree(subTree,elementReturnType,defineQueryType);
    }
 
 
@@ -1030,26 +1030,12 @@ NodeQuerySynthesizedAttributeType NodeQuery::queryNodeList ( NodeQuerySynthesize
      return NodeQuery::queryNodeList(queryList,VariantVector(targetVariant));
    }
 
-#if 0
-// DQ (3/14/207): Older version using a return type of std::list
-class TypeQueryDummyFunctionalTest :  public std::unary_function<SgNode*, std::list<SgNode*> > 
+class TypeQueryDummyFunctionalTest
    {
      public:
-          result_type operator()(SgNode* node );
-   };
-
-TypeQueryDummyFunctionalTest::result_type
-TypeQueryDummyFunctionalTest::operator()(SgNode* node )
-   {
-     result_type returnType;
-     returnType.push_back(node);
-     return returnType; 
-   }
-#endif
-
-class TypeQueryDummyFunctionalTest :  public std::binary_function<SgNode*, Rose_STL_Container<SgNode*>*, void* >
-   {
-     public:
+          using first_argument_type = SgNode*;
+          using second_argument_type = Rose_STL_Container<SgNode*>*;
+          using result_type = void*;
           result_type operator()(SgNode* node, Rose_STL_Container<SgNode*>* ) const;
    };
 
@@ -1065,9 +1051,12 @@ TypeQueryDummyFunctionalTest::operator()(SgNode* node, Rose_STL_Container<SgNode
 typedef SgNode* node_ptr;
 
 // Making this use a std::vector instead of std::list might make it more efficient as well.
-class TwoParamaters :  public std::binary_function<node_ptr, Rose_STL_Container<SgNode*>* , void* >
+class TwoParamaters
 {
   public:
+    using first_argument_type = node_ptr;
+    using second_argument_type = Rose_STL_Container<SgNode*>*;
+    using result_type = void*;
     result_type operator()(first_argument_type node, const second_argument_type returnList ) const
     {
       // second_argument_type curr_list = (second_argument_type) returnList;
@@ -1076,9 +1065,12 @@ class TwoParamaters :  public std::binary_function<node_ptr, Rose_STL_Container<
     }
 };
 
-class OneParamater :  public std::unary_function<SgNode*, Rose_STL_Container<SgNode*> >
+class OneParamater
 {
   public:
+    using argument_type = SgNode*;
+    using result_type = Rose_STL_Container<SgNode*>;
+
     result_type operator()(SgNode* node ) const
     {
       Rose_STL_Container<SgNode*> returnList;
@@ -1193,7 +1185,7 @@ Rose_STL_Container<SgNode*> NodeQuery::generateListOfTypes ( SgNode* astNode )
   NodeQuerySynthesizedAttributeType
 NodeQuery::queryMemoryPool ( SgNode * traversal, NodeQuery::roseFunctionPointerTwoParameters querySolverFunction, VariantVector* targetVariantVector)
 {
-  return AstQueryNamespace::queryMemoryPool(std::bind(std::ptr_fun(querySolverFunction),std::placeholders::_1,traversal), targetVariantVector);
+  return AstQueryNamespace::queryMemoryPool(std::bind(querySolverFunction,std::placeholders::_1,traversal), targetVariantVector);
 }
 
 
@@ -1208,7 +1200,7 @@ NodeQuery::queryMemoryPool ( SgNode * traversal, NodeQuery::roseFunctionPointerT
   NodeQuerySynthesizedAttributeType
 NodeQuery::queryMemoryPool ( SgNode * traversal, NodeQuery::roseFunctionPointerOneParameter querySolverFunction, VariantVector* targetVariantVector)
 {
-  return  AstQueryNamespace::queryMemoryPool(std::ptr_fun(querySolverFunction),targetVariantVector);
+  return  AstQueryNamespace::queryMemoryPool(querySolverFunction,targetVariantVector);
 }
 
 /********************************************************************************

@@ -329,7 +329,7 @@ ASTtools::collectDefdVarSyms (const SgStatement* s, VarSymSet_t& syms)
 {
   typedef Rose_STL_Container<SgNode *> NodeList_t;
   NodeList_t vars_local = NodeQuery::querySubTree (const_cast<SgStatement *> (s), V_SgVariableDeclaration);
-  for_each (vars_local.begin (), vars_local.end (), bind2nd (ptr_fun (getVarSyms), &syms));
+  for_each (vars_local.begin (), vars_local.end (), [&syms](SgNode* n) { getVarSyms(n, &syms); });
 
   for (VarSymSet_t::iterator it = syms.begin(); it != syms.end(); it++ )
     ROSE_ASSERT (*it!=NULL);

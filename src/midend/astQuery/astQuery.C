@@ -144,7 +144,10 @@ namespace AstQueryNamespace{
 
 
 template<typename AstQuerySynthesizedAttributeType>
-struct testFunctionals: public std::unary_function<SgNode*,std::list<AstQuerySynthesizedAttributeType> >{
+struct testFunctionals
+{
+  using argument_type = SgNode*;
+  using result_type = std::list<AstQuerySynthesizedAttributeType>;
   //When elementMatchCount==1 then a match has been made
   typedef std::list<AstQuerySynthesizedAttributeType> (*roseFunctionPointerOneParameter)  (SgNode *);
   roseFunctionPointerOneParameter queryFunctionOneParameter;
@@ -170,7 +173,11 @@ std::list<SgNode*> queryNodeAnonymousTypedef2(SgNode* node)
   return returnList;
 } /* End function:queryNodeCLassDeclarationFromName() */
 
-struct testFunctionals2: public std::binary_function<SgNode*,SgNode*, std::list<SgNode*> >{
+struct testFunctionals2
+{
+  using first_argument_type = SgNode*;
+  using second_argument_type = SgNode*;
+  using result_type = std::list<SgNode*>;
   int y;
   void setPred(int x){
     y=x;

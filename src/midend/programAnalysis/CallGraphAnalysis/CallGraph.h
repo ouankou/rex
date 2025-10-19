@@ -127,15 +127,19 @@ class ROSE_DLL_API FunctionData
 };
 
 //! A function object to be used as a predicate to filter out functions in a call graph: it does not filter out anything.
-struct dummyFilter : public std::unary_function<bool,SgFunctionDeclaration*>
+struct dummyFilter
 {
+  using argument_type = SgFunctionDeclaration*;
+  using result_type = bool;
   bool operator() (SgFunctionDeclaration* node) const; // always return true
 }; 
 
 //! A function object to filter out builtin functions in a call graph (only non-builtin functions will be considered)
 // Liao, 6/17/2012
-struct ROSE_DLL_API builtinFilter : public std::unary_function<bool,SgFunctionDeclaration*>
+struct ROSE_DLL_API builtinFilter
 {
+  using argument_type = SgFunctionDeclaration*;
+  using result_type = bool;
   bool operator() (SgFunctionDeclaration* node) const;
 }; 
 
@@ -173,9 +177,11 @@ class ROSE_DLL_API CallGraphBuilder
 // AstDOTGeneration::writeIncidenceGraphToDOTFile() is used instead in the tutorial. Liao 6/17/2012
 void GenerateDotGraph ( SgIncidenceDirectedGraph *graph, std::string fileName );
 
-class ROSE_DLL_API GetOneFuncDeclarationPerFunction :  public std::unary_function<SgNode*, Rose_STL_Container<SgNode*> >
+class ROSE_DLL_API GetOneFuncDeclarationPerFunction
 {
   public:
+    using argument_type = SgNode*;
+    using result_type = Rose_STL_Container<SgNode*>;
     result_type operator()(SgNode* node );
 };
 
