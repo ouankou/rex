@@ -652,15 +652,17 @@ class AttributeListMap {
                }
 
        //////////////////////////////////////////////////////////////////////////////////////
-       // The functor
-       //     struct findDirective: public std::binary_function<TokenIterator,DirectiveType,bool>
-       // helps to see if TokenIterator is of type directive.
+       // The functor findDirective helps to see if TokenIterator is of type directive.
        ///////////////////////////////////////////////////////////////////////////////////// 
 
        template<typename TokenIterator, typename DirectiveType>
-               struct findDirective: public std::binary_function<TokenIterator,DirectiveType,bool>
+               struct findDirective
                {
-                       bool operator()(TokenIterator node, DirectiveType directive) const{
+                  using first_argument_type = TokenIterator;
+                  using second_argument_type = DirectiveType;
+                  using result_type = bool;
+
+                  bool operator()(TokenIterator node, DirectiveType directive) const{
                                bool returnValue = false;
 
                                using namespace boost::wave;
@@ -682,9 +684,13 @@ class AttributeListMap {
        // helps to see if the token is of one of the types in directiveList.
        ///////////////////////////////////////////////////////////////////////////////////// 
        template<typename TokenIterator, typename DirectiveType>
-               struct findDirectiveInList: public std::binary_function<TokenIterator,std::list<DirectiveType>,bool>
+               struct findDirectiveInList
                {
-                       bool operator()(TokenIterator node, std::list<DirectiveType> directiveList) const{
+                  using first_argument_type = TokenIterator;
+                  using second_argument_type = std::list<DirectiveType>;
+                  using result_type = bool;
+
+                  bool operator()(TokenIterator node, std::list<DirectiveType> directiveList) const{
                                bool returnValue = false;
 
                                using namespace boost::wave;

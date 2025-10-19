@@ -729,7 +729,7 @@ CallTargetSet::solveFunctionPointerCall( SgPointerDerefExp *pointerDerefExp)
   vv.push_back(V_SgFunctionDeclaration);
   vv.push_back(V_SgTemplateInstantiationFunctionDecl);
 
-  functionList =  AstQueryNamespace::queryMemoryPool(std::bind2nd(std::ptr_fun(solveFunctionPointerCallsFunctional), fctType), &vv );
+  functionList =  AstQueryNamespace::queryMemoryPool(std::bind(solveFunctionPointerCallsFunctional, std::placeholders::_1, fctType), &vv );
 
   return functionList;
 }
@@ -1313,7 +1313,7 @@ getPropertiesForSgFunctionCallExp(SgFunctionCallExp* sgFunCallExp,
             SgFunctionType *fctType = isSgFunctionType(functionPointerType->findBaseType());
             assert(fctType!=NULL);
             SgFunctionDeclarationPtrList matches =
-                AstQueryNamespace::queryMemoryPool(std::bind2nd(std::ptr_fun(solveFunctionPointerCallsFunctional), fctType),
+                AstQueryNamespace::queryMemoryPool(std::bind(solveFunctionPointerCallsFunctional, std::placeholders::_1, fctType),
                                                    &vv);
             functionList.insert(functionList.end(), matches.begin(), matches.end());
             break;

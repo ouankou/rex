@@ -42,9 +42,11 @@ printNodeList ( const list<string> & localList )
   *    NodeQuery::querySubTree<typename NodeFunctional>(..)
   * since the querySubTree we are using builds on that interface.
   ****************************************************************************/
-class FunctionalTest1 :  public std::unary_function<SgNode*, NodeQuerySynthesizedAttributeType > 
+class FunctionalTest1
    {
      public:
+      using argument_type = SgNode*;
+      using result_type = NodeQuerySynthesizedAttributeType;
 	  result_type operator()(SgNode* node ) 
 	     { 
 	       result_type returnType;

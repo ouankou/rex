@@ -321,9 +321,11 @@ auxObjectsAllocated(SgStatement *stmt)
      return objs;
    }
      
-class IsFunctionDef : unary_function<SgNode *, bool>
+class IsFunctionDef
    {
      public:
+          using argument_type = SgNode*;
+          using result_type = bool;
           bool operator()(SgNode *n)
              {
                //cout << "IsFunctionDef: looking at a " << n->class_name() << endl;
@@ -334,9 +336,11 @@ class IsFunctionDef : unary_function<SgNode *, bool>
    };
 
 // if a break/continue is issued, does the buck stop here?
-class IsBreakPoint : unary_function<SgNode *, bool>
+class IsBreakPoint
    {
      public:
+          using argument_type = SgNode*;
+          using result_type = bool;
           bool operator()(SgNode *n)
              {
                return isSgForStatement(n) ||
@@ -347,9 +351,11 @@ class IsBreakPoint : unary_function<SgNode *, bool>
              }
    };
 
-class ParentIsBreakPoint : unary_function<SgNode *, bool>
+class ParentIsBreakPoint
    {
      public:
+          using argument_type = SgNode*;
+          using result_type = bool;
           bool operator()(SgNode *n)
              {
                return IsBreakPoint()(n->get_parent());
@@ -772,8 +778,10 @@ class Transformer : public AstSimpleProcessing
 // BEGIN STOLEN from wholeGraphAST.C
 
 // This functor is derived from the STL functor mechanism
-struct customFilter: public std::unary_function< bool, pair< SgNode*, std::string>& >
-   {
+struct customFilter
+{
+  using argument_type = pair<SgNode*, std::string>&;
+  using result_type = bool;
   // This functor filters SgFileInfo objects and IR nodes from the GNU compatability file
      bool operator() ( AST_Graph::NodeType & x );
    };
