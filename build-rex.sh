@@ -76,7 +76,6 @@ cmake .. \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
     -Denable-c=ON \
     -Denable-fortran=ON \
-    -Denable-java=ON \
     -DCMAKE_CXX_STANDARD=17 \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 

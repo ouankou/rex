@@ -172,40 +172,60 @@ endif()
 
 if(enable-fortran)
   # --------check Fortran compiler -----------------------
-  # CMakeDetermineFortranCompiler does not recognize gfortran first
-  # we use a slightly modified CMakeDetermineFortranCompiler.cmake to put gfortran to the highest priority
-  # Pei-Hung (04/08/21) allowed gfortran* for homebrew gfortran with suffix name
-  # REX: Check compiler ID instead of just name to handle f95/f90 symlinks to gfortran
   include(roseCMakeDetermineFortranCompiler)
-  if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_Fortran_COMPILER}"  MATCHES ".*gfortran.*$")
+
+  if(NOT BACKEND_FORTRAN_COMPILER)
+    set(BACKEND_FORTRAN_COMPILER ${CMAKE_Fortran_COMPILER})
+  endif()
+
+  get_filename_component(BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH "${BACKEND_FORTRAN_COMPILER}" NAME)
+  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH "${BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH}")
+
+  set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER "")
+  set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER "")
+
+  # First try compiler-native queries (GNU supports -dumpfullversion/-dumpversion)
+  if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU")
     if(VERBOSE)
-      message("Found GNU Fortran compiler ${CMAKE_Fortran_COMPILER}")
+      message("Querying GNU Fortran version via -dumpfullversion")
     endif()
-    if(NOT BACKEND_FORTRAN_COMPILER)
-      set (BACKEND_FORTRAN_COMPILER  ${CMAKE_Fortran_COMPILER})
+    execute_process(
+      COMMAND ${BACKEND_FORTRAN_COMPILER} -dumpfullversion
+      OUTPUT_VARIABLE _fortran_version_full
+      ERROR_VARIABLE _fortran_version_full_err
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE _fortran_full_status)
+    if(_fortran_full_status EQUAL 0 AND NOT _fortran_version_full STREQUAL "")
+      string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _fortran_version_match "${_fortran_version_full}")
+      if(_fortran_version_match)
+        set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
+        set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
+      endif()
     endif()
+  endif()
 
+  # Generic fallback: parse `<major>.<minor>` from `--version`
+  if(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "" OR BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER STREQUAL "")
     execute_process(
       COMMAND ${BACKEND_FORTRAN_COMPILER} --version
-      COMMAND head -1
-      COMMAND cut -f2 -d\)
-      COMMAND tr -d \ # must have a space
-      COMMAND cut -d. -f1
-      OUTPUT_VARIABLE BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER)
-    string(REGEX MATCH "[0-9]+" BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER ${BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER})
-    execute_process(
-      COMMAND basename ${BACKEND_FORTRAN_COMPILER}
-      OUTPUT_VARIABLE BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH)
-    string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH ${BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH})
+      OUTPUT_VARIABLE _fortran_version_stdout
+      ERROR_VARIABLE _fortran_version_stderr
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE _fortran_version_status)
+    set(_fortran_version_combined "${_fortran_version_stdout}\n${_fortran_version_stderr}")
+    string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _fortran_generic_match "${_fortran_version_combined}")
+    if(_fortran_generic_match)
+      set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
+      set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
+    endif()
+  endif()
 
-    execute_process(
-      COMMAND ${BACKEND_FORTRAN_COMPILER} --version
-      COMMAND head -1
-      COMMAND cut -f2 -d\)
-      COMMAND tr -d \ # must have a space
-      COMMAND cut -d. -f2
-      OUTPUT_VARIABLE BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER)
-    string(REGEX MATCH "[0-9]+" BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER})
+  if(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "" OR BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER STREQUAL "")
+    message(WARNING "Could not determine Fortran compiler version from ${BACKEND_FORTRAN_COMPILER}; defaulting to 0.0")
+    set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER 0)
+    set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER 0)
   endif()
 endif()
 
