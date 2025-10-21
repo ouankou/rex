@@ -50,71 +50,56 @@ if(CCACHE_EXECUTABLE)
 endif()
 
 #-----------------------------------------------------------------------------------------------------------------------
-# Enforce Clang/Clang++ compiler requirement for REX
+# Compiler selection
 #-----------------------------------------------------------------------------------------------------------------------
-# REX requires Clang/Clang++ for building due to Clang frontend integration
-# Using GCC/G++ causes ABI incompatibilities with Clang/LLVM libraries
-
-# Helper function to generate consistent error messages for missing compilers
-function(fatal_compiler_not_found LANG COMPILER_NAME PREFERRED_VERSION CMAKE_VAR)
-  message(FATAL_ERROR
-    "REX requires ${COMPILER_NAME} as ${LANG} compiler but ${COMPILER_NAME} was not found.\n"
-    "Please install ${COMPILER_NAME} (preferably ${PREFERRED_VERSION}) or set ${CMAKE_VAR} to ${COMPILER_NAME} path.\n"
-    "Example: cmake -D${CMAKE_VAR}=${PREFERRED_VERSION} ..")
-endfunction()
-
-# If compilers not set, try to find clang-20/clang++-20 first, then fall back to clang/clang++
-if(NOT DEFINED CMAKE_C_COMPILER)
-  find_program(CLANG_20 NAMES clang-20)
-  if(CLANG_20)
-    set(CMAKE_C_COMPILER ${CLANG_20})
-    message(STATUS "Auto-detected C compiler: ${CMAKE_C_COMPILER}")
+# Prefer Clang/Clang++ when available, but allow any modern compiler.
+if(NOT DEFINED CMAKE_C_COMPILER OR "${CMAKE_C_COMPILER}" STREQUAL "")
+  if(DEFINED ENV{CC} AND NOT "$ENV{CC}" STREQUAL "")
+    set(CMAKE_C_COMPILER "$ENV{CC}")
+    message(STATUS "Using C compiler from CC: ${CMAKE_C_COMPILER}")
   else()
-    find_program(CLANG NAMES clang)
-    if(CLANG)
-      set(CMAKE_C_COMPILER ${CLANG})
+    find_program(CLANG_20 NAMES clang-20)
+    if(CLANG_20)
+      set(CMAKE_C_COMPILER ${CLANG_20})
       message(STATUS "Auto-detected C compiler: ${CMAKE_C_COMPILER}")
     else()
-      fatal_compiler_not_found("C" "clang" "clang-20" "CMAKE_C_COMPILER")
+      find_program(CLANG NAMES clang)
+      if(CLANG)
+        set(CMAKE_C_COMPILER ${CLANG})
+        message(STATUS "Auto-detected C compiler: ${CMAKE_C_COMPILER}")
+      endif()
     endif()
   endif()
 endif()
 
-if(NOT DEFINED CMAKE_CXX_COMPILER)
-  find_program(CLANGXX_20 NAMES clang++-20)
-  if(CLANGXX_20)
-    set(CMAKE_CXX_COMPILER ${CLANGXX_20})
-    message(STATUS "Auto-detected C++ compiler: ${CMAKE_CXX_COMPILER}")
+if(NOT DEFINED CMAKE_CXX_COMPILER OR "${CMAKE_CXX_COMPILER}" STREQUAL "")
+  if(DEFINED ENV{CXX} AND NOT "$ENV{CXX}" STREQUAL "")
+    set(CMAKE_CXX_COMPILER "$ENV{CXX}")
+    message(STATUS "Using C++ compiler from CXX: ${CMAKE_CXX_COMPILER}")
   else()
-    find_program(CLANGXX NAMES clang++)
-    if(CLANGXX)
-      set(CMAKE_CXX_COMPILER ${CLANGXX})
+    find_program(CLANGXX_20 NAMES clang++-20)
+    if(CLANGXX_20)
+      set(CMAKE_CXX_COMPILER ${CLANGXX_20})
       message(STATUS "Auto-detected C++ compiler: ${CMAKE_CXX_COMPILER}")
     else()
-      fatal_compiler_not_found("C++" "clang++" "clang++-20" "CMAKE_CXX_COMPILER")
+      find_program(CLANGXX NAMES clang++)
+      if(CLANGXX)
+        set(CMAKE_CXX_COMPILER ${CLANGXX})
+        message(STATUS "Auto-detected C++ compiler: ${CMAKE_CXX_COMPILER}")
+      endif()
     endif()
   endif()
 endif()
 
-# Verify that GCC is not being used (common mistake)
-get_filename_component(C_COMPILER_NAME "${CMAKE_C_COMPILER}" NAME)
-get_filename_component(CXX_COMPILER_NAME "${CMAKE_CXX_COMPILER}" NAME)
-
-if(C_COMPILER_NAME MATCHES "^gcc")
-  message(FATAL_ERROR
-    "REX cannot be built with GCC as C compiler (found: ${CMAKE_C_COMPILER}).\n"
-    "REX requires Clang due to ABI compatibility with Clang/LLVM frontend libraries.\n"
-    "Please use: cmake -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 ..")
+set(_C_COMPILER_DISPLAY "${CMAKE_C_COMPILER}")
+if(NOT _C_COMPILER_DISPLAY)
+  set(_C_COMPILER_DISPLAY "<unspecified>")
 endif()
-
-if(CXX_COMPILER_NAME MATCHES "^g\\+\\+")
-  message(FATAL_ERROR
-    "REX cannot be built with G++ as C++ compiler (found: ${CMAKE_CXX_COMPILER}).\n"
-    "REX requires Clang++ due to ABI compatibility with Clang/LLVM frontend libraries.\n"
-    "Please use: cmake -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 ..")
+set(_CXX_COMPILER_DISPLAY "${CMAKE_CXX_COMPILER}")
+if(NOT _CXX_COMPILER_DISPLAY)
+  set(_CXX_COMPILER_DISPLAY "<unspecified>")
 endif()
-
-message(STATUS "Compiler enforcement: Using ${CMAKE_C_COMPILER} and ${CMAKE_CXX_COMPILER}")
+message(STATUS "Compiler selection: Using ${_C_COMPILER_DISPLAY} and ${_CXX_COMPILER_DISPLAY}")
 
 project(ROSE CXX C)
 
@@ -362,6 +347,24 @@ endif()
 if(enable-fortran)
   if(NOT enable-java)
     message(FATAL_ERROR "Fortran analysis requires Java support; enable-java must remain ON when enable-fortran is set.")
+  endif()
+  if(NOT DEFINED CMAKE_Fortran_COMPILER OR "${CMAKE_Fortran_COMPILER}" STREQUAL "")
+    if(DEFINED ENV{FC} AND NOT "$ENV{FC}" STREQUAL "")
+      set(CMAKE_Fortran_COMPILER "$ENV{FC}")
+      message(STATUS "Using Fortran compiler from FC: ${CMAKE_Fortran_COMPILER}")
+    else()
+      find_program(FLANG_20 NAMES flang-20)
+      if(FLANG_20)
+        set(CMAKE_Fortran_COMPILER ${FLANG_20})
+        message(STATUS "Auto-detected Fortran compiler: ${CMAKE_Fortran_COMPILER}")
+      else()
+        find_program(FLANG_FALLBACK NAMES flang-new flang)
+        if(FLANG_FALLBACK)
+          set(CMAKE_Fortran_COMPILER ${FLANG_FALLBACK})
+          message(STATUS "Auto-detected Fortran compiler: ${CMAKE_Fortran_COMPILER}")
+        endif()
+      endif()
+    endif()
   endif()
   set(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT 1)
   enable_language(Fortran)
@@ -927,14 +930,15 @@ if(enable-c)
 
   set(CXX_INCLUDE_STRING "{\"${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
   find_program(shell sh)
+  file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include-staging")
   if(shell AND CMAKE_COMPILER_IS_GNUCXX)
     execute_process(
-      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/dirincludes "./include-staging/" "${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS"
+      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/dirincludes "${CMAKE_BINARY_DIR}/include-staging" "${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS"
       OUTPUT_VARIABLE C_includeString)
     string(STRIP "${C_includeString}" C_includeString)
 
     execute_process(
-      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/dirincludes "./include-staging/" "${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS"
+      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/dirincludes "${CMAKE_BINARY_DIR}/include-staging" "${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS"
       OUTPUT_VARIABLE CXX_includeString)
     string(STRIP "${CXX_includeString}" CXX_includeString)
 

@@ -33,26 +33,31 @@ cmake --install .
 
 **See `BUILDING_WITH_CLANG.md` for complete Clang frontend build instructions.**
 
-## ⚠️ CRITICAL: Compiler Requirement
+## Compiler Requirements
 
-**ALWAYS use clang and clang++ as the C and C++ compilers for REX. Never use GCC.**
+**REX prefers Clang/Clang++ but supports any modern C++17-capable compiler (GCC 7+, Clang 5+, etc.).**
 
-The REX build system requires Clang/LLVM 20.x as the compiler (NOT just for the frontend, but for building the entire project):
+The build system will automatically select compilers in this order:
+1. **Environment variables** (`CC`, `CXX`, `FC`) - if set, these take precedence
+2. **Preferred compilers** - `clang-20`/`clang++-20`/`flang-20` if available
+3. **Fallback compilers** - `clang`/`clang++`/`flang-new`/`flang`
+4. **System default** - whatever CMake finds on your system
 
 ```bash
-# Always build with:
-CC=clang CXX=clang++ ./build-rex.sh ~/rex-install
+# Use default (automatically prefers clang-20/clang++-20 if available)
+./build-rex.sh ~/rex-install
 
-# Or manually:
-CC=clang CXX=clang++ cmake .. -Denable-clang-frontend=ON ...
+# Explicitly use GCC/G++
+CC=gcc CXX=g++ ./build-rex.sh ~/rex-install
+
+# Use specific compiler versions
+CC=gcc-11 CXX=g++-11 FC=gfortran-11 cmake .. -Denable-fortran=ON
+
+# Use Clang (manually)
+CC=clang-20 CXX=clang++-20 FC=flang-20 cmake .. -Denable-fortran=ON
 ```
 
-**Why this is required:**
-- The Clang frontend integration requires consistent C++ ABI between ROSE and Clang libraries
-- Using GCC to build ROSE creates incompatibilities with Clang/LLVM libraries
-- The build script automatically sets these compilers, but manual builds MUST specify them
-
-**Never use:** `gcc` or `g++` for building REX.
+**Note:** While any modern compiler works, Clang is preferred and better tested. The Clang/LLVM libraries for the frontend are linked separately and don't require building REX with Clang.
 
 ## Build System
 
@@ -284,7 +289,7 @@ SgExprStatement* stmt =
 
 **Boost version conflicts**: ROSE requires Boost >= 1.47.0. Specify with `-DBOOST_ROOT=` or `--with-boost=`.
 
-**LLVM/Clang requirement**: REX now requires LLVM/Clang 20.x or later. Install with `sudo apt-get install llvm-20 clang-20 libclang-20-dev` (Ubuntu/Debian).
+**LLVM/Clang requirement**: REX requires LLVM/Clang 20.x or later libraries for the frontend (libclang, not the compiler itself). Install with `sudo apt-get install llvm-20 libclang-20-dev` (Ubuntu/Debian). The `clang-20` compiler package is optional but recommended.
 
 **Clang frontend limitations**: The Clang frontend is highly experimental. It may only successfully compile simple C programs. C++ is not supported.
 
