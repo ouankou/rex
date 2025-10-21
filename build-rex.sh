@@ -70,7 +70,7 @@ fi
 mkdir -p "$BUILD_DIR" || { echo -e "${RED}Failed to create build directory${NC}"; exit 1; }
 cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 1; }
 
-# Configure with CMake (using Clang for LLVM 20 compatibility)
+# Configure with CMake (will auto-detect compilers, preferring clang-20/flang-20)
 cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
