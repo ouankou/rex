@@ -3584,6 +3584,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
           cerr << "Intel Fortran preprocessor not available! " << endl;
           ROSE_ABORT();
 #endif
+#else
+          fortran_C_preprocessor_commandLine.push_back(BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
 #endif
 
        // DQ (10/23/2010): Added support for "-D" options (this will trigger CPP preprocessing, eventually, but this is just to support the syntax checking).
@@ -3618,6 +3620,11 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 #elif BACKEND_FORTRAN_IS_PGI_COMPILER
      // Pei-Hung 12/09/2019 This is for PGI Fortran compiler, add others if necessary
           fortran_C_preprocessor_commandLine.push_back("-Mcpp");
+#elif BACKEND_FORTRAN_IS_INTEL_COMPILER
+     // Intel FPP adds the required flags above
+#else
+          fortran_C_preprocessor_commandLine.push_back("-E");
+          fortran_C_preprocessor_commandLine.push_back("-P");
 #endif
 
        // add source file name
@@ -3703,7 +3710,16 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
           vector<string> fortranCommandLine;
           fortranCommandLine.push_back(ROSE_GFORTRAN_PATH);
+#if BACKEND_FORTRAN_IS_GNU_COMPILER
           fortranCommandLine.push_back("-fsyntax-only");
+#elif defined(BACKEND_FORTRAN_IS_INTEL_COMPILER) && BACKEND_FORTRAN_IS_INTEL_COMPILER
+          fortranCommandLine.push_back("-syntax-only");
+#elif defined(BACKEND_FORTRAN_IS_LLVM_FLANG) && BACKEND_FORTRAN_IS_LLVM_FLANG
+          fortranCommandLine.push_back("-fsyntax-only");
+#else
+          // Fallback: most modern Fortran compilers support -fsyntax-only (GNU-compatible flag)
+          fortranCommandLine.push_back("-fsyntax-only");
+#endif
 
        // DQ (5/19/2008): Added support for include paths as required for relatively new Fortran specific include mechanism in OFP.
           const SgStringList & includeList = get_project()->get_includeDirectorySpecifierList();
@@ -3760,8 +3776,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                  else
                   {
                     string backendCompilerSystem = BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH;
-                    printf ("Currently only the GNU compiler backend is supported (gfortran) backendCompilerSystem = %s \n",backendCompilerSystem.c_str());
-                    ROSE_ABORT();
+                    if (get_verbose() > 0)
+                       printf ("Skipping Fortran warning flags for backend compiler %s (GNU-specific options not applied).\n",backendCompilerSystem.c_str());
                   }
              }
 
@@ -3781,7 +3797,9 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                  // We will implement a strict syntax checking option with a default of false so that we can by default support codes using
                  // the "REAL*8" syntax with F90 (which appear to be common).
                  // fortranCommandLine.push_back("-std=f95");
+#if BACKEND_FORTRAN_IS_GNU_COMPILER
                     fortranCommandLine.push_back("-std=legacy");
+#endif
                   }
 
             // DQ (5/20/2008)
@@ -3802,7 +3820,9 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                       // DQ (9/24/2010): We need to consider making a strict syntax checking option and allowing this to be relaxed
                       // by default.  It is however not clear that this is required for F2003 code where it does appear to be required
                       // for F90 code.  So this needs to be tested, see comments above relative to use of "-std=legacy".
+#if BACKEND_FORTRAN_IS_GNU_COMPILER
                          fortranCommandLine.push_back("-std=f2003");
+#endif
                        }
 
                  // DQ (5/20/2008)
@@ -3823,7 +3843,9 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                            // DQ (1/25/2016): We need to consider making a strict syntax checking option and allowing this to be relaxed
                            // by default.  It is however not clear that this is required for F2008 code where it does appear to be required
                            // for F90 code.  So this needs to be tested, see comments above relative to use of "-std=legacy".
+#if BACKEND_FORTRAN_IS_GNU_COMPILER
                               fortranCommandLine.push_back("-std=f2008");
+#endif
                             }
 #if BACKEND_FORTRAN_IS_GNU_COMPILER
                          use_line_length_none_string = "-ffree-line-length-none";
@@ -3866,9 +3888,12 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
        // A web page specific to -fno-backend suggests using -fsyntax-only instead (so the "-c" options is not required).
 #if 1
        // if ( SgProject::get_verbose() > 0 )
+          const string syntaxCheckerName = fortranCommandLine.empty() ? string() : fortranCommandLine.front();
           if ( get_verbose() > 0 )
              {
-               printf ("Checking syntax of input program using gfortran: syntaxCheckingCommandline = %s \n",CommandlineProcessing::generateStringFromArgList(fortranCommandLine,false,false).c_str());
+               printf ("Checking syntax of input program using %s: syntaxCheckingCommandline = %s \n",
+                       syntaxCheckerName.c_str(),
+                       CommandlineProcessing::generateStringFromArgList(fortranCommandLine,false,false).c_str());
              }
 #endif
        // Call the OS with the commandline defined by: syntaxCheckingCommandline
@@ -3897,15 +3922,12 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
        // At this point we have the full command line with the source file name
           if ( get_verbose() > 0 )
              {
-               printf ("Checking syntax of input program using gfortran: syntaxCheckingCommandline = %s \n",CommandlineProcessing::generateStringFromArgList(fortranCommandLine,false,false).c_str());
+               printf ("Checking syntax of input program using %s: syntaxCheckingCommandline = %s \n",
+                       syntaxCheckerName.c_str(),
+                       CommandlineProcessing::generateStringFromArgList(fortranCommandLine,false,false).c_str());
              }
 
-          int returnValueForSyntaxCheckUsingBackendCompiler = 0;
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-        returnValueForSyntaxCheckUsingBackendCompiler = systemFromVector (fortranCommandLine);
-#else
-        printf ("backend fortran compiler (gfortran) unavailable ... (not an error) \n");
-#endif
+          int returnValueForSyntaxCheckUsingBackendCompiler = systemFromVector (fortranCommandLine);
 
      // Check that there are no errors, I think that warnings are ignored!
         if (returnValueForSyntaxCheckUsingBackendCompiler != 0)

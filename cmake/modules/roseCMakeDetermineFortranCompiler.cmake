@@ -46,16 +46,17 @@ IF(NOT CMAKE_Fortran_COMPILER)
     #  ifc: Intel Fortran 95 compiler for Linux/x86
     #  efc: Intel Fortran 95 compiler for IA64
     #
-    #  The order is 95 or newer compilers first, then 90, 
+    #  The order is 95 or newer compilers first (with LLVM flang preferred when available), then 90,
     #  then 77 or older compilers, gnu is always last in the group,
     #  so if you paid for a compiler it is picked by default.
     # NOTE for testing purposes this list is DUPLICATED in
     # CMake/Source/CMakeLists.txt, IF YOU CHANGE THIS LIST,
     # PLEASE UPDATE THAT FILE AS WELL!
     SET(CMAKE_Fortran_COMPILER_LIST
-#      ifort ifc efc f95 pgf95 lf95 xlf95 fort gfortran gfortran-4 g95 f90
-# Liao, 11/25/2009, changed the order to find gfortran first by default   
-       gfortran ifort ifc efc f95 pgf95 lf95 xlf95 fort gfortran-4 g95 f90
+# Prefer LLVM flang family first when no explicit compiler is provided.
+      flang flang-new flang-20
+# Legacy ordering retained below (see note about duplication in CMake/Source/CMakeLists.txt).
+      gfortran ifort ifc efc f95 pgf95 lf95 xlf95 fort gfortran-4 g95 f90
       pgf90 xlf90 epcf90 fort77 frt pgf77 xlf fl32 af77 g77 f77
       )
   ENDIF(CMAKE_Fortran_COMPILER_INIT)
