@@ -28,6 +28,10 @@
 #include <string>
 #include <stdlib.h>
 #include <stdio.h>
+#include <set>
+#include <sstream>
+#include <vector>
+#include <filesystem>
 #include "rose_config.h"
 #include "rose_paths.h"
 #include "commandline_processing.h"
@@ -42,6 +46,8 @@
 
 
 using namespace std;
+
+namespace fs = std::filesystem;
 
 // DQ (9/6/2010): Allow this to be commented out to simplify debugging using gdb.
 // #define ENABLE_FORTRAN_ERROR_HANDLER
@@ -68,18 +74,92 @@ int openFortranParser_main(int argc, char **argv)
   */
 
  /* Overwite to a new value. It is not clear when to use the install path and when to use the build path! */
-    #ifdef USE_CMAKE
-    string new_value = findRoseSupportPathFromBuild("lib", "lib");
-    #else
-    string new_value = findRoseSupportPathFromBuild("src/frontend/OpenFortranParser_SAGE_Connection/.libs", "lib");
-    #endif
+#ifdef USE_CMAKE
+    string install_lib_dir = findRoseSupportPathFromBuild("lib", "lib");
+#else
+    string install_lib_dir = findRoseSupportPathFromBuild("src/frontend/OpenFortranParser_SAGE_Connection/.libs", "lib");
+#endif
 
  /* Save the old value */
     const char* old_value = getenv(ROSE_SHLIBPATH_VAR); // Might be null
+    std::string old_value_str = old_value ? old_value : "";
 
 #if OVERWRITE_LD_LIBRARY_PATH
+    std::vector<std::string> runtime_paths;
+    std::set<std::string> seen_paths;
+
+    auto add_runtime_dir = [&](const fs::path& dir, bool require_jvm) {
+        if (dir.empty())
+            return;
+        std::error_code ec;
+        fs::path normalized_dir = dir;
+        if (require_jvm) {
+            fs::path lib_candidate = dir;
+#ifdef __APPLE__
+            lib_candidate /= "libjvm.dylib";
+#elif defined(_WIN32)
+            lib_candidate /= "jvm.dll";
+#else
+            lib_candidate /= "libjvm.so";
+#endif
+            if (!fs::exists(lib_candidate, ec))
+                return;
+        }
+        std::string normalized = fs::weakly_canonical(dir, ec).string();
+        if (ec || normalized.empty())
+            normalized = dir.lexically_normal().string();
+        if (normalized.empty())
+            return;
+        if (seen_paths.insert(normalized).second) {
+            runtime_paths.push_back(normalized);
+        }
+    };
+
+    add_runtime_dir(install_lib_dir, /*require_jvm=*/false);
+
+    auto record_java_home_variants = [&](const fs::path& java_home) {
+        if (java_home.empty())
+            return;
+        add_runtime_dir(java_home / "lib/server", /*require_jvm=*/true);
+        add_runtime_dir(java_home / "lib/amd64/server", /*require_jvm=*/true);
+        add_runtime_dir(java_home / "lib/jli", /*require_jvm=*/true);
+        add_runtime_dir(java_home / "lib", /*require_jvm=*/true);
+    };
+
+#ifdef JAVA_JVM_PATH
+    {
+        fs::path java_exe = fs::path(JAVA_JVM_PATH);
+        fs::path java_bin = java_exe.parent_path();
+        fs::path java_home = java_bin.parent_path();
+        record_java_home_variants(java_home);
+    }
+#endif
+
+    if (const char* java_home_env = getenv("JAVA_HOME")) {
+        record_java_home_variants(fs::path(java_home_env));
+    }
+    if (const char* jre_home_env = getenv("JRE_HOME")) {
+        record_java_home_variants(fs::path(jre_home_env));
+    }
+
+    if (!old_value_str.empty()) {
+        std::stringstream ss(old_value_str);
+        std::string segment;
+        while (std::getline(ss, segment, ':')) {
+            if (!segment.empty())
+                add_runtime_dir(segment, /*require_jvm=*/false);
+        }
+    }
+
+    std::string combined_ld_path;
+    for (size_t i = 0; i < runtime_paths.size(); ++i) {
+        if (i != 0)
+            combined_ld_path += ":";
+        combined_ld_path += runtime_paths[i];
+    }
+
     int overwrite = 1;
-    int env_status = setenv(ROSE_SHLIBPATH_VAR,new_value.c_str(),overwrite);
+    int env_status = setenv(ROSE_SHLIBPATH_VAR,combined_ld_path.c_str(),overwrite);
     assert(env_status == 0);
 #endif
 
@@ -88,7 +168,7 @@ int openFortranParser_main(int argc, char **argv)
          printf ("Call the function that will start a JVM and call the OFP \n\n");
          string JVM_command_line = CommandlineProcessing::generateStringFromArgList(CommandlineProcessing::generateArgListFromArgcArgv(argc, argv));
          printf ("Java JVM commandline = %s \n",JVM_command_line.c_str());
-         printf ("ROSE modified %s = %s \n",ROSE_SHLIBPATH_VAR,new_value.c_str());
+         printf ("ROSE modified %s = %s \n",ROSE_SHLIBPATH_VAR,combined_ld_path.c_str());
        }
 
 #ifdef ENABLE_FORTRAN_ERROR_HANDLER
@@ -110,8 +190,10 @@ int openFortranParser_main(int argc, char **argv)
 #if OVERWRITE_LD_LIBRARY_PATH
  // DQ (9/12/2011): Note that old_value can be NULL and if so then we don't want it to be dereferenced.
  // env_status = setenv(ROSE_SHLIBPATH_VAR,old_value,overwrite);
-    if (old_value != NULL)
-          env_status = setenv(ROSE_SHLIBPATH_VAR,old_value,overwrite);
+    if (!old_value_str.empty())
+          env_status = setenv(ROSE_SHLIBPATH_VAR,old_value_str.c_str(),1);
+    else
+          env_status = unsetenv(ROSE_SHLIBPATH_VAR);
 
     assert(env_status == 0);
 #endif
@@ -288,4 +370,3 @@ experimental_openFortranParser_main(int argc, char **argv)
    }
 #endif
 #endif
-

@@ -320,6 +320,14 @@ endif()
 
 # Java
 option(enable-java "Enable Java analysis" ON)
+
+# Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
+option(enable-fortran "Enable Fortran analysis." OFF)
+if(enable-fortran AND NOT enable-java)
+  message(STATUS "Fortran analysis requires Java; enabling Java automatically.")
+  set(enable-java ON CACHE BOOL "Enable Java analysis" FORCE)
+endif()
+
 if(enable-java)
   message(STATUS "Looking for JAVA ...")
   # The FindJava script is different than all our others--it doesn't consult JAVA_ROOT. Therefore, the only
@@ -351,24 +359,37 @@ if(enable-opencl)
 endif()
 
 # Fortran
-option(enable-fortran "Enable Fortran analysis." OFF) # OFF because lack of OFP is not handled properly
 if(enable-fortran)
   if(NOT enable-java)
-    message(FATAL_ERROR "Fortran analysis also requires Java analysis.  Either turn on enable-java, or turn off enable-fortran")
+    message(FATAL_ERROR "Fortran analysis requires Java support; enable-java must remain ON when enable-fortran is set.")
   endif()
   set(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT 1)
   enable_language(Fortran)
-  # check if gfortran was found
-  if(CMAKE_COMPILER_IS_GNUG77)
+  set(BACKEND_FORTRAN_COMPILER "${CMAKE_Fortran_COMPILER}")
+  get_filename_component(BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH "${BACKEND_FORTRAN_COMPILER}" NAME)
+  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH "${BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH}")
+  set(_fortran_is_gnu 0)
+  set(_fortran_is_llvm_flang 0)
+  if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU" OR BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH MATCHES "gfortran")
+    set(_fortran_is_gnu 1)
+  elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "LLVMFlang" OR "${CMAKE_Fortran_COMPILER_ID}" STREQUAL "Flang" OR BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH MATCHES "flang")
+    set(_fortran_is_llvm_flang 1)
+  endif()
+  if(_fortran_is_gnu)
     set(USE_GFORTRAN_IN_ROSE 1)
-    add_compile_definitions(BACKEND_FORTRAN_IS_GNU_COMPILER)
-    # query gfortran version
-    execute_process(
-      COMMAND ${CMAKE_Fortran_COMPILER} -dumpversion
-      OUTPUT_VARIABLE gfortran_version_output)
-    string(REGEX MATCH "([0-9]+\\.[0-9]+\\.[0-9]+)"
-      gfortran_version "${gfortran_version_output}")
-    message(STATUS "gfortran version ${gfortran_version} detected")
+    add_compile_definitions(BACKEND_FORTRAN_IS_GNU_COMPILER=1)
+    add_compile_definitions(BACKEND_FORTRAN_IS_LLVM_FLANG=0)
+    message(STATUS "Using GNU Fortran backend: ${BACKEND_FORTRAN_COMPILER}")
+  elseif(_fortran_is_llvm_flang)
+    set(USE_GFORTRAN_IN_ROSE 0)
+    add_compile_definitions(BACKEND_FORTRAN_IS_GNU_COMPILER=0)
+    add_compile_definitions(BACKEND_FORTRAN_IS_LLVM_FLANG=1)
+    message(STATUS "Using LLVM Flang backend: ${BACKEND_FORTRAN_COMPILER}")
+  else()
+    set(USE_GFORTRAN_IN_ROSE 0)
+    add_compile_definitions(BACKEND_FORTRAN_IS_GNU_COMPILER=0)
+    add_compile_definitions(BACKEND_FORTRAN_IS_LLVM_FLANG=0)
+    message(STATUS "Using non-GNU Fortran backend: ${BACKEND_FORTRAN_COMPILER}")
   endif()
 endif()
 

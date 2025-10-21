@@ -1,4 +1,4 @@
-name: CMake
+name: CI
 
 on:
   push:
@@ -40,6 +40,7 @@ jobs:
           cmake \
           clang-${{ matrix.llvm }} \
           curl \
+          flang-${{ matrix.llvm }} \
           flex \
           g++ \
           gdb \
@@ -65,6 +66,7 @@ jobs:
         LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
         CC: clang-${{ matrix.llvm }}
         CXX: clang++-${{ matrix.llvm }}
+        FC: flang-${{ matrix.llvm }}
       run: |
         cd $GITHUB_WORKSPACE
         ./build-rex.sh $GITHUB_WORKSPACE/../rex_install
