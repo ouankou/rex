@@ -914,7 +914,31 @@ if(enable-c)
 
   set(CXX_INCLUDE_STRING "{\"${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
   find_program(shell sh)
-  if(shell AND CMAKE_COMPILER_IS_GNUCXX)
+
+  # Determine compiler vendor names for get_compiler_header_dirs script
+  # Map CMake compiler IDs to vendor names expected by the script
+  if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    set(C_COMPILER_VENDOR "gnu")
+  elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "AppleClang")
+    set(C_COMPILER_VENDOR "clang")
+  elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
+    set(C_COMPILER_VENDOR "intel")
+  else()
+    set(C_COMPILER_VENDOR "unknown")
+  endif()
+
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set(CXX_COMPILER_VENDOR "gnu")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+    set(CXX_COMPILER_VENDOR "clang")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+    set(CXX_COMPILER_VENDOR "intel")
+  else()
+    set(CXX_COMPILER_VENDOR "unknown")
+  endif()
+
+  # Process header paths for Unix-like systems (GNU, Clang, Intel compilers)
+  if(shell AND (CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel"))
     execute_process(
       COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/dirincludes "${CMAKE_BINARY_DIR}/include-staging" "${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS"
       OUTPUT_VARIABLE C_includeString)
@@ -926,12 +950,14 @@ if(enable-c)
     string(STRIP "${CXX_includeString}" CXX_includeString)
 
     set(CXX_INCLUDE_STRING "${CXX_INCLUDE_STRING} ${CXX_includeString}")
+
+    # Use the actual backend compiler instead of hardcoded gcc/g++
     execute_process(
-      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/get_compiler_header_dirs gcc c gnu
+      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/get_compiler_header_dirs ${BACKEND_C_COMPILER} c ${C_COMPILER_VENDOR}
       OUTPUT_VARIABLE C_backend_includes)
 
     execute_process(
-      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/get_compiler_header_dirs g++ c++ gnu
+      COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/get_compiler_header_dirs ${BACKEND_CXX_COMPILER} c++ ${CXX_COMPILER_VENDOR}
       OUTPUT_VARIABLE CXX_backend_includes)
     string(REPLACE "\n" ";" C_backend_includes "${C_backend_includes}")
     string(REPLACE "\n" ";" CXX_backend_includes "${CXX_backend_includes}")
