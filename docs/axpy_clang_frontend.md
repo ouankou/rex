@@ -75,10 +75,8 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 
 ## Limitations & Next Steps
 
-- **Scope leakage for loop indices**: the current Clang bridge appends `for`-loop induction variables to the surrounding `SgBasicBlock` (see `src/frontend/CxxFrontend/Clang/clang-frontend.cpp:125` onward). When multiple loops reuse the name `i`, the containing block reports duplicate `SgVariableSymbol`s, which triggers the name-qualification warning even though the source is well-formed.
-- **Root cause**: the translator never attaches those declarations to the loop-specific `SgForInitStatement`. Instead, it pushes the surrounding block scope and emits the declaration there. Name qualification therefore believes two unrelated loops share a single scope.
-- **Proposed fix**: adjust the Clang frontend to build a dedicated scope for each `SgForStatement` init clause and append the induction variable there (mirroring EDG and Clang AST semantics). After that, the duplicated-symbol warning can be reinstated without noise.
-- **Follow-up**: track this as a frontend bug (e.g. `ROSE-XXXX`) and add a regression test that exercises consecutive loops with the same index name.
+- **Resolved name-qualification noise**: the unparser used raw symbol-table counts and saw duplicate entries for block-local declarations (including `for`-loop indices), so every reference triggered a warning. `nameQualificationSupport.C` now counts distinct lexical declarations within the current scope before warning, which eliminates the flood while preserving real conflicts.
+- **Future hardening**: it is still worthwhile to tighten the Clang bridge so loop induction variables are stored under the `SgForInitStatement` scope, but the immediate user-facing problem is gone.
 
 ## Known Gaps
 

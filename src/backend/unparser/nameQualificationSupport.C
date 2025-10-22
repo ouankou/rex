@@ -7,6 +7,55 @@ using namespace std;
 
 namespace si = SageInterface;
 
+namespace {
+
+int countDeclarationsInList(const SgStatementPtrList &stmts, const SgName &name) {
+    int count = 0;
+    for (SgStatement *stmt : stmts) {
+        if (auto *var_decl = isSgVariableDeclaration(stmt)) {
+            for (SgInitializedName *init : var_decl->get_variables()) {
+                if (init->get_name() == name)
+                    ++count;
+            }
+        } else if (auto *for_stmt = isSgForStatement(stmt)) {
+            if (SgForInitStatement *init = for_stmt->get_for_init_stmt()) {
+                count += countDeclarationsInList(init->get_init_stmt(), name);
+            }
+        }
+    }
+    return count;
+}
+
+int countDeclarationsInList(const SgDeclarationStatementPtrList &decls, const SgName &name) {
+    int count = 0;
+    for (SgDeclarationStatement *decl : decls) {
+        if (auto *var_decl = isSgVariableDeclaration(decl)) {
+            for (SgInitializedName *init : var_decl->get_variables()) {
+                if (init->get_name() == name)
+                    ++count;
+            }
+        }
+    }
+    return count;
+}
+
+int countLocalVariableDeclarations(SgScopeStatement *scope, const SgName &name) {
+    if (auto *block = isSgBasicBlock(scope)) {
+        return countDeclarationsInList(block->get_statements(), name);
+    }
+    if (auto *global = isSgGlobal(scope)) {
+        return countDeclarationsInList(global->get_declarations(), name);
+    }
+    if (auto *for_stmt = isSgForStatement(scope)) {
+        if (SgForInitStatement *init = for_stmt->get_for_init_stmt())
+            return countDeclarationsInList(init->get_init_stmt(), name);
+        return 0;
+    }
+    return -1;
+}
+
+} // namespace
+
 // This value must be greater than 3 to cause most output to be generated.
 #define DEBUG_NAME_QUALIFICATION_LEVEL 0
 
@@ -12690,6 +12739,9 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                            // DQ (12/23/2015): Note that this is not a count of the SgVariableSymbol IR nodes.
                            // size_t numberOfSymbolsWithSameName = currentScope->count_symbol(name);
                               int numberOfSymbolsWithSameName = (int)currentScope->count_symbol(name);
+                              int localDeclCount = countLocalVariableDeclarations(currentScope, name);
+                              if (localDeclCount >= 0)
+                                  numberOfSymbolsWithSameName = localDeclCount;
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                               MLOG_WARN_C(MLOG_UNPARSER, "SgVarRefExp's SgDeclarationStatement: numberOfSymbolsWithSameName       = %d \n",numberOfSymbolsWithSameName);
