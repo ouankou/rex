@@ -228,6 +228,10 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
             ret_status = VisitNamespaceDecl((clang::NamespaceDecl *)decl, &result);
             ROSE_ASSERT(ret_status == false || result != NULL);
             break;
+        case clang::Decl::LinkageSpec:
+            ret_status = VisitLinkageSpecDecl((clang::LinkageSpecDecl *)decl, &result);
+            ROSE_ASSERT(ret_status == false || result != NULL);
+            break;
         case clang::Decl::BuiltinTemplate:
             ret_status = VisitBuiltinTemplateDecl((clang::BuiltinTemplateDecl *)decl, &result);
             ROSE_ASSERT(ret_status == false || result != NULL);
@@ -644,6 +648,29 @@ bool ClangToSageTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_
     //ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitNamedDecl(namespace_decl, node) && res;
+}
+
+bool ClangToSageTranslator::VisitLinkageSpecDecl(clang::LinkageSpecDecl * linkage_spec_decl, SgNode ** node) {
+#if DEBUG_VISIT_DECL
+    std::cerr << "ClangToSageTranslator::VisitLinkageSpecDecl" << std::endl;
+#endif
+
+    SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+    for (auto it = linkage_spec_decl->decls_begin(); it != linkage_spec_decl->decls_end(); ++it) {
+        clang::Decl *inner_decl = *it;
+        if (inner_decl == nullptr)
+            continue;
+
+        SgNode *child = Traverse(inner_decl);
+        if (SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child)) {
+            if (decl_stmt->get_parent() == nullptr && current_scope != nullptr) {
+                SageInterface::appendStatement(decl_stmt, current_scope);
+            }
+        }
+    }
+
+    *node = nullptr;
+    return false;
 }
 
 bool ClangToSageTranslator::VisitTemplateDecl(clang::TemplateDecl * template_decl, SgNode ** node) {
