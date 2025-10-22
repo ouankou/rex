@@ -36,6 +36,7 @@
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/LangStandard.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
@@ -45,6 +46,7 @@
 
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/CompilerInstance.h"
+#include "clang/Lex/PreprocessorOptions.h"
 
 #include "clang/Basic/DiagnosticOptions.h"
 
@@ -65,6 +67,7 @@
 #include "llvm/Config/llvm-config.h"
 
 #include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
 
@@ -225,6 +228,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
                 virtual bool VisitLabelDecl(clang::LabelDecl * label_decl, SgNode ** node);
                 virtual bool VisitNamespaceAliasDecl(clang::NamespaceAliasDecl * namespace_alias_decl, SgNode ** node);
                 virtual bool VisitNamespaceDecl(clang::NamespaceDecl * namespace_decl, SgNode ** node);
+                virtual bool VisitLinkageSpecDecl(clang::LinkageSpecDecl * linkage_spec_decl, SgNode ** node);
               //virtual bool VisitObjCCompatibleAliasDecl
               //virtual bool VisitObjCContainerDecl
                   //virtual bool VisitObjCCategoryDecl
@@ -638,4 +642,3 @@ class PreprocessorInserter : public AstTopDownProcessing<NextPreprocessorToInser
 };
 
 #endif /* _CLANG_FRONTEND_PRIVATE_HPP_ */
-

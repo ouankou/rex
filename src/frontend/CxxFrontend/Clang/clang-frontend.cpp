@@ -134,24 +134,29 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                                                        c_config_include_dirs_array + sizeof(c_config_include_dirs_array) / sizeof(const char*)
                                                      );
 
-    std::string rose_include_path;
-    bool in_install_tree = roseInstallPrefix(rose_include_path);
+    std::string install_prefix;
+    bool in_install_tree = roseInstallPrefix(install_prefix);
+
+    std::string compiler_header_root;
+    std::string builtin_header_root;
     if (in_install_tree) {
-        rose_include_path += "/include/";
-    }
-    else {
-        rose_include_path = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
+        const std::string include_root = install_prefix + "/include/";
+        compiler_header_root = include_root + "edg/";
+        builtin_header_root = include_root + "clang/";
+    } else {
+        compiler_header_root = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
+        builtin_header_root = compiler_header_root + "clang/";
     }
 
     std::vector<std::string>::iterator it;
     for (it = c_config_include_dirs.begin(); it != c_config_include_dirs.end(); it++)
         if (it->length() > 0 && (*it)[0] != '/')
-            *it = rose_include_path + *it;
+            *it = compiler_header_root + *it;
     for (it = cxx_config_include_dirs.begin(); it != cxx_config_include_dirs.end(); it++)
         if (it->length() > 0 && (*it)[0] != '/')
-            *it = rose_include_path + *it;
+            *it = compiler_header_root + *it;
 
-    sys_dirs_list.push_back(rose_include_path + "clang/");
+    sys_dirs_list.push_back(builtin_header_root);
 
     switch (language) {
         case ClangToSageTranslator::C:
@@ -252,37 +257,71 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts.get());
     compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
+    clang::CompilerInvocation &invocation = compiler_instance->getInvocation();
+    const llvm::Triple target_triple(llvm::sys::getDefaultTargetTriple());
+
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
-    clang::CompilerInvocation::CreateFromArgs(compiler_instance->getInvocation(), argsArrayRef, compiler_instance->getDiagnostics());
+    clang::CompilerInvocation::CreateFromArgs(invocation, argsArrayRef, compiler_instance->getDiagnostics());
+
+    clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
+    std::vector<std::string> lang_specific_includes;
+    clang::LangStandard::Kind requested_std = lang_opts.LangStd;
+    clang::Language clang_lang = clang::Language::C;
+    bool enable_cuda = false;
+    bool enable_opencl = false;
+
+    switch (language) {
+        case ClangToSageTranslator::C:
+            if (requested_std == clang::LangStandard::lang_unspecified) {
+                requested_std = clang::LangStandard::lang_gnu17;
+            }
+            clang_lang = clang::Language::C;
+            break;
+        case ClangToSageTranslator::CPLUSPLUS:
+            if (requested_std == clang::LangStandard::lang_unspecified) {
+                requested_std = clang::LangStandard::lang_gnucxx17;
+            }
+            clang_lang = clang::Language::CXX;
+            break;
+        case ClangToSageTranslator::CUDA:
+            if (requested_std == clang::LangStandard::lang_unspecified) {
+                requested_std = clang::LangStandard::lang_gnucxx17;
+            }
+            clang_lang = clang::Language::CUDA;
+            enable_cuda = true;
+            break;
+        case ClangToSageTranslator::OPENCL:
+            if (requested_std == clang::LangStandard::lang_unspecified) {
+                requested_std = clang::LangStandard::lang_opencl30;
+            }
+            clang_lang = clang::Language::OpenCL;
+            enable_opencl = true;
+            break;
+        case ClangToSageTranslator::OBJC:
+            ROSE_ASSERT(!"Objective-C is not supported by ROSE Compiler.");
+        default:
+            ROSE_ABORT();
+    }
+
+    clang::LangOptions::setLangDefaults(
+        lang_opts, clang_lang, target_triple, lang_specific_includes, requested_std);
+
+    if (enable_cuda) {
+        lang_opts.CUDA = 1;
+    }
+    if (enable_opencl) {
+        lang_opts.OpenCL = 1;
+    }
 
     // Now create file manager with FileSystemOptions from the parsed invocation
     compiler_instance->createFileManager();
 
-    clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
-
-    switch (language) {
-        case ClangToSageTranslator::C:
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_C, );
-            break;
-        case ClangToSageTranslator::CPLUSPLUS:
-            lang_opts.CPlusPlus = 1;
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_CXX, );
-            break;
-        case ClangToSageTranslator::CUDA:
-            lang_opts.CUDA = 1;
-//          lang_opts.CPlusPlus = 1;
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_CUDA,   clang::LangStandard::lang_cuda);
-            break;
-        case ClangToSageTranslator::OPENCL:
-            lang_opts.OpenCL = 1;
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_OpenCL, clang::LangStandard::lang_opencl);
-            break;
-        case ClangToSageTranslator::OBJC:
-            ROSE_ASSERT(!"Objective-C is not supported by ROSE Compiler.");
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_, );
-        default:
-            ROSE_ABORT();
+    clang::PreprocessorOptions &pp_opts = compiler_instance->getInvocation().getPreprocessorOpts();
+    if (!lang_specific_includes.empty()) {
+        pp_opts.Includes.insert(pp_opts.Includes.end(),
+                                lang_specific_includes.begin(),
+                                lang_specific_includes.end());
     }
 
     // LLVM 20 requires shared_ptr, LLVM 21+ requires reference
@@ -860,4 +899,3 @@ bool SagePreprocessorRecord::pop() {
     p_preprocessor_record_list.erase(p_preprocessor_record_list.begin());
     return !p_preprocessor_record_list.empty();
 }
-
