@@ -252,6 +252,8 @@ int clang_to_dot_main(int argc, char ** argv)
     // Create diagnostics with default real filesystem (before parsing args that might override it)
     clang::DiagnosticOptions *DiagOpts = new clang::DiagnosticOptions();
     clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts);
+
+    // LLVM 20+ API - requires VFS as first parameter
     compiler_instance->createDiagnostics(*llvm::vfs::getRealFileSystem(), diag_printer, true);
 
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)

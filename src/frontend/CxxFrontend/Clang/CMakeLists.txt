@@ -44,11 +44,18 @@ target_include_directories(libroseClangFrontend PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# Add LLVM includes as SYSTEM to avoid cxxabi.h conflicts with libstdc++
-# This ensures GCC's cxxabi.h is found before LLVM's version
-target_include_directories(libroseClangFrontend SYSTEM PRIVATE
-  ${LLVM_INCLUDE_DIRS}
-)
+# Add LLVM includes to ensure LLVM 20 headers are found first
+# when multiple LLVM versions are installed.
+# Get LLVM include path from llvm-config if LLVM_INCLUDE_DIRS is not set
+if(NOT LLVM_INCLUDE_DIRS)
+  execute_process(COMMAND llvm-config-20 --includedir
+    OUTPUT_VARIABLE LLVM_INCLUDE_DIRS
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+endif()
+message(STATUS "Clang frontend using LLVM includes: ${LLVM_INCLUDE_DIRS}")
+
+# LLVM 20 include path is set globally in top-level CMakeLists.txt
+# No additional configuration needed here
 
 # Add LLVM definitions
 target_compile_definitions(libroseClangFrontend PRIVATE

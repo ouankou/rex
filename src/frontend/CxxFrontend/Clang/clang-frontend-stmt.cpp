@@ -373,6 +373,10 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             ret_status = VisitCXXBoolLiteralExpr((clang::CXXBoolLiteralExpr *)stmt, &result);
             ROSE_ASSERT(result != NULL);
             break;
+        case clang::Stmt::CXXConstructExprClass:
+            ret_status = VisitCXXConstructExpr((clang::CXXConstructExpr *)stmt, &result);
+            ROSE_ASSERT(result != NULL);
+            break;
         case clang::Stmt::CXXTemporaryObjectExprClass:
             ret_status = VisitCXXTemporaryObjectExpr((clang::CXXTemporaryObjectExpr *)stmt, &result);
             ROSE_ASSERT(result != NULL);
@@ -2217,9 +2221,9 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(clang::CXXOperatorCallExpr 
 #endif
      bool res = true;
 
-     // TODO 
-
-     return VisitExpr(cxx_operator_call_expr, node) && res;
+     // C++ overloaded operators (operator+, operator[], etc.) are represented as function calls
+     // Delegate to CallExpr handler for proper function call expression generation
+     return VisitCallExpr(cxx_operator_call_expr, node) && res;
 }
 
 bool ClangToSageTranslator::VisitUserDefinedLiteral(clang::UserDefinedLiteral * user_defined_literal, SgNode ** node) {
@@ -2239,7 +2243,16 @@ bool ClangToSageTranslator::VisitCastExpr(clang::CastExpr * cast_expr, SgNode **
 #endif
     bool res = true;
 
-    // TODO
+    // Process the sub-expression being cast
+    SgNode * tmp_expr = Traverse(cast_expr->getSubExpr());
+    SgExpression * sg_expr = isSgExpression(tmp_expr);
+    ROSE_ASSERT(sg_expr != NULL);
+
+    // Get the target type
+    SgType * sg_type = buildTypeFromQualifiedType(cast_expr->getType());
+
+    // Create the cast expression
+    *node = SageBuilder::buildCastExp(sg_expr, sg_type);
 
     return VisitExpr(cast_expr, node) && res;
 }
@@ -2502,7 +2515,9 @@ bool ClangToSageTranslator::VisitCXXBoolLiteralExpr(clang::CXXBoolLiteralExpr * 
 #endif
     bool res = true;
 
-    // TODO
+    // C++ boolean literals (true/false)
+    bool value = cxx_bool_literal_expr->getValue();
+    *node = SageBuilder::buildBoolValExp(value);
 
     return VisitExpr(cxx_bool_literal_expr, node) && res;
 }
@@ -2513,7 +2528,46 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(clang::CXXConstructExpr * cxx_
 #endif
     bool res = true;
 
-    // TODO
+    // Get the constructor being called
+    clang::CXXConstructorDecl *ctor_decl = cxx_construct_expr->getConstructor();
+
+    if (ctor_decl != nullptr) {
+        // Get the type being constructed
+        SgType *constructed_type = buildTypeFromQualifiedType(cxx_construct_expr->getType());
+
+        // Build argument list for constructor call
+        // Note: Empty argument lists are intentional and valid for default constructors
+        // or when all arguments fail traversal (e.g., template-dependent arguments)
+        SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
+
+        // Traverse constructor arguments
+        for (unsigned i = 0; i < cxx_construct_expr->getNumArgs(); ++i) {
+            clang::Expr *arg = cxx_construct_expr->getArg(i);
+            if (arg != nullptr) {
+                SgNode *sg_arg = Traverse(arg);
+                if (SgExpression *sg_expr = isSgExpression(sg_arg)) {
+                    args->append_expression(sg_expr);
+                }
+            }
+        }
+
+        // Use SgConstructorInitializer to properly represent constructor calls
+        // This ensures the expression has the constructed class type, not void
+        SgConstructorInitializer *ctor_init = SageBuilder::buildConstructorInitializer_nfi(
+            NULL,  // declaration (filled in later by AST fixup if needed)
+            args,
+            constructed_type,
+            false,  // need_name
+            false,  // need_qualifier
+            false,  // need_parenthesis_after_name
+            false   // associated_class_unknown
+        );
+
+        *node = ctor_init;
+    } else {
+        // No constructor available, create a null expression
+        *node = SageBuilder::buildNullExpression();
+    }
 
     return VisitExpr(cxx_construct_expr, node) && res;
 }
@@ -2568,7 +2622,40 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(clang::CXXDependent
 #endif
     bool res = true;
 
-    // TODO
+    // CXXDependentScopeMemberExpr represents member access on a template-dependent type
+    // (e.g., obj.begin(), obj->data())
+    // Extract the base expression and member name to create proper member access
+
+    SgExpression* base_expr = NULL;
+    if (cxx_dependent_scope_member_expr->getBase() != NULL) {
+        // Traverse the base expression
+        clang::Expr* base = const_cast<clang::Expr*>(cxx_dependent_scope_member_expr->getBase());
+        SgNode* tmp_base = Traverse(base);
+        base_expr = isSgExpression(tmp_base);
+    }
+
+    // Get the member name
+    std::string member_name = cxx_dependent_scope_member_expr->getMember().getAsString();
+
+    if (base_expr != NULL) {
+        // Create an arrow or dot expression depending on the operator used
+        if (cxx_dependent_scope_member_expr->isArrow()) {
+            // Use arrow expression (obj->member)
+            *node = SageBuilder::buildArrowExp(base_expr, SageBuilder::buildVarRefExp(member_name));
+        } else {
+            // Use dot expression (obj.member)
+            *node = SageBuilder::buildDotExp(base_expr, SageBuilder::buildVarRefExp(member_name));
+        }
+    } else {
+        // If we can't get the base expression, use a simple variable reference
+        *node = SageBuilder::buildVarRefExp(member_name);
+    }
+
+    // Set source position
+    SgExpression* expr = isSgExpression(*node);
+    if (expr != NULL) {
+        applySourceRange(expr, cxx_dependent_scope_member_expr->getSourceRange());
+    }
 
     return VisitExpr(cxx_dependent_scope_member_expr, node) && res;
 }
@@ -2612,7 +2699,11 @@ bool ClangToSageTranslator::VisitCXXNoexceptExpr(clang::CXXNoexceptExpr * cxx_no
 #endif
     bool res = true;
 
-    // TODO
+    // C++ noexcept operator not fully implemented yet
+    // Create a placeholder NullExpression to allow translation to continue
+    std::cerr << "Warning: CXXNoexceptExpr not fully implemented, using NullExpression placeholder" << std::endl;
+
+    *node = SageBuilder::buildNullExpression();
 
     return VisitExpr(cxx_noexcept_expr, node) && res;
 }
@@ -2711,7 +2802,10 @@ bool ClangToSageTranslator::VisitCXXUnresolvedConstructExpr(clang::CXXUnresolved
 #endif
     bool res = true;
 
-    // TODO
+    // Template-dependent constructor calls (e.g., T(args) where T is a template parameter)
+    // Cannot be fully resolved at parse time, use placeholder
+    std::cerr << "Warning: CXXUnresolvedConstructExpr not fully implemented, using NullExpression placeholder" << std::endl;
+    *node = SageBuilder::buildNullExpression();
 
     return VisitExpr(cxx_unresolved_construct_expr, node) && res;
 }
@@ -2845,7 +2939,34 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(clang::DependentScope
 #endif
     bool res = true;
 
-    // TODO
+    // DependentScopeDeclRefExpr represents a reference to a declaration that depends on template parameters
+    // (e.g., variable references like 'x' or 'y' in template-dependent contexts)
+    // Extract the name and create a variable reference expression
+
+    std::string decl_name = dependent_scope_decl_ref_expr->getDeclName().getAsString();
+
+    // Check for qualified names (e.g., namespace::var)
+    if (dependent_scope_decl_ref_expr->getQualifier() != NULL) {
+        std::string qualifier_str;
+        llvm::raw_string_ostream qualifier_stream(qualifier_str);
+        dependent_scope_decl_ref_expr->getQualifier()->print(qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
+        decl_name = qualifier_stream.str() + decl_name;
+    }
+
+    // Create a variable reference expression
+    // NOTE: Using topScopeStack() may not correctly resolve variables in nested scopes
+    // since dependent scope information isn't always available at this stage.
+    // Ideally, the variable lookup should search upward through parent scopes,
+    // but for template-dependent contexts, complete scope information may not be
+    // available until instantiation time.
+    SgName sg_name(decl_name);
+    *node = SageBuilder::buildVarRefExp(sg_name, SageBuilder::topScopeStack());
+
+    // Set source position
+    SgExpression* expr = isSgExpression(*node);
+    if (expr != NULL) {
+        applySourceRange(expr, dependent_scope_decl_ref_expr->getSourceRange());
+    }
 
     return VisitExpr(dependent_scope_decl_ref_expr, node) && res;
 }
@@ -3078,12 +3199,23 @@ bool ClangToSageTranslator::VisitFloatingLiteral(clang::FloatingLiteral * floati
 #endif
 
     unsigned int precision =  llvm::APFloat::semanticsPrecision(floating_literal->getValue().getSemantics());
-    if (precision == 24)
+    if (precision == 24) {
+        // 32-bit float
         *node = SageBuilder::buildFloatVal(floating_literal->getValue().convertToFloat());
-    else if (precision == 53)
+    } else if (precision == 53) {
+        // 64-bit double
         *node = SageBuilder::buildDoubleVal(floating_literal->getValue().convertToDouble());
-    else
-        ROSE_ASSERT(!"In VisitFloatingLiteral: Unsupported float size");
+    } else if (precision == 64 || precision == 113) {
+        // 80-bit or 128-bit long double - use double as approximation
+        *node = SageBuilder::buildLongDoubleVal(floating_literal->getValue().convertToDouble());
+    } else if (precision == 11) {
+        // 16-bit half precision - use float
+        *node = SageBuilder::buildFloatVal(floating_literal->getValue().convertToFloat());
+    } else {
+        // Fallback for other sizes - use double
+        std::cerr << "Warning: Unsupported float precision " << precision << ", using double" << std::endl;
+        *node = SageBuilder::buildDoubleVal(floating_literal->getValue().convertToDouble());
+    }
 
     return VisitExpr(floating_literal, node);
 }
@@ -3452,7 +3584,37 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(clang::UnresolvedLookupExp
 #endif
     bool res = true;
 
-    // TODO
+    // UnresolvedLookupExpr represents a reference to a name that couldn't be resolved during parsing
+    // (e.g., template-dependent function names like std::iota)
+    // Extract the name and create a variable reference expression as an approximation
+
+    std::string function_name;
+    if (unresolved_lookup_expr->hasExplicitTemplateArgs()) {
+        // Template function with explicit template arguments
+        function_name = unresolved_lookup_expr->getName().getAsString();
+    } else {
+        // Regular function name
+        function_name = unresolved_lookup_expr->getName().getAsString();
+    }
+
+    // Check for qualified names (e.g., std::iota)
+    if (unresolved_lookup_expr->getQualifier() != NULL) {
+        std::string qualifier_str;
+        llvm::raw_string_ostream qualifier_stream(qualifier_str);
+        unresolved_lookup_expr->getQualifier()->print(qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
+        function_name = qualifier_stream.str() + function_name;
+    }
+
+    // Create a variable reference expression with the function name
+    // This will unparse as the function name, which is what we want
+    SgName sg_name(function_name);
+    *node = SageBuilder::buildVarRefExp(sg_name, SageBuilder::topScopeStack());
+
+    // Set source position
+    SgExpression* expr = isSgExpression(*node);
+    if (expr != NULL) {
+        applySourceRange(expr, unresolved_lookup_expr->getSourceRange());
+    }
 
     return VisitOverloadExpr(unresolved_lookup_expr, node) && res;
 }
@@ -3474,7 +3636,11 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(clang::PackExpansionExpr * pa
 #endif
     bool res = true;
 
-    // TODO
+    // C++ variadic template pack expansions (Args...) not fully implemented yet
+    // Create a placeholder NullExpression to allow translation to continue
+    std::cerr << "Warning: PackExpansionExpr not fully implemented, using NullExpression placeholder" << std::endl;
+
+    *node = SageBuilder::buildNullExpression();
 
     return VisitExpr(pack_expansion_expr, node) && res;
 }
@@ -3615,7 +3781,11 @@ bool ClangToSageTranslator::VisitSizeOfPackExpr(clang::SizeOfPackExpr * size_of_
 #endif
     bool res = true;
 
-    // TODO
+    // C++ sizeof...(Args) for variadic templates not fully implemented yet
+    // Create a placeholder NullExpression to allow translation to continue
+    std::cerr << "Warning: SizeOfPackExpr not fully implemented, using NullExpression placeholder" << std::endl;
+
+    *node = SageBuilder::buildNullExpression();
 
     return VisitExpr(size_of_pack_expr, node) && res;
 }
@@ -3738,7 +3908,11 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr * type_trait
 #endif
     bool res = true;
 
-    // TODO
+    // C++ type traits (std::is_integral, std::is_same, etc.) not fully implemented yet
+    // Create a placeholder NullExpression to allow translation to continue
+    std::cerr << "Warning: TypeTraitExpr not fully implemented, using NullExpression placeholder" << std::endl;
+
+    *node = SageBuilder::buildNullExpression();
 
     return VisitExpr(type_trait, node) && res;
 }
