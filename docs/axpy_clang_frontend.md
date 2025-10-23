@@ -22,11 +22,12 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 
 ## Source Example
 
-- Added `tests/nonsmoke/functional/input_codes/axpy.cpp` as a minimal C++
-  example that avoids STL usage and anonymous namespaces so that the current
-  frontend can process it.
-- The program initialises two fixed-size buffers, performs the AXPY loop, and
-  returns `0`/`1` based on a relative-error check (no runtime I/O needed).
+- Added `tests/nonsmoke/functional/input_codes/axpy.cpp` as a C++ example that
+  now exercises common standard headers (`<array>`, `<numeric>`, `<cmath>`) to
+  validate language default initialisation.
+- The program initialises two fixed-size buffers with `std::array`, performs the
+  AXPY loop, and returns `0`/`1` based on a relative-error check (no runtime I/O
+  needed).
 
 ## Frontend Issues & Fixes
 
@@ -90,8 +91,38 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 
 ## Known Gaps
 
-- The frontend still struggles with standard C++ library headers, templates,
-  and richer language constructs. Keep examples limited to plain C-style
-  constructs for now.
+- The frontend still struggles with large swaths of the C++ standard library
+  (heavy template specialisations, allocator traits, etc.). The builtin/runtime
+  mismatches are gone, but expect additional traversal failures until those
+  visitors are implemented.
+
+## May 2025 Status & Next Steps
+
+- **Bug fixed**: the Clang driver now initialises `LangOptions` for C++ input,
+  picking a GNU C++17 default, injecting implicit headers, and enabling builtin
+  intrinsics. This unblocks `<cmath>`/`__builtin_*` usage and lines up with the
+  intended Clang invocation (`clang-frontend.cpp:267`-`395`, `clang-to-dot.cpp:264`-`325`).
+- **AXPY sample**: the smoke test in `tests/nonsmoke/functional/input_codes/axpy.cpp`
+  now exercises `<array>`, `<numeric>`, `<cmath>`, and `<cstddef>`. It compiles and
+  runs with stock `clang++`, but the current Clang→ROSE bridge still aborts when
+  walking the resulting libstdc++ AST.
+- **Translator gaps**: namespace traversal, template declarations/specialisations,
+  and many type/statement visitors remain stubs. With real system headers enabled
+  the translator quickly encounters `std::array` scaffolding and dies. Skipping or
+  generating opaque stand-ins for those nodes is the next prerequisite before we
+  can ingest richer C++.
+- **Proposed short-term plan**
+  1. Teach `VisitNamespaceDecl` to record namespace shells while continuing to walk
+     child declarations safely (no early aborts).
+  2. Add minimal handling for class/function/alias/var template decls: traverse the
+     templated declaration, create an opaque `SgType`, and store symbols so later
+     lookups succeed.
+  3. Extend record/typedef/type visitors to fall back to `buildOpaqueType` and
+     unblock `std::array` basics; do the same for critical statement/expression
+     visitors (`DeclRefExpr`, `MemberExpr`, `CallExpr` into template instantiations).
+  4. Re-run the AXPY sample end-to-end, then incrementally admit additional headers.
+- **Risks**: without better symbol management we risk leaking thousands of opaque
+  placeholders or emitting unusable ASTs. Each fallback should log once (guarded
+  by a debug knob) so production runs stay quiet.
 - Linkage specifications are flattened; follow-up work is needed if downstream
   analyses require exact `extern` metadata.

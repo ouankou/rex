@@ -267,32 +267,33 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
     std::vector<std::string> lang_specific_includes;
     clang::LangStandard::Kind requested_std = lang_opts.LangStd;
+    clang::LangStandard std_info = clang::LangStandard::getLangStandardForKind(requested_std);
     clang::Language clang_lang = clang::Language::C;
     bool enable_cuda = false;
     bool enable_opencl = false;
 
     switch (language) {
         case ClangToSageTranslator::C:
-            if (requested_std == clang::LangStandard::lang_unspecified) {
+            if (!(std_info.isC99() || std_info.isC11() || std_info.isC17() || std_info.isC23())) {
                 requested_std = clang::LangStandard::lang_gnu17;
             }
             clang_lang = clang::Language::C;
             break;
         case ClangToSageTranslator::CPLUSPLUS:
-            if (requested_std == clang::LangStandard::lang_unspecified) {
+            if (!std_info.isCPlusPlus()) {
                 requested_std = clang::LangStandard::lang_gnucxx17;
             }
             clang_lang = clang::Language::CXX;
             break;
         case ClangToSageTranslator::CUDA:
-            if (requested_std == clang::LangStandard::lang_unspecified) {
+            if (!std_info.isCPlusPlus()) {
                 requested_std = clang::LangStandard::lang_gnucxx17;
             }
             clang_lang = clang::Language::CUDA;
             enable_cuda = true;
             break;
         case ClangToSageTranslator::OPENCL:
-            if (requested_std == clang::LangStandard::lang_unspecified) {
+            if (!std_info.isOpenCL()) {
                 requested_std = clang::LangStandard::lang_opencl30;
             }
             clang_lang = clang::Language::OpenCL;
@@ -304,8 +305,17 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             ROSE_ABORT();
     }
 
+    clang::InputKind input_kind(clang_lang);
+    clang::FrontendOptions &fe_opts = invocation.getFrontendOpts();
+    fe_opts.Inputs.clear();
+    fe_opts.Inputs.emplace_back(input_file, input_kind);
+
     clang::LangOptions::setLangDefaults(
         lang_opts, clang_lang, target_triple, lang_specific_includes, requested_std);
+
+    if (language == ClangToSageTranslator::CPLUSPLUS) {
+        ROSE_ASSERT(lang_opts.CPlusPlus && "Expected C++ mode after setting language defaults");
+    }
 
     if (enable_cuda) {
         lang_opts.CUDA = 1;
@@ -354,6 +364,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (!compiler_instance->hasASTContext()) compiler_instance->createASTContext();
 
+    compiler_instance->getPreprocessor().getBuiltinInfo().initializeBuiltins(
+        compiler_instance->getPreprocessor().getIdentifierTable(), lang_opts);
+
     auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language, &sageFile);
     ClangToSageTranslator* translator = translator_ptr.get();
     compiler_instance->setASTConsumer(std::move(translator_ptr));
@@ -373,6 +386,12 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 //  printf ("Calling clang::ParseAST()\n");
 
     compiler_instance->getDiagnosticClient().BeginSourceFile(compiler_instance->getLangOpts(), &(compiler_instance->getPreprocessor()));
+    if (language == ClangToSageTranslator::CPLUSPLUS) {
+        clang::IdentifierInfo &builtin_id =
+            compiler_instance->getPreprocessor().getIdentifierTable().get("__builtin_clzll");
+        ROSE_ASSERT(builtin_id.getBuiltinID() != static_cast<unsigned>(clang::Builtin::NotBuiltin) &&
+                    "Expected Clang builtins to be initialised for C++ mode");
+    }
     clang::ParseAST(compiler_instance->getPreprocessor(), translator, compiler_instance->getASTContext());
     compiler_instance->getDiagnosticClient().EndSourceFile();
 

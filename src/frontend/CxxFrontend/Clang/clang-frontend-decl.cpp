@@ -232,10 +232,11 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
             ret_status = VisitLinkageSpecDecl((clang::LinkageSpecDecl *)decl, &result);
             ROSE_ASSERT(ret_status == false || result != NULL);
             break;
-        case clang::Decl::BuiltinTemplate:
-            ret_status = VisitBuiltinTemplateDecl((clang::BuiltinTemplateDecl *)decl, &result);
-            ROSE_ASSERT(ret_status == false || result != NULL);
+        case clang::Decl::BuiltinTemplate: {
+            ret_status = false;
+            result = NULL;
             break;
+        }
         case clang::Decl::Concept:
             ret_status = VisitConceptDecl((clang::ConceptDecl *)decl, &result);
             ROSE_ASSERT(ret_status == false || result != NULL);
@@ -428,7 +429,9 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
 
     ROSE_ASSERT(ret_status == false || result != NULL);
 
-    p_decl_translation_map.insert(std::pair<clang::Decl *, SgNode *>(decl, result));
+    if (ret_status && result != NULL) {
+        p_decl_translation_map.insert(std::pair<clang::Decl *, SgNode *>(decl, result));
+    }
 
 #if DEBUG_TRAVERSE_DECL
     std::cerr << "Traverse(clang::Decl : " << decl << " ";
@@ -454,7 +457,24 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl * decl, SgNode ** node) {
     std::cerr << "ClangToSageTranslator::VisitDecl" << std::endl;
 #endif    
     if (*node == NULL) {
-        std::cerr << "Runtime error: No Sage node associated with the declaration..." << std::endl;
+        const char* kind_name = decl ? decl->getDeclKindName() : "Unknown";
+        std::string loc_string;
+        if (decl) {
+            clang::SourceLocation loc = decl->getLocation();
+            if (loc.isValid()) {
+                clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+                clang::PresumedLoc ploc = sm.getPresumedLoc(loc);
+                if (ploc.isValid()) {
+                    loc_string = std::string(ploc.getFilename()) + ":" + std::to_string(ploc.getLine());
+                }
+            }
+        }
+        if (!loc_string.empty()) {
+            std::cerr << "Runtime error: No Sage node associated with the declaration (" << kind_name
+                      << " at " << loc_string << ")..." << std::endl;
+        } else {
+            std::cerr << "Runtime error: No Sage node associated with the declaration (" << kind_name << ")..." << std::endl;
+        }
         return false;
     }
 
@@ -643,11 +663,28 @@ bool ClangToSageTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitNamespaceDecl" << std::endl;
 #endif
-    bool res = true;
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    if (scope == nullptr) {
+        scope = p_global_scope;
+    }
 
-    //ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    SageBuilder::pushScopeStack(scope);
+    for (auto it = namespace_decl->decls_begin(); it != namespace_decl->decls_end(); ++it) {
+        clang::Decl *inner_decl = *it;
+        if (inner_decl == nullptr)
+            continue;
 
-    return VisitNamedDecl(namespace_decl, node) && res;
+        SgNode *child = Traverse(inner_decl);
+        if (SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child)) {
+            if (decl_stmt->get_parent() == nullptr && scope != nullptr) {
+                SageInterface::appendStatement(decl_stmt, scope);
+            }
+        }
+    }
+    SageBuilder::popScopeStack();
+
+    *node = SageBuilder::buildNullStatement_nfi();
+    return true;
 }
 
 bool ClangToSageTranslator::VisitLinkageSpecDecl(clang::LinkageSpecDecl * linkage_spec_decl, SgNode ** node) {
@@ -677,11 +714,11 @@ bool ClangToSageTranslator::VisitTemplateDecl(clang::TemplateDecl * template_dec
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitTemplateDecl" << std::endl;
 #endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
-    return VisitNamedDecl(template_decl, node) && res;
+    if (template_decl != nullptr && template_decl->getTemplatedDecl() != nullptr) {
+        Traverse(template_decl->getTemplatedDecl());
+    }
+    *node = NULL;
+    return false;
 }
 
 bool ClangToSageTranslator::VisitBuiltinTemplateDecl(clang::BuiltinTemplateDecl * builtin_template_decl, SgNode ** node) {
@@ -710,44 +747,43 @@ bool ClangToSageTranslator::VisitRedeclarableTemplateDecl(clang::RedeclarableTem
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitRedeclarableTemplateDecl" << std::endl;
 #endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
-    return VisitTemplateDecl(redeclarable_template_decl, node) && res;
+    return VisitTemplateDecl(redeclarable_template_decl, node);
 }
 
 bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * class_template_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitClassTemplateDecl" << std::endl;
 #endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-    return VisitRedeclarableTemplateDecl(class_template_decl, node) && res;
+    if (class_template_decl != nullptr) {
+        Traverse(class_template_decl->getTemplatedDecl());
+        for (auto it = class_template_decl->spec_begin(); it != class_template_decl->spec_end(); ++it) {
+            Traverse(*it);
+        }
+    }
+    *node = NULL;
+    return false;
 }
 
 bool ClangToSageTranslator::VisitFunctionTemplateDecl(clang::FunctionTemplateDecl * function_template_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitFunctionTemplateDecl" << std::endl;
 #endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-    return VisitRedeclarableTemplateDecl(function_template_decl, node) && res;
+    if (function_template_decl != nullptr) {
+        Traverse(function_template_decl->getTemplatedDecl());
+    }
+    *node = NULL;
+    return false;
 }
 
 bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(clang::TypeAliasTemplateDecl * type_alias_template_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitTypeAliasTemplateDecl" << std::endl;
 #endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-    return VisitRedeclarableTemplateDecl(type_alias_template_decl, node) && res;
+    if (type_alias_template_decl != nullptr) {
+        Traverse(type_alias_template_decl->getTemplatedDecl());
+    }
+    *node = NULL;
+    return false;
 }
 
 bool ClangToSageTranslator::VisitVarTemplateDecl(clang::VarTemplateDecl * var_template_decl, SgNode ** node) {
@@ -755,11 +791,11 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(clang::VarTemplateDecl * var_te
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitVarTemplateDecl" << std::endl;
 #endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-    return VisitRedeclarableTemplateDecl(var_template_decl, node) && res;
+    if (var_template_decl != nullptr) {
+        Traverse(var_template_decl->getTemplatedDecl());
+    }
+    *node = NULL;
+    return false;
 }
 
 
@@ -767,11 +803,7 @@ bool ClangToSageTranslator::VisitTemplateTemplateParmDecl(clang::TemplateTemplat
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitTemplateTemplateParmDecl" << std::endl;
 #endif
-    bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-    return VisitTemplateDecl(template_template_parm_decl, node) && res;
+    return VisitTemplateDecl(template_template_parm_decl, node);
 }
 
 bool ClangToSageTranslator::VisitTypeDecl(clang::TypeDecl * type_decl, SgNode ** node) {
