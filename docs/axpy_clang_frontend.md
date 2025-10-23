@@ -124,5 +124,37 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 - **Risks**: without better symbol management we risk leaking thousands of opaque
   placeholders or emitting unusable ASTs. Each fallback should log once (guarded
   by a debug knob) so production runs stay quiet.
+
+## Roadmap (Follow-Through Checklist)
+
+The following sequence should be executed top-to-bottom for any future engineer
+continuing this work. Do not re-investigate the fixed language-default bug; the
+remaining tasks are strictly around AST translation hardening:
+
+1. **Namespace scaffolding**
+   - Finish implementation of `VisitNamespaceDecl` to emit an actual
+     `SgNamespaceDeclarationStatement` while preserving child traversal.
+   - Verify we no longer produce `SgNullStatement` placeholders for namespace IR.
+2. **Template declaration handling**
+   - Implement stub visitors for class/function/type-alias/variable templates that
+     fabricate opaque types + symbols in scope.
+   - Ensure specialisations (full/partial) are walked, even if they degrade to
+     placeholders.
+3. **Type fallback coverage**
+   - Harden `VisitRecordType`, `VisitTemplateSpecializationType`, and
+     `VisitTypedefType` to avoid assertions; emit `buildOpaqueType` or
+     `buildUnknownType` with deterministic naming.
+   - Add exhaustive unit logging behind a debug flag so missing cases are easy to
+     trace.
+4. **Expression/statement wiring**
+   - Handle the common expression forms produced by `std::array` and friends:
+     `DeclRefExpr`, `MemberExpr`, `CXXConstructExpr`, `CallExpr`, etc.
+   - Reuse existing SageBuilder helpers where possible; skip unhandled nodes with
+     `buildNullExpression()` rather than abort.
+5. **Regression loop**
+   - Re-run `rose-compiler tests/nonsmoke/functional/input_codes/axpy.cpp`
+     until it produces a translated file without crashing.
+   - Expand coverage gradually (`<vector>`, `<algorithm>`, etc.) using the same
+     smoke-test pattern.
 - Linkage specifications are flattened; follow-up work is needed if downstream
   analyses require exact `extern` metadata.
