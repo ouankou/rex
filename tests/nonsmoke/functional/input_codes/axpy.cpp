@@ -1,39 +1,43 @@
-static void axpy(double a, const double *x, double *y, int n) {
-  for (int i = 0; i < n; ++i) {
+#include <array>
+#include <cstddef>
+#include <cmath>
+#include <numeric>
+
+static constexpr std::size_t kElements = 1u << 10;
+
+static void axpy(double a, const double *x, double *y, std::size_t n) {
+  for (std::size_t i = 0; i < n; ++i) {
     y[i] = a * x[i] + y[i];
   }
 }
 
-static double checksum(const double *values, int n) {
+static double checksum(const double *values, std::size_t n) {
   double sum = 0.0;
-  for (int i = 0; i < n; ++i) {
+  for (std::size_t i = 0; i < n; ++i) {
     sum += values[i];
   }
   return sum;
 }
 
 int main() {
-  const int n = 1 << 10; // 1024 elements
   const double a = 2.5;
 
-  double x[1 << 10];
-  double y[1 << 10];
+  std::array<double, kElements> x{};
+  std::array<double, kElements> y{};
 
-  for (int i = 0; i < n; ++i) {
-    x[i] = (double)i;
-    y[i] = (double)(2 * i);
+  std::iota(x.begin(), x.end(), 0.0);
+  std::iota(y.begin(), y.end(), 0.0);
+  for (std::size_t i = 0; i < y.size(); ++i) {
+    y[i] *= 2.0;
   }
 
-  axpy(a, x, y, n);
+  axpy(a, x.data(), y.data(), y.size());
 
-  const double result = checksum(y, n);
-  const double expected = (a + 2.0) * (double)((n - 1) * n) * 0.5;
+  const double result = checksum(y.data(), y.size());
+  const double expected =
+      (a + 2.0) * static_cast<double>((kElements - 1) * kElements) * 0.5;
 
-  double diff = result - expected;
-  if (diff < 0.0) {
-    diff = -diff;
-  }
-  const double rel_error = diff / expected;
+  const double rel_error = std::fabs(result - expected) / expected;
   if (rel_error > 1e-9) {
     return 1;
   }

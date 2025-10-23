@@ -36,6 +36,7 @@
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/LangStandard.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
@@ -45,6 +46,8 @@
 
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendOptions.h"
+#include "clang/Lex/PreprocessorOptions.h"
 
 #include "clang/Basic/DiagnosticOptions.h"
 
@@ -65,6 +68,7 @@
 #include "llvm/Config/llvm-config.h"
 
 #include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
 
@@ -712,4 +716,3 @@ class ClangToDotPreprocessorInserter : public AstTopDownProcessing<ClangToDotNex
    };
 
 #endif /* _CLANG_TO_DOT_FRONTEND_PRIVATE_HPP_ */
-

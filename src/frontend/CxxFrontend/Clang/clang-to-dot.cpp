@@ -262,29 +262,67 @@ int clang_to_dot_main(int argc, char ** argv)
     compiler_instance->createFileManager();
 
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
+    const llvm::Triple target_triple(llvm::sys::getDefaultTargetTriple());
+    std::vector<std::string> lang_specific_includes;
+    clang::LangStandard::Kind requested_std = lang_opts.LangStd;
+    clang::LangStandard std_info = clang::LangStandard::getLangStandardForKind(requested_std);
+    clang::Language clang_lang = clang::Language::C;
+    bool enable_cuda = false;
+    bool enable_opencl = false;
 
     switch (language) {
         case ClangToDotTranslator::C:
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_C, );
+            if (!(std_info.isC99() || std_info.isC11() || std_info.isC17() || std_info.isC23())) {
+                requested_std = clang::LangStandard::lang_gnu17;
+            }
+            clang_lang = clang::Language::C;
             break;
         case ClangToDotTranslator::CPLUSPLUS:
-            lang_opts.CPlusPlus = 1;
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_CXX, );
+            if (!std_info.isCPlusPlus()) {
+                requested_std = clang::LangStandard::lang_gnucxx17;
+            }
+            clang_lang = clang::Language::CXX;
             break;
         case ClangToDotTranslator::CUDA:
-            lang_opts.CUDA = 1;
-//          lang_opts.CPlusPlus = 1;
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_CUDA,   clang::LangStandard::lang_cuda);
+            if (!std_info.isCPlusPlus()) {
+                requested_std = clang::LangStandard::lang_gnucxx17;
+            }
+            clang_lang = clang::Language::CUDA;
+            enable_cuda = true;
             break;
         case ClangToDotTranslator::OPENCL:
-            lang_opts.OpenCL = 1;
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_OpenCL, clang::LangStandard::lang_opencl);
+            if (!std_info.isOpenCL()) {
+                requested_std = clang::LangStandard::lang_opencl30;
+            }
+            clang_lang = clang::Language::OpenCL;
+            enable_opencl = true;
             break;
         case ClangToDotTranslator::OBJC:
             ROSE_ASSERT(!"Objective-C is not supported by ROSE Compiler.");
-//          compiler_instance->getInvocation().setLangDefaults(lang_opts, clang::IK_, );
         default:
             ROSE_ABORT();
+    }
+
+    clang::InputKind input_kind(clang_lang);
+    clang::FrontendOptions &fe_opts = compiler_instance->getInvocation().getFrontendOpts();
+    fe_opts.Inputs.clear();
+    fe_opts.Inputs.emplace_back(input_file, input_kind);
+
+    clang::LangOptions::setLangDefaults(
+        lang_opts, clang_lang, target_triple, lang_specific_includes, requested_std);
+
+    if (enable_cuda) {
+        lang_opts.CUDA = 1;
+    }
+    if (enable_opencl) {
+        lang_opts.OpenCL = 1;
+    }
+
+    clang::PreprocessorOptions &pp_opts = compiler_instance->getInvocation().getPreprocessorOpts();
+    if (!lang_specific_includes.empty()) {
+        pp_opts.Includes.insert(pp_opts.Includes.end(),
+                                lang_specific_includes.begin(),
+                                lang_specific_includes.end());
     }
 
     // LLVM 20 requires shared_ptr, LLVM 21+ requires reference

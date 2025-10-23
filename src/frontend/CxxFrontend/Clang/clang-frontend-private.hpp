@@ -46,6 +46,7 @@
 
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendOptions.h"
 #include "clang/Lex/PreprocessorOptions.h"
 
 #include "clang/Basic/DiagnosticOptions.h"
