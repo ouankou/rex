@@ -1985,9 +1985,6 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
     ROSE_ASSERT(var_def != NULL);
     applySourceRange(var_def, var_decl->getSourceRange());
 
-    SgVariableSymbol * var_symbol = new SgVariableSymbol(init_name);
-    SageBuilder::topScopeStack()->insert_symbol(name, var_symbol);
-
     // Pei-Hung (06/16/22) added "extern" modifier
     bool hasExternalStorage = var_decl->hasExternalStorage();
     if(hasExternalStorage)
