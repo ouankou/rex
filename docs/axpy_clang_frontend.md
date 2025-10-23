@@ -57,6 +57,17 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
      helper routines inside `namespace { ... }`.  
    - *Workaround*: Keep helper routines at global scope and mark them `static`.
      This sidesteps unimplemented namespace support in the current frontend.
+4. **Duplicate scope symbols triggering name-qualification warnings**
+   - *Symptom*: `nameQualificationSupport` warned on almost every reference to
+     block-local variables (notably `for`-loop indices).
+   - *Root cause*: The Clang bridge manually pushed a `SgVariableSymbol` into the
+     current scope after calling `SageBuilder::buildVariableDeclaration_nfi`, but
+     the builder already inserts the symbol. This double insertion inflated the
+     scope's symbol table and fooled the unparser into thinking multiple
+     declarations existed.
+   - *Fix*: Drop the extra `insert_symbol` and rely on `SageBuilder` to manage the
+     symbol table. The unparser now uses the scope counts directly with no
+     custom filtering, so only real ambiguities surface.
 
 ## Validation Flow
 
@@ -75,7 +86,6 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 
 ## Limitations & Next Steps
 
-- **Resolved name-qualification noise**: the unparser used raw symbol-table counts and saw duplicate entries for block-local declarations (including `for`-loop indices), so every reference triggered a warning. `nameQualificationSupport.C` now counts distinct lexical declarations within the current scope before warning, which eliminates the flood while preserving real conflicts.
 - **Future hardening**: it is still worthwhile to tighten the Clang bridge so loop induction variables are stored under the `SgForInitStatement` scope, but the immediate user-facing problem is gone.
 
 ## Known Gaps
