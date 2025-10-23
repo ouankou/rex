@@ -65,192 +65,148 @@ SgNode * ClangToSageTranslator::Traverse(const clang::Type * type) {
     switch (type->getTypeClass()) {
         case clang::Type::Decayed:
             ret_status = VisitDecayedType((clang::DecayedType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::ConstantArray:
             ret_status = VisitConstantArrayType((clang::ConstantArrayType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::DependentSizedArray:
             ret_status = VisitDependentSizedArrayType((clang::DependentSizedArrayType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
        case clang::Type::IncompleteArray:
             ret_status = VisitIncompleteArrayType((clang::IncompleteArrayType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::VariableArray:
             ret_status = VisitVariableArrayType((clang::VariableArrayType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Atomic:
             ret_status = VisitAtomicType((clang::AtomicType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Attributed:
             ret_status = VisitAttributedType((clang::AttributedType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::BlockPointer:
             ret_status = VisitBlockPointerType((clang::BlockPointerType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Builtin:
             ret_status = VisitBuiltinType((clang::BuiltinType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Complex:
             ret_status = VisitComplexType((clang::ComplexType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Decltype:
             ret_status = VisitDecltypeType((clang::DecltypeType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
      // case clang::Type::DependentDecltype:
      //     ret_status = VisitDependentDecltypeType((clang::DependentDecltypeType *)type, &result);
      //     break;
         case clang::Type::Auto:
             ret_status = VisitAutoType((clang::AutoType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::DeducedTemplateSpecialization:
             ret_status = VisitDeducedTemplateSpecializationType((clang::DeducedTemplateSpecializationType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::DependentSizedExtVector:
             ret_status = VisitDependentSizedExtVectorType((clang::DependentSizedExtVectorType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::DependentVector:
             ret_status = VisitDependentVectorType((clang::DependentVectorType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::FunctionNoProto:
             ret_status = VisitFunctionNoProtoType((clang::FunctionNoProtoType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::FunctionProto:
             ret_status = VisitFunctionProtoType((clang::FunctionProtoType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::InjectedClassName:
             ret_status = VisitInjectedClassNameType((clang::InjectedClassNameType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
      // case clang::Type::LocInfo:
      //     ret_status = VisitLocInfoType((clang::LocInfoType *)type, &result);
      //     break;
         case clang::Type::MacroQualified:
             ret_status = VisitMacroQualifiedType((clang::MacroQualifiedType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::MemberPointer:
             ret_status = VisitMemberPointerType((clang::MemberPointerType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::PackExpansion:
             ret_status = VisitPackExpansionType((clang::PackExpansionType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Paren:
             ret_status = VisitParenType((clang::ParenType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Pipe:
             ret_status = VisitPipeType((clang::PipeType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Pointer:
             ret_status = VisitPointerType((clang::PointerType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::LValueReference:
             ret_status = VisitLValueReferenceType((clang::LValueReferenceType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::RValueReference:
             ret_status = VisitRValueReferenceType((clang::RValueReferenceType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::SubstTemplateTypeParmPack:
             ret_status = VisitSubstTemplateTypeParmPackType((clang::SubstTemplateTypeParmPackType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::SubstTemplateTypeParm:
             ret_status = VisitSubstTemplateTypeParmType((clang::SubstTemplateTypeParmType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Enum:
             ret_status = VisitEnumType((clang::EnumType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Record:
             ret_status = VisitRecordType((clang::RecordType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::TemplateSpecialization:
             ret_status = VisitTemplateSpecializationType((clang::TemplateSpecializationType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::TemplateTypeParm:
             ret_status = VisitTemplateTypeParmType((clang::TemplateTypeParmType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Typedef:
             ret_status = VisitTypedefType((clang::TypedefType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::TypeOfExpr:
             ret_status = VisitTypeOfExprType((clang::TypeOfExprType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
     //  case clang::Type::DependentTypeOfExpr:
     //      ret_status = VisitDependentTypeOfExprType((clang::DependentTypeOfExprType *)type, &result);
     //      break;
         case clang::Type::TypeOf:
             ret_status = VisitTypeOfType((clang::TypeOfType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::DependentName:
             ret_status = VisitDependentNameType((clang::DependentNameType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::DependentTemplateSpecialization:
             ret_status = VisitDependentTemplateSpecializationType((clang::DependentTemplateSpecializationType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Elaborated:
             ret_status = VisitElaboratedType((clang::ElaboratedType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::UnaryTransform:
             ret_status = VisitUnaryTransformType((clang::UnaryTransformType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::UnresolvedUsing:
             ret_status = VisitUnresolvedUsingType((clang::UnresolvedUsingType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::Vector:
             ret_status = VisitVectorType((clang::VectorType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
         case clang::Type::ExtVector:
             ret_status = VisitExtVectorType((clang::ExtVectorType *)type, &result);
-            if (ret_status && result == NULL) { result = SageBuilder::buildUnknownType(); }
             break;
 
         default:
             std::cerr << "Warning: Unhandled clang::Type '" << type->getTypeClassName() << "'. Using opaque type." << std::endl;
-            result = SageBuilder::buildUnknownType();
             ret_status = true;
             break;
     }
 
     if (result == NULL) {
         result = SageBuilder::buildUnknownType();
-        ret_status = true;
     }
 
     p_type_translation_map.insert(std::pair<const clang::Type *, SgNode *>(type, result));
@@ -912,6 +868,7 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType * record_type, SgN
             if (qualified_name.empty()) {
                 qualified_name = "__anonymous_record";
             }
+            // std::isalnum expects values representable as unsigned char; cast to avoid UB for negative char.
             for (char &ch : qualified_name) {
                 if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')) {
                     ch = '_';
@@ -988,31 +945,12 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType * typedef_type, 
     SgTypedefSymbol * tdef_sym = isSgTypedefSymbol(sym);
 
     if (tdef_sym == NULL) {
-        clang::TypedefNameDecl *typedef_decl = typedef_type->getDecl();
-        std::string typedef_name = typedef_decl->getNameAsString();
-        if (!typedef_name.empty()) {
-            SgType *underlying_type = buildTypeFromQualifiedType(typedef_decl->getUnderlyingType());
-            if (underlying_type != nullptr) {
-                SgScopeStatement *scope = SageBuilder::topScopeStack();
-                if (scope == nullptr) {
-                    scope = p_global_scope;
-                }
-                SgTypedefDeclaration *sg_typedef_decl = SageBuilder::buildTypedefDeclaration(typedef_name, underlying_type, scope);
-                sym = GetSymbolFromSymbolTable(typedef_decl);
-                tdef_sym = isSgTypedefSymbol(sym);
-            }
-        }
-        if (tdef_sym == NULL) {
-            std::cerr << "Runtime Error: Cannot find a typedef symbol for the TypedefType." << std::endl;
-            res = false;
-        }
+        std::cerr << "Runtime Error: Cannot find a typedef symbol for the TypedefType." << std::endl;
+        res = false;
     }
 
-    if (tdef_sym != NULL) {
-        *node = tdef_sym->get_type();
-    } else {
-        *node = SageBuilder::buildUnknownType();
-    }
+    *node = (tdef_sym != NULL) ? tdef_sym->get_type()
+                               : SageBuilder::buildUnknownType();
 
    return VisitType(typedef_type, node) && res;
 }

@@ -683,8 +683,10 @@ bool ClangToSageTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_
     }
     SageBuilder::popScopeStack();
 
-    *node = SageBuilder::buildNullStatement_nfi();
-    return true;
+    // TODO(roadmap): Replace placeholder with real namespace declaration handling.
+    // Reference docs/axpy_clang_frontend.md roadmap item (Namespace scaffolding).
+    *node = NULL;
+    return false;
 }
 
 bool ClangToSageTranslator::VisitLinkageSpecDecl(clang::LinkageSpecDecl * linkage_spec_decl, SgNode ** node) {
@@ -717,6 +719,8 @@ bool ClangToSageTranslator::VisitTemplateDecl(clang::TemplateDecl * template_dec
     if (template_decl != nullptr && template_decl->getTemplatedDecl() != nullptr) {
         Traverse(template_decl->getTemplatedDecl());
     }
+    // TODO(roadmap): Emit proper template decl nodes once namespace/template scaffolding lands
+    // (see docs/axpy_clang_frontend.md roadmap section).
     *node = NULL;
     return false;
 }
