@@ -1046,7 +1046,44 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(clang::CXXForRangeStmt * cxx_fo
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // ROOT CAUSE FIX: C++11 range-based for loop: for (auto x : container) { ... }
+    // Clang desugars this into a regular for loop with begin/end iterators
+    // For ROSE, we build a SgForStatement using the desugared components
+
+    // Get the desugared components from Clang
+    // Range init contains the range expression (e.g., the container)
+    SgNode* tmp_range_init = cxx_for_range_stmt->getRangeInit() ? Traverse(cxx_for_range_stmt->getRangeInit()) : nullptr;
+    SgStatement* range_init = isSgStatement(tmp_range_init);
+
+    // Begin/end iterator setup
+    SgNode* tmp_begin = cxx_for_range_stmt->getBeginStmt() ? Traverse(cxx_for_range_stmt->getBeginStmt()) : nullptr;
+    SgNode* tmp_end = cxx_for_range_stmt->getEndStmt() ? Traverse(cxx_for_range_stmt->getEndStmt()) : nullptr;
+
+    // Loop variable declaration
+    SgNode* tmp_loop_var = cxx_for_range_stmt->getLoopVariable() ? Traverse(cxx_for_range_stmt->getLoopVariable()) : nullptr;
+    SgStatement* loop_var_decl = isSgStatement(tmp_loop_var);
+
+    // Condition, increment, and body
+    SgNode* tmp_cond = cxx_for_range_stmt->getCond() ? Traverse(cxx_for_range_stmt->getCond()) : nullptr;
+    SgExpression* cond = isSgExpression(tmp_cond);
+
+    SgNode* tmp_inc = cxx_for_range_stmt->getInc() ? Traverse(cxx_for_range_stmt->getInc()) : nullptr;
+    SgExpression* inc = isSgExpression(tmp_inc);
+
+    SgNode* tmp_body = cxx_for_range_stmt->getBody() ? Traverse(cxx_for_range_stmt->getBody()) : nullptr;
+    SgStatement* body = isSgStatement(tmp_body);
+
+    // Build initialization statement list (range init + loop variable)
+    SgStatementPtrList init_stmts;
+    if (range_init) init_stmts.push_back(range_init);
+    if (loop_var_decl) init_stmts.push_back(loop_var_decl);
+
+    // Build the for loop with these components
+    SgForInitStatement* for_init = SageBuilder::buildForInitStatement(init_stmts);
+    SgStatement* test = cond ? SageBuilder::buildExprStatement(cond) : nullptr;
+
+    *node = SageBuilder::buildForStatement(for_init, test, inc, body);
+
     return VisitStmt(cxx_for_range_stmt, node) && res;
 }
 
@@ -2228,7 +2265,26 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr * atomic_expr, SgN
 #endif
      bool res = true;
 
-     // TODO 
+     // ROOT CAUSE FIX: AtomicExpr represents C11/C++11 atomic operations like:
+     // __atomic_load, __atomic_store, __atomic_fetch_add, __atomic_exchange, etc.
+     // Build a function call expression to represent the atomic builtin.
+
+     // Traverse all sub-expressions (pointer, values, memory orders, etc.)
+     SgExprListExp* args = SageBuilder::buildExprListExp();
+     for (unsigned i = 0; i < atomic_expr->getNumSubExprs(); i++) {
+         SgNode* tmp_arg = Traverse(atomic_expr->getSubExprs()[i]);
+         SgExpression* arg = isSgExpression(tmp_arg);
+         if (arg != NULL) {
+             args->append_expression(arg);
+         } else if (tmp_arg != NULL) {
+             std::cerr << "Warning: AtomicExpr argument " << i << " is not an expression" << std::endl;
+             res = false;
+         }
+     }
+
+     // Build the function call expression with a generic builtin name
+     // We use buildFunctionCallExp with string name which handles undeclared builtins
+     *node = SageBuilder::buildFunctionCallExp("__atomic_builtin", SageBuilder::buildVoidType(), args, SageBuilder::topScopeStack());
 
      return VisitExpr(atomic_expr, node) && res;
 }
@@ -2255,8 +2311,9 @@ bool ClangToSageTranslator::VisitBinaryOperator(clang::BinaryOperator * binary_o
     }
 
     switch (binary_operator->getOpcode()) {
-        case clang::BO_PtrMemD:   ROSE_ASSERT(!"clang::BO_PtrMemD:");//*node = SageBuilder::build(lhs, rhs); break;
-        case clang::BO_PtrMemI:   ROSE_ASSERT(!"clang::BO_PtrMemI:");//*node = SageBuilder::build(lhs, rhs); break;
+        // ROOT CAUSE FIX: Pointer-to-member operators for C++ member function pointers
+        case clang::BO_PtrMemD:   *node = SageBuilder::buildDotStarOp(lhs, rhs); break;  // obj.*ptr_to_member
+        case clang::BO_PtrMemI:   *node = SageBuilder::buildArrowStarOp(lhs, rhs); break; // ptr->*ptr_to_member
         case clang::BO_Mul:       *node = SageBuilder::buildMultiplyOp(lhs, rhs); break;
         case clang::BO_Div:       *node = SageBuilder::buildDivideOp(lhs, rhs); break;
         case clang::BO_Rem:       *node = SageBuilder::buildModOp(lhs, rhs); break;
@@ -4050,7 +4107,20 @@ bool ClangToSageTranslator::VisitOpaqueValueExpr(clang::OpaqueValueExpr * opaque
 #endif
     bool res = true;
 
-    // TODO
+    // ROOT CAUSE FIX: OpaqueValueExpr is a Clang internal node representing a value
+    // that appears multiple times in the AST but should only be evaluated once.
+    // It's used for desugaring constructs like the conditional operator and range-based for.
+    // We just traverse the source expression and return it.
+
+    clang::Expr* source_expr = opaque_value_expr->getSourceExpr();
+    if (source_expr) {
+        *node = Traverse(source_expr);
+    } else {
+        // No source expression - OpaqueValueExpr is used as a placeholder
+        // Create a null expression placeholder for ROSE
+        // This happens in range-based for loops and other desugared constructs
+        *node = SageBuilder::buildNullExpression();
+    }
 
     return VisitExpr(opaque_value_expr, node) && res;
 }
@@ -4168,7 +4238,30 @@ bool ClangToSageTranslator::VisitParenListExpr(clang::ParenListExpr * paran_list
 #endif
     bool res = true;
 
-    // TODO
+    // ROOT CAUSE FIX: ParenListExpr represents a parenthesized list of expressions
+    // like in aggregate initialization: Point p(1, 2);
+    // Build an expression list to represent the paren list
+
+    unsigned num_exprs = paran_list_expr->getNumExprs();
+
+    if (num_exprs == 1) {
+        // Single expression - just unwrap the parentheses and return the expression directly
+        *node = Traverse(paran_list_expr->getExpr(0));
+    } else {
+        // Multiple expressions - build an ExprListExp
+        SgExprListExp* expr_list = SageBuilder::buildExprListExp();
+        for (unsigned i = 0; i < num_exprs; i++) {
+            SgNode* tmp_expr = Traverse(paran_list_expr->getExpr(i));
+            SgExpression* expr = isSgExpression(tmp_expr);
+            if (expr != NULL) {
+                expr_list->append_expression(expr);
+            } else if (tmp_expr != NULL) {
+                std::cerr << "Warning: ParenListExpr element " << i << " is not an expression" << std::endl;
+                res = false;
+            }
+        }
+        *node = expr_list;
+    }
 
     return VisitExpr(paran_list_expr, node) && res;
 }

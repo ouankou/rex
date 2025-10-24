@@ -1350,9 +1350,13 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // has incorrect namespace qualification.
 
     // Create symbol and insert into symbol table
+    // ROOT CAUSE FIX: Insert symbol into the same scope as the declaration (inst_scope)
+    // not getGlobalScope(). This fixes ROSETTA warnings:
+    // "SgScopeStatement::insert_symbol(): class_declaration->get_scope() != this"
+    // The declaration's scope (set on line 1322) must match the scope where we insert the symbol.
     // Use full mangled name for symbol table to avoid conflicts
     SgClassSymbol* class_symbol = new SgClassSymbol(inst_decl);
-    getGlobalScope()->insert_symbol(SgName(inst_name_full), class_symbol);
+    inst_scope->insert_symbol(SgName(inst_name_full), class_symbol);
 
     // Cache it with full name
     p_template_inst_cache[inst_name_full] = inst_decl;
