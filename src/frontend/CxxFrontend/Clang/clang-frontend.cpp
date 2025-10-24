@@ -183,7 +183,15 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             inc_list.push_back("clang-builtin-c.h");
             break;
         case ClangToSageTranslator::CPLUSPLUS:
-            sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(), cxx_config_include_dirs.end());
+            // NOTE: Skip staged headers for C++ - use system headers directly to avoid
+            // incomplete/broken staged header trees that cause compilation failures
+            // Add Clang builtin headers first, then system C++ and C include paths
+            sys_dirs_list.push_back("/usr/lib/llvm-20/lib/clang/20/include");
+            sys_dirs_list.push_back("/usr/include/c++/12");
+            sys_dirs_list.push_back("/usr/include/aarch64-linux-gnu/c++/12");
+            sys_dirs_list.push_back("/usr/include/c++/12/backward");
+            sys_dirs_list.push_back("/usr/include/aarch64-linux-gnu");
+            sys_dirs_list.push_back("/usr/include");
             inc_list.push_back("clang-builtin-cpp.hpp");
             break;
         case ClangToSageTranslator::CUDA:

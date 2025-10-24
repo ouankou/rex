@@ -3366,10 +3366,14 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier2 ( SgDeclarationSta
                curprint("template ");
              } 
             else 
-               if (isSgTemplateInstantiationDecl(decl_stmt)) 
+               if (isSgTemplateInstantiationDecl(decl_stmt))
                   {
-                    if(experimentalModeVerbose==1) curprint("/*1*/");
-                    curprint("template<> ");
+                    // ROOT CAUSE FIX: Don't output "template<>" for compiler-generated implicit instantiations
+                    // Only output it for explicit specializations (user-written code)
+                    if (!decl_stmt->get_file_info()->isCompilerGenerated()) {
+                        if(experimentalModeVerbose==1) curprint("/*1*/");
+                        curprint("template<> ");
+                    }
                   } 
                  else 
                     if (isSgTemplateInstantiationDefn(decl_stmt->get_parent())) 

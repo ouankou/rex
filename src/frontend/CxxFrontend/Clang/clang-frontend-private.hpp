@@ -181,6 +181,16 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         std::map<SgClassType *, bool> p_class_type_decl_first_see_in_type;
         std::map<SgEnumType *, bool>  p_enum_type_decl_first_see_in_type;
 
+        // Template declaration cache - maps template name to SgTemplateClassDeclaration
+        // Key: mangled template name (e.g., "std::array")
+        // Value: Template class declaration
+        std::map<std::string, SgTemplateClassDeclaration*> p_template_decl_cache;
+
+        // Template instantiation cache - maps instantiation signature to SgTemplateInstantiationDecl
+        // Key: mangled instantiation name (e.g., "std::array<double, 1024>")
+        // Value: Template instantiation declaration
+        std::map<std::string, SgTemplateInstantiationDecl*> p_template_inst_cache;
+
         clang::CompilerInstance  * p_compiler_instance;
         SagePreprocessorRecord   * p_sage_preprocessor_recorder;
         SgSourceFile             * p_sage_source_file; // Parent file for connecting global scope
@@ -190,6 +200,25 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         SgSymbol * GetSymbolFromSymbolTable(clang::NamedDecl * decl);
 
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
+
+        // Template helper methods
+        // Helper: Get or create template class declaration
+        SgTemplateClassDeclaration* getOrCreateTemplateDeclaration(
+            const std::string& template_name,
+            const clang::TemplateSpecializationType* clang_type);
+
+        // Helper: Get or create template instantiation
+        SgTemplateInstantiationDecl* getOrCreateTemplateInstantiation(
+            SgTemplateClassDeclaration* template_decl,
+            const clang::TemplateSpecializationType* clang_type);
+
+        // Helper: Build template arguments from Clang
+        SgTemplateArgumentPtrList buildTemplateArguments(
+            const clang::TemplateSpecializationType* clang_type);
+
+        // Helper: Build template parameters (inferred from arguments)
+        SgTemplateParameterPtrList* buildTemplateParameters(
+            const clang::TemplateSpecializationType* clang_type);
 
     public:
         ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file);
@@ -573,6 +602,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             virtual bool VisitUnresolvedUsingType(clang::UnresolvedUsingType * unresolved_using_type, SgNode ** node);
             virtual bool VisitVectorType(clang::VectorType * vector_type, SgNode ** node);
                 virtual bool VisitExtVectorType(clang::ExtVectorType * ext_vector_type, SgNode ** node);
+                virtual bool VisitUsingType(clang::UsingType * using_type, SgNode ** node);
 
   // Preprocessing access
         std::pair<Sg_File_Info *, PreprocessingInfo *> preprocessor_top();

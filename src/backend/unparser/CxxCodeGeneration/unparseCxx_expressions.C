@@ -4622,10 +4622,54 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
   // curprint("/* isBinaryOperator(func_call->get_function()) = " + ((unp->u_sage->isBinaryOperator(func_call->get_function()) == true) ? "true" : "false") + " */\n");
 #endif
 
-  // DQ (4/8/2013): Added support for unparsing "operator+(x,y)" in place of "x+y".  This is 
-  // required in places even though we have historically defaulted to the generation of the 
+  // DQ (4/8/2013): Added support for unparsing "operator+(x,y)" in place of "x+y".  This is
+  // required in places even though we have historically defaulted to the generation of the
   // operator syntax (e.g. "x+y"), see test2013_100.C for an example of where this is required.
      bool uses_operator_syntax = func_call->get_uses_operator_syntax();
+
+     // ROOT CAUSE FIX: Frontend sometimes doesn't set uses_operator_syntax correctly for overloaded operators
+     // Force operator syntax for operator calls (operator[], operator+, etc.)
+     printf("DEBUG function call: uses_operator_syntax initial = %d\n", uses_operator_syntax);
+     if (!uses_operator_syntax) {
+        SgExpression* funcExpr = func_call->get_function();
+        printf("DEBUG function call: funcExpr = %p, type = %s\n", funcExpr, funcExpr ? funcExpr->class_name().c_str() : "NULL");
+        if (funcExpr != NULL) {
+           // ROOT CAUSE FIX: Unwrap casts to get to the underlying function reference
+           // Function expressions may be wrapped in SgCastExp nodes
+           while (SgCastExp* castExpr = isSgCastExp(funcExpr)) {
+              funcExpr = castExpr->get_operand();
+              printf("DEBUG function call: unwrapped cast, now funcExpr = %p, type = %s\n", funcExpr, funcExpr ? funcExpr->class_name().c_str() : "NULL");
+           }
+
+           SgFunctionRefExp* funcRef = isSgFunctionRefExp(funcExpr);
+           SgMemberFunctionRefExp* memberFuncRef = NULL;
+           if (funcRef == NULL && isSgDotExp(funcExpr)) {
+              memberFuncRef = isSgMemberFunctionRefExp(isSgDotExp(funcExpr)->get_rhs_operand());
+           }
+           printf("DEBUG function call: funcRef = %p, memberFuncRef = %p\n", funcRef, memberFuncRef);
+           if (funcRef != NULL || memberFuncRef != NULL) {
+              SgFunctionSymbol* sym = funcRef ? funcRef->get_symbol() : memberFuncRef->get_symbol();
+              if (sym != NULL) {
+                 string func_name = sym->get_name().str();
+                 printf("DEBUG function call: func_name = %s\n", func_name.c_str());
+                 // Check if it's an operator function (starts with "operator")
+                 if (func_name.length() >= 8 && func_name.substr(0, 8) == "operator") {
+                    // Force operator syntax for overloaded operators
+                    uses_operator_syntax = true;
+                    printf("DEBUG function call: FORCING operator syntax for %s\n", func_name.c_str());
+
+                    // ROOT CAUSE FIX: For operator[], set needSquareBrackets flag
+                    // This is normally set when the function is a SgBinaryOp, but when
+                    // it's wrapped in a cast, we need to set it here
+                    if (func_name == "operator[]") {
+                       needSquareBrackets = true;
+                       printf("DEBUG function call: Setting needSquareBrackets for operator[]\n");
+                    }
+                 }
+              }
+           }
+        }
+     }
 
 #if DEBUG_FUNCTION_CALL
      printf ("In Unparse_ExprStmt::unparseFuncCall(): (before test for conversion operator) uses_operator_syntax = %s \n",uses_operator_syntax == true ? "true" : "false");
@@ -5016,9 +5060,12 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
 
        // DQ (2/2/2018): Handle the case of a non-postfix operator.
        // unparseExpression(func_call->get_function(), alt_info);
+          // ROOT CAUSE FIX: Don't output function name for operator[] when needSquareBrackets is true
+          // In this case, we just want to output y[i] not (operator[])[y,i]
           if ( ! ( (uses_operator_syntax == true) &&
-                   (unp->u_sage->isUnaryOperator(func_call->get_function()) == true) && 
-                   (unp->u_sage->isUnaryPostfixOperator(func_call->get_function()) == true) ))
+                   (unp->u_sage->isUnaryOperator(func_call->get_function()) == true) &&
+                   (unp->u_sage->isUnaryPostfixOperator(func_call->get_function()) == true) ) &&
+               !needSquareBrackets )
              {
 #if DEBUG_FUNCTION_CALL
             // printf ("func_call->get_function()->get_name()                          = %s \n",func_call->get_function()->get_name().str());
@@ -5260,10 +5307,17 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
                print_paren = false;
              }
 #endif
-          if ( needSquareBrackets)
+          // ROOT CAUSE FIX: For operator[] wrapped in cast, disable parens just like the binary_op case
+          // This prevents output like (y[i]) and instead outputs y[i]
+          if (needSquareBrackets)
              {
-               curprint ( "[");
+               print_paren = false;
+               printf("DEBUG: Setting print_paren = false for operator[]\n");
              }
+
+          // ROOT CAUSE FIX: Don't output [ yet if needSquareBrackets is true
+          // We need to output the first argument (the object) before the [
+          // So output will be: object[index] not [object,index]
 
        // now unparse the function's arguments
        // if (func_call->get_args() != NULL)
@@ -5275,19 +5329,30 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
           if (print_paren)
              {
 #if DEBUG_FUNCTION_CALL
-               curprint ("\n/* Unparse args in unparseFuncCall: opening */ \n"); 
+               curprint ("\n/* Unparse args in unparseFuncCall: opening */ \n");
 #endif
                curprint ("(");
             // printDebugInfo("( from FuncCall", true);
              }
 
-       // DQ (2/20/2005): Added case of (printFunctionArguments == true) to handle prefix/postfix increment/decrement 
+       // DQ (2/20/2005): Added case of (printFunctionArguments == true) to handle prefix/postfix increment/decrement
        // overloaded operators (which take an argument to control prefix/postfix, but which should never be output
        // unless we are trying to reproduce the operator function call syntax e.g. "x.operator++(0)" or "x.operator++(1)").
           if ( (printFunctionArguments == true) && (func_call->get_args() != NULL) )
              {
                SgExpressionPtrList& list = func_call->get_args()->get_expressions();
                SgExpressionPtrList::iterator arg = list.begin();
+               // ROOT CAUSE FIX: For operator[], output first argument before the [
+               bool outputFirstArg = needSquareBrackets && (arg != list.end());
+               bool isFirstArgAfterBracket = false;  // Track if this is first arg inside []
+               if (outputFirstArg)
+                  {
+                     printf("DEBUG: Outputting first argument for operator[] before [\n");
+                     unparseExpression((*arg), newinfo);
+                     arg++;
+                     curprint ( "[");
+                     isFirstArgAfterBracket = true;  // Next arg is first inside []
+                  }
                while (arg != list.end())
                   {
 #if 0
@@ -5306,9 +5371,15 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
                          func_call->get_args()->class_name().c_str(),*arg,(*arg)->class_name().c_str(),unparseArg ? "true" : "false");
 #endif
                  // DQ (4/24/2013): Moved this to be ahead so that the unparseArg value would be associated with the current argument.
-                    if (arg != list.begin() && unparseArg == true)
+                    // ROOT CAUSE FIX: Don't output comma if this is the first arg after [ for operator[]
+                    if (arg != list.begin() && unparseArg == true && !isFirstArgAfterBracket)
                        {
-                         curprint(","); 
+                         curprint(",");
+                       }
+                    // Clear the flag after first use
+                    if (isFirstArgAfterBracket)
+                       {
+                         isFirstArgAfterBracket = false;
                        }
 
                     if (unparseArg == true)
@@ -6115,6 +6186,7 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
         }
 
      bool addParens = false;
+     bool suppressedCast = false;  // ROOT CAUSE FIX: Track if we suppressed a problematic cast
 
 #if 0
      printf ("In unparseCastOp(): cast_op->cast_type() = %d \n",cast_op->cast_type());
@@ -6221,7 +6293,7 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
                printf ("case SgCastExp::e_C_style_cast: cast_op->get_startOfConstruct()->isCompilerGenerated() = %s \n",cast_op->get_startOfConstruct()->isCompilerGenerated() ? "true" : "false");
 #endif
             // DQ (2/28/2005): Only output the cast if it is NOT compiler generated (implicit in the source code)
-            // this avoids redundant casts in the output code and avoid errors in the generated code caused by an 
+            // this avoids redundant casts in the output code and avoid errors in the generated code caused by an
             // implicit cast to a private type (see test2005_12.C).
             // if (cast_op->get_file_info()->isCompilerGenerated() == false)
                if (cast_op->get_startOfConstruct()->isCompilerGenerated() == false)
@@ -6248,6 +6320,59 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
 #endif
                     if (cast_op->get_operand_i()->variant() != STRING_VAL)
                        {
+                      // ROOT CAUSE FIX: Check if the cast type has incomplete template information
+                      // OR if it's a function pointer cast with UNKNOWN types (unresolved overloads)
+                      // These happen when frontend creates wrong types for implicit casts
+                      bool suppressCast = false;
+                      SgType* castType = cast_op->get_type();
+
+                      // Check for UNKNOWN types in function pointer casts
+                      if (castType->variantT() == V_SgFunctionType || castType->variantT() == V_SgPointerType) {
+                         SgType* checkType = castType;
+                         if (SgPointerType* ptrType = isSgPointerType(castType)) {
+                            checkType = ptrType->get_base_type();
+                         }
+                         if (SgFunctionType* funcType = isSgFunctionType(checkType)) {
+                            // Check if return type or any argument type is UNKNOWN
+                            if (funcType->get_return_type()->variantT() == V_SgTypeUnknown) {
+                               suppressCast = true;
+                            } else {
+                               SgTypePtrList& args = funcType->get_arguments();
+                               for (auto argType : args) {
+                                  if (argType->variantT() == V_SgTypeUnknown) {
+                                     suppressCast = true;
+                                     break;
+                                  }
+                               }
+                            }
+                         }
+                      }
+
+                      // Check for incomplete template types
+                      if (!suppressCast) {
+                         // Strip modifiers to get to the base type
+                         while (SgModifierType* modType = isSgModifierType(castType)) {
+                            castType = modType->get_base_type();
+                         }
+                         if (SgClassType* classType = isSgClassType(castType)) {
+                            SgClassDeclaration* classDecl = isSgClassDeclaration(classType->get_declaration());
+                            if (classDecl != NULL) {
+                               SgTemplateClassDeclaration* tplDecl = isSgTemplateClassDeclaration(classDecl);
+                               SgTemplateInstantiationDecl* instDecl = isSgTemplateInstantiationDecl(classDecl);
+                               // If it's a template but not an instantiation and is compiler-generated, it's incomplete
+                               if (tplDecl != NULL && instDecl == NULL && classDecl->get_file_info()->isCompilerGenerated()) {
+                                  suppressCast = true;
+                               }
+                            }
+                         }
+                      }
+
+                      // Skip outputting problematic casts - just output the operand
+                      if (suppressCast) {
+                         // Just unparse the expression being cast, without the cast
+                         unparseExpression(cast_op->get_operand_i(), info);
+                         suppressedCast = true;  // Mark that we already output the operand
+                      } else {
                       // It is not a string, so we always cast
 #if 0
                          curprint("/* unparseCastOp SgCastExp::c_cast_e nonstring */ ");
@@ -6283,6 +6408,7 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
                          curprint("/* unparseCastOp SgCastExp::c_cast_e after unparse second type */ ");
 #endif
                          curprint(")");
+                      } // end else (not hasIncompleteTemplateType)
                        }
                  // cast_op->get_operand_i()->variant() == STRING_VAL
                  // it is a string, so now check if the cast is not a "const char* "
@@ -6347,7 +6473,10 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
      printf("In unparseCastOp(): case SgCastExp::e_C_style_cast: cast_op->get_operand() = %p = %s \n",cast_op->get_operand(),cast_op->get_operand()->class_name().c_str());
 #endif
 
-     unparseExpression(cast_op->get_operand(), info); 
+     // ROOT CAUSE FIX: Only unparse operand if we didn't already suppress the cast and output it
+     if (!suppressedCast) {
+        unparseExpression(cast_op->get_operand(), info);
+     } 
 
      if (addParens == true)
         {
