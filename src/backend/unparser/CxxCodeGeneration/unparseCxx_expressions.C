@@ -4629,16 +4629,23 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
 
      // ROOT CAUSE FIX: Frontend sometimes doesn't set uses_operator_syntax correctly for overloaded operators
      // Force operator syntax for operator calls (operator[], operator+, etc.)
+#if DEBUG_FUNCTION_CALL
+     // FIX (PR review): Wrap debug output in conditional to prevent production output
      printf("DEBUG function call: uses_operator_syntax initial = %d\n", uses_operator_syntax);
+#endif
      if (!uses_operator_syntax) {
         SgExpression* funcExpr = func_call->get_function();
+#if DEBUG_FUNCTION_CALL
         printf("DEBUG function call: funcExpr = %p, type = %s\n", funcExpr, funcExpr ? funcExpr->class_name().c_str() : "NULL");
+#endif
         if (funcExpr != NULL) {
            // ROOT CAUSE FIX: Unwrap casts to get to the underlying function reference
            // Function expressions may be wrapped in SgCastExp nodes
            while (SgCastExp* castExpr = isSgCastExp(funcExpr)) {
               funcExpr = castExpr->get_operand();
+#if DEBUG_FUNCTION_CALL
               printf("DEBUG function call: unwrapped cast, now funcExpr = %p, type = %s\n", funcExpr, funcExpr ? funcExpr->class_name().c_str() : "NULL");
+#endif
            }
 
            SgFunctionRefExp* funcRef = isSgFunctionRefExp(funcExpr);
@@ -4646,24 +4653,32 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
            if (funcRef == NULL && isSgDotExp(funcExpr)) {
               memberFuncRef = isSgMemberFunctionRefExp(isSgDotExp(funcExpr)->get_rhs_operand());
            }
+#if DEBUG_FUNCTION_CALL
            printf("DEBUG function call: funcRef = %p, memberFuncRef = %p\n", funcRef, memberFuncRef);
+#endif
            if (funcRef != NULL || memberFuncRef != NULL) {
               SgFunctionSymbol* sym = funcRef ? funcRef->get_symbol() : memberFuncRef->get_symbol();
               if (sym != NULL) {
                  string func_name = sym->get_name().str();
+#if DEBUG_FUNCTION_CALL
                  printf("DEBUG function call: func_name = %s\n", func_name.c_str());
+#endif
                  // Check if it's an operator function (starts with "operator")
                  if (func_name.length() >= 8 && func_name.substr(0, 8) == "operator") {
                     // Force operator syntax for overloaded operators
                     uses_operator_syntax = true;
+#if DEBUG_FUNCTION_CALL
                     printf("DEBUG function call: FORCING operator syntax for %s\n", func_name.c_str());
+#endif
 
                     // ROOT CAUSE FIX: For operator[], set needSquareBrackets flag
                     // This is normally set when the function is a SgBinaryOp, but when
                     // it's wrapped in a cast, we need to set it here
                     if (func_name == "operator[]") {
                        needSquareBrackets = true;
+#if DEBUG_FUNCTION_CALL
                        printf("DEBUG function call: Setting needSquareBrackets for operator[]\n");
+#endif
                     }
                  }
               }
@@ -5312,7 +5327,10 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
           if (needSquareBrackets)
              {
                print_paren = false;
+#if DEBUG_FUNCTION_CALL
+               // FIX (PR review): Wrap debug output in conditional to prevent production output
                printf("DEBUG: Setting print_paren = false for operator[]\n");
+#endif
              }
 
           // ROOT CAUSE FIX: Don't output [ yet if needSquareBrackets is true
@@ -5347,7 +5365,10 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
                bool isFirstArgAfterBracket = false;  // Track if this is first arg inside []
                if (outputFirstArg)
                   {
+#if DEBUG_FUNCTION_CALL
+                     // FIX (PR review): Wrap debug output in conditional to prevent production output
                      printf("DEBUG: Outputting first argument for operator[] before [\n");
+#endif
                      unparseExpression((*arg), newinfo);
                      arg++;
                      curprint ( "[");

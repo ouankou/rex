@@ -1,13 +1,43 @@
 # Clang Frontend Test Status Report
 ## astInterfaceTests Suite Analysis
 
-**Date**: October 24, 2025 (Continued Session)
+**Date**: October 24, 2025 (Continued Session #2)
 **Test Suite**: `tests/nonsmoke/functional/roseTests/astInterfaceTests`
 **Overall Status**: 87% pass rate (52/60 tests passing)
 
 ---
 
-## Summary of This Session's Work
+## Summary of Today's Session (Session #2)
+
+### ✅ New Fixes Completed
+
+1. **getDeclarationList Scope Type Fix** (This Session)
+   - Location: `src/frontend/CxxFrontend/Clang/clang-frontend-decl.cpp:1859-1876`
+   - **Problem**: Calling `getDeclarationList()` on unsupported scope types (SgBasicBlock, SgDeclarationScope, etc.)
+   - **Root Cause**: Code didn't check if scope type supports `getDeclarationList()` before calling it
+   - **Fix**: Match exact set of supported types from `Cxx_Grammar.C:116211-116268`:
+     - `SgGlobal`, `SgNamespaceDefinitionStatement`, `SgClassDefinition`
+     - `SgTemplateClassDefinition`, `SgTemplateInstantiationDefn`, `SgFunctionParameterScope`
+   - **Result**: Fixed assertion failure in VisitFunctionDecl ✅
+
+2. **CXXNullPtrLiteralExpr Handler** (This Session)
+   - Location: `src/frontend/CxxFrontend/Clang/clang-frontend-stmt.cpp:3004-3026`
+   - **Problem**: Missing handler for C++11 `nullptr` literal
+   - **Root Cause**: Stub implementation with `// TODO` comment
+   - **Fix**: Create `SgNullptrValExp` node using `SageBuilder::buildNullptrValExp()`
+   - **Result**: `nullptr` literals now properly converted to SAGE IR ✅
+
+### 📈 Progress Update
+
+- **interfaceFunctionCoverage** now parses successfully and executes test logic
+- Test progresses to AST manipulation phase before hitting architectural issue
+- **New Error**: `SgStatement::insert_child()` base class called instead of derived override
+- **Diagnosis**: AST parent/child relationships not properly maintained by Clang frontend
+- **Category**: Fundamental "AST Relationship Integrity" architectural issue
+
+---
+
+## Summary of Previous Session Work
 
 ### ✅ Completed Implementations
 

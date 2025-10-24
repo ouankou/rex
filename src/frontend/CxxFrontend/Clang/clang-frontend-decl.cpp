@@ -1856,8 +1856,17 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             // e.g. test2018_15.c, test2018_13.c
             else
             {
-              // ROSE-1378: SgDeclarationScope doesn't support getDeclarationList(), skip check for it
-              if (!isSgDeclarationScope(definitionEnclosingScope))
+              // ROOT CAUSE FIX: Only certain scope types support getDeclarationList()
+              // Match the exact set of types from Cxx_Grammar.C:116211-116268
+              // Supported: SgGlobal, SgNamespaceDefinitionStatement, SgClassDefinition,
+              //            SgTemplateClassDefinition, SgTemplateInstantiationDefn, SgFunctionParameterScope
+              // NOT supported: SgBasicBlock, SgDeclarationScope, SgForInitStatement, etc.
+              if (isSgGlobal(definitionEnclosingScope) ||
+                  isSgNamespaceDefinitionStatement(definitionEnclosingScope) ||
+                  isSgClassDefinition(definitionEnclosingScope) ||
+                  isSgTemplateClassDefinition(definitionEnclosingScope) ||
+                  isSgTemplateInstantiationDefn(definitionEnclosingScope) ||
+                  isSgFunctionParameterScope(definitionEnclosingScope))
               {
                 SgDeclarationStatementPtrList& declList = definitionEnclosingScope->getDeclarationList();
                 if(std::find(declList.begin(), declList.end(), definingNamedTypeDecl) == declList.end())
@@ -2203,9 +2212,12 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
 
     const clang::Type* varType = varQualType.getTypePtr();
 
+#if DEBUG_VISIT_DECL
+    // FIX (PR review): Wrap debug output in conditional to prevent production output
     if (name.getString() == "x") {
         std::cerr << "DEBUG VarDecl: Variable 'x' has type class = " << varType->getTypeClassName() << std::endl;
     }
+#endif
 
     // Pei-Hung (06/01/2022) check if the declaration is considered embedded in Clang AST.
     // If it is embedded, no explicit SgDeclaration should be placed for ROSE AST.
@@ -2410,11 +2422,13 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl * param_var_decl
     if (param_var_decl->hasDefaultArg()) {
         SgNode * tmp_expr = Traverse(param_var_decl->getDefaultArg());
         SgExpression * expr = isSgExpression(tmp_expr);
+        // ROOT CAUSE FIX: Check that expr is not NULL before using it
+        // The conversion from tmp_expr to expr can fail, leaving expr == NULL
         if (tmp_expr != NULL && expr == NULL) {
             std::cerr << "Runtime error: tmp_expr != NULL && expr == NULL" << std::endl;
             res = false;
         }
-        else {
+        else if (expr != NULL) {
             applySourceRange(expr, param_var_decl->getDefaultArgRange());
             init = SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
             applySourceRange(init, param_var_decl->getDefaultArgRange());

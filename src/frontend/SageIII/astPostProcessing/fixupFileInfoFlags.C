@@ -54,10 +54,22 @@ fixupFileInfoInconsistanties(SgNode *ast)
 #endif
                          if (result != located->get_endOfConstruct()->isTransformation())
                             {
+                           // FIX: The Clang frontend may have set p_file_id to TRANSFORMATION_FILE_ID when the node
+                           // was originally created. We need to restore it to a valid file_id before changing the flag.
+                           // Use startOfConstruct's file_id as the source of truth for the real file location.
+                              if (result == false)
+                                 {
+                                // We're about to unset transformation - need to restore p_file_id from startOfConstruct
+                                   located->get_endOfConstruct()->set_file_id(located->get_startOfConstruct()->get_file_id());
+                                 }
+
                               if (result == true)
                                    located->get_endOfConstruct()->setTransformation();
                                 else
                                    located->get_endOfConstruct()->unsetTransformation();
+
+                           // After changing transformation flag, sync physical_file_id to match
+                              located->get_endOfConstruct()->set_physical_file_id(located->get_endOfConstruct()->get_file_id());
 
                               printf ("WARNING: In fixupFileInfoInconsistanties(): located = %p = %s testing: get_endOfConstruct()->isTransformation() inconsistantly set (set to match startOfConstruct) \n",located,located->class_name().c_str());
                               located->get_startOfConstruct()->display("fixupFileInfoInconsistanties()");
@@ -78,10 +90,22 @@ fixupFileInfoInconsistanties(SgNode *ast)
 #endif
                          if (result != expression->get_operatorPosition()->isTransformation())
                             {
+                           // FIX: The Clang frontend may have set p_file_id to TRANSFORMATION_FILE_ID when the node
+                           // was originally created. We need to restore it to a valid file_id before changing the flag.
+                           // Use startOfConstruct's file_id as the source of truth for the real file location.
+                              if (result == false)
+                                 {
+                                // We're about to unset transformation - need to restore p_file_id from startOfConstruct
+                                   expression->get_operatorPosition()->set_file_id(expression->get_startOfConstruct()->get_file_id());
+                                 }
+
                               if (result == true)
                                    expression->get_operatorPosition()->setTransformation();
                                 else
                                    expression->get_operatorPosition()->unsetTransformation();
+
+                           // After changing transformation flag, sync physical_file_id to match
+                              expression->get_operatorPosition()->set_physical_file_id(expression->get_operatorPosition()->get_file_id());
 
                               printf ("WARNING: In fixupFileInfoInconsistanties(): expression located = %p = %s testing: get_operatorPosition()->isTransformation() inconsistantly set (set to match startOfConstruct) \n",expression,expression->class_name().c_str());
                               expression->get_startOfConstruct()->display("fixupFileInfoInconsistanties()");

@@ -1055,9 +1055,13 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(clang::CXXForRangeStmt * cxx_fo
     SgNode* tmp_range_init = cxx_for_range_stmt->getRangeInit() ? Traverse(cxx_for_range_stmt->getRangeInit()) : nullptr;
     SgStatement* range_init = isSgStatement(tmp_range_init);
 
-    // Begin/end iterator setup
+    // FIX (PR review): Begin/end iterator setup - must be included in init_stmts
+    // The condition and increment expressions reference __begin/__end variables created here
     SgNode* tmp_begin = cxx_for_range_stmt->getBeginStmt() ? Traverse(cxx_for_range_stmt->getBeginStmt()) : nullptr;
+    SgStatement* begin_stmt = isSgStatement(tmp_begin);
+
     SgNode* tmp_end = cxx_for_range_stmt->getEndStmt() ? Traverse(cxx_for_range_stmt->getEndStmt()) : nullptr;
+    SgStatement* end_stmt = isSgStatement(tmp_end);
 
     // Loop variable declaration
     SgNode* tmp_loop_var = cxx_for_range_stmt->getLoopVariable() ? Traverse(cxx_for_range_stmt->getLoopVariable()) : nullptr;
@@ -1073,9 +1077,11 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(clang::CXXForRangeStmt * cxx_fo
     SgNode* tmp_body = cxx_for_range_stmt->getBody() ? Traverse(cxx_for_range_stmt->getBody()) : nullptr;
     SgStatement* body = isSgStatement(tmp_body);
 
-    // Build initialization statement list (range init + loop variable)
+    // Build initialization statement list (range init + begin/end iterators + loop variable)
     SgStatementPtrList init_stmts;
     if (range_init) init_stmts.push_back(range_init);
+    if (begin_stmt) init_stmts.push_back(begin_stmt);
+    if (end_stmt) init_stmts.push_back(end_stmt);
     if (loop_var_decl) init_stmts.push_back(loop_var_decl);
 
     // Build the for loop with these components
@@ -2850,7 +2856,23 @@ bool ClangToSageTranslator::VisitCXXDeleteExpr(clang::CXXDeleteExpr * cxx_delete
 #endif
     bool res = true;
 
-    // TODO
+    // ROOT CAUSE FIX: CXXDeleteExpr represents the C++ delete operator
+    // Examples: delete ptr; or delete[] array;
+
+    // Get the expression being deleted
+    SgNode* tmp_arg = Traverse(cxx_delete_expr->getArgument());
+    SgExpression* arg = isSgExpression(tmp_arg);
+
+    if (arg == NULL) {
+        // If we can't get the argument, create a null expression as placeholder
+        arg = SageBuilder::buildNullExpression();
+    }
+
+    // Check if this is array delete (delete[]) or single object delete (delete)
+    bool is_array = cxx_delete_expr->isArrayForm();
+
+    // Build the delete expression
+    *node = SageBuilder::buildDeleteExp(arg, is_array, false, NULL);
 
     return VisitExpr(cxx_delete_expr, node) && res;
 }
@@ -2991,7 +3013,20 @@ bool ClangToSageTranslator::VisitCXXNullPtrLiteralExpr(clang::CXXNullPtrLiteralE
 #endif
     bool res = true;
 
-    // TODO
+    // ROOT CAUSE FIX: CXXNullPtrLiteralExpr represents C++11's nullptr literal
+    // nullptr is a null pointer constant of type std::nullptr_t
+    // In SAGE, we represent it with SgNullptrValExp
+
+    // Get the type (should be std::nullptr_t)
+    SgType* nullptr_type = buildTypeFromQualifiedType(cxx_null_ptr_literal_expr->getType());
+
+    if (nullptr_type == NULL) {
+        // Fallback: if type conversion fails, use void pointer type
+        nullptr_type = SageBuilder::buildPointerType(SageBuilder::buildVoidType());
+    }
+
+    // Create the nullptr value expression
+    *node = SageBuilder::buildNullptrValExp();
 
     return VisitExpr(cxx_null_ptr_literal_expr, node) && res;
 }
@@ -3042,7 +3077,20 @@ bool ClangToSageTranslator::VisitCXXScalarValueInitExpr(clang::CXXScalarValueIni
 #endif
     bool res = true;
 
-    // TODO
+    // ROOT CAUSE FIX: CXXScalarValueInitExpr represents value initialization of scalar types
+    // Examples: int(), char(), double*() - all initialize to zero/null
+    // This is equivalent to a cast expression with default initialization
+
+    // Get the type being initialized
+    SgType* type = buildTypeFromQualifiedType(cxx_scalar_value_init_expr->getType());
+
+    if (type == NULL) {
+        type = SageBuilder::buildVoidType();
+    }
+
+    // Create a cast expression with a null operand to represent the default initialization
+    // The cast will produce the zero-initialized value of the target type
+    *node = SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), type);
 
     return VisitExpr(cxx_scalar_value_init_expr, node) && res;
 }
@@ -3309,7 +3357,24 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr * decl_ref_expr,
                   {
                     if (enum_sym != NULL)
                        {
-                         SgEnumDeclaration * enum_decl = isSgEnumDeclaration(enum_sym->get_declaration()->get_parent());
+                         // ROOT CAUSE FIX: Get enum declaration from the type instead of parent
+                         // The Clang frontend may not set parent pointers correctly for enum constants
+                         // But the type is always set correctly to an SgEnumType
+                         SgInitializedName* init_name = enum_sym->get_declaration();
+                         SgEnumDeclaration * enum_decl = NULL;
+
+                         if (init_name != NULL && init_name->get_type() != NULL) {
+                             SgEnumType* enum_type = isSgEnumType(init_name->get_type());
+                             if (enum_type != NULL) {
+                                 enum_decl = isSgEnumDeclaration(enum_type->get_declaration());
+                             }
+                         }
+
+                         // Fallback: try getting from parent if type method didn't work
+                         if (enum_decl == NULL && init_name != NULL) {
+                             enum_decl = isSgEnumDeclaration(init_name->get_parent());
+                         }
+
                          ROSE_ASSERT(enum_decl != NULL);
                          SgName name = enum_sym->get_name();
                          *node = SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
@@ -4183,7 +4248,39 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(clang::UnresolvedMemberExp
 #endif
     bool res = true;
 
-    // TODO
+    // ROOT CAUSE FIX: UnresolvedMemberExpr represents a member access expression where the member
+    // couldn't be resolved at parse time (typically in template-dependent code)
+    // Example: template<typename T> void foo(T t) { t.bar(); }  // 'bar' is unresolved
+
+    // Get the member name
+    std::string member_name = unresolved_member_expr->getMemberName().getAsString();
+
+    // Handle the base expression (the object/pointer being accessed)
+    SgExpression* base_expr = NULL;
+
+    // Check if this is an implicit access (e.g., calling member function without 'this->')
+    if (!unresolved_member_expr->isImplicitAccess() && unresolved_member_expr->getBase() != NULL) {
+        SgNode* tmp_base = Traverse(unresolved_member_expr->getBase());
+        base_expr = isSgExpression(tmp_base);
+    }
+
+    // If no base (implicit 'this' access), create a 'this' variable reference
+    if (base_expr == NULL) {
+        base_expr = SageBuilder::buildVarRefExp("this", SageBuilder::topScopeStack());
+    }
+
+    // Create a variable reference for the member name
+    SgVarRefExp* member_ref = SageBuilder::buildVarRefExp(SgName(member_name), SageBuilder::topScopeStack());
+
+    // Determine if it's arrow (->) or dot (.) access
+    if (unresolved_member_expr->isArrow()) {
+        *node = SageBuilder::buildArrowExp(base_expr, member_ref);
+    } else {
+        *node = SageBuilder::buildDotExp(base_expr, member_ref);
+    }
+
+    // Note: Don't call applySourceRange here as it may try to apply to child nodes
+    // (like member_ref) that aren't SgLocatedNode. Let VisitOverloadExpr handle file info.
 
     return VisitOverloadExpr(unresolved_member_expr, node) && res;
 }
@@ -4422,7 +4519,22 @@ bool ClangToSageTranslator::VisitStringLiteral(clang::StringLiteral * string_lit
     std::cerr << "ClangToSageTranslator::VisitStringLiteral" << std::endl;
 #endif
 
-    std::string tmp = string_literal->getString().str();
+    // ROOT CAUSE FIX: Check character byte width to handle wide/unicode string literals
+    // getString() only works for regular char strings (width=1)
+    // For wide strings (L"...", u"...", U"..."), we need to use getBytes() instead
+    std::string tmp;
+    unsigned char_byte_width = string_literal->getCharByteWidth();
+
+    if (char_byte_width == 1) {
+        // Regular char string or UTF-8 string
+        tmp = string_literal->getString().str();
+    } else {
+        // Wide string literal (wchar_t, char16_t, char32_t)
+        // Use getBytes() which returns raw bytes regardless of encoding
+        llvm::StringRef bytes = string_literal->getBytes();
+        tmp = bytes.str();
+    }
+
     const char * raw_str = tmp.c_str();
 
     unsigned i = 0;
