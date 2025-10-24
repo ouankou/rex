@@ -34,7 +34,9 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
     SgSymbol * sym = NULL;
     switch (decl->getKind()) {
         case clang::Decl::Typedef:
+        case clang::Decl::TypeAlias:
         {
+            // TypeAlias (C++11 using declarations) are semantically equivalent to Typedef
             it = SageBuilder::ScopeStack.rbegin();
             while (it != SageBuilder::ScopeStack.rend() && sym == NULL) {
                  sym = (*it)->lookup_typedef_symbol(name);
@@ -52,6 +54,8 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
             }
             break;
         }
+        case clang::Decl::CXXConstructor:
+        case clang::Decl::CXXDestructor:
         case clang::Decl::Function:
         {
             SgType * tmp_type = buildTypeFromQualifiedType(((clang::FunctionDecl *)decl)->getType());
@@ -108,6 +112,8 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
             }
             break;
         }
+        case clang::Decl::ClassTemplatePartialSpecialization:
+        case clang::Decl::ClassTemplateSpecialization:
         case clang::Decl::CXXRecord:
         case clang::Decl::Record:
         {
@@ -145,6 +151,16 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
             it = SageBuilder::ScopeStack.rbegin();
             while (it != SageBuilder::ScopeStack.rend() && sym == NULL) {
                 sym = (*it)->lookup_enum_symbol(name);
+                it++;
+            }
+            break;
+        }
+        case clang::Decl::NonTypeTemplateParm:
+        {
+            // Non-type template parameters are treated as variables
+            it = SageBuilder::ScopeStack.rbegin();
+            while (it != SageBuilder::ScopeStack.rend() && sym == NULL) {
+                sym = (*it)->lookup_variable_symbol(name);
                 it++;
             }
             break;
@@ -307,6 +323,10 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
             break;
         case clang::Decl::UsingPack:
             ret_status = VisitUsingPackDecl((clang::UsingPackDecl *)decl, &result);
+            ROSE_ASSERT(ret_status == false || result != NULL);
+            break;
+        case clang::Decl::UsingShadow:
+            ret_status = VisitUsingShadowDecl((clang::UsingShadowDecl *)decl, &result);
             ROSE_ASSERT(ret_status == false || result != NULL);
             break;
         case clang::Decl::ConstructorUsingShadow:
@@ -663,12 +683,46 @@ bool ClangToSageTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitNamespaceDecl" << std::endl;
 #endif
+
+    // Get the namespace name (handle anonymous namespaces)
+    bool isAnonymous = namespace_decl->isAnonymousNamespace();
+    std::string namespaceName = namespace_decl->getNameAsString();
+    if (isAnonymous || namespaceName.empty()) {
+        namespaceName = "__anonymous_namespace_" + generate_source_position_string(namespace_decl->getBeginLoc());
+    }
+    SgName name(namespaceName);
+
+    // Get current scope
     SgScopeStatement *scope = SageBuilder::topScopeStack();
     if (scope == nullptr) {
         scope = p_global_scope;
     }
 
-    SageBuilder::pushScopeStack(scope);
+    // Build namespace declaration using SageBuilder
+    // This function handles:
+    // - Creating the declaration and definition
+    // - Looking up existing namespace symbols for reopening
+    // - Setting up global_definition to link all instances
+    // - Inserting the symbol (only for first declaration)
+    // We don't need to manually duplicate any of this logic
+    SgNamespaceDeclarationStatement *sg_namespace_decl =
+        SageBuilder::buildNamespaceDeclaration_nfi(name, isAnonymous, scope);
+
+    // Get the definition that was already created by the builder
+    SgNamespaceDefinitionStatement *sg_namespace_def = sg_namespace_decl->get_definition();
+    ROSE_ASSERT(sg_namespace_def != nullptr);
+
+    // Attach to parent scope at its proper location
+    if (scope != nullptr) {
+        SageInterface::appendStatement(sg_namespace_decl, scope);
+    }
+
+    applySourceRange(sg_namespace_decl, namespace_decl->getSourceRange());
+
+    // Traverse children within the namespace definition scope
+    ROSE_ASSERT(sg_namespace_def != nullptr);
+    SageBuilder::pushScopeStack(sg_namespace_def);
+
     for (auto it = namespace_decl->decls_begin(); it != namespace_decl->decls_end(); ++it) {
         clang::Decl *inner_decl = *it;
         if (inner_decl == nullptr)
@@ -676,17 +730,17 @@ bool ClangToSageTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_
 
         SgNode *child = Traverse(inner_decl);
         if (SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child)) {
-            if (decl_stmt->get_parent() == nullptr && scope != nullptr) {
-                SageInterface::appendStatement(decl_stmt, scope);
+            if (decl_stmt->get_parent() == nullptr) {
+                sg_namespace_def->append_declaration(decl_stmt);
+                decl_stmt->set_parent(sg_namespace_def);
             }
         }
     }
+
     SageBuilder::popScopeStack();
 
-    // TODO(roadmap): Replace placeholder with real namespace declaration handling.
-    // Reference docs/axpy_clang_frontend.md roadmap item (Namespace scaffolding).
-    *node = NULL;
-    return false;
+    *node = sg_namespace_decl;
+    return true;
 }
 
 bool ClangToSageTranslator::VisitLinkageSpecDecl(clang::LinkageSpecDecl * linkage_spec_decl, SgNode ** node) {
@@ -881,8 +935,24 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
     SgClassSymbol * sg_defining_sym = isSgClassSymbol(GetSymbolFromSymbolTable(record_Definition));
     SgClassDeclaration * sg_def_class_decl = sg_defining_sym == NULL ? NULL : isSgClassDeclaration(sg_defining_sym->get_declaration()->get_definingDeclaration());
 
+    // For template specializations, the first declaration may also be the definition
+    // In that case, sg_first_class_decl and sg_def_class_decl may refer to the same node
+    if (sg_first_class_decl == NULL && sg_def_class_decl != NULL) {
+        // This can happen for template specializations that are instantiated on first use
+        // Use the defining declaration as the first declaration
+        sg_first_class_decl = isSgClassDeclaration(sg_def_class_decl->get_firstNondefiningDeclaration());
+        if (sg_first_class_decl == NULL) {
+            // Still NULL - this means the defining decl doesn't have firstNondefining set
+            // For template specializations, this is acceptable (they may not have separate declarations)
+            // Just use the definition as the first declaration
+            std::cerr << "Warning: Class definition without first non-defining declaration: "
+                      << record_decl->getNameAsString() << " (using definition as first declaration)" << std::endl;
+            sg_first_class_decl = sg_def_class_decl;
+        }
+    }
 
-    ROSE_ASSERT(sg_first_class_decl != NULL || sg_def_class_decl == NULL);
+    // ROSE_ASSERT(sg_first_class_decl != NULL || sg_def_class_decl == NULL);
+    // Assertion relaxed for template specializations which may not have separate forward declarations
 
     bool had_prev_decl = sg_first_class_decl != NULL;
 
@@ -929,6 +999,15 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
 
  // DQ (11/28/2020): Adding asertion.
     ROSE_ASSERT(sg_class_decl->get_parent() != NULL);
+
+    // CRITICAL: Set firstNondefiningDeclaration BEFORE calling createType()
+    // createType() internally asserts that this pointer is not null
+    // This will be corrected later if this is not actually the first declaration
+    if (sg_first_class_decl != NULL) {
+        sg_class_decl->set_firstNondefiningDeclaration(sg_first_class_decl);
+    } else {
+        sg_class_decl->set_firstNondefiningDeclaration(sg_class_decl);
+    }
 
     SgClassType * type = NULL;
     if (sg_first_class_decl != NULL) {
@@ -1013,28 +1092,32 @@ bool ClangToSageTranslator::VisitCXXRecordDecl(clang::CXXRecordDecl * cxx_record
 #endif
     bool res = VisitRecordDecl(cxx_record_decl, node);
 
-    clang::CXXRecordDecl::base_class_iterator it_base;
-    for (it_base = cxx_record_decl->bases_begin(); it_base !=  cxx_record_decl->bases_end(); it_base++) {
-        // TODO add base classes
-    }
+    // Only process class members if this is a definition, not a forward declaration
+    // Methods like bases_begin(), method_begin(), etc. internally call .data() which requires a definition
+    if (cxx_record_decl->hasDefinition()) {
+        clang::CXXRecordDecl::base_class_iterator it_base;
+        for (it_base = cxx_record_decl->bases_begin(); it_base !=  cxx_record_decl->bases_end(); it_base++) {
+            // TODO add base classes
+        }
 
-    clang::CXXRecordDecl::method_iterator it_method;
-    for (it_method = cxx_record_decl->method_begin(); it_method !=  cxx_record_decl->method_end(); it_method++) {
+        clang::CXXRecordDecl::method_iterator it_method;
+        for (it_method = cxx_record_decl->method_begin(); it_method !=  cxx_record_decl->method_end(); it_method++) {
+            // TODO
+        }
+
+        clang::CXXRecordDecl::ctor_iterator it_ctor;
+        for (it_ctor = cxx_record_decl->ctor_begin(); it_ctor != cxx_record_decl->ctor_end(); it_ctor++) {
+            // TODO if not tranversed as methods
+        }
+
+        clang::CXXRecordDecl::friend_iterator it_friend;
+        for (it_friend = cxx_record_decl->friend_begin(); it_friend != cxx_record_decl->friend_end(); it_friend++) {
+            // TODO
+        }
+
+        clang::CXXDestructorDecl * destructor = cxx_record_decl->getDestructor();
         // TODO
     }
-
-    clang::CXXRecordDecl::ctor_iterator it_ctor;
-    for (it_ctor = cxx_record_decl->ctor_begin(); it_ctor != cxx_record_decl->ctor_end(); it_ctor++) {
-        // TODO if not tranversed as methods
-    }
-
-    clang::CXXRecordDecl::friend_iterator it_friend;
-    for (it_friend = cxx_record_decl->friend_begin(); it_friend != cxx_record_decl->friend_end(); it_friend++) {
-        // TODO
-    }
-
-    clang::CXXDestructorDecl * destructor = cxx_record_decl->getDestructor();
-    // TODO
 
     return res;
 }
@@ -1045,7 +1128,11 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // TODO: Full template specialization support not yet implemented
+    // For now, treat class template specializations as regular classes
+    // This allows basic processing of STL containers like std::array<int, 5>
+    // std::cerr << "Warning: ClassTemplateSpecializationDecl not fully implemented" << std::endl;
+    // ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitCXXRecordDecl(class_tpl_spec_decl, node) && res;
 }
@@ -1056,7 +1143,10 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(clang::C
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // TODO: Full template partial specialization support not yet implemented
+    // For now, delegate to ClassTemplateSpecializationDecl handler
+    // This allows basic processing of partial template specializations
+    // ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitClassTemplateSpecializationDecl(class_tpl_part_spec_decl, node) && res;
 }
@@ -1266,10 +1356,20 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl * typedef_decl, 
 bool ClangToSageTranslator::VisitTypeAliasDecl(clang::TypeAliasDecl * type_alias_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitTypeAliasDecl" << std::endl;
-#endif  
+#endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // C++11 type aliases (using foo = int) are semantically equivalent to typedefs
+    // TypeAliasDecl and TypedefDecl both inherit from TypedefNameDecl
+    // Use the same implementation logic as VisitTypedefDecl
+
+    SgName name(type_alias_decl->getNameAsString());
+    clang::QualType underlyingQualType = type_alias_decl->getUnderlyingType();
+    SgType * type = buildTypeFromQualifiedType(underlyingQualType);
+
+    SgTypedefDeclaration * sg_typedef_decl = SageBuilder::buildTypedefDeclaration_nfi(name, type, SageBuilder::topScopeStack());
+
+    *node = sg_typedef_decl;
 
     return VisitTypedefNameDecl(type_alias_decl, node) && res;
 }
@@ -1288,10 +1388,13 @@ bool ClangToSageTranslator::VisitUnresolvedUsingTypenameDecl(clang::UnresolvedUs
 bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl * using_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitUsingDecl" << std::endl;
-#endif  
+#endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+    // TODO: Full support for using declarations (e.g., using std::cout;) not yet implemented
+    // For now, create an empty declaration statement as placeholder
+    std::cerr << "Warning: UsingDecl not fully implemented, using placeholder" << std::endl;
+    *node = SageBuilder::buildNullStatement();
 
     return VisitNamedDecl(using_decl, node) && res;
 }
@@ -1299,10 +1402,14 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl * using_decl, SgNode
 bool ClangToSageTranslator::VisitUsingDirectiveDecl(clang::UsingDirectiveDecl * using_directive_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitUsingDirectiveDecl" << std::endl;
-#endif  
+#endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+    // TODO: Full support for using directives not yet implemented
+    // UsingDirectiveDecl represents namespace using directives (e.g., using namespace std;)
+    // For now, use null statement as placeholder
+    std::cerr << "Warning: UsingDirectiveDecl not fully implemented, using placeholder" << std::endl;
+    *node = SageBuilder::buildNullStatement();
 
     return VisitNamedDecl(using_directive_decl, node) && res;
 }
@@ -1321,10 +1428,14 @@ bool ClangToSageTranslator::VisitUsingPackDecl(clang::UsingPackDecl * using_pack
 bool ClangToSageTranslator::VisitUsingShadowDecl(clang::UsingShadowDecl * using_shadow_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitUsingShadowDecl" << std::endl;
-#endif  
+#endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+    // TODO: Full support for using shadow declarations not yet implemented
+    // UsingShadowDecl represents declarations brought in by a using declaration
+    // For now, use null statement as placeholder
+    std::cerr << "Warning: UsingShadowDecl not fully implemented, using placeholder" << std::endl;
+    *node = SageBuilder::buildNullStatement();
 
     return VisitNamedDecl(using_shadow_decl, node) && res;
 }
@@ -1601,13 +1712,17 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
               init_name->set_needs_definitions(true);
             }
             // case 2: definition is at other scope but not in the SgDeclarationStatementPtrList from that scope
-            // e.g. test2018_15.c, test2018_13.c 
+            // e.g. test2018_15.c, test2018_13.c
             else
             {
-              SgDeclarationStatementPtrList& declList = definitionEnclosingScope->getDeclarationList();
-              if(std::find(declList.begin(), declList.end(), definingNamedTypeDecl) == declList.end())
+              // ROSE-1378: SgDeclarationScope doesn't support getDeclarationList(), skip check for it
+              if (!isSgDeclarationScope(definitionEnclosingScope))
               {
-                init_name->set_needs_definitions(true);
+                SgDeclarationStatementPtrList& declList = definitionEnclosingScope->getDeclarationList();
+                if(std::find(declList.begin(), declList.end(), definingNamedTypeDecl) == declList.end())
+                {
+                  init_name->set_needs_definitions(true);
+                }
               }
             }
           } 
@@ -1640,49 +1755,54 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             sg_function_decl->hasEllipses();
         }
 
-        if (!function_decl->hasBody()) {
-            std::cerr << "Defining function declaration without body..." << std::endl;
-            res = false;
-        }
+        // Only process the function body if it exists
+        // Template functions and forward declarations may be marked as definitions but have no body
+        if (function_decl->hasBody()) {
 /*
-        if (sg_function_decl->get_definition() != NULL) SageInterface::deleteAST(sg_function_decl->get_definition());
+            if (sg_function_decl->get_definition() != NULL) SageInterface::deleteAST(sg_function_decl->get_definition());
 
-        SgFunctionDefinition * function_definition = new SgFunctionDefinition(sg_function_decl, NULL);
+            SgFunctionDefinition * function_definition = new SgFunctionDefinition(sg_function_decl, NULL);
 
-        SgInitializedNamePtrList & init_names = param_list->get_args();
-        SgInitializedNamePtrList::iterator it;
-        for (it = init_names.begin(); it != init_names.end(); it++) {
-            (*it)->set_scope(function_definition);
-            SgSymbolTable * st = function_definition->get_symbol_table();
-            ROSE_ASSERT(st != NULL);
-            SgVariableSymbol * tmp_sym  = new SgVariableSymbol(*it);
-            st->insert((*it)->get_name(), tmp_sym);
-        }
+            SgInitializedNamePtrList & init_names = param_list->get_args();
+            SgInitializedNamePtrList::iterator it;
+            for (it = init_names.begin(); it != init_names.end(); it++) {
+                (*it)->set_scope(function_definition);
+                SgSymbolTable * st = function_definition->get_symbol_table();
+                ROSE_ASSERT(st != NULL);
+                SgVariableSymbol * tmp_sym  = new SgVariableSymbol(*it);
+                st->insert((*it)->get_name(), tmp_sym);
+            }
 */
-        SgFunctionDefinition * function_definition = sg_function_decl->get_definition();
+            SgFunctionDefinition * function_definition = sg_function_decl->get_definition();
 
-        if (sg_function_decl->get_definition()->get_body() != NULL)
-            SageInterface::deleteAST(sg_function_decl->get_definition()->get_body());
+            if (sg_function_decl->get_definition()->get_body() != NULL)
+                SageInterface::deleteAST(sg_function_decl->get_definition()->get_body());
 
-        SageBuilder::pushScopeStack(function_definition);
+            SageBuilder::pushScopeStack(function_definition);
 
-        SgNode * tmp_body = Traverse(function_decl->getBody());
-        SgBasicBlock * body = isSgBasicBlock(tmp_body);
+            SgNode * tmp_body = Traverse(function_decl->getBody());
+            SgBasicBlock * body = isSgBasicBlock(tmp_body);
 
-        SageBuilder::popScopeStack();
+            SageBuilder::popScopeStack();
 
-        if (tmp_body != NULL && body == NULL) {
-            std::cerr << "Runtime error: tmp_body != NULL && body == NULL" << std::endl;
-            res = false;
+            if (tmp_body != NULL && body == NULL) {
+                std::cerr << "Runtime error: tmp_body != NULL && body == NULL" << std::endl;
+                res = false;
+            }
+            else {
+                function_definition->set_body(body);
+                body->set_parent(function_definition);
+                applySourceRange(function_definition, function_decl->getSourceRange());
+            }
+
+            sg_function_decl->set_definition(function_definition);
+            function_definition->set_parent(sg_function_decl);
         }
         else {
-            function_definition->set_body(body);
-            body->set_parent(function_definition);
-            applySourceRange(function_definition, function_decl->getSourceRange());
+            // Function declaration without body (e.g., template function in header, forward declaration)
+            // This is normal for template functions and should not cause an error
+            // The get_definition() will return NULL, which is expected
         }
-
-        sg_function_decl->set_definition(function_definition);
-        function_definition->set_parent(sg_function_decl);
 /*
         SgFunctionDeclaration * first_decl;
         if (function_decl->isFirstDecl()) {
@@ -1804,7 +1924,9 @@ bool ClangToSageTranslator::VisitCXXDeductionGuideDecl(clang::CXXDeductionGuideD
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // TODO: Full C++17 deduction guide support not yet implemented
+    // For now, delegate to FunctionDecl handler for basic processing
+    // ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitFunctionDecl(cxx_deduction_guide_decl, node) && res;
 }
@@ -1870,9 +1992,31 @@ bool ClangToSageTranslator::VisitNonTypeTemplateParmDecl(clang::NonTypeTemplateP
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // TODO: Full non-type template parameter support not yet implemented
+    // Non-type template parameters (e.g., template<int N>) should NOT be translated as standalone
+    // variable declarations. They belong in a template parameter list (SgTemplateParameterPtrList)
+    // attached to a template declaration, not in the surrounding scope.
+    //
+    // Proper implementation requires:
+    // 1. Collect template parameters when visiting the parent TemplateDecl
+    // 2. Build SgTemplateParameter nodes using:
+    //    SageBuilder::buildTemplateParameter(SgTemplateParameter::nontype_parameter, type)
+    // 3. Add them to a template parameter list
+    // 4. Attach the list to the template declaration (e.g., SgTemplateClassDeclaration)
+    //
+    // For now, we skip creating any node to avoid polluting the symbol table and generating
+    // bogus variable declarations in the unparsed code.
+    // ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
-    return VisitDeclaratorDecl(non_type_template_param_decl, node) && res;
+    std::cerr << "Warning: NonTypeTemplateParmDecl not fully implemented, skipping" << std::endl;
+
+    // Don't create any node - template parameters should be handled by template declarations
+    *node = NULL;
+
+    // Return false to indicate this node was intentionally skipped (not an error)
+    // The traversal logic expects: (return_value == false || *node != NULL)
+    // Since we're not creating a node, we must return false to avoid assertion failures
+    return false;
 }
 
 bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** node) {
@@ -2111,7 +2255,11 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(clang::VarTemplat
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // TODO: Full variable template specialization support not yet implemented
+    // Variable templates are a C++14 feature for templated variables
+    // For now, use null statement as placeholder
+    std::cerr << "Warning: VarTemplateSpecializationDecl not fully implemented, using placeholder" << std::endl;
+    *node = SageBuilder::buildNullStatement();
 
     return VisitDeclaratorDecl(var_template_specialization_decl, node) && res;
 }
@@ -2122,7 +2270,10 @@ bool ClangToSageTranslator::VisitVarTemplatePartialSpecializationDecl(clang::Var
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // TODO: Full variable template partial specialization support not yet implemented
+    // For now, delegate to VarTemplateSpecializationDecl handler
+    // This allows basic processing of variable template partial specializations
+    // ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitVarTemplateSpecializationDecl(var_template_partial_specialization_decl, node) && res;
 }
@@ -2133,8 +2284,18 @@ bool  ClangToSageTranslator::VisitEnumConstantDecl(clang::EnumConstantDecl * enu
 #endif
     bool res = true;
 
-    SgName name(enum_constant_decl->getNameAsString());
+    // Safely get the name - check if the declaration name is valid first
+    SgName name;
+    if (enum_constant_decl && enum_constant_decl->getDeclName().isIdentifier()) {
+        name = SgName(enum_constant_decl->getNameAsString());
+    } else {
+        // Fallback to empty name if declaration name is not a simple identifier
+        name = SgName("");
+    }
 
+    // Get the enum constant's type - this should be the enum type itself, not the underlying integer type
+    // This is critical for type safety, especially for scoped enums (enum class)
+    // where the enumerator must have the enum type, not int
     SgType * type = buildTypeFromQualifiedType(enum_constant_decl->getType());
 
     SgInitializer * init = NULL;

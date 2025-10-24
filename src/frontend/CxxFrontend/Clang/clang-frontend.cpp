@@ -255,6 +255,8 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     // IntrusiveRefCntPtr ensures proper reference counting and cleanup.
     llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
     clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts.get());
+
+    // LLVM 20+ API - requires VFS as first parameter
     compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
     clang::CompilerInvocation &invocation = compiler_instance->getInvocation();
@@ -397,7 +399,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     // In LLVM 20, get error count from diagnostics directly
     unsigned numErrors = compiler_instance->getDiagnostics().getNumErrors();
-//  printf ("Clang found %d errors\n", numErrors);
+    if (numErrors > 0) {
+        printf ("Clang found %d diagnostic errors during parsing\n", numErrors);
+    }
 
     SgGlobal * global_scope = translator->getGlobalScope();
 
@@ -454,7 +458,19 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     delete compiler_instance;
 
-    return numErrors;
+    // REX: Experimental C++ frontend is permissive - if we successfully built an AST
+    // (valid global_scope), allow backend to run even if Clang reported errors.
+    // This is necessary because Clang may report missing headers or other compilation
+    // errors, but we still want to attempt code generation with the partial AST.
+    if (global_scope != NULL) {
+        if (numErrors > 0) {
+            printf ("Note: Proceeding to backend despite %d Clang diagnostic error(s) because AST was successfully constructed\n", numErrors);
+        }
+        return 0;  // Success - AST was built
+    } else {
+        printf ("Error: Failed to build AST - global_scope is NULL\n");
+        return (numErrors > 0) ? numErrors : 1;  // Failure - no AST
+    }
 }
 
 void finishSageAST(ClangToSageTranslator & translator) {

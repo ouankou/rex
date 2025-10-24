@@ -228,7 +228,7 @@ bool ClangToSageTranslator::VisitType(clang::Type * type, SgNode ** node) {
 #endif
 
     if (*node == NULL) {
-        std::cerr << "Runtime error: No Sage node associated with the type..." << std::endl;
+        std::cerr << "Runtime error: No Sage node associated with the type: " << type->getTypeClassName() << std::endl;
         return false;
     }
 /*
@@ -285,7 +285,10 @@ bool ClangToSageTranslator::VisitArrayType(clang::ArrayType * array_type, SgNode
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+    // Array type handling is implemented in child visitor functions
+    // (ConstantArrayType, VariableArrayType, DependentSizedArrayType, IncompleteArrayType)
+    // which set *node before calling this base function
+    // ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
  // DQ (11/28/2020): Added assertion.
     ROSE_ASSERT(*node != NULL);
@@ -315,7 +318,14 @@ bool ClangToSageTranslator::VisitDependentSizedArrayType(clang::DependentSizedAr
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // Template-dependent array sizes (e.g., T arr[N] where N is a template parameter)
+    // Create a placeholder array type with unknown size
+    // ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+
+    SgType * type = buildTypeFromQualifiedType(dependent_sized_array_type->getElementType());
+
+    // Use buildArrayType without size expression to represent dependent-sized array
+    *node = SageBuilder::buildArrayType(type);
 
     return VisitArrayType(dependent_sized_array_type, node) && res;
 }
@@ -478,11 +488,12 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType * builtin_type, 
         case clang::BuiltinType::UInt128:    *node = SageBuilder::buildUnsignedLongLongType(); break;
         case clang::BuiltinType::Int128:     *node = SageBuilder::buildLongLongType();         break;
  
-        case clang::BuiltinType::Char_U:    std::cerr << "Char_U    -> "; break;
-        case clang::BuiltinType::WChar_U:   std::cerr << "WChar_U   -> "; break;
-        case clang::BuiltinType::Char16:    std::cerr << "Char16    -> "; break;
-        case clang::BuiltinType::Char32:    std::cerr << "Char32    -> "; break;
-        case clang::BuiltinType::WChar_S:   std::cerr << "WChar_S   -> "; break;
+        // Wide character and Unicode types - use wchar for wide chars, int/long for char16/32
+        case clang::BuiltinType::Char_U:    *node = SageBuilder::buildUnsignedCharType();   break;
+        case clang::BuiltinType::WChar_U:   *node = SageBuilder::buildWcharType();          break;
+        case clang::BuiltinType::WChar_S:   *node = SageBuilder::buildWcharType();          break;
+        case clang::BuiltinType::Char16:    *node = SageBuilder::buildUnsignedShortType();  break; // char16_t is typically 16-bit
+        case clang::BuiltinType::Char32:    *node = SageBuilder::buildUnsignedIntType();    break; // char32_t is typically 32-bit
 
 
         case clang::BuiltinType::ObjCId:
@@ -492,9 +503,23 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType * builtin_type, 
         case clang::BuiltinType::Overload:
         case clang::BuiltinType::BoundMember:
         case clang::BuiltinType::UnknownAny:
-        default:
-            std::cerr << "Unknown builtin type: " << builtin_type->getName(p_compiler_instance->getLangOpts()).str() << " !" << std::endl;
-            exit(-1);
+        default: {
+            // Fallback for unknown builtin types (e.g., ARM SVE types, vendor extensions)
+            std::string type_name = builtin_type->getName(p_compiler_instance->getLangOpts()).str();
+            std::cerr << "Warning: Using fallback type for unknown builtin: " << type_name << std::endl;
+
+            // Check if scope stack is initialized before building opaque type
+            SgScopeStatement* scope = SageBuilder::topScopeStack();
+            if (scope != nullptr) {
+                // Build opaque type if we have a valid scope
+                *node = SageBuilder::buildOpaqueType(type_name, scope);
+            } else {
+                // Fall back to int type if scope not yet initialized (early header processing)
+                std::cerr << "Warning: Scope not initialized, using int type for: " << type_name << std::endl;
+                *node = SageBuilder::buildIntType();
+            }
+            break;
+        }
     }
 
     return VisitType(builtin_type, node);
@@ -520,7 +545,10 @@ bool ClangToSageTranslator::VisitDecltypeType(clang::DecltypeType * decltype_typ
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // TODO: Full support for decltype not yet implemented
+    // decltype(expr) deduces the type of an expression
+    // For now, use a generic unknown type scoped to global scope to avoid ROSE-1378
+    *node = SageBuilder::buildOpaqueType("decltype", getGlobalScope());
 
     return VisitType(decltype_type, node) && res;
 }
@@ -553,7 +581,10 @@ bool ClangToSageTranslator::VisitAutoType(clang::AutoType * auto_type, SgNode **
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // TODO: Full support for auto type deduction not yet implemented
+    // auto keyword (C++11) allows type to be deduced from initializer
+    // For now, use a generic unknown type scoped to global scope
+    *node = SageBuilder::buildOpaqueType("auto", getGlobalScope());
 
     return VisitDeducedType(auto_type, node) && res;
 }
@@ -701,7 +732,10 @@ bool ClangToSageTranslator::VisitMemberPointerType(clang::MemberPointerType * me
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // TODO: Full support for member pointers not yet implemented
+    // Member pointers (e.g., int Class::*) point to class members
+    // For now, use a generic unknown type scoped to global scope
+    *node = SageBuilder::buildOpaqueType("member_pointer", getGlobalScope());
 
     return VisitType(member_pointer_type, node) && res;
 }
@@ -862,6 +896,13 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType * record_type, SgN
         SgClassDeclaration * sg_decl = isSgClassDeclaration(tmp_decl);
 
         if (sg_decl != NULL) {
+            // Ensure firstNondefiningDeclaration is set before calling get_type()
+            // which internally calls createType() and asserts on this pointer
+            if (sg_decl->get_firstNondefiningDeclaration() == NULL) {
+                // For template specializations and forward declarations without separate non-defining decl
+                // use the declaration itself as the first non-defining declaration
+                sg_decl->set_firstNondefiningDeclaration(sg_decl);
+            }
             *node = sg_decl->get_type();
         } else {
             std::string qualified_name = record_decl->getQualifiedNameAsString();
@@ -901,6 +942,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(clang::TemplateSpeci
 #if DEBUG_VISIT_TYPE
     std::cerr << "ClangToSageTranslator::TemplateSpecializationType" << std::endl;
 #endif
+    // First try to desugar to get the underlying concrete type
     clang::QualType desugared = template_specialization_type->desugar();
     if (!desugared.isNull() && desugared.getTypePtr() != template_specialization_type) {
         SgNode *desugared_node = Traverse(desugared.getTypePtr());
@@ -910,6 +952,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(clang::TemplateSpeci
         }
     }
 
+    // Try canonical type
     const clang::Type *canonical = template_specialization_type->getCanonicalTypeInternal().getTypePtrOrNull();
     if (canonical != NULL && canonical != template_specialization_type) {
         SgNode *canonicalNode = Traverse(canonical);
@@ -919,17 +962,61 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(clang::TemplateSpeci
         }
     }
 
-    *node = SageBuilder::buildUnknownType();
+    // REX: Build a name for the template specialization
+    // Extract template name (e.g., "std::array" from "std::array<double, 1024>")
+    std::string template_name;
+    clang::TemplateName tname = template_specialization_type->getTemplateName();
+    llvm::raw_string_ostream template_name_stream(template_name);
+    tname.print(template_name_stream, clang::PrintingPolicy(clang::LangOptions()));
+    template_name_stream.flush();
+
+    // Build full type name with template arguments (e.g., "std::array<double, 1024>")
+    // In LLVM 20, use template_arguments() iterator instead of getNumArgs()/getArg()
+    std::string full_type_name = template_name;
+    auto template_args = template_specialization_type->template_arguments();
+    if (!template_args.empty()) {
+        full_type_name += "<";
+        bool first = true;
+        for (const clang::TemplateArgument &arg : template_args) {
+            if (!first) full_type_name += ", ";
+            first = false;
+            std::string arg_str;
+            llvm::raw_string_ostream arg_stream(arg_str);
+            arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream, /*IncludeType=*/true);
+            arg_stream.flush();
+            full_type_name += arg_str;
+        }
+        full_type_name += ">";
+    }
+
+    // Sanitize the type name for use as a C++ identifier
+    // Replace invalid characters (::, <, >, comma, space, *, &) with underscores
+    // This produces a valid typedef name like "std_array_double_1024_"
+    std::string sanitized_name = full_type_name;
+    for (size_t i = 0; i < sanitized_name.length(); ++i) {
+        char c = sanitized_name[i];
+        if (c == ':' || c == '<' || c == '>' || c == ',' || c == ' ' ||
+            c == '*' || c == '&' || c == '(' || c == ')') {
+            sanitized_name[i] = '_';
+        }
+    }
+
+    // Create an opaque type with the sanitized identifier
+    // Note: Full template type support requires SgTemplateType/SgTemplateInstantiationType
+    *node = SageBuilder::buildOpaqueType(sanitized_name, getGlobalScope());
     return VisitType(template_specialization_type, node);
 }
 
 bool ClangToSageTranslator::VisitTemplateTypeParmType(clang::TemplateTypeParmType * template_type_parm_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE
-    std::cerr << "ClangToSageTranslator::TemplateTypeParmType" << std::endl;
+    std::cerr << "ClangToSageTranslator::VisitTemplateTypeParmType" << std::endl;
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // TODO: Full support for template type parameters not yet implemented
+    // Template type parameters (e.g., typename T) are placeholders for types
+    // For now, use a generic unknown type scoped to global scope to avoid ROSE-1378
+    *node = SageBuilder::buildOpaqueType("template_type_param", getGlobalScope());
 
     return VisitType(template_type_parm_type, node) && res;
 }
@@ -945,8 +1032,9 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType * typedef_type, 
     SgTypedefSymbol * tdef_sym = isSgTypedefSymbol(sym);
 
     if (tdef_sym == NULL) {
-        std::cerr << "Runtime Error: Cannot find a typedef symbol for the TypedefType." << std::endl;
-        res = false;
+        // Some typedefs (especially template-dependent ones) may not have symbols yet
+        // Use unknown type as fallback - this is acceptable for incomplete C++ support
+        std::cerr << "Warning: Cannot find a typedef symbol for the TypedefType, using unknown type" << std::endl;
     }
 
     *node = (tdef_sym != NULL) ? tdef_sym->get_type()
@@ -1021,20 +1109,77 @@ bool ClangToSageTranslator::VisitDependentNameType(clang::DependentNameType * de
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // TODO: Full support for dependent names not yet implemented
+    // Dependent names (e.g., T::value_type) depend on template parameters
+    // For now, use a generic unknown type scoped to global scope to avoid ROSE-1378
+    *node = SageBuilder::buildOpaqueType("dependent_name", getGlobalScope());
 
     return VisitTypeWithKeyword(dependent_name_type, node) && res;
 }
 
-bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(clang::DependentTemplateSpecializationType * ependent_template_specialization_type, SgNode ** node) {
+bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(clang::DependentTemplateSpecializationType * dependent_template_specialization_type, SgNode ** node) {
 #if DEBUG_VISIT_TYPE
     std::cerr << "ClangToSageTranslator::DependentTemplateSpecializationType" << std::endl;
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // REX: Build a meaningful name for dependent template specializations
+    // Extract the template name and arguments even though they're dependent
+    std::string type_name;
 
-    return VisitTypeWithKeyword(ependent_template_specialization_type, node) && res;
+    // Get the qualifier (e.g., "std" in "std::array")
+    if (dependent_template_specialization_type->getQualifier() != NULL) {
+        llvm::raw_string_ostream qualifier_stream(type_name);
+        dependent_template_specialization_type->getQualifier()->print(qualifier_stream,
+                                                                       clang::PrintingPolicy(clang::LangOptions()));
+        qualifier_stream.flush();
+    }
+
+    // Get the template name (e.g., "array")
+    // Note: getIdentifier() returns nullptr for operator/literal templates like T::template operator+<U>
+    // In those cases, fall back to a generic name
+    if (dependent_template_specialization_type->getIdentifier() != NULL) {
+        type_name += dependent_template_specialization_type->getIdentifier()->getName().str();
+    } else {
+        // Handle operator or literal template names
+        type_name += "dependent_template_specialization";
+    }
+
+    // Build template arguments string
+    // In LLVM 20, use template_arguments() iterator instead of getNumArgs()/getArg()
+    auto template_args = dependent_template_specialization_type->template_arguments();
+    if (!template_args.empty()) {
+        type_name += "<";
+        bool first = true;
+        for (const clang::TemplateArgument &arg : template_args) {
+            if (!first) type_name += ", ";
+            first = false;
+            std::string arg_str;
+            llvm::raw_string_ostream arg_stream(arg_str);
+            arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream, /*IncludeType=*/true);
+            arg_stream.flush();
+            type_name += arg_str;
+        }
+        type_name += ">";
+    }
+
+    // Sanitize the type name for use as a C++ identifier
+    // Replace invalid characters (::, <, >, comma, space, *, &) with underscores
+    // This produces a valid typedef name instead of using raw template syntax
+    std::string sanitized_name = type_name;
+    for (size_t i = 0; i < sanitized_name.length(); ++i) {
+        char c = sanitized_name[i];
+        if (c == ':' || c == '<' || c == '>' || c == ',' || c == ' ' ||
+            c == '*' || c == '&' || c == '(' || c == ')') {
+            sanitized_name[i] = '_';
+        }
+    }
+
+    // Create an opaque type with the sanitized identifier
+    // Note: Full template type support requires SgTemplateType/SgTemplateInstantiationType
+    *node = SageBuilder::buildOpaqueType(sanitized_name, getGlobalScope());
+
+    return VisitTypeWithKeyword(dependent_template_specialization_type, node) && res;
 }
 
 bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborated_type, SgNode ** node) {

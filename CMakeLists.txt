@@ -403,6 +403,17 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
+# CRITICAL FIX: Force LLVM 20 headers by overriding compiler's built-in search paths
+# Must be set BEFORE project() or any compiler checks
+# Iterate over LLVM_INCLUDE_DIRS list to properly add each directory with -isystem
+# (LLVM_INCLUDE_DIRS is a semicolon-separated list and must be expanded correctly)
+foreach(llvm_include_dir ${LLVM_INCLUDE_DIRS})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem ${llvm_include_dir}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${llvm_include_dir}")
+endforeach()
+# Also add to CMake's include directories with BEFORE to ensure priority
+include_directories(BEFORE SYSTEM ${LLVM_INCLUDE_DIRS})
+
 # Prefer linking against shared LLVM library when available to avoid duplicate globals
 # Try two methods to detect if shared LLVM library exists:
 # Method 1: Check if "LLVM" target is in LLVM_AVAILABLE_LIBS (works on many systems)
