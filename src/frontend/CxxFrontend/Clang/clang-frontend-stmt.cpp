@@ -2,6 +2,11 @@
 #include "clang-frontend-private.hpp"
 #include "clang-to-rose-support.hpp"
 #include <regex>
+#include <utility>
+
+#include "clang/Lex/Lexer.h"
+
+#include "sageInterface.h"
 
 using llvm::isa;  // For LLVM type checking (isa<Type>)
 
@@ -902,7 +907,6 @@ bool ClangToSageTranslator::VisitMSAsmStmt(clang::MSAsmStmt * ms_asm_stmt, SgNod
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
     return VisitStmt(ms_asm_stmt, node) && res;
 }
 
@@ -921,7 +925,19 @@ bool ClangToSageTranslator::VisitCapturedStmt(clang::CapturedStmt * captured_stm
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    SgNode * tmp_stmt = Traverse(captured_stmt->getCapturedStmt());
+    SgStatement * body = isSgStatement(tmp_stmt);
+    if (tmp_stmt != NULL && body == NULL) {
+        std::cerr << "Runtime error: CapturedStmt child did not translate into an SgStatement." << std::endl;
+        res = false;
+    }
+
+    if (body == NULL) {
+        body = SageBuilder::buildNullStatement();
+    }
+
+    *node = body;
+
     return VisitStmt(captured_stmt, node) && res;
 }
 
@@ -1222,13 +1238,42 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt * for_stmt, SgNode ** no
             std::cerr << "Runtime error: tmp_cond != NULL && cond == NULL" << std::endl;
             res = false;
         }
-        if (cond != NULL) { 
+        if (cond != NULL) {
             cond_stmt = SageBuilder::buildExprStatement(cond);
             applySourceRange(cond_stmt, for_stmt->getCond()->getSourceRange());
         }
         else {
             cond_stmt = SageBuilder::buildNullStatement_nfi();
             setCompilerGeneratedFileInfo(cond_stmt, true);
+        }
+
+        if (cond_stmt != NULL) {
+            auto *expr_stmt = isSgExprStatement(cond_stmt);
+            if (expr_stmt != NULL) {
+                auto simplifyOperand = [](SgExpression *operand) -> SgExpression * {
+                    SgExpression *current = operand;
+                    while (auto cast = isSgCastExp(current)) {
+                        current = cast->get_operand_i();
+                    }
+                    if (isSgVarRefExp(current) != NULL || isSgIntVal(current) != NULL ||
+                        isSgUnsignedIntVal(current) != NULL || isSgLongLongIntVal(current) != NULL ||
+                        isSgUnsignedLongLongIntVal(current) != NULL) {
+                        return SageInterface::copyExpression(current);
+                    }
+                    return nullptr;
+                };
+
+                if (auto *less_than = isSgLessThanOp(expr_stmt->get_expression())) {
+                    SgExpression *lhs_simplified = simplifyOperand(less_than->get_lhs_operand());
+                    SgExpression *rhs_simplified = simplifyOperand(less_than->get_rhs_operand());
+                    if (lhs_simplified != NULL && rhs_simplified != NULL) {
+                        SgExpression *new_cond = SageBuilder::buildLessThanOp(lhs_simplified, rhs_simplified);
+                        applySourceRange(new_cond, for_stmt->getCond()->getSourceRange());
+                        expr_stmt->set_expression(new_cond);
+                        new_cond->set_parent(expr_stmt);
+                    }
+                }
+            }
         }
     }
 
@@ -1440,8 +1485,98 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
     std::cerr << "ClangToSageTranslator::VisitOMPExecutableDirective" << std::endl;
 #endif
     bool res = true;
+    SgStatement *associated_stmt = nullptr;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    if (clang::Stmt *clang_associated_stmt = omp_executable_directive->getAssociatedStmt()) {
+        SgNode *tmp_stmt = Traverse(clang_associated_stmt);
+        associated_stmt = isSgStatement(tmp_stmt);
+        if (tmp_stmt != NULL && associated_stmt == NULL) {
+            std::cerr << "Runtime error: associated OpenMP statement did not translate into an SgStatement." << std::endl;
+            res = false;
+        }
+    }
+
+    SgStatement *target_stmt = associated_stmt;
+
+    if (target_stmt == nullptr) {
+        target_stmt = SageBuilder::buildNullStatement();
+        target_stmt->set_parent(SageBuilder::topScopeStack());
+    }
+
+    {
+        clang::SourceLocation begin = omp_executable_directive->getBeginLoc();
+        clang::SourceLocation end = omp_executable_directive->getEndLoc();
+        if (begin.isValid() && end.isValid()) {
+            clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+            clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
+            auto range = clang::CharSourceRange::getTokenRange(begin, end);
+            std::string directive_text = clang::Lexer::getSourceText(range, sm, lang_opts).str();
+
+            if (!directive_text.empty()) {
+                auto first_non_ws = directive_text.find_first_not_of(" \t");
+                if (first_non_ws != std::string::npos && first_non_ws > 0) {
+                    directive_text.erase(0, first_non_ws);
+                }
+                auto last_non_ws = directive_text.find_last_not_of(" \t\r\n");
+                if (last_non_ws != std::string::npos && last_non_ws + 1 < directive_text.size()) {
+                    directive_text.erase(last_non_ws + 1);
+                }
+                if (!directive_text.empty() && directive_text.rfind("#pragma", 0) != 0) {
+                    directive_text.insert(0, "#pragma ");
+                }
+                if (!directive_text.empty()) {
+                    auto filename_ref = sm.getFilename(begin);
+                    std::string filename = filename_ref.empty() ? std::string("<unknown>") : filename_ref.str();
+                    unsigned line = sm.getPresumedLineNumber(begin);
+                    unsigned column = sm.getPresumedColumnNumber(begin);
+
+                    size_t search_pos = 0;
+                    while (true) {
+                        size_t newline_pos = directive_text.find_first_of("\r\n", search_pos);
+                        if (newline_pos == std::string::npos) {
+                            directive_text.push_back('\n');
+                            break;
+                        }
+
+                        size_t check_pos = newline_pos;
+                        while (check_pos > 0 && (directive_text[check_pos - 1] == '\r' || directive_text[check_pos - 1] == '\n'))
+                            --check_pos;
+                        while (check_pos > 0 && (directive_text[check_pos - 1] == ' ' || directive_text[check_pos - 1] == '\t'))
+                            --check_pos;
+
+                        bool continued = (check_pos > 0 && directive_text[check_pos - 1] == '\\');
+                        if (continued) {
+                            search_pos = newline_pos + 1;
+                            continue;
+                        }
+
+                        size_t end_pos = newline_pos + 1;
+                        if (directive_text[newline_pos] == '\r' &&
+                            end_pos < directive_text.size() &&
+                            directive_text[end_pos] == '\n') {
+                            ++end_pos;
+                        }
+                        directive_text.erase(end_pos);
+                        break;
+                    }
+
+                    PreprocessingInfo *info = new PreprocessingInfo(
+                        PreprocessingInfo::CMacroCallStatement,
+                        directive_text,
+                        filename,
+                        line,
+                        column,
+                        0,
+                        PreprocessingInfo::before);
+
+                    info->get_file_info()->setTransformation();
+                    target_stmt->addToAttachedPreprocessingInfo(info, PreprocessingInfo::before);
+                }
+            }
+        }
+    }
+
+    *node = target_stmt;
 
     return VisitStmt(omp_executable_directive, node) && res;
 }
@@ -1517,8 +1652,6 @@ bool ClangToSageTranslator::VisitOMPLoopDirective(clang::OMPLoopDirective * omp_
     std::cerr << "ClangToSageTranslator::VisitOMPLoopDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPExecutableDirective(omp_loop_directive, node) && res;
 }
@@ -1628,8 +1761,6 @@ bool ClangToSageTranslator::VisitOMPTargetParallelForDirective(clang::OMPTargetP
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
     return VisitOMPLoopDirective(omp_target_parallel_for_directive, node) && res;
 }
 
@@ -1638,8 +1769,6 @@ bool ClangToSageTranslator::VisitOMPTargetParallelForSimdDirective(clang::OMPTar
     std::cerr << "ClangToSageTranslator::VisitOMPTargetParallelForSimdDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPLoopDirective(omp_target_parallel_for_simd_directive, node) && res;
 }
@@ -1650,8 +1779,6 @@ bool ClangToSageTranslator::VisitOMPTargetSimdDirective(clang::OMPTargetSimdDire
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
     return VisitOMPLoopDirective(omp_target_simd_directive, node) && res;
 }
 
@@ -1661,8 +1788,6 @@ bool ClangToSageTranslator::VisitOMPTargetTeamsDistributeDirective(clang::OMPTar
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
     return VisitOMPLoopDirective(omp_target_teams_distribute_directive, node) && res;
 }
 
@@ -1671,8 +1796,6 @@ bool ClangToSageTranslator::VisitOMPTargetTeamsDistributeSimdDirective(clang::OM
     std::cerr << "ClangToSageTranslator::VisitOMPTargetTeamsDistributeSimdDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPLoopDirective(omp_target_teams_distribute_simd_directive, node) && res;
 }
@@ -2028,6 +2151,36 @@ bool ClangToSageTranslator::VisitArraySubscriptExpr(clang::ArraySubscriptExpr * 
     if (tmp_base != NULL && base == NULL) {
         std::cerr << "Runtime error: tmp_base != NULL && base == NULL" << std::endl;
         res = false;
+    }
+    if (SgCastExp *cast = isSgCastExp(base)) {
+        auto pointerInfo = [](SgType *type) -> std::pair<int, SgType *> {
+            int depth = 0;
+            SgType *current = type;
+            while (current != nullptr) {
+                current = current->stripTypedefsAndModifiers();
+                SgPointerType *ptrType = isSgPointerType(current);
+                if (ptrType == nullptr) {
+                    break;
+                }
+                ++depth;
+                current = ptrType->get_base_type();
+            }
+            return std::make_pair(depth, current != nullptr ? current->stripTypedefsAndModifiers() : nullptr);
+        };
+
+        SgType *operandType = cast->get_operand_i()->get_type();
+        if (operandType != nullptr) {
+            operandType = operandType->stripTypedefsAndModifiers();
+            if (SgArrayType *arrayType = isSgArrayType(operandType)) {
+                SgType *elementType = arrayType->get_base_type();
+                ROSE_ASSERT(elementType != nullptr);
+                SgType *targetType = SgPointerType::createType(elementType);
+                ROSE_ASSERT(targetType != nullptr);
+                if (pointerInfo(cast->get_type()) != pointerInfo(targetType)) {
+                    cast->set_type(targetType);
+                }
+            }
+        }
     }
 
     SgNode * tmp_idx = Traverse(array_subscript_expr->getIdx());

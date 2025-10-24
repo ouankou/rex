@@ -54,8 +54,12 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     std::vector<std::string> sys_dirs_list;
     std::vector<std::string> inc_dirs_list;
     std::vector<std::string> define_list;
+    std::vector<std::string> openmp_define_list;
     std::vector<std::string> inc_list;
     std::string input_file;
+    std::vector<std::string> passthrough_args;
+    bool enable_openmp = false;
+    bool enable_openmp_simd = false;
 
     for (int i = 0; i < argc; i++) {
         std::string current_arg(argv[i]);
@@ -72,16 +76,31 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             }
         }
         else if (current_arg.find("-D") == 0) {
+            std::string define_value;
             if (current_arg.length() > 2) {
-                define_list.push_back(current_arg.substr(2));
-            }
-            else {
-                i++;
+                define_value = current_arg.substr(2);
+            } else {
+                ++i;
                 if (i < argc)
-                    define_list.push_back(current_arg);
+                    define_value = argv[i];
                 else
                     break;
             }
+            const bool is_openmp_define =
+                (define_value == "_OPENMP") ||
+                (define_value.rfind("_OPENMP=", 0) == 0);
+            if (is_openmp_define)
+                openmp_define_list.push_back(define_value);
+            else
+                define_list.push_back(define_value);
+        }
+        else if (current_arg.rfind("-fopenmp", 0) == 0) {
+            enable_openmp = true;
+            passthrough_args.push_back(current_arg);
+        }
+        else if (current_arg == "-fopenmp-simd") {
+            enable_openmp_simd = true;
+            passthrough_args.push_back(current_arg);
         }
         else if (current_arg.find("-c") == 0) {}
         else if (current_arg.find("-o") == 0) {
@@ -190,7 +209,13 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
  // FIXME should be handle by Clang ?
     define_list.push_back("__I__=_Complex_I");
 
-    unsigned cnt = define_list.size() + inc_dirs_list.size() + sys_dirs_list.size() + inc_list.size();
+    if (!enable_openmp) {
+        define_list.insert(define_list.end(),
+                           openmp_define_list.begin(),
+                           openmp_define_list.end());
+    }
+
+    unsigned cnt = define_list.size() + inc_dirs_list.size() + sys_dirs_list.size() + inc_list.size() + passthrough_args.size();
     char ** args = new char*[cnt];
     std::vector<std::string>::iterator it_str;
     unsigned i = 0;
@@ -233,6 +258,14 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         std::cerr << "args[" << i << "] = " << args[i] << std::endl;
 #endif
         i++;
+    }
+    for (it_str = passthrough_args.begin(); it_str != passthrough_args.end(); ++it_str) {
+        args[i] = new char[it_str->size() + 1];
+        strcpy(args[i], it_str->c_str());
+#if DEBUG_ARGS
+        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
+#endif
+        ++i;
     }
 
 
@@ -324,6 +357,13 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     }
     if (enable_opencl) {
         lang_opts.OpenCL = 1;
+    }
+    if (enable_openmp) {
+        lang_opts.OpenMP = 1;
+        lang_opts.OpenMPUseTLS = 1;
+    }
+    if (enable_openmp_simd) {
+        lang_opts.OpenMPSimd = 1;
     }
 
     // Now create file manager with FileSystemOptions from the parsed invocation
