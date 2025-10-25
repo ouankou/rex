@@ -42,7 +42,6 @@ set(noinst_programs
   collectReadWriteVariables
   typeTraits
   livenessAnalysis
-  buildProcedureHeaderStatement
   replaceMacroCalls
   getDependentDecls
   buildStructDeclaration2
@@ -52,10 +51,6 @@ set(noinst_programs
   removeStatementCommentRelocation
   generateUniqueName
   annotateExpressionsWithUniqueNames
-  buildExternalStatement
-  buildCommonBlock
-  doLoopNormalization
-  buildLabelStatement2
   replaceWithPattern
   insertBeforeUsingCommaOp
   insertAfterUsingCommaOp
@@ -68,6 +63,15 @@ set(noinst_programs
   buildUsingDirectiveStatement
 )
 
+# Fortran-specific executables (only build when enable-fortran=ON)
+set(fortran_programs
+  buildProcedureHeaderStatement
+  buildExternalStatement
+  buildCommonBlock
+  doLoopNormalization
+  buildLabelStatement2
+)
+
 # Include directories for test programs
 include_directories(
   ${CMAKE_SOURCE_DIR}/src
@@ -78,7 +82,12 @@ include_directories(
 )
 
 # Build all executables
-foreach(prog ${bin_programs} ${noinst_programs})
+set(all_programs ${bin_programs} ${noinst_programs})
+if(enable-fortran)
+  list(APPEND all_programs ${fortran_programs})
+endif()
+
+foreach(prog ${all_programs})
   add_executable(${prog} ${prog}.C)
   target_link_libraries(${prog} ROSE_DLL ${link_with_libraries})
 endforeach()
@@ -301,15 +310,7 @@ add_test(
 
 # Fortran tests (only if Fortran support is enabled)
 if(enable-fortran)
-  set(fortran_tests
-    buildProcedureHeaderStatement
-    buildExternalStatement
-    buildCommonBlock
-    doLoopNormalization
-    buildLabelStatement2
-  )
-
-  foreach(test ${fortran_tests})
+  foreach(test ${fortran_programs})
     add_test(
       NAME astInterface_${test}
       COMMAND ${test} ${TEST_CXXFLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/input${test}.f

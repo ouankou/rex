@@ -4630,7 +4630,7 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
      // ROOT CAUSE FIX: Frontend sometimes doesn't set uses_operator_syntax correctly for overloaded operators
      // Force operator syntax for operator calls (operator[], operator+, etc.)
 #if DEBUG_FUNCTION_CALL
-     // FIX (PR review): Wrap debug output in conditional to prevent production output
+     // Wrap debug output in conditional to prevent production output
      printf("DEBUG function call: uses_operator_syntax initial = %d\n", uses_operator_syntax);
 #endif
      if (!uses_operator_syntax) {
@@ -5328,7 +5328,7 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
              {
                print_paren = false;
 #if DEBUG_FUNCTION_CALL
-               // FIX (PR review): Wrap debug output in conditional to prevent production output
+               // Wrap debug output in conditional to prevent production output
                printf("DEBUG: Setting print_paren = false for operator[]\n");
 #endif
              }
@@ -5366,7 +5366,7 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
                if (outputFirstArg)
                   {
 #if DEBUG_FUNCTION_CALL
-                     // FIX (PR review): Wrap debug output in conditional to prevent production output
+                     // Wrap debug output in conditional to prevent production output
                      printf("DEBUG: Outputting first argument for operator[] before [\n");
 #endif
                      unparseExpression((*arg), newinfo);

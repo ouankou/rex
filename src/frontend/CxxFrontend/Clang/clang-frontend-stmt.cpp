@@ -1055,7 +1055,7 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(clang::CXXForRangeStmt * cxx_fo
     SgNode* tmp_range_init = cxx_for_range_stmt->getRangeInit() ? Traverse(cxx_for_range_stmt->getRangeInit()) : nullptr;
     SgStatement* range_init = isSgStatement(tmp_range_init);
 
-    // FIX (PR review): Begin/end iterator setup - must be included in init_stmts
+    // Begin/end iterator setup - must be included in init_stmts
     // The condition and increment expressions reference __begin/__end variables created here
     SgNode* tmp_begin = cxx_for_range_stmt->getBeginStmt() ? Traverse(cxx_for_range_stmt->getBeginStmt()) : nullptr;
     SgStatement* begin_stmt = isSgStatement(tmp_begin);
@@ -2288,9 +2288,15 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr * atomic_expr, SgN
          }
      }
 
-     // Build the function call expression with a generic builtin name
-     // We use buildFunctionCallExp with string name which handles undeclared builtins
-     *node = SageBuilder::buildFunctionCallExp("__atomic_builtin", SageBuilder::buildVoidType(), args, SageBuilder::topScopeStack());
+     // Build the function call expression with the actual builtin name
+     // Get the real builtin name (e.g., "__atomic_load", "__atomic_fetch_add", etc.)
+     // so the unparsed code will compile correctly
+     std::string builtin_name = atomic_expr->getOpAsString().str();
+
+     // Use the actual return type from Clang, not void - many atomics return values
+     // Example: __atomic_fetch_add returns the old value before addition
+     SgType* return_type = buildTypeFromQualifiedType(atomic_expr->getType());
+     *node = SageBuilder::buildFunctionCallExp(builtin_name, return_type, args, SageBuilder::topScopeStack());
 
      return VisitExpr(atomic_expr, node) && res;
 }
@@ -2975,11 +2981,17 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr * cxx_new_expr, Sg
         }
     }
 
+    // Build the expression list for array new (if any)
+    SgExprListExp* array_expr_list = NULL;
+    if (array_size != NULL) {
+        array_expr_list = SageBuilder::buildExprListExp(array_size);
+    }
+
     // Build the new expression
     // buildNewExp(type, exprListExp, constInit, expr, val, funcDecl)
     SgNewExp* new_exp = SageBuilder::buildNewExp(
         allocated_type,      // type
-        NULL,                // exprListExp (for arrays)
+        array_expr_list,     // exprListExp (array size list)
         ctor_init,           // constInit (constructor initializer)
         NULL,                // expr (placement new expression)
         0,                   // val (need_global_specifier as short)
@@ -2997,12 +3009,22 @@ bool ClangToSageTranslator::VisitCXXNoexceptExpr(clang::CXXNoexceptExpr * cxx_no
 #endif
     bool res = true;
 
-    // ROOT CAUSE FIX: noexcept operator evaluates at compile-time whether an expression can throw
-    // Get the compile-time result and create a bool literal
-    bool can_throw = cxx_noexcept_expr->getValue();
+    if (cxx_noexcept_expr->isValueDependent()) {
+        // Value-dependent noexcept results can't be evaluated until instantiation
+        // Create a placeholder expression so translation can proceed
+        *node = SageBuilder::buildNullExpression();
+        if (SgExpression* expr = isSgExpression(*node)) {
+            expr->get_file_info()->setCompilerGenerated();
+        }
+    } else {
+        // noexcept operator evaluates at compile-time whether an expression can throw
+        bool can_throw = cxx_noexcept_expr->getValue();
+        *node = SageBuilder::buildBoolValExp(can_throw);
+    }
 
-    // Build a bool literal expression with the compile-time result
-    *node = SageBuilder::buildBoolValExp(can_throw);
+    if (SgExpression* expr = isSgExpression(*node)) {
+        applySourceRange(expr, cxx_noexcept_expr->getSourceRange());
+    }
 
     return VisitExpr(cxx_noexcept_expr, node) && res;
 }
@@ -3233,6 +3255,35 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr * decl_ref_expr,
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitDeclRefExpr" << std::endl;
 #endif
+
+    if (clang::NonTypeTemplateParmDecl* non_type_param =
+            llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(decl_ref_expr->getDecl())) {
+        SgDeclarationStatement* owning_template = NULL;
+        if (clang::DeclContext* ctx = non_type_param->getDeclContext()) {
+            if (clang::TemplateDecl* template_ctx = llvm::dyn_cast<clang::TemplateDecl>(ctx)) {
+                auto it = p_decl_translation_map.find(template_ctx);
+                if (it != p_decl_translation_map.end()) {
+                    owning_template = isSgDeclarationStatement(it->second);
+                }
+            }
+        }
+
+        unsigned position = non_type_param->getIndex();
+        SgTemplateParameter* sg_param =
+            translateTemplateParameter(non_type_param, owning_template, position);
+
+        if (sg_param != NULL) {
+            SgTemplateParameterVal* param_val =
+                SageBuilder::buildTemplateParameterVal(non_type_param->getIndex());
+            param_val->set_valueString(non_type_param->getNameAsString());
+            if (sg_param->get_type() != NULL) {
+                param_val->set_valueType(sg_param->get_type());
+            }
+            applySourceRange(param_val, decl_ref_expr->getSourceRange());
+            *node = param_val;
+            return true;
+        }
+    }
 
     bool res = true;
 
@@ -4255,22 +4306,34 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(clang::UnresolvedMemberExp
     // Get the member name
     std::string member_name = unresolved_member_expr->getMemberName().getAsString();
 
+    // Determine a scope we can safely use for placeholder expressions
+    SgScopeStatement* current_scope = SageBuilder::topScopeStack();
+    if (current_scope == NULL) {
+        current_scope = getGlobalScope();
+    }
+
     // Handle the base expression (the object/pointer being accessed)
     SgExpression* base_expr = NULL;
-
-    // Check if this is an implicit access (e.g., calling member function without 'this->')
-    if (!unresolved_member_expr->isImplicitAccess() && unresolved_member_expr->getBase() != NULL) {
-        SgNode* tmp_base = Traverse(unresolved_member_expr->getBase());
-        base_expr = isSgExpression(tmp_base);
+    if (!unresolved_member_expr->isImplicitAccess()) {
+        if (clang::Expr* base = unresolved_member_expr->getBase()) {
+            SgNode* tmp_base = Traverse(base);
+            base_expr = isSgExpression(tmp_base);
+        }
     }
 
-    // If no base (implicit 'this' access), create a 'this' variable reference
+    // If no base (implicit 'this' access or translation failure), build a placeholder
     if (base_expr == NULL) {
-        base_expr = SageBuilder::buildVarRefExp("this", SageBuilder::topScopeStack());
+        base_expr = SageBuilder::buildOpaqueVarRefExp("this", current_scope);
+        if (SgLocatedNode* located_base = isSgLocatedNode(base_expr)) {
+            located_base->get_file_info()->setCompilerGenerated();
+        }
     }
 
-    // Create a variable reference for the member name
-    SgVarRefExp* member_ref = SageBuilder::buildVarRefExp(SgName(member_name), SageBuilder::topScopeStack());
+    // Create a placeholder expression for the member name without requiring a resolved symbol
+    SgVarRefExp* member_ref = SageBuilder::buildOpaqueVarRefExp(member_name, current_scope);
+    if (member_ref != NULL) {
+        member_ref->get_file_info()->setCompilerGenerated();
+    }
 
     // Determine if it's arrow (->) or dot (.) access
     if (unresolved_member_expr->isArrow()) {
@@ -4279,8 +4342,9 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(clang::UnresolvedMemberExp
         *node = SageBuilder::buildDotExp(base_expr, member_ref);
     }
 
-    // Note: Don't call applySourceRange here as it may try to apply to child nodes
-    // (like member_ref) that aren't SgLocatedNode. Let VisitOverloadExpr handle file info.
+    if (SgExpression* expr = isSgExpression(*node)) {
+        applySourceRange(expr, unresolved_member_expr->getSourceRange());
+    }
 
     return VisitOverloadExpr(unresolved_member_expr, node) && res;
 }
@@ -4535,56 +4599,51 @@ bool ClangToSageTranslator::VisitStringLiteral(clang::StringLiteral * string_lit
         tmp = bytes.str();
     }
 
-    const char * raw_str = tmp.c_str();
+    const char* raw_str = tmp.data();
 
-    unsigned i = 0;
-    unsigned l = 0;
-    while (raw_str[i] != '\0') {
-        if (
-            raw_str[i] == '\\' ||
-            raw_str[i] == '\n' ||
-            raw_str[i] == '\r' ||
-            raw_str[i] == '"')
-        {
-            l++;
+    // Get byte length from Clang instead of searching for '\0'
+    // For wide strings, getBytes() includes embedded NULs between characters
+    // Example: L"AB" becomes {'A',0,'B',0,0,0}, so we can't use '\0' as terminator
+    unsigned byte_length = string_literal->getByteLength();
+
+    std::string escaped;
+    escaped.reserve(byte_length * 4 + 1);
+    auto appendHexEscape = [&](unsigned char byte) {
+        static const char hex_digits[] = "0123456789ABCDEF";
+        escaped += "\\x";
+        escaped += hex_digits[(byte >> 4) & 0xF];
+        escaped += hex_digits[byte & 0xF];
+    };
+
+    for (unsigned i = 0; i < byte_length; ++i) {
+        unsigned char ch = static_cast<unsigned char>(raw_str[i]);
+        if (char_byte_width == 1) {
+            switch (ch) {
+                case '\\':
+                    escaped += "\\\\";
+                    break;
+                case '\n':
+                    escaped += "\\n";
+                    break;
+                case '\r':
+                    escaped += "\\r";
+                    break;
+                case '"':
+                    escaped += "\\\"";
+                    break;
+                case '\0':
+                    escaped += "\\0";
+                    break;
+                default:
+                    escaped.push_back(static_cast<char>(ch));
+                    break;
+            }
+        } else {
+            appendHexEscape(ch);
         }
-        l++;
-        i++;
     }
-    l++;
 
-    char * str = (char *)malloc(l * sizeof(char));
-    i = 0;
-    unsigned cnt = 0;
-
-    while (raw_str[i] != '\0') {
-        switch (raw_str[i]) {
-            case '\\':
-                str[cnt++] = '\\';
-                str[cnt++] = '\\';
-                break;
-            case '\n':
-                str[cnt++] = '\\';
-                str[cnt++] = 'n';
-                break;
-            case '\r':
-                str[cnt++] = '\\';
-                str[cnt++] = 'r';
-                break;
-            case '"':
-                str[cnt++] = '\\';
-                str[cnt++] = '"';
-                break;
-            default:
-                str[cnt++] = raw_str[i];
-        }
-        i++;
-    }
-    str[cnt] = '\0';
-
-    ROSE_ASSERT(l==cnt+1);
-
-    *node = SageBuilder::buildStringVal(str);
+    *node = SageBuilder::buildStringVal(escaped);
 
     return VisitExpr(string_literal, node);
 }

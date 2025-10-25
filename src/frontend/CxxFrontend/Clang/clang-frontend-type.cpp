@@ -2,6 +2,7 @@
 #include "clang-frontend-private.hpp"
 
 #include <cctype>
+#include "llvm/ADT/SmallString.h"
 
 namespace {
     // Generate unique name for template declaration with full namespace qualification
@@ -1177,12 +1178,39 @@ ClangToSageTranslator::buildTemplateArguments(
             }
 
             case clang::TemplateArgument::Integral: {
-                // Non-type argument (e.g., 1024)
-                llvm::APSInt value = arg.getAsIntegral();
+                const llvm::APSInt& value = arg.getAsIntegral();
+                const bool is_signed = value.isSigned();
+                const unsigned bit_width = value.getBitWidth();
 
-                // Create integer literal expression
-                SgExpression* value_expr = SageBuilder::buildIntVal(
-                    value.getLimitedValue());
+                SgExpression* value_expr = nullptr;
+                if (bit_width <= 32) {
+                    if (is_signed) {
+                        value_expr = SageBuilder::buildIntVal(static_cast<int>(value.getSExtValue()));
+                    } else {
+                        value_expr = SageBuilder::buildUnsignedIntVal(static_cast<unsigned int>(value.getZExtValue()));
+                    }
+                } else if (bit_width <= 64) {
+                    if (is_signed) {
+                        value_expr = SageBuilder::buildLongLongIntVal(value.getSExtValue());
+                    } else {
+                        value_expr = SageBuilder::buildUnsignedLongLongIntVal(value.getZExtValue());
+                    }
+                } else {
+                    // Larger than 64-bit: preserve textual representation so it unparses correctly
+                    llvm::SmallString<128> buffer;
+                    value.toString(buffer, is_signed);
+                    std::string literal_text(buffer.str().str());
+
+                    if (is_signed) {
+                        SgLongLongIntVal* literal = SageBuilder::buildLongLongIntVal(0);
+                        literal->set_valueString(literal_text);
+                        value_expr = literal;
+                    } else {
+                        SgUnsignedLongLongIntVal* literal = SageBuilder::buildUnsignedLongLongIntVal(0);
+                        literal->set_valueString(literal_text);
+                        value_expr = literal;
+                    }
+                }
 
                 sg_arg = new SgTemplateArgument(value_expr, false);
                 break;
@@ -1250,7 +1278,10 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
         }
     }
 
-    std::string inst_name_full = mangleTemplateInstantiation(template_base_name, clang_type);
+    // Use qualified name in cache key to avoid namespace collisions
+    // Example: "std::array<int>" and "my_ns::array<int>" must have different cache keys
+    // Otherwise they would both mangle to "array_int" and collide
+    std::string inst_name_full = mangleTemplateInstantiation(template_qualified_name, clang_type);
 
     // Check cache
     auto it = p_template_inst_cache.find(inst_name_full);
@@ -1285,18 +1316,29 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     inst_decl->set_definingDeclaration(nullptr);
     inst_decl->set_firstNondefiningDeclaration(inst_decl);
 
-    // ROOT CAUSE FIX: Set scope to namespace if qualified name has namespace prefix
-    // Extract namespace from qualified name and find/create namespace scope
+    // FIX P1: Handle nested namespaces correctly (e.g., "std::chrono::duration")
+    // Split the qualified name by "::" and create/find nested namespace scopes
     SgScopeStatement* inst_scope = getGlobalScope();
 
-    // Check if we have namespace prefix (e.g., "std" from "std::array")
+    // Split qualified name into components
+    std::vector<std::string> components;
+    size_t start = 0;
     size_t colon_pos = template_qualified_name.find("::");
-    if (colon_pos != std::string::npos) {
-        std::string ns_name = template_qualified_name.substr(0, colon_pos);
+    while (colon_pos != std::string::npos) {
+        components.push_back(template_qualified_name.substr(start, colon_pos - start));
+        start = colon_pos + 2;  // Skip "::"
+        colon_pos = template_qualified_name.find("::", start);
+    }
+    components.push_back(template_qualified_name.substr(start));  // Last component (class name)
 
-        // Find or create namespace
+    // Iterate through all namespace components (all except the last, which is the class name)
+    // For "std::chrono::duration", iterate through ["std", "chrono"], not "duration"
+    for (size_t i = 0; i + 1 < components.size(); ++i) {
+        const std::string& ns_name = components[i];
+
+        // Find or create namespace in current scope
         SgNamespaceDefinitionStatement* ns_def = nullptr;
-        SgDeclarationStatementPtrList& decls = getGlobalScope()->getDeclarationList();
+        SgDeclarationStatementPtrList& decls = inst_scope->getDeclarationList();
         for (SgDeclarationStatement* decl : decls) {
             if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(decl)) {
                 if (ns_decl->get_name().getString() == ns_name) {
@@ -1307,15 +1349,16 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
         }
 
         if (ns_def == nullptr) {
-            // Create namespace
+            // Create namespace in current scope
+            // buildNamespaceDeclaration automatically inserts the declaration into inst_scope
             SgNamespaceDeclarationStatement* ns_decl =
-                SageBuilder::buildNamespaceDeclaration(SgName(ns_name), getGlobalScope());
+                SageBuilder::buildNamespaceDeclaration(SgName(ns_name), inst_scope);
             ns_decl->get_file_info()->setCompilerGenerated();
             ns_def = ns_decl->get_definition();
             ns_def->get_file_info()->setCompilerGenerated();
-            getGlobalScope()->append_declaration(ns_decl);
         }
 
+        // Move into nested namespace for next iteration
         inst_scope = ns_def;
     }
 

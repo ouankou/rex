@@ -183,7 +183,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             inc_list.push_back("clang-builtin-c.h");
             break;
         case ClangToSageTranslator::CPLUSPLUS:
-            // FIX (PR review): Use configuration-driven cxx_config_include_dirs for portability
+            // Use configuration-driven cxx_config_include_dirs for portability
             // across different platforms, architectures, and compiler versions
             sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(), cxx_config_include_dirs.end());
             inc_list.push_back("clang-builtin-cpp.hpp");

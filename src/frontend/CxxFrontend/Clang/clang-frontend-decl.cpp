@@ -195,6 +195,173 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
     return sym;
 }
 
+SgTemplateParameter*
+ClangToSageTranslator::translateTemplateParameter(
+    clang::NamedDecl* param_decl,
+    SgDeclarationStatement* owning_template,
+    unsigned position) {
+    if (param_decl == NULL) {
+        return NULL;
+    }
+
+    // Reuse existing translation if available
+    auto it = p_decl_translation_map.find(param_decl);
+    if (it != p_decl_translation_map.end()) {
+        return isSgTemplateParameter(it->second);
+    }
+
+    SgTemplateParameter* sg_param = NULL;
+
+    // Generate fallback name for anonymous parameters
+    if (clang::TemplateTypeParmDecl* type_param = llvm::dyn_cast<clang::TemplateTypeParmDecl>(param_decl)) {
+        std::string name_str = type_param->getNameAsString();
+        if (name_str.empty()) {
+            name_str = "__type_param_" + std::to_string(position);
+        }
+        SgTemplateType* template_type = SageBuilder::buildTemplateType(SgName(name_str));
+        sg_param = SageBuilder::buildTemplateParameter(SgTemplateParameter::type_parameter, template_type);
+
+        if (type_param->hasDefaultArgument() && !type_param->defaultArgumentWasInherited()) {
+            const clang::TemplateArgumentLoc& default_loc = type_param->getDefaultArgument();
+            const clang::TemplateArgument& default_arg = default_loc.getArgument();
+            if (default_arg.getKind() == clang::TemplateArgument::Type) {
+                SgType* default_type = buildTypeFromQualifiedType(default_arg.getAsType());
+                if (default_type != NULL) {
+                    sg_param->set_defaultTypeParameter(default_type);
+                }
+            }
+        }
+    } else if (clang::NonTypeTemplateParmDecl* non_type_param = llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(param_decl)) {
+        std::string name_str = non_type_param->getNameAsString();
+        if (name_str.empty()) {
+            name_str = "__non_type_param_" + std::to_string(position);
+        }
+
+        SgType* param_type = buildTypeFromQualifiedType(non_type_param->getType());
+        if (param_type == NULL) {
+            param_type = SageBuilder::buildIntType();
+        }
+
+        SgInitializedName* init_name = SageBuilder::buildInitializedName(SgName(name_str), param_type);
+        applySourceRange(init_name, non_type_param->getSourceRange());
+
+        sg_param = new SgTemplateParameter(
+            static_cast<SgExpression*>(NULL),
+            static_cast<SgExpression*>(NULL));
+
+        sg_param->set_type(param_type);
+        sg_param->set_initializedName(init_name);
+        init_name->set_parent(sg_param);
+
+        if (non_type_param->hasDefaultArgument()) {
+            const clang::TemplateArgumentLoc& default_loc = non_type_param->getDefaultArgument();
+            const clang::TemplateArgument& default_arg = default_loc.getArgument();
+            SgExpression* sg_default_expr = NULL;
+
+            switch (default_arg.getKind()) {
+                case clang::TemplateArgument::Expression: {
+                    clang::Expr* expr = default_arg.getAsExpr();
+                    if (expr != NULL) {
+                        SgNode* sg_node = Traverse(expr);
+                        sg_default_expr = isSgExpression(sg_node);
+                    }
+                    break;
+                }
+                case clang::TemplateArgument::Integral: {
+                    const llvm::APSInt& value = default_arg.getAsIntegral();
+                    sg_default_expr = SageBuilder::buildIntVal(value.getLimitedValue());
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            if (sg_default_expr != NULL) {
+                sg_param->set_defaultExpressionParameter(sg_default_expr);
+            }
+        }
+    } else if (clang::TemplateTemplateParmDecl* template_template_param = llvm::dyn_cast<clang::TemplateTemplateParmDecl>(param_decl)) {
+        // Build placeholder template declaration for template template parameters
+        sg_param = new SgTemplateParameter(
+            static_cast<SgTemplateDeclaration*>(NULL),
+            static_cast<SgTemplateDeclaration*>(NULL));
+
+        std::string name_str = template_template_param->getNameAsString();
+        if (name_str.empty()) {
+            name_str = "__template_template_param_" + std::to_string(position);
+        }
+
+        SgInitializedName* init_name = SageBuilder::buildInitializedName(SgName(name_str), SgTypeUnknown::createType());
+        init_name->get_file_info()->setCompilerGenerated();
+        init_name->set_parent(sg_param);
+        sg_param->set_initializedName(init_name);
+    } else {
+        std::cerr << "Warning: Unsupported template parameter kind: "
+                  << param_decl->getDeclKindName() << std::endl;
+        return NULL;
+    }
+
+    if (sg_param != NULL) {
+        applySourceRange(sg_param, param_decl->getSourceRange());
+        if (owning_template != NULL) {
+            sg_param->set_templateDeclaration(owning_template);
+        }
+        p_decl_translation_map.insert(std::make_pair(param_decl, sg_param));
+    }
+
+    return sg_param;
+}
+
+SgTemplateParameterPtrList*
+ClangToSageTranslator::translateTemplateParameterList(
+    clang::TemplateParameterList* param_list,
+    SgDeclarationStatement* owning_template) {
+    SgTemplateParameterPtrList* sg_params = new SgTemplateParameterPtrList();
+    if (param_list == NULL) {
+        return sg_params;
+    }
+
+    unsigned index = 0;
+    for (clang::NamedDecl* param_decl : *param_list) {
+        SgTemplateParameter* sg_param = translateTemplateParameter(param_decl, owning_template, index);
+        if (sg_param != NULL) {
+            sg_params->push_back(sg_param);
+        }
+        ++index;
+    }
+
+    return sg_params;
+}
+
+void
+ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def) {
+    if (record_decl == NULL || class_def == NULL) {
+        return;
+    }
+
+    SageBuilder::pushScopeStack(class_def);
+
+    for (clang::Decl* inner_decl : record_decl->decls()) {
+        if (inner_decl == NULL) {
+            continue;
+        }
+
+        if (inner_decl->isImplicit()) {
+            continue;
+        }
+
+        SgNode* sg_child = Traverse(inner_decl);
+        if (SgDeclarationStatement* child_decl = isSgDeclarationStatement(sg_child)) {
+            if (child_decl->get_parent() == NULL) {
+                child_decl->set_parent(class_def);
+            }
+            class_def->append_member(child_decl);
+        }
+    }
+
+    SageBuilder::popScopeStack();
+}
+
 SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
     if (decl == NULL)
         return NULL;
@@ -853,14 +1020,103 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitClassTemplateDecl" << std::endl;
 #endif
-    if (class_template_decl != nullptr) {
-        Traverse(class_template_decl->getTemplatedDecl());
-        for (auto it = class_template_decl->spec_begin(); it != class_template_decl->spec_end(); ++it) {
-            Traverse(*it);
+    if (class_template_decl == NULL) {
+        *node = NULL;
+        return false;
+    }
+
+    clang::CXXRecordDecl* templated_decl = class_template_decl->getTemplatedDecl();
+    if (templated_decl == NULL) {
+        *node = NULL;
+        return false;
+    }
+
+    // Determine the template name, generate a fallback if necessary
+    std::string template_name_str = templated_decl->getNameAsString();
+    if (template_name_str.empty()) {
+        template_name_str = "__anon_template_" + generate_source_position_string(class_template_decl->getBeginLoc());
+    }
+    SgName template_name(template_name_str);
+
+    // Resolve class kind
+    SgClassDeclaration::class_types class_kind = SgClassDeclaration::e_class;
+    switch (templated_decl->getTagKind()) {
+        case clang::TagTypeKind::Struct:
+            class_kind = SgClassDeclaration::e_struct;
+            break;
+        case clang::TagTypeKind::Class:
+            class_kind = SgClassDeclaration::e_class;
+            break;
+        case clang::TagTypeKind::Union:
+            class_kind = SgClassDeclaration::e_union;
+            break;
+        default:
+            std::cerr << "Warning: Unsupported tag kind for class template: "
+                      << static_cast<int>(templated_decl->getTagKind()) << std::endl;
+            break;
+    }
+
+    SgScopeStatement* scope = SageBuilder::topScopeStack();
+    if (scope == NULL) {
+        scope = getGlobalScope();
+    }
+
+    // Build template parameters and template declaration
+    SgTemplateArgumentPtrList* empty_args = new SgTemplateArgumentPtrList();
+    SgTemplateParameterPtrList* params = translateTemplateParameterList(class_template_decl->getTemplateParameters(), NULL);
+
+    SgTemplateClassDeclaration* template_decl =
+        SageBuilder::buildTemplateClassDeclaration_nfi(
+            template_name,
+            class_kind,
+            scope,
+            NULL,
+            params,
+            empty_args);
+
+    delete params;
+    delete empty_args;
+
+    if (template_decl == NULL) {
+        *node = NULL;
+        return false;
+    }
+
+    // Attach template parameter back-links
+    SgTemplateParameterPtrList& decl_params = template_decl->get_templateParameters();
+    for (SgTemplateParameter* param : decl_params) {
+        if (param != NULL) {
+            param->set_templateDeclaration(template_decl);
         }
     }
-    *node = NULL;
-    return false;
+
+    applySourceRange(template_decl, class_template_decl->getSourceRange());
+
+    // Insert into current scope if not already present
+    if (template_decl->get_parent() == NULL && scope != NULL) {
+        SageInterface::appendStatement(template_decl, scope);
+    }
+
+    // Cache translation for both the template and its templated declaration
+    p_decl_translation_map.insert(std::make_pair(class_template_decl, template_decl));
+    p_decl_translation_map.insert(std::make_pair(templated_decl, template_decl));
+
+    // Populate the class definition for definitions
+    if (templated_decl->isThisDeclarationADefinition()) {
+        if (SgTemplateClassDefinition* class_def = isSgTemplateClassDefinition(template_decl->get_definition())) {
+            applySourceRange(class_def, templated_decl->getSourceRange());
+            populateClassDefinition(templated_decl, class_def);
+        }
+    } else {
+        template_decl->setForward();
+    }
+
+    for (auto it = class_template_decl->spec_begin(); it != class_template_decl->spec_end(); ++it) {
+        Traverse(*it);
+    }
+
+    *node = template_decl;
+    return true;
 }
 
 bool ClangToSageTranslator::VisitFunctionTemplateDecl(clang::FunctionTemplateDecl * function_template_decl, SgNode ** node) {
@@ -902,7 +1158,22 @@ bool ClangToSageTranslator::VisitTemplateTemplateParmDecl(clang::TemplateTemplat
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitTemplateTemplateParmDecl" << std::endl;
 #endif
-    return VisitTemplateDecl(template_template_parm_decl, node);
+    SgDeclarationStatement* owning_template = NULL;
+    if (clang::DeclContext* ctx = template_template_parm_decl->getDeclContext()) {
+        if (clang::TemplateDecl* template_ctx = llvm::dyn_cast<clang::TemplateDecl>(ctx)) {
+            auto it = p_decl_translation_map.find(template_ctx);
+            if (it != p_decl_translation_map.end()) {
+                owning_template = isSgDeclarationStatement(it->second);
+            }
+        }
+    }
+
+    unsigned position = template_template_parm_decl->getIndex();
+    SgTemplateParameter* sg_param =
+        translateTemplateParameter(template_template_parm_decl, owning_template, position);
+
+    *node = sg_param;
+    return sg_param != NULL;
 }
 
 bool ClangToSageTranslator::VisitTypeDecl(clang::TypeDecl * type_decl, SgNode ** node) {
@@ -1285,12 +1556,22 @@ bool ClangToSageTranslator::VisitTemplateTypeParmDecl(clang::TemplateTypeParmDec
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitTemplateTypeParmDecl" << std::endl;
 #endif
-    bool res = true;
+    SgDeclarationStatement* owning_template = NULL;
+    if (clang::DeclContext* ctx = template_type_parm_decl->getDeclContext()) {
+        if (clang::TemplateDecl* template_ctx = llvm::dyn_cast<clang::TemplateDecl>(ctx)) {
+            auto it = p_decl_translation_map.find(template_ctx);
+            if (it != p_decl_translation_map.end()) {
+                owning_template = isSgDeclarationStatement(it->second);
+            }
+        }
+    }
 
-    // ROOT CAUSE FIX: Allow delegation to work - disabled FAIL_TODO
-    // ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    unsigned position = template_type_parm_decl->getIndex();
+    SgTemplateParameter* sg_param =
+        translateTemplateParameter(template_type_parm_decl, owning_template, position);
 
-    return VisitTypeDecl(template_type_parm_decl, node) && res;
+    *node = sg_param;
+    return sg_param != NULL;
 }
 
 bool ClangToSageTranslator::VisitTypedefNameDecl(clang::TypedefNameDecl * typedef_name_decl, SgNode ** node) {
@@ -1903,8 +2184,38 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     // Get the proper scope for this function from its Clang declaration context
     // This fixes the issue where functions are created with wrong scope when
     // traversed from DeclRefExpr inside other function bodies
-    // For now, use global scope for all function declarations to avoid recursion issues
-    SgScopeStatement* proper_scope = getGlobalScope();
+    clang::DeclContext* decl_context = function_decl->getDeclContext();
+    SgScopeStatement* proper_scope = getGlobalScope();  // Default fallback
+
+    // Try to find the actual scope from DeclContext (namespace or class)
+    // We need to get the DEFINITION not the DECLARATION to satisfy containsOnlyDeclarations()
+    if (decl_context && !decl_context->isTranslationUnit()) {
+        clang::Decl* context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
+        if (context_decl) {
+            std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
+            if (it != p_decl_translation_map.end()) {
+                SgNode* context_node = it->second;
+                // Get the definition, not the declaration
+                if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(context_node)) {
+                    SgNamespaceDefinitionStatement* ns_def = ns_decl->get_definition();
+                    if (ns_def != nullptr) {
+                        proper_scope = ns_def;
+                    }
+                } else if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
+                    SgClassDefinition* class_def = class_decl->get_definition();
+                    if (class_def != nullptr) {
+                        proper_scope = class_def;
+                    }
+                } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
+                    // Already a definition
+                    proper_scope = ns_def;
+                } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
+                    // Already a definition
+                    proper_scope = class_def;
+                }
+            }
+        }
+    }
 
     SgFunctionDeclaration * sg_function_decl;
 
@@ -2158,44 +2469,22 @@ bool ClangToSageTranslator::VisitNonTypeTemplateParmDecl(clang::NonTypeTemplateP
     std::cerr << "ClangToSageTranslator::VisitNonTypeTemplateParmDecl" << std::endl;
 #endif
 
-    // Non-type template parameters need a representation so they can be referenced in DeclRefExprs
-    // Create a SgInitializedName to represent the parameter
-
-    SgName param_name(non_type_template_param_decl->getNameAsString());
-    SgType* param_type = buildTypeFromQualifiedType(non_type_template_param_decl->getType());
-
-    if (param_type == nullptr) {
-        // Fallback to int type if we can't determine the actual type
-        param_type = SageBuilder::buildIntType();
+    SgDeclarationStatement* owning_template = NULL;
+    if (clang::DeclContext* ctx = non_type_template_param_decl->getDeclContext()) {
+        if (clang::TemplateDecl* template_ctx = llvm::dyn_cast<clang::TemplateDecl>(ctx)) {
+            auto it = p_decl_translation_map.find(template_ctx);
+            if (it != p_decl_translation_map.end()) {
+                owning_template = isSgDeclarationStatement(it->second);
+            }
+        }
     }
 
-    // Create SgInitializedName for the template parameter
-    SgInitializedName* initialized_name = SageBuilder::buildInitializedName(
-        param_name,
-        param_type
-    );
+    unsigned position = non_type_template_param_decl->getIndex();
+    SgTemplateParameter* sg_param =
+        translateTemplateParameter(non_type_template_param_decl, owning_template, position);
 
-    // Mark as compiler generated
-    initialized_name->get_file_info()->setCompilerGenerated();
-
-    // Insert into symbol table so it can be found by DeclRefExpr
-    SgVariableSymbol* symbol = new SgVariableSymbol(initialized_name);
-    applySourceRange(initialized_name, non_type_template_param_decl->getSourceRange());
-
-    // Add to symbol table in current scope
-    SgScopeStatement* scope = SageBuilder::topScopeStack();
-    if (scope != nullptr) {
-        initialized_name->set_scope(scope);
-        initialized_name->set_parent(scope);
-        scope->insert_symbol(param_name, symbol);
-    }
-
-    // Store in translator map
-    p_decl_translation_map.insert(std::pair<clang::Decl *, SgNode *>(non_type_template_param_decl, initialized_name));
-
-    *node = initialized_name;
-
-    return VisitValueDecl(non_type_template_param_decl, node);
+    *node = sg_param;
+    return sg_param != NULL;
 }
 
 bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** node) {
@@ -2213,7 +2502,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
     const clang::Type* varType = varQualType.getTypePtr();
 
 #if DEBUG_VISIT_DECL
-    // FIX (PR review): Wrap debug output in conditional to prevent production output
+    // Wrap debug output in conditional to prevent production output
     if (name.getString() == "x") {
         std::cerr << "DEBUG VarDecl: Variable 'x' has type class = " << varType->getTypeClassName() << std::endl;
     }

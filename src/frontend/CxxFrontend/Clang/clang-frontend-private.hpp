@@ -220,6 +220,18 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         SgTemplateParameterPtrList* buildTemplateParameters(
             const clang::TemplateSpecializationType* clang_type);
 
+        // Helper: Translate template parameter lists on declarations
+        SgTemplateParameter* translateTemplateParameter(
+            clang::NamedDecl* param_decl,
+            SgDeclarationStatement* owning_template,
+            unsigned position);
+
+        SgTemplateParameterPtrList* translateTemplateParameterList(
+            clang::TemplateParameterList* param_list,
+            SgDeclarationStatement* owning_template);
+
+        void populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def);
+
     public:
         ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file);
 
