@@ -2606,10 +2606,14 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(clang::ImplicitCastExpr * impl
     // EDG frontend doesn't create explicit cast nodes for implicit casts
     // Creating them breaks parent pointer relationships (e.g., FunctionRefExp parent becomes CastExp instead of FunctionCallExp)
     // This matches the behavior expected by existing ROSE tests
+
+    // LIMITATION: The sub-expression retains its original type (e.g., int stays int even if cast to double).
+    // SgExpression types are immutable in ROSE - there is no set_type() method.
+    // This matches EDG frontend behavior where implicit casts don't create SgCastExp nodes.
+    // Most ROSE analyses handle this correctly. If type correctness is critical for a specific analysis,
+    // that analysis should consult the Clang AST context or implement its own type inference.
     *node = expr;
 
-    // Do NOT call VisitCastExpr - it would wrap the expression in a SgCastExp
-    // Instead, just call VisitExpr to set type information
     return VisitExpr(implicit_cast_expr, node);
 }
 
