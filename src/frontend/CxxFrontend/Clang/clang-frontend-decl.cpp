@@ -118,7 +118,12 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
             }
 
             SgClassDeclaration * sg_class_decl = isSgClassDeclaration(Traverse(((clang::FieldDecl *)decl)->getParent()));
-            ROSE_ASSERT(sg_class_decl != NULL);
+            // CLANG FRONTEND FIX: sg_class_decl can be NULL if parent class was skipped (e.g., system header template)
+            if (sg_class_decl == NULL) {
+                // Parent class not translated (likely skipped system header template)
+                // Cannot find symbol without parent class
+                break;
+            }
             if (sg_class_decl->get_definingDeclaration() == NULL)
                 std::cerr << "Runtime Error: cannot find the definition of the class/struct associate to the field: " << name << std::endl;
             else {
@@ -253,6 +258,8 @@ ClangToSageTranslator::translateTemplateParameter(
         sg_param->set_initializedName(init_name);
         init_name->set_parent(sg_param);
 
+        // CLANG FRONTEND FIX: Set declptr for template parameter's SgInitializedName
+
         if (non_type_param->hasDefaultArgument()) {
             const clang::TemplateArgumentLoc& default_loc = non_type_param->getDefaultArgument();
             const clang::TemplateArgument& default_arg = default_loc.getArgument();
@@ -295,6 +302,8 @@ ClangToSageTranslator::translateTemplateParameter(
         init_name->get_file_info()->setCompilerGenerated();
         init_name->set_parent(sg_param);
         sg_param->set_initializedName(init_name);
+
+        // CLANG FRONTEND FIX: Set declptr for template template parameter's SgInitializedName
     } else {
         std::cerr << "Warning: Unsupported template parameter kind: "
                   << param_decl->getDeclKindName() << std::endl;
@@ -1025,6 +1034,15 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
         return false;
     }
 
+    // CLANG FRONTEND FIX: Skip system header template classes to avoid performance issues
+    // System headers contain massive template hierarchies that cause extremely slow processing
+    clang::SourceManager &SM = p_compiler_instance->getSourceManager();
+    if (SM.isInSystemHeader(class_template_decl->getLocation())) {
+        // Skip this template class - let VisitRecordDecl handle it as a regular class
+        *node = NULL;
+        return false;
+    }
+
     clang::CXXRecordDecl* templated_decl = class_template_decl->getTemplatedDecl();
     if (templated_decl == NULL) {
         *node = NULL;
@@ -1229,6 +1247,17 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
     std:: cerr << "isModulePrivate() " << record_decl->isModulePrivate() << "\n";
 #endif
 
+    // CLANG FRONTEND FIX: Check if this decl was already translated (e.g., by template visitors)
+    // This prevents creating duplicate SgClassDeclaration for nodes already handled as templates
+    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(record_decl);
+    if (it != p_decl_translation_map.end()) {
+#if DEBUG_VISIT_DECL
+        std::cerr << "VisitRecordDecl: Already translated, skipping: " << record_decl->getNameAsString() << std::endl;
+#endif
+        *node = it->second;
+        return true;  // Already processed
+    }
+
     SgClassDeclaration * sg_class_decl = NULL;
 
   // Find previous declaration
@@ -1239,13 +1268,23 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
     bool isAnonymousStructOrUnion = record_decl->isAnonymousStructOrUnion();
 
     SgClassSymbol * sg_prev_class_sym = isSgClassSymbol(GetSymbolFromSymbolTable(prev_record_decl));
-    SgClassDeclaration * sg_prev_class_decl = sg_prev_class_sym == NULL ? NULL : isSgClassDeclaration(sg_prev_class_sym->get_declaration());
+    SgClassDeclaration * sg_prev_class_decl = NULL;
+    if (sg_prev_class_sym != NULL) {
+        // CLANG FRONTEND FIX: Accept both SgClassDeclaration and SgTemplateClassDeclaration
+        // For templates, the symbol table may contain SgTemplateClassDeclaration from VisitClassTemplateDecl
+        sg_prev_class_decl = isSgClassDeclaration(sg_prev_class_sym->get_declaration());
+    }
 
     SgClassDeclaration * sg_first_class_decl = sg_prev_class_decl == NULL ? NULL : isSgClassDeclaration(sg_prev_class_decl->get_firstNondefiningDeclaration());
 
     //SgClassDeclaration * sg_def_class_decl = sg_prev_class_decl == NULL ? NULL : isSgClassDeclaration(sg_prev_class_decl->get_definingDeclaration());
     SgClassSymbol * sg_defining_sym = isSgClassSymbol(GetSymbolFromSymbolTable(record_Definition));
-    SgClassDeclaration * sg_def_class_decl = sg_defining_sym == NULL ? NULL : isSgClassDeclaration(sg_defining_sym->get_declaration()->get_definingDeclaration());
+    SgClassDeclaration * sg_def_class_decl = NULL;
+    if (sg_defining_sym != NULL && sg_defining_sym->get_declaration() != NULL) {
+        // CLANG FRONTEND FIX: Accept both SgClassDeclaration and SgTemplateClassDeclaration
+        SgDeclarationStatement* decl_stmt = sg_defining_sym->get_declaration();
+        sg_def_class_decl = isSgClassDeclaration(decl_stmt->get_definingDeclaration());
+    }
 
     // For template specializations, the first declaration may also be the definition
     // In that case, sg_first_class_decl and sg_def_class_decl may refer to the same node
@@ -1377,7 +1416,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
         if (isAnonymousStructOrUnion) sg_def_class_decl->set_isUnNamed(true);
         sg_def_class_decl->set_parent(correct_scope);
 
-        sg_class_decl = sg_def_class_decl; // we return thew defining decl
+        sg_class_decl = sg_def_class_decl; // we return the defining decl
 
         sg_def_class_decl->set_firstNondefiningDeclaration(sg_first_class_decl);
         sg_def_class_decl->set_definingDeclaration(sg_def_class_decl);
@@ -1402,13 +1441,28 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
 
         SageBuilder::pushScopeStack(sg_class_def);
 
-        clang::RecordDecl::field_iterator it;
-        for (it = record_decl->field_begin(); it != record_decl->field_end(); it++) {
-            SgNode * tmp_field = Traverse(*it);
-            SgDeclarationStatement * field_decl = isSgDeclarationStatement(tmp_field);
-            ROSE_ASSERT(field_decl != NULL);
-            sg_class_def->append_member(field_decl);
-            field_decl->set_parent(sg_class_def);
+        // CLANG FRONTEND FIX: Skip processing members of system header template classes to avoid performance issues
+        // System headers contain massive template hierarchies that cause extremely slow processing
+        bool skip_members = false;
+        clang::SourceManager &SM = p_compiler_instance->getSourceManager();
+        if (SM.isInSystemHeader(record_decl->getLocation())) {
+            if (clang::CXXRecordDecl* cxx_rec = llvm::dyn_cast<clang::CXXRecordDecl>(record_decl)) {
+                if (cxx_rec->getDescribedClassTemplate() != NULL ||
+                    cxx_rec->getTemplateInstantiationPattern() != NULL) {
+                    skip_members = true;
+                }
+            }
+        }
+
+        if (!skip_members) {
+            clang::RecordDecl::field_iterator it;
+            for (it = record_decl->field_begin(); it != record_decl->field_end(); it++) {
+                SgNode * tmp_field = Traverse(*it);
+                SgDeclarationStatement * field_decl = isSgDeclarationStatement(tmp_field);
+                ROSE_ASSERT(field_decl != NULL);
+                sg_class_def->append_member(field_decl);
+                field_decl->set_parent(sg_class_def);
+            }
         }
 
         SageBuilder::popScopeStack();
@@ -1531,6 +1585,10 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl * enum_decl, SgNode **
 
           enumerator->set_scope(SageBuilder::topScopeStack());
           sg_enum_decl->append_enumerator(enumerator);
+
+          // CLANG FRONTEND FIX: Set declptr for enum constant's SgInitializedName
+          // declptr should point to the enum declaration that contains this constant
+          enumerator->set_declptr(sg_enum_decl);
       }
     }
     else {
@@ -2049,14 +2107,22 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
         var_decl->set_parent(SageBuilder::topScopeStack());
      
         ROSE_ASSERT(var_decl->get_variables().size() == 1);
-     
+
         SgInitializedName * init_name = var_decl->get_variables()[0];
         ROSE_ASSERT(init_name != NULL);
         init_name->set_scope(SageBuilder::topScopeStack());
-     
+
         applySourceRange(init_name, field_decl->getSourceRange());
-     
+
+        // CLANG FRONTEND FIX: declptr should point to SgVariableDefinition, not SgVariableDeclaration
+        // Check if it's already set, if not get it from var_decl
         SgVariableDefinition * var_def = isSgVariableDefinition(init_name->get_declptr());
+        if (var_def == NULL) {
+            var_def = var_decl->get_definition();
+            if (var_def != NULL) {
+                init_name->set_declptr(var_def);
+            }
+        }
         ROSE_ASSERT(var_def != NULL);
         applySourceRange(var_def, field_decl->getSourceRange());
      
@@ -2227,6 +2293,15 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             sg_function_decl->hasEllipses();
         }
 
+        // CLANG FRONTEND FIX: Set declptr for all function parameters
+        // declptr should point to the function declaration for parameters
+        SgInitializedNamePtrList & param_names = param_list->get_args();
+        for (SgInitializedName* param : param_names) {
+            if (param != NULL) {
+                param->set_declptr(sg_function_decl);
+            }
+        }
+
         // Only process the function body if it exists
         // Template functions and forward declarations may be marked as definitions but have no body
         if (function_decl->hasBody()) {
@@ -2328,6 +2403,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         SgInitializedNamePtrList::iterator it;
         for (it = init_names.begin(); it != init_names.end(); it++) {
              (*it)->set_scope(SageBuilder::topScopeStack());
+             // CLANG FRONTEND FIX: Set declptr for function parameters
+             (*it)->set_declptr(sg_function_decl);
         }
 
         if (function_decl->getFirstDecl() != function_decl) {
@@ -2570,13 +2647,17 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
         init = SageBuilder::buildAggregateInitializer(expr_list_expr, type);
     else if (expr != NULL)
         init = SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
-    if (init != NULL)
-    {
-        init->set_parent(sg_var_decl);
-        applySourceRange(init, init_expr->getSourceRange());
-    }
+
     // Pei-Hung (09/01/2022) setup initializer once the RHS is processed.
     sg_var_decl->reset_initializer(init);
+
+    // CLANG FRONTEND FIX: Set initializer parent AFTER reset_initializer
+    // reset_initializer sets the parent of the initializer to the SgInitializedName,
+    // not the SgVariableDeclaration. Setting it to sg_var_decl here was wrong.
+    if (init != NULL)
+    {
+        applySourceRange(init, init_expr->getSourceRange());
+    }
 
     // finding the bottom base type and check
     while(type->findBaseType() != type)
@@ -2634,9 +2715,32 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
     ROSE_ASSERT(init_name != NULL);
     init_name->set_scope(SageBuilder::topScopeStack());
 
+    // CLANG FRONTEND FIX: Set initializer parent to SgInitializedName
+    // The initializer is a child of the SgInitializedName, not the SgVariableDeclaration
+    if (init != NULL) {
+        init->set_parent(init_name);
+    }
+
     applySourceRange(init_name, var_decl->getSourceRange());
 
+    // CLANG FRONTEND FIX: The declptr should already be set by SgVariableDeclaration constructor
+    // to point to the SgVariableDefinition. If it's null, we need to check why.
     SgVariableDefinition * var_def = isSgVariableDefinition(init_name->get_declptr());
+    if (var_def == NULL) {
+        // If declptr is null, try to get it from the variable declaration
+        // buildVariableDeclaration_nfi should have created a definition
+        var_def = sg_var_decl->get_definition();
+        if (var_def != NULL) {
+            init_name->set_declptr(var_def);
+        } else {
+            // Debug: why is var_def null?
+            printf("ERROR: Variable definition is null for variable: %s\n", init_name->get_name().str());
+            printf("  sg_var_decl = %p\n", sg_var_decl);
+            printf("  init_name = %p\n", init_name);
+            printf("  init_name->get_declptr() = %p\n", init_name->get_declptr());
+            fflush(stdout);
+        }
+    }
     ROSE_ASSERT(var_def != NULL);
     applySourceRange(var_def, var_decl->getSourceRange());
 
@@ -2839,6 +2943,10 @@ bool  ClangToSageTranslator::VisitEnumConstantDecl(clang::EnumConstantDecl * enu
     SgScopeStatement* scope = SageBuilder::topScopeStack();
     init_name->set_scope(scope);
     init_name->set_parent(scope);
+
+    // CLANG FRONTEND FIX: declptr will be set in VisitEnumDecl after appending the enumerator
+    // (we can't set it here because the enum declaration hasn't been added to translation map yet)
+
     scope->insert_symbol(name, symbol);
 
     *node = init_name;

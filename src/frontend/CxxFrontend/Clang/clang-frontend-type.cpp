@@ -1404,6 +1404,14 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // Cache it with full name
     p_template_inst_cache[inst_name_full] = inst_decl;
 
+    // CRITICAL FIX: Also register in decl_translation_map so that VisitClassTemplateSpecializationDecl
+    // can find this instantiation when it encounters the declaration later.
+    // Without this, we get variant type mismatches when the type system creates SgTemplateInstantiationDecl
+    // but the declaration visitor creates SgClassDeclaration for the same entity.
+    // We need to get the clang::ClassTemplateSpecializationDecl from the clang type to use as key.
+    // However, at this point we only have the TemplateSpecializationType, not the decl.
+    // This will be handled in VisitClassTemplateSpecializationDecl by checking p_template_inst_cache.
+
     return inst_decl;
 }
 

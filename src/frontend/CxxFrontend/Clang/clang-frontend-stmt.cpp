@@ -2602,11 +2602,15 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(clang::ImplicitCastExpr * impl
 
     ROSE_ASSERT(expr != NULL);
 
-    // NOTE: Implicit casts are currently passed through as the sub-expression
-    // Creating explicit SgCastExp nodes causes file_id mapping issues
+    // FIX: Pass through implicit casts without creating SgCastExp nodes
+    // EDG frontend doesn't create explicit cast nodes for implicit casts
+    // Creating them breaks parent pointer relationships (e.g., FunctionRefExp parent becomes CastExp instead of FunctionCallExp)
+    // This matches the behavior expected by existing ROSE tests
     *node = expr;
 
-    return VisitCastExpr(implicit_cast_expr, node);
+    // Do NOT call VisitCastExpr - it would wrap the expression in a SgCastExp
+    // Instead, just call VisitExpr to set type information
+    return VisitExpr(implicit_cast_expr, node);
 }
 
 bool ClangToSageTranslator::VisitCharacterLiteral(clang::CharacterLiteral * character_literal, SgNode ** node) {
