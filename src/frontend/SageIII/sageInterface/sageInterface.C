@@ -16064,16 +16064,41 @@ PreprocessingInfo* SageInterface::insertHeader(const string& filename, Preproces
 
      if (stmtList.size() > 0) // the source file is not empty
         {
+          // FIX (Clang frontend): First try to find a declaration from the source file itself.
+          // Only fall back to transformation-generated declarations if no source file declarations exist.
+          // This ensures the #include appears in the output (transformation nodes may not be unparsed).
+          SgDeclarationStatement* targetDecl = NULL;
+          SgDeclarationStatement* fallbackDecl = NULL;
+
           for (SgDeclarationStatementPtrList::iterator j = stmtList.begin (); j != stmtList.end (); j++)
              {
             // must have this judgement, otherwise wrong file will be modified!
             // It could also be the transformation generated statements with #include attached
-               if ( ((*j)->get_file_info())->isSameFile(srcScope->get_file_info ()) || ((*j)->get_file_info ())->isTransformation() )
+
+               // Prefer declarations from the source file over transformation-generated ones
+               if ( ((*j)->get_file_info())->isSameFile(srcScope->get_file_info ()) )
                   {
-                    result = new PreprocessingInfo(PreprocessingInfo::CpreprocessorIncludeDeclaration, content, "Transformation generated",0, 0, 0, PreprocessingInfo::before);
-                    ROSE_ASSERT(result != NULL);
+                    targetDecl = *j;
+                    break;  // Found a source file declaration, use it
+                  }
+               else if ( ((*j)->get_file_info ())->isTransformation() && fallbackDecl == NULL)
+                  {
+                    fallbackDecl = *j;  // Save as fallback
+                  }
+             }
+
+          // Use source file declaration if found, otherwise use transformation fallback
+          if (targetDecl == NULL && fallbackDecl != NULL)
+             {
+               targetDecl = fallbackDecl;
+             }
+
+          if (targetDecl != NULL)
+             {
+               result = new PreprocessingInfo(PreprocessingInfo::CpreprocessorIncludeDeclaration, content, "Transformation generated",0, 0, 0, PreprocessingInfo::before);
+               ROSE_ASSERT(result != NULL);
 #if 0
-                    printf ("Building a PreprocessingInfo: result = %p \n",result);
+                    printf ("Building a PreprocessingInfo: result = %p content = '%s'\n",result, content.c_str());
 #endif
                  // DQ (3/22/2019): Fixing this to work with the token-based unparsing.
                  // add to the last position
@@ -16083,20 +16108,20 @@ PreprocessingInfo* SageInterface::insertHeader(const string& filename, Preproces
 
                     if (supportTokenUnparsing == false)
                        {
-                         (*j)->addToAttachedPreprocessingInfo(result,position);
+                         targetDecl->addToAttachedPreprocessingInfo(result,position);
                        }
                       else
                        {
-                         (*j)->addToAttachedPreprocessingInfo(result,position);
+                         targetDecl->addToAttachedPreprocessingInfo(result,position);
 #if 0
                          printf ("In SageInterface::insertHeader(): Calling set_containsTransformationToSurroundingWhitespace(true) \n");
 #endif
 #if 1
                       // DQ (12/31/2020): Set the whitespace around the statement as being modified.
-                         (*j)->set_containsTransformationToSurroundingWhitespace(true);
+                         targetDecl->set_containsTransformationToSurroundingWhitespace(true);
 #endif
 #if 0
-                         SgDeclarationStatement* declarationStatement = *j;
+                         SgDeclarationStatement* declarationStatement = targetDecl;
 
                       // DQ (1/5/2021): Don't call unparseToString, since this triggers the unparer which then unparses
                       // from the token stream and makrs some token stream elements as already unparsed.
@@ -16128,16 +16153,9 @@ PreprocessingInfo* SageInterface::insertHeader(const string& filename, Preproces
 
                          emptyDeclaration->addToAttachedPreprocessingInfo(result, position);
 
-                         globalScope->insert_statement(*j,emptyDeclaration);
+                         globalScope->insert_statement(targetDecl,emptyDeclaration);
 #endif
                        }
-#if 0
-                    printf ("break out of for loop: result = %p \n",result);
-#endif
-                 // DQ (8/12/2020): This is a compiler warning.
-                 // successful = true;
-                    break;
-                  }
              }
         }
        else // empty file, attach it after SgGlobal,TODO it is not working for unknown reason!!
@@ -18790,6 +18808,20 @@ SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(const vector<SgDecla
       vector<SgDeclarationStatement*>::const_iterator j = find (sortedNode.begin(), sortedNode.end(), *i);
       if (j == sortedNode.end())
         sortedNode.push_back(*i);
+    }
+  }
+
+  // FIX (Clang frontend): Handle compiler-generated nodes that don't appear in AST traversal
+  // Some nodes (e.g., compiler-generated functions) may not have valid source positions
+  // and won't be found by NodeQuery. Append these to the end of the sorted list.
+  for (vector<SgDeclarationStatement*>::const_iterator iter = nodevec.begin(); iter != nodevec.end(); iter++)
+  {
+    vector<SgDeclarationStatement*>::const_iterator j = find(sortedNode.begin(), sortedNode.end(), *iter);
+    if (j == sortedNode.end())
+    {
+      // This node wasn't found in the AST traversal (likely compiler-generated)
+      // Append it to the end
+      sortedNode.push_back(*iter);
     }
   }
 

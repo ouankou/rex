@@ -1456,6 +1456,11 @@ mangleExpression (const SgExpression* expr)
           mangled_name << "_bFunctionParameterRefExp_" << std::hex << e << "_eFunctionParameterRefExp_";
           break;
         }
+        case V_SgNullExpression: {
+          // Handle null expressions (placeholders for unsupported C++ constructs)
+          mangled_name << "_bNullExpr_";
+          break;
+        }
         default: {
           printf("In mangleExpression: Unsupported expression %p (%s)\n", expr, expr ? expr->class_name().c_str() : "");
           ROSE_ABORT();

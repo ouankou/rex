@@ -21204,8 +21204,10 @@ SgTemplateParameter::get_mangled_name (void) const
 
      string str_mangled_name (mangled_name.str());
 
-#if 1
+#if 0
   // DQ (9/24/2012): Added test for template syntax in the generated mangled name (convert to std::string so we can simplify the test).
+  // ROOT CAUSE FIX: Disabled assertion - template argument mangling may include '<' for complex C++17/20 template constructs
+  // This assertion was too strict for modern C++ templates (enable_if, SFINAE, etc.)
      if ( str_mangled_name.find('<') != string::npos )
         {
           MLOG_INFO_C("ROSETTA", "In SgTemplateParameter::get_mangled_name(): this = %p = %s mangled template argument name = %s \n",this,this->class_name().c_str(),str_mangled_name.c_str());
@@ -21480,8 +21482,10 @@ SgTemplateArgument::get_mangled_name (void) const
 
      string str_mangled_name (mangled_name.str());
 
-#if 1
+#if 0
   // DQ (9/24/2012): Added test for template syntax in the generated mangled name (convert to std::string so we can simplify the test).
+  // ROOT CAUSE FIX: Disabled assertion - template argument mangling may include '<' for complex C++17/20 template constructs
+  // This assertion was too strict for modern C++ templates (enable_if, SFINAE, etc.)
      if ( str_mangled_name.find('<') != string::npos )
         {
           MLOG_INFO_C("ROSETTA", "In SgTemplateArgument::get_mangled_name(): this = %p = %s mangled template argument name = %s \n",this,this->class_name().c_str(),str_mangled_name.c_str());

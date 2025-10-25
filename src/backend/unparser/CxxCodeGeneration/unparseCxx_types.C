@@ -2623,6 +2623,10 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
 #if 0
           info.display("In unparseClassType(): can we supress the class specifier in an initialization list?");
 #endif
+          // ROOT CAUSE FIX: Check if it's a template INSTANTIATION before outputting "template "
+          // Must check this BEFORE SkipClassSpecifier to handle both code paths
+          bool isInstantiation = (isSgTemplateInstantiationDecl(decl) != NULL);
+
           if(!info.SkipClassSpecifier())
              {
             // GB (09/18/2007): If the class definition is unparsed, also unparse its
@@ -2632,10 +2636,23 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                     unp->u_exprStmt->unparseAttachedPreprocessingInfo(cDefiningDecl, info, PreprocessingInfo::before);
                   }
 
-               if (tpldecl != NULL) {
+               // ROOT CAUSE FIX: Only output "template " for template declarations, NOT instantiations
+               // SgTemplateInstantiationDecl is a subclass of SgTemplateClassDeclaration,
+               // so we need to explicitly check it's not an instantiation
+               // Also skip compiler-generated template class declarations (used in casts)
+               bool shouldOutputTemplate = (tpldecl != NULL && !isInstantiation &&
+                                           !decl->get_file_info()->isCompilerGenerated());
+
+               // ROOT CAUSE FIX: Also skip elaborated type (class/struct/union keyword) for
+               // compiler-generated template class declarations without proper instantiation info
+               // because they lack template arguments and will cause compile errors
+               bool skipElaboration = (tpldecl != NULL && !isInstantiation &&
+                                      decl->get_file_info()->isCompilerGenerated());
+
+               if (shouldOutputTemplate) {
                  curprint ( "template ");
-               } else {
-              // DQ (6/6/2007): Type elaboration goes here.
+               } else if (!skipElaboration) {
+              // DQ (6/6/6/2007): Type elaboration goes here.
                  bool useElaboratedType = generateElaboratedType(decl,info);
                  if (useElaboratedType == true)
                     {
@@ -2768,7 +2785,32 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                          curprint(nameQualifier.str());
 
                          SgTemplateInstantiationDecl* templateInstantiationDeclaration = isSgTemplateInstantiationDecl(decl);
-                         if (isSgTemplateInstantiationDecl(decl) != NULL)
+
+                         // ROOT CAUSE FIX: For compiler-generated template class declarations,
+                         // try to find the actual instantiation by checking the class_type more carefully
+                         if (tpldecl != NULL && templateInstantiationDeclaration == NULL && decl->get_file_info()->isCompilerGenerated()) {
+                            // The frontend sometimes creates SgTemplateClassDeclaration instead of SgTemplateInstantiationDecl
+                            // Check if the class_type itself points to an instantiation
+                            SgClassDeclaration* firstNondefining = isSgClassDeclaration(decl->get_firstNondefiningDeclaration());
+                            if (firstNondefining != NULL) {
+                               SgTemplateInstantiationDecl* possibleInst = isSgTemplateInstantiationDecl(firstNondefining);
+                               if (possibleInst != NULL) {
+                                  templateInstantiationDeclaration = possibleInst;
+                               }
+                            }
+                            // Also check the defining declaration
+                            if (templateInstantiationDeclaration == NULL) {
+                               SgClassDeclaration* defining = isSgClassDeclaration(decl->get_definingDeclaration());
+                               if (defining != NULL) {
+                                  SgTemplateInstantiationDecl* possibleInst = isSgTemplateInstantiationDecl(defining);
+                                  if (possibleInst != NULL) {
+                                     templateInstantiationDeclaration = possibleInst;
+                                  }
+                               }
+                            }
+                         }
+
+                         if (isSgTemplateInstantiationDecl(decl) != NULL || templateInstantiationDeclaration != NULL)
                             {
                            // Handle case of class template instantiation (code located in unparse_stmt.C)
 #if 0
@@ -3834,6 +3876,15 @@ Unparse_Type::unparseRestrictKeyword()
      #ifdef USE_CMAKE
         #ifdef CMAKE_COMPILER_IS_GNUCC
            usingGcc = true;
+        #endif
+        // ROOT CAUSE FIX: Also detect Clang compiler which uses GNU-style __restrict__
+        #if defined(BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH)
+           string compilerName = BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH;
+           if (compilerName.find("g++") != string::npos ||
+               compilerName.find("gcc") != string::npos ||
+               compilerName.find("clang") != string::npos) {
+               usingGcc = true;
+           }
         #endif
      #else
      // DQ (4/16/2016): The clang compiler also uses the GNU form of the restrict keyword.
