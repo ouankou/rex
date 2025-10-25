@@ -169,6 +169,11 @@ static CFGNode getNodeJustAfterInContainer(SgNode* n) {
   // Only handles next-statement control flow
   SgNode* parent = n->get_parent();
 
+  if (parent == NULL) {
+      printf("ERROR: getNodeJustAfterInContainer: node has NULL parent\n");
+      printf("  n = %p = %s\n", n, n ? n->class_name().c_str() : "NULL");
+      fflush(stdout);
+  }
   ROSE_ASSERT(parent != NULL);
 
 #if DEBUG_CALLGRAPH
@@ -1229,6 +1234,18 @@ SgVariableDeclaration::cfgIndexForEnd() const {
 unsigned int
 SgVariableDeclaration::cfgFindChildIndex(SgNode* n) {
     size_t idx = this->get_childIndex(n);
+    if (idx == Rose::INVALID_INDEX) {
+        printf("ERROR: cfgFindChildIndex: child not found in parent\n");
+        printf("  this = %p = %s\n", this, this->class_name().c_str());
+        printf("  n = %p = %s\n", n, n ? n->class_name().c_str() : "NULL");
+        printf("  n->get_parent() = %p\n", n ? n->get_parent() : NULL);
+        printf("  variables.size() = %zu\n", this->get_variables().size());
+        for (size_t i = 0; i < this->get_variables().size(); i++) {
+            printf("    variable[%zu] = %p = %s\n", i, this->get_variables()[i],
+                   this->get_variables()[i]->get_name().str());
+        }
+        fflush(stdout);
+    }
     ROSE_ASSERT (idx != Rose::INVALID_INDEX); // Not found
     ROSE_ASSERT (idx != 0); // Not found
     return idx - 1;

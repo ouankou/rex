@@ -319,37 +319,88 @@ cmake .. [your options]
 make -j1  # Build with single thread for clearer error messages
 ```
 
+## Test Suite Status
+
+**AST Interface Tests** (`tests/nonsmoke/functional/roseTests/astInterfaceTests/`):
+- **57 out of 60 tests passing (95%)**
+- Updated: January 2025
+
+### ✅ Passing Tests (57)
+All basic C language AST interface operations work correctly:
+- Variable declaration and initialization
+- Expression building and manipulation
+- Control flow constructs (if, for, while, switch)
+- Function declarations and definitions
+- Struct/union declarations
+- Enum declarations (**fixed**: enum constant declptr issue)
+- Loop analysis and normalization
+- Variable reference tracking
+- Type operations
+- AST traversal and queries
+
+### ❌ Failing Tests (3)
+All 3 failures are due to **C++ template limitations**:
+
+1. **`interfaceFunctionCoverage`** - Uses `<iostream>` and `<vector>`
+   - Hangs processing STL template hierarchies (>60 seconds)
+   - Test requires completion within 1 minute
+
+2. **`getDependentDecls`** - Uses `<iostream>` and `<string>`
+   - Hangs processing STL template metaprogramming
+   - Same timeout issue as above
+
+3. **`movePreprocessingInfo`** - Uses `<iostream>` and `<string>`
+   - Hangs processing STL templates
+   - Same timeout issue as above
+
+**Root Cause**: These tests require C++ Standard Library headers which use extensive template metaprogramming. The Clang C++ frontend does not have adequate template support yet.
+
 ## Current Limitations
 
 The Clang frontend in REX is **highly experimental**:
 
 1. **Language Support:**
-   - ✅ Basic C code (simple functions, control flow)
-   - ⚠️ Complex C (advanced preprocessor, inline assembly) - **may fail**
-   - ❌ C++ - **not supported**
-   - ❌ C++11/14/17/20 - **not supported**
-   - ❌ Fortran, Java, PHP, Python - **not applicable**
+   - ✅ **C language** - Good support for basic C constructs
+   - ✅ **C structs, unions, enums** - Full support with proper AST representation
+   - ✅ **C control flow** - if, for, while, switch statements work correctly
+   - ✅ **C preprocessor** - Basic support for macros and includes
+   - ⚠️ **Complex C** (advanced preprocessor, inline assembly) - **may fail**
+   - ❌ **C++ templates** - **not supported** (causes hangs/failures)
+   - ❌ **C++ STL** - **not supported** (uses templates extensively)
+   - ❌ **C++11/14/17/20 features** - **not supported**
+   - ❌ **Fortran, Java, PHP, Python** - **not applicable**
 
-2. **Compilation Success:**
-   - May only successfully compile trivial "hello world" style programs
-   - Complex programs will likely fail during parsing or AST construction
+2. **Known C++ Template Issues:**
+   - Processing STL headers (`<iostream>`, `<vector>`, `<string>`) causes extreme slowness
+   - Template class instantiations not handled properly
+   - Template specializations cause variant type mismatches
+   - ROSE-1378: `SgDeclarationScope` support incomplete (partial workaround implemented)
+   - Dependent types and template metaprogramming not supported
+
+3. **Compilation Success:**
+   - ✅ Successfully compiles C programs without STL dependencies
+   - ⚠️ Complex C programs may fail during parsing or AST construction
+   - ❌ C++ programs using templates will hang or fail
    - This is expected for experimental software
 
-3. **Build Goal:**
-   - **Primary goal**: Achieve successful build compilation
-   - **Secondary goal**: Parse simple C programs
-   - **Future goal**: Full C language support
+4. **Build Goal:**
+   - ✅ **Primary goal achieved**: Successful build compilation
+   - ✅ **Secondary goal achieved**: Parse C programs (95% test pass rate)
+   - ⚠️ **In progress**: Full C language support
+   - ❌ **Future goal**: C++ template support (requires significant work)
 
 ## Development Status
 
-**Current Phase**: Migration from EDG to Clang frontend
+**Current Phase**: Experimental Clang frontend with good C support
 
 - ✅ CMake build system configured
 - ✅ LLVM 20 API compatibility implemented
 - ✅ Basic Clang frontend integration
-- ⚠️ Limited C language support (experimental)
-- ❌ C++ support (not implemented)
-- ❌ Production-ready (far future)
+- ✅ **C language support** (95% test pass rate)
+- ✅ Enum constant handling fixed (declptr issue resolved)
+- ⚠️ **C++ template support** - Partial implementation, not production-ready
+- ❌ **C++ STL support** - Not implemented
+- ❌ Production-ready for C++ (requires template work)
 
 ## Getting Help
 

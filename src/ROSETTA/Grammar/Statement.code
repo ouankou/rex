@@ -6289,8 +6289,10 @@ SgScopeStatement::getDeclarationList ()
           case V_SgDeclarationScope:
              {
             // TV (09/16/2018): (ROSE-1378) TODO
-               ROSE_ASSERT(!"ROSE-1378");
-               break;
+            // CLANG FRONTEND FIX: Return empty list for SgDeclarationScope instead of asserting
+            // This is a temporary workaround for C++ template processing until full support is implemented
+               static SgDeclarationStatementPtrList empty_list;
+               return empty_list;
              }
 #endif
           default:
@@ -6365,8 +6367,10 @@ SgScopeStatement::getDeclarationList () const
           case V_SgDeclarationScope:
              {
             // TV (09/16/2018): (ROSE-1378) TODO
-               ROSE_ASSERT(!"ROSE-1378");
-               break;
+            // CLANG FRONTEND FIX: Return empty list for SgDeclarationScope instead of asserting
+            // This is a temporary workaround for C++ template processing until full support is implemented
+               static SgDeclarationStatementPtrList empty_list;
+               return empty_list;
              }
 
           default:
