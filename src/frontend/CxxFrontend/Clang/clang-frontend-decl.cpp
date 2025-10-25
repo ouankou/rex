@@ -258,7 +258,9 @@ ClangToSageTranslator::translateTemplateParameter(
         sg_param->set_initializedName(init_name);
         init_name->set_parent(sg_param);
 
-        // CLANG FRONTEND FIX: Set declptr for template parameter's SgInitializedName
+        // NOTE: Template parameters don't set declptr. SgTemplateParameter is an SgSupport node,
+        // not an SgDeclarationStatement, so it cannot be used with set_declptr().
+        // The parent relationship (set above) is sufficient for template parameters.
 
         if (non_type_param->hasDefaultArgument()) {
             const clang::TemplateArgumentLoc& default_loc = non_type_param->getDefaultArgument();
@@ -303,7 +305,9 @@ ClangToSageTranslator::translateTemplateParameter(
         init_name->set_parent(sg_param);
         sg_param->set_initializedName(init_name);
 
-        // CLANG FRONTEND FIX: Set declptr for template template parameter's SgInitializedName
+        // NOTE: Template parameters don't set declptr. SgTemplateParameter is an SgSupport node,
+        // not an SgDeclarationStatement, so it cannot be used with set_declptr().
+        // The parent relationship (set above) is sufficient for template parameters.
     } else {
         std::cerr << "Warning: Unsupported template parameter kind: "
                   << param_decl->getDeclKindName() << std::endl;
@@ -2654,7 +2658,8 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
     // CLANG FRONTEND FIX: Set initializer parent AFTER reset_initializer
     // reset_initializer sets the parent of the initializer to the SgInitializedName,
     // not the SgVariableDeclaration. Setting it to sg_var_decl here was wrong.
-    if (init != NULL)
+    // Only apply source range if we have both the initializer and the original expression
+    if (init != NULL && init_expr != NULL)
     {
         applySourceRange(init, init_expr->getSourceRange());
     }
