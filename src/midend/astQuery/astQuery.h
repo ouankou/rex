@@ -85,95 +85,6 @@ namespace AstQueryNamespace
       }
     };
 
-  // ============================================================================
-  // REX Function Pointer Adapters (Temporary Workaround)
-  // ============================================================================
-  //
-  // BACKGROUND: C++17 removed std::ptr_fun, std::unary_function, and
-  // std::binary_function as deprecated features. However, ROSE's legacy AST query
-  // templates (querySubTree, queryMemoryPool, queryNodeList, queryRange) explicitly
-  // access typename NodeFunctional::result_type (and argument_type typedefs), which
-  // makes them incompatible with:
-  //   - Modern C++11+ lambdas (no result_type typedef)
-  //   - std::function wrappers (no result_type or argument_type typedefs)
-  //   - Raw function pointers (no typedef members)
-  //
-  // PROBLEM: The templates use explicit typedef access like:
-  //   template<typename NodeFunctional>
-  //   typename NodeFunctional::result_type querySubTree(...) { ... }
-  //
-  // This requires NodeFunctional to provide result_type as a member typedef.
-  //
-  // SOLUTION: These adapters wrap function pointers and provide ALL the typedefs
-  // that the deprecated std::ptr_fun used to provide:
-  //   - result_type
-  //   - argument_type (for unary functions)
-  //   - first_argument_type, second_argument_type (for binary functions)
-  //
-  // This is a TEMPORARY workaround. The proper long-term solution is to modernize
-  // the template infrastructure to use std::invoke_result_t (C++17) for type
-  // deduction. See MODERNIZATION_ISSUE.md for the full modernization roadmap.
-  //
-  // USAGE: Replace std::ptr_fun(__x) calls with rex_ptr_fun(__x)
-  //
-  // Used in 21 locations across:
-  //   - src/midend/astQuery/astQuery.h (2 locations)
-  //   - src/midend/astQuery/numberQuery.C (8 locations)
-  //   - src/midend/astQuery/nameQuery.C (8 locations)
-  //   - src/midend/astQuery/nodeQuery.C (3 locations)
-  // ============================================================================
-
-  // Unary function pointer adapter
-  template<typename _Arg, typename _Result>
-  struct rex_unary_ptr_fun {
-    using argument_type = _Arg;
-    using result_type = _Result;
-
-    explicit rex_unary_ptr_fun(_Result (*__pf)(_Arg)) : _M_ptr(__pf) {}
-
-    _Result operator()(_Arg __x) const {
-      return _M_ptr(__x);
-    }
-
-  private:
-    _Result (*_M_ptr)(_Arg);
-  };
-
-  // Binary function pointer adapter
-  template<typename _Arg1, typename _Arg2, typename _Result>
-  struct rex_binary_ptr_fun {
-    using first_argument_type = _Arg1;
-    using second_argument_type = _Arg2;
-    using result_type = _Result;
-
-    explicit rex_binary_ptr_fun(_Result (*__pf)(_Arg1, _Arg2)) : _M_ptr(__pf) {}
-
-    _Result operator()(_Arg1 __x, _Arg2 __y) const {
-      return _M_ptr(__x, __y);
-    }
-
-  private:
-    _Result (*_M_ptr)(_Arg1, _Arg2);
-  };
-
-  // Factory function for unary function pointers
-  template<typename _Arg, typename _Result>
-  inline rex_unary_ptr_fun<_Arg, _Result>
-  rex_ptr_fun(_Result (*__pf)(_Arg)) {
-    return rex_unary_ptr_fun<_Arg, _Result>(__pf);
-  }
-
-  // Factory function for binary function pointers
-  template<typename _Arg1, typename _Arg2, typename _Result>
-  inline rex_binary_ptr_fun<_Arg1, _Arg2, _Result>
-  rex_ptr_fun(_Result (*__pf)(_Arg1, _Arg2)) {
-    return rex_binary_ptr_fun<_Arg1, _Arg2, _Result>(__pf);
-  }
-
-  // ============================================================================
-  // End of REX Function Pointer Adapters
-  // ============================================================================
-
   enum QueryDepth
   {
     UnknownListElementTypeQueryDepth = 0,
@@ -264,7 +175,7 @@ namespace AstQueryNamespace
 
     //When a node satisfies a functional it is added to
     //this list.
-    typedef typename NodeFunctional::result_type AstQueryReturnType;
+    typedef std::invoke_result_t<NodeFunctional, SgNode*> AstQueryReturnType;
     AstQueryReturnType listOfNodes;
     public:
     AstQuery();
@@ -340,7 +251,7 @@ namespace AstQueryNamespace
 #endif
 
       // This function assemble the elements of the input list (a list of lists) to form the output (a single list)
-      AstQueryNamespace::Merge(listOfNodes, nodeFunc->operator()(node));
+      AstQueryNamespace::Merge(listOfNodes, (*nodeFunc)(node));
     }
 
 
@@ -353,7 +264,7 @@ namespace AstQueryNamespace
    * the criteria specified in and returned by the predicate in the second argument.
    ********************************************************************************/
 template<typename NodeFunctional>
-    typename NodeFunctional::result_type 
+    std::invoke_result_t<NodeFunctional, SgNode*>
     querySubTree(SgNode* node, NodeFunctional nodeFunc, AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes,
         t_traverseOrder treeTraversalOrder = preorder)
     {
@@ -415,11 +326,11 @@ template<typename NodeFunctional>
    ** will query the subtree of the IR node in the first argument for nodes satisfying
    * the criteria specified in and returned by the function pointer in the second argument.
    ********************************************************************************/
-  template <class _Arg, class _Result> 
+  template <class _Arg, class _Result>
      _Result querySubTree ( SgNode * subTree,
         _Result (*__x)(SgNode*,_Arg), _Arg x_arg,
         AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes ){
-      return querySubTree(subTree,std::bind(std::ptr_fun(__x),std::placeholders::_1,x_arg),defineQueryType);
+      return querySubTree(subTree,std::bind(__x,std::placeholders::_1,x_arg),defineQueryType);
     }
 
   /********************************************************************************
@@ -434,7 +345,7 @@ template<typename NodeFunctional>
      _Result querySubTree ( SgNode * subTree,
         _Result (*__x)(SgNode*),
         AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes ){
-      return querySubTree(subTree,rex_ptr_fun(__x),defineQueryType);
+      return querySubTree(subTree,__x,defineQueryType);
     }
 
   /********************************************************************************
@@ -445,8 +356,8 @@ template<typename NodeFunctional>
    * the criteria specified in and returned by the predicate in the third argument.
    ********************************************************************************/
   template <class Iterator, class NodeFunctional>
-    typename NodeFunctional::result_type 
-    queryRange(Iterator begin, Iterator end, 
+    std::invoke_result_t<NodeFunctional, SgNode*>
+    queryRange(Iterator begin, Iterator end,
         NodeFunctional nodeFunc){
 
       AstQuery<AstQuery_DUMMY,NodeFunctional> astQuery(&nodeFunc);
@@ -470,13 +381,13 @@ template<typename NodeFunctional>
   template <class _Arg, class _Result>
     _Result queryRange ( typename _Result::iterator begin, const typename _Result::iterator end,
         _Result (*__x)(SgNode*,_Arg), _Arg x_arg){
-      return queryRange(begin,end,std::bind(rex_ptr_fun(__x), std::placeholders::_1,x_arg));
+      return queryRange(begin,end,std::bind(__x, std::placeholders::_1,x_arg));
     }
 
   /********************************************************************************
    * The function
    * _Result queryRange(typename _Result::const_iterator& begin, typename _Result::const_iterator& end,
-   *                   _Result (*__x)(SgNode*), 
+   *                   _Result (*__x)(SgNode*),
    *                   AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes )
    * will query the iterator _Result::const_iterator from 'begin' to 'end' for IR nodes satisfying
    * the criteria specified in and returned by the function pointer in the third argument.
@@ -484,7 +395,7 @@ template<typename NodeFunctional>
   template <class _Result>
     _Result queryRange (typename _Result::iterator begin, typename _Result::iterator end,
         _Result (*__x)(SgNode*)){
-      return queryRange(begin,end,rex_ptr_fun(__x));
+      return queryRange(begin,end,__x);
     }
 
   /****************************************************************************
@@ -504,7 +415,7 @@ template<typename NodeFunctional>
    * the criteria specified in and returned by the predicate in the second argument.
    ********************************************************************************/
   template<typename NodeFunctional>
-    typename NodeFunctional::result_type 
+    std::invoke_result_t<NodeFunctional, SgNode*>
     queryMemoryPool(NodeFunctional nodeFunc , VariantVector* targetVariantVector = NULL)
     {
 
@@ -549,7 +460,7 @@ template <class _Result>
 _Result queryMemoryPool (
     _Result (*__x)(SgNode*),
     VariantVector* targetVariantVector = NULL ){
-  return queryMemoryPool(rex_ptr_fun(__x),targetVariantVector);
+  return queryMemoryPool(__x,targetVariantVector);
 }
 
 

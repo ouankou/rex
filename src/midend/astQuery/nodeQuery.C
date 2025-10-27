@@ -116,7 +116,7 @@ NodeQuery::getFunction(TypeOfQueryTypeOneParameter oneParam)
         ROSE_ABORT ();
       }
   } /* End switch-case */
-  return AstQueryNamespace::rex_ptr_fun(__x);
+  return __x;
 
 }
 
@@ -163,7 +163,7 @@ NodeQuery::getFunction(TypeOfQueryTypeTwoParameters twoParam)
         ROSE_ABORT ();
       }
   }
-  return AstQueryNamespace::rex_ptr_fun(__x);
+  return __x;
 }
 
 
