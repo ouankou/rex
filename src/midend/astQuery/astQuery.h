@@ -251,7 +251,7 @@ namespace AstQueryNamespace
 #endif
 
       // This function assemble the elements of the input list (a list of lists) to form the output (a single list)
-      AstQueryNamespace::Merge(listOfNodes, (*nodeFunc)(node));
+      AstQueryNamespace::Merge(listOfNodes, std::invoke(*nodeFunc, node));
     }
 
 
