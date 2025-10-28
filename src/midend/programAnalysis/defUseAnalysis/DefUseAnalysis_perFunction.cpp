@@ -951,10 +951,6 @@ FilteredCFGNode<IsDFAFilter> DefUseAnalysisPF::run(
 
   // add this node to worklist and work through the outgoing edges
   FilteredCFGNode<IsDFAFilter> source = FilteredCFGNode<IsDFAFilter> (funcDecl->cfgForBeginning());
-
-// DQ (12/10/2016): Note: Previously had CFGNode(funcDecl->cfgForBeginning()) here but it was unused.
-// Removed to eliminate unused-value warning.
-
   FilteredCFGNode<IsDFAFilter> rem_source = source;
 
   if (DEBUG_MODE) {

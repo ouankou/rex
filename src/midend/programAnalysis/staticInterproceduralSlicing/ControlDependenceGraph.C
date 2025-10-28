@@ -168,8 +168,6 @@ void dfsVisit(SliceCFGNode p)
       //        cout<<"component: "<<p.getNode()->unparseToString()<<endl;
       while(L.top()!=p)
         {
-       // DQ (12/10/2016): Note: Previously had L.top() here but it was unused.
-       // Removed to eliminate unused-value warning. Value already checked in while condition.
           L.pop();
           //cout <<"\t"<<v.getNode()->unparseToString()<<endl;
         }
