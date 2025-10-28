@@ -168,10 +168,6 @@ void dfsVisit(SliceCFGNode p)
       //        cout<<"component: "<<p.getNode()->unparseToString()<<endl;
       while(L.top()!=p)
         {
-       // DQ (12/10/2016): Eliminating a warning that we want to be an error: -Werror=unused-but-set-variable.
-       // SliceCFGNode v = L.top();
-          L.top();
-
           L.pop();
           //cout <<"\t"<<v.getNode()->unparseToString()<<endl;
         }

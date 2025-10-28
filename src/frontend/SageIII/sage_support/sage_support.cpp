@@ -5492,7 +5492,7 @@ SgProject::compileOutput()
        // DQ (30/8/2017): Note that Csharp does not use linking the same way that C/C++ does (as I understand it).
        // if (! (get_Java_only() || get_Python_only() || get_X10_only()) )
        // if (! (get_Java_only() || get_Python_only() || get_X10_only() || get_Csharp_only() ) )
-          if ( (errorCode == 0) )
+          if (errorCode == 0)
              {
 
             // ROSE_ASSERT(get_compileOnly() == true);

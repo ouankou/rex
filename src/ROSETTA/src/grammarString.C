@@ -107,10 +107,42 @@ GrammarString::getRawString () const
      return functionNameString;
    }
 
+// Helper function to detect if a string represents a function call
+// Checks for presence of '(' followed by ')' to catch all function call patterns
+static bool
+isFunctionCallExpression ( const string& expr )
+   {
+     size_t openParen = expr.find('(');
+     size_t closeParen = expr.find(')');
+     return (openParen != string::npos && closeParen != string::npos && openParen < closeParen);
+   }
+
+// Helper function to get the container variable name for storing temporary list results
+// This ensures consistency between listIteratorInitialization and forLoopOpening
+static string
+getContainerVariableName ( const string& iteratorName )
+   {
+     return iteratorName + "_container";
+   }
+
 string
 listIteratorInitialization ( string typeName, string iteratorName, string listName, string accessOperator )
    {
-     string returnString  = "     " + typeName + "::const_iterator " + iteratorName + " = " + listName + accessOperator + "begin(); \n";
+  // Check if listName is a function call (contains parentheses) to avoid dangling-gsl warnings
+     bool isFunctionCall = isFunctionCallExpression(listName);
+     string returnString;
+
+     if (isFunctionCall && accessOperator == ".") {
+    // Store the list in a temporary reference variable to avoid calling .begin() on a temporary
+    // Use const reference to preserve reference semantics and avoid copying
+       string tempListName = getContainerVariableName(iteratorName);
+       returnString  = "     const " + typeName + "& " + tempListName + " = " + listName + "; \n";
+       returnString += "     " + typeName + "::const_iterator " + iteratorName + " = " + tempListName + ".begin(); \n";
+     } else {
+    // Original behavior for non-function-call cases or pointer access
+       returnString  = "     " + typeName + "::const_iterator " + iteratorName + " = " + listName + accessOperator + "begin(); \n";
+     }
+
      return returnString;
    }
 
@@ -118,8 +150,18 @@ listIteratorInitialization ( string typeName, string iteratorName, string listNa
 string
 forLoopOpening ( string iteratorName, string listName, string accessOperator )
    {
+  // Check if we're using a container variable (to match listIteratorInitialization behavior)
+     bool isFunctionCall = isFunctionCallExpression(listName);
+     string endTarget = listName;
+
+     if (isFunctionCall && accessOperator == ".") {
+    // Use the container variable created in listIteratorInitialization
+       endTarget = getContainerVariableName(iteratorName);
+       accessOperator = ".";
+     }
+
      string returnString = "     for ( /* empty by design */; " + iteratorName
-                         + " != " + listName + accessOperator + "end(); ++"
+                         + " != " + endTarget + accessOperator + "end(); ++"
                          + iteratorName + ") \n        { \n";
      return returnString;
    }

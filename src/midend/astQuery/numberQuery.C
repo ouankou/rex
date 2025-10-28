@@ -53,10 +53,11 @@ NumberQuery::queryNumberOfArgsInParenthesisOperator (SgNode * astNode, string ty
         // Looking for different types of overloaded functions (of the correct type)
         SgFunctionCallExp *functionCallExp = isSgFunctionCallExp (astNode);
         ROSE_ASSERT (functionCallExp != NULL);
-        
+
         //yanyh15 (2023-01-31): donot quite understand this and need to check later
         SgFunctionDeclaration* funcDeclaration = SageInterface::getFunctionDeclaration (functionCallExp);
-        const char *functionTypeName = SageInterface::getTypeName(funcDeclaration->get_type()->get_return_type()).data();
+        std::string functionTypeNameStr = SageInterface::getTypeName(funcDeclaration->get_type()->get_return_type());
+        const char *functionTypeName = functionTypeNameStr.c_str();
 
         ROSE_ASSERT (functionTypeName != NULL);
 
@@ -247,7 +248,8 @@ NumberQuery::queryNumberOfArgsInScalarIndexingOperator (SgNode * astNode)
 
         //yanyh15 (2023-01-31): donot quite understand this and need to check later
         SgFunctionDeclaration* funcDeclaration = SageInterface::getFunctionDeclaration (functionCallExp);
-        const char *functionTypeName = SageInterface::getTypeName(funcDeclaration->get_type()->get_return_type()).data();
+        std::string functionTypeNameStr = SageInterface::getTypeName(funcDeclaration->get_type()->get_return_type());
+        const char *functionTypeName = functionTypeNameStr.c_str();
 
         ROSE_ASSERT (functionTypeName != NULL);
 
