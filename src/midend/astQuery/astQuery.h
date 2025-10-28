@@ -345,7 +345,7 @@ template<typename NodeFunctional>
      _Result querySubTree ( SgNode * subTree,
         _Result (*__x)(SgNode*),
         AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes ){
-      return querySubTree(subTree,__x,defineQueryType);
+      return querySubTree(subTree,[__x](SgNode* n) { return __x(n); },defineQueryType);
     }
 
   /********************************************************************************
@@ -395,7 +395,7 @@ template<typename NodeFunctional>
   template <class _Result>
     _Result queryRange (typename _Result::iterator begin, typename _Result::iterator end,
         _Result (*__x)(SgNode*)){
-      return queryRange(begin,end,__x);
+      return queryRange(begin,end,[__x](SgNode* n) { return __x(n); });
     }
 
   /****************************************************************************
@@ -460,7 +460,7 @@ template <class _Result>
 _Result queryMemoryPool (
     _Result (*__x)(SgNode*),
     VariantVector* targetVariantVector = NULL ){
-  return queryMemoryPool(__x,targetVariantVector);
+  return queryMemoryPool([__x](SgNode* n) { return __x(n); },targetVariantVector);
 }
 
 
