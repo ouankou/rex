@@ -133,9 +133,10 @@ listIteratorInitialization ( string typeName, string iteratorName, string listNa
      string returnString;
 
      if (isFunctionCall && accessOperator == ".") {
-    // Store the list in a temporary variable to avoid calling .begin() on a temporary
+    // Store the list in a temporary reference variable to avoid calling .begin() on a temporary
+    // Use const reference to preserve reference semantics and avoid copying
        string tempListName = getContainerVariableName(iteratorName);
-       returnString  = "     " + typeName + " " + tempListName + " = " + listName + "; \n";
+       returnString  = "     const " + typeName + "& " + tempListName + " = " + listName + "; \n";
        returnString += "     " + typeName + "::const_iterator " + iteratorName + " = " + tempListName + ".begin(); \n";
      } else {
     // Original behavior for non-function-call cases or pointer access
