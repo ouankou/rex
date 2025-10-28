@@ -110,7 +110,20 @@ GrammarString::getRawString () const
 string
 listIteratorInitialization ( string typeName, string iteratorName, string listName, string accessOperator )
    {
-     string returnString  = "     " + typeName + "::const_iterator " + iteratorName + " = " + listName + accessOperator + "begin(); \n";
+  // Check if listName is a function call (contains parentheses) to avoid dangling-gsl warnings
+     bool isFunctionCall = (listName.find("()") != string::npos);
+     string returnString;
+
+     if (isFunctionCall && accessOperator == ".") {
+    // Store the list in a temporary variable to avoid calling .begin() on a temporary
+       string tempListName = iteratorName + "_container";
+       returnString  = "     " + typeName + " " + tempListName + " = " + listName + "; \n";
+       returnString += "     " + typeName + "::const_iterator " + iteratorName + " = " + tempListName + ".begin(); \n";
+     } else {
+    // Original behavior for non-function-call cases or pointer access
+       returnString  = "     " + typeName + "::const_iterator " + iteratorName + " = " + listName + accessOperator + "begin(); \n";
+     }
+
      return returnString;
    }
 
@@ -118,8 +131,18 @@ listIteratorInitialization ( string typeName, string iteratorName, string listNa
 string
 forLoopOpening ( string iteratorName, string listName, string accessOperator )
    {
+  // Check if we're using a container variable (to match listIteratorInitialization behavior)
+     bool isFunctionCall = (listName.find("()") != string::npos);
+     string endTarget = listName;
+
+     if (isFunctionCall && accessOperator == ".") {
+    // Use the container variable created in listIteratorInitialization
+       endTarget = iteratorName + "_container";
+       accessOperator = ".";
+     }
+
      string returnString = "     for ( /* empty by design */; " + iteratorName
-                         + " != " + listName + accessOperator + "end(); ++"
+                         + " != " + endTarget + accessOperator + "end(); ++"
                          + iteratorName + ") \n        { \n";
      return returnString;
    }

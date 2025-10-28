@@ -243,6 +243,9 @@
 #define BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER ${BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER}
 #define BACKEND_C_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_C_COMPILER_MINOR_VERSION_NUMBER}
 
+/* Define if backend C compiler supports __asm__ (GNU-style inline assembly) */
+#define BACKEND_C_COMPILER_SUPPORTS_UNDESCORE_ASM 1
+
 /* Name of backend Fortran compiler including path (may or may not explicit
    include path; used to call backend). */
 
