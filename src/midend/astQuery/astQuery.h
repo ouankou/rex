@@ -8,6 +8,7 @@
 #include "rosedll.h"
 
 #include <functional>
+#include <type_traits>
 // Support for operations like (SgTypeInt | SgTypeFloat)
 // note that non-terminals would be expanded into the associated terminals!
 // So SgType would generate (SgTypeInt | SgTypeFloat | SgTypeDouble | ... | <last type>)
