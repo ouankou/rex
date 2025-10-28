@@ -107,16 +107,34 @@ GrammarString::getRawString () const
      return functionNameString;
    }
 
+// Helper function to detect if a string represents a function call
+// Checks for presence of '(' followed by ')' to catch all function call patterns
+static bool
+isFunctionCallExpression ( const string& expr )
+   {
+     size_t openParen = expr.find('(');
+     size_t closeParen = expr.find(')');
+     return (openParen != string::npos && closeParen != string::npos && openParen < closeParen);
+   }
+
+// Helper function to get the container variable name for storing temporary list results
+// This ensures consistency between listIteratorInitialization and forLoopOpening
+static string
+getContainerVariableName ( const string& iteratorName )
+   {
+     return iteratorName + "_container";
+   }
+
 string
 listIteratorInitialization ( string typeName, string iteratorName, string listName, string accessOperator )
    {
   // Check if listName is a function call (contains parentheses) to avoid dangling-gsl warnings
-     bool isFunctionCall = (listName.find("()") != string::npos);
+     bool isFunctionCall = isFunctionCallExpression(listName);
      string returnString;
 
      if (isFunctionCall && accessOperator == ".") {
     // Store the list in a temporary variable to avoid calling .begin() on a temporary
-       string tempListName = iteratorName + "_container";
+       string tempListName = getContainerVariableName(iteratorName);
        returnString  = "     " + typeName + " " + tempListName + " = " + listName + "; \n";
        returnString += "     " + typeName + "::const_iterator " + iteratorName + " = " + tempListName + ".begin(); \n";
      } else {
@@ -132,12 +150,12 @@ string
 forLoopOpening ( string iteratorName, string listName, string accessOperator )
    {
   // Check if we're using a container variable (to match listIteratorInitialization behavior)
-     bool isFunctionCall = (listName.find("()") != string::npos);
+     bool isFunctionCall = isFunctionCallExpression(listName);
      string endTarget = listName;
 
      if (isFunctionCall && accessOperator == ".") {
     // Use the container variable created in listIteratorInitialization
-       endTarget = iteratorName + "_container";
+       endTarget = getContainerVariableName(iteratorName);
        accessOperator = ".";
      }
 
