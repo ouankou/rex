@@ -109,11 +109,10 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             }
         }
         else if (current_arg.rfind("-fopenmp", 0) == 0) {
-            passthrough_args.push_back(current_arg);
-
             bool explicitly_disabled = false;
-            if (current_arg.size() > 9 && current_arg[9] == '=') {
-                std::string value = current_arg.substr(10);
+            // -fopenmp is 8 chars (index 0-7), so '=' would be at index 8
+            if (current_arg.size() > 8 && current_arg[8] == '=') {
+                std::string value = current_arg.substr(9);  // Value starts at index 9
                 std::string lower_value = value;
                 std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(),
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -123,10 +122,16 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             }
 
             if (explicitly_disabled) {
+                // Don't pass -fopenmp=0/false/disabled to Clang (it doesn't support this syntax)
+                // Just mark OpenMP as disabled for ROSE's internal tracking
                 disable_openmp_via_flag = true;
                 enable_openmp = false;
-            } else if (!disable_openmp_via_flag) {
-                enable_openmp = true;
+            } else {
+                // Pass valid -fopenmp or -fopenmp=<lib> to Clang
+                passthrough_args.push_back(current_arg);
+                if (!disable_openmp_via_flag) {
+                    enable_openmp = true;
+                }
             }
         }
         else if (current_arg == "-fopenmp-simd") {
