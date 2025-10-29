@@ -1105,7 +1105,10 @@ bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<
             continue;
         }
 
-        if (continue_across_multiline_directive && p_openmp_pragma_callback->isContinuationLine(file_id, search_line)) {
+        // Check if this line is a continuation of a multi-line pragma (ends with backslash)
+        // We must check this regardless of whether we've found the pragma yet, because when
+        // scanning backwards, we encounter continuation lines BEFORE the pragma line itself
+        if (p_openmp_pragma_callback->isContinuationLine(file_id, search_line)) {
             continue;
         }
 
@@ -1114,6 +1117,7 @@ bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<
             continue;
         }
 
+        // Non-empty, non-continuation, non-skippable line - stop scanning
         break;
     }
 
