@@ -3393,14 +3393,10 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
                set_fortran_openmp(false);
              }
              */
-         //side effect for enabling OpenMP, define the macro as required
-         //This new option does not reach the backend compiler
-         //But it is enough to reach EDG only.
-         //We can later on back end option to turn on their OpenMP handling flags,
-         //like -fopenmp for GCC, depending on the version of gcc
-         //which will defirose-cc ne this macro for GCC
-         if (!Outliner::select_omp_loop) // the Outliner has a special mode to find omp loops for testing, not really turning on OpenMP
-            argv.push_back(ompmacro);
+         // REX: Removed hardcoded -D_OPENMP=OMPVERSION for Clang frontend
+         // The EDG frontend required this macro to be explicitly defined, but Clang
+         // automatically defines _OPENMP with the correct version when -fopenmp is passed.
+         // (EDG removed in REX migration, Clang frontend now used for all C/C++ code)
         }
 
      // Process sub-options for OpenMP handling, Liao 5/31/2009
