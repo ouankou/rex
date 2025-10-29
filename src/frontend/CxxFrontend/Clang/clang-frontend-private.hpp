@@ -173,20 +173,53 @@ public:
 
     void PragmaDirective(clang::SourceLocation Loc,
                         clang::PragmaIntroducerKind Introducer) override {
-        // Get the FileID and line number where the pragma appears
+        // Get the FileID and starting line number where the pragma appears
         clang::FileID file_id = p_source_manager.getFileID(Loc);
         unsigned line = p_source_manager.getPresumedLineNumber(Loc);
 
-        // Get the raw pragma text from the source
-        const char* begin = p_source_manager.getCharacterData(Loc);
-        const char* end = begin;
+        // Capture the full pragma text, including any backslash-continued lines
+        const char *current = p_source_manager.getCharacterData(Loc);
+        std::string original_text;
+        unsigned line_count = 1;
 
-        // Find the end of the pragma line
-        while (*end != '\n' && *end != '\r' && *end != '\0') {
-            ++end;
+        while (current != nullptr) {
+            const char *line_end = current;
+            while (*line_end != '\n' && *line_end != '\r' && *line_end != '\0') {
+                ++line_end;
+            }
+
+            original_text.append(current, line_end - current);
+
+            if (*line_end == '\0') {
+                break;
+            }
+
+            const char *back = line_end;
+            while (back > current && isWhitespace(*(back - 1))) {
+                --back;
+            }
+            bool has_continuation = (back > current && *(back - 1) == '\\');
+
+            // Preserve newline sequence in the stored text
+            if (*line_end == '\r' && *(line_end + 1) == '\n') {
+                original_text.push_back('\r');
+                original_text.push_back('\n');
+                current = line_end + 2;
+            } else {
+                original_text.push_back(*line_end);
+                current = line_end + 1;
+            }
+
+            if (!has_continuation) {
+                // Trim trailing newline characters from the stored directive
+                while (!original_text.empty() && (original_text.back() == '\n' || original_text.back() == '\r')) {
+                    original_text.pop_back();
+                }
+                break;
+            }
+
+            ++line_count;
         }
-
-        std::string original_text(begin, end);
 
         // Check if this is an OMP pragma - handle multiple spaces
         // Pattern: # <spaces> pragma <spaces> omp <rest>
@@ -219,7 +252,9 @@ public:
         }
 
         // This is an OMP pragma - store with (FileID, line) key to handle multi-file TUs
-        line_to_pragma[std::make_pair(file_id, line)] = original_text;
+        for (unsigned offset = 0; offset < line_count; ++offset) {
+            line_to_pragma[std::make_pair(file_id, line + offset)] = original_text;
+        }
     }
 
     // Lookup pragma by (FileID, line) - returns true if found, false otherwise
