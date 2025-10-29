@@ -217,13 +217,15 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
           }
     }
 
- // FIXME should be handle by Clang ?
+// FIXME should be handle by Clang ?
     define_list.push_back("__I__=_Complex_I");
 
-    if (!enable_openmp) {
+    if (!openmp_define_list.empty()) {
         define_list.insert(define_list.end(),
                            openmp_define_list.begin(),
                            openmp_define_list.end());
+    } else if (enable_openmp || enable_openmp_simd) {
+        define_list.push_back(std::string("_OPENMP=") + Rose::StringUtility::numberToString(OMPVERSION));
     }
 
     unsigned cnt = define_list.size() + inc_dirs_list.size() + sys_dirs_list.size() + inc_list.size() + passthrough_args.size();

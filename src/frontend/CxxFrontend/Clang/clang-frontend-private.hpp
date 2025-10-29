@@ -252,9 +252,7 @@ public:
         }
 
         // This is an OMP pragma - store with (FileID, line) key to handle multi-file TUs
-        for (unsigned offset = 0; offset < line_count; ++offset) {
-            line_to_pragma[std::make_pair(file_id, line + offset)] = original_text;
-        }
+        line_to_pragma[std::make_pair(file_id, line)] = original_text;
     }
 
     // Lookup pragma by (FileID, line) - returns true if found, false otherwise
@@ -362,6 +360,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             SgDeclarationStatement* owning_template);
 
         void populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def);
+        bool collectOpenMPPragmas(clang::Stmt* stmt, std::vector<std::pair<unsigned, std::string>>& pragmas);
+        SgPragmaDeclaration* buildOpenMPPragmaDeclaration(const std::string& directive, unsigned pragma_line, SgScopeStatement* scope);
+        void appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScopeStatement* scope);
+        SgStatement* wrapStatementWithOpenMPPragmas(clang::Stmt* stmt, SgStatement* statement);
 
     public:
         ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file);
