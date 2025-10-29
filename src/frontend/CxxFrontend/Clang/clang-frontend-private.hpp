@@ -5,6 +5,8 @@
 #include "clang-frontend.hpp"
 
 #include <iostream>
+#include <vector>
+#include <set>
 
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTContext.h"
@@ -152,6 +154,7 @@ class RoseOpenMPPragmaCallback : public clang::PPCallbacks {
 private:
     // Use (FileID, line) pair as key to handle pragmas from multiple files correctly
     std::map<std::pair<clang::FileID, unsigned>, std::string> line_to_pragma;
+    std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
     clang::SourceManager& p_source_manager;
     clang::Preprocessor& p_preprocessor;
 
@@ -253,6 +256,9 @@ public:
 
         // This is an OMP pragma - store with (FileID, line) key to handle multi-file TUs
         line_to_pragma[std::make_pair(file_id, line)] = original_text;
+        for (unsigned offset = 1; offset < line_count; ++offset) {
+            pragma_continuation_lines.insert(std::make_pair(file_id, line + offset));
+        }
     }
 
     // Lookup pragma by (FileID, line) - returns true if found, false otherwise
@@ -268,6 +274,10 @@ public:
 
     size_t getCount() const {
         return line_to_pragma.size();
+    }
+
+    bool isContinuationLine(clang::FileID file_id, unsigned line) const {
+        return pragma_continuation_lines.count(std::make_pair(file_id, line)) > 0;
     }
 };
 

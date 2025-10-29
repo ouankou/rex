@@ -1,4 +1,6 @@
 
+#include <algorithm>
+#include <cctype>
 #include <iostream>
 
 #include "sage3basic.h"
@@ -61,19 +63,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     std::vector<std::string> passthrough_args;
     bool enable_openmp = false;
     bool enable_openmp_simd = false;
-
-    // Forward -fopenmp to Clang so _OPENMP macro is defined and OpenMP headers work correctly
-    // ROSE's command-line processor sets sageFile.get_openmp() when it sees -fopenmp
-    // We forward it to Clang to enable preprocessing, but keep lang_opts.OpenMP disabled
-    // so Clang doesn't try to parse OpenMP constructs (we handle that via PPCallbacks)
-    if (sageFile.get_openmp()) {
-        passthrough_args.push_back("-fopenmp");
-        enable_openmp = true;
-    }
-    if (sageFile.get_openmp_parse_only()) {
-        passthrough_args.push_back("-fopenmp-simd");
-        enable_openmp_simd = true;
-    }
+    bool disable_openmp_via_flag = false;
 
     for (int i = 0; i < argc; i++) {
         std::string current_arg(argv[i]);
@@ -118,6 +108,31 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                 if (i >= argc) break;
             }
         }
+        else if (current_arg.rfind("-fopenmp", 0) == 0) {
+            passthrough_args.push_back(current_arg);
+
+            bool explicitly_disabled = false;
+            if (current_arg.size() > 9 && current_arg[9] == '=') {
+                std::string value = current_arg.substr(10);
+                std::string lower_value = value;
+                std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (lower_value == "0" || lower_value == "false" || lower_value == "disabled") {
+                    explicitly_disabled = true;
+                }
+            }
+
+            if (explicitly_disabled) {
+                disable_openmp_via_flag = true;
+                enable_openmp = false;
+            } else if (!disable_openmp_via_flag) {
+                enable_openmp = true;
+            }
+        }
+        else if (current_arg == "-fopenmp-simd") {
+            passthrough_args.push_back("-fopenmp-simd");
+            enable_openmp_simd = true;
+        }
         else {
             // TODO -include
 #if DEBUG_ARGS
@@ -125,6 +140,16 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 #endif
             input_file = current_arg;
         }
+    }
+
+    if (sageFile.get_openmp() && !enable_openmp && !disable_openmp_via_flag) {
+        passthrough_args.push_back("-fopenmp");
+        enable_openmp = true;
+    }
+
+    if (sageFile.get_openmp_parse_only() && !enable_openmp_simd) {
+        passthrough_args.push_back("-fopenmp-simd");
+        enable_openmp_simd = true;
     }
 
     ClangToSageTranslator::Language language = ClangToSageTranslator::unknown;
@@ -371,9 +396,13 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     if (enable_opencl) {
         lang_opts.OpenCL = 1;
     }
-    // Never enable Clang's OpenMP parser (lang_opts.OpenMP) - pragmas are captured via PPCallbacks and processed by ROSE's ompparser instead
-    // Even though we forward -fopenmp to Clang (for _OPENMP macro), we must disable the OpenMP parser
-    lang_opts.OpenMP = 0;
+    if (enable_openmp) {
+        lang_opts.OpenMP = 1;
+        lang_opts.OpenMPUseTLS = 1;
+    }
+    if (enable_openmp_simd) {
+        lang_opts.OpenMPSimd = 1;
+    }
 
     // Now create file manager with FileSystemOptions from the parsed invocation
     compiler_instance->createFileManager();

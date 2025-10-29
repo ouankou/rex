@@ -5,6 +5,7 @@
 #include <utility>
 #include <cctype>
 #include <algorithm>
+#include <vector>
 
 #include "clang/Lex/Lexer.h"
 
@@ -43,6 +44,10 @@ bool isSkippableLineBetweenPragmaAndStatement(const std::string& trimmed_line) {
     if (trimmed_line.size() >= 2 &&
         trimmed_line[trimmed_line.size() - 2] == '*' &&
         trimmed_line.back() == '/') {
+        return true;
+    }
+
+    if (!trimmed_line.empty() && trimmed_line.back() == '\\') {
         return true;
     }
 
@@ -1067,22 +1072,19 @@ bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<
     }
 
     bool found_any = false;
-    unsigned search_line = stmt_line;
     std::string pragma_text;
 
-    while (search_line > 0) {
-        --search_line;
-        if (search_line == 0) {
-            break;
-        }
+    bool continue_across_multiline_directive = false;
+
+    for (unsigned search_line = stmt_line; search_line > 0; --search_line) {
 
         if (p_openmp_pragma_callback->getPragmaAtLine(file_id, search_line, pragma_text)) {
             std::string extracted = extractOpenMPDirective(pragma_text);
             if (!extracted.empty()) {
                 pragmas.emplace_back(search_line, extracted);
                 found_any = true;
+                continue_across_multiline_directive = true;
             }
-            // Continue searching upward for additional stacked pragmas
             continue;
         }
 
@@ -1092,11 +1094,26 @@ bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<
         }
 
         std::string trimmed = trimWhitespace(line_content);
-        if (trimmed.empty() || isSkippableLineBetweenPragmaAndStatement(trimmed)) {
+        bool is_statement_line = (search_line == stmt_line);
+
+        if (is_statement_line) {
             continue;
         }
 
-        // Encountered a non-skippable, non-pragma line; stop searching
+        if (trimmed.empty()) {
+            continue_across_multiline_directive = false;
+            continue;
+        }
+
+        if (continue_across_multiline_directive && p_openmp_pragma_callback->isContinuationLine(file_id, search_line)) {
+            continue;
+        }
+
+        if (isSkippableLineBetweenPragmaAndStatement(trimmed)) {
+            continue_across_multiline_directive = false;
+            continue;
+        }
+
         break;
     }
 
@@ -1788,10 +1805,72 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitOMPExecutableDirective" << std::endl;
 #endif
-    // ERROR: VisitOMPExecutableDirective should not be called - OpenMP pragmas handled via PPCallbacks instead of Clang's parser
-    std::cerr << "ERROR: VisitOMPExecutableDirective should not be called - OpenMP pragmas handled via PPCallbacks instead of Clang's parser" << std::endl;
-    ROSE_ASSERT(false);
-    return false;
+    bool res = true;
+    SgStatement * associated_stmt = NULL;
+
+    if (clang::Stmt * clang_associated_stmt = omp_executable_directive->getAssociatedStmt()) {
+        SgNode * tmp_stmt = Traverse(clang_associated_stmt);
+        associated_stmt = isSgStatement(tmp_stmt);
+        if (tmp_stmt != NULL && associated_stmt == NULL) {
+            std::cerr << "Runtime error: associated OpenMP statement did not translate into an SgStatement." << std::endl;
+            res = false;
+        }
+    }
+
+    SgStatement * target_stmt = associated_stmt;
+
+    if (target_stmt == NULL) {
+        target_stmt = SageBuilder::buildNullStatement();
+        target_stmt->set_parent(SageBuilder::topScopeStack());
+    }
+
+    clang::SourceLocation begin = omp_executable_directive->getBeginLoc();
+    clang::SourceLocation end = omp_executable_directive->getEndLoc();
+    if (begin.isValid() && end.isValid()) {
+        clang::SourceManager & sm = p_compiler_instance->getSourceManager();
+        clang::LangOptions & lang_opts = p_compiler_instance->getLangOpts();
+        clang::CharSourceRange range = clang::CharSourceRange::getTokenRange(begin, end);
+        std::string directive_text = clang::Lexer::getSourceText(range, sm, lang_opts).str();
+
+        if (!directive_text.empty()) {
+            size_t first_non_ws = directive_text.find_first_not_of(" \t");
+            if (first_non_ws != std::string::npos && first_non_ws > 0)
+                directive_text.erase(0, first_non_ws);
+
+            size_t last_non_ws = directive_text.find_last_not_of(" \t\r\n");
+            if (last_non_ws != std::string::npos && last_non_ws + 1 < directive_text.size())
+                directive_text.erase(last_non_ws + 1);
+
+            if (!directive_text.empty() && directive_text.rfind("#pragma", 0) != 0)
+                directive_text.insert(0, "#pragma ");
+
+            if (!directive_text.empty()) {
+                llvm::StringRef filename_ref = sm.getFilename(begin);
+                std::string filename = filename_ref.empty() ? std::string("<unknown>") : filename_ref.str();
+                unsigned line = sm.getPresumedLineNumber(begin);
+                unsigned column = sm.getPresumedColumnNumber(begin);
+
+                if (directive_text.find('\n') == std::string::npos)
+                    directive_text.push_back('\n');
+
+                PreprocessingInfo * info = new PreprocessingInfo(
+                    PreprocessingInfo::CMacroCallStatement,
+                    directive_text,
+                    filename,
+                    line,
+                    column,
+                    0,
+                    PreprocessingInfo::before);
+
+                info->get_file_info()->setTransformation();
+                target_stmt->addToAttachedPreprocessingInfo(info, PreprocessingInfo::before);
+            }
+        }
+    }
+
+    *node = target_stmt;
+
+    return VisitStmt(omp_executable_directive, node) && res;
 }
 
 bool ClangToSageTranslator::VisitOMPAtomicDirective(clang::OMPAtomicDirective * omp_atomic_directive, SgNode ** node) {
