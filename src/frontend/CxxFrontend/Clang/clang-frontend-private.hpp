@@ -5,6 +5,7 @@
 #include "clang-frontend.hpp"
 
 #include <iostream>
+#include <vector>
 
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTContext.h"
