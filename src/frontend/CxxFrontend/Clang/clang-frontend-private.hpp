@@ -191,31 +191,42 @@ public:
                 ++line_end;
             }
 
-            original_text.append(current, line_end - current);
-
-            if (*line_end == '\0') {
-                break;
-            }
-
+            // Check for continuation BEFORE appending to properly normalize the text
             const char *back = line_end;
             while (back > current && isWhitespace(*(back - 1))) {
                 --back;
             }
             bool has_continuation = (back > current && *(back - 1) == '\\');
 
-            // Preserve newline sequence in the stored text
+            if (has_continuation) {
+                // For continuation lines: append up to (but not including) the backslash
+                // First, skip any whitespace before the backslash
+                const char *effective_end = back - 1;  // -1 to exclude the backslash itself
+                while (effective_end > current && isWhitespace(*(effective_end - 1))) {
+                    --effective_end;
+                }
+                original_text.append(current, effective_end - current);
+                // Add a single space to separate tokens from the next line
+                original_text.push_back(' ');
+            } else {
+                // For non-continuation lines: append the entire line as-is
+                original_text.append(current, line_end - current);
+            }
+
+            if (*line_end == '\0') {
+                break;
+            }
+
+            // Move to the next line
             if (*line_end == '\r' && *(line_end + 1) == '\n') {
-                original_text.push_back('\r');
-                original_text.push_back('\n');
                 current = line_end + 2;
             } else {
-                original_text.push_back(*line_end);
                 current = line_end + 1;
             }
 
             if (!has_continuation) {
-                // Trim trailing newline characters from the stored directive
-                while (!original_text.empty() && (original_text.back() == '\n' || original_text.back() == '\r')) {
+                // Trim trailing whitespace from the stored directive
+                while (!original_text.empty() && isspace(static_cast<unsigned char>(original_text.back()))) {
                     original_text.pop_back();
                 }
                 break;
