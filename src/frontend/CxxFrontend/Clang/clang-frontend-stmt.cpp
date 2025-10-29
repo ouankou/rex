@@ -953,38 +953,87 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
 
     bool res = true;
 
-    // Check if there's an OpenMP pragma immediately before this statement
-    std::string pragma_text;
-    bool has_pragma = false;
-    unsigned pragma_line = 0;
-    std::string pragma_filename;
-    if (p_openmp_pragma_callback != nullptr) {
-        clang::SourceLocation loc = compound_stmt->getBeginLoc();
-        if (loc.isValid()) {
-            clang::FileID file_id = p_compiler_instance->getSourceManager().getFileID(loc);
-            unsigned line = p_compiler_instance->getSourceManager().getPresumedLineNumber(loc);
-            pragma_line = line - 1;
-            // Try to find pragma on the line before the compound statement (in the same file)
-            if (p_openmp_pragma_callback->getPragmaAtLine(file_id, pragma_line, pragma_text)) {
-                has_pragma = true;
-                // Get the filename for file info
-                clang::PresumedLoc presumed = p_compiler_instance->getSourceManager().getPresumedLoc(loc);
-                if (presumed.isValid()) {
-                    pragma_filename = presumed.getFilename();
-                }
-            }
-        }
-    }
-
     SgBasicBlock * block = SageBuilder::buildBasicBlock();
 
     block->set_parent(SageBuilder::topScopeStack());
 
     SageBuilder::pushScopeStack(block);
 
+    auto attachCapturedOpenMPPragma = [&](clang::Stmt * child_stmt) {
+        if (p_openmp_pragma_callback == nullptr || child_stmt == nullptr) {
+            return;
+        }
+
+        clang::SourceLocation child_loc = child_stmt->getBeginLoc();
+        if (!child_loc.isValid()) {
+            return;
+        }
+
+        clang::SourceManager & source_manager = p_compiler_instance->getSourceManager();
+        clang::FileID file_id = source_manager.getFileID(child_loc);
+        unsigned stmt_line = source_manager.getPresumedLineNumber(child_loc);
+
+        if (stmt_line == 0) {
+            return;
+        }
+
+        unsigned pragma_line = stmt_line - 1;
+        std::string pragma_text;
+        if (!p_openmp_pragma_callback->getPragmaAtLine(file_id, pragma_line, pragma_text)) {
+            return;
+        }
+
+        // Extract directive text while preserving whitespace for accurate passthrough
+        std::string directive;
+        size_t pragma_pos = pragma_text.find("pragma");
+        if (pragma_pos != std::string::npos) {
+            size_t hash_pos = pragma_text.find('#');
+            size_t spaces_after_hash = 0;
+            if (hash_pos != std::string::npos && pragma_pos > hash_pos) {
+                spaces_after_hash = pragma_pos - hash_pos - 1;
+            }
+            size_t after_pragma = pragma_pos + 6; // Skip "pragma"
+
+            if (after_pragma < pragma_text.size() && RoseOpenMPPragmaCallback::isWhitespace(pragma_text[after_pragma])) {
+                ++after_pragma;
+            }
+
+            directive = std::string(spaces_after_hash, ' ') + pragma_text.substr(after_pragma);
+        }
+
+        if (directive.empty()) {
+            return;
+        }
+
+        SgPragmaDeclaration * pragma_decl = SageBuilder::buildPragmaDeclaration(directive, block);
+
+        Sg_File_Info * start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+        Sg_File_Info * end_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+
+        start_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+        start_fi->set_line(pragma_line);
+        start_fi->set_col(1);
+
+        end_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+        end_fi->set_line(pragma_line);
+        end_fi->set_col(1);
+
+        pragma_decl->set_startOfConstruct(start_fi);
+        pragma_decl->set_endOfConstruct(end_fi);
+        start_fi->set_parent(pragma_decl);
+        end_fi->set_parent(pragma_decl);
+
+        pragma_decl->set_parent(block);
+        block->append_statement(pragma_decl);
+    };
+
     clang::CompoundStmt::body_iterator it;
     for (it = compound_stmt->body_begin(); it != compound_stmt->body_end(); it++) {
-        SgNode * tmp_node = Traverse(*it);
+        clang::Stmt * child_stmt = *it;
+
+        attachCapturedOpenMPPragma(child_stmt);
+
+        SgNode * tmp_node = Traverse(child_stmt);
 
 #if DEBUG_VISIT_STMT
         if (tmp_node != NULL)
@@ -1018,60 +1067,6 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
     }
 
     SageBuilder::popScopeStack();
-
-    // If there's a captured OpenMP pragma, insert it in the PARENT scope before this compound statement
-    // This allows processOpenMP() to use the entire compound statement as the pragma's body
-    if (has_pragma) {
-        // Extract directive text while preserving whitespace for accurate passthrough
-        // Example: "#  pragma    omp parallel" → "  omp parallel"
-        // (Unparser adds "#pragma " prefix, so we extract everything after "pragma")
-        std::string directive;
-
-        size_t pragma_pos = pragma_text.find("pragma");
-        if (pragma_pos != std::string::npos) {
-            size_t hash_pos = pragma_text.find('#');
-            size_t spaces_after_hash = pragma_pos - hash_pos - 1;
-            size_t after_pragma = pragma_pos + 6; // Skip "pragma"
-
-            // Skip first space after "pragma" since unparser adds it
-            if (after_pragma < pragma_text.size() && RoseOpenMPPragmaCallback::isWhitespace(pragma_text[after_pragma])) {
-                ++after_pragma;
-            }
-
-            // Preserve spaces between # and pragma by prepending to directive
-            directive = std::string(spaces_after_hash, ' ') + pragma_text.substr(after_pragma);
-        }
-
-        // Get the parent scope where this compound statement will be inserted
-        SgScopeStatement* parent_scope = SageBuilder::topScopeStack();
-        SgBasicBlock* parent_block = isSgBasicBlock(parent_scope);
-
-        if (parent_block != nullptr) {
-            // Create pragma declaration with parent block as scope
-            SgPragmaDeclaration* pragma_decl = SageBuilder::buildPragmaDeclaration(directive, parent_block);
-
-            // Mark as transformation for processOpenMP() filtering
-            Sg_File_Info* start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
-            Sg_File_Info* end_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
-
-            start_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
-            start_fi->set_line(pragma_line);
-            start_fi->set_col(1);
-
-            end_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
-            end_fi->set_line(pragma_line);
-            end_fi->set_col(1);
-
-            pragma_decl->set_startOfConstruct(start_fi);
-            pragma_decl->set_endOfConstruct(end_fi);
-            start_fi->set_parent(pragma_decl);
-            end_fi->set_parent(pragma_decl);
-
-            // Append pragma to parent block - it will appear before the compound statement
-            // when the compound statement is later appended to the parent
-            SageInterface::appendStatement(pragma_decl, parent_block);
-        }
-    }
 
     *node = block;
 
