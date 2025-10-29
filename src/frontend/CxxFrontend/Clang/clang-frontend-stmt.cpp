@@ -953,6 +953,28 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
 
     bool res = true;
 
+    // Check if there's an OpenMP pragma immediately before this statement
+    std::string pragma_text;
+    bool has_pragma = false;
+    unsigned pragma_line = 0;
+    std::string pragma_filename;
+    if (p_openmp_pragma_callback != nullptr) {
+        clang::SourceLocation loc = compound_stmt->getBeginLoc();
+        if (loc.isValid()) {
+            unsigned line = p_compiler_instance->getSourceManager().getPresumedLineNumber(loc);
+            pragma_line = line - 1;
+            // Try to find pragma on the line before the compound statement
+            if (p_openmp_pragma_callback->getPragmaAtLine(pragma_line, pragma_text)) {
+                has_pragma = true;
+                // Get the filename for file info
+                clang::PresumedLoc presumed = p_compiler_instance->getSourceManager().getPresumedLoc(loc);
+                if (presumed.isValid()) {
+                    pragma_filename = presumed.getFilename();
+                }
+            }
+        }
+    }
+
     SgBasicBlock * block = SageBuilder::buildBasicBlock();
 
     block->set_parent(SageBuilder::topScopeStack());
@@ -996,7 +1018,57 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
 
     SageBuilder::popScopeStack();
 
-    *node = block;
+    // If there's a captured OpenMP pragma, insert it as the first statement in the body block
+    // This matches the Fortran connector pattern: pragma inserted into existing scope
+    if (has_pragma) {
+        // Extract directive text while preserving whitespace for accurate passthrough
+        // Example: "#  pragma    omp parallel" → "  omp parallel"
+        // (Unparser adds "#pragma " prefix, so we extract everything after "pragma")
+        std::string directive;
+
+        size_t pragma_pos = pragma_text.find("pragma");
+        if (pragma_pos != std::string::npos) {
+            size_t hash_pos = pragma_text.find('#');
+            size_t spaces_after_hash = pragma_pos - hash_pos - 1;
+            size_t after_pragma = pragma_pos + 6; // Skip "pragma"
+
+            // Skip first space after "pragma" since unparser adds it
+            if (after_pragma < pragma_text.size() &&
+                (pragma_text[after_pragma] == ' ' || pragma_text[after_pragma] == '\t')) {
+                ++after_pragma;
+            }
+
+            // Preserve spaces between # and pragma by prepending to directive
+            directive = std::string(spaces_after_hash, ' ') + pragma_text.substr(after_pragma);
+        }
+
+        // Create pragma declaration with body block as scope
+        SgPragmaDeclaration* pragma_decl = SageBuilder::buildPragmaDeclaration(directive, block);
+
+        // Mark as transformation for processOpenMP() filtering
+        Sg_File_Info* start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+        Sg_File_Info* end_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+
+        start_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+        start_fi->set_line(pragma_line);
+        start_fi->set_col(1);
+
+        end_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+        end_fi->set_line(pragma_line);
+        end_fi->set_col(1);
+
+        pragma_decl->set_startOfConstruct(start_fi);
+        pragma_decl->set_endOfConstruct(end_fi);
+        start_fi->set_parent(pragma_decl);
+        end_fi->set_parent(pragma_decl);
+
+        // Prepend pragma to the body block (making it the first statement)
+        SageInterface::prependStatement(pragma_decl, block);
+
+        *node = block;
+    } else {
+        *node = block;
+    }
 
     return VisitStmt(compound_stmt, node) && res;
 }
@@ -1532,101 +1604,10 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitOMPExecutableDirective" << std::endl;
 #endif
-    bool res = true;
-    SgStatement *associated_stmt = nullptr;
-
-    if (clang::Stmt *clang_associated_stmt = omp_executable_directive->getAssociatedStmt()) {
-        SgNode *tmp_stmt = Traverse(clang_associated_stmt);
-        associated_stmt = isSgStatement(tmp_stmt);
-        if (tmp_stmt != NULL && associated_stmt == NULL) {
-            std::cerr << "Runtime error: associated OpenMP statement did not translate into an SgStatement." << std::endl;
-            res = false;
-        }
-    }
-
-    SgStatement *target_stmt = associated_stmt;
-
-    if (target_stmt == nullptr) {
-        target_stmt = SageBuilder::buildNullStatement();
-        target_stmt->set_parent(SageBuilder::topScopeStack());
-    }
-
-    {
-        clang::SourceLocation begin = omp_executable_directive->getBeginLoc();
-        clang::SourceLocation end = omp_executable_directive->getEndLoc();
-        if (begin.isValid() && end.isValid()) {
-            clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-            clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
-            auto range = clang::CharSourceRange::getTokenRange(begin, end);
-            std::string directive_text = clang::Lexer::getSourceText(range, sm, lang_opts).str();
-
-            if (!directive_text.empty()) {
-                auto first_non_ws = directive_text.find_first_not_of(" \t");
-                if (first_non_ws != std::string::npos && first_non_ws > 0) {
-                    directive_text.erase(0, first_non_ws);
-                }
-                auto last_non_ws = directive_text.find_last_not_of(" \t\r\n");
-                if (last_non_ws != std::string::npos && last_non_ws + 1 < directive_text.size()) {
-                    directive_text.erase(last_non_ws + 1);
-                }
-                if (!directive_text.empty() && directive_text.rfind("#pragma", 0) != 0) {
-                    directive_text.insert(0, "#pragma ");
-                }
-                if (!directive_text.empty()) {
-                    auto filename_ref = sm.getFilename(begin);
-                    std::string filename = filename_ref.empty() ? std::string("<unknown>") : filename_ref.str();
-                    unsigned line = sm.getPresumedLineNumber(begin);
-                    unsigned column = sm.getPresumedColumnNumber(begin);
-
-                    size_t search_pos = 0;
-                    while (true) {
-                        size_t newline_pos = directive_text.find_first_of("\r\n", search_pos);
-                        if (newline_pos == std::string::npos) {
-                            directive_text.push_back('\n');
-                            break;
-                        }
-
-                        size_t check_pos = newline_pos;
-                        while (check_pos > 0 && (directive_text[check_pos - 1] == '\r' || directive_text[check_pos - 1] == '\n'))
-                            --check_pos;
-                        while (check_pos > 0 && (directive_text[check_pos - 1] == ' ' || directive_text[check_pos - 1] == '\t'))
-                            --check_pos;
-
-                        bool continued = (check_pos > 0 && directive_text[check_pos - 1] == '\\');
-                        if (continued) {
-                            search_pos = newline_pos + 1;
-                            continue;
-                        }
-
-                        size_t end_pos = newline_pos + 1;
-                        if (directive_text[newline_pos] == '\r' &&
-                            end_pos < directive_text.size() &&
-                            directive_text[end_pos] == '\n') {
-                            ++end_pos;
-                        }
-                        directive_text.erase(end_pos);
-                        break;
-                    }
-
-                    PreprocessingInfo *info = new PreprocessingInfo(
-                        PreprocessingInfo::CMacroCallStatement,
-                        directive_text,
-                        filename,
-                        line,
-                        column,
-                        0,
-                        PreprocessingInfo::before);
-
-                    info->get_file_info()->setTransformation();
-                    target_stmt->addToAttachedPreprocessingInfo(info, PreprocessingInfo::before);
-                }
-            }
-        }
-    }
-
-    *node = target_stmt;
-
-    return VisitStmt(omp_executable_directive, node) && res;
+    // This should never be called since we don't enable OpenMP in Clang
+    std::cerr << "ERROR: VisitOMPExecutableDirective called but OpenMP not enabled in Clang" << std::endl;
+    ROSE_ASSERT(false);
+    return false;
 }
 
 bool ClangToSageTranslator::VisitOMPAtomicDirective(clang::OMPAtomicDirective * omp_atomic_directive, SgNode ** node) {
@@ -1634,8 +1615,6 @@ bool ClangToSageTranslator::VisitOMPAtomicDirective(clang::OMPAtomicDirective * 
     std::cerr << "ClangToSageTranslator::VisitOMPAtomicDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPExecutableDirective(omp_atomic_directive, node) && res;
 }
@@ -1645,8 +1624,6 @@ bool ClangToSageTranslator::VisitOMPBarrierDirective(clang::OMPBarrierDirective 
     std::cerr << "ClangToSageTranslator::VisitOMPBarrierDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPExecutableDirective(omp_barrier_directive, node) && res;
 }
@@ -1753,8 +1730,6 @@ bool ClangToSageTranslator::VisitOMPForDirective(clang::OMPForDirective * omp_fo
     std::cerr << "ClangToSageTranslator::VisitOMPForDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPLoopDirective(omp_for_directive, node) && res;
 }
@@ -1897,8 +1872,6 @@ bool ClangToSageTranslator::VisitOMPParallelDirective(clang::OMPParallelDirectiv
     std::cerr << "ClangToSageTranslator::VisitOMPParallelDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPExecutableDirective(omp_parallel_directive, node) && res;
 }

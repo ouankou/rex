@@ -1301,7 +1301,6 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
 
     if (getEnclosingSourceFile(decl) != sageFilePtr)
       continue;
-
     if (OpenMPIR_list.size() != 0) {
       convertDirective(OpenMPIR_list[OpenMPIR_index]);
       OpenMPIR_index--;
