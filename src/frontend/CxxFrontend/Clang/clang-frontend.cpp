@@ -356,7 +356,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     if (enable_opencl) {
         lang_opts.OpenCL = 1;
     }
-    // Never enable OpenMP in Clang - let ROSE's ompparser handle it
+    // Never enable Clang's OpenMP parser (lang_opts.OpenMP) - pragmas are captured via PPCallbacks and processed by ROSE's ompparser instead
 
     // Now create file manager with FileSystemOptions from the parsed invocation
     compiler_instance->createFileManager();

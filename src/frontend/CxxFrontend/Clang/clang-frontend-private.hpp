@@ -154,6 +154,7 @@ private:
     clang::SourceManager& p_source_manager;
     clang::Preprocessor& p_preprocessor;
 
+public:
     // Helper function to check if character is whitespace (space or tab)
     static bool isWhitespace(char c) {
         return c == ' ' || c == '\t';
@@ -166,8 +167,6 @@ private:
         }
         return pos;
     }
-
-public:
     RoseOpenMPPragmaCallback(clang::SourceManager& SM, clang::Preprocessor& PP)
         : p_source_manager(SM), p_preprocessor(PP) {}
 

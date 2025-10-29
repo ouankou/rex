@@ -1018,8 +1018,8 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
 
     SageBuilder::popScopeStack();
 
-    // If there's a captured OpenMP pragma, insert it as the first statement in the body block
-    // This matches the Fortran connector pattern: pragma inserted into existing scope
+    // If there's a captured OpenMP pragma, insert it in the PARENT scope before this compound statement
+    // This allows processOpenMP() to use the entire compound statement as the pragma's body
     if (has_pragma) {
         // Extract directive text while preserving whitespace for accurate passthrough
         // Example: "#  pragma    omp parallel" → "  omp parallel"
@@ -1033,8 +1033,7 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
             size_t after_pragma = pragma_pos + 6; // Skip "pragma"
 
             // Skip first space after "pragma" since unparser adds it
-            if (after_pragma < pragma_text.size() &&
-                (pragma_text[after_pragma] == ' ' || pragma_text[after_pragma] == '\t')) {
+            if (after_pragma < pragma_text.size() && RoseOpenMPPragmaCallback::isWhitespace(pragma_text[after_pragma])) {
                 ++after_pragma;
             }
 
@@ -1042,33 +1041,38 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
             directive = std::string(spaces_after_hash, ' ') + pragma_text.substr(after_pragma);
         }
 
-        // Create pragma declaration with body block as scope
-        SgPragmaDeclaration* pragma_decl = SageBuilder::buildPragmaDeclaration(directive, block);
+        // Get the parent scope where this compound statement will be inserted
+        SgScopeStatement* parent_scope = SageBuilder::topScopeStack();
+        SgBasicBlock* parent_block = isSgBasicBlock(parent_scope);
 
-        // Mark as transformation for processOpenMP() filtering
-        Sg_File_Info* start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
-        Sg_File_Info* end_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+        if (parent_block != nullptr) {
+            // Create pragma declaration with parent block as scope
+            SgPragmaDeclaration* pragma_decl = SageBuilder::buildPragmaDeclaration(directive, parent_block);
 
-        start_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
-        start_fi->set_line(pragma_line);
-        start_fi->set_col(1);
+            // Mark as transformation for processOpenMP() filtering
+            Sg_File_Info* start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+            Sg_File_Info* end_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
 
-        end_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
-        end_fi->set_line(pragma_line);
-        end_fi->set_col(1);
+            start_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+            start_fi->set_line(pragma_line);
+            start_fi->set_col(1);
 
-        pragma_decl->set_startOfConstruct(start_fi);
-        pragma_decl->set_endOfConstruct(end_fi);
-        start_fi->set_parent(pragma_decl);
-        end_fi->set_parent(pragma_decl);
+            end_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+            end_fi->set_line(pragma_line);
+            end_fi->set_col(1);
 
-        // Prepend pragma to the body block (making it the first statement)
-        SageInterface::prependStatement(pragma_decl, block);
+            pragma_decl->set_startOfConstruct(start_fi);
+            pragma_decl->set_endOfConstruct(end_fi);
+            start_fi->set_parent(pragma_decl);
+            end_fi->set_parent(pragma_decl);
 
-        *node = block;
-    } else {
-        *node = block;
+            // Append pragma to parent block - it will appear before the compound statement
+            // when the compound statement is later appended to the parent
+            SageInterface::appendStatement(pragma_decl, parent_block);
+        }
     }
+
+    *node = block;
 
     return VisitStmt(compound_stmt, node) && res;
 }
@@ -1604,8 +1608,8 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitOMPExecutableDirective" << std::endl;
 #endif
-    // This should never be called since we don't enable OpenMP in Clang
-    std::cerr << "ERROR: VisitOMPExecutableDirective called but OpenMP not enabled in Clang" << std::endl;
+    // ERROR: VisitOMPExecutableDirective should not be called - OpenMP pragmas handled via PPCallbacks instead of Clang's parser
+    std::cerr << "ERROR: VisitOMPExecutableDirective should not be called - OpenMP pragmas handled via PPCallbacks instead of Clang's parser" << std::endl;
     ROSE_ASSERT(false);
     return false;
 }
