@@ -150,7 +150,8 @@
 // PP Callbacks to capture OpenMP pragmas before Clang processes them
 class RoseOpenMPPragmaCallback : public clang::PPCallbacks {
 private:
-    std::map<unsigned, std::string> line_to_pragma;
+    // Use (FileID, line) pair as key to handle pragmas from multiple files correctly
+    std::map<std::pair<clang::FileID, unsigned>, std::string> line_to_pragma;
     clang::SourceManager& p_source_manager;
     clang::Preprocessor& p_preprocessor;
 
@@ -172,7 +173,8 @@ public:
 
     void PragmaDirective(clang::SourceLocation Loc,
                         clang::PragmaIntroducerKind Introducer) override {
-        // Get the line number where the pragma appears
+        // Get the FileID and line number where the pragma appears
+        clang::FileID file_id = p_source_manager.getFileID(Loc);
         unsigned line = p_source_manager.getPresumedLineNumber(Loc);
 
         // Get the raw pragma text from the source
@@ -216,14 +218,14 @@ public:
             return;
         }
 
-        // This is an OMP pragma - store the ORIGINAL text with all formatting
-        line_to_pragma[line] = original_text;
+        // This is an OMP pragma - store with (FileID, line) key to handle multi-file TUs
+        line_to_pragma[std::make_pair(file_id, line)] = original_text;
     }
 
-    // Lookup pragma by line number - returns true if found, false otherwise
+    // Lookup pragma by (FileID, line) - returns true if found, false otherwise
     // Passes result by reference to avoid ABI issues with std::string returns
-    bool getPragmaAtLine(unsigned line, std::string& result) const {
-        auto it = line_to_pragma.find(line);
+    bool getPragmaAtLine(clang::FileID file_id, unsigned line, std::string& result) const {
+        auto it = line_to_pragma.find(std::make_pair(file_id, line));
         if (it != line_to_pragma.end()) {
             result = it->second;
             return true;

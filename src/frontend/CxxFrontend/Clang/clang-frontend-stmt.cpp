@@ -961,10 +961,11 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
     if (p_openmp_pragma_callback != nullptr) {
         clang::SourceLocation loc = compound_stmt->getBeginLoc();
         if (loc.isValid()) {
+            clang::FileID file_id = p_compiler_instance->getSourceManager().getFileID(loc);
             unsigned line = p_compiler_instance->getSourceManager().getPresumedLineNumber(loc);
             pragma_line = line - 1;
-            // Try to find pragma on the line before the compound statement
-            if (p_openmp_pragma_callback->getPragmaAtLine(pragma_line, pragma_text)) {
+            // Try to find pragma on the line before the compound statement (in the same file)
+            if (p_openmp_pragma_callback->getPragmaAtLine(file_id, pragma_line, pragma_text)) {
                 has_pragma = true;
                 // Get the filename for file info
                 clang::PresumedLoc presumed = p_compiler_instance->getSourceManager().getPresumedLoc(loc);
