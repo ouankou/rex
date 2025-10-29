@@ -4,6 +4,10 @@
 
 #include "clang-frontend.hpp"
 
+#include <iostream>
+#include <vector>
+#include <set>
+
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTConsumer.h"
@@ -57,6 +61,7 @@
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/PPCallbacks.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/Pragma.h"
 
 #include "clang/Parse/ParseAST.h"
 
@@ -144,6 +149,149 @@
 #  define FAIL_TODO 1
 #endif
 
+// PP Callbacks to capture OpenMP pragmas before Clang processes them
+class RoseOpenMPPragmaCallback : public clang::PPCallbacks {
+private:
+    // Use (FileID, line) pair as key to handle pragmas from multiple files correctly
+    std::map<std::pair<clang::FileID, unsigned>, std::string> line_to_pragma;
+    std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
+    clang::SourceManager& p_source_manager;
+    clang::Preprocessor& p_preprocessor;
+
+public:
+    // Helper function to check if character is whitespace (space or tab)
+    static bool isWhitespace(char c) {
+        return c == ' ' || c == '\t';
+    }
+
+    // Helper to skip whitespace in a string
+    static size_t skipWhitespace(const std::string& str, size_t pos) {
+        while (pos < str.size() && isWhitespace(str[pos])) {
+            ++pos;
+        }
+        return pos;
+    }
+    RoseOpenMPPragmaCallback(clang::SourceManager& SM, clang::Preprocessor& PP)
+        : p_source_manager(SM), p_preprocessor(PP) {}
+
+    void PragmaDirective(clang::SourceLocation Loc,
+                        clang::PragmaIntroducerKind Introducer) override {
+        // Get the FileID and starting line number where the pragma appears
+        clang::FileID file_id = p_source_manager.getFileID(Loc);
+        unsigned line = p_source_manager.getPresumedLineNumber(Loc);
+
+        // Capture the full pragma text, including any backslash-continued lines
+        const char *current = p_source_manager.getCharacterData(Loc);
+        std::string original_text;
+        unsigned line_count = 1;
+
+        while (current != nullptr) {
+            const char *line_end = current;
+            while (*line_end != '\n' && *line_end != '\r' && *line_end != '\0') {
+                ++line_end;
+            }
+
+            // Check for continuation BEFORE appending to properly normalize the text
+            const char *back = line_end;
+            while (back > current && isWhitespace(*(back - 1))) {
+                --back;
+            }
+            bool has_continuation = (back > current && *(back - 1) == '\\');
+
+            if (has_continuation) {
+                // For continuation lines: append up to (but not including) the backslash
+                // First, skip any whitespace before the backslash
+                const char *effective_end = back - 1;  // -1 to exclude the backslash itself
+                while (effective_end > current && isWhitespace(*(effective_end - 1))) {
+                    --effective_end;
+                }
+                original_text.append(current, effective_end - current);
+                // Add a single space to separate tokens from the next line
+                original_text.push_back(' ');
+            } else {
+                // For non-continuation lines: append the entire line as-is
+                original_text.append(current, line_end - current);
+            }
+
+            if (*line_end == '\0') {
+                break;
+            }
+
+            // Move to the next line
+            if (*line_end == '\r' && *(line_end + 1) == '\n') {
+                current = line_end + 2;
+            } else {
+                current = line_end + 1;
+            }
+
+            if (!has_continuation) {
+                // Trim trailing whitespace from the stored directive
+                while (!original_text.empty() && isspace(static_cast<unsigned char>(original_text.back()))) {
+                    original_text.pop_back();
+                }
+                break;
+            }
+
+            ++line_count;
+        }
+
+        // Check if this is an OMP pragma - handle multiple spaces
+        // Pattern: # <spaces> pragma <spaces> omp <rest>
+        size_t pos = 0;
+
+        // Check for '#'
+        if (pos >= original_text.size() || original_text[pos] != '#') {
+            return;
+        }
+        ++pos;
+
+        // Skip whitespace after '#'
+        pos = skipWhitespace(original_text, pos);
+
+        // Check for "pragma"
+        if (original_text.compare(pos, 6, "pragma") != 0) {
+            return;
+        }
+        pos += 6;
+
+        // Must have at least one whitespace after "pragma"
+        if (pos >= original_text.size() || !isWhitespace(original_text[pos])) {
+            return;
+        }
+        pos = skipWhitespace(original_text, pos);
+
+        // Check for "omp"
+        if (original_text.compare(pos, 3, "omp") != 0) {
+            return;
+        }
+
+        // This is an OMP pragma - store with (FileID, line) key to handle multi-file TUs
+        line_to_pragma[std::make_pair(file_id, line)] = original_text;
+        for (unsigned offset = 1; offset < line_count; ++offset) {
+            pragma_continuation_lines.insert(std::make_pair(file_id, line + offset));
+        }
+    }
+
+    // Lookup pragma by (FileID, line) - returns true if found, false otherwise
+    // Passes result by reference to avoid ABI issues with std::string returns
+    bool getPragmaAtLine(clang::FileID file_id, unsigned line, std::string& result) const {
+        auto it = line_to_pragma.find(std::make_pair(file_id, line));
+        if (it != line_to_pragma.end()) {
+            result = it->second;
+            return true;
+        }
+        return false;
+    }
+
+    size_t getCount() const {
+        return line_to_pragma.size();
+    }
+
+    bool isContinuationLine(clang::FileID file_id, unsigned line) const {
+        return pragma_continuation_lines.count(std::make_pair(file_id, line)) > 0;
+    }
+};
+
 class SagePreprocessorRecord;
 
 /*! \brief Translator from Clang AST to SAGE III (ROSE Compiler AST)
@@ -180,6 +328,8 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         std::map<SgClassType *, bool> p_class_type_decl_first_see_in_type;
         std::map<SgEnumType *, bool>  p_enum_type_decl_first_see_in_type;
+
+        const RoseOpenMPPragmaCallback* p_openmp_pragma_callback;
 
         // Template declaration cache - maps template name to SgTemplateClassDeclaration
         // Key: mangled template name (e.g., "std::array")
@@ -231,6 +381,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             SgDeclarationStatement* owning_template);
 
         void populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def);
+        bool collectOpenMPPragmas(clang::Stmt* stmt, std::vector<std::pair<unsigned, std::string>>& pragmas);
+        SgPragmaDeclaration* buildOpenMPPragmaDeclaration(const std::string& directive, unsigned pragma_line, SgScopeStatement* scope);
+        void appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScopeStatement* scope);
+        SgStatement* wrapStatementWithOpenMPPragmas(clang::Stmt* stmt, SgStatement* statement);
 
     public:
         ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file);
@@ -238,6 +392,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         virtual ~ClangToSageTranslator();
 
         SgGlobal * getGlobalScope();
+
+        void setOpenMPPragmaCallback(const RoseOpenMPPragmaCallback* callback) {
+            p_openmp_pragma_callback = callback;
+        }
 
   /* ASTConsumer's methods overload */
 

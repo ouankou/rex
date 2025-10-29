@@ -3,12 +3,118 @@
 #include "clang-to-rose-support.hpp"
 #include <regex>
 #include <utility>
+#include <cctype>
+#include <algorithm>
+#include <vector>
 
 #include "clang/Lex/Lexer.h"
 
 #include "sageInterface.h"
 
 using llvm::isa;  // For LLVM type checking (isa<Type>)
+
+namespace {
+
+std::string trimWhitespace(const std::string& input) {
+    size_t start = 0;
+    while (start < input.size() && (input[start] == ' ' || input[start] == '\t')) {
+        ++start;
+    }
+    size_t end = input.size();
+    while (end > start && (input[end - 1] == ' ' || input[end - 1] == '\t')) {
+        --end;
+    }
+    return input.substr(start, end - start);
+}
+
+bool isSkippableLineBetweenPragmaAndStatement(const std::string& trimmed_line) {
+    if (trimmed_line.empty()) {
+        return true;
+    }
+
+    if (trimmed_line.size() >= 2 && trimmed_line[0] == '/' && trimmed_line[1] == '/') {
+        return true;
+    }
+    if (trimmed_line.size() >= 2 && trimmed_line[0] == '/' && trimmed_line[1] == '*') {
+        return true;
+    }
+    if (!trimmed_line.empty() && trimmed_line[0] == '*') {
+        return true;
+    }
+    if (trimmed_line.size() >= 2 &&
+        trimmed_line[trimmed_line.size() - 2] == '*' &&
+        trimmed_line.back() == '/') {
+        return true;
+    }
+
+    if (!trimmed_line.empty() && trimmed_line.back() == '\\') {
+        return true;
+    }
+
+    if (trimmed_line.back() == ':') {
+        bool is_case = trimmed_line.rfind("case", 0) == 0;
+        bool is_default = trimmed_line.rfind("default", 0) == 0;
+        if (!is_case && !is_default) {
+            bool valid_label = true;
+            for (size_t i = 0; i + 1 < trimmed_line.size(); ++i) {
+                char c = trimmed_line[i];
+                if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_')) {
+                    valid_label = false;
+                    break;
+                }
+            }
+            if (valid_label) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool getLineContent(const clang::SourceManager& source_manager,
+                    clang::FileID file_id,
+                    unsigned line,
+                    std::string& result) {
+    if (line == 0) {
+        return false;
+    }
+    clang::SourceLocation line_start = source_manager.translateLineCol(file_id, line, 1);
+    if (!line_start.isValid()) {
+        return false;
+    }
+
+    const char* begin = source_manager.getCharacterData(line_start);
+    const char* current = begin;
+    while (*current != '\n' && *current != '\r' && *current != '\0') {
+        ++current;
+    }
+
+    result.assign(begin, current - begin);
+    return true;
+}
+
+std::string extractOpenMPDirective(const std::string& pragma_text) {
+    size_t pragma_pos = pragma_text.find("pragma");
+    if (pragma_pos == std::string::npos) {
+        return std::string();
+    }
+
+    size_t hash_pos = pragma_text.find('#');
+    size_t spaces_after_hash = 0;
+    if (hash_pos != std::string::npos && pragma_pos > hash_pos) {
+        spaces_after_hash = pragma_pos - hash_pos - 1;
+    }
+    size_t after_pragma = pragma_pos + 6; // Skip "pragma"
+
+    if (after_pragma < pragma_text.size() && RoseOpenMPPragmaCallback::isWhitespace(pragma_text[after_pragma])) {
+        ++after_pragma;
+    }
+
+    return std::string(spaces_after_hash, ' ') + pragma_text.substr(after_pragma);
+}
+
+} // namespace
 
 SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
     if (stmt == NULL)
@@ -946,6 +1052,157 @@ bool ClangToSageTranslator::VisitCapturedStmt(clang::CapturedStmt * captured_stm
     return VisitStmt(captured_stmt, node) && res;
 }
 
+bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<std::pair<unsigned, std::string>>& pragmas) {
+    pragmas.clear();
+
+    if (p_openmp_pragma_callback == nullptr || stmt == nullptr || p_compiler_instance == nullptr) {
+        return false;
+    }
+
+    clang::SourceLocation loc = stmt->getBeginLoc();
+    if (!loc.isValid()) {
+        return false;
+    }
+
+    clang::SourceManager& source_manager = p_compiler_instance->getSourceManager();
+    clang::FileID file_id = source_manager.getFileID(loc);
+    unsigned stmt_line = source_manager.getPresumedLineNumber(loc);
+    if (stmt_line == 0) {
+        return false;
+    }
+
+    bool found_any = false;
+    std::string pragma_text;
+
+    bool continue_across_multiline_directive = false;
+
+    for (unsigned search_line = stmt_line; search_line > 0; --search_line) {
+
+        if (p_openmp_pragma_callback->getPragmaAtLine(file_id, search_line, pragma_text)) {
+            std::string extracted = extractOpenMPDirective(pragma_text);
+            if (!extracted.empty()) {
+                pragmas.emplace_back(search_line, extracted);
+                found_any = true;
+                continue_across_multiline_directive = true;
+            }
+            continue;
+        }
+
+        std::string line_content;
+        if (!getLineContent(source_manager, file_id, search_line, line_content)) {
+            break;
+        }
+
+        std::string trimmed = trimWhitespace(line_content);
+        bool is_statement_line = (search_line == stmt_line);
+
+        if (is_statement_line) {
+            continue;
+        }
+
+        if (trimmed.empty()) {
+            continue_across_multiline_directive = false;
+            continue;
+        }
+
+        // Check if this line is a continuation of a multi-line pragma (ends with backslash)
+        // We must check this regardless of whether we've found the pragma yet, because when
+        // scanning backwards, we encounter continuation lines BEFORE the pragma line itself
+        if (p_openmp_pragma_callback->isContinuationLine(file_id, search_line)) {
+            continue;
+        }
+
+        if (isSkippableLineBetweenPragmaAndStatement(trimmed)) {
+            continue_across_multiline_directive = false;
+            continue;
+        }
+
+        // Non-empty, non-continuation, non-skippable line - stop scanning
+        break;
+    }
+
+    if (found_any) {
+        std::reverse(pragmas.begin(), pragmas.end());
+    }
+
+    return found_any;
+}
+
+SgPragmaDeclaration* ClangToSageTranslator::buildOpenMPPragmaDeclaration(const std::string& directive, unsigned pragma_line, SgScopeStatement* scope) {
+    if (scope == NULL || directive.empty()) {
+        return NULL;
+    }
+
+    SgPragmaDeclaration* pragma_decl = SageBuilder::buildPragmaDeclaration(directive, scope);
+
+    Sg_File_Info* start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+    Sg_File_Info* end_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+
+    start_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+    start_fi->set_line(pragma_line);
+    start_fi->set_col(1);
+
+    end_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+    end_fi->set_line(pragma_line);
+    end_fi->set_col(1);
+
+    pragma_decl->set_startOfConstruct(start_fi);
+    pragma_decl->set_endOfConstruct(end_fi);
+    start_fi->set_parent(pragma_decl);
+    end_fi->set_parent(pragma_decl);
+    pragma_decl->set_parent(scope);
+
+    return pragma_decl;
+}
+
+void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScopeStatement* scope) {
+    if (scope == NULL) {
+        return;
+    }
+
+    std::vector<std::pair<unsigned, std::string>> pragmas;
+    if (!collectOpenMPPragmas(stmt, pragmas)) {
+        return;
+    }
+
+    for (const auto& entry : pragmas) {
+        SgPragmaDeclaration* pragma_decl = buildOpenMPPragmaDeclaration(entry.second, entry.first, scope);
+        if (pragma_decl == NULL) {
+            continue;
+        }
+
+        if (SgBasicBlock* block = isSgBasicBlock(scope)) {
+            block->append_statement(pragma_decl);
+        } else {
+            SageInterface::appendStatement(pragma_decl, scope);
+        }
+    }
+}
+
+SgStatement* ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt* stmt, SgStatement* statement) {
+    if (statement == NULL) {
+        return NULL;
+    }
+
+    std::vector<std::pair<unsigned, std::string>> pragmas;
+    if (!collectOpenMPPragmas(stmt, pragmas)) {
+        return statement;
+    }
+
+    SgBasicBlock* wrapper_block = SageBuilder::buildBasicBlock();
+    setCompilerGeneratedFileInfo(wrapper_block, true);
+
+    for (const auto& entry : pragmas) {
+        SgPragmaDeclaration* pragma_decl = buildOpenMPPragmaDeclaration(entry.second, entry.first, wrapper_block);
+        if (pragma_decl != NULL) {
+            wrapper_block->append_statement(pragma_decl);
+        }
+    }
+
+    wrapper_block->append_statement(statement);
+    return wrapper_block;
+}
+
 bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stmt, SgNode ** node) {
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitCompoundStmt" << std::endl;
@@ -961,7 +1218,11 @@ bool ClangToSageTranslator::VisitCompoundStmt(clang::CompoundStmt * compound_stm
 
     clang::CompoundStmt::body_iterator it;
     for (it = compound_stmt->body_begin(); it != compound_stmt->body_end(); it++) {
-        SgNode * tmp_node = Traverse(*it);
+        clang::Stmt * child_stmt = *it;
+
+        appendOpenMPPragmasBefore(child_stmt, block);
+
+        SgNode * tmp_node = Traverse(child_stmt);
 
 #if DEBUG_VISIT_STMT
         if (tmp_node != NULL)
@@ -1076,6 +1337,16 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(clang::CXXForRangeStmt * cxx_fo
 
     SgNode* tmp_body = cxx_for_range_stmt->getBody() ? Traverse(cxx_for_range_stmt->getBody()) : nullptr;
     SgStatement* body = isSgStatement(tmp_body);
+    if (body == nullptr) {
+        SgExpression* body_expr = isSgExpression(tmp_body);
+        if (body_expr != nullptr) {
+            body = SageBuilder::buildExprStatement(body_expr);
+            applySourceRange(body, cxx_for_range_stmt->getBody()->getSourceRange());
+        }
+    }
+    if (body != nullptr) {
+        body = wrapStatementWithOpenMPPragmas(cxx_for_range_stmt->getBody(), body);
+    }
 
     // Build initialization statement list (range init + begin/end iterators + loop variable)
     SgStatementPtrList init_stmts;
@@ -1202,6 +1473,7 @@ bool ClangToSageTranslator::VisitDoStmt(clang::DoStmt * do_stmt, SgNode ** node)
         applySourceRange(body, do_stmt->getBody()->getSourceRange());
     }
     ROSE_ASSERT(body != NULL);
+    body = wrapStatementWithOpenMPPragmas(do_stmt->getBody(), body);
 
     body->set_parent(sg_do_stmt);
 
@@ -1365,6 +1637,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt * for_stmt, SgNode ** no
             setCompilerGeneratedFileInfo(body);
         }
     }
+    body = wrapStatementWithOpenMPPragmas(for_stmt->getBody(), body);
 
     SageBuilder::popScopeStack();
 
@@ -1470,6 +1743,7 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt * if_stmt, SgNode ** node)
         then_stmt = SageBuilder::buildExprStatement(then_expr);
     }
     applySourceRange(then_stmt, if_stmt->getThen()->getSourceRange());
+    then_stmt = wrapStatementWithOpenMPPragmas(if_stmt->getThen(), then_stmt);
 
     SgNode * tmp_else = Traverse(if_stmt->getElse());
     SgStatement * else_stmt = isSgStatement(tmp_else);
@@ -1478,7 +1752,10 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt * if_stmt, SgNode ** node)
         if (else_expr != NULL)
             else_stmt = SageBuilder::buildExprStatement(else_expr);
     }
-    if (else_stmt != NULL) applySourceRange(else_stmt, if_stmt->getElse()->getSourceRange());
+    if (else_stmt != NULL) {
+        applySourceRange(else_stmt, if_stmt->getElse()->getSourceRange());
+        else_stmt = wrapStatementWithOpenMPPragmas(if_stmt->getElse(), else_stmt);
+    }
 
     SageBuilder::popScopeStack();
 
@@ -1533,10 +1810,10 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
     std::cerr << "ClangToSageTranslator::VisitOMPExecutableDirective" << std::endl;
 #endif
     bool res = true;
-    SgStatement *associated_stmt = nullptr;
+    SgStatement * associated_stmt = NULL;
 
-    if (clang::Stmt *clang_associated_stmt = omp_executable_directive->getAssociatedStmt()) {
-        SgNode *tmp_stmt = Traverse(clang_associated_stmt);
+    if (clang::Stmt * clang_associated_stmt = omp_executable_directive->getAssociatedStmt()) {
+        SgNode * tmp_stmt = Traverse(clang_associated_stmt);
         associated_stmt = isSgStatement(tmp_stmt);
         if (tmp_stmt != NULL && associated_stmt == NULL) {
             std::cerr << "Runtime error: associated OpenMP statement did not translate into an SgStatement." << std::endl;
@@ -1544,82 +1821,53 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
         }
     }
 
-    SgStatement *target_stmt = associated_stmt;
+    SgStatement * target_stmt = associated_stmt;
 
-    if (target_stmt == nullptr) {
+    if (target_stmt == NULL) {
         target_stmt = SageBuilder::buildNullStatement();
         target_stmt->set_parent(SageBuilder::topScopeStack());
     }
 
-    {
-        clang::SourceLocation begin = omp_executable_directive->getBeginLoc();
-        clang::SourceLocation end = omp_executable_directive->getEndLoc();
-        if (begin.isValid() && end.isValid()) {
-            clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-            clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
-            auto range = clang::CharSourceRange::getTokenRange(begin, end);
-            std::string directive_text = clang::Lexer::getSourceText(range, sm, lang_opts).str();
+    clang::SourceLocation begin = omp_executable_directive->getBeginLoc();
+    clang::SourceLocation end = omp_executable_directive->getEndLoc();
+    if (begin.isValid() && end.isValid()) {
+        clang::SourceManager & sm = p_compiler_instance->getSourceManager();
+        clang::LangOptions & lang_opts = p_compiler_instance->getLangOpts();
+        clang::CharSourceRange range = clang::CharSourceRange::getTokenRange(begin, end);
+        std::string directive_text = clang::Lexer::getSourceText(range, sm, lang_opts).str();
+
+        if (!directive_text.empty()) {
+            size_t first_non_ws = directive_text.find_first_not_of(" \t");
+            if (first_non_ws != std::string::npos && first_non_ws > 0)
+                directive_text.erase(0, first_non_ws);
+
+            size_t last_non_ws = directive_text.find_last_not_of(" \t\r\n");
+            if (last_non_ws != std::string::npos && last_non_ws + 1 < directive_text.size())
+                directive_text.erase(last_non_ws + 1);
+
+            if (!directive_text.empty() && directive_text.rfind("#pragma", 0) != 0)
+                directive_text.insert(0, "#pragma ");
 
             if (!directive_text.empty()) {
-                auto first_non_ws = directive_text.find_first_not_of(" \t");
-                if (first_non_ws != std::string::npos && first_non_ws > 0) {
-                    directive_text.erase(0, first_non_ws);
-                }
-                auto last_non_ws = directive_text.find_last_not_of(" \t\r\n");
-                if (last_non_ws != std::string::npos && last_non_ws + 1 < directive_text.size()) {
-                    directive_text.erase(last_non_ws + 1);
-                }
-                if (!directive_text.empty() && directive_text.rfind("#pragma", 0) != 0) {
-                    directive_text.insert(0, "#pragma ");
-                }
-                if (!directive_text.empty()) {
-                    auto filename_ref = sm.getFilename(begin);
-                    std::string filename = filename_ref.empty() ? std::string("<unknown>") : filename_ref.str();
-                    unsigned line = sm.getPresumedLineNumber(begin);
-                    unsigned column = sm.getPresumedColumnNumber(begin);
+                llvm::StringRef filename_ref = sm.getFilename(begin);
+                std::string filename = filename_ref.empty() ? std::string("<unknown>") : filename_ref.str();
+                unsigned line = sm.getPresumedLineNumber(begin);
+                unsigned column = sm.getPresumedColumnNumber(begin);
 
-                    size_t search_pos = 0;
-                    while (true) {
-                        size_t newline_pos = directive_text.find_first_of("\r\n", search_pos);
-                        if (newline_pos == std::string::npos) {
-                            directive_text.push_back('\n');
-                            break;
-                        }
+                if (directive_text.find('\n') == std::string::npos)
+                    directive_text.push_back('\n');
 
-                        size_t check_pos = newline_pos;
-                        while (check_pos > 0 && (directive_text[check_pos - 1] == '\r' || directive_text[check_pos - 1] == '\n'))
-                            --check_pos;
-                        while (check_pos > 0 && (directive_text[check_pos - 1] == ' ' || directive_text[check_pos - 1] == '\t'))
-                            --check_pos;
+                PreprocessingInfo * info = new PreprocessingInfo(
+                    PreprocessingInfo::CMacroCallStatement,
+                    directive_text,
+                    filename,
+                    line,
+                    column,
+                    0,
+                    PreprocessingInfo::before);
 
-                        bool continued = (check_pos > 0 && directive_text[check_pos - 1] == '\\');
-                        if (continued) {
-                            search_pos = newline_pos + 1;
-                            continue;
-                        }
-
-                        size_t end_pos = newline_pos + 1;
-                        if (directive_text[newline_pos] == '\r' &&
-                            end_pos < directive_text.size() &&
-                            directive_text[end_pos] == '\n') {
-                            ++end_pos;
-                        }
-                        directive_text.erase(end_pos);
-                        break;
-                    }
-
-                    PreprocessingInfo *info = new PreprocessingInfo(
-                        PreprocessingInfo::CMacroCallStatement,
-                        directive_text,
-                        filename,
-                        line,
-                        column,
-                        0,
-                        PreprocessingInfo::before);
-
-                    info->get_file_info()->setTransformation();
-                    target_stmt->addToAttachedPreprocessingInfo(info, PreprocessingInfo::before);
-                }
+                info->get_file_info()->setTransformation();
+                target_stmt->addToAttachedPreprocessingInfo(info, PreprocessingInfo::before);
             }
         }
     }
@@ -1635,8 +1883,6 @@ bool ClangToSageTranslator::VisitOMPAtomicDirective(clang::OMPAtomicDirective * 
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
     return VisitOMPExecutableDirective(omp_atomic_directive, node) && res;
 }
 
@@ -1645,8 +1891,6 @@ bool ClangToSageTranslator::VisitOMPBarrierDirective(clang::OMPBarrierDirective 
     std::cerr << "ClangToSageTranslator::VisitOMPBarrierDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPExecutableDirective(omp_barrier_directive, node) && res;
 }
@@ -1753,8 +1997,6 @@ bool ClangToSageTranslator::VisitOMPForDirective(clang::OMPForDirective * omp_fo
     std::cerr << "ClangToSageTranslator::VisitOMPForDirective" << std::endl;
 #endif
     bool res = true;
-
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
     return VisitOMPLoopDirective(omp_for_directive, node) && res;
 }
@@ -1898,8 +2140,6 @@ bool ClangToSageTranslator::VisitOMPParallelDirective(clang::OMPParallelDirectiv
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
     return VisitOMPExecutableDirective(omp_parallel_directive, node) && res;
 }
 
@@ -2000,6 +2240,7 @@ bool ClangToSageTranslator::VisitCaseStmt(clang::CaseStmt * case_stmt, SgNode **
         applySourceRange(stmt, case_stmt->getSubStmt()->getSourceRange());
     }
     ROSE_ASSERT(stmt != NULL);
+    stmt = wrapStatementWithOpenMPPragmas(case_stmt->getSubStmt(), stmt);
 
     SgNode * tmp_lhs = Traverse(case_stmt->getLHS());
     SgExpression * lhs = isSgExpression(tmp_lhs);
@@ -2030,6 +2271,7 @@ bool ClangToSageTranslator::VisitDefaultStmt(clang::DefaultStmt * default_stmt, 
         applySourceRange(stmt, default_stmt->getSubStmt()->getSourceRange());
     }
     ROSE_ASSERT(stmt != NULL);
+    stmt = wrapStatementWithOpenMPPragmas(default_stmt->getSubStmt(), stmt);
 
     *node = SageBuilder::buildDefaultOptionStmt_nfi(stmt);
 
@@ -4931,6 +5173,7 @@ bool ClangToSageTranslator::VisitLabelStmt(clang::LabelStmt * label_stmt, SgNode
     }
 
     ROSE_ASSERT(sg_sub_stmt != NULL);
+    sg_sub_stmt = wrapStatementWithOpenMPPragmas(label_stmt->getSubStmt(), sg_sub_stmt);
 
     sg_sub_stmt->set_parent(sg_label_stmt);
     sg_label_stmt->set_statement(sg_sub_stmt);
@@ -4964,6 +5207,7 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt * while_stmt, SgNode
         applySourceRange(body, while_stmt->getBody()->getSourceRange());
     }
     ROSE_ASSERT(body != NULL);
+    body = wrapStatementWithOpenMPPragmas(while_stmt->getBody(), body);
 
     body->set_parent(sg_while_stmt);
 

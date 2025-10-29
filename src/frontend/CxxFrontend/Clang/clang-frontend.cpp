@@ -1,4 +1,6 @@
 
+#include <algorithm>
+#include <cctype>
 #include <iostream>
 
 #include "sage3basic.h"
@@ -7,6 +9,7 @@
 #include "rose_config.h"
 
 #include "clang-to-dot.hpp"
+#include "ompAstConstruction.h"
 
 extern bool roseInstallPrefix(std::string&);
 
@@ -60,6 +63,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     std::vector<std::string> passthrough_args;
     bool enable_openmp = false;
     bool enable_openmp_simd = false;
+    bool disable_openmp_via_flag = false;
 
     for (int i = 0; i < argc; i++) {
         std::string current_arg(argv[i]);
@@ -94,20 +98,45 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             else
                 define_list.push_back(define_value);
         }
-        else if (current_arg.rfind("-fopenmp", 0) == 0) {
-            enable_openmp = true;
-            passthrough_args.push_back(current_arg);
-        }
-        else if (current_arg == "-fopenmp-simd") {
-            enable_openmp_simd = true;
-            passthrough_args.push_back(current_arg);
-        }
+        // Note: -fopenmp is processed by ROSE's command line processor before reaching here
+        // ROSE sets sageFile.set_openmp(true) and related flags automatically
+        // We don't need to parse it again here
         else if (current_arg.find("-c") == 0) {}
         else if (current_arg.find("-o") == 0) {
             if (current_arg.length() == 2) {
                 i++;
                 if (i >= argc) break;
             }
+        }
+        else if (current_arg.rfind("-fopenmp", 0) == 0) {
+            bool explicitly_disabled = false;
+            // -fopenmp is 8 chars (index 0-7), so '=' would be at index 8
+            if (current_arg.size() > 8 && current_arg[8] == '=') {
+                std::string value = current_arg.substr(9);  // Value starts at index 9
+                std::string lower_value = value;
+                std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (lower_value == "0" || lower_value == "false" || lower_value == "disabled") {
+                    explicitly_disabled = true;
+                }
+            }
+
+            if (explicitly_disabled) {
+                // Don't pass -fopenmp=0/false/disabled to Clang (it doesn't support this syntax)
+                // Just mark OpenMP as disabled for ROSE's internal tracking
+                disable_openmp_via_flag = true;
+                enable_openmp = false;
+            } else {
+                // Pass valid -fopenmp or -fopenmp=<lib> to Clang
+                passthrough_args.push_back(current_arg);
+                if (!disable_openmp_via_flag) {
+                    enable_openmp = true;
+                }
+            }
+        }
+        else if (current_arg == "-fopenmp-simd") {
+            passthrough_args.push_back("-fopenmp-simd");
+            enable_openmp_simd = true;
         }
         else {
             // TODO -include
@@ -116,6 +145,16 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 #endif
             input_file = current_arg;
         }
+    }
+
+    if (sageFile.get_openmp() && !enable_openmp && !disable_openmp_via_flag) {
+        passthrough_args.push_back("-fopenmp");
+        enable_openmp = true;
+    }
+
+    if (sageFile.get_openmp_parse_only() && !enable_openmp_simd) {
+        passthrough_args.push_back("-fopenmp-simd");
+        enable_openmp_simd = true;
     }
 
     ClangToSageTranslator::Language language = ClangToSageTranslator::unknown;
@@ -208,10 +247,14 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
           }
     }
 
- // FIXME should be handle by Clang ?
+// FIXME should be handle by Clang ?
     define_list.push_back("__I__=_Complex_I");
 
-    if (!enable_openmp) {
+    // If user explicitly provided -D_OPENMP=value on command line, honor it
+    // Otherwise, when -fopenmp is passed to Clang (enable_openmp=true), Clang will
+    // automatically define _OPENMP with the correct version for its OpenMP runtime.
+    // We should NOT override Clang's built-in _OPENMP macro with a hardcoded value.
+    if (!openmp_define_list.empty()) {
         define_list.insert(define_list.end(),
                            openmp_define_list.begin(),
                            openmp_define_list.end());
@@ -406,6 +449,11 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (!compiler_instance->hasPreprocessor()) compiler_instance->createPreprocessor(clang::TU_Complete);
 
+    // Register OpenMP pragma callback to capture pragmas BEFORE Clang processes them
+    clang::Preprocessor& PP = compiler_instance->getPreprocessor();
+    RoseOpenMPPragmaCallback* omp_callback = new RoseOpenMPPragmaCallback(compiler_instance->getSourceManager(), PP);
+    PP.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>(omp_callback));
+
     if (!compiler_instance->hasASTContext()) compiler_instance->createASTContext();
 
     compiler_instance->getPreprocessor().getBuiltinInfo().initializeBuiltins(
@@ -413,6 +461,10 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language, &sageFile);
     ClangToSageTranslator* translator = translator_ptr.get();
+
+    // Pass pragma callback to translator BEFORE parsing
+    translator->setOpenMPPragmaCallback(omp_callback);
+
     compiler_instance->setASTConsumer(std::move(translator_ptr));
 
     if (!compiler_instance->hasSema()) compiler_instance->createSema(clang::TU_Complete, NULL);
@@ -453,6 +505,22 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     sageFile.set_globalScope(global_scope);
 
+    // Check if OpenMP was enabled by ROSE's command line processor
+    // ROSE processes -fopenmp before clang_main is called and sets these flags
+    if (sageFile.get_openmp()) {
+        // By default, ROSE sets parse_only mode. For Clang frontend, we want to default to ast_only.
+        // Only override if no explicit processing flag was set by user
+        bool has_explicit_processing_flag =
+            sageFile.get_openmp_ast_only() ||
+            sageFile.get_openmp_lowering() ||
+            sageFile.get_openmp_analyzing();
+
+        if (!has_explicit_processing_flag && sageFile.get_openmp_parse_only()) {
+            sageFile.set_openmp_parse_only(false);
+            sageFile.set_openmp_ast_only(true);
+        }
+    }
+
     // Parent relationship already set up during global scope creation
 
     std::string file_name(input_file);
@@ -488,7 +556,13 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     finishSageAST(*translator);
 
-  // 8 - Cleanup LLVM objects
+  // 8 - OpenMP Processing
+  //
+  // NOTE: processOpenMP() is called automatically by sage_support.cpp after this function returns.
+  // If -fopenmp was specified, it will convert SgPragmaDeclaration nodes to OpenMP-specific AST nodes.
+  // The OpenMP flags have been set correctly earlier in this function.
+
+  // 9 - Cleanup LLVM objects
   //
   // Now that we use createPhysicalFileSystem() instead of getRealFileSystem(),
   // the CompilerInstance owns its own VFS instance rather than sharing the global singleton.
@@ -552,7 +626,8 @@ ClangToSageTranslator::ClangToSageTranslator(clang::CompilerInstance * compiler_
     p_compiler_instance(compiler_instance),
     p_sage_preprocessor_recorder(new SagePreprocessorRecord(&(p_compiler_instance->getSourceManager()))),
     p_sage_source_file(sage_source_file),
-    language(language_)
+    language(language_),
+    p_openmp_pragma_callback(nullptr)
 {}
 
 ClangToSageTranslator::~ClangToSageTranslator() {
