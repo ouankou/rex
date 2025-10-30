@@ -156,11 +156,24 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             // Check if project already has a file with the same source filename
             // This indicates we're in a secondary parse (e.g., during outlining/lowering)
             SgFilePtrList& file_list = project->get_fileList();
+
+            // Normalize input_file to absolute path for comparison
+            char* abs_input = realpath(input_file.c_str(), NULL);
+            std::string normalized_input = abs_input ? std::string(abs_input) : input_file;
+            if (abs_input) free(abs_input);
+
             for (SgFilePtrList::iterator it = file_list.begin(); it != file_list.end(); ++it) {
                 SgSourceFile* existing_file = isSgSourceFile(*it);
                 if (existing_file != NULL && existing_file != &sageFile) {
                     std::string existing_filename = existing_file->get_sourceFileNameWithPath();
-                    if (existing_filename == input_file || existing_filename.find(input_file) != std::string::npos) {
+
+                    // Normalize existing filename to absolute path
+                    char* abs_existing = realpath(existing_filename.c_str(), NULL);
+                    std::string normalized_existing = abs_existing ? std::string(abs_existing) : existing_filename;
+                    if (abs_existing) free(abs_existing);
+
+                    // Use exact path comparison only (no substring matching)
+                    if (normalized_existing == normalized_input) {
                         is_secondary_parse = true;
                         break;
                     }
