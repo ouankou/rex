@@ -1410,8 +1410,25 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
         SgClassSymbol * class_symbol = new SgClassSymbol(sg_first_class_decl);
         correct_scope->insert_symbol(name, class_symbol);
     }
-    else if (!isDefined)
+    else if (!isDefined) {
+        // OPENMP LOWERING FIX: Even though we're skipping this non-defining redeclaration,
+        // we still need to set file info on both the newly created node AND the first declaration
+        // from the symbol table (sg_first_class_decl) to prevent NULL file info during lowering
+        applySourceRange(sg_class_decl, record_decl->getSourceRange());
+
+        // CRITICAL: Also set file info on sg_first_class_decl (from symbol table)
+        // This is normally done at line 1438, but only when isDefined is true
+        // We must ALWAYS call this, even if file info exists, because it might be invalid
+        if (sg_first_class_decl != NULL) {
+            setCompilerGeneratedFileInfo(sg_first_class_decl);
+        }
+
+        // CRITICAL: Set *node before returning, otherwise it contains garbage
+        // Return the first declaration since we're skipping this redeclaration
+        *node = sg_first_class_decl;
+
         return false; // FIXME ROSE need only one non-defining declaration (SageBuilder don't let me build another one....)
+    }
 
     if (isDefined) {
         sg_def_class_decl = new SgClassDeclaration(name, type_of_class, type, NULL);
@@ -1419,6 +1436,12 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
         sg_def_class_decl->set_scope(correct_scope);
         if (isAnonymousStructOrUnion) sg_def_class_decl->set_isUnNamed(true);
         sg_def_class_decl->set_parent(correct_scope);
+
+        // OPENMP LOWERING FIX: The sg_class_decl created at line 1350 will be orphaned when we reassign below,
+        // but it may still be referenced through SgClassType. Set its file info before orphaning.
+        if (had_prev_decl && sg_class_decl->get_startOfConstruct() == NULL) {
+            applySourceRange(sg_class_decl, record_decl->getSourceRange());
+        }
 
         sg_class_decl = sg_def_class_decl; // we return the defining decl
 
@@ -3108,7 +3131,19 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(clang::TranslationUnitDecl 
         return false;
     }
 
-    *node = p_global_scope = new SgGlobal();
+    // Create file info for global scope (following EDG pattern)
+    // Use the source file's filename and line 0
+    std::string sourceFilename;
+    if (p_sage_source_file != nullptr && p_sage_source_file->get_startOfConstruct() != nullptr) {
+        sourceFilename = p_sage_source_file->get_startOfConstruct()->get_filename();
+    } else {
+        // Fallback: will be set properly later in clang-frontend.cpp
+        sourceFilename = "TEMP_FILENAME";
+    }
+    Sg_File_Info* globalScopeFileInfo = new Sg_File_Info(sourceFilename, 0, 0);
+
+    // Pass file info to SgGlobal constructor (like EDG does)
+    *node = p_global_scope = new SgGlobal(globalScopeFileInfo);
 
     // Set up parent relationship immediately so symbol insertion can access the project
     if (p_sage_source_file != nullptr) {

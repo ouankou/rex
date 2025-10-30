@@ -15655,7 +15655,7 @@ void SageInterface::updateDefiningNondefiningLinks(SgFunctionDeclaration* func, 
              }
         }
 
-#if 1
+#if 0
      printf ("func                            = %p \n",func);
      printf ("func->get_definingDeclaration() = %p \n",func->get_definingDeclaration());
      printf ("func                            = %p \n",func);

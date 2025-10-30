@@ -147,12 +147,34 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         }
     }
 
-    if (sageFile.get_openmp() && !enable_openmp && !disable_openmp_via_flag) {
+    // Detect if this is a secondary parse during lowering/outlining
+    // Check if this file is being re-parsed (project already has a file with same source)
+    bool is_secondary_parse = false;
+    if (sageFile.get_parent() != NULL) {
+        SgProject* project = isSgProject(sageFile.get_parent()->get_parent());
+        if (project != NULL) {
+            // Check if project already has a file with the same source filename
+            // This indicates we're in a secondary parse (e.g., during outlining/lowering)
+            SgFilePtrList& file_list = project->get_fileList();
+            for (SgFilePtrList::iterator it = file_list.begin(); it != file_list.end(); ++it) {
+                SgSourceFile* existing_file = isSgSourceFile(*it);
+                if (existing_file != NULL && existing_file != &sageFile) {
+                    std::string existing_filename = existing_file->get_sourceFileNameWithPath();
+                    if (existing_filename == input_file || existing_filename.find(input_file) != std::string::npos) {
+                        is_secondary_parse = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (sageFile.get_openmp() && !enable_openmp && !disable_openmp_via_flag && !is_secondary_parse) {
         passthrough_args.push_back("-fopenmp");
         enable_openmp = true;
     }
 
-    if (sageFile.get_openmp_parse_only() && !enable_openmp_simd) {
+    if (sageFile.get_openmp_parse_only() && !enable_openmp_simd && !is_secondary_parse) {
         passthrough_args.push_back("-fopenmp-simd");
         enable_openmp_simd = true;
     }
@@ -449,10 +471,13 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (!compiler_instance->hasPreprocessor()) compiler_instance->createPreprocessor(clang::TU_Complete);
 
-    // Register OpenMP pragma callback to capture pragmas BEFORE Clang processes them
-    clang::Preprocessor& PP = compiler_instance->getPreprocessor();
-    RoseOpenMPPragmaCallback* omp_callback = new RoseOpenMPPragmaCallback(compiler_instance->getSourceManager(), PP);
-    PP.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>(omp_callback));
+    // Only register OpenMP pragma callback when -fopenmp is enabled
+    RoseOpenMPPragmaCallback* omp_callback = nullptr;
+    if (enable_openmp) {
+        clang::Preprocessor& PP = compiler_instance->getPreprocessor();
+        omp_callback = new RoseOpenMPPragmaCallback(compiler_instance->getSourceManager(), PP);
+        PP.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>(omp_callback));
+    }
 
     if (!compiler_instance->hasASTContext()) compiler_instance->createASTContext();
 
@@ -462,8 +487,10 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language, &sageFile);
     ClangToSageTranslator* translator = translator_ptr.get();
 
-    // Pass pragma callback to translator BEFORE parsing
-    translator->setOpenMPPragmaCallback(omp_callback);
+    // Pass pragma callback to translator (will be nullptr if -fopenmp not enabled)
+    if (omp_callback) {
+        translator->setOpenMPPragmaCallback(omp_callback);
+    }
 
     compiler_instance->setASTConsumer(std::move(translator_ptr));
 
@@ -801,6 +828,19 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
         {
           located_node->set_startOfConstruct(start_fi);
           located_node->set_endOfConstruct(end_fi);
+
+          // CFE FIX: If operatorPosition was already created by setSourcePositionToDefault,
+          // we need to update it to match the real source location (like EDG does)
+          SgExpression* expr = isSgExpression(located_node);
+          if (expr != NULL && expr->get_operatorPosition() != NULL)
+             {
+               // Delete the old default file info and replace with real source location
+               delete expr->get_operatorPosition();
+               // Use the same location as startOfConstruct (operator is at the expression location)
+               Sg_File_Info* op_fi = new Sg_File_Info(*start_fi);
+               expr->set_operatorPosition(op_fi);
+               op_fi->set_parent(expr);
+             }
         }
        else
         {
@@ -845,6 +885,20 @@ void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode * node, bool to_
 
         located_node->set_startOfConstruct(start_fi);
         located_node->set_endOfConstruct(end_fi);
+
+        // CFE FIX: If operatorPosition exists, update it to match compiler-generated flags
+        SgExpression* expr = isSgExpression(located_node);
+        if (expr != NULL && expr->get_operatorPosition() != NULL)
+           {
+             delete expr->get_operatorPosition();
+             Sg_File_Info* op_fi = Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+             op_fi->setCompilerGenerated();
+             if (to_be_unparse) {
+                 op_fi->setOutputInCodeGeneration();
+             }
+             expr->set_operatorPosition(op_fi);
+             op_fi->set_parent(expr);
+           }
     }
     else if (init_name != NULL) {
         Sg_File_Info * fi = init_name->get_startOfConstruct();
