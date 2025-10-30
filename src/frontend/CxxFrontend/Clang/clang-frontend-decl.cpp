@@ -1412,15 +1412,13 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
     }
     else if (!isDefined) {
         // OPENMP LOWERING FIX: Even though we're skipping this non-defining redeclaration,
-        // we still need to set file info on both the newly created node AND the first declaration
-        // from the symbol table (sg_first_class_decl) to prevent NULL file info during lowering
+        // sg_class_decl may still be referenced (e.g., through SgClassType), so set its file info
         applySourceRange(sg_class_decl, record_decl->getSourceRange());
 
-        // CRITICAL: Also set file info on sg_first_class_decl (from symbol table)
-        // This is normally done at line 1438, but only when isDefined is true
-        // We must ALWAYS call this, even if file info exists, because it might be invalid
-        if (sg_first_class_decl != NULL) {
-            setCompilerGeneratedFileInfo(sg_first_class_decl);
+        // Only apply source range to sg_first_class_decl if it's missing file info
+        // Use the real source location to preserve user-written declaration information
+        if (sg_first_class_decl != NULL && sg_first_class_decl->get_startOfConstruct() == NULL) {
+            applySourceRange(sg_first_class_decl, record_decl->getSourceRange());
         }
 
         // CRITICAL: Set *node before returning, otherwise it contains garbage
