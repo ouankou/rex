@@ -2106,6 +2106,8 @@ SgFile::usage ()
 "     -rose:OpenMP:lowering, -rose:openmp:lowering\n"
 "                             on top of -rose:openmp:ast_only, transform AST with OpenMP nodes into multithreaded code \n"
 "                             targeting GCC GOMP runtime library\n"
+"     --rex-omp-ast-only      REX convenience option: equivalent to -fopenmp --rose:openmp:ast_only\n"
+"     --rex-omp-lowering      REX convenience option: equivalent to -fopenmp -rose:openmp:lowering -rose:skipfinalCompileStep\n"
 "     -rose:fortran\n"
 "                             compile Fortran code, determining version of\n"
 "                             Fortran from file suffix)\n"
@@ -3414,8 +3416,9 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         if (!Outliner::select_omp_loop)
-           argv.push_back(ompmacro);
+         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
+         // if (!Outliner::select_omp_loop)
+         //   argv.push_back(ompmacro);
        }
      }
 
@@ -3434,8 +3437,9 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         if (!Outliner::select_omp_loop)
-           argv.push_back(ompmacro);
+         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
+         // if (!Outliner::select_omp_loop)
+         //   argv.push_back(ompmacro);
        }
      }
 
@@ -3455,8 +3459,9 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         if (!Outliner::select_omp_loop)
-           argv.push_back(ompmacro);
+         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
+         // if (!Outliner::select_omp_loop)
+         //   argv.push_back(ompmacro);
        }
      }
 
@@ -3477,11 +3482,52 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         if (!Outliner::select_omp_loop)
-           argv.push_back(ompmacro);
+         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
+         // if (!Outliner::select_omp_loop)
+         //   argv.push_back(ompmacro);
        }
      }
-     
+
+     // REX-specific convenience options for OpenMP
+     // --rex-omp-ast-only: equivalent to -fopenmp --rose:openmp:ast_only
+     if ( CommandlineProcessing::isOption(argv,"--rex-omp-","ast-only",true) == true
+         )
+     {
+       if ( SgProject::get_verbose() >= 1 )
+         printf ("REX OpenMP convenience option: --rex-omp-ast-only (enables -fopenmp --rose:openmp:ast_only)\n");
+       set_openmp_ast_only(true);
+       set_openmp_parse_only(false);
+       // turn on OpenMP if not set explicitly
+       if (!get_openmp())
+       {
+         set_openmp(true);
+         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
+         // if (!Outliner::select_omp_loop)
+         //   argv.push_back(ompmacro);
+       }
+     }
+
+     // --rex-omp-lowering: equivalent to -fopenmp -rose:openmp:lowering -rose:skipfinalCompileStep
+     if ( CommandlineProcessing::isOption(argv,"--rex-omp-","lowering",true) == true
+         )
+     {
+       if ( SgProject::get_verbose() >= 1 )
+         printf ("REX OpenMP convenience option: --rex-omp-lowering (enables -fopenmp -rose:openmp:lowering -rose:skipfinalCompileStep)\n");
+       set_openmp_lowering(true);
+       set_openmp_parse_only(false);
+       set_openmp_ast_only(false);
+       set_openmp_analyzing(false);
+       set_skipfinalCompileStep(true);
+       // turn on OpenMP if not set explicitly
+       if (!get_openmp())
+       {
+         set_openmp(true);
+         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
+         // if (!Outliner::select_omp_loop)
+         //   argv.push_back(ompmacro);
+       }
+     }
+
      // Patrick, 9/22/2022
      if (CommandlineProcessing::isOption(argv, "-rose:simd:", "(intel-avx)", true) == true) {
         simd_arch = Intel_AVX512;    
@@ -4413,6 +4459,10 @@ SgFile::stripEdgCommandLineOptions ( vector<string> & argv )
      CommandlineProcessing::removeArgsWithParameters (argv,"-edg_parameter:");
      CommandlineProcessing::removeArgsWithParameters (argv,"--edg_parameter:");
 
+  // Remove REX-specific OpenMP convenience options
+     CommandlineProcessing::removeArgs (argv,"--rex-omp-ast-only");
+     CommandlineProcessing::removeArgs (argv,"--rex-omp-lowering");
+
   // DQ (2/20/2010): Remove this option when building the command line for the vendor compiler.
 
   // DQ (12/9/2016): Eliminating a warning that we want to be an error: -Werror=unused-but-set-variable.
@@ -5183,11 +5233,13 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
 
        // Liao, 9/4/2009. If OpenMP lowering is activated. -D_OPENMP=OMPVERSION should be added
        // since we don't remove condition compilation preprocessing info. during OpenMP lowering
-          if (get_openmp_lowering()|| ( get_openmp() && !Outliner::select_omp_loop ))
-          {
-            string ompmacro="-D_OPENMP="+ StringUtility::numberToString(OMPVERSION);
-            compilerNameString.push_back(ompmacro);
-          }
+       // REX: Commented out - Clang automatically defines _OPENMP when -fopenmp is passed.
+       // The old EDG frontend required this to be explicitly defined, but Clang does not.
+          // if (get_openmp_lowering()|| ( get_openmp() && !Outliner::select_omp_loop ))
+          // {
+          //   string ompmacro="-D_OPENMP="+ StringUtility::numberToString(OMPVERSION);
+          //   compilerNameString.push_back(ompmacro);
+          // }
         }
 
   // DQ (3/31/2004): New cleaned up source file handling

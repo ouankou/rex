@@ -1036,11 +1036,24 @@ bool ClangToSageTranslator::VisitCapturedStmt(clang::CapturedStmt * captured_stm
 #endif
     bool res = true;
 
-    SgNode * tmp_stmt = Traverse(captured_stmt->getCapturedStmt());
+    clang::Stmt * clang_body = captured_stmt->getCapturedStmt();
+    SgNode * tmp_stmt = Traverse(clang_body);
     SgStatement * body = isSgStatement(tmp_stmt);
-    if (tmp_stmt != NULL && body == NULL) {
-        std::cerr << "Runtime error: CapturedStmt child did not translate into an SgStatement." << std::endl;
-        res = false;
+
+    // If the traversal returned an expression instead of a statement,
+    // wrap it in an expression statement (this happens when the captured
+    // region contains a single expression like a function call)
+    if (body == NULL && tmp_stmt != NULL) {
+        SgExpression * expr = isSgExpression(tmp_stmt);
+        if (expr != NULL) {
+            body = SageBuilder::buildExprStatement(expr);
+            if (clang_body != NULL) {
+                applySourceRange(body, clang_body->getSourceRange());
+            }
+        } else {
+            std::cerr << "Runtime error: CapturedStmt child did not translate into an SgStatement or SgExpression." << std::endl;
+            res = false;
+        }
     }
 
     if (body == NULL) {
@@ -1133,6 +1146,7 @@ SgPragmaDeclaration* ClangToSageTranslator::buildOpenMPPragmaDeclaration(const s
         return NULL;
     }
 
+    // Don't normalize here - OMP unparser will handle normalization
     SgPragmaDeclaration* pragma_decl = SageBuilder::buildPragmaDeclaration(directive, scope);
 
     Sg_File_Info* start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
@@ -1812,6 +1826,7 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
     bool res = true;
     SgStatement * associated_stmt = NULL;
 
+    // Traverse the body statement
     if (clang::Stmt * clang_associated_stmt = omp_executable_directive->getAssociatedStmt()) {
         SgNode * tmp_stmt = Traverse(clang_associated_stmt);
         associated_stmt = isSgStatement(tmp_stmt);
@@ -1822,60 +1837,21 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(clang::OMPExecutableDire
     }
 
     SgStatement * target_stmt = associated_stmt;
-
     if (target_stmt == NULL) {
         target_stmt = SageBuilder::buildNullStatement();
         target_stmt->set_parent(SageBuilder::topScopeStack());
     }
 
-    clang::SourceLocation begin = omp_executable_directive->getBeginLoc();
-    clang::SourceLocation end = omp_executable_directive->getEndLoc();
-    if (begin.isValid() && end.isValid()) {
-        clang::SourceManager & sm = p_compiler_instance->getSourceManager();
-        clang::LangOptions & lang_opts = p_compiler_instance->getLangOpts();
-        clang::CharSourceRange range = clang::CharSourceRange::getTokenRange(begin, end);
-        std::string directive_text = clang::Lexer::getSourceText(range, sm, lang_opts).str();
-
-        if (!directive_text.empty()) {
-            size_t first_non_ws = directive_text.find_first_not_of(" \t");
-            if (first_non_ws != std::string::npos && first_non_ws > 0)
-                directive_text.erase(0, first_non_ws);
-
-            size_t last_non_ws = directive_text.find_last_not_of(" \t\r\n");
-            if (last_non_ws != std::string::npos && last_non_ws + 1 < directive_text.size())
-                directive_text.erase(last_non_ws + 1);
-
-            if (!directive_text.empty() && directive_text.rfind("#pragma", 0) != 0)
-                directive_text.insert(0, "#pragma ");
-
-            if (!directive_text.empty()) {
-                llvm::StringRef filename_ref = sm.getFilename(begin);
-                std::string filename = filename_ref.empty() ? std::string("<unknown>") : filename_ref.str();
-                unsigned line = sm.getPresumedLineNumber(begin);
-                unsigned column = sm.getPresumedColumnNumber(begin);
-
-                if (directive_text.find('\n') == std::string::npos)
-                    directive_text.push_back('\n');
-
-                PreprocessingInfo * info = new PreprocessingInfo(
-                    PreprocessingInfo::CMacroCallStatement,
-                    directive_text,
-                    filename,
-                    line,
-                    column,
-                    0,
-                    PreprocessingInfo::before);
-
-                info->get_file_info()->setTransformation();
-                target_stmt->addToAttachedPreprocessingInfo(info, PreprocessingInfo::before);
-            }
-        }
-    }
-
+    // Just return the body statement
+    // The parent (VisitCompoundStmt) will handle pragma insertion via appendOpenMPPragmasBefore
+    // DO NOT call VisitStmt here - it would apply the directive's source range to the body statement,
+    // overwriting the body's correct source info
     *node = target_stmt;
-
-    return VisitStmt(omp_executable_directive, node) && res;
+    return res;
 }
+
+
+
 
 bool ClangToSageTranslator::VisitOMPAtomicDirective(clang::OMPAtomicDirective * omp_atomic_directive, SgNode ** node) {
 #if DEBUG_VISIT_STMT
