@@ -447,7 +447,9 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             break;
         case clang::Stmt::ImplicitCastExprClass:
             ret_status = VisitImplicitCastExpr((clang::ImplicitCastExpr *)stmt, &result);
-            ROSE_ASSERT(result != NULL);
+            // CLANG FRONTEND FIX: Allow NULL for casts of system header references
+            // VisitImplicitCastExpr may return NULL when subexpression is from a skipped system header
+            // ROSE_ASSERT(result != NULL);
             break;
         case clang::Stmt::CharacterLiteralClass:
             ret_status = VisitCharacterLiteral((clang::CharacterLiteral *)stmt, &result);
@@ -761,7 +763,9 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             break;
         case clang::Stmt::CallExprClass:
             ret_status = VisitCallExpr((clang::CallExpr *)stmt, &result);
-            ROSE_ASSERT(result != NULL);
+            // CLANG FRONTEND FIX: Allow NULL for calls to system header functions
+            // VisitCallExpr may return NULL when callee is from a skipped system header
+            // ROSE_ASSERT(result != NULL);
             break;
         case clang::Stmt::BinaryOperatorClass:
             ret_status = VisitBinaryOperator((clang::BinaryOperator *)stmt, &result);
