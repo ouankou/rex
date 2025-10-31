@@ -982,6 +982,9 @@ NextPreprocessorToInsert * NextPreprocessorToInsert::next() {
 // class
 
 NextPreprocessorToInsert * PreprocessorInserter::evaluateInheritedAttribute(SgNode * astNode, NextPreprocessorToInsert * inheritedValue) {
+    // Guard against null after final preprocessor insertion
+    if (inheritedValue == NULL) return NULL;
+
     SgLocatedNode * loc_node = isSgLocatedNode(astNode);
     if (loc_node == NULL) return inheritedValue;
 
