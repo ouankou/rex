@@ -993,15 +993,12 @@ NextPreprocessorToInsert * PreprocessorInserter::evaluateInheritedAttribute(SgNo
     bool passed_cursor = *current_pos > *(inheritedValue->cursor);
 
     if (passed_cursor) {
-        // Insert preprocessing info on the candidat node
-        if (inheritedValue->candidat != NULL && inheritedValue->next_to_insert != NULL) {
-            inheritedValue->candidat->addToAttachedPreprocessingInfo(inheritedValue->next_to_insert);
+        if (inheritedValue->next_to_insert != NULL) {
+            loc_node->addToAttachedPreprocessingInfo(inheritedValue->next_to_insert);
         }
         return inheritedValue->next();
     }
 
-    // Update candidat to current node since we haven't passed the cursor yet
-    inheritedValue->candidat = loc_node;
     return inheritedValue;
 }
 
