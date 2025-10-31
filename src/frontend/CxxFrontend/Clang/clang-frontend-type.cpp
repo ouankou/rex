@@ -637,7 +637,25 @@ bool ClangToSageTranslator::VisitDecltypeType(clang::DecltypeType * decltype_typ
     if (underlying_type.isNull()) {
         *node = SageBuilder::buildOpaqueType("decltype", getGlobalScope());
     } else {
-        *node = buildTypeFromQualifiedType(underlying_type);
+        // Attempt to build the underlying type, but fall back to opaque type if it fails.
+        // This prevents crashes when the underlying type cannot be represented in ROSE
+        // (e.g., complex template metaprogramming patterns in STL headers).
+        SgNode * tmp_node = Traverse(underlying_type.getTypePtr());
+        SgType * underlying_sage_type = isSgType(tmp_node);
+
+        if (underlying_sage_type != NULL) {
+            // Successfully built the underlying type - use it
+            if (underlying_type.hasLocalQualifiers()) {
+                // Need to apply qualifiers (const, volatile, etc.)
+                *node = buildTypeFromQualifiedType(underlying_type);
+            } else {
+                *node = underlying_sage_type;
+            }
+        } else {
+            // Could not build the underlying type - fall back to opaque type
+            // This preserves the old behavior of not crashing on unsupported types
+            *node = SageBuilder::buildOpaqueType("decltype", getGlobalScope());
+        }
     }
 
     return VisitType(decltype_type, node) && res;
