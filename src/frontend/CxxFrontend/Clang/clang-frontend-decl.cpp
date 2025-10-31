@@ -421,6 +421,48 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
         return NULL;
     }
 
+    // Handle VarDecl (variables like std::cout, errno, global constants)
+    if (clang::VarDecl* var_decl = llvm::dyn_cast<clang::VarDecl>(decl)) {
+        std::string name_str = var_decl->getNameAsString();
+        if (name_str.empty()) {
+            return NULL;
+        }
+
+        SgName name(name_str);
+        SgType* var_type = buildTypeFromQualifiedType(var_decl->getType());
+
+        // Create a variable declaration stub without initializer
+        SgVariableDeclaration* stub = SageBuilder::buildVariableDeclaration(
+            name, var_type, NULL, getGlobalScope());
+
+        setCompilerGeneratedFileInfo(stub);
+        return stub;
+    }
+
+    // Handle EnumConstantDecl (enum values like std::ios_base::fmtflags)
+    if (clang::EnumConstantDecl* enum_const_decl = llvm::dyn_cast<clang::EnumConstantDecl>(decl)) {
+        std::string name_str = enum_const_decl->getNameAsString();
+        if (name_str.empty()) {
+            return NULL;
+        }
+
+        // Get the enum value
+        llvm::APSInt value = enum_const_decl->getInitVal();
+
+        // Create an enum value stub
+        // Note: We create a simple integer constant as a placeholder
+        // since we don't have the full enum type definition
+        SgName name(name_str);
+        SgType* enum_type = buildTypeFromQualifiedType(enum_const_decl->getType());
+
+        // Build as a variable declaration representing the enum constant
+        SgVariableDeclaration* stub = SageBuilder::buildVariableDeclaration(
+            name, enum_type, NULL, getGlobalScope());
+
+        setCompilerGeneratedFileInfo(stub);
+        return stub;
+    }
+
     // Handle RecordDecl (struct/class/union) - create forward declaration
     if (clang::RecordDecl* record_decl = llvm::dyn_cast<clang::RecordDecl>(decl)) {
         if (!record_decl->isCompleteDefinition()) {
