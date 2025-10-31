@@ -4274,7 +4274,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
                 SgFunctionDeclaration* func_decl = isSgFunctionDeclaration(tmp_member);
                 SgScopeStatement* decl_scope = func_decl->get_scope();
                 if (decl_scope) {
-                    sym = decl_scope->lookup_function_symbol(func_decl->get_name());
+                    // Use type-aware lookup to handle overloaded functions correctly
+                    SgFunctionType* func_type = func_decl->get_type();
+                    sym = decl_scope->lookup_function_symbol(func_decl->get_name(), func_type);
                 }
             }
             if (isSgVariableSymbol(sym)) {
@@ -4296,7 +4298,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
                 // Try to find existing symbol in the class scope
                 SgScopeStatement* decl_scope = member_func_decl->get_scope();
                 if (decl_scope != NULL) {
-                    sym = decl_scope->lookup_function_symbol(member_func_decl->get_name());
+                    // Use type-aware lookup to handle overloaded member functions correctly
+                    SgFunctionType* func_type = member_func_decl->get_type();
+                    sym = decl_scope->lookup_function_symbol(member_func_decl->get_name(), func_type);
                 }
                 // If still not found, create new member function symbol
                 if (sym == NULL) {
@@ -4317,7 +4321,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
                 // Try to find existing symbol
                 SgScopeStatement* decl_scope = func_decl->get_scope();
                 if (decl_scope != NULL) {
-                    sym = decl_scope->lookup_function_symbol(func_decl->get_name());
+                    // Use type-aware lookup to handle overloaded functions correctly
+                    SgFunctionType* func_type = func_decl->get_type();
+                    sym = decl_scope->lookup_function_symbol(func_decl->get_name(), func_type);
                 }
                 // If not found, create new function symbol
                 if (sym == NULL) {
