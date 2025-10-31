@@ -4821,18 +4821,37 @@ bool ClangToSageTranslator::VisitSourceLocExpr(clang::SourceLocExpr * source_loc
     // __builtin_FUNCTION(), __builtin_COLUMN() - compiler builtins that return
     // source location information at runtime.
     //
-    // CURRENT IMPLEMENTATION: Returns hardcoded integer 0 as placeholder.
+    // We must preserve correct types:
+    // - __builtin_FILE(), __builtin_FUNCTION(), __builtin_FileName(), __builtin_FuncSig()
+    //   return const char* → SgStringVal
+    // - __builtin_LINE() and __builtin_COLUMN() return unsigned int → SgIntVal
     //
-    // LIMITATION: This is semantically incorrect - programs relying on these builtins
-    // will get wrong values. However, it prevents crashes during AST construction.
-    // Acceptable for AST structure tests that don't execute the builtin code paths.
-    //
-    // PROPER FIX REQUIRES:
-    // 1. Check source_loc_expr->getIdentKind() to determine which builtin
-    // 2. Extract source location using source_loc_expr->getLocation() and SourceManager
-    // 3. Build correct SAGE node: SgIntVal for LINE/COLUMN, SgStringVal for FILE/FUNCTION
-    //
-    *node = SageBuilder::buildIntVal(0);
+    // Current implementation returns placeholder values (empty string "" or 0) since
+    // extracting actual source location info requires SourceManager integration.
+
+    clang::SourceLocIdentKind kind = source_loc_expr->getIdentKind();
+
+    switch (kind) {
+        case clang::SourceLocIdentKind::File:
+        case clang::SourceLocIdentKind::FileName:
+        case clang::SourceLocIdentKind::Function:
+        case clang::SourceLocIdentKind::FuncSig:
+            // String-typed builtins: return empty string to preserve type correctness
+            // This allows code like `const char *f = __builtin_FILE();` to unparse correctly
+            *node = SageBuilder::buildStringVal("");
+            break;
+
+        case clang::SourceLocIdentKind::Line:
+        case clang::SourceLocIdentKind::Column:
+            // Integer-typed builtins: return 0 as placeholder
+            *node = SageBuilder::buildIntVal(0);
+            break;
+
+        default:
+            // Unknown builtin kind (e.g., SourceLocStruct): default to integer 0
+            *node = SageBuilder::buildIntVal(0);
+            break;
+    }
 
     return VisitExpr(source_loc_expr, node) && res;
 }
