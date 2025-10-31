@@ -408,8 +408,9 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         virtual SgNode * Traverse(const clang::Type * type);
         virtual SgNode * TraverseForDeclContext(clang::DeclContext * decl_context);
 
-  /* Helper method to create minimal stubs for system header declarations */
+  /* Helper methods to create minimal stubs for system header declarations */
         virtual SgNode * createSystemHeaderStub(clang::Decl * decl);
+        virtual SgScopeStatement * getScopeForSystemDecl(clang::Decl * decl);
 
   /* Visit methods */
   /* 

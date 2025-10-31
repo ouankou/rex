@@ -375,6 +375,42 @@ ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, S
     SageBuilder::popScopeStack();
 }
 
+// Helper: Get or create proper scope for a system header declaration
+// Respects namespace context (e.g., std::) instead of dumping everything into global scope
+SgScopeStatement* ClangToSageTranslator::getScopeForSystemDecl(clang::Decl* decl) {
+    if (decl == NULL) return getGlobalScope();
+
+    clang::DeclContext* decl_context = decl->getDeclContext();
+    if (decl_context == NULL || decl_context->isTranslationUnit()) {
+        return getGlobalScope();
+    }
+
+    // Try to get existing scope from our translation map
+    if (clang::NamespaceDecl* ns_decl = llvm::dyn_cast<clang::NamespaceDecl>(decl_context)) {
+        // Look up in our cache first
+        auto it = p_decl_translation_map.find(ns_decl);
+        if (it != p_decl_translation_map.end() && it->second != NULL) {
+            if (SgNamespaceDeclarationStatement* sg_ns = isSgNamespaceDeclarationStatement(it->second)) {
+                if (SgNamespaceDefinitionStatement* ns_def = sg_ns->get_definition()) {
+                    return ns_def;
+                }
+            }
+        }
+
+        // Not in cache - create a minimal namespace stub
+        // This is needed for std:: and other library namespaces
+        SgName ns_name(ns_decl->getNameAsString());
+        SgNamespaceDeclarationStatement* sg_ns = SageBuilder::buildNamespaceDeclaration(ns_name, getGlobalScope());
+        setCompilerGeneratedFileInfo(sg_ns);
+        p_decl_translation_map.insert(std::make_pair(ns_decl, sg_ns));
+        return sg_ns->get_definition();
+    }
+
+    // For class contexts and others, fall back to global scope
+    // (Methods and nested classes need more complex handling)
+    return getGlobalScope();
+}
+
 // CLANG FRONTEND FIX: Create minimal stub declarations for system headers
 // This allows user code to reference system functions/types without traversing their full definitions
 SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
@@ -395,9 +431,12 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
             param_list->append_arg(init_name);
         }
 
-        SgScopeStatement* scope = getGlobalScope();
+        // Get proper scope (respects namespaces like std::)
+        SgScopeStatement* scope = getScopeForSystemDecl(decl);
         SgFunctionDeclaration* stub = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, scope);
 
+        // CLANG FRONTEND FIX: Preserve variadic flag
+        // hasEllipses() is a mutator that sets the flag in the function type
         if (func_decl->isVariadic()) {
             stub->hasEllipses();
         }
@@ -431,9 +470,12 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
         SgName name(name_str);
         SgType* var_type = buildTypeFromQualifiedType(var_decl->getType());
 
+        // Get proper scope (respects namespaces like std::)
+        SgScopeStatement* scope = getScopeForSystemDecl(decl);
+
         // Create a variable declaration stub without initializer
         SgVariableDeclaration* stub = SageBuilder::buildVariableDeclaration(
-            name, var_type, NULL, getGlobalScope());
+            name, var_type, NULL, scope);
 
         setCompilerGeneratedFileInfo(stub);
         return stub;
@@ -455,9 +497,12 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
         SgName name(name_str);
         SgType* enum_type = buildTypeFromQualifiedType(enum_const_decl->getType());
 
+        // Get proper scope (respects namespaces)
+        SgScopeStatement* scope = getScopeForSystemDecl(decl);
+
         // Build as a variable declaration representing the enum constant
         SgVariableDeclaration* stub = SageBuilder::buildVariableDeclaration(
-            name, enum_type, NULL, getGlobalScope());
+            name, enum_type, NULL, scope);
 
         setCompilerGeneratedFileInfo(stub);
         return stub;
@@ -482,8 +527,11 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
         if (record_decl->isClass()) kind = SgClassDeclaration::e_class;
         else if (record_decl->isUnion()) kind = SgClassDeclaration::e_union;
 
+        // Get proper scope (respects namespaces like std::)
+        SgScopeStatement* scope = getScopeForSystemDecl(decl);
+
         SgClassDeclaration* stub = SageBuilder::buildNondefiningClassDeclaration_nfi(
-            name, kind, getGlobalScope(), false, NULL);
+            name, kind, scope, false, NULL);
         stub->setForward();
         setCompilerGeneratedFileInfo(stub);
 
