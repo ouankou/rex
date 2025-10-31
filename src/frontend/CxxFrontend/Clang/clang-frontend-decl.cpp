@@ -540,11 +540,42 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
         return NULL;
     }
 
-    // Handle CXXMethod - create stub method declaration
+    // Handle CXXMethod - create stub member function declaration
+    // NOTE: Check this BEFORE FunctionDecl since CXXMethodDecl inherits from FunctionDecl
     if (clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
-        // For methods, we need the class context which we may not have
-        // Skip for now - methods in system classes shouldn't be directly called without the class
-        return NULL;
+        // Create a non-defining member function declaration stub
+        SgName name(method_decl->getNameAsString());
+        SgType* ret_type = buildTypeFromQualifiedType(method_decl->getReturnType());
+
+        SgFunctionParameterList* param_list = SageBuilder::buildFunctionParameterList_nfi();
+        for (unsigned i = 0; i < method_decl->getNumParams(); i++) {
+            clang::ParmVarDecl* param = method_decl->getParamDecl(i);
+            SgType* param_type = buildTypeFromQualifiedType(param->getType());
+            SgName param_name(param->getNameAsString());
+            SgInitializedName* init_name = SageBuilder::buildInitializedName_nfi(param_name, param_type, NULL);
+            param_list->append_arg(init_name);
+        }
+
+        // Get proper scope - this will create class stub if needed via getScopeForSystemDecl
+        SgScopeStatement* scope = getScopeForSystemDecl(decl);
+
+        // Build member function declaration (not regular function)
+        SgMemberFunctionDeclaration* stub = SageBuilder::buildNondefiningMemberFunctionDeclaration(
+            name, ret_type, param_list, scope);
+
+        // Preserve variadic flag
+        if (method_decl->isVariadic()) {
+            stub->hasEllipses();
+        }
+
+        // TODO: Set const/static/virtual modifiers
+        // The SgFunctionModifier API for these needs to be investigated
+        // For now, the stub without modifiers is sufficient to preserve user code
+
+        // Mark as compiler-generated
+        setCompilerGeneratedFileInfo(stub);
+
+        return stub;
     }
 
     // Handle VarDecl (variables like std::cout, errno, global constants)
