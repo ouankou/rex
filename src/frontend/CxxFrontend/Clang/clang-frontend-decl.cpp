@@ -375,6 +375,83 @@ ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, S
     SageBuilder::popScopeStack();
 }
 
+// CLANG FRONTEND FIX: Create minimal stub declarations for system headers
+// This allows user code to reference system functions/types without traversing their full definitions
+SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
+    if (decl == NULL) return NULL;
+
+    // Only handle specific declaration types that user code commonly references
+    if (clang::FunctionDecl* func_decl = llvm::dyn_cast<clang::FunctionDecl>(decl)) {
+        // Create a non-defining function declaration stub
+        SgName name(func_decl->getNameAsString());
+        SgType* ret_type = buildTypeFromQualifiedType(func_decl->getReturnType());
+
+        SgFunctionParameterList* param_list = SageBuilder::buildFunctionParameterList_nfi();
+        for (unsigned i = 0; i < func_decl->getNumParams(); i++) {
+            clang::ParmVarDecl* param = func_decl->getParamDecl(i);
+            SgType* param_type = buildTypeFromQualifiedType(param->getType());
+            SgName param_name(param->getNameAsString());
+            SgInitializedName* init_name = SageBuilder::buildInitializedName_nfi(param_name, param_type, NULL);
+            param_list->append_arg(init_name);
+        }
+
+        SgScopeStatement* scope = getGlobalScope();
+        SgFunctionDeclaration* stub = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, scope);
+
+        if (func_decl->isVariadic()) {
+            stub->hasEllipses();
+        }
+
+        // Mark as compiler-generated to distinguish from user code
+        setCompilerGeneratedFileInfo(stub);
+
+        return stub;
+    }
+
+    // Handle AccessSpec - these should be skipped entirely for system headers
+    // They only make sense inside class definitions which we're not fully traversing
+    if (llvm::isa<clang::AccessSpecDecl>(decl)) {
+        return NULL;
+    }
+
+    // Handle CXXMethod - create stub method declaration
+    if (clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
+        // For methods, we need the class context which we may not have
+        // Skip for now - methods in system classes shouldn't be directly called without the class
+        return NULL;
+    }
+
+    // Handle RecordDecl (struct/class/union) - create forward declaration
+    if (clang::RecordDecl* record_decl = llvm::dyn_cast<clang::RecordDecl>(decl)) {
+        if (!record_decl->isCompleteDefinition()) {
+            // Already a forward declaration, skip
+            return NULL;
+        }
+
+        // Create a forward declaration stub
+        std::string name_str = record_decl->getNameAsString();
+        if (name_str.empty() || record_decl->isAnonymousStructOrUnion()) {
+            // Skip anonymous records
+            return NULL;
+        }
+
+        SgName name(name_str);
+        SgClassDeclaration::class_types kind = SgClassDeclaration::e_struct;
+        if (record_decl->isClass()) kind = SgClassDeclaration::e_class;
+        else if (record_decl->isUnion()) kind = SgClassDeclaration::e_union;
+
+        SgClassDeclaration* stub = SageBuilder::buildNondefiningClassDeclaration_nfi(
+            name, kind, getGlobalScope(), false, NULL);
+        stub->setForward();
+        setCompilerGeneratedFileInfo(stub);
+
+        return stub;
+    }
+
+    // For other types, return NULL
+    return NULL;
+}
+
 SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
     if (decl == NULL)
         return NULL;
@@ -399,12 +476,16 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
         return it->second;
     }
 
-    // If it's a system header and NOT in cache, skip it
+    // If it's a system header and NOT in cache, create a stub instead of traversing
     // This avoids traversing into system header hierarchies while still allowing
-    // cached system declarations to be returned
-    // Note: We don't cache nullptr to avoid cache bloat with thousands of entries
+    // user code to reference system functions/types
     if (is_system_header) {
-        return nullptr;
+        SgNode* stub = createSystemHeaderStub(decl);
+        // Cache the stub so we don't recreate it multiple times
+        if (stub != NULL) {
+            p_decl_translation_map.insert(std::make_pair(decl, stub));
+        }
+        return stub;
     }
 
     SgNode * result = NULL;
