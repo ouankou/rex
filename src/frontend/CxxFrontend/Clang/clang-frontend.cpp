@@ -651,6 +651,19 @@ void finishSageAST(ClangToSageTranslator & translator) {
     }
 */
  // 2 - Place Preprocessor informations
+
+    if (translator.preprocessor_list_size() > 0) {
+        NextPreprocessorToInsert * npp = new NextPreprocessorToInsert(translator);
+        std::pair<Sg_File_Info *, PreprocessingInfo *> top = translator.preprocessor_top();
+        npp->cursor = top.first;
+        npp->next_to_insert = top.second;
+        npp->candidat = NULL;
+
+        PreprocessorInserter preprocessor_inserter;
+        preprocessor_inserter.traverse(global_scope, npp);
+
+        delete npp;
+    }
 }
 
 SgGlobal * ClangToSageTranslator::getGlobalScope() { return p_global_scope; }
@@ -940,6 +953,10 @@ bool ClangToSageTranslator::preprocessor_pop() {
     return p_sage_preprocessor_recorder->pop();
 }
 
+size_t ClangToSageTranslator::preprocessor_list_size() {
+    return p_sage_preprocessor_recorder->size();
+}
+
 // struct NextPreprocessorToInsert
 
 // NextPreprocessorToInsert::NextPreprocessorToInsert(ClangToSageTranslator & translator_) :
@@ -965,6 +982,9 @@ NextPreprocessorToInsert * NextPreprocessorToInsert::next() {
 // class
 
 NextPreprocessorToInsert * PreprocessorInserter::evaluateInheritedAttribute(SgNode * astNode, NextPreprocessorToInsert * inheritedValue) {
+    // Guard against null after final preprocessor insertion
+    if (inheritedValue == NULL) return NULL;
+
     SgLocatedNode * loc_node = isSgLocatedNode(astNode);
     if (loc_node == NULL) return inheritedValue;
 
@@ -973,7 +993,9 @@ NextPreprocessorToInsert * PreprocessorInserter::evaluateInheritedAttribute(SgNo
     bool passed_cursor = *current_pos > *(inheritedValue->cursor);
 
     if (passed_cursor) {
-        // TODO insert on inheritedValue->candidat
+        if (inheritedValue->next_to_insert != NULL) {
+            loc_node->addToAttachedPreprocessingInfo(inheritedValue->next_to_insert);
+        }
         return inheritedValue->next();
     }
 

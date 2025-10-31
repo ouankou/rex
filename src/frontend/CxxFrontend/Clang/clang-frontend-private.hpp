@@ -777,6 +777,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
   // Preprocessing access
         std::pair<Sg_File_Info *, PreprocessingInfo *> preprocessor_top();
         bool preprocessor_pop();
+        size_t preprocessor_list_size();
 
         SgAsmOp::asm_operand_modifier_enum get_sgAsmOperandModifier(std::string modifier);
         SgAsmOp::asm_operand_constraint_enum get_sgAsmOperandConstraint(std::string constraint);
@@ -822,7 +823,8 @@ class SagePreprocessorRecord : public clang::PPCallbacks {
     void Endif();
 
     std::pair<Sg_File_Info *, PreprocessingInfo *> top();
-    bool pop(); 
+    bool pop();
+    size_t size() const { return p_preprocessor_record_list.size(); }
 };
 
 struct NextPreprocessorToInsert {

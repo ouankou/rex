@@ -1149,16 +1149,11 @@ SgPragmaDeclaration* ClangToSageTranslator::buildOpenMPPragmaDeclaration(const s
     // Don't normalize here - OMP unparser will handle normalization
     SgPragmaDeclaration* pragma_decl = SageBuilder::buildPragmaDeclaration(directive, scope);
 
-    Sg_File_Info* start_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
-    Sg_File_Info* end_fi = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
-
-    start_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
-    start_fi->set_line(pragma_line);
-    start_fi->set_col(1);
-
-    end_fi->set_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
-    end_fi->set_line(pragma_line);
-    end_fi->set_col(1);
+    // Use actual source file info instead of COMPILER_GENERATED so that attachPreprocessingInfo()
+    // can properly attach comments relative to the pragma based on source positions
+    std::string filename = p_sage_source_file->getFileName();
+    Sg_File_Info* start_fi = new Sg_File_Info(filename, pragma_line, 1);
+    Sg_File_Info* end_fi = new Sg_File_Info(filename, pragma_line, 1);
 
     pragma_decl->set_startOfConstruct(start_fi);
     pragma_decl->set_endOfConstruct(end_fi);
