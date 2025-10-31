@@ -2619,47 +2619,49 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr * call_expr, SgNode **
     bool res = true;
 
     SgNode * tmp_expr = Traverse(call_expr->getCallee());
-    SgExpression * expr = isSgExpression(tmp_expr);
+    SgExpression * callee_expr = isSgExpression(tmp_expr);
 
-    // CLANG FRONTEND FIX: If callee is NULL (e.g., system header function like printf, std::swap),
-    // we cannot build the function call expression. Return NULL to skip this call entirely.
-    if (tmp_expr == NULL) {
-        *node = NULL;
-        return false;
-    }
-
-    if (tmp_expr != NULL && expr == NULL) {
-        std::cerr << "Runtime error: tmp_expr != NULL && expr == NULLL" << std::endl;
+    if (tmp_expr != NULL && callee_expr == NULL) {
+        std::cerr << "Runtime error: tmp_expr != NULL && callee_expr == NULL" << std::endl;
         res = false;
     }
 
+    // CRITICAL: Always traverse arguments even if callee is NULL!
+    // User code in arguments (lambdas, other calls, etc.) must not be dropped
     SgExprListExp * param_list = SageBuilder::buildExprListExp_nfi();
-        applySourceRange(param_list, call_expr->getSourceRange());
+    applySourceRange(param_list, call_expr->getSourceRange());
 
     clang::CallExpr::arg_iterator it;
     for (it = call_expr->arg_begin(); it != call_expr->arg_end(); ++it) {
-        SgNode * tmp_expr = Traverse(*it);
-        SgExpression * expr = isSgExpression(tmp_expr);
+        SgNode * tmp_arg = Traverse(*it);
+        SgExpression * arg_expr = isSgExpression(tmp_arg);
 
         // CLANG FRONTEND FIX: Handle NULL arguments from skipped system headers
-        // If tmp_expr is NULL (e.g., from system header), create a placeholder
+        // If tmp_arg is NULL (e.g., from system header), create a placeholder
         // instead of inserting NULL into the parameter list
-        if (tmp_expr == NULL) {
+        if (tmp_arg == NULL) {
             // Argument came from skipped system header - create placeholder
-            expr = SageBuilder::buildNullExpression();
+            arg_expr = SageBuilder::buildNullExpression();
             std::cerr << "Warning: NULL argument in function call, creating placeholder" << std::endl;
         }
-        else if (expr == NULL) {
-            // tmp_expr != NULL but not an expression - this is an error
-            std::cerr << "Runtime error: tmp_expr != NULL && expr == NULL" << std::endl;
+        else if (arg_expr == NULL) {
+            // tmp_arg != NULL but not an expression - this is an error
+            std::cerr << "Runtime error: tmp_arg != NULL && arg_expr == NULL" << std::endl;
             res = false;
             continue;
         }
 
-        param_list->append_expression(expr);
+        param_list->append_expression(arg_expr);
     }
 
-    *node = SageBuilder::buildFunctionCallExp_nfi(expr, param_list);
+    // CLANG FRONTEND FIX: If callee is NULL (system header function), still return NULL
+    // but AFTER traversing arguments to preserve user code in those arguments
+    if (tmp_expr == NULL || callee_expr == NULL) {
+        *node = NULL;
+        return res;  // Return traversal status, not false - arguments were processed
+    }
+
+    *node = SageBuilder::buildFunctionCallExp_nfi(callee_expr, param_list);
 
     return VisitExpr(call_expr, node) && res;
 }

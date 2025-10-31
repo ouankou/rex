@@ -503,45 +503,14 @@ SgScopeStatement* ClangToSageTranslator::getScopeForSystemDecl(clang::Decl* decl
 SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
     if (decl == NULL) return NULL;
 
-    // Only handle specific declaration types that user code commonly references
-    if (clang::FunctionDecl* func_decl = llvm::dyn_cast<clang::FunctionDecl>(decl)) {
-        // Create a non-defining function declaration stub
-        SgName name(func_decl->getNameAsString());
-        SgType* ret_type = buildTypeFromQualifiedType(func_decl->getReturnType());
-
-        SgFunctionParameterList* param_list = SageBuilder::buildFunctionParameterList_nfi();
-        for (unsigned i = 0; i < func_decl->getNumParams(); i++) {
-            clang::ParmVarDecl* param = func_decl->getParamDecl(i);
-            SgType* param_type = buildTypeFromQualifiedType(param->getType());
-            SgName param_name(param->getNameAsString());
-            SgInitializedName* init_name = SageBuilder::buildInitializedName_nfi(param_name, param_type, NULL);
-            param_list->append_arg(init_name);
-        }
-
-        // Get proper scope (respects namespaces like std::)
-        SgScopeStatement* scope = getScopeForSystemDecl(decl);
-        SgFunctionDeclaration* stub = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, scope);
-
-        // CLANG FRONTEND FIX: Preserve variadic flag
-        // hasEllipses() is a mutator that sets the flag in the function type
-        if (func_decl->isVariadic()) {
-            stub->hasEllipses();
-        }
-
-        // Mark as compiler-generated to distinguish from user code
-        setCompilerGeneratedFileInfo(stub);
-
-        return stub;
-    }
-
     // Handle AccessSpec - these should be skipped entirely for system headers
     // They only make sense inside class definitions which we're not fully traversing
     if (llvm::isa<clang::AccessSpecDecl>(decl)) {
         return NULL;
     }
 
-    // Handle CXXMethod - create stub member function declaration
-    // NOTE: Check this BEFORE FunctionDecl since CXXMethodDecl inherits from FunctionDecl
+    // CRITICAL: Handle CXXMethod BEFORE FunctionDecl since CXXMethodDecl inherits from FunctionDecl
+    // If we check FunctionDecl first, methods will be caught there and returned as plain functions
     if (clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
         // Create a non-defining member function declaration stub
         SgName name(method_decl->getNameAsString());
@@ -573,6 +542,38 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
         // For now, the stub without modifiers is sufficient to preserve user code
 
         // Mark as compiler-generated
+        setCompilerGeneratedFileInfo(stub);
+
+        return stub;
+    }
+
+    // Handle regular FunctionDecl (non-member functions like printf, malloc)
+    // This must come AFTER CXXMethodDecl check since methods inherit from FunctionDecl
+    if (clang::FunctionDecl* func_decl = llvm::dyn_cast<clang::FunctionDecl>(decl)) {
+        // Create a non-defining function declaration stub
+        SgName name(func_decl->getNameAsString());
+        SgType* ret_type = buildTypeFromQualifiedType(func_decl->getReturnType());
+
+        SgFunctionParameterList* param_list = SageBuilder::buildFunctionParameterList_nfi();
+        for (unsigned i = 0; i < func_decl->getNumParams(); i++) {
+            clang::ParmVarDecl* param = func_decl->getParamDecl(i);
+            SgType* param_type = buildTypeFromQualifiedType(param->getType());
+            SgName param_name(param->getNameAsString());
+            SgInitializedName* init_name = SageBuilder::buildInitializedName_nfi(param_name, param_type, NULL);
+            param_list->append_arg(init_name);
+        }
+
+        // Get proper scope (respects namespaces like std::)
+        SgScopeStatement* scope = getScopeForSystemDecl(decl);
+        SgFunctionDeclaration* stub = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, scope);
+
+        // CLANG FRONTEND FIX: Preserve variadic flag
+        // hasEllipses() is a mutator that sets the flag in the function type
+        if (func_decl->isVariadic()) {
+            stub->hasEllipses();
+        }
+
+        // Mark as compiler-generated to distinguish from user code
         setCompilerGeneratedFileInfo(stub);
 
         return stub;
