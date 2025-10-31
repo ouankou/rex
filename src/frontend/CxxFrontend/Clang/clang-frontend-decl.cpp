@@ -402,9 +402,8 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
     // If it's a system header and NOT in cache, skip it
     // This avoids traversing into system header hierarchies while still allowing
     // cached system declarations to be returned
+    // Note: We don't cache nullptr to avoid cache bloat with thousands of entries
     if (is_system_header) {
-        // Cache nullptr so we don't keep trying to traverse this
-        p_decl_translation_map.insert(std::make_pair(decl, nullptr));
         return nullptr;
     }
 

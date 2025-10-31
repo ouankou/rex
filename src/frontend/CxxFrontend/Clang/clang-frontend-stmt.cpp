@@ -566,6 +566,8 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
         case clang::Stmt::DeclRefExprClass:
             ret_status = VisitDeclRefExpr((clang::DeclRefExpr *)stmt, &result);
             // CLANG FRONTEND FIX: result can be NULL when referencing system header declarations
+            // which are intentionally skipped. NULL results propagate and must be handled by
+            // downstream code (parent expressions will also return NULL, safely skipping the subtree).
             // ROSE_ASSERT(result != NULL);
             break;
         case clang::Stmt::DependentCoawaitExprClass:
@@ -776,10 +778,13 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
     }
 
     // CLANG FRONTEND FIX: result can be NULL when referencing system header declarations
-    // which are intentionally skipped to avoid performance issues
+    // which are intentionally skipped to avoid performance issues.
+    // We skip caching NULL results to avoid map bloat and downstream issues.
     // ROSE_ASSERT(result != NULL);
 
-    p_stmt_translation_map.insert(std::pair<clang::Stmt *, SgNode *>(stmt, result));
+    if (result != NULL) {
+        p_stmt_translation_map.insert(std::pair<clang::Stmt *, SgNode *>(stmt, result));
+    }
 
     return result;
 }
@@ -2611,6 +2616,14 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr * call_expr, SgNode **
 
     SgNode * tmp_expr = Traverse(call_expr->getCallee());
     SgExpression * expr = isSgExpression(tmp_expr);
+
+    // CLANG FRONTEND FIX: If callee is NULL (e.g., system header function like printf, std::swap),
+    // we cannot build the function call expression. Return NULL to skip this call entirely.
+    if (tmp_expr == NULL) {
+        *node = NULL;
+        return false;
+    }
+
     if (tmp_expr != NULL && expr == NULL) {
         std::cerr << "Runtime error: tmp_expr != NULL && expr == NULLL" << std::endl;
         res = false;
