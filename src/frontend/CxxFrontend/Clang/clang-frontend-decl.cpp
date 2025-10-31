@@ -376,7 +376,7 @@ ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, S
 }
 
 // Helper: Get or create proper scope for a system header declaration
-// Respects namespace context (e.g., std::) instead of dumping everything into global scope
+// Respects namespace context (e.g., std::, std::chrono::) instead of dumping everything into global scope
 SgScopeStatement* ClangToSageTranslator::getScopeForSystemDecl(clang::Decl* decl) {
     if (decl == NULL) return getGlobalScope();
 
@@ -385,7 +385,7 @@ SgScopeStatement* ClangToSageTranslator::getScopeForSystemDecl(clang::Decl* decl
         return getGlobalScope();
     }
 
-    // Try to get existing scope from our translation map
+    // Handle namespace context - may be nested (e.g., std::chrono)
     if (clang::NamespaceDecl* ns_decl = llvm::dyn_cast<clang::NamespaceDecl>(decl_context)) {
         // Look up in our cache first
         auto it = p_decl_translation_map.find(ns_decl);
@@ -397,10 +397,23 @@ SgScopeStatement* ClangToSageTranslator::getScopeForSystemDecl(clang::Decl* decl
             }
         }
 
-        // Not in cache - create a minimal namespace stub
-        // This is needed for std:: and other library namespaces
+        // Not in cache - need to create a namespace stub
+        // CRITICAL: Recursively resolve parent scope for nested namespaces (std::chrono, std::filesystem, etc.)
+        SgScopeStatement* parent_scope = getGlobalScope();
+
+        // Check if this namespace itself has a parent namespace
+        clang::DeclContext* parent_context = ns_decl->getDeclContext();
+        if (parent_context != NULL && !parent_context->isTranslationUnit()) {
+            if (clang::NamespaceDecl* parent_ns = llvm::dyn_cast<clang::NamespaceDecl>(parent_context)) {
+                // Recursively get/create parent namespace scope
+                // This handles std::chrono by first creating std::, then chrono inside it
+                parent_scope = getScopeForSystemDecl(parent_ns);
+            }
+        }
+
+        // Create namespace stub in the correct parent scope
         SgName ns_name(ns_decl->getNameAsString());
-        SgNamespaceDeclarationStatement* sg_ns = SageBuilder::buildNamespaceDeclaration(ns_name, getGlobalScope());
+        SgNamespaceDeclarationStatement* sg_ns = SageBuilder::buildNamespaceDeclaration(ns_name, parent_scope);
         setCompilerGeneratedFileInfo(sg_ns);
         p_decl_translation_map.insert(std::make_pair(ns_decl, sg_ns));
         return sg_ns->get_definition();
