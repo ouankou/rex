@@ -598,10 +598,21 @@ bool ClangToSageTranslator::VisitDecltypeType(clang::DecltypeType * decltype_typ
 #endif
     bool res = true;
 
-    // TODO: Full support for decltype not yet implemented
-    // decltype(expr) deduces the type of an expression
-    // For now, use a generic unknown type scoped to global scope to avoid ROSE-1378
-    *node = SageBuilder::buildOpaqueType("decltype", getGlobalScope());
+    // IMPORTANT FIX (2025-10-31): decltype(expr) deduces the type of an expression
+    // Previous implementation created a new SgOpaqueType("decltype") for each decltype,
+    // which caused infinite loops when processing C++ standard library headers like
+    // <iostream> and <string>. These headers contain extensive template metaprogramming
+    // with many decltype expressions, and creating new opaque types for each one led to
+    // unbounded type traversal.
+    //
+    // The fix: Use getUnderlyingType() to resolve decltype to its actual deduced type.
+    // This allows the type cache to work properly and prevents redundant type creation.
+    //
+    // NOTE: Full C++ standard library support is still experimental. Tests that include
+    // <iostream>, <string>, or other complex C++ headers may still experience performance
+    // issues due to deep template instantiation hierarchies.
+    clang::QualType underlying_type = decltype_type->getUnderlyingType();
+    *node = buildTypeFromQualifiedType(underlying_type);
 
     return VisitType(decltype_type, node) && res;
 }
