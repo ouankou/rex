@@ -419,8 +419,82 @@ SgScopeStatement* ClangToSageTranslator::getScopeForSystemDecl(clang::Decl* decl
         return sg_ns->get_definition();
     }
 
-    // For class contexts and others, fall back to global scope
-    // (Methods and nested classes need more complex handling)
+    // Handle class/struct/enum context (e.g., std::string::npos, std::ios_base::fmtflags)
+    if (clang::RecordDecl* record_decl = llvm::dyn_cast<clang::RecordDecl>(decl_context)) {
+        // Look up in cache first
+        auto it = p_decl_translation_map.find(record_decl);
+        if (it != p_decl_translation_map.end() && it->second != NULL) {
+            if (SgClassDeclaration* sg_class = isSgClassDeclaration(it->second)) {
+                if (SgClassDefinition* class_def = sg_class->get_definition()) {
+                    return class_def;
+                }
+            }
+        }
+
+        // Not in cache - need to create a class stub
+        // First recursively resolve the parent scope (could be namespace or another class)
+        clang::DeclContext* parent_context = record_decl->getDeclContext();
+        SgScopeStatement* parent_scope = getGlobalScope();
+
+        if (parent_context != NULL && !parent_context->isTranslationUnit()) {
+            if (clang::Decl* parent_decl = llvm::dyn_cast<clang::Decl>(parent_context)) {
+                parent_scope = getScopeForSystemDecl(parent_decl);
+            }
+        }
+
+        // Create forward class declaration stub
+        SgName class_name(record_decl->getNameAsString());
+        SgClassDeclaration::class_types kind = SgClassDeclaration::e_struct;
+        if (record_decl->isClass()) kind = SgClassDeclaration::e_class;
+        else if (record_decl->isUnion()) kind = SgClassDeclaration::e_union;
+
+        SgClassDeclaration* sg_class = SageBuilder::buildNondefiningClassDeclaration_nfi(
+            class_name, kind, parent_scope, false, NULL);
+        sg_class->setForward();
+        setCompilerGeneratedFileInfo(sg_class);
+
+        // Create definition so we have a scope to insert members into
+        SgClassDefinition* class_def = SageBuilder::buildClassDefinition_nfi(sg_class, false);
+        sg_class->set_definition(class_def);
+        class_def->set_declaration(sg_class);
+        setCompilerGeneratedFileInfo(class_def);
+
+        p_decl_translation_map.insert(std::make_pair(record_decl, sg_class));
+        return class_def;
+    }
+
+    // Handle enum context (e.g., enum members)
+    if (clang::EnumDecl* enum_decl = llvm::dyn_cast<clang::EnumDecl>(decl_context)) {
+        // Look up in cache first
+        auto it = p_decl_translation_map.find(enum_decl);
+        if (it != p_decl_translation_map.end() && it->second != NULL) {
+            if (SgEnumDeclaration* sg_enum = isSgEnumDeclaration(it->second)) {
+                return sg_enum->get_scope();
+            }
+        }
+
+        // Not in cache - create enum stub
+        // First recursively resolve parent scope
+        clang::DeclContext* parent_context = enum_decl->getDeclContext();
+        SgScopeStatement* parent_scope = getGlobalScope();
+
+        if (parent_context != NULL && !parent_context->isTranslationUnit()) {
+            if (clang::Decl* parent_decl = llvm::dyn_cast<clang::Decl>(parent_context)) {
+                parent_scope = getScopeForSystemDecl(parent_decl);
+            }
+        }
+
+        // Create enum declaration stub
+        SgName enum_name(enum_decl->getNameAsString());
+        SgEnumDeclaration* sg_enum = SageBuilder::buildEnumDeclaration_nfi(enum_name, parent_scope);
+        setCompilerGeneratedFileInfo(sg_enum);
+
+        p_decl_translation_map.insert(std::make_pair(enum_decl, sg_enum));
+        return parent_scope;
+    }
+
+    // For function contexts and other unsupported contexts, fall back to global scope
+    // (Function-local statics, etc. need more complex handling)
     return getGlobalScope();
 }
 
