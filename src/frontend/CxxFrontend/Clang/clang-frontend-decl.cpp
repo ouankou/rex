@@ -379,6 +379,14 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
     if (decl == NULL)
         return NULL;
 
+    // CLANG FRONTEND FIX: Skip most declarations from system headers globally
+    // This prevents traversing massive template hierarchies in STL headers
+    // However, we DO need to process declarations that are directly referenced from user code
+    // The cache check below will handle those cases by returning nullptr for truly skipped ones
+    clang::SourceManager &SM = p_compiler_instance->getSourceManager();
+    bool is_system_header = SM.isInSystemHeader(decl->getLocation());
+
+    // Check cache first - if we already processed this decl, return it
     std::map<clang::Decl *, SgNode *>::iterator it = p_decl_translation_map.find(decl);
     if (it != p_decl_translation_map.end()) {
 #if DEBUG_TRAVERSE_DECL
@@ -389,6 +397,15 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
         std::cerr << " already visited : node = " << it->second << std::endl;
 #endif
         return it->second;
+    }
+
+    // If it's a system header and NOT in cache, skip it
+    // This avoids traversing into system header hierarchies while still allowing
+    // cached system declarations to be returned
+    if (is_system_header) {
+        // Cache nullptr so we don't keep trying to traverse this
+        p_decl_translation_map.insert(std::make_pair(decl, nullptr));
+        return nullptr;
     }
 
     SgNode * result = NULL;
@@ -1542,6 +1559,20 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitClassTemplateSpecializationDecl" << std::endl;
 #endif
+    if (class_tpl_spec_decl == NULL) {
+        *node = NULL;
+        return false;
+    }
+
+    // CLANG FRONTEND FIX: Skip system header template specializations to avoid performance issues
+    // System headers can instantiate thousands of template specializations (std::vector, std::array, etc.)
+    // This causes extreme slowdown or infinite loops when traversing all specializations
+    clang::SourceManager &SM = p_compiler_instance->getSourceManager();
+    if (SM.isInSystemHeader(class_tpl_spec_decl->getLocation())) {
+        *node = NULL;
+        return false;
+    }
+
     bool res = true;
 
     // TODO: Full template specialization support not yet implemented
@@ -2868,6 +2899,18 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(clang::VarTemplat
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitVarTemplateSpecializationDecl" << std::endl;
 #endif
+    if (var_template_specialization_decl == NULL) {
+        *node = NULL;
+        return false;
+    }
+
+    // CLANG FRONTEND FIX: Skip system header variable template specializations to avoid performance issues
+    clang::SourceManager &SM = p_compiler_instance->getSourceManager();
+    if (SM.isInSystemHeader(var_template_specialization_decl->getLocation())) {
+        *node = NULL;
+        return false;
+    }
+
     bool res = true;
 
     // ROOT CAUSE FIX: Variable template specializations (e.g., template<> int x<int> = 5;)

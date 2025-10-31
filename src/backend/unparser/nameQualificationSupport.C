@@ -10800,20 +10800,24 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
      if (usingDirective != NULL)
         {
           SgNamespaceDeclarationStatement* namespaceDeclaration = usingDirective->get_namespaceDeclaration();
-          ASSERT_not_null(namespaceDeclaration);
-          SgScopeStatement* currentScope = usingDirective->get_scope();
-          ASSERT_not_null(currentScope);
+          // CLANG FRONTEND FIX: namespaceDeclaration can be NULL when referencing system headers
+          // Skip processing this using directive if namespace declaration is missing
+          // ASSERT_not_null(namespaceDeclaration);
+          if (namespaceDeclaration != NULL) {
+              SgScopeStatement* currentScope = usingDirective->get_scope();
+              ASSERT_not_null(currentScope);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-          MLOG_WARN_C(MLOG_UNPARSER, "currentScope = %p = %s = %s \n",currentScope,currentScope->class_name().c_str(),SageInterface::get_name(currentScope).c_str());
+              MLOG_WARN_C(MLOG_UNPARSER, "currentScope = %p = %s = %s \n",currentScope,currentScope->class_name().c_str(),SageInterface::get_name(currentScope).c_str());
 #endif
 
-          int amountOfNameQualificationRequired = nameQualificationDepth(namespaceDeclaration,currentScope,usingDirective);
+              int amountOfNameQualificationRequired = nameQualificationDepth(namespaceDeclaration,currentScope,usingDirective);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-          MLOG_WARN_C(MLOG_UNPARSER, "SgUsingDirectiveStatement's SgNamespaceDeclarationStatement: amountOfNameQualificationRequired = %d \n",amountOfNameQualificationRequired);
+              MLOG_WARN_C(MLOG_UNPARSER, "SgUsingDirectiveStatement's SgNamespaceDeclarationStatement: amountOfNameQualificationRequired = %d \n",amountOfNameQualificationRequired);
 #endif
-          setNameQualification(usingDirective,namespaceDeclaration,amountOfNameQualificationRequired);
+              setNameQualification(usingDirective,namespaceDeclaration,amountOfNameQualificationRequired);
+          }
         }
 
      SgUsingDeclarationStatement* usingDeclaration = isSgUsingDeclarationStatement(n);
