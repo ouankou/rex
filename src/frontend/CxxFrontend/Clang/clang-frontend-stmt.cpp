@@ -2636,11 +2636,22 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr * call_expr, SgNode **
     for (it = call_expr->arg_begin(); it != call_expr->arg_end(); ++it) {
         SgNode * tmp_expr = Traverse(*it);
         SgExpression * expr = isSgExpression(tmp_expr);
-        if (tmp_expr != NULL && expr == NULL) {
+
+        // CLANG FRONTEND FIX: Handle NULL arguments from skipped system headers
+        // If tmp_expr is NULL (e.g., from system header), create a placeholder
+        // instead of inserting NULL into the parameter list
+        if (tmp_expr == NULL) {
+            // Argument came from skipped system header - create placeholder
+            expr = SageBuilder::buildNullExpression();
+            std::cerr << "Warning: NULL argument in function call, creating placeholder" << std::endl;
+        }
+        else if (expr == NULL) {
+            // tmp_expr != NULL but not an expression - this is an error
             std::cerr << "Runtime error: tmp_expr != NULL && expr == NULL" << std::endl;
             res = false;
             continue;
         }
+
         param_list->append_expression(expr);
     }
 
