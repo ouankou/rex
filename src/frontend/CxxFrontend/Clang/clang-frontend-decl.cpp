@@ -1,5 +1,6 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
+#include <set>
 
 SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * decl) {
     if (decl == NULL) return NULL;
@@ -206,35 +207,32 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
 
             // FIELD SYMBOL LOOKUP: Resolve field symbols by walking up scope chain
             //
-            // ALGORITHM: Check immediate scope, then parent scope (2 levels total).
-            // Fields in nested classes/structs/unions need ancestor scope checking.
+            // ALGORITHM: Walk the full scope chain from innermost to outermost until
+            // we find the symbol or reach the top. Use a visited set to prevent infinite
+            // loops caused by cycles in the scope graph (which can occur during AST
+            // construction for complex template code).
             //
-            // KNOWN ISSUE: Only checking 2 scope levels means fields nested >2 levels deep
-            // may not resolve. However, extending this to a full while loop causes infinite
-            // loops during ROSE initialization when processing STL headers like <iostream>.
-            // The hang occurs before clang_main() is even called, indicating a deeper
-            // infrastructure issue in ROSE's command-line/initialization layer.
+            // CORRECTNESS: Fields can be promoted through multiple levels of anonymous
+            // structs/unions, or be defined in deeply nested classes. A depth limit
+            // would incorrectly fail to resolve valid symbols in deep hierarchies.
             //
-            // ROOT CAUSE: Complex STL template code triggers pathological behavior in ROSE's
-            // symbol table/AST infrastructure during early initialization. Not fixable in
-            // the Clang frontend alone.
-            //
-            // ACCEPTABLE TRADE-OFF: 97% of tests pass (63/65). The 2 failing tests use
-            // STL headers. Most real code has shallow nesting (1-2 levels) and works fine.
-            //
-            if(isAnonymousStructOrUnion)
-                sym = scope->lookup_class_symbol(name);
-            else
-                sym = scope->lookup_variable_symbol(name);
+            std::set<SgScopeStatement*> visited;
+            while (scope != NULL && sym == NULL) {
+                // Prevent infinite loops by detecting cycles
+                if (visited.count(scope) > 0) {
+                    break;  // Cycle detected, bail out
+                }
+                visited.insert(scope);
 
-            // Check parent scope if not found
-            if (sym == NULL) {
-                scope = scope->get_scope();
-                if (scope != NULL) {
-                    if(isAnonymousStructOrUnion)
-                        sym = scope->lookup_class_symbol(name);
-                    else
-                        sym = scope->lookup_variable_symbol(name);
+                // Look up symbol in current scope
+                if (isAnonymousStructOrUnion)
+                    sym = scope->lookup_class_symbol(name);
+                else
+                    sym = scope->lookup_variable_symbol(name);
+
+                // Move to parent scope
+                if (sym == NULL) {
+                    scope = scope->get_scope();
                 }
             }
             break;
