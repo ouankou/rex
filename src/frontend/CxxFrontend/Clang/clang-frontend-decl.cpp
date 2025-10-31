@@ -607,24 +607,43 @@ SgNode * ClangToSageTranslator::createSystemHeaderStub(clang::Decl * decl) {
             return NULL;
         }
 
-        // Get the enum value
+        // Get the parent enum declaration
+        clang::EnumDecl* parent_enum = llvm::dyn_cast<clang::EnumDecl>(enum_const_decl->getDeclContext());
+        if (parent_enum == NULL) {
+            // No parent enum - this shouldn't happen, but handle gracefully
+            return NULL;
+        }
+
+        // Check if we already created the parent enum stub
+        auto it = p_decl_translation_map.find(parent_enum);
+        SgEnumDeclaration* sg_enum_decl = NULL;
+
+        if (it != p_decl_translation_map.end() && it->second != NULL) {
+            sg_enum_decl = isSgEnumDeclaration(it->second);
+        }
+
+        // If parent enum doesn't exist, create it via getScopeForSystemDecl
+        // which will create the enum stub
+        if (sg_enum_decl == NULL) {
+            // Get parent scope will create the enum declaration if needed
+            SgScopeStatement* parent_scope = getScopeForSystemDecl(enum_const_decl);
+            // Try again to get the enum from the map
+            it = p_decl_translation_map.find(parent_enum);
+            if (it != p_decl_translation_map.end() && it->second != NULL) {
+                sg_enum_decl = isSgEnumDeclaration(it->second);
+            }
+        }
+
+        // Get the enum constant value
         llvm::APSInt value = enum_const_decl->getInitVal();
+        long long int val = value.getExtValue();
 
-        // Create an enum value stub
-        // Note: We create a simple integer constant as a placeholder
-        // since we don't have the full enum type definition
+        // Build proper SgEnumVal instead of variable
         SgName name(name_str);
-        SgType* enum_type = buildTypeFromQualifiedType(enum_const_decl->getType());
+        SgEnumVal* enum_val = SageBuilder::buildEnumVal_nfi(val, sg_enum_decl, name);
+        setCompilerGeneratedFileInfo(enum_val);
 
-        // Get proper scope (respects namespaces)
-        SgScopeStatement* scope = getScopeForSystemDecl(decl);
-
-        // Build as a variable declaration representing the enum constant
-        SgVariableDeclaration* stub = SageBuilder::buildVariableDeclaration(
-            name, enum_type, NULL, scope);
-
-        setCompilerGeneratedFileInfo(stub);
-        return stub;
+        return enum_val;
     }
 
     // Handle RecordDecl (struct/class/union) - create forward declaration
