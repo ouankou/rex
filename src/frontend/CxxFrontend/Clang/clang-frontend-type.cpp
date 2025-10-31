@@ -605,14 +605,40 @@ bool ClangToSageTranslator::VisitDecltypeType(clang::DecltypeType * decltype_typ
     // with many decltype expressions, and creating new opaque types for each one led to
     // unbounded type traversal.
     //
-    // The fix: Use getUnderlyingType() to resolve decltype to its actual deduced type.
-    // This allows the type cache to work properly and prevents redundant type creation.
+    // The fix: Use getUnderlyingType() to resolve decltype to its actual deduced type
+    // when available. This allows the type cache to work properly and prevents redundant
+    // type creation. For dependent decltype expressions (in template contexts), fall back
+    // to opaque type to avoid crashes.
     //
-    // NOTE: Full C++ standard library support is still experimental. Tests that include
-    // <iostream>, <string>, or other complex C++ headers may still experience performance
-    // issues due to deep template instantiation hierarchies.
+    // NOTE: Full C++ standard library support is still experimental.
+    // Limitations include:
+    //   - Incomplete handling of complex template metaprogramming patterns (e.g., heavy
+    //     use of SFINAE, type traits, or variadic templates).
+    //   - Performance issues and possible stack overflows when processing deeply nested
+    //     template instantiations, especially in headers like <iostream>, <string>,
+    //     <vector>, and other STL containers.
+    //   - Some standard library constructs (e.g., std::enable_if, std::is_same, or
+    //     advanced allocator patterns) may not be fully supported and could result in
+    //     incorrect translation or errors.
+    //   - Limited support for C++17 and later features (e.g., fold expressions,
+    //     structured bindings) in template-heavy code.
+    // Workarounds:
+    //   - Where possible, avoid including large or complex standard library headers in
+    //     test cases.
+    //   - Use simpler or reduced test cases to isolate issues.
+    //   - If you encounter performance problems, try preprocessing the code to reduce
+    //     template complexity, or comment out problematic includes.
+    //   - For up-to-date information on supported features and known issues, consult
+    //     the project's documentation or issue tracker.
     clang::QualType underlying_type = decltype_type->getUnderlyingType();
-    *node = buildTypeFromQualifiedType(underlying_type);
+
+    // Handle dependent decltype (e.g., decltype(std::declval<T>().foo()) in templates)
+    // getUnderlyingType() returns null for dependent types, so fall back to opaque type
+    if (underlying_type.isNull()) {
+        *node = SageBuilder::buildOpaqueType("decltype", getGlobalScope());
+    } else {
+        *node = buildTypeFromQualifiedType(underlying_type);
+    }
 
     return VisitType(decltype_type, node) && res;
 }
