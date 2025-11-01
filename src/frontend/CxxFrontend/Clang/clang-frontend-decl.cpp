@@ -844,12 +844,13 @@ bool ClangToSageTranslator::VisitAccessSpecDecl(clang::AccessSpecDecl * access_s
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitAccessSpecDecl" << std::endl;
 #endif
-    bool res = true;
+    // CLANG FRONTEND FIX: AccessSpecDecl (public:, private:, protected:) are not standalone
+    // declarations in ROSE - they're properties of member declarations. Set *node to NULL
+    // to indicate this declaration doesn't have a ROSE equivalent.
+    *node = NULL;
 
-    // ROOT CAUSE FIX: Allow delegation to work - disabled FAIL_TODO
-    // ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-    return VisitDecl(access_spec_decl, node) && res;
+    // Return false to indicate no ROSE node was created (this is expected behavior)
+    return false;
 }
 
 bool ClangToSageTranslator::VisitBlockDecl(clang::BlockDecl * block_decl, SgNode ** node) {
@@ -1629,31 +1630,60 @@ bool ClangToSageTranslator::VisitCXXRecordDecl(clang::CXXRecordDecl * cxx_record
 #endif
     bool res = VisitRecordDecl(cxx_record_decl, node);
 
-    // Only process class members if this is a definition, not a forward declaration
-    // Methods like bases_begin(), method_begin(), etc. internally call .data() which requires a definition
-    if (cxx_record_decl->hasDefinition()) {
-        clang::CXXRecordDecl::base_class_iterator it_base;
-        for (it_base = cxx_record_decl->bases_begin(); it_base !=  cxx_record_decl->bases_end(); it_base++) {
-            // TODO add base classes
-        }
+    // CLANG FRONTEND FIX: Process C++ specific members (methods, constructors, etc.)
+    // Only do this if this is the DEFINING declaration (not forward declaration or redeclaration)
+    if (cxx_record_decl->isThisDeclarationADefinition() && cxx_record_decl->hasDefinition()) {
+        SgClassDeclaration* sg_class_decl = isSgClassDeclaration(*node);
+        if (sg_class_decl != NULL) {
+            SgClassDeclaration* def_decl = isSgClassDeclaration(sg_class_decl->get_definingDeclaration());
+            if (def_decl != NULL && def_decl == sg_class_decl) {  // Make sure this IS the defining decl
+                SgClassDefinition* sg_class_def = def_decl->get_definition();
+                if (sg_class_def != NULL) {
+                    // Skip ALL system header classes to avoid namespace qualification corruption
+                    // Processing system header members causes issues with name qualification traversal
+                    bool skip_members = false;
+                    clang::SourceManager &SM = p_compiler_instance->getSourceManager();
+                    if (SM.isInSystemHeader(cxx_record_decl->getLocation())) {
+                        skip_members = true;  // Skip ALL system headers, not just templates
+                    }
 
-        clang::CXXRecordDecl::method_iterator it_method;
-        for (it_method = cxx_record_decl->method_begin(); it_method !=  cxx_record_decl->method_end(); it_method++) {
-            // TODO
-        }
+                    if (!skip_members) {
+                        // Check if scope stack is in correct state
+                        SgScopeStatement* current_scope = SageBuilder::topScopeStack();
 
-        clang::CXXRecordDecl::ctor_iterator it_ctor;
-        for (it_ctor = cxx_record_decl->ctor_begin(); it_ctor != cxx_record_decl->ctor_end(); it_ctor++) {
-            // TODO if not tranversed as methods
-        }
+                        // Only push scope if not already at this class definition
+                        bool need_scope_push = (current_scope != sg_class_def);
+                        if (need_scope_push) {
+                            SageBuilder::pushScopeStack(sg_class_def);
+                        }
 
-        clang::CXXRecordDecl::friend_iterator it_friend;
-        for (it_friend = cxx_record_decl->friend_begin(); it_friend != cxx_record_decl->friend_end(); it_friend++) {
-            // TODO
-        }
+                        // Process member functions (includes methods, constructors, destructors, operators)
+                        clang::CXXRecordDecl::method_iterator it_method;
+                        for (it_method = cxx_record_decl->method_begin(); it_method !=  cxx_record_decl->method_end(); it_method++) {
+                            clang::CXXMethodDecl* method = *it_method;
 
-        clang::CXXDestructorDecl * destructor = cxx_record_decl->getDestructor();
-        // TODO
+                            // Skip implicit methods to avoid processing compiler-generated functions
+                            if (method->isImplicit()) {
+                                continue;
+                            }
+
+                            SgNode* tmp_method = Traverse(method);
+                            SgDeclarationStatement* method_decl = isSgDeclarationStatement(tmp_method);
+                            if (method_decl != NULL) {
+                                sg_class_def->append_member(method_decl);
+                                method_decl->set_parent(sg_class_def);
+                            }
+                        }
+
+                        if (need_scope_push) {
+                            SageBuilder::popScopeStack();
+                        }
+                    }
+
+                    // Base classes and friends are TODO for future implementation
+                }
+            }
+        }
     }
 
     return res;
@@ -2201,7 +2231,19 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
         // *node = SageBuilder::buildVariableDeclaration(name, type, init, SageBuilder::topScopeStack());
       // Build it by hand...
         SgVariableDeclaration * var_decl = new SgVariableDeclaration(name, type, init);
-     
+
+        // CLANG FRONTEND FIX: Capture access modifier from Clang AST
+        clang::AccessSpecifier access = field_decl->getAccess();
+        if (access == clang::AS_public) {
+            var_decl->get_declarationModifier().get_accessModifier().setPublic();
+        } else if (access == clang::AS_private) {
+            var_decl->get_declarationModifier().get_accessModifier().setPrivate();
+        } else if (access == clang::AS_protected) {
+            var_decl->get_declarationModifier().get_accessModifier().setProtected();
+        }
+        // AS_none means default access (private for class, public for struct)
+        // Keep the ROSE default which is also "default"
+
         // finding the bottom base type and check
         while(type->findBaseType() != type)
         {
@@ -2305,6 +2347,9 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     std::cerr << "ClangToSageTranslator::VisitFunctionDecl name:" << name.getString() << std::endl;
 #endif
 
+    // CLANG FRONTEND FIX #21: Constructors use void type but are marked with special modifier
+    // buildDefiningFunctionDeclaration requires non-NULL return type, so we use void for constructors
+    // and mark them with the constructor modifier flag later
     SgType * ret_type = buildTypeFromQualifiedType(function_decl->getReturnType());
 
     SgFunctionParameterList * param_list = SageBuilder::buildFunctionParameterList_nfi();
@@ -2616,6 +2661,18 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
       sg_function_decl->get_declarationModifier().get_storageModifier().setExtern();
     }
 
+    // CLANG FRONTEND FIX #21: Mark constructors, destructors, and conversion operators
+    // with special function modifiers so unparser handles them correctly
+    if (SgMemberFunctionDeclaration* member_func = isSgMemberFunctionDeclaration(sg_function_decl)) {
+        if (llvm::isa<clang::CXXConstructorDecl>(function_decl)) {
+            member_func->get_specialFunctionModifier().setConstructor();
+        } else if (llvm::isa<clang::CXXDestructorDecl>(function_decl)) {
+            member_func->get_specialFunctionModifier().setDestructor();
+        } else if (llvm::isa<clang::CXXConversionDecl>(function_decl)) {
+            member_func->get_specialFunctionModifier().setConversion();
+        }
+    }
+
     *node = sg_function_decl;
 
     return VisitDeclaratorDecl(function_decl, node) && res;
@@ -2787,23 +2844,46 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
    // calling buildVariableDeclaration_nfi to get the symbol in place.
    SgVariableDeclaration * sg_var_decl = SageBuilder::buildVariableDeclaration_nfi(name,type, NULL ,SageBuilder::topScopeStack());
  
+   // CLANG FRONTEND FIX: Check if variable has an initializer before traversing
    clang::Expr * init_expr = var_decl->getInit();
-    SgNode * tmp_init = Traverse(init_expr);
-    SgExpression * expr = isSgExpression(tmp_init);
-    if (tmp_init != NULL && expr == NULL) {
-        std::cerr << "Runtime error: not a SgInitializer..." << std::endl; // TODO
-        res = false;
+    SgExpression * expr = NULL;
+    SgExprListExp * expr_list_expr = NULL;
+
+    if (init_expr != NULL) {
+        SgNode * tmp_init = Traverse(init_expr);
+        expr = isSgExpression(tmp_init);
+        if (tmp_init != NULL && expr == NULL) {
+            std::cerr << "Runtime error: not a SgInitializer..." << std::endl; // TODO
+            res = false;
+        }
+        expr_list_expr = isSgExprListExp(expr);
     }
-    SgExprListExp * expr_list_expr = isSgExprListExp(expr);
 
     SgInitializer * init = NULL;
     if (expr_list_expr != NULL)
         init = SageBuilder::buildAggregateInitializer(expr_list_expr, type);
     else if (expr != NULL)
-        init = SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
+    {
+        // CLANG FRONTEND FIX: Check if expr is already an initializer (e.g., SgConstructorInitializer)
+        // If so, use it directly instead of wrapping it in SgAssignInitializer
+        // This preserves constructor syntax: std::string str("hello") instead of std::string str = ("hello")
+        SgInitializer* existing_init = isSgInitializer(expr);
+        if (existing_init != NULL) {
+            // Expression is already an initializer (e.g., from CXXConstructExpr)
+            // Use it directly without wrapping
+            init = existing_init;
+        } else {
+            // Expression is not an initializer, wrap it in SgAssignInitializer
+            // This handles cases like: int x = 5;
+            init = SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
+        }
+    }
 
     // Pei-Hung (09/01/2022) setup initializer once the RHS is processed.
-    sg_var_decl->reset_initializer(init);
+    // CLANG FRONTEND FIX: Only set initializer if it's not NULL
+    if (init != NULL) {
+        sg_var_decl->reset_initializer(init);
+    }
 
     // CLANG FRONTEND FIX: Set initializer parent AFTER reset_initializer
     // reset_initializer sets the parent of the initializer to the SgInitializedName,

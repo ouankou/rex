@@ -395,7 +395,13 @@ if [ "$rose_system_cdefs_h" = "" ]; then
     exit 5
 elif [ ! -r "$rose_system_cdefs_h" ]; then
     # The "#include </.../cdefs.h> in the ROSE-specific cdefs.h is wrong, so try to fix it.
-    real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h |head -n1)
+    # CLANG FRONTEND FIX: Exclude newlib paths and prefer architecture-specific paths
+    # Look for arch-specific cdefs.h first (e.g., x86_64-linux-gnu, aarch64-linux-gnu, loongarch64-linux-gnu)
+    real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h -path '*-linux-gnu/sys/cdefs.h' | head -n1)
+    # Fallback to generic search if arch-specific not found, but exclude newlib
+    if [ -z "$real_system_cdefs_h" ] || [ ! -r "$real_system_cdefs_h" ]; then
+        real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h -not -path '*/newlib/*' | head -n1)
+    fi
 
     # Fix cdefs.h path for later versions of Mac OSX [Craig Rasmussen, 2019-01-23]
     if [[ "$OSTYPE" == "darwin18" ]]; then

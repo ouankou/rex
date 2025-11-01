@@ -1451,10 +1451,21 @@ bool ClangToSageTranslator::VisitTemplateTypeParmType(clang::TemplateTypeParmTyp
 #endif
     bool res = true;
 
-    // TODO: Full support for template type parameters not yet implemented
-    // Template type parameters (e.g., typename T) are placeholders for types
-    // For now, use a generic unknown type scoped to global scope to avoid ROSE-1378
-    *node = SageBuilder::buildOpaqueType("template_type_param", getGlobalScope());
+    // CLANG FRONTEND FIX: Proper template type parameter support
+    // Get the template parameter declaration to extract the name
+    const clang::TemplateTypeParmDecl* param_decl = template_type_parm_type->getDecl();
+    std::string param_name;
+
+    if (param_decl && param_decl->getDeclName().isIdentifier()) {
+        // Use the actual template parameter name (e.g., "T")
+        param_name = param_decl->getNameAsString();
+    } else {
+        // Fallback to a generic name if we can't get the actual name
+        param_name = "template_type_param";
+    }
+
+    // Create a proper template type with the actual parameter name
+    *node = SageBuilder::buildTemplateType(SgName(param_name));
 
     return VisitType(template_type_parm_type, node) && res;
 }
@@ -1627,7 +1638,30 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
 
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
 
-    // FIXME clang::ElaboratedType contains the "sugar" of a type reference (eg, "struct A" or "M::N::A"), it should be pass down to ROSE
+    // CLANG FRONTEND FIX: ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
+    // Extract the qualifier and apply it to the typedef declaration to preserve namespace information
+    clang::NestedNameSpecifier *qualifier = elaborated_type->getQualifier();
+    if (qualifier != NULL) {
+        // Convert the nested name specifier to a string (e.g., "std::")
+        std::string qualifierStr;
+        llvm::raw_string_ostream OS(qualifierStr);
+        qualifier->print(OS, clang::PrintingPolicy(p_compiler_instance->getLangOpts()));
+        OS.flush();
+
+        // If the underlying type is a TypedefType, modify its declaration's name
+        SgTypedefType *typedef_type = isSgTypedefType(type);
+        if (typedef_type != NULL && !qualifierStr.empty()) {
+            SgTypedefDeclaration *typedef_decl = isSgTypedefDeclaration(typedef_type->get_declaration());
+            if (typedef_decl != NULL) {
+                // Get the current name and prepend the qualifier
+                std::string currentName = typedef_decl->get_name().getString();
+                std::string qualifiedName = qualifierStr + currentName;
+
+                // Set the qualified name on the typedef declaration
+                typedef_decl->set_name(SgName(qualifiedName));
+            }
+        }
+    }
 
     *node = type;
 

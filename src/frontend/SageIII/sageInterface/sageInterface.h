@@ -1327,24 +1327,30 @@ T* findDeclarationStatement(SgNode* root, std::string name, SgScopeStatement* sc
 
      if (decl != NULL)
         {
-          if (scope)
+          // CLANG FRONTEND FIX: search_for_symbol_from_symbol_table() can return NULL
+          // for Clang-generated implicit/compiler-generated declarations
+          SgSymbol* symbol = decl->search_for_symbol_from_symbol_table();
+
+          if (symbol != NULL)
              {
-               if ((decl->get_scope() == scope) && (decl->search_for_symbol_from_symbol_table()->get_name() == name))
+               if (scope)
                   {
-                    found = true;
+                    if ((decl->get_scope() == scope) && (symbol->get_name() == name))
+                       {
+                         found = true;
+                       }
                   }
-             }
-            else // Liao 2/9/2010. We should allow NULL scope
-             {
-#if 0
-            // DQ (12/6/2016): Include this into the debugging code to aboid compiler warning about unused variable.
-               SgSymbol* symbol = decl->search_for_symbol_from_symbol_table();
-               printf ("In findDeclarationStatement(): decl->search_for_symbol_from_symbol_table() = %p \n",symbol);
-               printf ("In findDeclarationStatement(): decl->search_for_symbol_from_symbol_table()->get_name() = %s \n",symbol->get_name().str());
-#endif
-               if (decl->search_for_symbol_from_symbol_table()->get_name() == name)
+                 else // Liao 2/9/2010. We should allow NULL scope
                   {
-                    found = true;
+#if 0
+                 // DQ (12/6/2016): Include this into the debugging code to aboid compiler warning about unused variable.
+                    printf ("In findDeclarationStatement(): decl->search_for_symbol_from_symbol_table() = %p \n",symbol);
+                    printf ("In findDeclarationStatement(): decl->search_for_symbol_from_symbol_table()->get_name() = %s \n",symbol->get_name().str());
+#endif
+                    if (symbol->get_name() == name)
+                       {
+                         found = true;
+                       }
                   }
              }
         }

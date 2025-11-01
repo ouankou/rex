@@ -18,6 +18,12 @@ extern bool roseInstallPrefix(std::string&);
 
 int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
+ // CLANG FRONTEND FIX: Enable template unparsing from AST
+ // The Clang frontend doesn't save template strings like EDG did, so we must
+ // unparse templates from the AST instead of from saved strings.
+ // This ensures template declarations like "template <class T>" are output correctly.
+ sageFile.set_unparse_template_ast(true);
+
  // printf ("sageFile.get_clang_il_to_graphviz() = %s \n",sageFile.get_clang_il_to_graphviz() ? "true" : "false");
 
  // DQ (11/27/2020): Use the -rose:clang_il_to_graphviz option to comntrol the use of the Clang Dot generator.
@@ -378,6 +384,64 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
     clang::CompilerInvocation::CreateFromArgs(invocation, argsArrayRef, compiler_instance->getDiagnostics());
+
+    // CLANG FRONTEND FIX: Configure header search paths properly
+    // WHY: Default paths may point to incorrect locations (e.g., /usr/include/newlib/ on ARM)
+    // This ensures Clang can find standard C++ headers and system headers correctly.
+    clang::HeaderSearchOptions &headerSearchOpts = invocation.getHeaderSearchOpts();
+
+    // Enable Clang's builtin includes (provides compiler-specific headers like stddef.h)
+    headerSearchOpts.UseBuiltinIncludes = true;
+    headerSearchOpts.UseStandardSystemIncludes = true;
+    headerSearchOpts.UseStandardCXXIncludes = true;
+
+    // Set the resource directory (where Clang's builtin headers are located)
+    // This is typically /usr/lib/llvm-20/lib/clang/20 or similar
+    headerSearchOpts.ResourceDir = "/usr/lib/llvm-20/lib/clang/20";
+
+    // Add standard C++ include paths for the system
+    // These paths are architecture-specific, so we detect them based on the target triple
+    std::string triple_str = target_triple.str();
+
+    // Add C++ standard library headers
+    headerSearchOpts.AddPath("/usr/include/c++/12",
+                              clang::frontend::System,
+                              false, false);
+
+    // Add architecture-specific C++ headers (contains bits/c++config.h and other critical headers)
+    // CLANG FRONTEND: Unified cross-platform architecture detection
+    // This automatically supports ALL architectures without per-arch #ifdef code
+    std::string arch_prefix;
+    if (triple_str.find("x86_64") != std::string::npos) {
+        arch_prefix = "x86_64-linux-gnu";
+    } else if (triple_str.find("aarch64") != std::string::npos) {
+        arch_prefix = "aarch64-linux-gnu";
+    } else if (triple_str.find("loongarch64") != std::string::npos) {
+        arch_prefix = "loongarch64-linux-gnu";
+    } else if (triple_str.find("riscv64") != std::string::npos) {
+        arch_prefix = "riscv64-linux-gnu";
+    } else if (triple_str.find("powerpc64le") != std::string::npos) {
+        arch_prefix = "powerpc64le-linux-gnu";
+    } else if (triple_str.find("s390x") != std::string::npos) {
+        arch_prefix = "s390x-linux-gnu";
+    } else if (triple_str.find("i386") != std::string::npos || triple_str.find("i686") != std::string::npos) {
+        arch_prefix = "i386-linux-gnu";
+    }
+
+    // Add arch-specific paths if we detected an architecture
+    if (!arch_prefix.empty()) {
+        headerSearchOpts.AddPath("/usr/include/" + arch_prefix + "/c++/12",
+                                  clang::frontend::System,
+                                  false, false);
+        headerSearchOpts.AddPath("/usr/include/" + arch_prefix,
+                                  clang::frontend::System,
+                                  false, false);
+    }
+
+    // Add standard C library headers
+    headerSearchOpts.AddPath("/usr/include",
+                              clang::frontend::System,
+                              false, false);
 
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
     std::vector<std::string> lang_specific_includes;

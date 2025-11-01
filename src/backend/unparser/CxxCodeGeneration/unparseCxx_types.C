@@ -4766,7 +4766,25 @@ Unparse_Type::unparseTemplateType(SgType* type, SgUnparse_Info& info)
      SgTemplateType* template_type = isSgTemplateType(type);
      ASSERT_not_null(template_type);
 
-     ROSE_ABORT();
+     // CLANG FRONTEND FIX: Unparse template type parameters (like "T")
+     // Template types represent type parameters in template declarations
+     // Simply output the name of the template parameter
+     bool unparse_type = info.isTypeFirstPart() || ( !info.isTypeFirstPart() && !info.isTypeSecondPart() );
+     if (unparse_type) {
+       SgName name = template_type->get_name();
+       std::string type_name = name.str();
+
+       // CLANG FRONTEND FIX: Remove "templateType_" prefix if present
+       // This prefix is added by SageInterface::get_name() for SgTemplateType
+       // but should not appear in the unparsed output
+       const std::string prefix = "templateType_";
+       if (type_name.compare(0, prefix.length(), prefix) == 0) {
+         type_name = type_name.substr(prefix.length());
+       }
+
+       curprint(type_name);
+       curprint(" ");
+     }
    }
 
 void

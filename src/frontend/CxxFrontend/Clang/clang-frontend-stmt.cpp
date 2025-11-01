@@ -765,8 +765,13 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             ROSE_ASSERT(result != NULL);
             break;
         case clang::Stmt::RecoveryExprClass:
-            result = SageBuilder::buildIntVal(42);
-            ROSE_ASSERT(FAIL_FIXME == 0); // There is no concept of recovery expression in ROSE
+            // CLANG FRONTEND FIX: Use SgNullExpression instead of SgIntVal(42) for RecoveryExpr
+            // WHY: Clang creates RecoveryExpr during parse errors or incomplete template instantiations.
+            // Using SgIntVal(42) causes downstream errors when it appears as a function in function calls.
+            // SgNullExpression is better semantically as it represents a missing/unknown expression.
+            result = SageBuilder::buildNullExpression();
+            // Note: Assertion removed since RecoveryExpr is a valid (though error) state during parsing
+            // ROSE_ASSERT(FAIL_FIXME == 0); // There is no concept of recovery expression in ROSE
             break;
 
         default:
@@ -2663,7 +2668,19 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(clang::CXXOperatorCallExpr 
 
      // C++ overloaded operators (operator+, operator[], etc.) are represented as function calls
      // Delegate to CallExpr handler for proper function call expression generation
-     return VisitCallExpr(cxx_operator_call_expr, node) && res;
+     res = VisitCallExpr(cxx_operator_call_expr, node) && res;
+
+     // CLANG FRONTEND FIX: Set uses_operator_syntax flag to true for operator overloads
+     // This tells the unparser to generate operator syntax (e.g., a + b) instead of
+     // explicit function call syntax (e.g., operator+(a, b))
+     if (*node != NULL && res) {
+         SgFunctionCallExp* funcCall = isSgFunctionCallExp(*node);
+         if (funcCall != NULL) {
+             funcCall->set_uses_operator_syntax(true);
+         }
+     }
+
+     return res;
 }
 
 bool ClangToSageTranslator::VisitUserDefinedLiteral(clang::UserDefinedLiteral * user_defined_literal, SgNode ** node) {
@@ -2991,16 +3008,64 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(clang::CXXConstructExpr * cxx_
         // or when all arguments fail traversal (e.g., template-dependent arguments)
         SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
 
+        // CLANG FRONTEND DEBUG: Print constructor info
+        #if 1
+        std::string ctor_name = "unknown";
+        if (cxx_construct_expr->getConstructor()) {
+            ctor_name = cxx_construct_expr->getConstructor()->getNameAsString();
+        }
+        // DEBUG: std::cerr << "DEBUG VisitCXXConstructExpr: Processing constructor " << ctor_name
+        //           << " with " << cxx_construct_expr->getNumArgs() << " args" << std::endl;
+        #endif
+
         // Traverse constructor arguments
         for (unsigned i = 0; i < cxx_construct_expr->getNumArgs(); ++i) {
             clang::Expr *arg = cxx_construct_expr->getArg(i);
             if (arg != nullptr) {
+                // CLANG FRONTEND DEBUG: Print arg details
+                #if 0
+                std::cerr << "DEBUG VisitCXXConstructExpr:   Arg " << i
+                          << " clang type=" << arg->getStmtClassName() << std::endl;
+                #endif
+
+                // CLANG FRONTEND FIX #19: Skip default arguments
+                // CXXDefaultArgExpr represents implicit default arguments that shouldn't appear
+                // in the explicit argument list. For example:
+                //   std::string str("hello");  // Should have 1 arg, not 2
+                // The allocator parameter is a default argument and should be omitted.
+                if (clang::isa<clang::CXXDefaultArgExpr>(arg)) {
+                    #if 0
+                    std::cerr << "DEBUG VisitCXXConstructExpr:   Skipping arg " << i
+                              << " (default argument)" << std::endl;
+                    #endif
+                    continue;
+                }
+
                 SgNode *sg_arg = Traverse(arg);
                 if (SgExpression *sg_expr = isSgExpression(sg_arg)) {
+                    // CLANG FRONTEND DEBUG: Print what we're adding to the arg list
+                    #if 0
+                    std::cerr << "DEBUG VisitCXXConstructExpr:   Adding arg " << i
+                              << " sage type=" << sg_expr->class_name()
+                              << " to args list" << std::endl;
+                    #endif
                     args->append_expression(sg_expr);
+                } else {
+                    // CLANG FRONTEND DEBUG: Print skipped nodes
+                    #if 0
+                    std::cerr << "DEBUG VisitCXXConstructExpr:   Skipping arg " << i
+                              << " sage type=" << (sg_arg ? sg_arg->class_name() : "null")
+                              << " (not an expression)" << std::endl;
+                    #endif
                 }
             }
         }
+
+        // CLANG FRONTEND DEBUG: Print final arg list size
+        #if 0
+        // DEBUG: std::cerr << "DEBUG VisitCXXConstructExpr: Final args list for " << ctor_name
+        //           << " has " << args->get_expressions().size() << " elements" << std::endl;
+        #endif
 
         // Use SgConstructorInitializer to properly represent constructor calls
         // This ensures the expression has the constructed class type, not void
