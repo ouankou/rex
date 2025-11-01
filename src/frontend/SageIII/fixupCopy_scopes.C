@@ -887,6 +887,13 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 
             // DQ (2/19/2009): Make sure that these are the same kind of IR nodes since they might be in different files (instead of in the same file).
             // ROSE_ASSERT(this->get_definingDeclaration()->get_scope() == this->get_firstNondefiningDeclaration()->get_scope() );
+               if (this->get_definingDeclaration()->get_scope()->variantT() != this->get_firstNondefiningDeclaration()->get_scope()->variantT()) {
+                   printf ("SCOPE VARIANT MISMATCH: this = %p = %s = %s \n",this,this->class_name().c_str(),SageInterface::get_name(this).c_str());
+                   printf ("     this->get_definingDeclaration()         = %p \n",this->get_definingDeclaration());
+                   printf ("     this->get_firstNondefiningDeclaration() = %p \n",this->get_firstNondefiningDeclaration());
+                   printf ("     defining scope         = %p = %s (variant %d)\n",this->get_definingDeclaration()->get_scope(),this->get_definingDeclaration()->get_scope()->class_name().c_str(), this->get_definingDeclaration()->get_scope()->variantT());
+                   printf ("     non-defining scope     = %p = %s (variant %d)\n",this->get_firstNondefiningDeclaration()->get_scope(),this->get_firstNondefiningDeclaration()->get_scope()->class_name().c_str(), this->get_firstNondefiningDeclaration()->get_scope()->variantT());
+               }
                ROSE_ASSERT(this->get_definingDeclaration()->get_scope()->variantT() == this->get_firstNondefiningDeclaration()->get_scope()->variantT() );
              }
 

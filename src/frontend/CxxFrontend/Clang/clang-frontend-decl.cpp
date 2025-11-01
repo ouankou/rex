@@ -1588,6 +1588,12 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
 
         SageBuilder::pushScopeStack(sg_class_def);
 
+        // CRITICAL FIX: Add to translation map BEFORE processing members!
+        // This prevents infinite recursion if member processing triggers a lookup of this class type.
+        // The Traverse() function normally adds to the map after Visit returns, but that's too late -
+        // by then we've already processed members which may trigger recursive visits.
+        p_decl_translation_map.insert(std::make_pair(record_decl, sg_class_decl));
+
         // CLANG FRONTEND FIX: Skip processing members of system header template classes to avoid performance issues
         // System headers contain massive template hierarchies that cause extremely slow processing
         bool skip_members = false;
@@ -2659,6 +2665,19 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     if(hasExternalStorage)
     {
       sg_function_decl->get_declarationModifier().get_storageModifier().setExtern();
+    }
+
+    // ROOT CAUSE FIX: Set access modifiers for member functions from Clang AST
+    if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+        clang::CXXMethodDecl* method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
+        clang::AccessSpecifier access = method_decl->getAccess();
+        if (access == clang::AS_public) {
+            sg_function_decl->get_declarationModifier().get_accessModifier().setPublic();
+        } else if (access == clang::AS_private) {
+            sg_function_decl->get_declarationModifier().get_accessModifier().setPrivate();
+        } else if (access == clang::AS_protected) {
+            sg_function_decl->get_declarationModifier().get_accessModifier().setProtected();
+        }
     }
 
     // CLANG FRONTEND FIX #21: Mark constructors, destructors, and conversion operators
