@@ -1638,30 +1638,22 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
 
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
 
-    // CLANG FRONTEND FIX: ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
-    // Extract the qualifier and apply it to the typedef declaration to preserve namespace information
-    clang::NestedNameSpecifier *qualifier = elaborated_type->getQualifier();
-    if (qualifier != NULL) {
-        // Convert the nested name specifier to a string (e.g., "std::")
-        std::string qualifierStr;
-        llvm::raw_string_ostream OS(qualifierStr);
-        qualifier->print(OS, clang::PrintingPolicy(p_compiler_instance->getLangOpts()));
-        OS.flush();
-
-        // If the underlying type is a TypedefType, modify its declaration's name
-        SgTypedefType *typedef_type = isSgTypedefType(type);
-        if (typedef_type != NULL && !qualifierStr.empty()) {
-            SgTypedefDeclaration *typedef_decl = isSgTypedefDeclaration(typedef_type->get_declaration());
-            if (typedef_decl != NULL) {
-                // Get the current name and prepend the qualifier
-                std::string currentName = typedef_decl->get_name().getString();
-                std::string qualifiedName = qualifierStr + currentName;
-
-                // Set the qualified name on the typedef declaration
-                typedef_decl->set_name(SgName(qualifiedName));
-            }
-        }
-    }
+    // CLANG FRONTEND NOTE: ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
+    // and struct/class/enum keywords that provide "sugar" for the type reference.
+    //
+    // WARNING: Do NOT mutate the underlying SgTypedefDeclaration or other type declarations!
+    // The same declaration is shared by all uses, so modifying it causes corruption:
+    //   1st use: "string" → "std::string"
+    //   2nd use: "std::string" → "std::std::string"
+    //   3rd use: "std::std::string" → "std::std::std::string"
+    //
+    // TODO: ROSE needs a proper way to represent elaborated types with qualifiers.
+    // Possible solutions:
+    //   - Create SgQualifiedNameType or similar wrapper
+    //   - Store qualifier info as attributes on the type
+    //   - Handle qualification during unparsing only
+    //
+    // For now, we just desugar to the named type (same as EDG frontend behavior).
 
     *node = type;
 
