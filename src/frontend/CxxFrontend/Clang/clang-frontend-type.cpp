@@ -1451,10 +1451,21 @@ bool ClangToSageTranslator::VisitTemplateTypeParmType(clang::TemplateTypeParmTyp
 #endif
     bool res = true;
 
-    // TODO: Full support for template type parameters not yet implemented
-    // Template type parameters (e.g., typename T) are placeholders for types
-    // For now, use a generic unknown type scoped to global scope to avoid ROSE-1378
-    *node = SageBuilder::buildOpaqueType("template_type_param", getGlobalScope());
+    // CLANG FRONTEND FIX: Proper template type parameter support
+    // Get the template parameter declaration to extract the name
+    const clang::TemplateTypeParmDecl* param_decl = template_type_parm_type->getDecl();
+    std::string param_name;
+
+    if (param_decl && param_decl->getDeclName().isIdentifier()) {
+        // Use the actual template parameter name (e.g., "T")
+        param_name = param_decl->getNameAsString();
+    } else {
+        // Fallback to a generic name if we can't get the actual name
+        param_name = "template_type_param";
+    }
+
+    // Create a proper template type with the actual parameter name
+    *node = SageBuilder::buildTemplateType(SgName(param_name));
 
     return VisitType(template_type_parm_type, node) && res;
 }
@@ -1627,7 +1638,22 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
 
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
 
-    // FIXME clang::ElaboratedType contains the "sugar" of a type reference (eg, "struct A" or "M::N::A"), it should be pass down to ROSE
+    // CLANG FRONTEND NOTE: ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
+    // and struct/class/enum keywords that provide "sugar" for the type reference.
+    //
+    // WARNING: Do NOT mutate the underlying SgTypedefDeclaration or other type declarations!
+    // The same declaration is shared by all uses, so modifying it causes corruption:
+    //   1st use: "string" → "std::string"
+    //   2nd use: "std::string" → "std::std::string"
+    //   3rd use: "std::std::string" → "std::std::std::string"
+    //
+    // TODO: ROSE needs a proper way to represent elaborated types with qualifiers.
+    // Possible solutions:
+    //   - Create SgQualifiedNameType or similar wrapper
+    //   - Store qualifier info as attributes on the type
+    //   - Handle qualification during unparsing only
+    //
+    // For now, we just desugar to the named type (same as EDG frontend behavior).
 
     *node = type;
 

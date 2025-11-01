@@ -6648,6 +6648,10 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
 
      info.set_nested_expression();
 
+     // CLANG FRONTEND FIX #20: Debug array subscript operator name (disabled)
+     // std::cerr << "DEBUG unparseBinaryExp: operator_name='" << info.get_operator_name()
+     //           << "' node type=" << binary_op->class_name() << std::endl;
+
      if (info.get_operator_name() == "[]" )
         {
        // Special case:

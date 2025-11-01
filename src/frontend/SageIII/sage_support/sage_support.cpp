@@ -6530,6 +6530,24 @@ SgFunctionCallExp::getAssociatedFunctionSymbol() const
                returnSymbol = isSgFunctionSymbol(functionExp);
                break;
              }
+       // CLANG FRONTEND FIX: Handle SgIntVal and other value expressions that may appear
+       // when Clang RecoveryExpr creates placeholders during parse errors or template issues
+          case V_SgIntVal:
+          case V_SgFloatVal:
+          case V_SgDoubleVal:
+          case V_SgStringVal:
+          case V_SgBoolValExp:
+          case V_SgCharVal:
+          case V_SgNullExpression:
+             {
+               // These are placeholder values from error recovery - cannot resolve to function symbol
+               // Return NULL to indicate function symbol cannot be determined
+#if DEBUG_SAGE_SUPPORT_GETASSOCIATEDFUNCTION
+               MLOG_WARN_C("sage_support", "Function call expression has value literal %s as callee (likely from parse error recovery), returning NULL\n",
+                           functionExp->class_name().c_str());
+#endif
+               break;
+             }
           default:
              {
                // Send out error message before the assertion, which may fail and stop first otherwise.

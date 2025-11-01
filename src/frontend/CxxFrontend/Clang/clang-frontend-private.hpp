@@ -341,6 +341,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // Value: Template instantiation declaration
         std::map<std::string, SgTemplateInstantiationDecl*> p_template_inst_cache;
 
+        // Recursion guard for GetSymbolFromSymbolTable to prevent infinite loops
+        // when resolving symbols that reference each other (e.g., template members)
+        std::set<clang::NamedDecl*> p_symbol_lookup_in_progress;
+
         clang::CompilerInstance  * p_compiler_instance;
         SagePreprocessorRecord   * p_sage_preprocessor_recorder;
         SgSourceFile             * p_sage_source_file; // Parent file for connecting global scope

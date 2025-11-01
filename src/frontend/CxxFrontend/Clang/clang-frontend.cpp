@@ -18,6 +18,12 @@ extern bool roseInstallPrefix(std::string&);
 
 int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
+ // CLANG FRONTEND FIX: Enable template unparsing from AST
+ // The Clang frontend doesn't save template strings like EDG did, so we must
+ // unparse templates from the AST instead of from saved strings.
+ // This ensures template declarations like "template <class T>" are output correctly.
+ sageFile.set_unparse_template_ast(true);
+
  // printf ("sageFile.get_clang_il_to_graphviz() = %s \n",sageFile.get_clang_il_to_graphviz() ? "true" : "false");
 
  // DQ (11/27/2020): Use the -rose:clang_il_to_graphviz option to comntrol the use of the Clang Dot generator.
@@ -378,6 +384,28 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
     llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
     clang::CompilerInvocation::CreateFromArgs(invocation, argsArrayRef, compiler_instance->getDiagnostics());
+
+    // CLANG FRONTEND FIX: Configure header search paths properly
+    // WHY: Default paths may point to incorrect locations (e.g., /usr/include/newlib/ on ARM)
+    // CLANG FRONTEND FIX #22: Use Clang's automatic header detection instead of hard-coded paths
+    // This ensures portability across different systems, LLVM versions, and distributions.
+    //
+    // The CompilerInvocation::CreateFromArgs() call above already sets up correct paths:
+    // - ResourceDir is auto-detected from the Clang installation
+    // - System include paths are computed by Clang's Driver based on the target triple
+    // - No need to override with hard-coded paths that break on other systems
+    //
+    // We only need to enable the relevant flags to use Clang's built-in detection:
+    clang::HeaderSearchOptions &headerSearchOpts = invocation.getHeaderSearchOpts();
+
+    // Enable Clang's builtin includes (provides compiler-specific headers like stddef.h)
+    headerSearchOpts.UseBuiltinIncludes = true;
+    headerSearchOpts.UseStandardSystemIncludes = true;
+    headerSearchOpts.UseStandardCXXIncludes = true;
+
+    // ResourceDir and system include paths are already correctly set by CreateFromArgs()
+    // based on the Clang installation and target triple. Do NOT override them with
+    // hard-coded paths.
 
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
     std::vector<std::string> lang_specific_includes;

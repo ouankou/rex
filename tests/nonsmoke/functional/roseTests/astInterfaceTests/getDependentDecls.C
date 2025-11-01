@@ -14,7 +14,24 @@ int main(int argc, char * argv[])
 
 {
   SgProject *project = frontend (argc, argv);
+
+  // DEBUG: Check all function declarations and their scopes
+  Rose_STL_Container<SgNode*> funcs = NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
+  cout << "DEBUG: Found " << funcs.size() << " function declarations:\n";
+  for (Rose_STL_Container<SgNode*>::iterator it = funcs.begin(); it != funcs.end(); ++it) {
+    SgFunctionDeclaration* fd = isSgFunctionDeclaration(*it);
+    if (fd) {
+      SgScopeStatement* scope = fd->get_scope();
+      cout << "  Function: " << fd->get_name().getString()
+           << ", Scope: " << (scope ? scope->class_name() : "NULL")
+           << ", isGlobal: " << (isSgGlobal(scope) ? "YES" : "NO")
+           << ", defining: " << (fd->get_definingDeclaration() == fd ? "YES" : "NO")
+           << "\n";
+    }
+  }
+
   SgFunctionDeclaration* func = SageInterface::findMain(project);
+  cout << "DEBUG: findMain returned: " << (func ? func->get_name().getString() : "NULL") << "\n";
   ROSE_ASSERT(func != NULL);
   SgBasicBlock* body = func->get_definition()->get_body();
   ROSE_ASSERT(body!= NULL);

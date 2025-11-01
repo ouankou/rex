@@ -42,6 +42,17 @@ Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression* expr, SgUnpars
    {
   // This is the C and C++ specific expression code generation
 
+  // CLANG FRONTEND FIX #20: Handle SgPntrArrRefExp directly (array subscript expressions)
+  // The Clang frontend creates SgPntrArrRefExp nodes, but they're not being dispatched
+  // correctly through the normal unparsing path. Handle them explicitly here.
+  if (SgPntrArrRefExp* arrRef = isSgPntrArrRefExp(expr)) {
+    unparseExpression(arrRef->get_lhs_operand(), info);
+    curprint("[");
+    unparseExpression(arrRef->get_rhs_operand(), info);
+    curprint("]");
+    return;
+  }
+
 #if 0
      printf ("In C/C++ Unparse_ExprStmt::unparseLanguageSpecificExpression ( expr = %p = %s ) language = %s \n",expr,expr->class_name().c_str(),languageName().c_str());
      curprint(string("\n /*    unparseLanguageSpecificExpression(): class name  = ") + expr->class_name().c_str() + " */ \n");
@@ -1451,13 +1462,36 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                printf ("unparseTemplateParameter(): case SgTemplateParameter::type_parameter: type = %p = %s \n",type,type->class_name().c_str());
 #endif
 
-            // TV (04/17/2018): Not clear what the use case for other type of type is so let see where it breaks...
-               SgNonrealType * nrtype = isSgNonrealType(type);
-               ASSERT_not_null(nrtype);
+            // CLANG FRONTEND FIX: Clang frontend creates template parameters with various type classes,
+            // not just SgNonrealType. Handle SgTemplateType and SgNonrealType explicitly.
+               std::string type_name;
+               SgTemplateType* template_type = isSgTemplateType(type);
+               if (template_type != NULL) {
+                   // For SgTemplateType (used by Clang frontend), get the name directly
+                   type_name = template_type->get_name();
+               } else {
+                   SgNonrealType* nrtype = isSgNonrealType(type);
+                   if (nrtype != NULL) {
+                       type_name = nrtype->get_name();
+                   } else {
+                       // Fallback: use SageInterface for other type classes
+                       type_name = SageInterface::get_name(type);
+                   }
+               }
+
+               // CLANG FRONTEND FIX: Remove "templateType_" prefix added by SageInterface::get_name()
+               // This prefix is added in sageInterface.C for SgTemplateType but should not appear
+               // in template parameter lists (e.g., "template <typename T>" not "template <typename templateType_T>")
+               const std::string prefix = "templateType_";
+               if (type_name.compare(0, prefix.length(), prefix) == 0) {
+                   std::string old_name = type_name;
+                   type_name = type_name.substr(prefix.length());
+               } else {
+               }
 
                if (is_template_header)
                  curprint("typename ");
-               curprint(nrtype->get_name());
+               curprint(type_name);
 
                SgType* default_type = templateParameter->get_defaultTypeParameter();
                if (default_type != NULL)
@@ -4686,6 +4720,47 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
         }
      }
 
+     // CLANG FRONTEND FIX: For operator[] with uses_operator_syntax, also set needSquareBrackets
+     // This ensures proper unparsing as array subscript syntax (e.g., str[i] instead of str[]i)
+     if (uses_operator_syntax) {
+        SgExpression* funcExpr = func_call->get_function();
+        SgFunctionSymbol* funcSymbol = NULL;
+
+        // Handle both direct function references and member function references
+        SgFunctionRefExp* funcRef = isSgFunctionRefExp(funcExpr);
+        if (funcRef != NULL) {
+           funcSymbol = funcRef->get_symbol();
+        } else {
+           // Check for member function access (e.g., obj.operator[] or obj->operator[])
+           SgDotExp* dotExp = isSgDotExp(funcExpr);
+           SgArrowExp* arrowExp = isSgArrowExp(funcExpr);
+           if (dotExp != NULL) {
+              SgMemberFunctionRefExp* memberFuncRef = isSgMemberFunctionRefExp(dotExp->get_rhs_operand());
+              if (memberFuncRef != NULL) {
+                 funcSymbol = memberFuncRef->get_symbol();
+              }
+           } else if (arrowExp != NULL) {
+              SgMemberFunctionRefExp* memberFuncRef = isSgMemberFunctionRefExp(arrowExp->get_rhs_operand());
+              if (memberFuncRef != NULL) {
+                 funcSymbol = memberFuncRef->get_symbol();
+              }
+           }
+        }
+
+        if (funcSymbol != NULL) {
+           SgFunctionDeclaration* funcDecl = funcSymbol->get_declaration();
+           if (funcDecl != NULL) {
+              std::string funcName = funcDecl->get_name().getString();
+              if (funcName == "operator[]") {
+                 needSquareBrackets = true;
+#if DEBUG_FUNCTION_CALL
+                 printf("CLANG FIX: Setting needSquareBrackets for operator[] with uses_operator_syntax\n");
+#endif
+              }
+           }
+        }
+     }
+
 #if DEBUG_FUNCTION_CALL
      printf ("In Unparse_ExprStmt::unparseFuncCall(): (before test for conversion operator) uses_operator_syntax = %s \n",uses_operator_syntax == true ? "true" : "false");
      curprint(string("/* In unparseFuncCall(): (before test for conversion operator) uses_operator_syntax     = ") + (uses_operator_syntax ? "true" : "false") + " */\n");
@@ -4983,7 +5058,19 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
 #if DEBUG_FUNCTION_CALL
                curprint ( "\n/* In unparseFuncCall(): 1st part BEFORE: unparseExpression(func_call->get_function(), info); */ \n");
 #endif
-               unparseExpression(func_call->get_function(), info);
+               // ROOT CAUSE FIX: Don't output operator name for operator[] when needSquareBrackets is true
+               // We want to output y[i] not y[]i
+               if (!needSquareBrackets)
+                  {
+                    unparseExpression(func_call->get_function(), info);
+                  }
+                 else
+                  {
+#if DEBUG_FUNCTION_CALL
+                    curprint ( "\n/* CLANG FIX: Skipping operator[] output, outputting [ instead */ \n");
+#endif
+                    curprint ( "[");
+                  }
 #if DEBUG_FUNCTION_CALL
                curprint ( "\n/* In unparseFuncCall(): 1st part AFTER: unparseExpression(func_call->get_function(), info); */ \n");
 #endif
@@ -4999,6 +5086,14 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
             // DQ (5/6/2007): Added assert, though this was only a problem when handling unary minus implemented as a non-member function
                ROSE_ASSERT (arg != list.end());
                unparseExpression((*arg), newinfo);
+               // ROOT CAUSE FIX: Output closing ] for operator[]
+               if (needSquareBrackets)
+                  {
+#if DEBUG_FUNCTION_CALL
+                    curprint ( "\n/* CLANG FIX: Outputting ] for operator[] */ \n");
+#endif
+                    curprint ( "]");
+                  }
 #if 0
             // DQ (8/29/2014): This was a mistake.
             // DQ (8/29/2014): This fails for test2014_172.C.
@@ -6513,8 +6608,17 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
 
 void
 Unparse_ExprStmt::unparseArrayOp(SgExpression* expr, SgUnparse_Info& info)
-   { 
-     unparseBinaryOperator(expr, "[]", info); 
+   {
+     // CLANG FRONTEND FIX #20: Direct unparsing for array subscripts
+     // Instead of using unparseBinaryOperator which has issues with "[]",
+     // unparse array subscripts directly as lhs[rhs]
+     SgBinaryOp* binary_op = isSgBinaryOp(expr);
+     ROSE_ASSERT(binary_op != NULL);
+
+     unparseExpression(binary_op->get_lhs_operand(), info);
+     curprint("[");
+     unparseExpression(binary_op->get_rhs_operand(), info);
+     curprint("]");
    }
 
 void

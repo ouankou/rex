@@ -17,7 +17,21 @@
    #undef __attribute_malloc__
 #endif
 
-#include "/opt/usr/include/sys/cdefs.h"
+/* CLANG FRONTEND: Unified cross-platform solution
+ * Use a placeholder path to trigger automatic architecture detection.
+ *
+ * The create_system_headers build script will detect this placeholder doesn't exist
+ * and automatically find the correct arch-specific cdefs.h for the build system:
+ *   - x86_64:      /usr/include/x86_64-linux-gnu/sys/cdefs.h
+ *   - aarch64:     /usr/include/aarch64-linux-gnu/sys/cdefs.h
+ *   - loongarch64: /usr/include/loongarch64-linux-gnu/sys/cdefs.h
+ *   - riscv64:     /usr/include/riscv64-linux-gnu/sys/cdefs.h
+ *   - etc.
+ *
+ * This works on ALL architectures without per-platform #ifdef directives.
+ * The script now excludes problematic newlib paths and prefers *-linux-gnu paths.
+ */
+#include "/ROSE_WILL_AUTO_DETECT_ARCH_SPECIFIC_PATH/sys/cdefs.h"
 
 /* Define __flexarr to not require use of Variable Length Array (VLA) feature. */
 #undef __flexarr

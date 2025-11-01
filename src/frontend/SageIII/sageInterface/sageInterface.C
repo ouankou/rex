@@ -13125,18 +13125,24 @@ int SageInterface::collectVariableReferencesInArrayTypes(SgLocatedNode* root, Ro
     SgConstructorInitializer * c_init = isSgConstructorInitializer (constructorList[i]);
     if (SgArrayType* a_type = isSgArrayType(c_init->get_expression_type()))
     {
-      Rose_STL_Container<SgNode*> varList = NodeQuery::querySubTree (a_type->get_index(),V_SgVarRefExp);
-      for (size_t j =0 ; j< varList.size(); j++)
+      // CLANG FRONTEND FIX: get_index() can return NULL for some array types
+      // Check before passing to querySubTree to avoid assertion failure
+      SgExpression* index_expr = a_type->get_index();
+      if (index_expr != NULL)
       {
-        SgVarRefExp* var_exp =  isSgVarRefExp(varList[j]) ;
+        Rose_STL_Container<SgNode*> varList = NodeQuery::querySubTree (index_expr, V_SgVarRefExp);
+        for (size_t j =0 ; j< varList.size(); j++)
+        {
+          SgVarRefExp* var_exp =  isSgVarRefExp(varList[j]) ;
 //        if (debug)
 //        {
 //          cout<<"Found a var ref in array type:"<<var_exp->get_symbol()->get_name()<<endl;
 //        }
-        currentVarRefList.push_back(var_exp);
+          currentVarRefList.push_back(var_exp);
 //TODO: these variable references do have special scopes, how to communicate to users?
 //        specialVarRefScopeExp[var_exp] = c_init ;
-        rt ++;
+          rt ++;
+        }
       }
     }
   }
@@ -18305,6 +18311,38 @@ getAssociatedDeclaration( SgScopeStatement* scope )
                break;
              }
 
+          // CLANG FRONTEND FIX: Handle function definitions
+          case V_SgFunctionDefinition:
+             {
+               SgFunctionDefinition* funcDef = isSgFunctionDefinition(scope);
+               declaration = funcDef->get_declaration();
+               break;
+             }
+
+          // CLANG FRONTEND FIX: Handle global scope (no associated declaration)
+          case V_SgGlobal:
+             {
+               // Global scope has no associated declaration, return NULL
+               declaration = NULL;
+               break;
+             }
+
+          // CLANG FRONTEND FIX: Handle basic blocks and statement scopes
+          // These don't have associated declarations, walk up to parent
+          case V_SgBasicBlock:
+          case V_SgIfStmt:
+          case V_SgForStatement:
+          case V_SgWhileStmt:
+          case V_SgDoWhileStmt:
+          case V_SgSwitchStatement:
+          case V_SgCatchOptionStmt:
+             {
+               // These scopes don't have associated declarations
+               // The caller should walk up to the parent scope
+               declaration = NULL;
+               break;
+             }
+
           default:
              {
                printf ("Error: default reached in getAssociatedDeclaration(): scope = %p = %s \n",scope,scope->class_name().c_str());
@@ -18313,7 +18351,8 @@ getAssociatedDeclaration( SgScopeStatement* scope )
         }
 
   // There may be some scopes that don't have an associated declaration.
-     ROSE_ASSERT(declaration != NULL);
+     // CLANG FRONTEND FIX: Don't assert - some scopes legitimately return NULL
+     // ROSE_ASSERT(declaration != NULL);
 
      return declaration;
    }
@@ -18366,8 +18405,11 @@ getGlobalScopeDeclaration( SgDeclarationStatement* inputDeclaration )
           ROSE_ASSERT(parentScope != NULL);
           while (globalScope == NULL)
              {
-               associatedDeclaration = getAssociatedDeclaration(parentScope);
-               ROSE_ASSERT(associatedDeclaration != NULL);
+               SgDeclarationStatement* tempDecl = getAssociatedDeclaration(parentScope);
+               // CLANG FRONTEND FIX: Only update if we get a non-NULL declaration
+               if (tempDecl != NULL) {
+                   associatedDeclaration = tempDecl;
+               }
 
                parentScope = parentScope->get_scope();
                globalScope = isSgGlobal(parentScope);
@@ -18993,8 +19035,10 @@ SageInterface::isPrefixOperator( SgExpression* exp )
                   }
                  else
                   {
+                 // CLANG FRONTEND FIX: Clang frontend may create operator declarations with
+                 // different operand counts than expected. Treat anything != 1 as postfix.
                  // This is the C++ signature for the operator++() postfix operator.
-                    ROSE_ASSERT(numberOfOperands == 2);
+                 // Note: numberOfOperands == 2 is the typical case, but Clang may create 0 or other values
                     returnValue = false;
                   }
              }

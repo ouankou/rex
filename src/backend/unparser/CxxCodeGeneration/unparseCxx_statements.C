@@ -6305,13 +6305,13 @@ Unparse_ExprStmt::unparseReturnType (SgFunctionDeclaration* funcdecl_stmt, SgTyp
           ninfo.set_SkipClassDefinition();
           ninfo.set_SkipEnumDefinition();
 
-       // DQ (6/10/2007): set the declaration pointer so that the name qualification can see if this is 
+       // DQ (6/10/2007): set the declaration pointer so that the name qualification can see if this is
        // the declaration (so that exceptions to qualification can be tracked).
           ninfo.set_declstatement_ptr(NULL);
           ninfo.set_declstatement_ptr(funcdecl_stmt);
 
        // if (!(mfuncdecl_stmt->isConstructor() || mfuncdecl_stmt->isDestructor() || mfuncdecl_stmt->isConversion()))
-          if ( !( funcdecl_stmt->get_specialFunctionModifier().isConstructor() || 
+          if ( !( funcdecl_stmt->get_specialFunctionModifier().isConstructor() ||
                   funcdecl_stmt->get_specialFunctionModifier().isDestructor()  ||
                   funcdecl_stmt->get_specialFunctionModifier().isConversion() ) )
              {

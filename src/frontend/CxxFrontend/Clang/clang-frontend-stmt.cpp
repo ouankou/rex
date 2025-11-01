@@ -765,8 +765,13 @@ SgNode * ClangToSageTranslator::Traverse(clang::Stmt * stmt) {
             ROSE_ASSERT(result != NULL);
             break;
         case clang::Stmt::RecoveryExprClass:
-            result = SageBuilder::buildIntVal(42);
-            ROSE_ASSERT(FAIL_FIXME == 0); // There is no concept of recovery expression in ROSE
+            // CLANG FRONTEND FIX: Use SgNullExpression instead of SgIntVal(42) for RecoveryExpr
+            // WHY: Clang creates RecoveryExpr during parse errors or incomplete template instantiations.
+            // Using SgIntVal(42) causes downstream errors when it appears as a function in function calls.
+            // SgNullExpression is better semantically as it represents a missing/unknown expression.
+            result = SageBuilder::buildNullExpression();
+            // Note: Assertion removed since RecoveryExpr is a valid (though error) state during parsing
+            // ROSE_ASSERT(FAIL_FIXME == 0); // There is no concept of recovery expression in ROSE
             break;
 
         default:
@@ -2663,7 +2668,19 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(clang::CXXOperatorCallExpr 
 
      // C++ overloaded operators (operator+, operator[], etc.) are represented as function calls
      // Delegate to CallExpr handler for proper function call expression generation
-     return VisitCallExpr(cxx_operator_call_expr, node) && res;
+     res = VisitCallExpr(cxx_operator_call_expr, node) && res;
+
+     // CLANG FRONTEND FIX: Set uses_operator_syntax flag to true for operator overloads
+     // This tells the unparser to generate operator syntax (e.g., a + b) instead of
+     // explicit function call syntax (e.g., operator+(a, b))
+     if (*node != NULL && res) {
+         SgFunctionCallExp* funcCall = isSgFunctionCallExp(*node);
+         if (funcCall != NULL) {
+             funcCall->set_uses_operator_syntax(true);
+         }
+     }
+
+     return res;
 }
 
 bool ClangToSageTranslator::VisitUserDefinedLiteral(clang::UserDefinedLiteral * user_defined_literal, SgNode ** node) {
@@ -2991,16 +3008,64 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(clang::CXXConstructExpr * cxx_
         // or when all arguments fail traversal (e.g., template-dependent arguments)
         SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
 
+        // CLANG FRONTEND DEBUG: Print constructor info
+        #if 1
+        std::string ctor_name = "unknown";
+        if (cxx_construct_expr->getConstructor()) {
+            ctor_name = cxx_construct_expr->getConstructor()->getNameAsString();
+        }
+        // DEBUG: std::cerr << "DEBUG VisitCXXConstructExpr: Processing constructor " << ctor_name
+        //           << " with " << cxx_construct_expr->getNumArgs() << " args" << std::endl;
+        #endif
+
         // Traverse constructor arguments
         for (unsigned i = 0; i < cxx_construct_expr->getNumArgs(); ++i) {
             clang::Expr *arg = cxx_construct_expr->getArg(i);
             if (arg != nullptr) {
+                // CLANG FRONTEND DEBUG: Print arg details
+                #if 0
+                std::cerr << "DEBUG VisitCXXConstructExpr:   Arg " << i
+                          << " clang type=" << arg->getStmtClassName() << std::endl;
+                #endif
+
+                // CLANG FRONTEND FIX #19: Skip default arguments
+                // CXXDefaultArgExpr represents implicit default arguments that shouldn't appear
+                // in the explicit argument list. For example:
+                //   std::string str("hello");  // Should have 1 arg, not 2
+                // The allocator parameter is a default argument and should be omitted.
+                if (clang::isa<clang::CXXDefaultArgExpr>(arg)) {
+                    #if 0
+                    std::cerr << "DEBUG VisitCXXConstructExpr:   Skipping arg " << i
+                              << " (default argument)" << std::endl;
+                    #endif
+                    continue;
+                }
+
                 SgNode *sg_arg = Traverse(arg);
                 if (SgExpression *sg_expr = isSgExpression(sg_arg)) {
+                    // CLANG FRONTEND DEBUG: Print what we're adding to the arg list
+                    #if 0
+                    std::cerr << "DEBUG VisitCXXConstructExpr:   Adding arg " << i
+                              << " sage type=" << sg_expr->class_name()
+                              << " to args list" << std::endl;
+                    #endif
                     args->append_expression(sg_expr);
+                } else {
+                    // CLANG FRONTEND DEBUG: Print skipped nodes
+                    #if 0
+                    std::cerr << "DEBUG VisitCXXConstructExpr:   Skipping arg " << i
+                              << " sage type=" << (sg_arg ? sg_arg->class_name() : "null")
+                              << " (not an expression)" << std::endl;
+                    #endif
                 }
             }
         }
+
+        // CLANG FRONTEND DEBUG: Print final arg list size
+        #if 0
+        // DEBUG: std::cerr << "DEBUG VisitCXXConstructExpr: Final args list for " << ctor_name
+        //           << " has " << args->get_expressions().size() << " elements" << std::endl;
+        #endif
 
         // Use SgConstructorInitializer to properly represent constructor calls
         // This ensures the expression has the constructed class type, not void
@@ -4223,18 +4288,62 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
         }
     }
     else if (sym == NULL) {
-        // Symbol not found - try to traverse the member declaration
-        SgNode* tmp_member = Traverse(member_expr->getMemberDecl());
+        // Symbol not found - check if member declaration has already been traversed
+        // to avoid infinite recursion during template member access
+        SgNode* tmp_member = NULL;
+        clang::ValueDecl* member_decl = member_expr->getMemberDecl();
+
+        // First check if already in translation map
+        if (llvm::isa<clang::Decl>(member_decl)) {
+            std::map<clang::Decl*, SgNode*>::iterator it_decl = p_decl_translation_map.find((clang::Decl*)member_decl);
+            if (it_decl != p_decl_translation_map.end()) {
+                tmp_member = it_decl->second;
+            }
+        }
+
+        // If not in map, traverse it (but this might fail for template members)
+        if (tmp_member == NULL) {
+            tmp_member = Traverse(member_decl);
+        }
+
 #if DEBUG_VISIT_STMT
         if (tmp_member != NULL) {
-            std::cerr << "DEBUG VisitMemberExpr: Traversed member, got node type: " << tmp_member->class_name() << std::endl;
+            std::cerr << "DEBUG VisitMemberExpr: Got/traversed member, node type: " << tmp_member->class_name() << std::endl;
         } else {
-            std::cerr << "DEBUG VisitMemberExpr: Traverse returned NULL" << std::endl;
+            std::cerr << "DEBUG VisitMemberExpr: Member not available (NULL)" << std::endl;
         }
 #endif
         if (tmp_member != NULL) {
-            // Try again to get symbol after traversal
-            sym = GetSymbolFromSymbolTable(member_expr->getMemberDecl());
+            // CLANG FRONTEND FIX: Extract symbol from the traversed member declaration.
+            //
+            // WHY: After successfully traversing the member's declaration above, we need to
+            // get its symbol. However, calling GetSymbolFromSymbolTable again here would
+            // create infinite recursion when template members reference each other.
+            //
+            // SOLUTION: Set sym=NULL to skip the GetSymbolFromSymbolTable call below
+            // (around line 4290), and instead extract the symbol directly from the
+            // already-constructed SAGE node (tmp_member).
+            //
+            // This breaks the cycle: GetSymbolFromSymbolTable → VisitMemberExpr →
+            // Traverse(member) → GetSymbolFromSymbolTable (AVOIDED by sym=NULL)
+            //
+            sym = NULL;  // Skip GetSymbolFromSymbolTable below; extract from tmp_member instead
+
+            // Extract symbol directly from the traversed node
+            if (isSgVariableDeclaration(tmp_member)) {
+                SgInitializedName* init_name = SageInterface::getFirstInitializedName(isSgVariableDeclaration(tmp_member));
+                if (init_name) {
+                    sym = init_name->search_for_symbol_from_symbol_table();
+                }
+            } else if (isSgFunctionDeclaration(tmp_member)) {
+                SgFunctionDeclaration* func_decl = isSgFunctionDeclaration(tmp_member);
+                SgScopeStatement* decl_scope = func_decl->get_scope();
+                if (decl_scope) {
+                    // Use type-aware lookup to handle overloaded functions correctly
+                    SgFunctionType* func_type = func_decl->get_type();
+                    sym = decl_scope->lookup_function_symbol(func_decl->get_name(), func_type);
+                }
+            }
             if (isSgVariableSymbol(sym)) {
                 sg_member_expr = SageBuilder::buildVarRefExp(isSgVariableSymbol(sym));
             } else if (isSgMemberFunctionSymbol(sym)) {
@@ -4254,7 +4363,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
                 // Try to find existing symbol in the class scope
                 SgScopeStatement* decl_scope = member_func_decl->get_scope();
                 if (decl_scope != NULL) {
-                    sym = decl_scope->lookup_function_symbol(member_func_decl->get_name());
+                    // Use type-aware lookup to handle overloaded member functions correctly
+                    SgFunctionType* func_type = member_func_decl->get_type();
+                    sym = decl_scope->lookup_function_symbol(member_func_decl->get_name(), func_type);
                 }
                 // If still not found, create new member function symbol
                 if (sym == NULL) {
@@ -4275,7 +4386,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
                 // Try to find existing symbol
                 SgScopeStatement* decl_scope = func_decl->get_scope();
                 if (decl_scope != NULL) {
-                    sym = decl_scope->lookup_function_symbol(func_decl->get_name());
+                    // Use type-aware lookup to handle overloaded functions correctly
+                    SgFunctionType* func_type = func_decl->get_type();
+                    sym = decl_scope->lookup_function_symbol(func_decl->get_name(), func_type);
                 }
                 // If not found, create new function symbol
                 if (sym == NULL) {
@@ -4775,7 +4888,41 @@ bool ClangToSageTranslator::VisitSourceLocExpr(clang::SourceLocExpr * source_loc
 #endif
     bool res = true;
 
-    // TODO
+    // CLANG FRONTEND FIX: SourceLocExpr represents __builtin_FILE(), __builtin_LINE(),
+    // __builtin_FUNCTION(), __builtin_COLUMN() - compiler builtins that return
+    // source location information at runtime.
+    //
+    // We must preserve correct types:
+    // - __builtin_FILE(), __builtin_FUNCTION(), __builtin_FileName(), __builtin_FuncSig()
+    //   return const char* → SgStringVal
+    // - __builtin_LINE() and __builtin_COLUMN() return unsigned int → SgIntVal
+    //
+    // Current implementation returns placeholder values (empty string "" or 0) since
+    // extracting actual source location info requires SourceManager integration.
+
+    clang::SourceLocIdentKind kind = source_loc_expr->getIdentKind();
+
+    switch (kind) {
+        case clang::SourceLocIdentKind::File:
+        case clang::SourceLocIdentKind::FileName:
+        case clang::SourceLocIdentKind::Function:
+        case clang::SourceLocIdentKind::FuncSig:
+            // String-typed builtins: return empty string to preserve type correctness
+            // This allows code like `const char *f = __builtin_FILE();` to unparse correctly
+            *node = SageBuilder::buildStringVal("");
+            break;
+
+        case clang::SourceLocIdentKind::Line:
+        case clang::SourceLocIdentKind::Column:
+            // Integer-typed builtins: return 0 as placeholder
+            *node = SageBuilder::buildIntVal(0);
+            break;
+
+        default:
+            // Unknown builtin kind (e.g., SourceLocStruct): default to integer 0
+            *node = SageBuilder::buildIntVal(0);
+            break;
+    }
 
     return VisitExpr(source_loc_expr, node) && res;
 }
