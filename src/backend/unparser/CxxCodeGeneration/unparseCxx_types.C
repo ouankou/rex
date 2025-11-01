@@ -3662,6 +3662,23 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                  else
                   {
                     SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(info.get_reference_node_for_qualification());
+
+                    // WORKAROUND for Clang frontend: If the name qualifier is empty but the typedef is in a namespace,
+                    // use the fully qualified name instead. This handles system library types like std::string
+                    // where the typedef declaration isn't in our AST (it's in system headers).
+                    if (nameQualifier.getString().empty() && tdecl->get_scope() != NULL) {
+                        SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(tdecl->get_scope());
+                        if (ns_def != NULL) {
+                            // Typedef is in a namespace, use fully qualified name
+                            SgName fullName = typedef_type->get_qualified_name();
+                            if (!fullName.getString().empty()) {
+                                curprint(fullName.getString() + " ");
+                                // Skip the normal name output below by returning early
+                                return;
+                            }
+                        }
+                    }
+
                     curprint(nameQualifier.str());
 
                  // DQ (4/14/2018): This is not the correct way to handle the output of template instantations since this uses the internal name (with unqualified template arguments).
@@ -4162,6 +4179,19 @@ Unparse_Type::unparseFunctionType(SgType* type, SgUnparse_Info& info)
 
      if (ninfo.isTypeFirstPart())
         {
+       // Check if this is a constructor, destructor, or conversion operator - they should not have return types unparsed
+          bool skipReturnType = false;
+          SgFunctionDeclaration* funcdecl = isSgFunctionDeclaration(ninfo.get_declstatement_ptr());
+          if (funcdecl != NULL)
+             {
+               if ( funcdecl->get_specialFunctionModifier().isConstructor() ||
+                    funcdecl->get_specialFunctionModifier().isDestructor()  ||
+                    funcdecl->get_specialFunctionModifier().isConversion() )
+                  {
+                    skipReturnType = true;
+                  }
+             }
+
 #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
           curprint ( "\n/* In unparseFunctionType: handling first part */ \n");
           curprint ( "\n/* Skipping the first part of the return type! */ \n");
@@ -4179,7 +4209,10 @@ Unparse_Type::unparseFunctionType(SgType* type, SgUnparse_Info& info)
 #if OUTPUT_DEBUGGING_UNPARSE_INFO || DEBUG_FUNCTION_TYPE
                curprint ( string("\n/* ") + ninfo.displayString("Skipping the first part of the return type (in needParen == true case)") + " */ \n");
 #endif
-               unparseType(func_type->get_return_type(), ninfo);
+               if (!skipReturnType)
+                  {
+                    unparseType(func_type->get_return_type(), ninfo);
+                  }
                curprint("(");
             // curprint("/* unparseFunctionType */ (");
              }
@@ -4190,7 +4223,10 @@ Unparse_Type::unparseFunctionType(SgType* type, SgUnparse_Info& info)
                printf ("Skipping the first part of the return type (in needParen == false case)! \n");
                curprint ( "\n/* Skipping the first part of the return type (in needParen == false case)! */ \n");
 #endif
-               unparseType(func_type->get_return_type(), ninfo);
+               if (!skipReturnType)
+                  {
+                    unparseType(func_type->get_return_type(), ninfo);
+                  }
              }
         }
        else
@@ -4267,7 +4303,23 @@ Unparse_Type::unparseFunctionType(SgType* type, SgUnparse_Info& info)
 #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
                curprint ("\n/* In unparseFunctionType(): AFTER parenthesis are output */ \n");
 #endif
-               unparseType(func_type->get_return_type(), info); // catch the 2nd part of the rtype
+            // Check if this is a constructor, destructor, or conversion operator - they should not have return types unparsed
+               bool skipReturnType = false;
+               SgFunctionDeclaration* funcdecl = isSgFunctionDeclaration(info.get_declstatement_ptr());
+               if (funcdecl != NULL)
+                  {
+                    if ( funcdecl->get_specialFunctionModifier().isConstructor() ||
+                         funcdecl->get_specialFunctionModifier().isDestructor()  ||
+                         funcdecl->get_specialFunctionModifier().isConversion() )
+                       {
+                         skipReturnType = true;
+                       }
+                  }
+
+               if (!skipReturnType)
+                  {
+                    unparseType(func_type->get_return_type(), info); // catch the 2nd part of the rtype
+                  }
 
 #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
                curprint ("\n/* Done: In unparseFunctionType(): handling second part */ \n");
@@ -4331,6 +4383,19 @@ Unparse_Type::unparseMemberFunctionType(SgType* type, SgUnparse_Info& info)
 
      if (ninfo.isTypeFirstPart())
         {
+       // Check if this is a constructor, destructor, or conversion operator - they should not have return types unparsed
+          bool skipReturnType = false;
+          SgFunctionDeclaration* funcdecl = isSgFunctionDeclaration(ninfo.get_declstatement_ptr());
+          if (funcdecl != NULL)
+             {
+               if ( funcdecl->get_specialFunctionModifier().isConstructor() ||
+                    funcdecl->get_specialFunctionModifier().isDestructor()  ||
+                    funcdecl->get_specialFunctionModifier().isConversion() )
+                  {
+                    skipReturnType = true;
+                  }
+             }
+
           if (needParen)
              {
                ninfo.unset_isReferenceToSomething();
@@ -4342,7 +4407,10 @@ Unparse_Type::unparseMemberFunctionType(SgType* type, SgUnparse_Info& info)
             // DQ (1/13/2014): These should have been setup to be the same.
                ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
 
-               unparseType(mfunc_type->get_return_type(), ninfo);
+               if (!skipReturnType)
+                  {
+                    unparseType(mfunc_type->get_return_type(), ninfo);
+                  }
                curprint ( "(");
              }
             else
@@ -4354,7 +4422,10 @@ Unparse_Type::unparseMemberFunctionType(SgType* type, SgUnparse_Info& info)
             // DQ (1/13/2014): These should have been setup to be the same.
                ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
 
-               unparseType(mfunc_type->get_return_type(), ninfo);
+               if (!skipReturnType)
+                  {
+                    unparseType(mfunc_type->get_return_type(), ninfo);
+                  }
              }
         }
        else
