@@ -45,9 +45,6 @@ bool Unparse_MOD_SAGE::isOperator(SgExpression* expr)
 
 // DQ (8/13/2007): Added by Thomas to refactor unparser.
 void Unparse_MOD_SAGE::curprint(std::string str) {
-  if (str == "T" || str == "templateType_T" || str.find("template") != std::string::npos) {
-    std::cerr << "DEBUG curprint RECEIVED: '" << str << "'" << std::endl;
-  }
   unp->cur << str ;
 }
 

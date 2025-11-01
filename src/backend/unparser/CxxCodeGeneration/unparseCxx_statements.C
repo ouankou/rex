@@ -12566,9 +12566,7 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
      unparse_template_from_ast |= ((templateFunctionDeclaration != NULL) && (templateFunctionDeclaration->get_unparse_template_ast() == true));
      unparse_template_from_ast |= ((templateMemberFunctionDeclaration != NULL) && (templateMemberFunctionDeclaration->get_unparse_template_ast() == true));
 
-     std::cerr << "DEBUG unparse_template_from_ast = " << unparse_template_from_ast << std::endl;
      if (unparse_template_from_ast) {
-       std::cerr << "DEBUG: Taking AST unparse path" << std::endl;
        SgTemplateClassDeclaration * assoc_tpl_class_decl = nullptr;
        if (templateMemberFunctionDeclaration) {
          assoc_tpl_class_decl = isSgTemplateClassDeclaration(templateMemberFunctionDeclaration->get_associatedClassDeclaration());
@@ -12679,9 +12677,7 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
        }
      } else {
        // Unparsing done from saved string
-       std::cerr << "DEBUG: Taking EDG string unparse path" << std::endl;
        string templateString = template_stmt->get_string().str();
-       std::cerr << "DEBUG: templateString = '" << templateString << "'" << std::endl;
 
        // Substitute " decltype" with " __decltype". Only if we are not using C++11 or later version of C++.
        if (sourcefile != NULL && sourcefile->get_Cxx11_only() == false && sourcefile->get_Cxx14_only() == false) {

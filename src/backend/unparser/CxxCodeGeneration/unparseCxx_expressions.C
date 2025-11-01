@@ -46,7 +46,6 @@ Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression* expr, SgUnpars
   // The Clang frontend creates SgPntrArrRefExp nodes, but they're not being dispatched
   // correctly through the normal unparsing path. Handle them explicitly here.
   if (SgPntrArrRefExp* arrRef = isSgPntrArrRefExp(expr)) {
-    std::cerr << "DEBUG FIX #20: Unparsing SgPntrArrRefExp!" << std::endl;
     unparseExpression(arrRef->get_lhs_operand(), info);
     curprint("[");
     unparseExpression(arrRef->get_rhs_operand(), info);
@@ -1470,16 +1469,13 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                if (template_type != NULL) {
                    // For SgTemplateType (used by Clang frontend), get the name directly
                    type_name = template_type->get_name();
-                   std::cerr << "DEBUG: SgTemplateType found, name = '" << type_name << "'" << std::endl;
                } else {
                    SgNonrealType* nrtype = isSgNonrealType(type);
                    if (nrtype != NULL) {
                        type_name = nrtype->get_name();
-                       std::cerr << "DEBUG: SgNonrealType found, name = '" << type_name << "'" << std::endl;
                    } else {
                        // Fallback: use SageInterface for other type classes
                        type_name = SageInterface::get_name(type);
-                       std::cerr << "DEBUG: Other type (" << type->class_name() << "), name = '" << type_name << "'" << std::endl;
                    }
                }
 
@@ -1490,16 +1486,12 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                if (type_name.compare(0, prefix.length(), prefix) == 0) {
                    std::string old_name = type_name;
                    type_name = type_name.substr(prefix.length());
-                   std::cerr << "DEBUG: Stripped prefix: '" << old_name << "' -> '" << type_name << "'" << std::endl;
                } else {
-                   std::cerr << "DEBUG: No prefix to strip in '" << type_name << "'" << std::endl;
                }
 
                if (is_template_header)
                  curprint("typename ");
-               std::cerr << "DEBUG: About to curprint: '" << type_name << "'" << std::endl;
                curprint(type_name);
-               std::cerr << "DEBUG: Done curprint" << std::endl;
 
                SgType* default_type = templateParameter->get_defaultTypeParameter();
                if (default_type != NULL)
@@ -6620,7 +6612,6 @@ Unparse_ExprStmt::unparseArrayOp(SgExpression* expr, SgUnparse_Info& info)
      // CLANG FRONTEND FIX #20: Direct unparsing for array subscripts
      // Instead of using unparseBinaryOperator which has issues with "[]",
      // unparse array subscripts directly as lhs[rhs]
-     std::cerr << "DEBUG FIX #20: unparseArrayOp called!" << std::endl;
      SgBinaryOp* binary_op = isSgBinaryOp(expr);
      ROSE_ASSERT(binary_op != NULL);
 
