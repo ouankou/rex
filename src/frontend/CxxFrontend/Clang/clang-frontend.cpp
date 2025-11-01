@@ -387,7 +387,15 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     // CLANG FRONTEND FIX: Configure header search paths properly
     // WHY: Default paths may point to incorrect locations (e.g., /usr/include/newlib/ on ARM)
-    // This ensures Clang can find standard C++ headers and system headers correctly.
+    // CLANG FRONTEND FIX #22: Use Clang's automatic header detection instead of hard-coded paths
+    // This ensures portability across different systems, LLVM versions, and distributions.
+    //
+    // The CompilerInvocation::CreateFromArgs() call above already sets up correct paths:
+    // - ResourceDir is auto-detected from the Clang installation
+    // - System include paths are computed by Clang's Driver based on the target triple
+    // - No need to override with hard-coded paths that break on other systems
+    //
+    // We only need to enable the relevant flags to use Clang's built-in detection:
     clang::HeaderSearchOptions &headerSearchOpts = invocation.getHeaderSearchOpts();
 
     // Enable Clang's builtin includes (provides compiler-specific headers like stddef.h)
@@ -395,53 +403,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     headerSearchOpts.UseStandardSystemIncludes = true;
     headerSearchOpts.UseStandardCXXIncludes = true;
 
-    // Set the resource directory (where Clang's builtin headers are located)
-    // This is typically /usr/lib/llvm-20/lib/clang/20 or similar
-    headerSearchOpts.ResourceDir = "/usr/lib/llvm-20/lib/clang/20";
-
-    // Add standard C++ include paths for the system
-    // These paths are architecture-specific, so we detect them based on the target triple
-    std::string triple_str = target_triple.str();
-
-    // Add C++ standard library headers
-    headerSearchOpts.AddPath("/usr/include/c++/12",
-                              clang::frontend::System,
-                              false, false);
-
-    // Add architecture-specific C++ headers (contains bits/c++config.h and other critical headers)
-    // CLANG FRONTEND: Unified cross-platform architecture detection
-    // This automatically supports ALL architectures without per-arch #ifdef code
-    std::string arch_prefix;
-    if (triple_str.find("x86_64") != std::string::npos) {
-        arch_prefix = "x86_64-linux-gnu";
-    } else if (triple_str.find("aarch64") != std::string::npos) {
-        arch_prefix = "aarch64-linux-gnu";
-    } else if (triple_str.find("loongarch64") != std::string::npos) {
-        arch_prefix = "loongarch64-linux-gnu";
-    } else if (triple_str.find("riscv64") != std::string::npos) {
-        arch_prefix = "riscv64-linux-gnu";
-    } else if (triple_str.find("powerpc64le") != std::string::npos) {
-        arch_prefix = "powerpc64le-linux-gnu";
-    } else if (triple_str.find("s390x") != std::string::npos) {
-        arch_prefix = "s390x-linux-gnu";
-    } else if (triple_str.find("i386") != std::string::npos || triple_str.find("i686") != std::string::npos) {
-        arch_prefix = "i386-linux-gnu";
-    }
-
-    // Add arch-specific paths if we detected an architecture
-    if (!arch_prefix.empty()) {
-        headerSearchOpts.AddPath("/usr/include/" + arch_prefix + "/c++/12",
-                                  clang::frontend::System,
-                                  false, false);
-        headerSearchOpts.AddPath("/usr/include/" + arch_prefix,
-                                  clang::frontend::System,
-                                  false, false);
-    }
-
-    // Add standard C library headers
-    headerSearchOpts.AddPath("/usr/include",
-                              clang::frontend::System,
-                              false, false);
+    // ResourceDir and system include paths are already correctly set by CreateFromArgs()
+    // based on the Clang installation and target triple. Do NOT override them with
+    // hard-coded paths.
 
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
     std::vector<std::string> lang_specific_includes;
