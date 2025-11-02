@@ -498,8 +498,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     if (!compiler_instance->hasPreprocessor()) compiler_instance->createPreprocessor(clang::TU_Complete);
 
     // Register OpenMP pragma callback to capture pragmas as plain text
+    // Callback captures all "omp" pragmas (parallel, for, simd, etc.)
     RoseOpenMPPragmaCallback* omp_callback = nullptr;
-    if (enable_openmp || sageFile.get_openmp()) {
+    if (enable_openmp || enable_openmp_simd || sageFile.get_openmp()) {
         clang::Preprocessor& PP = compiler_instance->getPreprocessor();
         omp_callback = new RoseOpenMPPragmaCallback(compiler_instance->getSourceManager(), PP);
         PP.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>(omp_callback));
