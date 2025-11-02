@@ -115,10 +115,10 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             }
         }
         else if (current_arg.rfind("-fopenmp", 0) == 0) {
+            // Don't pass -fopenmp to Clang - REX captures OpenMP pragmas as plain text
             bool explicitly_disabled = false;
-            // -fopenmp is 8 chars (index 0-7), so '=' would be at index 8
             if (current_arg.size() > 8 && current_arg[8] == '=') {
-                std::string value = current_arg.substr(9);  // Value starts at index 9
+                std::string value = current_arg.substr(9);
                 std::string lower_value = value;
                 std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(),
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -128,20 +128,13 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             }
 
             if (explicitly_disabled) {
-                // Don't pass -fopenmp=0/false/disabled to Clang (it doesn't support this syntax)
-                // Just mark OpenMP as disabled for ROSE's internal tracking
                 disable_openmp_via_flag = true;
                 enable_openmp = false;
-            } else {
-                // Pass valid -fopenmp or -fopenmp=<lib> to Clang
-                passthrough_args.push_back(current_arg);
-                if (!disable_openmp_via_flag) {
-                    enable_openmp = true;
-                }
+            } else if (!disable_openmp_via_flag) {
+                enable_openmp = true;
             }
         }
         else if (current_arg == "-fopenmp-simd") {
-            passthrough_args.push_back("-fopenmp-simd");
             enable_openmp_simd = true;
         }
         else {
@@ -188,13 +181,12 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         }
     }
 
+    // Enable pragma capture if ROSE has OpenMP enabled (don't pass flag to Clang)
     if (sageFile.get_openmp() && !enable_openmp && !disable_openmp_via_flag && !is_secondary_parse) {
-        passthrough_args.push_back("-fopenmp");
         enable_openmp = true;
     }
 
     if (sageFile.get_openmp_parse_only() && !enable_openmp_simd && !is_secondary_parse) {
-        passthrough_args.push_back("-fopenmp-simd");
         enable_openmp_simd = true;
     }
 
@@ -466,13 +458,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     if (enable_opencl) {
         lang_opts.OpenCL = 1;
     }
-    if (enable_openmp) {
-        lang_opts.OpenMP = 1;
-        lang_opts.OpenMPUseTLS = 1;
-    }
-    if (enable_openmp_simd) {
-        lang_opts.OpenMPSimd = 1;
-    }
 
     // Now create file manager with FileSystemOptions from the parsed invocation
     compiler_instance->createFileManager();
@@ -512,9 +497,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (!compiler_instance->hasPreprocessor()) compiler_instance->createPreprocessor(clang::TU_Complete);
 
-    // Only register OpenMP pragma callback when -fopenmp is enabled
+    // Register OpenMP pragma callback to capture pragmas as plain text
     RoseOpenMPPragmaCallback* omp_callback = nullptr;
-    if (enable_openmp) {
+    if (enable_openmp || sageFile.get_openmp()) {
         clang::Preprocessor& PP = compiler_instance->getPreprocessor();
         omp_callback = new RoseOpenMPPragmaCallback(compiler_instance->getSourceManager(), PP);
         PP.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>(omp_callback));
@@ -528,7 +513,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language, &sageFile);
     ClangToSageTranslator* translator = translator_ptr.get();
 
-    // Pass pragma callback to translator (will be nullptr if -fopenmp not enabled)
+    // Pass pragma callback to translator
     if (omp_callback) {
         translator->setOpenMPPragmaCallback(omp_callback);
     }

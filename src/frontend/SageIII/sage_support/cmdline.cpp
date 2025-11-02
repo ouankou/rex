@@ -3395,10 +3395,8 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
                set_fortran_openmp(false);
              }
              */
-         // REX: Removed hardcoded -D_OPENMP=OMPVERSION for Clang frontend
-         // The EDG frontend required this macro to be explicitly defined, but Clang
-         // automatically defines _OPENMP with the correct version when -fopenmp is passed.
-         // (EDG removed in REX migration, Clang frontend now used for all C/C++ code)
+         // REX: Add -D_OPENMP since we don't pass -fopenmp to Clang (it captures pragmas as plain text)
+         argv.push_back(ompmacro);
         }
 
      // Process sub-options for OpenMP handling, Liao 5/31/2009
@@ -3416,9 +3414,8 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
-         // if (!Outliner::select_omp_loop)
-         //   argv.push_back(ompmacro);
+         if (!Outliner::select_omp_loop)
+           argv.push_back(ompmacro);
        }
      }
 
@@ -3437,9 +3434,8 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
-         // if (!Outliner::select_omp_loop)
-         //   argv.push_back(ompmacro);
+         if (!Outliner::select_omp_loop)
+           argv.push_back(ompmacro);
        }
      }
 
@@ -3459,9 +3455,8 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
-         // if (!Outliner::select_omp_loop)
-         //   argv.push_back(ompmacro);
+         if (!Outliner::select_omp_loop)
+           argv.push_back(ompmacro);
        }
      }
 
@@ -3482,9 +3477,8 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
-         // if (!Outliner::select_omp_loop)
-         //   argv.push_back(ompmacro);
+         if (!Outliner::select_omp_loop)
+           argv.push_back(ompmacro);
        }
      }
 
@@ -3501,9 +3495,8 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
-         // if (!Outliner::select_omp_loop)
-         //   argv.push_back(ompmacro);
+         if (!Outliner::select_omp_loop)
+           argv.push_back(ompmacro);
        }
      }
 
@@ -3522,9 +3515,8 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        if (!get_openmp())
        {
          set_openmp(true);
-         // REX: Don't add -D_OPENMP for Clang frontend (it defines it automatically with -fopenmp)
-         // if (!Outliner::select_omp_loop)
-         //   argv.push_back(ompmacro);
+         if (!Outliner::select_omp_loop)
+           argv.push_back(ompmacro);
        }
      }
 
@@ -4641,6 +4633,9 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
             }
         }
         else if (current_arg.find("-rose") == 0) {}
+        // Filter out OpenMP flags - REX captures pragmas as plain text, not via Clang
+        else if (current_arg.find("-fopenmp") == 0) {}
+        else if (current_arg.find("--rex-omp-") == 0) {}
         else {
             input_file = current_arg;
         }
