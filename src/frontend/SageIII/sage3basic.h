@@ -425,8 +425,9 @@
 // endif for ifndef ROSE_USE_SWIG_SUPPORT
 // #endif
 
-// Liao, 2018/6/25, define the actual version value for OpenMP 4.5
-#define OMPVERSION 201511
+// OpenMP version macro value (YYYYMM format from OpenMP spec)
+// 202011 = OpenMP 5.1 (November 2020), matching Clang-20 default
+#define OMPVERSION 202011
 
 #endif
 
