@@ -3382,8 +3382,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
      ROSE_ASSERT (get_openmp_ast_only() == false);
      ROSE_ASSERT (get_openmp_lowering() == false);
      if ( CommandlineProcessing::isOption(argv,"-rose:","(OpenMP|openmp)",true) == true
-         ||CommandlineProcessing::isOption(argv,"-","(openmp|fopenmp)",true) == true
-         ||CommandlineProcessing::isOption(argv,"-","fopenmp-simd",true) == true
+         ||CommandlineProcessing::isOption(argv,"-","(openmp|fopenmp|fopenmp-simd)",true) == true
          )
         {
           if ( SgProject::get_verbose() >= 1 )
@@ -4635,7 +4634,9 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
         }
         else if (current_arg.find("-rose") == 0) {}
         // Filter out OpenMP flags - REX captures pragmas as plain text, not via Clang
-        else if (current_arg.find("-fopenmp") == 0) {}
+        else if (current_arg == "-fopenmp" ||
+                 current_arg.rfind("-fopenmp=", 0) == 0 ||
+                 current_arg == "-fopenmp-simd") {}
         else if (current_arg.find("--rex-omp-") == 0) {}
         else {
             input_file = current_arg;
