@@ -3383,6 +3383,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
      ROSE_ASSERT (get_openmp_lowering() == false);
      if ( CommandlineProcessing::isOption(argv,"-rose:","(OpenMP|openmp)",true) == true
          ||CommandlineProcessing::isOption(argv,"-","(openmp|fopenmp)",true) == true
+         ||CommandlineProcessing::isOption(argv,"-","fopenmp-simd",true) == true
          )
         {
           if ( SgProject::get_verbose() >= 1 )

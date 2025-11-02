@@ -136,6 +136,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         }
         else if (current_arg == "-fopenmp-simd") {
             enable_openmp_simd = true;
+            enable_openmp = true;  // SIMD is a subset of OpenMP, enable full pragma capture
         }
         else {
             // TODO -include
@@ -188,6 +189,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (sageFile.get_openmp_parse_only() && !enable_openmp_simd && !is_secondary_parse) {
         enable_openmp_simd = true;
+        enable_openmp = true;  // SIMD requires pragma capture
     }
 
     ClangToSageTranslator::Language language = ClangToSageTranslator::unknown;
