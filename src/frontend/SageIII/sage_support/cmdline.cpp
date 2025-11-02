@@ -5241,13 +5241,12 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
 
        // Liao, 9/4/2009. If OpenMP lowering is activated. -D_OPENMP=OMPVERSION should be added
        // since we don't remove condition compilation preprocessing info. during OpenMP lowering
-       // REX: Commented out - Clang automatically defines _OPENMP when -fopenmp is passed.
-       // The old EDG frontend required this to be explicitly defined, but Clang does not.
-          // if (get_openmp_lowering()|| ( get_openmp() && !Outliner::select_omp_loop ))
-          // {
-          //   string ompmacro="-D_OPENMP="+ StringUtility::numberToString(OMPVERSION);
-          //   compilerNameString.push_back(ompmacro);
-          // }
+       // REX: Backend compiler needs -D_OPENMP to process #ifdef _OPENMP guards in generated code
+          if (get_openmp_lowering()|| ( get_openmp() && !Outliner::select_omp_loop ))
+          {
+            string ompmacro="-D_OPENMP="+ StringUtility::numberToString(OMPVERSION);
+            compilerNameString.push_back(ompmacro);
+          }
         }
 
   // DQ (3/31/2004): New cleaned up source file handling
