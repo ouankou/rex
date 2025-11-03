@@ -5239,15 +5239,14 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
        // the backend).  I don't think there is a way to not see code in the front-end, yet see it in the backend.
           compilerNameString.push_back("-DUSE_ROSE_BACKEND");
 
-       // Liao, 9/4/2009. If OpenMP lowering is activated. -D_OPENMP=OMPVERSION should be added
-       // since we don't remove condition compilation preprocessing info. during OpenMP lowering
-       // REX: Commented out - Clang automatically defines _OPENMP when -fopenmp is passed.
-       // The old EDG frontend required this to be explicitly defined, but Clang does not.
-          // if (get_openmp_lowering()|| ( get_openmp() && !Outliner::select_omp_loop ))
-          // {
-          //   string ompmacro="-D_OPENMP="+ StringUtility::numberToString(OMPVERSION);
-          //   compilerNameString.push_back(ompmacro);
-          // }
+       // Add -D_OPENMP to backend compiler when OpenMP is enabled
+       // This allows backend to process #ifdef _OPENMP guards in generated code
+       // OMPVERSION (202011 = OpenMP 5.1) matches Clang 20's native OpenMP support
+          if (get_openmp_lowering()|| ( get_openmp() && !Outliner::select_omp_loop ))
+          {
+            string ompmacro="-D_OPENMP="+ StringUtility::numberToString(OMPVERSION);
+            compilerNameString.push_back(ompmacro);
+          }
         }
 
   // DQ (3/31/2004): New cleaned up source file handling
