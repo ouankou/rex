@@ -3201,6 +3201,15 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         } else if (llvm::isa<clang::CXXConversionDecl>(function_decl)) {
             member_func->get_specialFunctionModifier().setConversion();
         }
+    } else if (SgTemplateMemberFunctionDeclaration* template_member_func = isSgTemplateMemberFunctionDeclaration(sg_function_decl)) {
+        // Also handle template member functions (constructors/destructors of template classes)
+        if (llvm::isa<clang::CXXConstructorDecl>(function_decl)) {
+            template_member_func->get_specialFunctionModifier().setConstructor();
+        } else if (llvm::isa<clang::CXXDestructorDecl>(function_decl)) {
+            template_member_func->get_specialFunctionModifier().setDestructor();
+        } else if (llvm::isa<clang::CXXConversionDecl>(function_decl)) {
+            template_member_func->get_specialFunctionModifier().setConversion();
+        }
     }
 
     // ROOT CAUSE FIX: Add/update translation map to prevent double visitation
