@@ -5529,8 +5529,9 @@ Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
           bool isDestructor = funcdecl_stmt->get_specialFunctionModifier().isDestructor();
           bool isConversion = funcdecl_stmt->get_specialFunctionModifier().isConversion();
 
-          // ROOT CAUSE: For member functions in class scope, verify by name matching
-          // Frontend sets specialFunctionModifier but verification needed for correctness
+          // Fallback name-based detection for cases where frontend didn't set flags
+          bool isConstructorByName = false;
+          bool isDestructorByName = false;
           if (!isConstructor && !isDestructor && !isConversion) {
               SgClassDefinition* class_defn = isSgClassDefinition(funcdecl_stmt->get_scope());
               if (!class_defn) class_defn = isSgTemplateClassDefinition(funcdecl_stmt->get_scope());
@@ -5540,18 +5541,15 @@ Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                   if (className.length() >= 2 && className[0] == ':' && className[1] == ':') {
                       className = className.substr(2);
                   }
-                  bool nameMatches = (funcName == className ||
-                                     (funcName.length() > className.length() &&
-                                      funcName.substr(0, className.length()) == className &&
-                                      funcName[className.length()] == '<'));
-                  bool isDestructorName = (!funcName.empty() && funcName[0] == '~');
-                  if (nameMatches || isDestructorName) {
-                      return;
-                  }
+                  isConstructorByName = (funcName == className ||
+                                        (funcName.length() > className.length() &&
+                                         funcName.substr(0, className.length()) == className &&
+                                         funcName[className.length()] == '<'));
+                  isDestructorByName = (!funcName.empty() && funcName[0] == '~');
               }
           }
 
-          if (!(isConstructor || isDestructor || isConversion)) {
+          if (!(isConstructor || isDestructor || isConversion || isConstructorByName || isDestructorByName)) {
               unp->u_type->unparseType(rtype, ninfo_for_type);
           }
 
