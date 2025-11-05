@@ -2920,6 +2920,10 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             template_member_func->set_parameterList(param_list);
             param_list->set_parent(template_member_func);
 
+            // NOTE: Not appending to global scope - ROSE finds declarations through other mechanisms
+            // (e.g., symbol tables, definition->declaration links). Append causes segfault.
+            // Function DOES appear in unparsed output (verified: getmax() is in rose_*.C files).
+
             // Set the associated class declaration for proper qualification
             clang::ClassTemplateDecl* canonical_class_template = llvm::cast<clang::ClassTemplateDecl>(class_template->getCanonicalDecl());
             std::map<clang::Decl*, SgNode*>::iterator class_it = p_decl_translation_map.find(canonical_class_template);
