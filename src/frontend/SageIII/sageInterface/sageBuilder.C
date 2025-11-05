@@ -4452,7 +4452,17 @@ SageBuilder::buildNondefiningFunctionDeclaration (const SgName & name, SgType* r
              }
             else
              {
-               result = buildNondefiningFunctionDeclaration_T <SgFunctionDeclaration> (name,return_type,paralist, /* isMemberFunction = */ false, scope, decoratorList, false, NULL, NULL, sm);
+               // CLANG FRONTEND FIX: Check if scope is a class definition to create SgMemberFunctionDeclaration
+               // This is the ROOT CAUSE fix that eliminates the need for unparser workarounds
+               bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
+               if (isMemberFunction)
+                  {
+                    result = buildNondefiningFunctionDeclaration_T <SgMemberFunctionDeclaration> (name,return_type,paralist, /* isMemberFunction = */ true, scope, decoratorList, false, NULL, NULL, sm);
+                  }
+                 else
+                  {
+                    result = buildNondefiningFunctionDeclaration_T <SgFunctionDeclaration> (name,return_type,paralist, /* isMemberFunction = */ false, scope, decoratorList, false, NULL, NULL, sm);
+                  }
              }
         }
 
@@ -6051,9 +6061,19 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
           ROSE_ASSERT(first_nondefining_declaration != NULL);
 
        // func = buildDefiningFunctionDeclaration_T<SgFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,first_nondefining_declaration);
-          func = buildDefiningFunctionDeclaration_T<SgFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,first_nondefining_declaration, NULL);
-
-          ROSE_ASSERT(isSgFunctionDeclaration(func) != NULL);
+       // CLANG FRONTEND FIX: Check if scope is a class definition to create SgMemberFunctionDeclaration
+       // This is the ROOT CAUSE fix that eliminates the need for unparser workarounds
+          bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
+          if (isMemberFunction)
+             {
+               func = buildDefiningFunctionDeclaration_T<SgMemberFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ true,scope,decoratorList,0,isSgMemberFunctionDeclaration(first_nondefining_declaration), NULL);
+               ROSE_ASSERT(isSgMemberFunctionDeclaration(func) != NULL);
+             }
+            else
+             {
+               func = buildDefiningFunctionDeclaration_T<SgFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,first_nondefining_declaration, NULL);
+               ROSE_ASSERT(isSgFunctionDeclaration(func) != NULL);
+             }
         }
 
      return func;
