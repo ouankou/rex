@@ -2896,12 +2896,16 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
             SgFunctionType* func_type = SageBuilder::buildFunctionType(ret_type, param_list);
 
-            // Create file info and function definition
+            // Create file info, basic block, and function definition
             Sg_File_Info* file_info = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
             ROSE_ASSERT(file_info != NULL);
 
-            SgFunctionDefinition* func_definition = new SgFunctionDefinition((SgFunctionDeclaration*)NULL, (SgBasicBlock*)NULL);
+            // Create an empty basic block for the function body (will be filled by later visitation)
+            SgBasicBlock* func_body = new SgBasicBlock(file_info);
+
+            SgFunctionDefinition* func_definition = new SgFunctionDefinition((SgFunctionDeclaration*)NULL, func_body);
             func_definition->set_file_info(file_info);
+            func_body->set_parent(func_definition);
 
             SgTemplateMemberFunctionDeclaration* template_member_func =
                 new SgTemplateMemberFunctionDeclaration(file_info, name, func_type, func_definition);
@@ -2939,9 +2943,15 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             template_member_func->set_parameterList(param_list);
             param_list->set_parent(template_member_func);
 
-            // NOTE: Not appending to global scope - ROSE finds declarations through other mechanisms
-            // (e.g., symbol tables, definition->declaration links). Append causes segfault.
-            // Function DOES appear in unparsed output (verified: getmax() is in rose_*.C files).
+            // NOTE: appendStatement(template_member_func, proper_scope) causes segfault during AST construction.
+            // The declaration is still reachable via:
+            // 1. Translation map: p_decl_translation_map[canonical_function] = sg_function_decl
+            // 2. Qualified name map: get_globalQualifiedNameMapForNames()[template_member_func]
+            // 3. Associated class: template_member_func->get_associatedClassDeclaration()
+            // The unparser can emit the function through these mechanisms, but general AST traversals
+            // from SgProject downward won't discover this node. This is a limitation that needs
+            // fixing - the segfault appears to be related to modifying scope statement lists during
+            // initial AST construction before all bidirectional links are established.
 
             // Set the associated class declaration for proper qualification
             clang::ClassTemplateDecl* canonical_class_template = llvm::cast<clang::ClassTemplateDecl>(class_template->getCanonicalDecl());
