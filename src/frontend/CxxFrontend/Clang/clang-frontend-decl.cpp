@@ -1226,14 +1226,14 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
 
     applySourceRange(template_decl, class_template_decl->getSourceRange());
 
+    // ROOT CAUSE FIX: Cache before appending to prevent double visitation
+    p_decl_translation_map.insert(std::make_pair(class_template_decl, template_decl));
+    p_decl_translation_map.insert(std::make_pair(templated_decl, template_decl));
+
     // Insert into current scope if not already present
     if (template_decl->get_parent() == NULL && scope != NULL) {
         SageInterface::appendStatement(template_decl, scope);
     }
-
-    // Cache translation for both the template and its templated declaration
-    p_decl_translation_map.insert(std::make_pair(class_template_decl, template_decl));
-    p_decl_translation_map.insert(std::make_pair(templated_decl, template_decl));
 
     // Populate the class definition for definitions
     if (templated_decl->isThisDeclarationADefinition()) {

@@ -12774,8 +12774,7 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
        SgUnparse_Info ninfo(info);
 
        if (templateClassDeclaration != NULL) {
-         // Workaround: Clang frontend creates duplicate template class nodes in AST
-         // Track which template classes we've already unparsed to avoid duplicates
+         // Prevent duplicate unparsing: same template node can appear multiple times in AST traversal
          static std::set<SgTemplateClassDeclaration*> unparsedTemplateClasses;
          if (unparsedTemplateClasses.find(templateClassDeclaration) != unparsedTemplateClasses.end()) {
              return;
