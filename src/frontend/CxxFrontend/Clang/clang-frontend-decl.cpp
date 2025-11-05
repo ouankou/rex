@@ -2932,10 +2932,15 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                 if (SgTemplateClassDeclaration* sg_template_class = isSgTemplateClassDeclaration(class_node)) {
                     template_member_func->set_associatedClassDeclaration(sg_template_class);
 
-                    // WORKAROUND: Pre-compute qualified name prefix (e.g., "mypair<T>::")
+                    // WORKAROUND: Pre-compute qualified name prefix (e.g., "ns::mypair<T>::")
                     // The name qualification traversal incorrectly generates "::< T> ::" instead.
                     // TODO: Fix the traversal to correctly handle template classes (see TEMPLATE_MEMBER_FUNCTIONS.md)
-                    std::string qualified_prefix = sg_template_class->get_name().getString();
+                    std::string qualified_prefix = sg_template_class->get_qualified_name().getString();
+
+                    // Strip leading "::" for global scope (keep namespace qualifiers like "ns::")
+                    if (qualified_prefix.size() >= 2 && qualified_prefix.substr(0, 2) == "::") {
+                        qualified_prefix = qualified_prefix.substr(2);
+                    }
 
                     SgTemplateParameterPtrList& class_params = sg_template_class->get_templateParameters();
                     if (!class_params.empty()) {
