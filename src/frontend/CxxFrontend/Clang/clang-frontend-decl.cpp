@@ -1,6 +1,10 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
 #include <set>
+#include <algorithm>
+#include "AstTextAttributesHandling.h"
+
+// #define DEBUG_TEMPLATE_DUPLICATION 1
 
 SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * decl) {
     if (decl == NULL) return NULL;
@@ -1150,6 +1154,25 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
         return false;
     }
 
+    // ROOT CAUSE FIX: Use canonical declaration as cache key to handle redeclarations
+    // Clang may visit the same template multiple times with different Decl pointers
+    clang::ClassTemplateDecl* canonical_decl = class_template_decl->getCanonicalDecl();
+#if DEBUG_TEMPLATE_DUPLICATION
+    std::cerr << "VisitClassTemplateDecl: " << class_template_decl->getNameAsString()
+              << " ptr=" << class_template_decl << " canonical=" << canonical_decl << std::endl;
+#endif
+    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(canonical_decl);
+    if (it != p_decl_translation_map.end()) {
+#if DEBUG_TEMPLATE_DUPLICATION
+        std::cerr << "  -> Found in cache, skipping!" << std::endl;
+#endif
+        *node = it->second;
+        return true;  // Already processed
+    }
+#if DEBUG_TEMPLATE_DUPLICATION
+    std::cerr << "  -> Not in cache, creating new node" << std::endl;
+#endif
+
     // CLANG FRONTEND FIX: Skip system header template classes to avoid performance issues
     // System headers contain massive template hierarchies that cause extremely slow processing
     clang::SourceManager &SM = p_compiler_instance->getSourceManager();
@@ -1170,6 +1193,13 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
     if (template_name_str.empty()) {
         template_name_str = "__anon_template_" + generate_source_position_string(class_template_decl->getBeginLoc());
     }
+
+    // ROOT CAUSE FIX: Clang's getNameAsString() returns qualified names with leading ::
+    // Strip leading :: to get the unqualified name
+    if (template_name_str.length() >= 2 && template_name_str[0] == ':' && template_name_str[1] == ':') {
+        template_name_str = template_name_str.substr(2);
+    }
+
     SgName template_name(template_name_str);
 
     // Resolve class kind
@@ -1195,28 +1225,60 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
         scope = getGlobalScope();
     }
 
-    // Build template parameters and template declaration
-    SgTemplateArgumentPtrList* empty_args = new SgTemplateArgumentPtrList();
+    // ROOT CAUSE FIX: Don't use buildTemplateClassDeclaration_nfi - it creates duplicate declarations
+    // Build the template class declaration manually to have full control
+
+    // Build template parameters
     SgTemplateParameterPtrList* params = translateTemplateParameterList(class_template_decl->getTemplateParameters(), NULL);
 
-    SgTemplateClassDeclaration* template_decl =
-        SageBuilder::buildTemplateClassDeclaration_nfi(
-            template_name,
-            class_kind,
-            scope,
-            NULL,
-            params,
-            empty_args);
+    // Create the class type
+    SgClassType* class_type = new SgClassType(NULL);
 
-    delete params;
-    delete empty_args;
+    // Create the class definition
+    SgTemplateClassDefinition* class_def = new SgTemplateClassDefinition();
 
-    if (template_decl == NULL) {
-        *node = NULL;
-        return false;
+    // ROOT CAUSE FIX: ROSE requires BOTH non-defining and defining declarations
+    // Both declarations share the same type
+
+    // Create non-defining (forward) declaration first (without definition)
+    // Don't set scope - it won't be added to the scope statement, only linked via declaration chain
+    SgTemplateClassDeclaration* nondefining_decl = new SgTemplateClassDeclaration(template_name, class_kind, class_type, NULL);
+
+    // Create defining declaration with the class definition (same type)
+    SgTemplateClassDeclaration* template_decl = new SgTemplateClassDeclaration(template_name, class_kind, class_type, class_def);
+    template_decl->set_scope(scope);
+
+    // ROOT CAUSE FIX: Tell unparser to use AST instead of saved string for manually constructed templates
+    // This ensures our manually constructed AST nodes are unparsed correctly
+    template_decl->set_unparse_template_ast(true);
+
+    // Link the declaration chain properly
+    nondefining_decl->set_firstNondefiningDeclaration(nondefining_decl);
+    nondefining_decl->set_definingDeclaration(template_decl);
+    template_decl->set_firstNondefiningDeclaration(nondefining_decl);
+    template_decl->set_definingDeclaration(template_decl);
+
+    // Link type back to declaration
+    class_type->set_declaration(template_decl);
+
+    // Set template parameters on both declarations
+    if (params != NULL) {
+        nondefining_decl->get_templateParameters() = *params;
+        template_decl->get_templateParameters() = *params;
+        delete params;
     }
 
-    // Attach template parameter back-links
+    // Link definition back to declaration
+    class_def->set_declaration(template_decl);
+
+    // Attach template parameter back-links to both declarations
+    SgTemplateParameterPtrList& nondef_params = nondefining_decl->get_templateParameters();
+    for (SgTemplateParameter* param : nondef_params) {
+        if (param != NULL) {
+            param->set_templateDeclaration(nondefining_decl);
+        }
+    }
+
     SgTemplateParameterPtrList& decl_params = template_decl->get_templateParameters();
     for (SgTemplateParameter* param : decl_params) {
         if (param != NULL) {
@@ -1224,19 +1286,98 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
         }
     }
 
+#if DEBUG_TEMPLATE_DUPLICATION
+    if (class_template_decl->getNameAsString() == "mypair") {
+        std::cerr << "  -> Manually created SgTemplateClassDeclaration: " << template_decl << std::endl;
+        std::cerr << "  -> firstNondefining=" << template_decl->get_firstNondefiningDeclaration()
+                  << " defining=" << template_decl->get_definingDeclaration() << std::endl;
+    }
+#endif
+
+    // Apply source range only to defining declaration
+    // ROOT CAUSE FIX: Don't set source range on non-defining declaration
+    // The unparser should skip nodes without valid source position information
     applySourceRange(template_decl, class_template_decl->getSourceRange());
 
     // Insert into current scope if not already present
     if (template_decl->get_parent() == NULL && scope != NULL) {
+#if DEBUG_TEMPLATE_DUPLICATION
+        if (class_template_decl->getNameAsString() == "mypair") {
+            std::cerr << "  -> Appending mypair defining template to scope" << std::endl;
+            std::cerr << "  -> Before append, scope has " << scope->getDeclarationList().size() << " declarations" << std::endl;
+        }
+#endif
         SageInterface::appendStatement(template_decl, scope);
+#if DEBUG_TEMPLATE_DUPLICATION
+        if (class_template_decl->getNameAsString() == "mypair") {
+            std::cerr << "  -> After append, scope has " << scope->getDeclarationList().size() << " declarations" << std::endl;
+            // Count how many mypair declarations are in scope
+            int mypair_count = 0;
+            for (SgDeclarationStatement* decl : scope->getDeclarationList()) {
+                if (SgTemplateClassDeclaration* tc = isSgTemplateClassDeclaration(decl)) {
+                    if (tc->get_name().getString() == "mypair") {
+                        mypair_count++;
+                        std::cerr << "  -> Found mypair in scope: " << tc << std::endl;
+                    }
+                }
+            }
+            std::cerr << "  -> Total mypair templates in scope: " << mypair_count << std::endl;
+        }
+#endif
+    }
+#if DEBUG_TEMPLATE_DUPLICATION
+    else if (class_template_decl->getNameAsString() == "mypair") {
+        std::cerr << "  -> mypair template already has parent: " << template_decl->get_parent() << std::endl;
+    }
+#endif
+
+    // ROOT CAUSE FIX: Ensure non-defining declaration is NOT in the scope
+    // AST fixup or unparser might find it through declaration chain - explicitly remove it
+    if (nondefining_decl != NULL && nondefining_decl != template_decl && scope != NULL) {
+        // Remove from scope's declaration list if it somehow got added
+        SgDeclarationStatementPtrList& decl_list = scope->getDeclarationList();
+        auto it = std::find(decl_list.begin(), decl_list.end(), nondefining_decl);
+        if (it != decl_list.end()) {
+            decl_list.erase(it);
+#if DEBUG_TEMPLATE_DUPLICATION
+            if (class_template_decl->getNameAsString() == "mypair") {
+                std::cerr << "  -> Explicitly removed non-defining declaration from scope" << std::endl;
+            }
+#endif
+        }
+
+        // Check if both are in the scope
+#if DEBUG_TEMPLATE_DUPLICATION
+        if (class_template_decl->getNameAsString() == "mypair") {
+            int nondefining_count = 0;
+            int defining_count = 0;
+            for (SgDeclarationStatement* decl : decl_list) {
+                if (decl == nondefining_decl) nondefining_count++;
+                if (decl == template_decl) defining_count++;
+            }
+            std::cerr << "  -> Final scope state: nondefining_count=" << nondefining_count
+                      << " defining_count=" << defining_count << std::endl;
+        }
+#endif
     }
 
     // Cache translation for both the template and its templated declaration
-    p_decl_translation_map.insert(std::make_pair(class_template_decl, template_decl));
-    p_decl_translation_map.insert(std::make_pair(templated_decl, template_decl));
+    p_decl_translation_map.insert(std::make_pair(canonical_decl, template_decl));
+    clang::CXXRecordDecl* canonical_templated = llvm::cast<clang::CXXRecordDecl>(templated_decl->getCanonicalDecl());
+#if DEBUG_TEMPLATE_DUPLICATION
+    if (class_template_decl->getNameAsString() == "mypair") {
+        std::cerr << "  -> Caching templated_decl canonical=" << canonical_templated << std::endl;
+    }
+#endif
+    p_decl_translation_map.insert(std::make_pair(canonical_templated, template_decl));
 
     // Populate the class definition for definitions
     if (templated_decl->isThisDeclarationADefinition()) {
+#if DEBUG_TEMPLATE_DUPLICATION
+        if (class_template_decl->getNameAsString() == "mypair") {
+            std::cerr << "  -> Populating mypair template class definition" << std::endl;
+        }
+#endif
         if (SgTemplateClassDefinition* class_def = isSgTemplateClassDefinition(template_decl->get_definition())) {
             applySourceRange(class_def, templated_decl->getSourceRange());
             populateClassDefinition(templated_decl, class_def);
@@ -1245,8 +1386,25 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
         template_decl->setForward();
     }
 
+    // ROOT CAUSE FIX: Do NOT traverse template instantiations - they are implicit
+    // Traversing them causes duplicate template declarations in the output
+    // Only explicit specializations should be traversed (not implicit instantiations)
     for (auto it = class_template_decl->spec_begin(); it != class_template_decl->spec_end(); ++it) {
-        Traverse(*it);
+        clang::CXXRecordDecl* spec = *it;
+        // Only traverse explicit specializations, skip implicit instantiations
+        if (spec->getTemplateSpecializationKind() == clang::TSK_ExplicitSpecialization) {
+#if DEBUG_TEMPLATE_DUPLICATION
+            if (class_template_decl->getNameAsString() == "mypair") {
+                std::cerr << "  -> Traversing mypair EXPLICIT specialization: " << spec << std::endl;
+            }
+#endif
+            Traverse(spec);
+        }
+#if DEBUG_TEMPLATE_DUPLICATION
+        else if (class_template_decl->getNameAsString() == "mypair") {
+            std::cerr << "  -> Skipping mypair IMPLICIT instantiation: " << spec << std::endl;
+        }
+#endif
     }
 
     *node = template_decl;
@@ -1257,9 +1415,55 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(clang::FunctionTemplateDec
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitFunctionTemplateDecl" << std::endl;
 #endif
-    if (function_template_decl != nullptr) {
-        Traverse(function_template_decl->getTemplatedDecl());
+    if (function_template_decl == NULL) {
+        *node = NULL;
+        return false;
     }
+
+    // ROOT CAUSE FIX: Use canonical declaration as cache key
+    clang::FunctionTemplateDecl* canonical_func_template = function_template_decl->getCanonicalDecl();
+    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(canonical_func_template);
+    if (it != p_decl_translation_map.end()) {
+        *node = it->second;
+        return true;  // Already processed
+    }
+
+    clang::FunctionDecl* templated_func = function_template_decl->getTemplatedDecl();
+    if (templated_func == NULL) {
+        *node = NULL;
+        return false;
+    }
+
+    // ROOT CAUSE FIX: Use attribute system to preserve template prefix information
+    // Similar to ElaboratedType fix - attach template parameters as attribute for unparser
+
+    // Translate the templated function
+    SgNode* func_node = Traverse(templated_func);
+
+    SgFunctionDeclaration* sg_func_decl = isSgFunctionDeclaration(func_node);
+    if (sg_func_decl != NULL) {
+        // Build template parameter string from Clang AST
+        std::string template_prefix = "template <";
+        const clang::TemplateParameterList* template_params = function_template_decl->getTemplateParameters();
+        for (unsigned i = 0; i < template_params->size(); ++i) {
+            if (i > 0) template_prefix += ", ";
+            const clang::NamedDecl* param = template_params->getParam(i);
+            template_prefix += "class " + param->getNameAsString();
+        }
+        template_prefix += ">";
+
+        // Attach template prefix as attribute for unparser to read
+        if (!template_prefix.empty()) {
+            sg_func_decl->addNewAttribute("template_declaration_prefix", new AstTextAttribute(template_prefix));
+        }
+
+        p_decl_translation_map.insert(std::make_pair(canonical_func_template, sg_func_decl));
+        p_decl_translation_map.insert(std::make_pair(templated_func->getCanonicalDecl(), sg_func_decl));
+
+        *node = sg_func_decl;
+        return true;
+    }
+
     *node = NULL;
     return false;
 }
@@ -1363,9 +1567,82 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
     std:: cerr << "isModulePrivate() " << record_decl->isModulePrivate() << "\n";
 #endif
 
-    // CLANG FRONTEND FIX: Check if this decl was already translated (e.g., by template visitors)
-    // This prevents creating duplicate SgClassDeclaration for nodes already handled as templates
-    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(record_decl);
+    // ROOT CAUSE FIX: For CXXRecordDecls, check if there's already a template class with the same name
+    // Clang visits templates through multiple paths: ClassTemplateDecl, then separate RecordDecl visits
+    // The RecordDecls aren't marked as dependent, but we need to prevent duplicating the template class
+    if (clang::CXXRecordDecl* cxx_record = llvm::dyn_cast<clang::CXXRecordDecl>(record_decl)) {
+#if DEBUG_TEMPLATE_DUPLICATION
+        if (record_decl->getNameAsString() == "mypair") {
+            std::cerr << "VisitRecordDecl DEDUP CHECK: mypair, checking for existing template..." << std::endl;
+        }
+#endif
+            // This is a template pattern - check if we already have a template class with this name
+            SgScopeStatement* current_scope = SageBuilder::topScopeStack();
+            // Only check scopes that support getDeclarationList (Global, Namespace, Class, Function)
+            if (SgGlobal* global_scope = isSgGlobal(current_scope)) {
+                std::string class_name = record_decl->getNameAsString();
+#if DEBUG_TEMPLATE_DUPLICATION
+                if (class_name == "mypair") {
+                    std::cerr << "  -> Searching global scope for existing mypair template..." << std::endl;
+                }
+#endif
+                if (!class_name.empty()) {
+                    SgDeclarationStatementPtrList& decls = global_scope->getDeclarationList();
+                    for (SgDeclarationStatement* decl : decls) {
+                        if (SgTemplateClassDeclaration* template_class = isSgTemplateClassDeclaration(decl)) {
+#if DEBUG_TEMPLATE_DUPLICATION
+                            if (class_name == "mypair") {
+                                std::cerr << "  -> Found template class: " << template_class->get_name().getString() << std::endl;
+                            }
+#endif
+                            if (template_class->get_name().getString() == class_name) {
+#if DEBUG_TEMPLATE_DUPLICATION
+                                std::cerr << "  -> MATCH! Returning existing template instead of creating duplicate!" << std::endl;
+#endif
+                                // Found existing template class - return it instead of creating duplicate
+                                *node = template_class;
+                                return true;
+                            }
+                        }
+                    }
+#if DEBUG_TEMPLATE_DUPLICATION
+                    if (class_name == "mypair") {
+                        std::cerr << "  -> No existing mypair template found, will create new RecordDecl" << std::endl;
+                    }
+#endif
+                }
+            } else if (SgNamespaceDefinitionStatement* ns_scope = isSgNamespaceDefinitionStatement(current_scope)) {
+                std::string class_name = record_decl->getNameAsString();
+                if (!class_name.empty()) {
+                    SgDeclarationStatementPtrList& decls = ns_scope->getDeclarationList();
+                    for (SgDeclarationStatement* decl : decls) {
+                        if (SgTemplateClassDeclaration* template_class = isSgTemplateClassDeclaration(decl)) {
+                            if (template_class->get_name().getString() == class_name) {
+                                *node = template_class;
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } else if (SgClassDefinition* class_scope = isSgClassDefinition(current_scope)) {
+                std::string class_name = record_decl->getNameAsString();
+                if (!class_name.empty()) {
+                    SgDeclarationStatementPtrList& decls = class_scope->getDeclarationList();
+                    for (SgDeclarationStatement* decl : decls) {
+                        if (SgTemplateClassDeclaration* template_class = isSgTemplateClassDeclaration(decl)) {
+                            if (template_class->get_name().getString() == class_name) {
+                                *node = template_class;
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
+    // CLANG FRONTEND FIX: Use canonical declaration to handle redeclarations
+    clang::RecordDecl* canonical_record = llvm::cast<clang::RecordDecl>(record_decl->getCanonicalDecl());
+    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(canonical_record);
     if (it != p_decl_translation_map.end()) {
 #if DEBUG_VISIT_DECL
         std::cerr << "VisitRecordDecl: Already translated, skipping: " << record_decl->getNameAsString() << std::endl;
@@ -1592,7 +1869,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
         // This prevents infinite recursion if member processing triggers a lookup of this class type.
         // The Traverse() function normally adds to the map after Visit returns, but that's too late -
         // by then we've already processed members which may trigger recursive visits.
-        p_decl_translation_map.insert(std::make_pair(record_decl, sg_class_decl));
+        p_decl_translation_map.insert(std::make_pair(canonical_record, sg_class_decl));
 
         // CLANG FRONTEND FIX: Skip processing members of system header template classes to avoid performance issues
         // System headers contain massive template hierarchies that cause extremely slow processing
@@ -2334,10 +2611,46 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 #endif
     bool res = true;
 
-    // FIXME: There is something weird here when try to Traverse a function reference in a recursive function (when first Traverse is not complete)
-    //        It seems that it tries to instantiate the decl inside the function...
-    //        It may be faster to recode from scratch...
-    //   If I am not wrong this have been fixed....
+    // Use canonical declaration for translation map lookups
+    clang::FunctionDecl* canonical_function = function_decl->getCanonicalDecl();
+    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(canonical_function);
+
+    SgFunctionDeclaration* existing_nondefining_func = NULL;
+
+    // Early detection: template member function defined outside class?
+    // Example: template<class T> T mypair<T>::getmax() { ... }
+    // Skip functions wrapped in FunctionTemplateDecl (handled by VisitFunctionTemplateDecl)
+    bool is_template_member_outside_class_early = false;
+    clang::CXXMethodDecl* method_decl_early = llvm::dyn_cast<clang::CXXMethodDecl>(function_decl);
+    if (function_decl->isThisDeclarationADefinition() && method_decl_early != NULL &&
+        function_decl->getDescribedFunctionTemplate() == NULL) {
+        clang::CXXRecordDecl* parent_class = method_decl_early->getParent();
+        if (parent_class != NULL && parent_class->getDescribedClassTemplate() != NULL) {
+            clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+            clang::DeclContext* semantic_context = function_decl->getDeclContext();
+            if (lexical_context != semantic_context) {
+                is_template_member_outside_class_early = true;
+            }
+        }
+    }
+
+    if (it != p_decl_translation_map.end()) {
+        SgFunctionDeclaration* existing_func = isSgFunctionDeclaration(it->second);
+        if (function_decl->isThisDeclarationADefinition() &&
+            existing_func != NULL &&
+            (existing_func->get_definition() == NULL || is_template_member_outside_class_early)) {
+            // Existing non-defining declaration found - need to create defining declaration
+            // For template members: create SgTemplateMemberFunctionDeclaration (different variant type)
+            existing_nondefining_func = existing_func;
+            // Continue below to create the definition
+        } else {
+#if DEBUG_VISIT_DECL
+            std::cerr << "VisitFunctionDecl: Already translated, skipping: " << function_decl->getNameAsString() << std::endl;
+#endif
+            *node = it->second;
+            return true;  // Already processed
+        }
+    }
 
     SgName name(function_decl->getNameAsString());
 
@@ -2444,46 +2757,200 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         param_list->append_arg(ellipses_param);
     }
 
-    // Get the proper scope for this function from its Clang declaration context
-    // This fixes the issue where functions are created with wrong scope when
-    // traversed from DeclRefExpr inside other function bodies
+    // Determine proper scope from Clang declaration context
     clang::DeclContext* decl_context = function_decl->getDeclContext();
-    SgScopeStatement* proper_scope = getGlobalScope();  // Default fallback
+    bool is_out_of_class_definition = false;
+    clang::Decl* context_decl_override = nullptr;  // For template member functions
 
-    // Try to find the actual scope from DeclContext (namespace or class)
-    // We need to get the DEFINITION not the DECLARATION to satisfy containsOnlyDeclarations()
+    // For template members: use canonical ClassTemplateDecl for scope lookup
+    // (translation map has ClassTemplateDecl, not CXXRecordDecl)
+    // Only create special nodes if template class is in map (skip standard library)
+    if (is_template_member_outside_class_early) {
+        clang::CXXMethodDecl* method_decl_temp = llvm::dyn_cast<clang::CXXMethodDecl>(function_decl);
+        if (method_decl_temp != NULL) {
+            clang::CXXRecordDecl* parent_class_temp = method_decl_temp->getParent();
+            if (parent_class_temp != NULL) {
+                clang::ClassTemplateDecl* class_template_temp = parent_class_temp->getDescribedClassTemplate();
+                if (class_template_temp != NULL) {
+                    // Use canonical declaration for translation map lookup
+                    clang::ClassTemplateDecl* canonical_template = llvm::cast<clang::ClassTemplateDecl>(class_template_temp->getCanonicalDecl());
+                    // Check if it's in the translation map before proceeding
+                    if (p_decl_translation_map.find(canonical_template) != p_decl_translation_map.end()) {
+                        context_decl_override = canonical_template;
+                    } else {
+                        // Template class not in map (e.g., standard library) - use regular function handling
+                        is_template_member_outside_class_early = false;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!is_template_member_outside_class_early && llvm::isa<clang::CXXMethodDecl>(function_decl) &&
+               function_decl->isThisDeclarationADefinition()) {
+        // CLANG FRONTEND FIX: For out-of-class member function definitions, detect them but
+        // DO NOT change decl_context. The SCOPE should remain the semantic context (class definition)
+        // for proper name qualification. Only the PARENT needs to be set to global later.
+        clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+        if (decl_context != lexical_context) {
+            // This is an out-of-class definition
+            is_out_of_class_definition = true;
+            // Keep decl_context as semantic context (the class) for proper scope determination
+            // Do NOT change to lexical_context
+        }
+    }
+    SgScopeStatement* proper_scope = getGlobalScope();
+
+    // Find actual scope from DeclContext (get definition, not declaration)
     if (decl_context && !decl_context->isTranslationUnit()) {
-        clang::Decl* context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
+        clang::Decl* context_decl = context_decl_override ? context_decl_override : llvm::dyn_cast<clang::Decl>(decl_context);
         if (context_decl) {
             std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
             if (it != p_decl_translation_map.end()) {
                 SgNode* context_node = it->second;
-                // Get the definition, not the declaration
                 if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(context_node)) {
                     SgNamespaceDefinitionStatement* ns_def = ns_decl->get_definition();
-                    if (ns_def != nullptr) {
-                        proper_scope = ns_def;
-                    }
+                    if (ns_def != nullptr) proper_scope = ns_def;
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
+                    // Check template class BEFORE regular class (inheritance)
+                    SgTemplateClassDefinition* template_class_def = isSgTemplateClassDefinition(template_class_decl->get_definition());
+                    if (template_class_def != nullptr) proper_scope = template_class_def;
                 } else if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
                     SgClassDefinition* class_def = class_decl->get_definition();
-                    if (class_def != nullptr) {
-                        proper_scope = class_def;
-                    }
+                    if (class_def != nullptr) proper_scope = class_def;
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
-                    // Already a definition
                     proper_scope = ns_def;
+                } else if (SgTemplateClassDefinition* template_class_def = isSgTemplateClassDefinition(context_node)) {
+                    proper_scope = template_class_def;
                 } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
-                    // Already a definition
                     proper_scope = class_def;
                 }
             }
         }
     }
 
+    bool is_member_function = llvm::isa<clang::CXXMethodDecl>(function_decl);
+    bool scope_is_class = (isSgClassDefinition(proper_scope) != NULL || isSgTemplateClassDefinition(proper_scope) != NULL);
+    bool is_template_member_outside_class = is_template_member_outside_class_early;
+
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+
+        // Regular member functions (not template members)
+        if (is_member_function && scope_is_class && !is_template_member_outside_class) {
+            // Link to existing non-defining declaration from translation map or symbol table
+            SgMemberFunctionDeclaration* first_nondecl = NULL;
+
+            // First, check if we already found the non-defining declaration in the translation map
+            if (existing_nondefining_func != NULL) {
+                first_nondecl = isSgMemberFunctionDeclaration(existing_nondefining_func->get_firstNondefiningDeclaration());
+                if (first_nondecl == NULL) {
+                    first_nondecl = isSgMemberFunctionDeclaration(existing_nondefining_func);
+                }
+            }
+
+            // If not found in translation map, search symbol table for existing declaration
+            if (first_nondecl == NULL) {
+                SgFunctionSymbol* existing_symbol = isSgFunctionSymbol(proper_scope->lookup_function_symbol(name));
+                if (existing_symbol != NULL) {
+                    SgFunctionDeclaration* existing_decl = existing_symbol->get_declaration();
+                    if (existing_decl != NULL) {
+                        // Get the first non-defining declaration from the chain
+                        first_nondecl = isSgMemberFunctionDeclaration(existing_decl->get_firstNondefiningDeclaration());
+                    }
+                }
+            }
+
+            if (first_nondecl != NULL) {
+                // Use existing non-defining declaration
+                sg_function_decl = SageBuilder::buildDefiningMemberFunctionDeclaration(
+                    name, ret_type, param_list, proper_scope, NULL, false, 0, first_nondecl, NULL);
+            } else {
+                // Create non-defining declaration manually first
+                first_nondecl = SageBuilder::buildNondefiningMemberFunctionDeclaration(name, ret_type, param_list, proper_scope);
+                // Now create defining declaration linked to it
+                sg_function_decl = SageBuilder::buildDefiningMemberFunctionDeclaration(
+                    name, ret_type, param_list, proper_scope, NULL, false, 0, first_nondecl, NULL);
+            }
+        } else if (is_template_member_outside_class) {
+            // Template member functions: create SgTemplateMemberFunctionDeclaration
+            clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(function_decl);
+            ROSE_ASSERT(method_decl != NULL);
+            clang::CXXRecordDecl* parent_class = method_decl->getParent();
+            clang::ClassTemplateDecl* class_template = parent_class->getDescribedClassTemplate();
+
+            SgFunctionType* func_type = SageBuilder::buildFunctionType(ret_type, param_list);
+
+            // Create file info and function definition
+            Sg_File_Info* file_info = Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+            ROSE_ASSERT(file_info != NULL);
+
+            SgFunctionDefinition* func_definition = new SgFunctionDefinition((SgFunctionDeclaration*)NULL, (SgBasicBlock*)NULL);
+            func_definition->set_file_info(file_info);
+
+            SgTemplateMemberFunctionDeclaration* template_member_func =
+                new SgTemplateMemberFunctionDeclaration(file_info, name, func_type, func_definition);
+
+            // Set bidirectional parent/child relationships
+            func_definition->set_declaration(template_member_func);
+            template_member_func->set_definition(func_definition);
+            func_definition->set_parent(template_member_func);
+
+            // IMPORTANT: Do NOT set template parameters on non-template member functions
+            // For "template<class T> T mypair<T>::getmax()", the function itself is NOT a template.
+            // Template parameters belong to the class. Setting them here causes duplicate template prefix.
+            // Only functions with FunctionTemplateDecl wrapper should have their own parameters.
+
+            template_member_func->set_scope(proper_scope);
+            template_member_func->set_parent(proper_scope);
+            template_member_func->set_parameterList(param_list);
+            param_list->set_parent(template_member_func);
+
+            // Set the associated class declaration for proper qualification
+            clang::ClassTemplateDecl* canonical_class_template = llvm::cast<clang::ClassTemplateDecl>(class_template->getCanonicalDecl());
+            std::map<clang::Decl*, SgNode*>::iterator class_it = p_decl_translation_map.find(canonical_class_template);
+            if (class_it != p_decl_translation_map.end()) {
+                SgNode* class_node = class_it->second;
+                if (SgTemplateClassDeclaration* sg_template_class = isSgTemplateClassDeclaration(class_node)) {
+                    template_member_func->set_associatedClassDeclaration(sg_template_class);
+
+                    // WORKAROUND: Pre-compute qualified name prefix (e.g., "mypair<T>::")
+                    // The name qualification traversal incorrectly generates "::< T> ::" instead.
+                    // TODO: Fix the traversal to correctly handle template classes (see TEMPLATE_MEMBER_FUNCTIONS.md)
+                    std::string qualified_prefix = sg_template_class->get_name().getString();
+
+                    SgTemplateParameterPtrList& class_params = sg_template_class->get_templateParameters();
+                    if (!class_params.empty()) {
+                        qualified_prefix += "<";
+                        for (size_t i = 0; i < class_params.size(); i++) {
+                            if (i > 0) qualified_prefix += ", ";
+                            SgTemplateParameter* param = class_params[i];
+                            if (param != NULL && param->get_parameterType() == SgTemplateParameter::type_parameter) {
+                                SgType* type = param->get_type();
+                                if (type != NULL) {
+                                    SgTemplateType* template_type = isSgTemplateType(type);
+                                    if (template_type != NULL) {
+                                        qualified_prefix += template_type->get_name();
+                                    }
+                                }
+                            }
+                        }
+                        qualified_prefix += ">";
+                    }
+                    qualified_prefix += "::";
+
+                    SgNode::get_globalQualifiedNameMapForNames()[template_member_func] = qualified_prefix;
+                }
+            }
+
+            // Set first non-defining declaration to self (different variant types prevent normal linkage)
+            template_member_func->set_firstNondefiningDeclaration(template_member_func);
+
+            sg_function_decl = template_member_func;
+        } else {
+            sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        }
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {
@@ -2592,7 +3059,11 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     else {
-        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        if (is_member_function && scope_is_class) {
+            sg_function_decl = SageBuilder::buildNondefiningMemberFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        } else {
+            sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        }
 
         if (function_decl->isVariadic()) sg_function_decl->hasEllipses();
 
@@ -2680,8 +3151,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
 
-    // CLANG FRONTEND FIX #21: Mark constructors, destructors, and conversion operators
-    // with special function modifiers so unparser handles them correctly
+    // ROOT CAUSE FIX: Set specialFunctionModifier for member functions
     if (SgMemberFunctionDeclaration* member_func = isSgMemberFunctionDeclaration(sg_function_decl)) {
         if (llvm::isa<clang::CXXConstructorDecl>(function_decl)) {
             member_func->get_specialFunctionModifier().setConstructor();
@@ -2691,6 +3161,11 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             member_func->get_specialFunctionModifier().setConversion();
         }
     }
+
+    // ROOT CAUSE FIX: Add/update translation map to prevent double visitation
+    // Use [] operator to insert or update - this is needed when we create a SgTemplateMemberFunctionDeclaration
+    // to replace an existing SgMemberFunctionDeclaration
+    p_decl_translation_map[canonical_function] = sg_function_decl;
 
     *node = sg_function_decl;
 

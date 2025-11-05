@@ -3,6 +3,7 @@
 
 #include <cctype>
 #include "llvm/ADT/SmallString.h"
+#include "AstTextAttributesHandling.h"
 
 namespace {
     // Generate unique name for template declaration with full namespace qualification
@@ -1636,24 +1637,23 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
     std::cerr << "ClangToSageTranslator::VisitElaboratedType" << std::endl;
 #endif
 
+    // ROOT CAUSE FIX: ElaboratedType contains namespace qualification that gets lost during desugaring
+    // Use ROSE attribute system to preserve the qualifier string
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
 
-    // CLANG FRONTEND NOTE: ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
-    // and struct/class/enum keywords that provide "sugar" for the type reference.
-    //
-    // WARNING: Do NOT mutate the underlying SgTypedefDeclaration or other type declarations!
-    // The same declaration is shared by all uses, so modifying it causes corruption:
-    //   1st use: "string" → "std::string"
-    //   2nd use: "std::string" → "std::std::string"
-    //   3rd use: "std::std::string" → "std::std::std::string"
-    //
-    // TODO: ROSE needs a proper way to represent elaborated types with qualifiers.
-    // Possible solutions:
-    //   - Create SgQualifiedNameType or similar wrapper
-    //   - Store qualifier info as attributes on the type
-    //   - Handle qualification during unparsing only
-    //
-    // For now, we just desugar to the named type (same as EDG frontend behavior).
+    // Extract the nested name specifier (e.g., "std::" from "std::string")
+    if (elaborated_type->getQualifier() != NULL) {
+        std::string qualifier_str;
+        llvm::raw_string_ostream stream(qualifier_str);
+        elaborated_type->getQualifier()->print(stream, clang::PrintingPolicy(clang::LangOptions()));
+        stream.flush();
+
+        if (!qualifier_str.empty()) {
+            // Attach the qualifier as an attribute to the type node
+            // The unparser will read this attribute and output the qualifier prefix
+            type->addNewAttribute("elaborated_type_qualifier", new AstTextAttribute(qualifier_str));
+        }
+    }
 
     *node = type;
 

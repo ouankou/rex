@@ -15543,22 +15543,35 @@ NameQualificationTraversal::setNameQualification ( SgFunctionDeclaration* functi
        // *i = std::pair<SgNode*,std::string>(templateArgument,qualifier);
           if (i->second != qualifier)
              {
-            // DQ (9/25/2019): Comment this out because it hides the error we are trying ti isolate.
-            // i->second = qualifier;
+            // CLANG FRONTEND FIX: For SgTemplateMemberFunctionDeclaration, the Clang frontend sets
+            // the correct qualified name (e.g., "mypair<T>::") in the global map. The name qualification
+            // traversal incorrectly computes "::< T> ::" for template members. Trust the frontend value.
+               SgTemplateMemberFunctionDeclaration* tmfd = isSgTemplateMemberFunctionDeclaration(functionDeclaration);
+               if (tmfd != NULL && !i->second.empty())
+                  {
+                    // Frontend already set correct qualified name, keep it
+                    MLOG_WARN_C(MLOG_UNPARSER, "CLANG FRONTEND: Keeping frontend-set qualified name for SgTemplateMemberFunctionDeclaration: %s (not replacing with %s)\n",
+                                i->second.c_str(), qualifier.c_str());
+                  }
+                 else
+                  {
+                    // DQ (9/25/2019): Comment this out because it hides the error we are trying ti isolate.
+                    // i->second = qualifier;
 
 #if 1
-               string tmp_previousQualifier = i->second.c_str();
-               MLOG_WARN_C(MLOG_UNPARSER, "WARNING: test 8: replacing previousQualifier = %s with new qualifier = %s \n",tmp_previousQualifier.c_str(),qualifier.c_str());
-               MLOG_WARN_C(MLOG_UNPARSER, " --- functionDeclaration = %p = %s name = %s \n",functionDeclaration,functionDeclaration->class_name().c_str(),functionDeclaration->get_name().str());
+                    string tmp_previousQualifier = i->second.c_str();
+                    MLOG_WARN_C(MLOG_UNPARSER, "WARNING: test 8: replacing previousQualifier = %s with new qualifier = %s \n",tmp_previousQualifier.c_str(),qualifier.c_str());
+                    MLOG_WARN_C(MLOG_UNPARSER, " --- functionDeclaration = %p = %s name = %s \n",functionDeclaration,functionDeclaration->class_name().c_str(),functionDeclaration->get_name().str());
 #endif
 #if 1
-            // DQ (3/31/2012): Commented out this assertion.
-               MLOG_WARN_C(MLOG_UNPARSER, "Error: name in qualifiedNameMapForNames already exists and is different... \n");
-               ROSE_ABORT();
+                    // DQ (3/31/2012): Commented out this assertion.
+                    MLOG_WARN_C(MLOG_UNPARSER, "Error: name in qualifiedNameMapForNames already exists and is different... \n");
+                    ROSE_ABORT();
 #else
-            // DQ (3/31/2012): I think this is OK, but I'm not certain (see test2012_57.C).
-               MLOG_WARN_C(MLOG_UNPARSER, "WARNING: name in qualifiedNameMapForNames already exists and is different... (reset) \n");
+                    // DQ (3/31/2012): I think this is OK, but I'm not certain (see test2012_57.C).
+                    MLOG_WARN_C(MLOG_UNPARSER, "WARNING: name in qualifiedNameMapForNames already exists and is different... (reset) \n");
 #endif
+                  }
              }
         }
 

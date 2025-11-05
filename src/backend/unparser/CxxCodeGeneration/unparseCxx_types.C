@@ -6,6 +6,7 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 #include "unparser.h"
+#include "AstTextAttributesHandling.h"
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
@@ -3662,24 +3663,21 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                  else
                   {
                     SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(info.get_reference_node_for_qualification());
+                    curprint(nameQualifier.str());
 
-                    // WORKAROUND for Clang frontend: If the name qualifier is empty but the typedef is in a namespace,
-                    // use the fully qualified name instead. This handles system library types like std::string
-                    // where the typedef declaration isn't in our AST (it's in system headers).
-                    if (nameQualifier.getString().empty() && tdecl->get_scope() != NULL) {
-                        SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(tdecl->get_scope());
-                        if (ns_def != NULL) {
-                            // Typedef is in a namespace, use fully qualified name
-                            SgName fullName = typedef_type->get_qualified_name();
-                            if (!fullName.getString().empty()) {
-                                curprint(fullName.getString() + " ");
-                                // Skip the normal name output below by returning early
-                                return;
+                 // ROOT CAUSE FIX: Check for elaborated_type_qualifier attribute attached by Clang frontend
+                 // This preserves namespace qualification (e.g., "std::" in "std::string") that would
+                 // otherwise be lost during ElaboratedType desugaring
+                    AstAttribute* attr = typedef_type->getAttribute("elaborated_type_qualifier");
+                    if (attr != NULL) {
+                        AstTextAttribute* text_attr = dynamic_cast<AstTextAttribute*>(attr);
+                        if (text_attr != NULL) {
+                            std::string qualifier = text_attr->toString();
+                            if (!qualifier.empty()) {
+                                curprint(qualifier);
                             }
                         }
                     }
-
-                    curprint(nameQualifier.str());
 
                  // DQ (4/14/2018): This is not the correct way to handle the output of template instantations since this uses the internal name (with unqualified template arguments).
 

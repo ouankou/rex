@@ -90,6 +90,7 @@ SgDeclarationModifier
 SgDeclarationScope
 SgDeclarationStatement
 SgDeclType
+SgElaboratedType
 SgDefaultOptionStmt
 SgDefaultSymbol
 SgDefineDirectiveStatement
