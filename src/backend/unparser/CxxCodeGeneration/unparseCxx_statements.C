@@ -12606,11 +12606,9 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
        SgUnparse_Info ninfo(info);
 
        if (templateClassDeclaration != NULL) {
-         // ROOT CAUSE: AST traversal visits the same SgTemplateClassDeclaration* multiple times
-         // This is fundamental to how ROSE's AST structure works - template declarations can be
-         // reached through multiple paths during traversal (e.g., via different parent nodes).
-         // Track which template class declarations we've already unparsed to avoid duplicates.
-         // This is the correct solution at the unparser level given the current AST structure.
+         // NOTE: Frontend now caches templates before appending to scope (PR #45 fix)
+         // This defensive check remains as a safety measure since AST traversal can reach
+         // the same declaration through multiple paths (fundamental ROSE architecture).
          static std::set<SgTemplateClassDeclaration*> unparsedTemplateClasses;
          if (unparsedTemplateClasses.find(templateClassDeclaration) != unparsedTemplateClasses.end()) {
              return;
