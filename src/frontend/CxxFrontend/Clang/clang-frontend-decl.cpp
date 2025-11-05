@@ -2446,11 +2446,16 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     // ROOT CAUSE FIX: Get proper scope for this function from its Clang declaration context
     // For out-of-line member functions, ensure scope is the class definition, not global
+    // CRITICAL: Friend functions are declared in class but are NOT members - use global scope
     clang::DeclContext* decl_context = function_decl->getDeclContext();
     SgScopeStatement* proper_scope = getGlobalScope();  // Default fallback
 
+    // Check if this is a friend function - friends are free functions, not members
+    bool isFriendFunction = (function_decl->getFriendObjectKind() != clang::Decl::FOK_None);
+
     // For member functions (including out-of-line), use the class as scope
-    if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+    // BUT NOT for friend functions - they remain in global/namespace scope
+    if (llvm::isa<clang::CXXMethodDecl>(function_decl) && !isFriendFunction) {
         clang::CXXMethodDecl* method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
         clang::CXXRecordDecl* parent_class = method_decl->getParent();
         if (parent_class) {
@@ -2672,6 +2677,12 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     if(hasExternalStorage)
     {
       sg_function_decl->get_declarationModifier().get_storageModifier().setExtern();
+    }
+
+    // CLANG FRONTEND FIX: Set friend modifier for friend functions
+    // Friend functions are free functions (not members) with special access rights
+    if (isFriendFunction) {
+        sg_function_decl->get_declarationModifier().setFriend();
     }
 
     // ROOT CAUSE FIX: Set access modifiers for member functions from Clang AST
