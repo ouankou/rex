@@ -1637,23 +1637,9 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
     std::cerr << "ClangToSageTranslator::VisitElaboratedType" << std::endl;
 #endif
 
-    // ROOT CAUSE FIX: ElaboratedType contains namespace qualification that gets lost during desugaring
-    // Use ROSE attribute system to preserve the qualifier string
+    // ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
+    // Just desugar to the named type - qualification is handled elsewhere
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
-
-    // Extract the nested name specifier (e.g., "std::" from "std::string")
-    if (elaborated_type->getQualifier() != NULL) {
-        std::string qualifier_str;
-        llvm::raw_string_ostream stream(qualifier_str);
-        elaborated_type->getQualifier()->print(stream, clang::PrintingPolicy(clang::LangOptions()));
-        stream.flush();
-
-        if (!qualifier_str.empty()) {
-            // Attach the qualifier as an attribute to the type node
-            // The unparser will read this attribute and output the qualifier prefix
-            type->addNewAttribute("elaborated_type_qualifier", new AstTextAttribute(qualifier_str));
-        }
-    }
 
     *node = type;
 

@@ -3663,21 +3663,20 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                  else
                   {
                     SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(info.get_reference_node_for_qualification());
-                    curprint(nameQualifier.str());
 
-                 // ROOT CAUSE FIX: Check for elaborated_type_qualifier attribute attached by Clang frontend
-                 // This preserves namespace qualification (e.g., "std::" in "std::string") that would
-                 // otherwise be lost during ElaboratedType desugaring
-                    AstAttribute* attr = typedef_type->getAttribute("elaborated_type_qualifier");
-                    if (attr != NULL) {
-                        AstTextAttribute* text_attr = dynamic_cast<AstTextAttribute*>(attr);
-                        if (text_attr != NULL) {
-                            std::string qualifier = text_attr->toString();
-                            if (!qualifier.empty()) {
-                                curprint(qualifier);
+                    if (nameQualifier.getString().empty() && tdecl->get_scope() != NULL) {
+                        SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(tdecl->get_scope());
+                        if (ns_def != NULL) {
+                            // Typedef in namespace - use fully qualified name
+                            SgName fullName = typedef_type->get_qualified_name();
+                            if (!fullName.getString().empty()) {
+                                curprint(fullName.getString() + " ");
+                                return;
                             }
                         }
                     }
+
+                    curprint(nameQualifier.str());
 
                  // DQ (4/14/2018): This is not the correct way to handle the output of template instantations since this uses the internal name (with unqualified template arguments).
 

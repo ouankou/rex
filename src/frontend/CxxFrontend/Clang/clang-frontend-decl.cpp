@@ -1448,17 +1448,25 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(clang::FunctionTemplateDec
 
     SgFunctionDeclaration* sg_func_decl = isSgFunctionDeclaration(func_node);
     if (sg_func_decl != NULL) {
-        // Build template parameter string from Clang AST
+        // Build template parameter string from Clang's actual parameter declarations
         std::string template_prefix = "template <";
         const clang::TemplateParameterList* template_params = function_template_decl->getTemplateParameters();
+
         for (unsigned i = 0; i < template_params->size(); ++i) {
             if (i > 0) template_prefix += ", ";
             const clang::NamedDecl* param = template_params->getParam(i);
-            template_prefix += "class " + param->getNameAsString();
+
+            // Print full parameter declaration (handles type/non-type/template-template parameters)
+            std::string param_str;
+            llvm::raw_string_ostream stream(param_str);
+            param->print(stream);
+            stream.flush();
+
+            template_prefix += param_str;
         }
         template_prefix += ">";
 
-        // Attach template prefix as attribute for unparser to read
+        // Attach template prefix as attribute for unparser
         if (!template_prefix.empty()) {
             sg_func_decl->addNewAttribute("template_declaration_prefix", new AstTextAttribute(template_prefix));
         }
