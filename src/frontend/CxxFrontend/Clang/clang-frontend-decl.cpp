@@ -3228,19 +3228,10 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
 
-    // TODO: Append template member functions to global scope for AST reachability
-    // Complex issue: appending causes duplicate definitions because Clang visits both
-    // the in-class declaration and out-of-class definition separately. Need to ensure
-    // both visits map to the same ROSE node before appending. For now, functions remain
-    // reachable via translation map, qualified name map, and associated class.
-    // if (SgTemplateMemberFunctionDeclaration* tmf = isSgTemplateMemberFunctionDeclaration(sg_function_decl)) {
-    //     if (is_template_member_outside_class) {
-    //         SgGlobal* global_scope = getGlobalScope();
-    //         if (global_scope != NULL) {
-    //             SageInterface::appendStatement(tmf, global_scope);
-    //         }
-    //     }
-    // }
+    // NOTE: Out-of-class template member function definitions are automatically appended
+    // to global scope by VisitTranslationUnitDecl (line 3973: p_global_scope->append_declaration).
+    // No manual appending needed here - the Traverse() infrastructure handles it.
+    // The node is returned via *node (line 3250) and the caller appends it to the appropriate scope.
 
     // ROOT CAUSE FIX: Add/update translation map to prevent double visitation
     // Use [] operator to insert or update - this is needed when we create a SgTemplateMemberFunctionDeclaration
