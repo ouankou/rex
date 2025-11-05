@@ -2477,7 +2477,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     // For non-member functions, use DeclContext (namespace or class)
-    else if (decl_context && !decl_context->isTranslationUnit()) {
+    // Skip friend functions - they always stay in global scope
+    else if (decl_context && !decl_context->isTranslationUnit() && !isFriendFunction) {
         clang::Decl* context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
         if (context_decl) {
             std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
