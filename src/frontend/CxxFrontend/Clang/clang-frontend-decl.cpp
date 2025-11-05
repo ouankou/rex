@@ -2956,15 +2956,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             template_member_func->set_parameterList(param_list);
             param_list->set_parent(template_member_func);
 
-            // NOTE: appendStatement(template_member_func, proper_scope) causes segfault during AST construction.
-            // The declaration is still reachable via:
-            // 1. Translation map: p_decl_translation_map[canonical_function] = sg_function_decl
-            // 2. Qualified name map: get_globalQualifiedNameMapForNames()[template_member_func]
-            // 3. Associated class: template_member_func->get_associatedClassDeclaration()
-            // The unparser can emit the function through these mechanisms, but general AST traversals
-            // from SgProject downward won't discover this node. This is a limitation that needs
-            // fixing - the segfault appears to be related to modifying scope statement lists during
-            // initial AST construction before all bidirectional links are established.
+            // NOTE: Cannot append here - function body not yet filled in.
+            // Append happens later after body construction (see end of VisitFunctionDecl).
 
             // Set the associated class declaration for proper qualification
             clang::ClassTemplateDecl* canonical_class_template = llvm::cast<clang::ClassTemplateDecl>(class_template->getCanonicalDecl());
@@ -3234,6 +3227,20 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             template_member_func->get_specialFunctionModifier().setConversion();
         }
     }
+
+    // TODO: Append template member functions to global scope for AST reachability
+    // Complex issue: appending causes duplicate definitions because Clang visits both
+    // the in-class declaration and out-of-class definition separately. Need to ensure
+    // both visits map to the same ROSE node before appending. For now, functions remain
+    // reachable via translation map, qualified name map, and associated class.
+    // if (SgTemplateMemberFunctionDeclaration* tmf = isSgTemplateMemberFunctionDeclaration(sg_function_decl)) {
+    //     if (is_template_member_outside_class) {
+    //         SgGlobal* global_scope = getGlobalScope();
+    //         if (global_scope != NULL) {
+    //             SageInterface::appendStatement(tmf, global_scope);
+    //         }
+    //     }
+    // }
 
     // ROOT CAUSE FIX: Add/update translation map to prevent double visitation
     // Use [] operator to insert or update - this is needed when we create a SgTemplateMemberFunctionDeclaration
