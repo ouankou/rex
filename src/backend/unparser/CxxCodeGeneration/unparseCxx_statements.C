@@ -1734,9 +1734,24 @@ Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration* funcdecl_stmt, SgUnparse
                      className = className.substr(2);
                  }
 
-                 size_t templateStart = className.find('<');
-                 if (templateStart != std::string::npos) {
-                     className = className.substr(0, templateStart);
+                 // Strip template args from FINAL component only (preserve outer qualifiers)
+                 // E.g., "Outer<T>::Inner<U>" -> "Outer<T>::Inner", not "Outer"
+                 size_t lastColonColon = className.rfind("::");
+                 if (lastColonColon != std::string::npos) {
+                     // Nested class: preserve qualifier, strip template args from final component only
+                     std::string prefix = className.substr(0, lastColonColon + 2);
+                     std::string finalName = className.substr(lastColonColon + 2);
+                     size_t templateStart = finalName.find('<');
+                     if (templateStart != std::string::npos) {
+                         finalName = finalName.substr(0, templateStart);
+                     }
+                     className = prefix + finalName;
+                 } else {
+                     // Simple class: strip all template args
+                     size_t templateStart = className.find('<');
+                     if (templateStart != std::string::npos) {
+                         className = className.substr(0, templateStart);
+                     }
                  }
 
                  if (scopeTemplateClassDef != NULL) {
