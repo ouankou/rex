@@ -1392,13 +1392,14 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
         template_decl->setForward();
     }
 
-    // ROOT CAUSE FIX: Do NOT traverse template instantiations - they are implicit
+    // ROOT CAUSE FIX: Do NOT traverse implicit template instantiations
     // Traversing them causes duplicate template declarations in the output
-    // Only explicit specializations should be traversed (not implicit instantiations)
+    // Traverse explicit specializations AND explicit instantiations
     for (auto it = class_template_decl->spec_begin(); it != class_template_decl->spec_end(); ++it) {
         clang::CXXRecordDecl* spec = *it;
-        // Only traverse explicit specializations, skip implicit instantiations
-        if (spec->getTemplateSpecializationKind() == clang::TSK_ExplicitSpecialization) {
+        // Skip only implicit instantiations (keep explicit specializations and explicit instantiations)
+        clang::TemplateSpecializationKind kind = spec->getTemplateSpecializationKind();
+        if (kind != clang::TSK_ImplicitInstantiation && kind != clang::TSK_Undeclared) {
 #if DEBUG_TEMPLATE_DUPLICATION
             if (class_template_decl->getNameAsString() == "mypair") {
                 std::cerr << "  -> Traversing mypair EXPLICIT specialization: " << spec << std::endl;
@@ -1584,13 +1585,24 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
     // ROOT CAUSE FIX: For CXXRecordDecls, check if there's already a template class with the same name
     // Clang visits templates through multiple paths: ClassTemplateDecl, then separate RecordDecl visits
     // The RecordDecls aren't marked as dependent, but we need to prevent duplicating the template class
+    // IMPORTANT: Do NOT deduplicate specializations - they have the same name but are different types
     if (clang::CXXRecordDecl* cxx_record = llvm::dyn_cast<clang::CXXRecordDecl>(record_decl)) {
+        // Check if this is a specialization - specializations should NOT be deduplicated
+        if (llvm::isa<clang::ClassTemplateSpecializationDecl>(cxx_record)) {
 #if DEBUG_TEMPLATE_DUPLICATION
-        if (record_decl->getNameAsString() == "mypair") {
-            std::cerr << "VisitRecordDecl DEDUP CHECK: mypair, checking for existing template..." << std::endl;
-        }
+            if (record_decl->getNameAsString() == "mypair") {
+                std::cerr << "VisitRecordDecl: mypair is a specialization, NOT deduplicating" << std::endl;
+            }
 #endif
-            // This is a template pattern - check if we already have a template class with this name
+            // This is a specialization - process normally, don't deduplicate
+            // Fall through to normal RecordDecl processing below
+        } else {
+#if DEBUG_TEMPLATE_DUPLICATION
+            if (record_decl->getNameAsString() == "mypair") {
+                std::cerr << "VisitRecordDecl DEDUP CHECK: mypair, checking for existing template..." << std::endl;
+            }
+#endif
+            // This is a primary template pattern - check if we already have a template class with this name
             SgScopeStatement* current_scope = SageBuilder::topScopeStack();
             // Only check scopes that support getDeclarationList (Global, Namespace, Class, Function)
             if (SgGlobal* global_scope = isSgGlobal(current_scope)) {
@@ -1652,7 +1664,8 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgN
                     }
                 }
             }
-    }
+        } // end else (primary template deduplication)
+    } // end if (CXXRecordDecl)
 
     // CLANG FRONTEND FIX: Use canonical declaration to handle redeclarations
     clang::RecordDecl* canonical_record = llvm::cast<clang::RecordDecl>(record_decl->getCanonicalDecl());
