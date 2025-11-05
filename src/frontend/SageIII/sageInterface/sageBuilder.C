@@ -4447,6 +4447,8 @@ SageBuilder::buildNondefiningFunctionDeclaration (const SgName & name, SgType* r
 #endif
        // DQ (11/27/2011): Added support to generate template declarations in the AST (this is part of a common API to make the build functions support more uniform).
           // CLANG FRONTEND FIX: Check scope for ALL paths to create correct declaration type
+          // Note: Friend functions are declared in class scope but are NOT member functions
+          // In non-defining path, friend modifier may be set by caller after this function returns
           bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
 
           if (buildTemplateInstantiation == true)
@@ -6044,12 +6046,19 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
 
   // DQ (2/10/2012): Fixed to build either SgTemplateInstantiationFunctionDecl or SgFunctionDeclaration.
      // CLANG FRONTEND FIX: Check scope for ALL paths to create correct declaration type
+     // Note: Friend functions are declared in class scope but are NOT member functions
      SgFunctionDeclaration* func = NULL;
+     ROSE_ASSERT(first_nondefining_declaration != NULL);
+
      bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
+
+     // Friend functions in class scope should remain free functions (SgFunctionDeclaration)
+     if (isMemberFunction && first_nondefining_declaration->get_declarationModifier().isFriend()) {
+         isMemberFunction = false;
+     }
 
      if (buildTemplateInstantiation == true)
         {
-          ROSE_ASSERT(first_nondefining_declaration != NULL);
 #if 0
           printf ("In buildDefiningFunctionDeclaration(): first_nondefining_declaration->get_declarationModifier().isFriend() = %s \n",first_nondefining_declaration->get_declarationModifier().isFriend() ? "true" : "false");
 #endif
@@ -6073,8 +6082,6 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
         }
        else
         {
-          ROSE_ASSERT(first_nondefining_declaration != NULL);
-
           if (isMemberFunction)
              {
                func = buildDefiningFunctionDeclaration_T<SgMemberFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ true,scope,decoratorList,0,isSgMemberFunctionDeclaration(first_nondefining_declaration), NULL);
