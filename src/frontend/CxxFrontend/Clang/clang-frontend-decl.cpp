@@ -1308,9 +1308,15 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
         }
 #endif
         SageInterface::appendStatement(template_decl, scope);
+
+        // Create symbol for template class lookups
+        SgTemplateClassSymbol* template_symbol = new SgTemplateClassSymbol(template_decl);
+        scope->insert_symbol(template_name, template_symbol);
+
 #if DEBUG_TEMPLATE_DUPLICATION
         if (class_template_decl->getNameAsString() == "mypair") {
             std::cerr << "  -> After append, scope has " << scope->getDeclarationList().size() << " declarations" << std::endl;
+            std::cerr << "  -> Created SgTemplateClassSymbol: " << template_symbol << std::endl;
             // Count how many mypair declarations are in scope
             int mypair_count = 0;
             for (SgDeclarationStatement* decl : scope->getDeclarationList()) {
@@ -2903,7 +2909,6 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             // Only functions with FunctionTemplateDecl wrapper should have their own parameters.
 
             template_member_func->set_scope(proper_scope);
-            template_member_func->set_parent(proper_scope);
             template_member_func->set_parameterList(param_list);
             param_list->set_parent(template_member_func);
 
