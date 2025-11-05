@@ -2482,6 +2482,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     SgFunctionDeclaration * sg_function_decl;
 
+    // Use SgFunctionDeclaration for all functions (base class)
+    // We'll mark member functions with special properties after creation
     if (function_decl->isThisDeclarationADefinition()) {
         sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
@@ -2680,15 +2682,21 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
 
-    // CLANG FRONTEND FIX #21: Mark constructors, destructors, and conversion operators
-    // with special function modifiers so unparser handles them correctly
-    if (SgMemberFunctionDeclaration* member_func = isSgMemberFunctionDeclaration(sg_function_decl)) {
-        if (llvm::isa<clang::CXXConstructorDecl>(function_decl)) {
-            member_func->get_specialFunctionModifier().setConstructor();
-        } else if (llvm::isa<clang::CXXDestructorDecl>(function_decl)) {
-            member_func->get_specialFunctionModifier().setDestructor();
-        } else if (llvm::isa<clang::CXXConversionDecl>(function_decl)) {
-            member_func->get_specialFunctionModifier().setConversion();
+    // ROOT CAUSE FIX: Mark constructors, destructors, and conversion operators
+    // specialFunctionModifier is available on SgFunctionDeclaration (base class)
+    if (llvm::isa<clang::CXXConstructorDecl>(function_decl)) {
+        sg_function_decl->get_specialFunctionModifier().setConstructor();
+    } else if (llvm::isa<clang::CXXDestructorDecl>(function_decl)) {
+        sg_function_decl->get_specialFunctionModifier().setDestructor();
+    } else if (llvm::isa<clang::CXXConversionDecl>(function_decl)) {
+        sg_function_decl->get_specialFunctionModifier().setConversion();
+    }
+
+    // ROOT CAUSE FIX: For out-of-line member functions, set name qualification
+    if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+        clang::CXXMethodDecl* method = llvm::cast<clang::CXXMethodDecl>(function_decl);
+        if (method->isOutOfLine()) {
+            sg_function_decl->set_name_qualification_length(1);
         }
     }
 
