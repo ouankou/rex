@@ -2911,10 +2911,29 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             template_member_func->set_definition(func_definition);
             func_definition->set_parent(template_member_func);
 
-            // IMPORTANT: Do NOT set template parameters on non-template member functions
-            // For "template<class T> T mypair<T>::getmax()", the function itself is NOT a template.
-            // Template parameters belong to the class. Setting them here causes duplicate template prefix.
-            // Only functions with FunctionTemplateDecl wrapper should have their own parameters.
+            // Build template header from class template parameters for unparser
+            // For "template<class T> T mypair<T>::getmax()", we need to emit "template<class T>"
+            if (class_template != NULL) {
+                std::string template_prefix = "template <";
+                const clang::TemplateParameterList* template_params = class_template->getTemplateParameters();
+
+                for (unsigned i = 0; i < template_params->size(); ++i) {
+                    if (i > 0) template_prefix += ", ";
+                    const clang::NamedDecl* param = template_params->getParam(i);
+
+                    std::string param_str;
+                    llvm::raw_string_ostream stream(param_str);
+                    param->print(stream);
+                    stream.flush();
+
+                    template_prefix += param_str;
+                }
+                template_prefix += ">";
+
+                if (!template_prefix.empty()) {
+                    template_member_func->addNewAttribute("template_declaration_prefix", new AstTextAttribute(template_prefix));
+                }
+            }
 
             template_member_func->set_scope(proper_scope);
             template_member_func->set_parameterList(param_list);
