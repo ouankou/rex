@@ -6904,16 +6904,15 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
           }
 #endif
 
-       // ROOT CAUSE FIX: For member functions whose scope is a template class definition,
-       // the qualified name prefix should be empty for declarations inside the class.
-       // Clang/AST fixup may set incorrect qualified names like "::< T> ::" which are malformed.
-       // Check the member function's scope directly
-          bool is_inside_template_class = (isSgTemplateClassDefinition(mfuncdecl_stmt->get_scope()) != NULL);
-          bool is_inside_regular_class = (parent_class == mfuncdecl_stmt->get_scope());
+       // For member functions declared INSIDE the class body, no qualification needed.
+       // For out-of-class definitions, parent != scope, so keep the qualifier.
+          SgTemplateClassDefinition* parent_template_class = isSgTemplateClassDefinition(mfuncdecl_stmt->get_parent());
+          bool is_inside_template_class = (parent_template_class != NULL && parent_template_class == mfuncdecl_stmt->get_scope());
+          bool is_inside_regular_class = (parent_class != NULL && parent_class == mfuncdecl_stmt->get_scope());
 
           if ((is_inside_template_class || is_inside_regular_class) &&
               mfuncdecl_stmt->get_declarationModifier().isFriend() == false) {
-              // Member function is declared inside the class body, no qualification needed
+              // Inside class body, clear incorrect qualifiers
               nameQualifier = SgName("");
           }
 
