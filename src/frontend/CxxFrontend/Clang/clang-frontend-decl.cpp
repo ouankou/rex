@@ -2923,7 +2923,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             SgTemplateMemberFunctionDeclaration* template_member_func =
                 new SgTemplateMemberFunctionDeclaration(file_info, name, func_type, func_definition);
 
-            // Set bidirectional parent/child relationships
+            applySourceRange(template_member_func, function_decl->getSourceRange());
+
             func_definition->set_declaration(template_member_func);
             template_member_func->set_definition(func_definition);
             func_definition->set_parent(template_member_func);
