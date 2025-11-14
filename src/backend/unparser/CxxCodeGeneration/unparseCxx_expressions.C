@@ -1116,7 +1116,8 @@ Unparse_ExprStmt::unparseTemplateArgumentList(const SgTemplateArgumentPtrList & 
      if (isEmptyTemplateArgumentList == false)
         {
        // DQ (2/11/2019): Moved to outside of the loop over all template parameters.
-          unp->u_exprStmt->curprint ( "< ");
+       // CLANG FRONTEND FIX: Remove space after < for cleaner output (e.g., <T> not < T>)
+          unp->u_exprStmt->curprint ( "<");
 #if 0
           unp->u_exprStmt->curprint ( " /* in template argument list */ ");
 #endif
@@ -1399,7 +1400,8 @@ Unparse_ExprStmt::unparseTemplateArgumentList(const SgTemplateArgumentPtrList & 
      if (isEmptyTemplateArgumentList == false)
         {
        // DQ (2/11/2019): Moved to outside of the loop over all template parameters.
-          unp->u_exprStmt->curprint(" > ");
+       // CLANG FRONTEND FIX: Remove spaces around > for cleaner output (e.g., <T> not < T> )
+          unp->u_exprStmt->curprint(">");
         }
 
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
@@ -1417,7 +1419,8 @@ Unparse_ExprStmt::unparseTemplateParameterList( const SgTemplateParameterPtrList
 
      if (templateParameterList.empty() == false)
         {
-          curprint ("< ");
+       // CLANG FRONTEND FIX: Remove space after < for cleaner output (e.g., <typename T> not < typename T>)
+          curprint ("<");
           SgTemplateParameterPtrList::const_iterator i = templateParameterList.begin();
           while (i != templateParameterList.end())
              {
@@ -1437,7 +1440,8 @@ Unparse_ExprStmt::unparseTemplateParameterList( const SgTemplateParameterPtrList
                   }
              }
 
-          curprint ("> ");
+       // CLANG FRONTEND FIX: Remove spaces around > for cleaner output (e.g., <typename T> not < typename T> )
+          curprint (">");
         }
    }
 
