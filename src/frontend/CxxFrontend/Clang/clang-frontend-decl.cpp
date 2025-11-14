@@ -2521,7 +2521,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope, isFriendFreeFunction);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {
@@ -2630,7 +2630,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     else {
-        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope, NULL, false, NULL, SgStorageModifier::e_default, isFriendFreeFunction);
 
         if (function_decl->isVariadic()) sg_function_decl->hasEllipses();
 
