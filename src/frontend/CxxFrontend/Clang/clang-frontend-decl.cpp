@@ -2526,7 +2526,17 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
             if (it != p_decl_translation_map.end()) {
                 SgNode* context_node = it->second;
-                if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(context_node)) {
+                if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
+                    if (class_decl->get_definition()) {
+                        proper_scope = class_decl->get_definition();
+                    }
+                } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
+                    proper_scope = class_def;
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
+                    if (template_class_decl->get_definition()) {
+                        proper_scope = template_class_decl->get_definition();
+                    }
+                } else if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(context_node)) {
                     if (ns_decl->get_definition()) proper_scope = ns_decl->get_definition();
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
                     proper_scope = ns_def;
