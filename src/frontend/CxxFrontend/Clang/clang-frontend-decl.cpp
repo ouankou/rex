@@ -1,5 +1,6 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
+#include <algorithm>
 #include <set>
 
 SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * decl) {
@@ -2488,17 +2489,22 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
                     proper_scope = ns_def;
                 }
-                // ROOT CAUSE FIX for W4: Handle class contexts for friend functions
-                // Friend functions are non-members but declared in class scope
-                else if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
-                    if (class_decl->get_definition()) {
-                        proper_scope = class_decl->get_definition();
+                // For friend functions: use the class's enclosing scope (namespace/global)
+                // to build as free SgFunctionDeclaration, not SgMemberFunctionDeclaration
+                else if (isFriendFunction) {
+                    SgScopeStatement* class_scope = NULL;
+                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
+                        class_scope = class_decl->get_scope();
+                    } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
+                        if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
+                            class_scope = decl->get_scope();
+                        }
+                    } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
+                        class_scope = template_class_decl->get_scope();
                     }
-                } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
-                    proper_scope = class_def;
-                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
-                    if (template_class_decl->get_definition()) {
-                        proper_scope = template_class_decl->get_definition();
+
+                    if (class_scope) {
+                        proper_scope = class_scope;
                     }
                 }
             }
@@ -2508,16 +2514,34 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        // ROOT CAUSE FIX for W4: Friend definitions also need special handling
-        // Create with global scope to get SgFunctionDeclaration, then move to class scope
         if (isFriendFunction) {
-            SgScopeStatement* saved_scope = proper_scope;
-            sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, getGlobalScope());
-            // Move from global scope to class definition
-            if (saved_scope != getGlobalScope() && isSgClassDefinition(saved_scope)) {
-                // Remove from global scope and add to class definition
-                SageInterface::removeStatement(sg_function_decl);
-                SageInterface::appendStatement(sg_function_decl, saved_scope);
+            // Build friend as free function using semantic scope (namespace/global)
+            // to get SgFunctionDeclaration (not SgMemberFunctionDeclaration)
+            sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+
+            // Find lexical class for syntactic attachment
+            clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+            if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
+                clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
+                std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
+                if (it != p_decl_translation_map.end()) {
+                    SgClassDefinition* lexical_class_def = NULL;
+                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
+                        lexical_class_def = class_decl->get_definition();
+                    } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
+                        lexical_class_def = class_def;
+                    }
+
+                    if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
+                        // Manually attach to class: remove from semantic scope, add to class
+                        SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
+                        semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
+
+                        lexical_class_def->getDeclarationList().push_back(sg_function_decl);
+                        sg_function_decl->set_parent(lexical_class_def);
+                        sg_function_decl->set_scope(lexical_class_def);
+                    }
+                }
             }
         } else {
             sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
@@ -2630,18 +2654,34 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     else {
-        // ROOT CAUSE FIX for W4: For friend functions, explicitly create SgFunctionDeclaration
-        // even though they're in class scope. Friends are syntactically in the class but
-        // semantically free functions.
         if (isFriendFunction) {
-            // Temporarily override scope to global for SageBuilder to create correct node type
-            SgScopeStatement* saved_scope = proper_scope;
-            sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, getGlobalScope());
-            // Now move the declaration from global scope to class scope
-            if (saved_scope != getGlobalScope() && isSgClassDefinition(saved_scope)) {
-                // Remove from global scope and add to class definition
-                SageInterface::removeStatement(sg_function_decl);
-                SageInterface::appendStatement(sg_function_decl, saved_scope);
+            // Build friend as free function using semantic scope (namespace/global)
+            // to get SgFunctionDeclaration (not SgMemberFunctionDeclaration)
+            sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+
+            // Find lexical class for syntactic attachment
+            clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+            if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
+                clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
+                std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
+                if (it != p_decl_translation_map.end()) {
+                    SgClassDefinition* lexical_class_def = NULL;
+                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
+                        lexical_class_def = class_decl->get_definition();
+                    } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
+                        lexical_class_def = class_def;
+                    }
+
+                    if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
+                        // Manually attach to class: remove from semantic scope, add to class
+                        SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
+                        semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
+
+                        lexical_class_def->getDeclarationList().push_back(sg_function_decl);
+                        sg_function_decl->set_parent(lexical_class_def);
+                        sg_function_decl->set_scope(lexical_class_def);
+                    }
+                }
             }
         } else {
             sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
