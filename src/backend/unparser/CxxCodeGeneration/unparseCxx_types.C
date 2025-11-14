@@ -3663,19 +3663,15 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                   {
                     SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(info.get_reference_node_for_qualification());
 
-                    // WORKAROUND for Clang frontend: If the name qualifier is empty but the typedef is in a namespace,
-                    // use the fully qualified name instead. This handles system library types like std::string
-                    // where the typedef declaration isn't in our AST (it's in system headers).
-                    if (nameQualifier.getString().empty() && tdecl->get_scope() != NULL) {
-                        SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(tdecl->get_scope());
-                        if (ns_def != NULL) {
-                            // Typedef is in a namespace, use fully qualified name
-                            SgName fullName = typedef_type->get_qualified_name();
-                            if (!fullName.getString().empty()) {
-                                curprint(fullName.getString() + " ");
-                                // Skip the normal name output below by returning early
-                                return;
-                            }
+                    // ROOT CAUSE FIX: If lookup_generated_qualified_name() returns empty (e.g., for system
+                    // header typedefs not in our AST), fall back to get_qualified_name() which is already
+                    // computed and stored on the type. This handles std::string and other system types.
+                    if (nameQualifier.getString().empty()) {
+                        SgName fullName = typedef_type->get_qualified_name();
+                        if (!fullName.getString().empty()) {
+                            curprint(fullName.getString() + " ");
+                            // Skip the normal name output below since we used the full qualified name
+                            return;
                         }
                     }
 

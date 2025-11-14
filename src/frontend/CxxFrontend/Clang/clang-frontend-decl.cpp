@@ -2444,37 +2444,50 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         param_list->append_arg(ellipses_param);
     }
 
-    // Get the proper scope for this function from its Clang declaration context
-    // This fixes the issue where functions are created with wrong scope when
-    // traversed from DeclRefExpr inside other function bodies
+    // ROOT CAUSE FIX: Get proper scope for this function from its Clang declaration context
+    // For out-of-line member functions, ensure scope is the class definition, not global
+    // CRITICAL: Friend functions are declared in class but are NOT members - use global scope
     clang::DeclContext* decl_context = function_decl->getDeclContext();
     SgScopeStatement* proper_scope = getGlobalScope();  // Default fallback
 
-    // Try to find the actual scope from DeclContext (namespace or class)
-    // We need to get the DEFINITION not the DECLARATION to satisfy containsOnlyDeclarations()
-    if (decl_context && !decl_context->isTranslationUnit()) {
+    // Check if this is a friend function - friends are free functions, not members
+    bool isFriendFunction = (function_decl->getFriendObjectKind() != clang::Decl::FOK_None);
+
+    // For member functions (including out-of-line), use the class as scope
+    // BUT NOT for friend functions - they remain in global/namespace scope
+    if (llvm::isa<clang::CXXMethodDecl>(function_decl) && !isFriendFunction) {
+        clang::CXXMethodDecl* method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
+        clang::CXXRecordDecl* parent_class = method_decl->getParent();
+        if (parent_class) {
+            std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(parent_class);
+            if (it != p_decl_translation_map.end()) {
+                SgNode* class_node = it->second;
+                if (SgClassDeclaration* class_decl = isSgClassDeclaration(class_node)) {
+                    if (class_decl->get_definition()) {
+                        proper_scope = class_decl->get_definition();
+                    }
+                } else if (SgClassDefinition* class_def = isSgClassDefinition(class_node)) {
+                    proper_scope = class_def;
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(class_node)) {
+                    if (template_class_decl->get_definition()) {
+                        proper_scope = template_class_decl->get_definition();
+                    }
+                }
+            }
+        }
+    }
+    // For non-member functions, use DeclContext (namespace or class)
+    // Skip friend functions - they always stay in global scope
+    else if (decl_context && !decl_context->isTranslationUnit() && !isFriendFunction) {
         clang::Decl* context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
         if (context_decl) {
             std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
             if (it != p_decl_translation_map.end()) {
                 SgNode* context_node = it->second;
-                // Get the definition, not the declaration
                 if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(context_node)) {
-                    SgNamespaceDefinitionStatement* ns_def = ns_decl->get_definition();
-                    if (ns_def != nullptr) {
-                        proper_scope = ns_def;
-                    }
-                } else if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
-                    SgClassDefinition* class_def = class_decl->get_definition();
-                    if (class_def != nullptr) {
-                        proper_scope = class_def;
-                    }
+                    if (ns_decl->get_definition()) proper_scope = ns_decl->get_definition();
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
-                    // Already a definition
                     proper_scope = ns_def;
-                } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
-                    // Already a definition
-                    proper_scope = class_def;
                 }
             }
         }
@@ -2665,6 +2678,12 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     if(hasExternalStorage)
     {
       sg_function_decl->get_declarationModifier().get_storageModifier().setExtern();
+    }
+
+    // CLANG FRONTEND FIX: Set friend modifier for friend functions
+    // Friend functions are free functions (not members) with special access rights
+    if (isFriendFunction) {
+        sg_function_decl->get_declarationModifier().setFriend();
     }
 
     // ROOT CAUSE FIX: Set access modifiers for member functions from Clang AST

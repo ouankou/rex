@@ -4446,13 +4446,31 @@ SageBuilder::buildNondefiningFunctionDeclaration (const SgName & name, SgType* r
           printf ("In SageBuilder::buildNondefiningFunctionDeclaration(): buildTemplateInstantiation = %s \n",buildTemplateInstantiation ? "true" : "false");
 #endif
        // DQ (11/27/2011): Added support to generate template declarations in the AST (this is part of a common API to make the build functions support more uniform).
+          // CLANG FRONTEND FIX: Check scope for ALL paths to create correct declaration type
+          // Note: Friend functions should be passed with global/namespace scope by the frontend, not class scope
+          bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
+
           if (buildTemplateInstantiation == true)
              {
-               result = buildNondefiningFunctionDeclaration_T <SgTemplateInstantiationFunctionDecl> (name,return_type,paralist, /* isMemberFunction = */ false, scope, decoratorList, false, templateArgumentsList, NULL, sm);
+               if (isMemberFunction)
+                  {
+                    result = buildNondefiningFunctionDeclaration_T <SgTemplateInstantiationMemberFunctionDecl> (name,return_type,paralist, /* isMemberFunction = */ true, scope, decoratorList, false, templateArgumentsList, NULL, sm);
+                  }
+                 else
+                  {
+                    result = buildNondefiningFunctionDeclaration_T <SgTemplateInstantiationFunctionDecl> (name,return_type,paralist, /* isMemberFunction = */ false, scope, decoratorList, false, templateArgumentsList, NULL, sm);
+                  }
              }
             else
              {
-               result = buildNondefiningFunctionDeclaration_T <SgFunctionDeclaration> (name,return_type,paralist, /* isMemberFunction = */ false, scope, decoratorList, false, NULL, NULL, sm);
+               if (isMemberFunction)
+                  {
+                    result = buildNondefiningFunctionDeclaration_T <SgMemberFunctionDeclaration> (name,return_type,paralist, /* isMemberFunction = */ true, scope, decoratorList, false, NULL, NULL, sm);
+                  }
+                 else
+                  {
+                    result = buildNondefiningFunctionDeclaration_T <SgFunctionDeclaration> (name,return_type,paralist, /* isMemberFunction = */ false, scope, decoratorList, false, NULL, NULL, sm);
+                  }
              }
         }
 
@@ -6026,34 +6044,48 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
   // SgFunctionDeclaration* func = buildDefiningFunctionDeclaration_T<SgFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList);
 
   // DQ (2/10/2012): Fixed to build either SgTemplateInstantiationFunctionDecl or SgFunctionDeclaration.
+     // CLANG FRONTEND FIX: Check scope for ALL paths to create correct declaration type
+     // Note: Friend functions should be passed with global/namespace scope by the frontend, not class scope
      SgFunctionDeclaration* func = NULL;
+     ROSE_ASSERT(first_nondefining_declaration != NULL);
+
+     bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
+
      if (buildTemplateInstantiation == true)
         {
-          SgTemplateInstantiationFunctionDecl* templateInstantiationFunctionDecl = isSgTemplateInstantiationFunctionDecl(first_nondefining_declaration);
-
-          ROSE_ASSERT(first_nondefining_declaration != NULL);
 #if 0
           printf ("In buildDefiningFunctionDeclaration(): first_nondefining_declaration->get_declarationModifier().isFriend() = %s \n",first_nondefining_declaration->get_declarationModifier().isFriend() ? "true" : "false");
 #endif
-       // func = buildDefiningFunctionDeclaration_T<SgTemplateInstantiationFunctionDecl>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,templateInstantiationFunctionDecl);
-       // func = buildDefiningFunctionDeclaration_T<SgTemplateInstantiationFunctionDecl>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,templateInstantiationFunctionDecl, templateArgumentsList);
-          func = buildDefiningFunctionDeclaration_T<SgTemplateInstantiationFunctionDecl>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,templateInstantiationFunctionDecl, templateArgumentsList);
-
-          ROSE_ASSERT(isSgTemplateInstantiationFunctionDecl(func) != NULL);
+          if (isMemberFunction)
+             {
+               SgTemplateInstantiationMemberFunctionDecl* templateInstantiationMemberFunctionDecl = isSgTemplateInstantiationMemberFunctionDecl(first_nondefining_declaration);
+               func = buildDefiningFunctionDeclaration_T<SgTemplateInstantiationMemberFunctionDecl>(name,return_type,paralist,/* isMemberFunction = */ true,scope,decoratorList,0,templateInstantiationMemberFunctionDecl, templateArgumentsList);
+               ROSE_ASSERT(isSgTemplateInstantiationMemberFunctionDecl(func) != NULL);
+               ROSE_ASSERT(isSgTemplateInstantiationMemberFunctionDecl(func)->get_templateName().is_null() == false);
+             }
+            else
+             {
+               SgTemplateInstantiationFunctionDecl* templateInstantiationFunctionDecl = isSgTemplateInstantiationFunctionDecl(first_nondefining_declaration);
+               func = buildDefiningFunctionDeclaration_T<SgTemplateInstantiationFunctionDecl>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,templateInstantiationFunctionDecl, templateArgumentsList);
+               ROSE_ASSERT(isSgTemplateInstantiationFunctionDecl(func) != NULL);
 #if 0
-          printf ("In SageBuilder::buildDefiningFunctionDeclaration(): isSgTemplateInstantiationFunctionDecl(func)->get_templateName() = %s \n",isSgTemplateInstantiationFunctionDecl(func)->get_templateName().str());
+               printf ("In SageBuilder::buildDefiningFunctionDeclaration(): isSgTemplateInstantiationFunctionDecl(func)->get_templateName() = %s \n",isSgTemplateInstantiationFunctionDecl(func)->get_templateName().str());
 #endif
-          ROSE_ASSERT(isSgTemplateInstantiationFunctionDecl(func) != NULL);
-          ROSE_ASSERT(isSgTemplateInstantiationFunctionDecl(func)->get_templateName().is_null() == false);
+               ROSE_ASSERT(isSgTemplateInstantiationFunctionDecl(func)->get_templateName().is_null() == false);
+             }
         }
        else
         {
-          ROSE_ASSERT(first_nondefining_declaration != NULL);
-
-       // func = buildDefiningFunctionDeclaration_T<SgFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,first_nondefining_declaration);
-          func = buildDefiningFunctionDeclaration_T<SgFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,first_nondefining_declaration, NULL);
-
-          ROSE_ASSERT(isSgFunctionDeclaration(func) != NULL);
+          if (isMemberFunction)
+             {
+               func = buildDefiningFunctionDeclaration_T<SgMemberFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ true,scope,decoratorList,0,isSgMemberFunctionDeclaration(first_nondefining_declaration), NULL);
+               ROSE_ASSERT(isSgMemberFunctionDeclaration(func) != NULL);
+             }
+            else
+             {
+               func = buildDefiningFunctionDeclaration_T<SgFunctionDeclaration>(name,return_type,paralist,/* isMemberFunction = */ false,scope,decoratorList,0,first_nondefining_declaration, NULL);
+               ROSE_ASSERT(isSgFunctionDeclaration(func) != NULL);
+             }
         }
 
      return func;

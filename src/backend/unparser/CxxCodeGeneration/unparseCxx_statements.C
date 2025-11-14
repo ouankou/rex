@@ -1715,141 +1715,6 @@ Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration* funcdecl_stmt, SgUnparse
 
      curprint(nameQualifier.str());
 
-  // Workaround for Clang frontend: Add scope qualification for out-of-line member functions
-  // The Clang frontend doesn't set get_qualified_name_prefix() properly for member functions
-  // defined outside the class, so we need to manually add the class scope.
-  //
-  // The key insight: For out-of-line member functions, the parent is global scope but the
-  // scope points to the class definition. This is how we detect them.
-     bool isInsideClassDef = isSgClassDefinition(funcdecl_stmt->get_parent()) != NULL;
-     std::string nameQualifierStr = nameQualifier.str();
-
-     // Check if this is an out-of-line member function:
-     // - NOT inside a class definition (parent is global)
-     // - BUT scope points to a class definition
-     // - AND no name qualifier already present
-     if (!isInsideClassDef && nameQualifierStr.empty()) {
-         SgClassDefinition* scopeClassDef = isSgClassDefinition(funcdecl_stmt->get_scope());
-         SgTemplateClassDefinition* scopeTemplateClassDef = isSgTemplateClassDefinition(funcdecl_stmt->get_scope());
-
-#if 0
-         std::string funcName = funcdecl_stmt->get_name().str();
-         if (funcName == "getmax" || funcName.find("operator[") != std::string::npos) {
-             printf("  Inside !isInsideClassDef && nameQualifierStr.empty()\n");
-             printf("    scopeClassDef = %p\n", scopeClassDef);
-             printf("    scopeTemplateClassDef = %p\n", scopeTemplateClassDef);
-         }
-#endif
-
-         if (scopeClassDef != NULL || scopeTemplateClassDef != NULL) {
-             // This is an out-of-line member function - add scope qualification
-             SgClassDeclaration* classDecl = NULL;
-
-#if 0
-             if (funcName == "getmax" || funcName.find("operator[") != std::string::npos) {
-                 printf("  Inside scopeClassDef != NULL || scopeTemplateClassDef != NULL\n");
-             }
-#endif
-
-             if (scopeTemplateClassDef != NULL) {
-                 classDecl = scopeTemplateClassDef->get_declaration();
-             } else {
-                 classDecl = scopeClassDef->get_declaration();
-             }
-
-#if 0
-             if (funcName == "getmax" || funcName.find("operator[") != std::string::npos) {
-                 printf("    classDecl = %p\n", classDecl);
-             }
-#endif
-
-             if (classDecl != NULL) {
-                 // Use qualified name to include namespace (e.g., "ns::Foo" not just "Foo")
-                 std::string className = classDecl->get_qualified_name().str();
-
-#if 0
-                 if (funcName == "getmax" || funcName.find("operator[") != std::string::npos) {
-                     printf("    className = %s\n", className.c_str());
-                 }
-#endif
-
-                 // Strip leading "::" from class name if present (e.g., "::ns::Foo" -> "ns::Foo")
-                 if (className.length() >= 2 && className[0] == ':' && className[1] == ':') {
-                     className = className.substr(2);
-                 }
-
-                 // Strip template parameters from FINAL class name only (preserve outer class template args)
-                 // E.g., "Outer<T>::Inner<U>" -> "Outer<T>::Inner", not "Outer"
-                 size_t lastColonColon = className.rfind("::");
-                 if (lastColonColon != std::string::npos) {
-                     // Nested class: preserve qualifier, strip template args only from final component
-                     std::string prefix = className.substr(0, lastColonColon + 2);  // Include "::"
-                     std::string finalName = className.substr(lastColonColon + 2);
-                     size_t templateStart = finalName.find('<');
-                     if (templateStart != std::string::npos) {
-                         finalName = finalName.substr(0, templateStart);
-                     }
-                     className = prefix + finalName;
-                 } else {
-                     // Simple class name: strip all template args
-                     size_t templateStart = className.find('<');
-                     if (templateStart != std::string::npos) {
-                         className = className.substr(0, templateStart);
-                     }
-                 }
-
-                 // For template classes, add template parameters
-                 if (scopeTemplateClassDef != NULL) {
-                     // Get template parameters from the template class definition
-                     SgTemplateClassDeclaration* templateClassDecl = isSgTemplateClassDeclaration(classDecl);
-                     if (templateClassDecl != NULL) {
-                         SgTemplateParameterPtrList& params = templateClassDecl->get_templateParameters();
-#if 0
-                         std::string funcName = funcdecl_stmt->get_name().str();
-                         if (funcName == "getmax") {
-                             printf("  Template params size = %zu\n", params.size());
-                             for (size_t i = 0; i < params.size(); i++) {
-                                 SgTemplateParameter* param = params[i];
-                                 printf("    param[%zu] = %p\n", i, param);
-                                 if (param != NULL) {
-                                     printf("      get_initializedName() = %p\n", param->get_initializedName());
-                                     if (param->get_initializedName() != NULL) {
-                                         printf("        name = %s\n", param->get_initializedName()->get_name().str());
-                                     }
-                                 }
-                             }
-                         }
-#endif
-                         if (params.size() > 0) {
-                             // Workaround: Clang frontend doesn't set initializedName for template parameters
-                             // Use placeholder names when actual names aren't available
-                             className += "<";
-                             for (size_t i = 0; i < params.size(); i++) {
-                                 if (i > 0) className += ", ";
-                                 SgTemplateParameter* param = params[i];
-                                 if (param != NULL && param->get_initializedName() != NULL) {
-                                     className += param->get_initializedName()->get_name().str();
-                                 } else {
-                                     // Use placeholder: T for first, T1 for second, T2 for third, etc.
-                                     if (i == 0) {
-                                         className += "T";
-                                     } else {
-                                         className += "T" + std::to_string(i);
-                                     }
-                                 }
-                             }
-                             className += ">";
-                         }
-                     }
-                 }
-
-                 // Output the class scope qualification
-                 curprint(className);
-                 curprint("::");
-             }
-         }
-     }
-
   // DQ (11/16/2013): See test2013_273.C for where we don't always want to always output the name with template arguments.
   // Alternatively we can just make sure that we use correct name qualification on the template arguments when this is a
   // template instantiation.
@@ -5602,34 +5467,7 @@ Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
           bool isDestructor = funcdecl_stmt->get_specialFunctionModifier().isDestructor();
           bool isConversion = funcdecl_stmt->get_specialFunctionModifier().isConversion();
 
-          // Workaround: Clang frontend doesn't always set specialFunctionModifier flags correctly.
-          // Use name-based checks as fallback to detect constructors/destructors.
-          // Note: Check scope (not parent) to handle out-of-line definitions where parent=SgGlobal.
-          bool isConstructorByName = false;
-          bool isDestructorByName = false;
-          SgClassDefinition* class_defn = isSgClassDefinition(funcdecl_stmt->get_scope());
-          if (!class_defn) {
-              class_defn = isSgTemplateClassDefinition(funcdecl_stmt->get_scope());
-          }
-          if (class_defn) {
-              std::string funcName = funcdecl_stmt->get_name().str();
-              std::string className = class_defn->get_declaration()->get_name().str();
-
-              // Strip leading "::" from class name if present (e.g., "::mypair" -> "mypair")
-              if (className.length() >= 2 && className[0] == ':' && className[1] == ':') {
-                  className = className.substr(2);
-              }
-
-              // Check if function name starts with class name (handles templates like "mypair<T>")
-              isConstructorByName = (funcName == className ||
-                                     (funcName.length() > className.length() &&
-                                      funcName.substr(0, className.length()) == className &&
-                                      funcName[className.length()] == '<'));
-              isDestructorByName = (!funcName.empty() && funcName[0] == '~' && funcName.substr(1) == className);
-          }
-
-          // Skip return type if this is a constructor, destructor, or conversion operator
-          if (!(isConstructor || isDestructor || isConversion || isConstructorByName || isDestructorByName)) {
+          if (!(isConstructor || isDestructor || isConversion)) {
               unp->u_type->unparseType(rtype, ninfo_for_type);
           }
 
@@ -9369,12 +9207,6 @@ Unparse_ExprStmt::unparseClassDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
        // DQ (6/5/2011): Newest refactored support for name qualification.
           SgName nameQualifier = classdecl_stmt->get_qualified_name_prefix();
 
-       // Strip leading "::" from nameQualifier for class definitions (global scope prefix shouldn't appear in class declarations)
-          std::string nameQualStr = nameQualifier.str();
-          if (nameQualStr.length() >= 2 && nameQualStr[0] == ':' && nameQualStr[1] == ':' && classdecl_stmt->get_definition() != NULL) {
-              nameQualifier = SgName(nameQualStr.substr(2));
-          }
-
 #if 0
           printf ("In unparseClassDeclStmt(): Output SgClassDeclaration = %p = %s qualified name: nameQualifier = %s \n",classdecl_stmt,classdecl_stmt->get_name().str(),nameQualifier.str());
 #endif
@@ -12774,8 +12606,11 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
        SgUnparse_Info ninfo(info);
 
        if (templateClassDeclaration != NULL) {
-         // Workaround: Clang frontend creates duplicate template class nodes in AST
-         // Track which template classes we've already unparsed to avoid duplicates
+         // ROOT CAUSE: AST traversal visits the same SgTemplateClassDeclaration* multiple times
+         // This is fundamental to how ROSE's AST structure works - template declarations can be
+         // reached through multiple paths during traversal (e.g., via different parent nodes).
+         // Track which template class declarations we've already unparsed to avoid duplicates.
+         // This is the correct solution at the unparser level given the current AST structure.
          static std::set<SgTemplateClassDeclaration*> unparsedTemplateClasses;
          if (unparsedTemplateClasses.find(templateClassDeclaration) != unparsedTemplateClasses.end()) {
              return;
