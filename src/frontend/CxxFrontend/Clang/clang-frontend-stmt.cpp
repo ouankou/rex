@@ -4217,7 +4217,33 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
 #endif
     bool res = true;
 
-    // TODO
+    // Get the lambda class (closure type) from Clang
+    const clang::CXXRecordDecl* clang_lambda_class = lambda_expr->getLambdaClass();
+
+    // Get the call operator (operator()) from Clang
+    const clang::CXXMethodDecl* clang_call_operator = lambda_expr->getCallOperator();
+
+    // Convert Clang lambda class to ROSE class declaration
+    SgClassDeclaration* lambda_closure_class = NULL;
+    if (clang_lambda_class != NULL) {
+        SgNode* tmp_class = Traverse(const_cast<clang::CXXRecordDecl*>(clang_lambda_class));
+        lambda_closure_class = isSgClassDeclaration(tmp_class);
+    }
+
+    // Convert Clang call operator to ROSE function declaration
+    SgFunctionDeclaration* lambda_function = NULL;
+    if (clang_call_operator != NULL) {
+        SgNode* tmp_func = Traverse(const_cast<clang::CXXMethodDecl*>(clang_call_operator));
+        lambda_function = isSgFunctionDeclaration(tmp_func);
+    }
+
+    // Create lambda capture list (NULL for now - basic support)
+    // TODO: Process lambda_expr->captures() to build full capture list
+    SgLambdaCaptureList* lambda_capture_list = NULL;
+
+    // Build the ROSE lambda expression node
+    *node = SageBuilder::buildLambdaExp(lambda_capture_list, lambda_closure_class, lambda_function);
+    ROSE_ASSERT(*node != NULL);
 
     return VisitExpr(lambda_expr, node) && res;
 }
