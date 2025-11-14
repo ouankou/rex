@@ -2447,12 +2447,37 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     // ROOT CAUSE FIX: Get proper scope for this function from its Clang declaration context
     // For out-of-line member functions, ensure scope is the class definition, not global
-    // CRITICAL: Friend functions are declared in class but are NOT members - use global scope
+    // CRITICAL: Friend functions are declared in class but are NOT members - keep them in the class
+    // syntactically and expose them via the enclosing namespace/global scope symbol table.
     clang::DeclContext* decl_context = function_decl->getDeclContext();
     SgScopeStatement* proper_scope = getGlobalScope();  // Default fallback
 
     // Check if this is a friend function - friends are free functions, not members
     bool isFriendFunction = (function_decl->getFriendObjectKind() != clang::Decl::FOK_None);
+    bool isFriendMethod = llvm::isa<clang::CXXMethodDecl>(function_decl);
+    bool isFriendFreeFunction = (isFriendFunction && !isFriendMethod);
+
+    // Lexical class enclosing scope needed so friend free functions stay visible in the namespace
+    SgScopeStatement* lexical_friend_enclosing_scope = NULL;
+    if (isFriendFreeFunction) {
+        clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+        if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
+            clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
+            std::map<clang::Decl*, SgNode*>::iterator lexical_it = p_decl_translation_map.find(lexical_class);
+            if (lexical_it != p_decl_translation_map.end()) {
+                SgNode* class_node = lexical_it->second;
+                if (SgClassDeclaration* class_decl = isSgClassDeclaration(class_node)) {
+                    lexical_friend_enclosing_scope = class_decl->get_scope();
+                } else if (SgClassDefinition* class_def = isSgClassDefinition(class_node)) {
+                    if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
+                        lexical_friend_enclosing_scope = decl->get_scope();
+                    }
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(class_node)) {
+                    lexical_friend_enclosing_scope = template_class_decl->get_scope();
+                }
+            }
+        }
+    }
 
     // For member functions (including out-of-line AND friend functions), use the class as scope
     // Friend functions are syntactically in the class but semantically free functions
@@ -2488,39 +2513,6 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                     if (ns_decl->get_definition()) proper_scope = ns_decl->get_definition();
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
                     proper_scope = ns_def;
-                }
-                // For free function friends: use the class's enclosing scope (namespace/global)
-                // to build as SgFunctionDeclaration. For member function friends (e.g.,
-                // friend void B::bar() in class A), keep the member's class scope.
-                else if (isFriendFunction) {
-                    // Check if this is a friend of a member function from another class
-                    const clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(function_decl);
-                    bool is_member_of_other_class = false;
-
-                    if (method_decl) {
-                        // It's a method - check if it belongs to a different class than the lexical context
-                        clang::DeclContext* lexical_ctx = function_decl->getLexicalDeclContext();
-                        const clang::DeclContext* parent_ctx = method_decl->getParent();
-                        is_member_of_other_class = (lexical_ctx != parent_ctx);
-                    }
-
-                    // Only change scope for free function friends, not member function friends
-                    if (!is_member_of_other_class) {
-                        SgScopeStatement* class_scope = NULL;
-                        if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
-                            class_scope = class_decl->get_scope();
-                        } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
-                            if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
-                                class_scope = decl->get_scope();
-                            }
-                        } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
-                            class_scope = template_class_decl->get_scope();
-                        }
-
-                        if (class_scope) {
-                            proper_scope = class_scope;
-                        }
-                    }
                 }
             }
         }
@@ -2717,6 +2709,25 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     // Friend functions are free functions (not members) with special access rights
     if (isFriendFunction) {
         sg_function_decl->get_declarationModifier().setFriend();
+    }
+
+    // Friend declarations written inside a class are still free functions. Keep them
+    // in the lexical class for syntactic correctness but ensure they remain visible
+    // from the enclosing namespace/global scope.
+    if (isFriendFreeFunction && lexical_friend_enclosing_scope != NULL) {
+        SgFunctionDeclaration* symbol_decl = isSgFunctionDeclaration(sg_function_decl->get_firstNondefiningDeclaration());
+        if (symbol_decl == NULL) symbol_decl = sg_function_decl;
+        if (symbol_decl != NULL) {
+            SgType* symbol_type = symbol_decl->get_type();
+            if (symbol_type != NULL) {
+                SgFunctionSymbol* existing_sym =
+                    lexical_friend_enclosing_scope->lookup_function_symbol(symbol_decl->get_name(), symbol_type);
+                if (existing_sym == NULL) {
+                    SgFunctionSymbol* func_sym = new SgFunctionSymbol(symbol_decl);
+                    lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), func_sym);
+                }
+            }
+        }
     }
 
     // ROOT CAUSE FIX: Set access modifiers for member functions from Clang AST
