@@ -2488,6 +2488,19 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
                     proper_scope = ns_def;
                 }
+                // ROOT CAUSE FIX for W4: Handle class contexts for friend functions
+                // Friend functions are non-members but declared in class scope
+                else if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
+                    if (class_decl->get_definition()) {
+                        proper_scope = class_decl->get_definition();
+                    }
+                } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
+                    proper_scope = class_def;
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
+                    if (template_class_decl->get_definition()) {
+                        proper_scope = template_class_decl->get_definition();
+                    }
+                }
             }
         }
     }
@@ -2496,13 +2509,15 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     if (function_decl->isThisDeclarationADefinition()) {
         // ROOT CAUSE FIX for W4: Friend definitions also need special handling
-        // Create with global scope to get SgFunctionDeclaration, then set class scope
+        // Create with global scope to get SgFunctionDeclaration, then move to class scope
         if (isFriendFunction) {
             SgScopeStatement* saved_scope = proper_scope;
             sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, getGlobalScope());
-            // Set class scope for syntactic correctness
+            // Move from global scope to class definition
             if (saved_scope != getGlobalScope() && isSgClassDefinition(saved_scope)) {
-                sg_function_decl->set_scope(saved_scope);
+                // Remove from global scope and add to class definition
+                SageInterface::removeStatement(sg_function_decl);
+                SageInterface::appendStatement(sg_function_decl, saved_scope);
             }
         } else {
             sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
@@ -2622,11 +2637,11 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             // Temporarily override scope to global for SageBuilder to create correct node type
             SgScopeStatement* saved_scope = proper_scope;
             sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, getGlobalScope());
-            // Now manually insert into the class scope where it belongs syntactically
+            // Now move the declaration from global scope to class scope
             if (saved_scope != getGlobalScope() && isSgClassDefinition(saved_scope)) {
-                sg_function_decl->set_scope(saved_scope);
-                // Note: Don't call appendStatement - that would add to symbol table incorrectly
-                // The declaration is in class scope but not a member
+                // Remove from global scope and add to class definition
+                SageInterface::removeStatement(sg_function_decl);
+                SageInterface::appendStatement(sg_function_decl, saved_scope);
             }
         } else {
             sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
