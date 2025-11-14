@@ -4257,20 +4257,17 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
             clang::ValueDecl* captured_val = capture.getCapturedVar();
             clang::VarDecl* captured_var = llvm::dyn_cast_or_null<clang::VarDecl>(captured_val);
             if (captured_var != NULL) {
-                SgNode* sg_var_node = Traverse(captured_var);
-                SgInitializedName* sg_var = NULL;
-
-                if (SgVariableDeclaration* var_decl = isSgVariableDeclaration(sg_var_node)) {
-                    SgInitializedNamePtrList& init_names = var_decl->get_variables();
-                    if (!init_names.empty()) {
-                        sg_var = init_names[0];
+                // Look up the existing symbol instead of traversing again (avoids duplicate decls)
+                SgSymbol* captured_symbol = GetSymbolFromSymbolTable(captured_var);
+                if (captured_symbol == NULL) {
+                    clang::VarDecl* canonical_decl = captured_var->getCanonicalDecl();
+                    if (canonical_decl != captured_var) {
+                        captured_symbol = GetSymbolFromSymbolTable(canonical_decl);
                     }
-                } else if (SgInitializedName* init_name = isSgInitializedName(sg_var_node)) {
-                    sg_var = init_name;
                 }
 
-                if (sg_var != NULL) {
-                    SgVarRefExp* sg_var_ref = SageBuilder::buildVarRefExp(sg_var);
+                if (SgVariableSymbol* var_symbol = isSgVariableSymbol(captured_symbol)) {
+                    SgVarRefExp* sg_var_ref = SageBuilder::buildVarRefExp(var_symbol);
                     SgLambdaCapture* sg_capture = SageBuilder::buildLambdaCapture(sg_var_ref, NULL, NULL);
                     lambda_capture_list->get_capture_list().push_back(sg_capture);
                     sg_capture->set_parent(lambda_capture_list);
