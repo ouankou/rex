@@ -4229,11 +4229,11 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
         SgNode* tmp_class = Traverse(const_cast<clang::CXXRecordDecl*>(clang_lambda_class));
         lambda_closure_class = isSgClassDeclaration(tmp_class);
 
-        // Remove from enclosing scope to avoid stale parent pointers
-        // buildLambdaExp will reparent to the lambda expression
+        // Remove from enclosing scope using SageInterface so symbols/scopes stay consistent
         if (lambda_closure_class && lambda_closure_class->get_scope()) {
-            SgDeclarationStatementPtrList& scope_decls = lambda_closure_class->get_scope()->getDeclarationList();
-            scope_decls.erase(std::remove(scope_decls.begin(), scope_decls.end(), lambda_closure_class), scope_decls.end());
+            SageInterface::removeStatement(lambda_closure_class, false);
+            lambda_closure_class->set_scope(NULL);
+            lambda_closure_class->set_parent(NULL);
         }
     }
 
@@ -4244,8 +4244,9 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
         lambda_function = isSgFunctionDeclaration(tmp_func);
 
         if (lambda_function && lambda_function->get_scope()) {
-            SgDeclarationStatementPtrList& scope_decls = lambda_function->get_scope()->getDeclarationList();
-            scope_decls.erase(std::remove(scope_decls.begin(), scope_decls.end(), lambda_function), scope_decls.end());
+            SageInterface::removeStatement(lambda_function, false);
+            lambda_function->set_scope(NULL);
+            lambda_function->set_parent(NULL);
         }
     }
 
