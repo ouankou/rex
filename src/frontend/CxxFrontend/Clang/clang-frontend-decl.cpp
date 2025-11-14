@@ -2459,6 +2459,16 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     // Lexical class enclosing scope needed so friend free functions stay visible in the namespace
     SgScopeStatement* lexical_friend_enclosing_scope = NULL;
+    auto getEnclosingNamespaceScope = [](SgScopeStatement* scope) -> SgScopeStatement* {
+        SgScopeStatement* current = scope;
+        while (current != NULL && !isSgGlobal(current) && !isSgNamespaceDefinitionStatement(current)) {
+            SgScopeStatement* next_scope = SageInterface::getEnclosingScope(current, false);
+            if (next_scope == current) break;
+            current = next_scope;
+        }
+        return current;
+    };
+
     if (isFriendFreeFunction) {
         clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
         if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
@@ -2466,14 +2476,21 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
             std::map<clang::Decl*, SgNode*>::iterator lexical_it = p_decl_translation_map.find(lexical_class);
             if (lexical_it != p_decl_translation_map.end()) {
                 SgNode* class_node = lexical_it->second;
+                SgScopeStatement* class_scope = NULL;
                 if (SgClassDeclaration* class_decl = isSgClassDeclaration(class_node)) {
-                    lexical_friend_enclosing_scope = class_decl->get_scope();
+                    class_scope = class_decl->get_scope();
                 } else if (SgClassDefinition* class_def = isSgClassDefinition(class_node)) {
                     if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
-                        lexical_friend_enclosing_scope = decl->get_scope();
+                        class_scope = decl->get_scope();
                     }
                 } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(class_node)) {
-                    lexical_friend_enclosing_scope = template_class_decl->get_scope();
+                    class_scope = template_class_decl->get_scope();
+                }
+                if (class_scope != NULL) {
+                    lexical_friend_enclosing_scope = getEnclosingNamespaceScope(class_scope);
+                    if (lexical_friend_enclosing_scope == NULL) {
+                        lexical_friend_enclosing_scope = getGlobalScope();
+                    }
                 }
             }
         }

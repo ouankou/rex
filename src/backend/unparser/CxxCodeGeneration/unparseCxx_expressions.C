@@ -385,11 +385,16 @@ Unparse_ExprStmt::unparseLambdaExpression(SgExpression* expr, SgUnparse_Info& in
                }
                curprint("this");
              } else {
-               if (lambdaCapture->get_capture_by_reference() == true)
-                  {
-                    curprint("&");
-                  }
-               unp->u_exprStmt->unparseExpression(capt_var_expr,info);
+              if (lambdaCapture->get_capture_by_reference() == true)
+                 {
+                   curprint("&");
+                 }
+              unp->u_exprStmt->unparseExpression(capt_var_expr,info);
+
+              if (SgExpression* init_expr = lambdaCapture->get_source_closure_variable()) {
+                 curprint(" = ");
+                 unp->u_exprStmt->unparseExpression(init_expr, info);
+              }
              }
 
              }

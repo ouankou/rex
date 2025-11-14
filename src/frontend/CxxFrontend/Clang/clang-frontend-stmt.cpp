@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "clang/AST/LambdaCapture.h"
+
 #include "clang/Lex/Lexer.h"
 
 #include "sageInterface.h"
@@ -4251,9 +4253,17 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
     }
 
     SgLambdaCaptureList* lambda_capture_list = SageBuilder::buildLambdaCaptureList();
+    unsigned total_captures = lambda_expr->capture_size();
+    unsigned capture_index = 0;
+    for (auto capture_it = lambda_expr->capture_begin(); capture_it != lambda_expr->capture_end(); ++capture_it, ++capture_index) {
+        const clang::LambdaCapture& capture = *capture_it;
+        SgExpression* capture_expression = NULL;
+        bool handled_capture = false;
 
-    for (auto capture : lambda_expr->captures()) {
-        if (capture.capturesVariable()) {
+        if (capture.capturesThis()) {
+            capture_expression = SageBuilder::buildThisExp(NULL);
+            handled_capture = true;
+        } else if (capture.capturesVariable()) {
             clang::ValueDecl* captured_val = capture.getCapturedVar();
             clang::VarDecl* captured_var = llvm::dyn_cast_or_null<clang::VarDecl>(captured_val);
             if (captured_var != NULL) {
@@ -4267,17 +4277,56 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
                 }
 
                 if (SgVariableSymbol* var_symbol = isSgVariableSymbol(captured_symbol)) {
-                    SgVarRefExp* sg_var_ref = SageBuilder::buildVarRefExp(var_symbol);
-                    SgLambdaCapture* sg_capture = SageBuilder::buildLambdaCapture(sg_var_ref, NULL, NULL);
-                    lambda_capture_list->get_capture_list().push_back(sg_capture);
-                    sg_capture->set_parent(lambda_capture_list);
+                    capture_expression = SageBuilder::buildVarRefExp(var_symbol);
+                    handled_capture = true;
+                } else if (captured_var->isInitCapture()) {
+                    // Create a dangling var ref for init-captures (symbol not in current scope yet)
+                    SgName capture_name(captured_var->getNameAsString());
+                    capture_expression = SageBuilder::buildVarRefExp(capture_name);
+                    handled_capture = true;
+                }
+            }
+        } else if (capture.capturesVLAType()) {
+            // VLA captures are represented on the closure type; nothing to emit in capture list.
+            continue;
+        }
+
+        if (!handled_capture || capture_expression == NULL) {
+            continue;
+        }
+
+        bool is_init_capture = lambda_expr->isInitCapture(&capture);
+        clang::LambdaCaptureKind capture_kind = capture.getCaptureKind();
+        bool capture_by_reference = (capture_kind == clang::LCK_ByRef || capture_kind == clang::LCK_This);
+
+        SgLambdaCapture* sg_capture = SageBuilder::buildLambdaCapture(capture_expression, NULL, NULL);
+        sg_capture->set_capture_by_reference(capture_by_reference);
+        sg_capture->set_implicit(capture.isImplicit());
+        sg_capture->set_pack_expansion(capture.isPackExpansion());
+        if (is_init_capture && capture_index < total_captures) {
+            clang::Expr* clang_init_expr = lambda_expr->capture_init_begin()[capture_index];
+            if (clang_init_expr != NULL) {
+                SgNode* init_node = Traverse(clang_init_expr);
+                if (SgExpression* init_expr = isSgExpression(init_node)) {
+                    sg_capture->set_source_closure_variable(init_expr);
+                    init_expr->set_parent(sg_capture);
                 }
             }
         }
+
+        lambda_capture_list->get_capture_list().push_back(sg_capture);
+        sg_capture->set_parent(lambda_capture_list);
     }
 
-    *node = SageBuilder::buildLambdaExp(lambda_capture_list, lambda_closure_class, lambda_function);
-    ROSE_ASSERT(*node != NULL);
+    SgLambdaExp* built_lambda = SageBuilder::buildLambdaExp(lambda_capture_list, lambda_closure_class, lambda_function);
+    ROSE_ASSERT(built_lambda != NULL);
+
+    clang::LambdaCaptureDefault capture_default = lambda_expr->getCaptureDefault();
+    bool has_default_capture = (capture_default != clang::LCD_None);
+    built_lambda->set_capture_default(has_default_capture);
+    built_lambda->set_default_is_by_reference(capture_default == clang::LCD_ByRef);
+
+    *node = built_lambda;
 
     return VisitExpr(lambda_expr, node) && res;
 }
