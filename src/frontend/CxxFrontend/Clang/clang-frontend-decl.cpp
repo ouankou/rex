@@ -2529,40 +2529,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        if (isFriendFunction) {
-            sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
-
-            clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
-            if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
-                clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
-                std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
-                if (it != p_decl_translation_map.end()) {
-                    SgClassDefinition* lexical_class_def = NULL;
-                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
-                        lexical_class_def = class_decl->get_definition();
-                    } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
-                        lexical_class_def = class_def;
-                    }
-
-                    if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
-                        SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
-                        semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
-
-                        lexical_class_def->getDeclarationList().push_back(sg_function_decl);
-                        sg_function_decl->set_parent(lexical_class_def);
-                        sg_function_decl->set_scope(lexical_class_def);
-
-                        SgSymbol* func_sym = sg_function_decl->search_for_symbol_from_symbol_table();
-                        if (func_sym != NULL) {
-                            proper_scope->remove_symbol(func_sym);
-                            lexical_class_def->insert_symbol(name, func_sym);
-                        }
-                    }
-                }
-            }
-        } else {
-            sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
-        }
+        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {
@@ -2671,40 +2638,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     else {
-        if (isFriendFunction) {
-            sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
-
-            clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
-            if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
-                clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
-                std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
-                if (it != p_decl_translation_map.end()) {
-                    SgClassDefinition* lexical_class_def = NULL;
-                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
-                        lexical_class_def = class_decl->get_definition();
-                    } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
-                        lexical_class_def = class_def;
-                    }
-
-                    if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
-                        SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
-                        semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
-
-                        lexical_class_def->getDeclarationList().push_back(sg_function_decl);
-                        sg_function_decl->set_parent(lexical_class_def);
-                        sg_function_decl->set_scope(lexical_class_def);
-
-                        SgSymbol* func_sym = sg_function_decl->search_for_symbol_from_symbol_table();
-                        if (func_sym != NULL) {
-                            proper_scope->remove_symbol(func_sym);
-                            lexical_class_def->insert_symbol(name, func_sym);
-                        }
-                    }
-                }
-            }
-        } else {
-            sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
-        }
+        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
 
         if (function_decl->isVariadic()) sg_function_decl->hasEllipses();
 
