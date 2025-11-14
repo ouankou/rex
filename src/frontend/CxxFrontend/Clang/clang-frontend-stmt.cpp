@@ -4228,6 +4228,13 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
     if (clang_lambda_class != NULL) {
         SgNode* tmp_class = Traverse(const_cast<clang::CXXRecordDecl*>(clang_lambda_class));
         lambda_closure_class = isSgClassDeclaration(tmp_class);
+
+        // Remove from enclosing scope to avoid stale parent pointers
+        // buildLambdaExp will reparent to the lambda expression
+        if (lambda_closure_class && lambda_closure_class->get_scope()) {
+            SgDeclarationStatementPtrList& scope_decls = lambda_closure_class->get_scope()->getDeclarationList();
+            scope_decls.erase(std::remove(scope_decls.begin(), scope_decls.end(), lambda_closure_class), scope_decls.end());
+        }
     }
 
     // Convert Clang call operator to ROSE function declaration
@@ -4235,10 +4242,16 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
     if (clang_call_operator != NULL) {
         SgNode* tmp_func = Traverse(const_cast<clang::CXXMethodDecl*>(clang_call_operator));
         lambda_function = isSgFunctionDeclaration(tmp_func);
+
+        // Remove from enclosing scope to avoid stale parent pointers
+        // buildLambdaExp will reparent to the lambda expression
+        if (lambda_function && lambda_function->get_scope()) {
+            SgDeclarationStatementPtrList& scope_decls = lambda_function->get_scope()->getDeclarationList();
+            scope_decls.erase(std::remove(scope_decls.begin(), scope_decls.end(), lambda_function), scope_decls.end());
+        }
     }
 
     // Create lambda capture list (NULL for now - basic support)
-    // TODO: Process lambda_expr->captures() to build full capture list
     SgLambdaCaptureList* lambda_capture_list = NULL;
 
     // Build the ROSE lambda expression node
