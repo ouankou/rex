@@ -2489,22 +2489,37 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
                     proper_scope = ns_def;
                 }
-                // For friend functions: use the class's enclosing scope (namespace/global)
-                // to build as free SgFunctionDeclaration, not SgMemberFunctionDeclaration
+                // For free function friends: use the class's enclosing scope (namespace/global)
+                // to build as SgFunctionDeclaration. For member function friends (e.g.,
+                // friend void B::bar() in class A), keep the member's class scope.
                 else if (isFriendFunction) {
-                    SgScopeStatement* class_scope = NULL;
-                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
-                        class_scope = class_decl->get_scope();
-                    } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
-                        if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
-                            class_scope = decl->get_scope();
-                        }
-                    } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
-                        class_scope = template_class_decl->get_scope();
+                    // Check if this is a friend of a member function from another class
+                    const clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(function_decl);
+                    bool is_member_of_other_class = false;
+
+                    if (method_decl) {
+                        // It's a method - check if it belongs to a different class than the lexical context
+                        clang::DeclContext* lexical_ctx = function_decl->getLexicalDeclContext();
+                        const clang::DeclContext* parent_ctx = method_decl->getParent();
+                        is_member_of_other_class = (lexical_ctx != parent_ctx);
                     }
 
-                    if (class_scope) {
-                        proper_scope = class_scope;
+                    // Only change scope for free function friends, not member function friends
+                    if (!is_member_of_other_class) {
+                        SgScopeStatement* class_scope = NULL;
+                        if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
+                            class_scope = class_decl->get_scope();
+                        } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
+                            if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
+                                class_scope = decl->get_scope();
+                            }
+                        } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
+                            class_scope = template_class_decl->get_scope();
+                        }
+
+                        if (class_scope) {
+                            proper_scope = class_scope;
+                        }
                     }
                 }
             }
@@ -2515,31 +2530,43 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     if (function_decl->isThisDeclarationADefinition()) {
         if (isFriendFunction) {
-            // Build friend as free function using semantic scope (namespace/global)
-            // to get SgFunctionDeclaration (not SgMemberFunctionDeclaration)
+            // Build friend using semantic scope
             sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
 
-            // Find lexical class for syntactic attachment
-            clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
-            if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
-                clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
-                std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
-                if (it != p_decl_translation_map.end()) {
-                    SgClassDefinition* lexical_class_def = NULL;
-                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
-                        lexical_class_def = class_decl->get_definition();
-                    } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
-                        lexical_class_def = class_def;
-                    }
+            // Check if this is a friend of a member function from another class
+            const clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(function_decl);
+            bool is_member_of_other_class = false;
 
-                    if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
-                        // Manually attach to class: remove from semantic scope, add to class
-                        SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
-                        semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
+            if (method_decl) {
+                clang::DeclContext* lexical_ctx = function_decl->getLexicalDeclContext();
+                const clang::DeclContext* parent_ctx = method_decl->getParent();
+                is_member_of_other_class = (lexical_ctx != parent_ctx);
+            }
 
-                        lexical_class_def->getDeclarationList().push_back(sg_function_decl);
-                        sg_function_decl->set_parent(lexical_class_def);
-                        sg_function_decl->set_scope(lexical_class_def);
+            // Only reattach free function friends, not member function friends
+            if (!is_member_of_other_class) {
+                // Find lexical class for syntactic attachment
+                clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+                if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
+                    clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
+                    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
+                    if (it != p_decl_translation_map.end()) {
+                        SgClassDefinition* lexical_class_def = NULL;
+                        if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
+                            lexical_class_def = class_decl->get_definition();
+                        } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
+                            lexical_class_def = class_def;
+                        }
+
+                        if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
+                            // Manually attach to class: remove from semantic scope, add to class
+                            SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
+                            semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
+
+                            lexical_class_def->getDeclarationList().push_back(sg_function_decl);
+                            sg_function_decl->set_parent(lexical_class_def);
+                            sg_function_decl->set_scope(lexical_class_def);
+                        }
                     }
                 }
             }
@@ -2655,31 +2682,43 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     }
     else {
         if (isFriendFunction) {
-            // Build friend as free function using semantic scope (namespace/global)
-            // to get SgFunctionDeclaration (not SgMemberFunctionDeclaration)
+            // Build friend using semantic scope
             sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
 
-            // Find lexical class for syntactic attachment
-            clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
-            if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
-                clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
-                std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
-                if (it != p_decl_translation_map.end()) {
-                    SgClassDefinition* lexical_class_def = NULL;
-                    if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
-                        lexical_class_def = class_decl->get_definition();
-                    } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
-                        lexical_class_def = class_def;
-                    }
+            // Check if this is a friend of a member function from another class
+            const clang::CXXMethodDecl* method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(function_decl);
+            bool is_member_of_other_class = false;
 
-                    if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
-                        // Manually attach to class: remove from semantic scope, add to class
-                        SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
-                        semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
+            if (method_decl) {
+                clang::DeclContext* lexical_ctx = function_decl->getLexicalDeclContext();
+                const clang::DeclContext* parent_ctx = method_decl->getParent();
+                is_member_of_other_class = (lexical_ctx != parent_ctx);
+            }
 
-                        lexical_class_def->getDeclarationList().push_back(sg_function_decl);
-                        sg_function_decl->set_parent(lexical_class_def);
-                        sg_function_decl->set_scope(lexical_class_def);
+            // Only reattach free function friends, not member function friends
+            if (!is_member_of_other_class) {
+                // Find lexical class for syntactic attachment
+                clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+                if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
+                    clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
+                    std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(lexical_class);
+                    if (it != p_decl_translation_map.end()) {
+                        SgClassDefinition* lexical_class_def = NULL;
+                        if (SgClassDeclaration* class_decl = isSgClassDeclaration(it->second)) {
+                            lexical_class_def = class_decl->get_definition();
+                        } else if (SgClassDefinition* class_def = isSgClassDefinition(it->second)) {
+                            lexical_class_def = class_def;
+                        }
+
+                        if (lexical_class_def != NULL && lexical_class_def != proper_scope) {
+                            // Manually attach to class: remove from semantic scope, add to class
+                            SgDeclarationStatementPtrList& semantic_stmts = proper_scope->getDeclarationList();
+                            semantic_stmts.erase(std::remove(semantic_stmts.begin(), semantic_stmts.end(), sg_function_decl), semantic_stmts.end());
+
+                            lexical_class_def->getDeclarationList().push_back(sg_function_decl);
+                            sg_function_decl->set_parent(lexical_class_def);
+                            sg_function_decl->set_scope(lexical_class_def);
+                        }
                     }
                 }
             }
