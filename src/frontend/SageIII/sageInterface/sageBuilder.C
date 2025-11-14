@@ -4447,7 +4447,8 @@ SageBuilder::buildNondefiningFunctionDeclaration (const SgName & name, SgType* r
 #endif
        // DQ (11/27/2011): Added support to generate template declarations in the AST (this is part of a common API to make the build functions support more uniform).
           // CLANG FRONTEND FIX: Check scope for ALL paths to create correct declaration type
-          // Note: Friend functions should be passed with global/namespace scope by the frontend, not class scope
+          // Note: Friend functions are handled specially by the frontend - they pass global scope
+          // here so we create SgFunctionDeclaration, then frontend sets the correct scope afterward
           bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
 
           if (buildTemplateInstantiation == true)
@@ -6045,7 +6046,8 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
 
   // DQ (2/10/2012): Fixed to build either SgTemplateInstantiationFunctionDecl or SgFunctionDeclaration.
      // CLANG FRONTEND FIX: Check scope for ALL paths to create correct declaration type
-     // Note: Friend functions should be passed with global/namespace scope by the frontend, not class scope
+     // Note: Friend functions are handled specially by the frontend - they pass global scope
+     // here so we create SgFunctionDeclaration, then frontend sets the correct scope afterward
      SgFunctionDeclaration* func = NULL;
      ROSE_ASSERT(first_nondefining_declaration != NULL);
 

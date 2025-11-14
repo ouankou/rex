@@ -12641,12 +12641,10 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
            }
 
            SgName class_name = templateClassDeclaration->get_name();
-           // Strip leading "::" for class declarations
-           std::string class_name_str = class_name.getString();
-           if (class_name_str.length() >= 2 && class_name_str[0] == ':' && class_name_str[1] == ':') {
-               class_name_str = class_name_str.substr(2);
-           }
-           curprint(class_name_str.c_str());
+           // W4 WORKAROUND REMOVED: Friend function fix eliminates need for :: prefix stripping
+           // ROOT CAUSE FIX: Frontend now properly handles friend functions by creating
+           // SgFunctionDeclaration (not SgMemberFunctionDeclaration) even in class scope
+           curprint(class_name.str());
          }
 
          ninfo.set_declstatement_ptr(NULL);

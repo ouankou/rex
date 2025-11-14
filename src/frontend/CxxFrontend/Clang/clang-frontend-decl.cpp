@@ -2453,9 +2453,9 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     // Check if this is a friend function - friends are free functions, not members
     bool isFriendFunction = (function_decl->getFriendObjectKind() != clang::Decl::FOK_None);
 
-    // For member functions (including out-of-line), use the class as scope
-    // BUT NOT for friend functions - they remain in global/namespace scope
-    if (llvm::isa<clang::CXXMethodDecl>(function_decl) && !isFriendFunction) {
+    // For member functions (including out-of-line AND friend functions), use the class as scope
+    // Friend functions are syntactically in the class but semantically free functions
+    if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
         clang::CXXMethodDecl* method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
         clang::CXXRecordDecl* parent_class = method_decl->getParent();
         if (parent_class) {
@@ -2477,8 +2477,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     // For non-member functions, use DeclContext (namespace or class)
-    // Skip friend functions - they always stay in global scope
-    else if (decl_context && !decl_context->isTranslationUnit() && !isFriendFunction) {
+    else if (decl_context && !decl_context->isTranslationUnit()) {
         clang::Decl* context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
         if (context_decl) {
             std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
@@ -2496,7 +2495,18 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        // ROOT CAUSE FIX for W4: Friend definitions also need special handling
+        // Create with global scope to get SgFunctionDeclaration, then set class scope
+        if (isFriendFunction) {
+            SgScopeStatement* saved_scope = proper_scope;
+            sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, getGlobalScope());
+            // Set class scope for syntactic correctness
+            if (saved_scope != getGlobalScope() && isSgClassDefinition(saved_scope)) {
+                sg_function_decl->set_scope(saved_scope);
+            }
+        } else {
+            sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        }
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {
@@ -2605,7 +2615,22 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     else {
-        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        // ROOT CAUSE FIX for W4: For friend functions, explicitly create SgFunctionDeclaration
+        // even though they're in class scope. Friends are syntactically in the class but
+        // semantically free functions.
+        if (isFriendFunction) {
+            // Temporarily override scope to global for SageBuilder to create correct node type
+            SgScopeStatement* saved_scope = proper_scope;
+            sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, getGlobalScope());
+            // Now manually insert into the class scope where it belongs syntactically
+            if (saved_scope != getGlobalScope() && isSgClassDefinition(saved_scope)) {
+                sg_function_decl->set_scope(saved_scope);
+                // Note: Don't call appendStatement - that would add to symbol table incorrectly
+                // The declaration is in class scope but not a member
+            }
+        } else {
+            sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        }
 
         if (function_decl->isVariadic()) sg_function_decl->hasEllipses();
 
