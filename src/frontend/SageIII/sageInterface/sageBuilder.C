@@ -4446,7 +4446,7 @@ SageBuilder::buildNondefiningFunctionDeclaration (const SgName & name, SgType* r
           printf ("In SageBuilder::buildNondefiningFunctionDeclaration(): buildTemplateInstantiation = %s \n",buildTemplateInstantiation ? "true" : "false");
 #endif
        // DQ (11/27/2011): Added support to generate template declarations in the AST (this is part of a common API to make the build functions support more uniform).
-          bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
+          bool isMemberFunction = (scope != NULL && (isSgClassDefinition(scope) != NULL || isSgTemplateClassDefinition(scope) != NULL));
 
           if (buildTemplateInstantiation == true)
              {
@@ -6043,7 +6043,7 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
 
   // DQ (2/10/2012): Fixed to build either SgTemplateInstantiationFunctionDecl or SgFunctionDeclaration.
      SgFunctionDeclaration* func = NULL;
-     bool isMemberFunction = (scope != NULL && isSgClassDefinition(scope) != NULL);
+     bool isMemberFunction = (scope != NULL && (isSgClassDefinition(scope) != NULL || isSgTemplateClassDefinition(scope) != NULL));
 
      if (buildTemplateInstantiation == true)
         {
