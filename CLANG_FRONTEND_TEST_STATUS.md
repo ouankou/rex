@@ -20,7 +20,7 @@
 **Code Quality**:
 - Net code reduction: ~600 lines removed
 - Improved maintainability
-- Clear architectural fixes in frontend and SageBuilder
+- Clean architectural fixes in frontend and SageBuilder
 
 ---
 
@@ -155,23 +155,24 @@ if (nameQualifier.getString().empty()) {
 
 ### W4: Global Scope `::` Prefix Stripping
 
-**Location**: `src/backend/unparser/CxxCodeGeneration/unparseCxx_statements.C:~9233`
+**Location**: `src/backend/unparser/CxxCodeGeneration/unparseCxx_statements.C:12644`
 
-**Issue**: `get_qualified_name_prefix()` returns `"::"` for classes in global scope, causing invalid output like `class ::MyClass`.
+**Issue**: `get_name()` returns `"::"` prefix for some class names, causing invalid output like `class ::MyClass`.
 
 **Workaround** (~5 lines):
 ```cpp
-std::string nameQualStr = nameQualifier.str();
-if (nameQualStr.length() >= 2 && nameQualStr[0] == ':' && nameQualStr[1] == ':') {
-    nameQualifier = SgName(nameQualStr.substr(2));
+// Strip leading "::" for class declarations
+std::string class_name_str = class_name.getString();
+if (class_name_str.length() >= 2 && class_name_str[0] == ':' && class_name_str[1] == ':') {
+    class_name_str = class_name_str.substr(2);
 }
 ```
 
 **ROOT CAUSE FIX PATH**:
 - **File**: Core ROSE name qualification system
-- **Change**: Fix `get_qualified_name_prefix()` to return `""` (empty string) for global scope instead of `"::"`
+- **Change**: Fix `get_name()` to return clean name without `"::"` prefix for global scope
 - **Estimated effort**: 2-3 hours
-- **Risk**: Low (isolated change to single function)
+- **Risk**: Low (isolated change)
 - **Priority**: Low (workaround is simple and works correctly)
 
 ---
@@ -191,17 +192,15 @@ class mypair {
 template<class T>
 T mypair<T>::getmax() { return ...; }
 
-// Output:
+// Output: Identical formatting
 template<class T>
-T mypair< T> ::getmax() { return ...; }  // ✅ Correct (minor spacing difference)
+T mypair<T>::getmax() { return ...; }
 ```
 
 **How It Works**:
 - SageBuilder creates correct node types (`SgMemberFunctionDeclaration` for member functions)
 - Name qualification system automatically adds `mypair<T>::` scope
 - No special handling or workarounds needed
-
-**Note**: Minor spacing difference (`mypair< T> ::` vs `mypair<T>::`) is cosmetic and does not affect compilation.
 
 ---
 
@@ -218,16 +217,19 @@ T mypair< T> ::getmax() { return ...; }  // ✅ Correct (minor spacing differenc
    - Lines ~1229: Template class caching before append (eliminates W3)
    - Lines ~2689: Access modifier reading from Clang AST
    - Lines ~2702: Constructor/destructor/conversion operator detection
-   - **Impact**: ROOT CAUSE fixes for access modifiers and special functions
+   - **Impact**: ROOT CAUSE fixes for access modifiers, special functions, and template duplicates
 
 3. **src/backend/unparser/CxxCodeGeneration/unparseCxx_statements.C**
    - Removed ~150 lines of workaround code (W1, W2 eliminated)
-   - Kept ~5 lines for W4 (:: prefix stripping)
    - Updated comments to reflect frontend fixes
 
 4. **src/backend/unparser/CxxCodeGeneration/unparseCxx_types.C**
    - Simplified typedef fallback (W5 improved)
    - Removed 6 lines, simplified logic
+
+5. **src/backend/unparser/CxxCodeGeneration/unparseCxx_expressions.C**
+   - Fixed template bracket spacing (removed extra spaces)
+   - Clean formatting: `mypair<T>::` instead of `mypair< T> ::`
 
 ### Code Metrics:
 
@@ -269,8 +271,8 @@ T mypair< T> ::getmax() { return ...; }  // ✅ Correct (minor spacing differenc
 **Priority**: Low (current workaround works correctly)
 
 **Steps**:
-1. Locate `get_qualified_name_prefix()` implementation in ROSE core
-2. Modify to return `""` for global scope instead of `"::"`
+1. Locate `get_name()` implementation that returns names with `::` prefix
+2. Modify to return clean name without prefix for global scope
 3. Update callers if needed
 4. Test thoroughly with existing test suite
 5. Remove W4 workaround from unparser
