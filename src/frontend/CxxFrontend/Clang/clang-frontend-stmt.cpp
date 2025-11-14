@@ -4243,18 +4243,41 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
         SgNode* tmp_func = Traverse(const_cast<clang::CXXMethodDecl*>(clang_call_operator));
         lambda_function = isSgFunctionDeclaration(tmp_func);
 
-        // Remove from enclosing scope to avoid stale parent pointers
-        // buildLambdaExp will reparent to the lambda expression
         if (lambda_function && lambda_function->get_scope()) {
             SgDeclarationStatementPtrList& scope_decls = lambda_function->get_scope()->getDeclarationList();
             scope_decls.erase(std::remove(scope_decls.begin(), scope_decls.end(), lambda_function), scope_decls.end());
         }
     }
 
-    // Create lambda capture list (NULL for now - basic support)
-    SgLambdaCaptureList* lambda_capture_list = NULL;
+    SgLambdaCaptureList* lambda_capture_list = SageBuilder::buildLambdaCaptureList();
 
-    // Build the ROSE lambda expression node
+    for (auto capture : lambda_expr->captures()) {
+        if (capture.capturesVariable()) {
+            clang::ValueDecl* captured_val = capture.getCapturedVar();
+            clang::VarDecl* captured_var = llvm::dyn_cast_or_null<clang::VarDecl>(captured_val);
+            if (captured_var != NULL) {
+                SgNode* sg_var_node = Traverse(captured_var);
+                SgInitializedName* sg_var = NULL;
+
+                if (SgVariableDeclaration* var_decl = isSgVariableDeclaration(sg_var_node)) {
+                    SgInitializedNamePtrList& init_names = var_decl->get_variables();
+                    if (!init_names.empty()) {
+                        sg_var = init_names[0];
+                    }
+                } else if (SgInitializedName* init_name = isSgInitializedName(sg_var_node)) {
+                    sg_var = init_name;
+                }
+
+                if (sg_var != NULL) {
+                    SgVarRefExp* sg_var_ref = SageBuilder::buildVarRefExp(sg_var);
+                    SgLambdaCapture* sg_capture = SageBuilder::buildLambdaCapture(sg_var_ref, NULL, NULL);
+                    lambda_capture_list->get_capture_list().push_back(sg_capture);
+                    sg_capture->set_parent(lambda_capture_list);
+                }
+            }
+        }
+    }
+
     *node = SageBuilder::buildLambdaExp(lambda_capture_list, lambda_closure_class, lambda_function);
     ROSE_ASSERT(*node != NULL);
 
