@@ -4778,6 +4778,48 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
 #endif
    }
 
+namespace
+{
+void fixSymbolTableEntries(SgScopeStatement* scope)
+   {
+     if (scope == NULL)
+        return;
+
+     SgSymbolTable* table = scope->get_symbol_table();
+     if (table == NULL)
+        return;
+
+     if (table->get_parent() == NULL)
+        table->set_parent(scope);
+
+     SgSymbolTable::BaseHashType* entries = table->get_table();
+     if (entries == NULL)
+        return;
+
+     for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); /**/)
+        {
+          SgSymbol* symbol = it->second;
+          if (symbol == NULL)
+             {
+               it = entries->erase(it);
+               continue;
+             }
+
+          SgScopeStatement* owner = symbol->get_scope();
+          if (owner != scope || owner == NULL)
+             {
+               it = entries->erase(it);
+               continue;
+             }
+
+          if (symbol->get_parent() == NULL)
+               symbol->set_parent(table);
+
+          ++it;
+        }
+   }
+}
+
 void
 SageInterface::ensureSymbolParentPointers(SgNode* root)
    {
@@ -4789,27 +4831,8 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
           public:
                void visit(SgNode* node) override
                   {
-                    SgScopeStatement* scope = isSgScopeStatement(node);
-                    if (scope == NULL)
-                       return;
-
-                    SgSymbolTable* table = scope->get_symbol_table();
-                    if (table == NULL)
-                       return;
-
-                    if (table->get_parent() == NULL)
-                       table->set_parent(scope);
-
-                    SgSymbolTable::BaseHashType* entries = table->get_table();
-                    if (entries == NULL)
-                       return;
-
-                    for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); ++it)
-                       {
-                         SgSymbol* symbol = it->second;
-                         if (symbol != NULL && symbol->get_parent() == NULL)
-                              symbol->set_parent(table);
-                       }
+                    if (SgScopeStatement* scope = isSgScopeStatement(node))
+                       fixSymbolTableEntries(scope);
                   }
         };
 
@@ -13885,35 +13908,18 @@ void SageInterface::appendStatement(SgStatement *stmt, SgScopeStatement* scope)
                     {
                       if (SgClassDefinition* classDef = isSgClassDefinition(node))
                          {
-                           SgSymbolTable* classTable = classDef->get_symbol_table();
-                           if (classTable == NULL)
+                           if (classDef->get_symbol_table() == NULL)
                                 SageInterface::rebuildSymbolTable(classDef);
                          }
 
                       if (SgScopeStatement* scopeStmt = isSgScopeStatement(node))
-                         {
-                           if (SgSymbolTable* table = scopeStmt->get_symbol_table())
-                              {
-                                if (table->get_parent() == NULL)
-                                   table->set_parent(scopeStmt);
-
-                                SgSymbolTable::BaseHashType* entries = table->get_table();
-                                if (entries != NULL)
-                                   {
-                                     for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); ++it)
-                                        {
-                                          SgSymbol* symbol = it->second;
-                                          if (symbol != NULL && symbol->get_parent() == NULL)
-                                             symbol->set_parent(table);
-                                        }
-                                   }
-                              }
-                         }
+                           fixSymbolTableEntries(scopeStmt);
                     }
             };
 
          RepairSymbolTables repairTraversal;
          repairTraversal.traverse(stmt,preorder);
+         repairTraversal.traverse(scope,preorder);
         }
 #endif
 

@@ -719,13 +719,26 @@ void repairSymbolTableParents(SgScopeStatement* scope)
      if (entries == NULL)
         return;
 
-     for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); ++it)
+     for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); /**/)
         {
           SgSymbol* symbol = it->second;
-          if (symbol != NULL && symbol->get_parent() == NULL)
+          if (symbol == NULL)
              {
-               symbol->set_parent(table);
+               it = entries->erase(it);
+               continue;
              }
+
+          SgScopeStatement* owner = symbol->get_scope();
+          if (owner != scope || owner == NULL)
+             {
+               it = entries->erase(it);
+               continue;
+             }
+
+          if (symbol->get_parent() == NULL)
+               symbol->set_parent(table);
+
+          ++it;
         }
    }
 }
