@@ -2745,13 +2745,25 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         SgFunctionDeclaration* symbol_decl = isSgFunctionDeclaration(sg_function_decl->get_firstNondefiningDeclaration());
         if (symbol_decl == NULL) symbol_decl = sg_function_decl;
         if (symbol_decl != NULL) {
+            SgFunctionSymbol* friend_symbol = NULL;
+            if (SgSymbol* class_symbol = symbol_decl->search_for_symbol_from_symbol_table()) {
+                if (SgFunctionSymbol* class_func_sym = isSgFunctionSymbol(class_symbol)) {
+                    if (SgScopeStatement* class_scope = class_func_sym->get_scope()) {
+                        class_scope->remove_symbol(class_func_sym);
+                    }
+                    friend_symbol = class_func_sym;
+                }
+            }
+
             SgType* symbol_type = symbol_decl->get_type();
             if (symbol_type != NULL) {
                 SgFunctionSymbol* existing_sym =
                     lexical_friend_enclosing_scope->lookup_function_symbol(symbol_decl->get_name(), symbol_type);
                 if (existing_sym == NULL) {
-                    SgFunctionSymbol* func_sym = new SgFunctionSymbol(symbol_decl);
-                    lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), func_sym);
+                    if (friend_symbol == NULL) {
+                        friend_symbol = new SgFunctionSymbol(symbol_decl);
+                    }
+                    lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), friend_symbol);
                 }
             }
         }
