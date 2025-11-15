@@ -14029,6 +14029,14 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
           return;
         }
 
+    for (SgNode* ancestor = targetStmt; ancestor != NULL; ancestor = ancestor->get_parent())
+       {
+         if (isSgLambdaExp(ancestor) != NULL)
+            {
+              return;
+            }
+       }
+
      SgNode* parent = targetStmt->get_parent();
      if (parent == NULL)
         {
