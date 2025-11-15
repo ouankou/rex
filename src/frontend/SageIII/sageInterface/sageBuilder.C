@@ -23,6 +23,8 @@
 // DQ (2/27/2014): We need this feature to support the function: fixupCopyOfAstFromSeparateFileInNewTargetAst()
 #include "RoseAst.h"
 
+// Parent pointer maintenance for reused subtrees (e.g., lambda closure class/function)
+#include "astPostProcessing/resetParentPointers.h"
 // DQ (3/31/2012): Is this going to be an issue for C++11 use with ROSE?
 
 
@@ -5256,6 +5258,14 @@ SageBuilder::buildDefiningFunctionDeclaration_T(const SgName & XXX_name, SgType*
      printf ("WARNING: This function for building defining function declarations has different semantics from that of the function to build defining class declarations. \n");
 #endif
 
+     if (first_nondefining_declaration == NULL)
+        {
+          printf ("ERROR: buildDefiningFunctionDeclaration_T called with NULL nondef for name=%s scope=%s isMember=%s\n",
+              XXX_name.str(),
+              scope ? scope->class_name().c_str() : "NULL",
+              isMemberFunction ? "true" : "false");
+          fflush(stdout);
+        }
      assert(first_nondefining_declaration != NULL);
      assert(first_nondefining_declaration->get_firstNondefiningDeclaration() != NULL);
      assert(first_nondefining_declaration->get_firstNondefiningDeclaration() == first_nondefining_declaration);
@@ -6112,7 +6122,32 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
      SgFunctionDeclaration* nondefiningDeclaration = NULL;
 
      SgFunctionType* func_type = buildFunctionType(return_type,parameter_list);
-     SgFunctionSymbol* func_symbol = scope->find_symbol_by_type_of_function<SgFunctionDeclaration>(name,func_type,NULL,NULL);
+
+  // Allow friend free functions (forceFreeFunctionScope == true) to locate their symbol
+  // in the enclosing namespace/global scope instead of the lexical class.
+     SgFunctionSymbol* func_symbol = scope != NULL ? scope->find_symbol_by_type_of_function<SgFunctionDeclaration>(name,func_type,NULL,NULL) : NULL;
+     if (func_symbol == NULL && forceFreeFunctionScope == true)
+        {
+          SgScopeStatement* lookup_scope = scope;
+          while (lookup_scope != NULL)
+             {
+               if (isSgSourceFile(lookup_scope) != NULL)
+                  break;
+
+               SgScopeStatement* parent_scope = SageInterface::getEnclosingScope(lookup_scope,false);
+               if (parent_scope == NULL || parent_scope == lookup_scope)
+                  break;
+
+               func_symbol = parent_scope->find_symbol_by_type_of_function<SgFunctionDeclaration>(name,func_type,NULL,NULL);
+               if (func_symbol != NULL)
+                  {
+                    lookup_scope = parent_scope;
+                    break;
+                  }
+
+               lookup_scope = parent_scope;
+             }
+        }
      if (func_symbol != NULL)
         {
           nondefiningDeclaration = func_symbol->get_declaration();
@@ -6135,6 +6170,13 @@ SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return
   // DQ (8/23/2013): Added assertions.
      assert(nondefiningDeclaration != NULL);
      assert(nondefiningDeclaration->get_firstNondefiningDeclaration() != NULL);
+     if (nondefiningDeclaration->get_firstNondefiningDeclaration() != nondefiningDeclaration)
+        {
+          if (SgFunctionDeclaration* first_nd = isSgFunctionDeclaration(nondefiningDeclaration->get_firstNondefiningDeclaration()))
+             {
+               nondefiningDeclaration = first_nd;
+             }
+        }
      assert(nondefiningDeclaration->get_firstNondefiningDeclaration() == nondefiningDeclaration);
 
      return buildDefiningFunctionDeclaration (name,return_type,parameter_list,scope,NULL,false,nondefiningDeclaration,NULL,forceFreeFunctionScope);
@@ -11589,12 +11631,14 @@ SageBuilder::buildLambdaExp(SgLambdaCaptureList* lambda_capture_list, SgClassDec
      if (lambda_closure_class != NULL)
         {
           lambda_closure_class->set_parent(expr);
+          resetParentPointers(lambda_closure_class, expr);
         }
 
      if (lambda_function != NULL)
         {
 #if 1
           lambda_function->set_parent(expr);
+          resetParentPointers(lambda_function, expr);
 #else
           if (lambda_closure_class != NULL)
              {
@@ -11626,12 +11670,14 @@ SageBuilder::buildLambdaExp_nfi(SgLambdaCaptureList* lambda_capture_list, SgClas
      if (lambda_closure_class != NULL)
         {
           lambda_closure_class->set_parent(expr);
+          resetParentPointers(lambda_closure_class, expr);
         }
 
      if (lambda_function != NULL)
         {
 #if 1
           lambda_function->set_parent(expr);
+          resetParentPointers(lambda_function, expr);
 #else
           if (lambda_closure_class != NULL)
              {

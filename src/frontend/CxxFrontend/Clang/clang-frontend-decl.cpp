@@ -2204,6 +2204,20 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
 
     isAnonymousStructOrUnion = field_decl->isAnonymousStructOrUnion();
 
+    const clang::CXXRecordDecl* parent_record = llvm::dyn_cast<clang::CXXRecordDecl>(field_decl->getParent());
+    bool is_lambda_field = (parent_record != NULL && parent_record->isLambda());
+
+    if (is_lambda_field) {
+        // Lambda closure fields are implicit captures; they should always materialize as
+        // real member variables even if Clang marks them anonymous. Give them stable names
+        // so the symbol table can reference them during conversion of the lambda body.
+        isAnonymousStructOrUnion = false;
+        if (name.getString().empty()) {
+            std::string synthesized_name = "__lambda_field_" + std::to_string(field_decl->getFieldIndex());
+            name = synthesized_name;
+        }
+    }
+
     SgType * sg_fieldType = buildTypeFromQualifiedType(fieldQualType);
     SgType * type = buildTypeFromQualifiedType(field_decl->getType());
 
@@ -2219,21 +2233,11 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
     if (init != NULL)
         applySourceRange(init, init_expr->getSourceRange());
 
-    if(isAnonymousStructOrUnion)
-    {
-        if (isSgClassType(type) && iscompleteDefined) {
-            SgClassDeclaration* classDecl = isSgClassDeclaration(isSgClassType(type)->get_declaration());
-            SgClassDeclaration* classDefDecl = isSgClassDeclaration(isSgClassType(type)->get_declaration()->get_definingDeclaration());
-            *node = classDefDecl;
-        }
-        else if (isSgEnumType(type) && iscompleteDefined) {
-            SgEnumDeclaration* enumDecl = isSgEnumDeclaration(isSgEnumType(type)->get_declaration());
-            SgEnumDeclaration* enumDefDecl = isSgEnumDeclaration(isSgEnumType(type)->get_declaration()->get_definingDeclaration());
-            *node = enumDefDecl;
-        }
+    if (isAnonymousStructOrUnion && name.getString().empty()) {
+        std::string anon_name = "__anonymous_field_" + std::to_string(field_decl->getFieldIndex());
+        name = anon_name;
     }
-    else
-    {
+
       // Cannot use 'SageBuilder::buildVariableDeclaration' because of anonymous field
         // *node = SageBuilder::buildVariableDeclaration(name, type, init, SageBuilder::topScopeStack());
       // Build it by hand...
@@ -2325,7 +2329,6 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
         SageBuilder::topScopeStack()->insert_symbol(name, var_symbol);
      
         *node = var_decl;
-        }
     return VisitDeclaratorDecl(field_decl, node) && res; 
 }
 
@@ -2496,9 +2499,16 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
 
-    // For member functions (including out-of-line AND friend functions), use the class as scope
-    // Friend functions are syntactically in the class but semantically free functions
-    if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+    // Friend free functions should live in the enclosing namespace/global scope for definition
+    if (isFriendFreeFunction) {
+        if (lexical_friend_enclosing_scope != NULL) {
+            proper_scope = lexical_friend_enclosing_scope;
+        } else {
+            proper_scope = getGlobalScope();
+        }
+    }
+    // For member functions (including friend methods), use the class definition as scope
+    else if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
         clang::CXXMethodDecl* method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
         clang::CXXRecordDecl* parent_class = method_decl->getParent();
         if (parent_class) {
@@ -2548,7 +2558,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope, isFriendFreeFunction);
+        bool builder_force_free_scope = false;
+        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope, builder_force_free_scope);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {
