@@ -701,9 +701,35 @@ ResetParentPointers::resetParentPointersInTemplateArgumentList ( const SgTemplat
    }
 
 
+namespace
+{
+void repairSymbolTableParents(SgScopeStatement* scope)
+   {
+     if (scope == NULL)
+        return;
 
+     SgSymbolTable* table = scope->get_symbol_table();
+     if (table == NULL)
+        return;
 
-// [DQ]
+     if (table->get_parent() == NULL)
+        table->set_parent(scope);
+
+     SgSymbolTable::BaseHashType* entries = table->get_table();
+     if (entries == NULL)
+        return;
+
+     for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); ++it)
+        {
+          SgSymbol* symbol = it->second;
+          if (symbol != NULL && symbol->get_parent() == NULL)
+             {
+               symbol->set_parent(table);
+             }
+        }
+   }
+}
+
 ResetParentPointersInheritedAttribute
 ResetParentPointers::evaluateInheritedAttribute (
    SgNode* node,
@@ -727,8 +753,13 @@ ResetParentPointers::evaluateInheritedAttribute (
      for (size_t i = 0; i < children.size(); i++)
         {
           printf (" --- --- children[%zu] = %p = %s \n",i,children[i],children[i] != NULL ? children[i]->class_name().c_str() : "null");
-        }
+       }
 #endif
+
+     if (SgScopeStatement* scope = isSgScopeStatement(node))
+        {
+          repairSymbolTableParents(scope);
+        }
 
 #if 0
      if (node->get_parent() != NULL)
@@ -2503,5 +2534,3 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
      ROSE_ASSERT(node->get_parent() == NULL);
 #endif
    }
-
-

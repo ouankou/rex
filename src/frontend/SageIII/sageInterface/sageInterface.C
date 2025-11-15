@@ -4784,25 +4784,11 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
      if (root == NULL)
         return;
 
-     class FixSymbolParents : public AstSimpleProcessing
+     class SymbolParentTraversal : public AstSimpleProcessing
         {
           public:
                void visit(SgNode* node) override
                   {
-                    if (SgSymbol* sym = isSgSymbol(node))
-                       {
-                         if (sym->get_parent() == NULL)
-                            {
-                              if (SgScopeStatement* owner = sym->get_scope())
-                                 {
-                                   if (SgSymbolTable* ownerTable = owner->get_symbol_table())
-                                      {
-                                        sym->set_parent(ownerTable);
-                                      }
-                                 }
-                            }
-                       }
-
                     SgScopeStatement* scope = isSgScopeStatement(node);
                     if (scope == NULL)
                        return;
@@ -4811,22 +4797,23 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
                     if (table == NULL)
                        return;
 
+                    if (table->get_parent() == NULL)
+                       table->set_parent(scope);
+
                     SgSymbolTable::BaseHashType* entries = table->get_table();
                     if (entries == NULL)
                        return;
 
                     for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); ++it)
                        {
-                         SgSymbol* tableSymbol = it->second;
-                         if (tableSymbol != NULL && tableSymbol->get_parent() == NULL)
-                            {
-                              tableSymbol->set_parent(table);
-                            }
+                         SgSymbol* symbol = it->second;
+                         if (symbol != NULL && symbol->get_parent() == NULL)
+                              symbol->set_parent(table);
                        }
                   }
         };
 
-     FixSymbolParents fixer;
+     SymbolParentTraversal fixer;
      fixer.traverse(root,preorder);
 
      class FixOrphanSymbolParents : public ROSE_VisitTraversal
@@ -4841,9 +4828,7 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
                               if (SgScopeStatement* owner = sym->get_scope())
                                  {
                                    if (SgSymbolTable* table = owner->get_symbol_table())
-                                      {
-                                        sym->set_parent(table);
-                                      }
+                                      sym->set_parent(table);
                                  }
                             }
                        }
@@ -4853,7 +4838,6 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
      FixOrphanSymbolParents orphanFixer;
      orphanFixer.traverseMemoryPool();
    }
-
 
 // #ifndef USE_ROSE
 
@@ -13894,25 +13878,33 @@ void SageInterface::appendStatement(SgStatement *stmt, SgScopeStatement* scope)
        // other declarations (e.g. "typedef struct { int x; } y;").
           stmt->set_parent(scope); // needed?
 
-         class RepairClassSymbolTables : public AstSimpleProcessing
+         class RepairSymbolTables : public AstSimpleProcessing
             {
               public:
                  void visit(SgNode* node) override
                     {
                       if (SgClassDefinition* classDef = isSgClassDefinition(node))
                          {
-                           if (SgSymbolTable* table = classDef->get_symbol_table())
+                           SgSymbolTable* classTable = classDef->get_symbol_table();
+                           if (classTable == NULL)
+                                SageInterface::rebuildSymbolTable(classDef);
+                         }
+
+                      if (SgScopeStatement* scopeStmt = isSgScopeStatement(node))
+                         {
+                           if (SgSymbolTable* table = scopeStmt->get_symbol_table())
                               {
+                                if (table->get_parent() == NULL)
+                                   table->set_parent(scopeStmt);
+
                                 SgSymbolTable::BaseHashType* entries = table->get_table();
                                 if (entries != NULL)
                                    {
                                      for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); ++it)
                                         {
-                                          SgSymbol* classSymbol = it->second;
-                                          if (classSymbol != NULL && classSymbol->get_parent() == NULL)
-                                             {
-                                               classSymbol->set_parent(table);
-                                             }
+                                          SgSymbol* symbol = it->second;
+                                          if (symbol != NULL && symbol->get_parent() == NULL)
+                                             symbol->set_parent(table);
                                         }
                                    }
                               }
@@ -13920,9 +13912,8 @@ void SageInterface::appendStatement(SgStatement *stmt, SgScopeStatement* scope)
                     }
             };
 
-         RepairClassSymbolTables repairTraversal;
+         RepairSymbolTables repairTraversal;
          repairTraversal.traverse(stmt,preorder);
-         repairTraversal.traverse(scope,preorder);
         }
 #endif
 
