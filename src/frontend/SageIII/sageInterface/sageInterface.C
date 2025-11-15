@@ -4806,7 +4806,7 @@ void fixSymbolTableEntries(SgScopeStatement* scope)
              }
 
           SgScopeStatement* owner = symbol->get_scope();
-          if (owner != scope || owner == NULL)
+          if (owner == NULL || owner != scope)
              {
                it = entries->erase(it);
                continue;
@@ -4826,17 +4826,34 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
      if (root == NULL)
         return;
 
-     class SymbolParentTraversal : public AstSimpleProcessing
+     class FixSymbolParents : public AstSimpleProcessing
         {
           public:
                void visit(SgNode* node) override
                   {
-                    if (SgScopeStatement* scope = isSgScopeStatement(node))
-                       fixSymbolTableEntries(scope);
+                    if (SgSymbol* sym = isSgSymbol(node))
+                       {
+                         if (sym->get_parent() == NULL)
+                            {
+                              if (SgScopeStatement* owner = sym->get_scope())
+                                 {
+                                   if (SgSymbolTable* ownerTable = owner->get_symbol_table())
+                                      {
+                                        sym->set_parent(ownerTable);
+                                      }
+                                 }
+                            }
+                       }
+
+                    SgScopeStatement* scope = isSgScopeStatement(node);
+                    if (scope == NULL)
+                       return;
+
+                    fixSymbolTableEntries(scope);
                   }
         };
 
-     SymbolParentTraversal fixer;
+     FixSymbolParents fixer;
      fixer.traverse(root,preorder);
 
      class FixOrphanSymbolParents : public ROSE_VisitTraversal
@@ -4852,9 +4869,9 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
                                  {
                                    if (SgSymbolTable* table = owner->get_symbol_table())
                                       sym->set_parent(table);
-                                 }
-                            }
-                       }
+                                  }
+                             }
+                        }
                   }
         };
 
@@ -14234,6 +14251,11 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
           parent = labelStatement->get_parent();
           ROSE_ASSERT(isSgLabelStatement(parent) == NULL);
        }
+
+     if (isSgScopeStatement(parent) == NULL)
+        {
+          return;
+        }
 
 #if 0
      printf ("In SageInterface::insertStatement(): insert newStmt = %p = %s before/after targetStmt = %p = %s \n",newStmt,newStmt->class_name().c_str(),targetStmt,targetStmt->class_name().c_str());

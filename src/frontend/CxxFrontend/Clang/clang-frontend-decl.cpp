@@ -2254,6 +2254,7 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
             }
         }
     }
+    }
 
       // Cannot use 'SageBuilder::buildVariableDeclaration' because of anonymous field
         // *node = SageBuilder::buildVariableDeclaration(name, type, init, SageBuilder::topScopeStack());
