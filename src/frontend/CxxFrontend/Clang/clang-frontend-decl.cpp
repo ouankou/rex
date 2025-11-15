@@ -2764,6 +2764,9 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                         friend_symbol = new SgFunctionSymbol(symbol_decl);
                     }
                     lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), friend_symbol);
+                    if (SgSymbolTable* ns_table = lexical_friend_enclosing_scope->get_symbol_table()) {
+                        friend_symbol->set_parent(ns_table);
+                    }
                 }
             }
         }
