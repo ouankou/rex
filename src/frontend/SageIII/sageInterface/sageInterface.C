@@ -14046,7 +14046,38 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
 
   // must get the new scope after ensureBasicBlockAsParent ()
      SgScopeStatement* scope = targetStmt->get_scope();
-     ROSE_ASSERT(scope);
+     if (scope == NULL)
+        {
+       // Lambda closure declarations and their operator() do not belong to a
+       // conventional scope that can accept insertions.  Skip early to avoid
+       // forcing StatementListInsertChild() to diagnose an impossible target.
+          auto belongsToLambda = [](SgStatement* stmt) -> bool {
+             if (stmt == NULL)
+                return false;
+             if (SgFunctionDeclaration* funcDecl = isSgFunctionDeclaration(stmt))
+                {
+                  if (SageInterface::isLambdaFunction(funcDecl))
+                     return true;
+                }
+             SgNode* current = stmt->get_parent();
+             while (current != NULL)
+                {
+                  if (isSgLambdaExp(current) != NULL)
+                     return true;
+                  current = current->get_parent();
+                }
+             return false;
+          };
+
+          if (belongsToLambda(targetStmt))
+             {
+            // Lambda synthesized declarations live only inside SgLambdaExp and
+            // cannot be reordered relative to enclosing scope statements.
+               return;
+             }
+
+          ROSE_ASSERT(scope);
+        }
 
 #if 0
      printf ("targetStmt = %p = %s \n",targetStmt,targetStmt->class_name().c_str());
@@ -26981,4 +27012,3 @@ void SageInterface::clearSharedGlobalScopes(SgProject * project) {
   ROSE_ASSERT(hmm != nullptr);
   hmm->clear();
 }
-

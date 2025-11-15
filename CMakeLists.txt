@@ -329,6 +329,31 @@ if(enable-java)
   set(USE_ROSE_INTERNAL_JAVA_SUPPORT 1)
   get_filename_component(BACKEND_JAVA_COMPILER ${Java_JAVAC_EXECUTABLE} NAME)
   install(FILES ${JAVA_JVM_LIBRARY} DESTINATION ${ROSE_LIB_DIR_NAME})
+
+  # Ensure CTest inherits a usable JAVA_HOME and libjvm path even when shell
+  # init scripts are not sourced (e.g., Codex sandboxes).  Prefer the existing
+  # JAVA_HOME environment variable, otherwise derive it from the detected Java
+  # runtime or fall back to the system default symlink if available.
+  set(_rose_java_home "$ENV{JAVA_HOME}")
+  if(_rose_java_home STREQUAL "" AND Java_JAVA_EXECUTABLE)
+    get_filename_component(_rose_java_bin "${Java_JAVA_EXECUTABLE}" DIRECTORY)
+    get_filename_component(_rose_java_home "${_rose_java_bin}" DIRECTORY)
+  elseif(_rose_java_home STREQUAL "" AND EXISTS "/usr/lib/jvm/default-java")
+    set(_rose_java_home "/usr/lib/jvm/default-java")
+  endif()
+  if(_rose_java_home AND EXISTS "${_rose_java_home}/lib/server")
+    set(_rose_ctest_env "${CMAKE_BINARY_DIR}/CTestJavaEnv.cmake")
+    file(WRITE "${_rose_ctest_env}"
+      "if(\"\$ENV{JAVA_HOME}\" STREQUAL \"\")\n"
+      "  set(ENV{JAVA_HOME} \"${_rose_java_home}\")\n"
+      "endif()\n"
+      "if(\"\$ENV{LD_LIBRARY_PATH}\" STREQUAL \"\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server\")\n"
+      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_java_home}/lib/server(:|$)\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server:\$ENV{LD_LIBRARY_PATH}\")\n"
+      "endif()\n")
+    set_property(DIRECTORY PROPERTY TEST_INCLUDE_FILE "${_rose_ctest_env}")
+  endif()
 endif()
 
 # OpenCL

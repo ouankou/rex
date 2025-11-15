@@ -4219,6 +4219,26 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
 #endif
     bool res = true;
 
+    auto detach_declaration_from_scope = [](SgDeclarationStatement* decl) {
+        if (decl == NULL) {
+            return;
+        }
+
+        // Remove any symbol that was registered for this declaration in the enclosing scope.
+        if (SgSymbol* associated_symbol = decl->search_for_symbol_from_symbol_table()) {
+            SgScopeStatement* symbol_scope = associated_symbol->get_scope();
+            if (symbol_scope != NULL) {
+                symbol_scope->remove_symbol(associated_symbol);
+            }
+        }
+
+        if (decl->get_scope() != NULL) {
+            SageInterface::removeStatement(decl, false);
+            decl->set_scope(NULL);
+            decl->set_parent(NULL);
+        }
+    };
+
     // Get the lambda class (closure type) from Clang
     const clang::CXXRecordDecl* clang_lambda_class = lambda_expr->getLambdaClass();
 
@@ -4232,11 +4252,7 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
         lambda_closure_class = isSgClassDeclaration(tmp_class);
 
         // Remove from enclosing scope using SageInterface so symbols/scopes stay consistent
-        if (lambda_closure_class && lambda_closure_class->get_scope()) {
-            SageInterface::removeStatement(lambda_closure_class, false);
-            lambda_closure_class->set_scope(NULL);
-            lambda_closure_class->set_parent(NULL);
-        }
+        detach_declaration_from_scope(lambda_closure_class);
     }
 
     // Convert Clang call operator to ROSE function declaration
@@ -4245,11 +4261,7 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
         SgNode* tmp_func = Traverse(const_cast<clang::CXXMethodDecl*>(clang_call_operator));
         lambda_function = isSgFunctionDeclaration(tmp_func);
 
-        if (lambda_function && lambda_function->get_scope()) {
-            SageInterface::removeStatement(lambda_function, false);
-            lambda_function->set_scope(NULL);
-            lambda_function->set_parent(NULL);
-        }
+        detach_declaration_from_scope(lambda_function);
     }
 
     SgLambdaCaptureList* lambda_capture_list = SageBuilder::buildLambdaCaptureList();
