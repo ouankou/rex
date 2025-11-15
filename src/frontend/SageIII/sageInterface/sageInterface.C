@@ -14065,8 +14065,13 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
     // parent = ensureBasicBlockAsParent(targetStmt);
 
   // must get the new scope after ensureBasicBlockAsParent ()
-     SgScopeStatement* scope = targetStmt->get_scope();
-     ROSE_ASSERT(scope);
+    SgScopeStatement* scope = targetStmt->get_scope();
+    if (scope == NULL) {
+      scope = SageInterface::getEnclosingScope(targetStmt, false);
+    }
+    if (scope == NULL) {
+      return;
+    }
 
 #if 0
      printf ("targetStmt = %p = %s \n",targetStmt,targetStmt->class_name().c_str());
