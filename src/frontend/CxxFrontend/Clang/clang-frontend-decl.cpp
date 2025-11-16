@@ -2536,7 +2536,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                 proper_scope = lexical_friend_class_def;
                 scope_assigned = true;
             }
-        } else {
+        } else if (!function_decl->isInlined()) {
             if (lexical_friend_enclosing_scope != NULL) {
                 proper_scope = lexical_friend_enclosing_scope;
                 scope_assigned = true;
