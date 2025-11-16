@@ -2233,6 +2233,28 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
     if (init != NULL)
         applySourceRange(init, init_expr->getSourceRange());
 
+    if (isAnonymousStructOrUnion && !is_lambda_field) {
+        if (isSgClassType(type) && iscompleteDefined) {
+            SgClassDeclaration* classDecl = isSgClassDeclaration(isSgClassType(type)->get_declaration());
+            if (classDecl != NULL) {
+                SgClassDeclaration* classDefDecl = isSgClassDeclaration(classDecl->get_definingDeclaration());
+                if (classDefDecl != NULL) {
+                    *node = classDefDecl;
+                    return VisitDeclaratorDecl(field_decl, node) && res;
+                }
+            }
+        } else if (isSgEnumType(type) && iscompleteDefined) {
+            SgEnumDeclaration* enumDecl = isSgEnumDeclaration(isSgEnumType(type)->get_declaration());
+            if (enumDecl != NULL) {
+                SgEnumDeclaration* enumDefDecl = isSgEnumDeclaration(enumDecl->get_definingDeclaration());
+                if (enumDefDecl != NULL) {
+                    *node = enumDefDecl;
+                    return VisitDeclaratorDecl(field_decl, node) && res;
+                }
+            }
+        }
+    }
+
     if (isAnonymousStructOrUnion && name.getString().empty()) {
         std::string anon_name = "__anonymous_field_" + std::to_string(field_decl->getFieldIndex());
         name = anon_name;
