@@ -1104,7 +1104,6 @@ StatementListInsertChild( SgStatement *parent, Rose_STL_Container<Elemtype*>& st
                target->class_name().c_str(),
                target->get_parent(),
                target->get_parent() != NULL ? target->get_parent()->class_name().c_str() : "null");
-          printf ("       target snippet: %s\n",target->unparseToString().c_str());
           fflush(stdout);
           ROSE_ASSERT(false);
         }
