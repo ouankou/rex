@@ -2806,11 +2806,6 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                     }
                 }
 
-                // Friend free functions live in the enclosing namespace/global scope for lookup.
-                if (lexical_friend_enclosing_scope != NULL) {
-                    symbol_decl->set_scope(lexical_friend_enclosing_scope);
-                }
-
                 SgType* symbol_type = symbol_decl->get_type();
                 if (symbol_type != NULL) {
                     SgFunctionSymbol* existing_sym =
