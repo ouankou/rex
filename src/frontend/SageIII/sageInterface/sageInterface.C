@@ -14237,9 +14237,7 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
     if (scope == NULL) {
       scope = SageInterface::getEnclosingScope(targetStmt, false);
     }
-    if (scope == NULL) {
-      return;
-    }
+    ROSE_ASSERT(scope != NULL);
 
 #if 0
      printf ("targetStmt = %p = %s \n",targetStmt,targetStmt->class_name().c_str());

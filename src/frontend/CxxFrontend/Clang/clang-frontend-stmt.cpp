@@ -4219,24 +4219,26 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
 #endif
     bool res = true;
 
-    auto detach_declaration_from_scope = [](SgDeclarationStatement* decl) {
+    auto detach_declaration_from_scope = [](SgDeclarationStatement* decl) -> SgScopeStatement* {
         if (decl == NULL) {
-            return;
+            return NULL;
         }
+
+        SgScopeStatement* original_scope = decl->get_scope();
 
         // Remove any symbol that was registered for this declaration in the enclosing scope.
         if (SgSymbol* associated_symbol = decl->search_for_symbol_from_symbol_table()) {
-            SgScopeStatement* symbol_scope = associated_symbol->get_scope();
-            if (symbol_scope != NULL) {
+            if (SgScopeStatement* symbol_scope = associated_symbol->get_scope()) {
                 symbol_scope->remove_symbol(associated_symbol);
             }
         }
 
-        if (decl->get_scope() != NULL) {
+        if (original_scope != NULL) {
             SageInterface::removeStatement(decl, false);
-            decl->set_scope(NULL);
             decl->set_parent(NULL);
         }
+
+        return original_scope;
     };
 
     // Get the lambda class (closure type) from Clang
@@ -4247,21 +4249,40 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
 
     // Convert Clang lambda class to ROSE class declaration
     SgClassDeclaration* lambda_closure_class = NULL;
+    SgScopeStatement* lambda_closure_lexical_scope = NULL;
     if (clang_lambda_class != NULL) {
         SgNode* tmp_class = Traverse(const_cast<clang::CXXRecordDecl*>(clang_lambda_class));
         lambda_closure_class = isSgClassDeclaration(tmp_class);
 
         // Remove from enclosing scope using SageInterface so symbols/scopes stay consistent
-        detach_declaration_from_scope(lambda_closure_class);
+        lambda_closure_lexical_scope = detach_declaration_from_scope(lambda_closure_class);
+
+        // Preserve a valid scope so downstream lookups don't see NULL after detachment.
+        if (lambda_closure_class != NULL && lambda_closure_lexical_scope != NULL) {
+            lambda_closure_class->set_scope(lambda_closure_lexical_scope);
+            if (SgClassDefinition* class_def = lambda_closure_class->get_definition()) {
+                class_def->set_scope(lambda_closure_lexical_scope);
+            }
+        }
     }
 
     // Convert Clang call operator to ROSE function declaration
     SgFunctionDeclaration* lambda_function = NULL;
+    SgScopeStatement* lambda_function_scope = NULL;
     if (clang_call_operator != NULL) {
         SgNode* tmp_func = Traverse(const_cast<clang::CXXMethodDecl*>(clang_call_operator));
         lambda_function = isSgFunctionDeclaration(tmp_func);
 
-        detach_declaration_from_scope(lambda_function);
+        lambda_function_scope = detach_declaration_from_scope(lambda_function);
+
+        // Restore the scope pointer for operator() so later queries succeed.
+        if (lambda_function != NULL) {
+            if (lambda_function_scope != NULL) {
+                lambda_function->set_scope(lambda_function_scope);
+            } else if (lambda_closure_class != NULL && lambda_closure_class->get_definition() != NULL) {
+                lambda_function->set_scope(lambda_closure_class->get_definition());
+            }
+        }
     }
 
     SgLambdaCaptureList* lambda_capture_list = SageBuilder::buildLambdaCaptureList();
