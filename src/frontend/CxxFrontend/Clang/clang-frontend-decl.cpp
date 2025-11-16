@@ -2455,6 +2455,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     clang::DeclContext* decl_context = function_decl->getDeclContext();
     SgScopeStatement* proper_scope = getGlobalScope();  // Default fallback
 
+    bool isDefinition = function_decl->isThisDeclarationADefinition();
+
     // Check if this is a friend function - friends are free functions, not members
     bool isFriendFunction = (function_decl->getFriendObjectKind() != clang::Decl::FOK_None);
     bool isFriendMethod = llvm::isa<clang::CXXMethodDecl>(function_decl);
@@ -2462,6 +2464,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     // Lexical class enclosing scope needed so friend free functions stay visible in the namespace
     SgScopeStatement* lexical_friend_enclosing_scope = NULL;
+    SgClassDefinition* lexical_friend_class_def = NULL;
     auto getEnclosingNamespaceScope = [](SgScopeStatement* scope) -> SgScopeStatement* {
         SgScopeStatement* current = scope;
         while (current != NULL && !isSgGlobal(current) && !isSgNamespaceDefinitionStatement(current)) {
@@ -2482,12 +2485,17 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                 SgScopeStatement* class_scope = NULL;
                 if (SgClassDeclaration* class_decl = isSgClassDeclaration(class_node)) {
                     class_scope = class_decl->get_scope();
+                    if (class_decl->get_definition())
+                        lexical_friend_class_def = class_decl->get_definition();
                 } else if (SgClassDefinition* class_def = isSgClassDefinition(class_node)) {
+                    lexical_friend_class_def = class_def;
                     if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
                         class_scope = decl->get_scope();
                     }
                 } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(class_node)) {
                     class_scope = template_class_decl->get_scope();
+                    if (template_class_decl->get_definition())
+                        lexical_friend_class_def = template_class_decl->get_definition();
                 }
                 if (class_scope != NULL) {
                     lexical_friend_enclosing_scope = getEnclosingNamespaceScope(class_scope);
@@ -2499,16 +2507,23 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
 
-    // Friend free functions should live in the enclosing namespace/global scope for definition
+    bool scope_assigned = false;
     if (isFriendFreeFunction) {
-        if (lexical_friend_enclosing_scope != NULL) {
-            proper_scope = lexical_friend_enclosing_scope;
+        if (!isDefinition) {
+            if (lexical_friend_class_def != NULL) {
+                proper_scope = lexical_friend_class_def;
+                scope_assigned = true;
+            }
         } else {
-            proper_scope = getGlobalScope();
+            if (lexical_friend_enclosing_scope != NULL) {
+                proper_scope = lexical_friend_enclosing_scope;
+                scope_assigned = true;
+            }
         }
     }
+
     // For member functions (including friend methods), use the class definition as scope
-    else if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+    if (!scope_assigned && llvm::isa<clang::CXXMethodDecl>(function_decl)) {
         clang::CXXMethodDecl* method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
         clang::CXXRecordDecl* parent_class = method_decl->getParent();
         if (parent_class) {
@@ -2530,7 +2545,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     // For non-member functions, use DeclContext (namespace or class)
-    else if (decl_context && !decl_context->isTranslationUnit()) {
+    else if (!scope_assigned && decl_context && !decl_context->isTranslationUnit()) {
         clang::Decl* context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
         if (context_decl) {
             std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
