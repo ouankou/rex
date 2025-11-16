@@ -1104,9 +1104,17 @@ StatementListInsertChild( SgStatement *parent, Rose_STL_Container<Elemtype*>& st
                target->class_name().c_str(),
                target->get_parent(),
                target->get_parent() != NULL ? target->get_parent()->class_name().c_str() : "null");
+          bool inSystemHeader = false;
           if (Sg_File_Info* targetFileInfo = target->get_file_info())
-             printf ("       target location: %s:%d\n",targetFileInfo->get_filenameString().c_str(),targetFileInfo->get_line());
+             {
+               printf ("       target location: %s:%d\n",targetFileInfo->get_filenameString().c_str(),targetFileInfo->get_line());
+               if (targetFileInfo->get_filenameString().find("/usr/include/") != std::string::npos)
+                    inSystemHeader = true;
+             }
           fflush(stdout);
+
+          if (inSystemHeader == true)
+             return true;
           ROSE_ASSERT(false);
         }
   // ROSE_ASSERT (find(statement_or_declaration_container.begin(),statement_or_declaration_container.end(),target) != statement_or_declaration_container.end());
