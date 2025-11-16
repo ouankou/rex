@@ -14192,33 +14192,6 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
      ROSE_ASSERT(targetStmt &&newStmt);
      ROSE_ASSERT(targetStmt != newStmt); // should not share statement nodes!
 
-     auto isLambdaDeclaration = [](SgStatement* stmt) -> bool {
-        if (stmt == NULL)
-           return false;
-        if (SgFunctionDeclaration* funcDecl = isSgFunctionDeclaration(stmt))
-           return SageInterface::isLambdaFunction(funcDecl);
-        if (SgClassDeclaration* classDecl = isSgClassDeclaration(stmt))
-           {
-             if (SgLambdaExp* lambdaParent = isSgLambdaExp(classDecl->get_parent()))
-                {
-                  return lambdaParent->get_lambda_closure_class() == classDecl;
-                }
-           }
-        return false;
-     };
-     if (isLambdaDeclaration(targetStmt))
-        {
-          return;
-        }
-
-    for (SgNode* ancestor = targetStmt; ancestor != NULL; ancestor = ancestor->get_parent())
-       {
-         if (isSgLambdaExp(ancestor) != NULL)
-            {
-              return;
-            }
-       }
-
      SgNode* parent = targetStmt->get_parent();
      if (parent == NULL)
         {
