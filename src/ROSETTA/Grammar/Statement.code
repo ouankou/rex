@@ -1105,7 +1105,7 @@ StatementListInsertChild( SgStatement *parent, Rose_STL_Container<Elemtype*>& st
                target->get_parent(),
                target->get_parent() != NULL ? target->get_parent()->class_name().c_str() : "null");
           if (Sg_File_Info* targetFileInfo = target->get_file_info())
-             targetFileInfo->display("StatementListInsertChild target location");
+             printf ("       target location: %s:%d\n",targetFileInfo->get_filenameString().c_str(),targetFileInfo->get_line());
           fflush(stdout);
           ROSE_ASSERT(false);
         }
