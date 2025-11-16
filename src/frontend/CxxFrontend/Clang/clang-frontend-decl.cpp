@@ -2801,7 +2801,8 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                         if (SgScopeStatement* class_scope = class_func_sym->get_scope()) {
                             class_scope->remove_symbol(class_func_sym);
                         }
-                        friend_symbol = class_func_sym;
+                        // Do not reuse the class-owned symbol to avoid stale scope metadata; build a fresh one below.
+                        friend_symbol = NULL;
                     }
                 }
 
@@ -2810,19 +2811,19 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                     symbol_decl->set_scope(lexical_friend_enclosing_scope);
                 }
 
-            SgType* symbol_type = symbol_decl->get_type();
-            if (symbol_type != NULL) {
-                SgFunctionSymbol* existing_sym =
-                    lexical_friend_enclosing_scope->lookup_function_symbol(symbol_decl->get_name(), symbol_type);
-                if (existing_sym == NULL) {
-                    if (friend_symbol == NULL) {
-                        friend_symbol = new SgFunctionSymbol(symbol_decl);
+                SgType* symbol_type = symbol_decl->get_type();
+                if (symbol_type != NULL) {
+                    SgFunctionSymbol* existing_sym =
+                        lexical_friend_enclosing_scope->lookup_function_symbol(symbol_decl->get_name(), symbol_type);
+                    if (existing_sym == NULL) {
+                        if (friend_symbol == NULL) {
+                            friend_symbol = new SgFunctionSymbol(symbol_decl);
+                        }
+                        lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), friend_symbol);
+                        if (SgSymbolTable* ns_table = lexical_friend_enclosing_scope->get_symbol_table()) {
+                            friend_symbol->set_parent(ns_table);
+                        }
                     }
-                    lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), friend_symbol);
-                    if (SgSymbolTable* ns_table = lexical_friend_enclosing_scope->get_symbol_table()) {
-                        friend_symbol->set_parent(ns_table);
-                    }
-                }
             }
         }
     }
