@@ -2794,12 +2794,16 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     if (isFriendFreeFunction && lexical_friend_enclosing_scope != NULL) {
         SgFunctionDeclaration* symbol_decl = isSgFunctionDeclaration(sg_function_decl->get_firstNondefiningDeclaration());
         if (symbol_decl == NULL) symbol_decl = sg_function_decl;
-        if (symbol_decl != NULL) {
-            SgFunctionSymbol* friend_symbol = NULL;
-            if (SgSymbol* class_symbol = symbol_decl->search_for_symbol_from_symbol_table()) {
-                if (SgFunctionSymbol* class_func_sym = isSgFunctionSymbol(class_symbol)) {
-                    if (SgScopeStatement* class_scope = class_func_sym->get_scope()) {
-                        class_scope->remove_symbol(class_func_sym);
+            if (symbol_decl != NULL) {
+                // Friend free functions live in the enclosing namespace/global scope for lookup.
+                if (lexical_friend_enclosing_scope != NULL) {
+                    symbol_decl->set_scope(lexical_friend_enclosing_scope);
+                }
+                SgFunctionSymbol* friend_symbol = NULL;
+                if (SgSymbol* class_symbol = symbol_decl->search_for_symbol_from_symbol_table()) {
+                    if (SgFunctionSymbol* class_func_sym = isSgFunctionSymbol(class_symbol)) {
+                        if (SgScopeStatement* class_scope = class_func_sym->get_scope()) {
+                            class_scope->remove_symbol(class_func_sym);
                     }
                     friend_symbol = class_func_sym;
                 }
