@@ -2255,11 +2255,6 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
         }
     }
 
-    if (isAnonymousStructOrUnion && name.getString().empty()) {
-        std::string anon_name = "__anonymous_field_" + std::to_string(field_decl->getFieldIndex());
-        name = anon_name;
-    }
-
       // Cannot use 'SageBuilder::buildVariableDeclaration' because of anonymous field
         // *node = SageBuilder::buildVariableDeclaration(name, type, init, SageBuilder::topScopeStack());
       // Build it by hand...
@@ -2487,6 +2482,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     // Lexical class enclosing scope needed so friend free functions stay visible in the namespace
     SgScopeStatement* lexical_friend_enclosing_scope = NULL;
     SgClassDefinition* lexical_friend_class_def = NULL;
+    bool friend_lexically_inside_class = false;
     auto getEnclosingNamespaceScope = [](SgScopeStatement* scope) -> SgScopeStatement* {
         SgScopeStatement* current = scope;
         while (current != NULL && !isSgGlobal(current) && !isSgNamespaceDefinitionStatement(current)) {
@@ -2519,6 +2515,9 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
                     if (template_class_decl->get_definition())
                         lexical_friend_class_def = template_class_decl->get_definition();
                 }
+                if (lexical_friend_class_def != NULL) {
+                    friend_lexically_inside_class = true;
+                }
                 if (class_scope != NULL) {
                     lexical_friend_enclosing_scope = getEnclosingNamespaceScope(class_scope);
                     if (lexical_friend_enclosing_scope == NULL) {
@@ -2531,12 +2530,13 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     bool scope_assigned = false;
     if (isFriendFreeFunction) {
-        if (!isDefinition) {
+        bool keep_in_class_scope = (!isDefinition) || friend_lexically_inside_class;
+        if (keep_in_class_scope) {
             if (lexical_friend_class_def != NULL) {
                 proper_scope = lexical_friend_class_def;
                 scope_assigned = true;
             }
-        } else if (!function_decl->isInlined()) {
+        } else {
             if (lexical_friend_enclosing_scope != NULL) {
                 proper_scope = lexical_friend_enclosing_scope;
                 scope_assigned = true;
@@ -2595,7 +2595,9 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        bool builder_force_free_scope = false;
+        // Keep inline friend definitions lexically inside the class body; symbol relocation below
+        // exposes them via the enclosing namespace/global scope.
+        bool builder_force_free_scope = isFriendFreeFunction;
         sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope, builder_force_free_scope);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 

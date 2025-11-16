@@ -8007,6 +8007,8 @@ SageInterface::getScope( const SgNode* astNode )
         return tempArg->get_scope();
     else if (const SgQualifiedName* qualifiedName = isSgQualifiedName(astNode))
         return qualifiedName->get_scope();
+    else if (const SgSourceFile* sourceFile = isSgSourceFile(astNode))
+        return sourceFile->get_globalScope();
 
     // DQ (6/9/2007): This function traverses through the parents to the first scope (used for name qualification support of template arguments)
     const SgNode* parentNode = astNode;
@@ -8039,7 +8041,9 @@ SageInterface::getScope( const SgNode* astNode )
           dynamic_cast<const SgType*>(parentNode) == NULL &&
           dynamic_cast<const SgSymbol*>(parentNode) == NULL )
         {
-          printf ("Error: In SageInterface::getScope(): could not trace back to SgScopeStatement node \n");
+          fprintf(stderr,
+                  "Error: In SageInterface::getScope(): could not trace back to SgScopeStatement node for astNode=%p (%s)\n",
+                  astNode, astNode ? astNode->class_name().c_str() : "null");
           ROSE_ABORT();
         }
        else
