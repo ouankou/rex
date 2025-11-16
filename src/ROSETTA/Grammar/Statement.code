@@ -1099,6 +1099,11 @@ StatementListInsertChild( SgStatement *parent, Rose_STL_Container<Elemtype*>& st
      if (targetLocated == false)
         {
           printf ("Error: target statement = %p not found in list of statements provided. \n",target);
+          printf ("       parent scope = %p = %s\n",parent,parent->class_name().c_str());
+          printf ("       target class = %s target->get_parent() = %p = %s\n",
+               target->class_name().c_str(),
+               target->get_parent(),
+               target->get_parent() != NULL ? target->get_parent()->class_name().c_str() : "null");
           ROSE_ASSERT(false);
         }
   // ROSE_ASSERT (find(statement_or_declaration_container.begin(),statement_or_declaration_container.end(),target) != statement_or_declaration_container.end());
