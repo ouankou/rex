@@ -728,13 +728,6 @@ void repairSymbolTableParents(SgScopeStatement* scope)
                continue;
              }
 
-          SgScopeStatement* owner = symbol->get_scope();
-          if (owner != scope || owner == NULL)
-             {
-               it = entries->erase(it);
-               continue;
-             }
-
           if (symbol->get_parent() == NULL)
                symbol->set_parent(table);
 
