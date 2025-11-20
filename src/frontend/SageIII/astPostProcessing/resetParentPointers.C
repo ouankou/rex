@@ -733,6 +733,72 @@ void repairSymbolTableParents(SgScopeStatement* scope)
 
           ++it;
         }
+
+  // Also ensure declarations in this scope own a symbol in this scope's table.
+     if (isSgGlobal(scope) || isSgNamespaceDefinitionStatement(scope) ||
+         isSgClassDefinition(scope) || isSgTemplateClassDefinition(scope) ||
+         isSgTemplateInstantiationDefn(scope))
+        {
+         SgDeclarationStatementPtrList& decls = scope->getDeclarationList();
+         for (SgDeclarationStatement* decl : decls)
+            {
+              if (decl == NULL) continue;
+
+              if (SgTemplateInstantiationDecl* tid = isSgTemplateInstantiationDecl(decl))
+                 {
+                   if (tid->get_name().getString().empty()) continue;
+                   if (tid->search_for_symbol_from_symbol_table() != NULL) continue;
+                   SgClassSymbol* sym = new SgClassSymbol(tid);
+                   if (table != NULL)
+                      {
+                        table->insert(tid->get_name(), sym);
+                        sym->set_parent(table);
+                      }
+                   continue;
+                 }
+
+              if (SgClassDeclaration* cd = isSgClassDeclaration(decl))
+                 {
+                   if (cd->get_name().getString().empty()) continue;
+                   if (cd->search_for_symbol_from_symbol_table() != NULL) continue;
+                   SgClassSymbol* sym = new SgClassSymbol(cd);
+                   if (table != NULL)
+                      {
+                        table->insert(cd->get_name(), sym);
+                        sym->set_parent(table);
+                      }
+                   continue;
+                 }
+
+              if (SgEnumDeclaration* ed = isSgEnumDeclaration(decl))
+                 {
+                   if (ed->get_name().getString().empty()) continue;
+                   if (ed->search_for_symbol_from_symbol_table() != NULL) continue;
+                   SgEnumSymbol* sym = new SgEnumSymbol(ed);
+                   if (table != NULL)
+                      {
+                        table->insert(ed->get_name(), sym);
+                        sym->set_parent(table);
+                      }
+                   continue;
+                 }
+
+              if (SgFunctionDeclaration* fd = isSgFunctionDeclaration(decl))
+                 {
+                   if (fd->get_name().getString().empty()) continue;
+                   if (fd->search_for_symbol_from_symbol_table() != NULL) continue;
+                   SgType* ftype = fd->get_type();
+                   if (table != NULL && table->find_function(fd->get_name(), ftype) != NULL) continue;
+                   SgFunctionSymbol* sym = new SgFunctionSymbol(fd);
+                   if (table != NULL)
+                      {
+                        table->insert(fd->get_name(), sym);
+                        sym->set_parent(table);
+                      }
+                   continue;
+                 }
+            }
+        }
    }
 }
 
@@ -865,7 +931,18 @@ ResetParentPointers::evaluateInheritedAttribute (
                if (modifier->get_parent() == NULL)
                   {
                     modifier->set_parent(initializedName);
-                  }
+               }
+           }
+        }
+
+     if (SgConstructorInitializer* ctorInit = isSgConstructorInitializer(node))
+        {
+       // Some constructor initializer nodes originate from compiler-generated declarations
+       // in system headers and may not have an associated declaration. Mark them explicitly
+       // so consistency checks do not expect a class or declaration pointer.
+          if (ctorInit->get_declaration() == NULL && ctorInit->get_class_decl() == NULL)
+             {
+               ctorInit->set_associated_class_unknown(true);
              }
         }
 

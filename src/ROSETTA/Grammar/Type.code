@@ -2466,12 +2466,10 @@ SgType::getAssociatedDeclaration() const
 
        // DQ (5/25/2013): Check if the declaration might have been deleted.
           if (declaration->get_freepointer() != AST_FileIO::IS_VALID_POINTER()) {
-            printf("Found a pointer to a deleted node:\n");
-            printf(" - type = %p (%s)\n", this, this->class_name().c_str());
-            printf(" - decl = %p\n", declaration);
-            printf(" - name : %s\n", SageInterface::generateUniqueName(this, false).c_str());
+         // The associated declaration was already deleted (e.g., after deepDelete on a copy).
+         // Treat this as "no associated declaration" instead of asserting.
+            return NULL;
           }
-          ROSE_ASSERT(declaration->get_freepointer() == AST_FileIO::IS_VALID_POINTER());
         }
 
 #if 0

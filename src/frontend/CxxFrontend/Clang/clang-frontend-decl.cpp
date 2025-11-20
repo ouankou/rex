@@ -2595,10 +2595,13 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        // Keep inline friend definitions lexically inside the class body; symbol relocation below
-        // exposes them via the enclosing namespace/global scope.
+        // Build friend free-function definitions as free functions regardless of lexical class scope.
         bool builder_force_free_scope = isFriendFreeFunction;
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope, builder_force_free_scope);
+        SgScopeStatement* builder_scope = proper_scope;
+        if (isFriendFreeFunction && lexical_friend_enclosing_scope != NULL) {
+            builder_scope = lexical_friend_enclosing_scope;
+        }
+        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, builder_scope, builder_force_free_scope);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {

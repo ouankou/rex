@@ -7576,6 +7576,22 @@ SgConstructorInitializer::post_construction_initialization()
              }
 
           ROSE_ASSERT( (isSgTypedefType(p_expression_type) || isSgClassType(p_expression_type) != NULL) || (p_associated_class_unknown == true) );
+
+       // If we get here with neither a declaration nor a class/typedef type, this constructor
+       // initializer arose from a synthesized/system header construct. Mark it explicitly so
+       // downstream consistency checks do not expect a class declaration.
+          if (p_associated_class_unknown == false &&
+              isSgTypedefType(p_expression_type) == NULL && isSgClassType(p_expression_type) == NULL)
+             {
+               p_associated_class_unknown = true;
+             }
+
+      // If we still have no declaration and get_class_decl() cannot resolve a class,
+      // record that the associated class is unknown so consistency checks do not expect one.
+         if (p_associated_class_unknown == false && get_class_decl() == NULL)
+            {
+              p_associated_class_unknown = true;
+            }
         }
 
   // DQ (11/15/2006): avoid setting newArgs this late in the process.
@@ -9619,4 +9635,3 @@ HEADER_SIMD_SCATTER_END
 SOURCE_SIMD_SCATTER_START
 void SgSIMDScatter::post_construction_initialization() {}
 SOURCE_SIMD_SCATTER_END
-

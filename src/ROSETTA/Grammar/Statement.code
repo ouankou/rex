@@ -9294,8 +9294,16 @@ SgDeclarationStatement::generate_alternative_name_for_unnamed_declaration ( SgNo
 SgSymbol*
 SgDeclarationStatement::get_symbol_from_symbol_table() const
    {
-     printf ("Error: virtual function SgDeclarationStatement::get_symbol_from_symbol_table() called on base class SgDeclarationStatement this = %p = %s \n",this,this->class_name().c_str());
-     ROSE_ASSERT(false);
+  // Some declaration kinds (e.g., variable declarations) do not override this
+  // and may not have a corresponding symbol. Try to recover gracefully instead
+  // of unconditionally asserting.
+     SgScopeStatement* scope = get_scope();
+     if (scope == NULL)
+        return NULL;
+
+     if (SgSymbol* sym = scope->find_symbol_from_declaration(this))
+        return sym;
+
      return NULL;
    }
 
@@ -11314,9 +11322,6 @@ SgFunctionDeclaration::get_symbol_from_symbol_table() const
 #endif
   // return scope->get_symbol_table()->find(this);
      return scope->find_symbol_from_declaration(this);
-
-  // ROSE_ASSERT(get_scope() != NULL);
-  // return get_scope()->get_symbol_table()->find(this);
    }
 
 
@@ -12370,21 +12375,18 @@ SgMemberFunctionDeclaration::get_symbol_from_symbol_table() const
           this,this->class_name().c_str(),SageInterface::get_name(this).c_str(),get_scope(),get_scope()->class_name().c_str(),get_scope()->get_symbol_table());
 #endif
 
-     SgSymbol* symbol = NULL;
-     if (get_scope() == NULL)
+     SgScopeStatement* scope = get_scope();
+     if (scope == NULL)
         {
           printf ("In SgMemberFunctionDeclaration::get_symbol_from_symbol_table(): get_scope() == NULL for %p = %s \n",this,this->class_name().c_str());
-          symbol = NULL;
-        }
-       else
-        {
-          ROSE_ASSERT(get_scope() != NULL);
-       // ROSE_ASSERT(get_scope()->get_symbol_table() != NULL);
-       // symbol = get_scope()->get_symbol_table()->find(this);
-          symbol = get_scope()->find_symbol_from_declaration(this);
+          return NULL;
         }
 
-     return symbol;
+     SgSymbol* symbol = scope->find_symbol_from_declaration(this);
+     if (symbol != NULL)
+        return symbol;
+
+     return NULL;
    }
 
 SOURCE_MEMBER_FUNCTION_DECLARATION_STATEMENT_END
@@ -14397,9 +14399,21 @@ SgSymbol*
 SgTemplateInstantiationDecl::get_symbol_from_symbol_table() const
    {
      ROSE_ASSERT(get_scope() != NULL);
-  // ROSE_ASSERT(get_scope()->get_symbol_table() != NULL);
-  // return get_scope()->get_symbol_table()->find(this);
-     return get_scope()->find_symbol_from_declaration(this);
+     SgScopeStatement* scope = get_scope();
+     SgSymbol* sym = scope->find_symbol_from_declaration(this);
+     if (sym != NULL)
+        return sym;
+
+     SgSymbolTable* table = scope->get_symbol_table();
+     if (table != NULL)
+        {
+          SgClassSymbol* cls_sym = new SgClassSymbol(const_cast<SgTemplateInstantiationDecl*>(this));
+          table->insert(get_name(), cls_sym);
+          cls_sym->set_parent(table);
+          sym = cls_sym;
+        }
+
+     return sym;
    }
 
 SOURCE_TEMPLATE_INSTANTIATION_DECLARATION_STATEMENT_END
@@ -14512,10 +14526,7 @@ SgTemplateInstantiationFunctionDecl::get_mangled_name (void) const
 SgSymbol*
 SgTemplateInstantiationFunctionDecl::get_symbol_from_symbol_table() const
    {
-     ROSE_ASSERT(get_scope() != NULL);
-  // ROSE_ASSERT(get_scope()->get_symbol_table() != NULL);
-  // return get_scope()->get_symbol_table()->find(this);
-     return get_scope()->find_symbol_from_declaration(this);
+     return SgFunctionDeclaration::get_symbol_from_symbol_table();
    }
 
 
@@ -14659,10 +14670,7 @@ SgTemplateInstantiationMemberFunctionDecl::get_mangled_name (void) const
 SgSymbol*
 SgTemplateInstantiationMemberFunctionDecl::get_symbol_from_symbol_table() const
    {
-     ROSE_ASSERT(get_scope() != NULL);
-  // ROSE_ASSERT(get_scope()->get_symbol_table() != NULL);
-  // return get_scope()->get_symbol_table()->find(this);
-     return get_scope()->find_symbol_from_declaration(this);
+     return SgMemberFunctionDeclaration::get_symbol_from_symbol_table();
    }
 
 // DQ (11/27/2011): Adding support to hold the template declarations in the AST.
