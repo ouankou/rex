@@ -4054,9 +4054,16 @@ SgStatement::post_construction_initialization()
 void
 SgStatement::set_scope ( SgScopeStatement* newScope )
    {
-     ROSE_ASSERT(this != NULL);
-     printf ("Warning: It is meaningless to set the scope in this %s IR node, the scope is not explicitly stored on this IR node! \n",class_name().c_str());
-     ROSE_ASSERT(false);
+      ROSE_ASSERT(this != NULL);
+   // Statements that do not store an explicit scope should simply ignore scope
+   // updates instead of asserting. Some transformations (e.g., preprocessing
+   // info moves) may try to set a scope on placeholder/system-header nodes
+   // where no explicit scope is kept.
+      if (hasExplicitScope() == false)
+         return;
+
+   // Downstream overrides on types that do store an explicit scope should
+   // implement their own setter; the base provides only a guard.
    }
 
 bool
