@@ -4109,6 +4109,22 @@ SageBuilder::buildNondefiningFunctionDeclaration_T (
                ROSE_ASSERT(testMemberDecl->get_associatedClassDeclaration() != NULL);
              }
 
+      // Prefer the symbol attached to the first nondefining declaration. Clang can inject
+      // duplicate builtin prototypes (e.g., vfscanf) and the lookup above may return a
+      // different symbol than the one carried by the canonical first nondefining
+      // declaration, which trips the consistency assertion below.
+          if (func_symbol != NULL)
+             {
+               SgSymbol* symbol_from_first_nondefining_function = nondefiningDeclaration->get_symbol_from_symbol_table();
+               ROSE_ASSERT(symbol_from_first_nondefining_function != NULL);
+
+               SgFunctionSymbol* first_nondef_symbol = isSgFunctionSymbol(symbol_from_first_nondefining_function);
+               if (first_nondef_symbol != NULL && func_symbol != first_nondef_symbol)
+                  {
+                    func_symbol = first_nondef_symbol;
+                  }
+             }
+
        // DQ (12/18/2011): Testing to debug generation of wrong kind of declaration (symbol not found in correct scope or ...).
           if (isSgFunctionDeclaration(func) == NULL)
              {
