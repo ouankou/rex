@@ -33,6 +33,15 @@ echo "Build directory: $BUILD_DIR"
 echo "Parallel jobs: $NUM_JOBS"
 echo ""
 
+# Prefer the same GCC/stdlib headers/libs as CI (GCC 14) when driving Clang.
+: "${GCC_VERSION:=14}"
+GCC_PREFIX="/usr/lib/gcc/x86_64-linux-gnu/${GCC_VERSION}"
+GCC_CPLUS_INCLUDE_1="/usr/include/c++/${GCC_VERSION}"
+GCC_CPLUS_INCLUDE_2="/usr/include/x86_64-linux-gnu/c++/${GCC_VERSION}"
+export CPLUS_INCLUDE_PATH="${GCC_CPLUS_INCLUDE_1}:${GCC_CPLUS_INCLUDE_2}${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}"
+export LIBRARY_PATH="${GCC_PREFIX}${LIBRARY_PATH:+:${LIBRARY_PATH}}"
+export LD_LIBRARY_PATH="${GCC_PREFIX}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
 # Check if we're in the repository root
 if [ ! -f "CMakeLists.txt" ]; then
     echo -e "${RED}Error: CMakeLists.txt not found. Please run this script from the repository root.${NC}"
