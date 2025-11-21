@@ -130,14 +130,13 @@ FixupAstDeclarationScope::visit ( SgNode* node )
   // failures; only process user-visible declarations here.
      if (SgLocatedNode* located = isSgLocatedNode(node))
         {
-          if (Sg_File_Info* fi = located->get_file_info())
-             {
-               const std::string& fname = fi->get_filenameString();
-               if (fi->isCompilerGenerated() || fi->isFrontendSpecific() ||
-                   fname.find("/usr/include/") != std::string::npos)
-                    return;
-             }
-        }
+     if (Sg_File_Info* fi = located->get_file_info())
+         {
+           if (fi->isCompilerGenerated() || fi->isFrontendSpecific() ||
+               SageInterface::insideSystemHeader(located))
+                return;
+         }
+    }
 
      SgDeclarationStatement* declaration = isSgDeclarationStatement(node);
      if (declaration != NULL)
