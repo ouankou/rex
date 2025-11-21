@@ -9,6 +9,7 @@
 
 #include "AstDOTGeneration.h"
 #include "processSupport.h"
+#include "sageInterface/sageInterface.h"
 
 #include "wholeAST_API.h"
 
@@ -451,6 +452,8 @@ frontend (const std::vector<std::string>& argv, bool frontendConstantFolding )
 #else
      Rose::obtainAndExecuteActions(project);
 #endif
+
+     SageInterface::ensureSymbolParentPointers(project);
      return project;
    }
 

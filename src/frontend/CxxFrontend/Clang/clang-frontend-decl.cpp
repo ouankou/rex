@@ -1,5 +1,6 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
+#include <algorithm>
 #include <set>
 
 SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * decl) {
@@ -1226,14 +1227,14 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(clang::ClassTemplateDecl * cl
 
     applySourceRange(template_decl, class_template_decl->getSourceRange());
 
+    // ROOT CAUSE FIX: Cache before appending to prevent double visitation
+    p_decl_translation_map.insert(std::make_pair(class_template_decl, template_decl));
+    p_decl_translation_map.insert(std::make_pair(templated_decl, template_decl));
+
     // Insert into current scope if not already present
     if (template_decl->get_parent() == NULL && scope != NULL) {
         SageInterface::appendStatement(template_decl, scope);
     }
-
-    // Cache translation for both the template and its templated declaration
-    p_decl_translation_map.insert(std::make_pair(class_template_decl, template_decl));
-    p_decl_translation_map.insert(std::make_pair(templated_decl, template_decl));
 
     // Populate the class definition for definitions
     if (templated_decl->isThisDeclarationADefinition()) {
@@ -2203,6 +2204,20 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
 
     isAnonymousStructOrUnion = field_decl->isAnonymousStructOrUnion();
 
+    const clang::CXXRecordDecl* parent_record = llvm::dyn_cast<clang::CXXRecordDecl>(field_decl->getParent());
+    bool is_lambda_field = (parent_record != NULL && parent_record->isLambda());
+
+    if (is_lambda_field) {
+        // Lambda closure fields are implicit captures; they should always materialize as
+        // real member variables even if Clang marks them anonymous. Give them stable names
+        // so the symbol table can reference them during conversion of the lambda body.
+        isAnonymousStructOrUnion = false;
+        if (name.getString().empty()) {
+            std::string synthesized_name = "__lambda_field_" + std::to_string(field_decl->getFieldIndex());
+            name = synthesized_name;
+        }
+    }
+
     SgType * sg_fieldType = buildTypeFromQualifiedType(fieldQualType);
     SgType * type = buildTypeFromQualifiedType(field_decl->getType());
 
@@ -2218,21 +2233,28 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
     if (init != NULL)
         applySourceRange(init, init_expr->getSourceRange());
 
-    if(isAnonymousStructOrUnion)
-    {
+    if (isAnonymousStructOrUnion && !is_lambda_field) {
         if (isSgClassType(type) && iscompleteDefined) {
             SgClassDeclaration* classDecl = isSgClassDeclaration(isSgClassType(type)->get_declaration());
-            SgClassDeclaration* classDefDecl = isSgClassDeclaration(isSgClassType(type)->get_declaration()->get_definingDeclaration());
-            *node = classDefDecl;
-        }
-        else if (isSgEnumType(type) && iscompleteDefined) {
+            if (classDecl != NULL) {
+                SgClassDeclaration* classDefDecl = isSgClassDeclaration(classDecl->get_definingDeclaration());
+                if (classDefDecl != NULL) {
+                    *node = classDefDecl;
+                    return VisitDeclaratorDecl(field_decl, node) && res;
+                }
+            }
+        } else if (isSgEnumType(type) && iscompleteDefined) {
             SgEnumDeclaration* enumDecl = isSgEnumDeclaration(isSgEnumType(type)->get_declaration());
-            SgEnumDeclaration* enumDefDecl = isSgEnumDeclaration(isSgEnumType(type)->get_declaration()->get_definingDeclaration());
-            *node = enumDefDecl;
+            if (enumDecl != NULL) {
+                SgEnumDeclaration* enumDefDecl = isSgEnumDeclaration(enumDecl->get_definingDeclaration());
+                if (enumDefDecl != NULL) {
+                    *node = enumDefDecl;
+                    return VisitDeclaratorDecl(field_decl, node) && res;
+                }
+            }
         }
     }
-    else
-    {
+
       // Cannot use 'SageBuilder::buildVariableDeclaration' because of anonymous field
         // *node = SageBuilder::buildVariableDeclaration(name, type, init, SageBuilder::topScopeStack());
       // Build it by hand...
@@ -2324,7 +2346,6 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
         SageBuilder::topScopeStack()->insert_symbol(name, var_symbol);
      
         *node = var_decl;
-        }
     return VisitDeclaratorDecl(field_decl, node) && res; 
 }
 
@@ -2444,37 +2465,128 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         param_list->append_arg(ellipses_param);
     }
 
-    // Get the proper scope for this function from its Clang declaration context
-    // This fixes the issue where functions are created with wrong scope when
-    // traversed from DeclRefExpr inside other function bodies
+    // ROOT CAUSE FIX: Get proper scope for this function from its Clang declaration context
+    // For out-of-line member functions, ensure scope is the class definition, not global
+    // CRITICAL: Friend functions are declared in class but are NOT members - keep them in the class
+    // syntactically and expose them via the enclosing namespace/global scope symbol table.
     clang::DeclContext* decl_context = function_decl->getDeclContext();
     SgScopeStatement* proper_scope = getGlobalScope();  // Default fallback
 
-    // Try to find the actual scope from DeclContext (namespace or class)
-    // We need to get the DEFINITION not the DECLARATION to satisfy containsOnlyDeclarations()
-    if (decl_context && !decl_context->isTranslationUnit()) {
+    bool isDefinition = function_decl->isThisDeclarationADefinition();
+
+    // Check if this is a friend function - friends are free functions, not members
+    bool isFriendFunction = (function_decl->getFriendObjectKind() != clang::Decl::FOK_None);
+    bool isFriendMethod = llvm::isa<clang::CXXMethodDecl>(function_decl);
+    bool isFriendFreeFunction = (isFriendFunction && !isFriendMethod);
+
+    // Lexical class enclosing scope needed so friend free functions stay visible in the namespace
+    SgScopeStatement* lexical_friend_enclosing_scope = NULL;
+    SgClassDefinition* lexical_friend_class_def = NULL;
+    bool friend_lexically_inside_class = false;
+    auto getEnclosingNamespaceScope = [](SgScopeStatement* scope) -> SgScopeStatement* {
+        SgScopeStatement* current = scope;
+        while (current != NULL && !isSgGlobal(current) && !isSgNamespaceDefinitionStatement(current)) {
+            SgScopeStatement* next_scope = SageInterface::getEnclosingScope(current, false);
+            if (next_scope == current) break;
+            current = next_scope;
+        }
+        return current;
+    };
+
+    if (isFriendFreeFunction) {
+        clang::DeclContext* lexical_context = function_decl->getLexicalDeclContext();
+        if (lexical_context && llvm::isa<clang::CXXRecordDecl>(lexical_context)) {
+            clang::CXXRecordDecl* lexical_class = llvm::cast<clang::CXXRecordDecl>(lexical_context);
+            std::map<clang::Decl*, SgNode*>::iterator lexical_it = p_decl_translation_map.find(lexical_class);
+            if (lexical_it != p_decl_translation_map.end()) {
+                SgNode* class_node = lexical_it->second;
+                SgScopeStatement* class_scope = NULL;
+                if (SgClassDeclaration* class_decl = isSgClassDeclaration(class_node)) {
+                    class_scope = class_decl->get_scope();
+                    if (class_decl->get_definition())
+                        lexical_friend_class_def = class_decl->get_definition();
+                } else if (SgClassDefinition* class_def = isSgClassDefinition(class_node)) {
+                    lexical_friend_class_def = class_def;
+                    if (SgClassDeclaration* decl = isSgClassDeclaration(class_def->get_declaration())) {
+                        class_scope = decl->get_scope();
+                    }
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(class_node)) {
+                    class_scope = template_class_decl->get_scope();
+                    if (template_class_decl->get_definition())
+                        lexical_friend_class_def = template_class_decl->get_definition();
+                }
+                if (lexical_friend_class_def != NULL) {
+                    friend_lexically_inside_class = true;
+                }
+                if (class_scope != NULL) {
+                    lexical_friend_enclosing_scope = getEnclosingNamespaceScope(class_scope);
+                    if (lexical_friend_enclosing_scope == NULL) {
+                        lexical_friend_enclosing_scope = getGlobalScope();
+                    }
+                }
+            }
+        }
+    }
+
+    bool scope_assigned = false;
+    if (isFriendFreeFunction) {
+        bool keep_in_class_scope = (!isDefinition) || friend_lexically_inside_class;
+        if (keep_in_class_scope) {
+            if (lexical_friend_class_def != NULL) {
+                proper_scope = lexical_friend_class_def;
+                scope_assigned = true;
+            }
+        } else {
+            if (lexical_friend_enclosing_scope != NULL) {
+                proper_scope = lexical_friend_enclosing_scope;
+                scope_assigned = true;
+            }
+        }
+    }
+
+    // For member functions (including friend methods), use the class definition as scope
+    if (!scope_assigned && llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+        clang::CXXMethodDecl* method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
+        clang::CXXRecordDecl* parent_class = method_decl->getParent();
+        if (parent_class) {
+            std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(parent_class);
+            if (it != p_decl_translation_map.end()) {
+                SgNode* class_node = it->second;
+                if (SgClassDeclaration* class_decl = isSgClassDeclaration(class_node)) {
+                    if (class_decl->get_definition()) {
+                        proper_scope = class_decl->get_definition();
+                    }
+                } else if (SgClassDefinition* class_def = isSgClassDefinition(class_node)) {
+                    proper_scope = class_def;
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(class_node)) {
+                    if (template_class_decl->get_definition()) {
+                        proper_scope = template_class_decl->get_definition();
+                    }
+                }
+            }
+        }
+    }
+    // For non-member functions, use DeclContext (namespace or class)
+    else if (!scope_assigned && decl_context && !decl_context->isTranslationUnit()) {
         clang::Decl* context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
         if (context_decl) {
             std::map<clang::Decl*, SgNode*>::iterator it = p_decl_translation_map.find(context_decl);
             if (it != p_decl_translation_map.end()) {
                 SgNode* context_node = it->second;
-                // Get the definition, not the declaration
-                if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(context_node)) {
-                    SgNamespaceDefinitionStatement* ns_def = ns_decl->get_definition();
-                    if (ns_def != nullptr) {
-                        proper_scope = ns_def;
+                if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
+                    if (class_decl->get_definition()) {
+                        proper_scope = class_decl->get_definition();
                     }
-                } else if (SgClassDeclaration* class_decl = isSgClassDeclaration(context_node)) {
-                    SgClassDefinition* class_def = class_decl->get_definition();
-                    if (class_def != nullptr) {
-                        proper_scope = class_def;
-                    }
-                } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
-                    // Already a definition
-                    proper_scope = ns_def;
                 } else if (SgClassDefinition* class_def = isSgClassDefinition(context_node)) {
-                    // Already a definition
                     proper_scope = class_def;
+                } else if (SgTemplateClassDeclaration* template_class_decl = isSgTemplateClassDeclaration(context_node)) {
+                    if (template_class_decl->get_definition()) {
+                        proper_scope = template_class_decl->get_definition();
+                    }
+                } else if (SgNamespaceDeclarationStatement* ns_decl = isSgNamespaceDeclarationStatement(context_node)) {
+                    if (ns_decl->get_definition()) proper_scope = ns_decl->get_definition();
+                } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
+                    proper_scope = ns_def;
                 }
             }
         }
@@ -2483,7 +2595,10 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        // Build friend free-function definitions as free functions regardless of lexical class scope.
+        bool builder_force_free_scope = isFriendFreeFunction;
+        SgScopeStatement* builder_scope = proper_scope;
+        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, builder_scope, builder_force_free_scope);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {
@@ -2592,7 +2707,7 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
     else {
-        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope);
+        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(name, ret_type, param_list, proper_scope, NULL, false, NULL, SgStorageModifier::e_default, isFriendFreeFunction);
 
         if (function_decl->isVariadic()) sg_function_decl->hasEllipses();
 
@@ -2665,6 +2780,47 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     if(hasExternalStorage)
     {
       sg_function_decl->get_declarationModifier().get_storageModifier().setExtern();
+    }
+
+    // CLANG FRONTEND FIX: Set friend modifier for friend functions
+    // Friend functions are free functions (not members) with special access rights
+    if (isFriendFunction) {
+        sg_function_decl->get_declarationModifier().setFriend();
+    }
+
+    // Friend declarations written inside a class are still free functions. Keep them
+    // in the lexical class for syntactic correctness but ensure they remain visible
+    // from the enclosing namespace/global scope.
+    if (isFriendFreeFunction && lexical_friend_enclosing_scope != NULL) {
+        SgFunctionDeclaration* symbol_decl = isSgFunctionDeclaration(sg_function_decl->get_firstNondefiningDeclaration());
+        if (symbol_decl == NULL) symbol_decl = sg_function_decl;
+            if (symbol_decl != NULL) {
+                SgFunctionSymbol* friend_symbol = NULL;
+                if (SgSymbol* class_symbol = symbol_decl->search_for_symbol_from_symbol_table()) {
+                    if (SgFunctionSymbol* class_func_sym = isSgFunctionSymbol(class_symbol)) {
+                        if (SgScopeStatement* class_scope = class_func_sym->get_scope()) {
+                            class_scope->remove_symbol(class_func_sym);
+                        }
+                        // Do not reuse the class-owned symbol to avoid stale scope metadata; build a fresh one below.
+                        friend_symbol = NULL;
+                    }
+                }
+
+                SgType* symbol_type = symbol_decl->get_type();
+                if (symbol_type != NULL) {
+                    SgFunctionSymbol* existing_sym =
+                        lexical_friend_enclosing_scope->lookup_function_symbol(symbol_decl->get_name(), symbol_type);
+                    if (existing_sym == NULL) {
+                        if (friend_symbol == NULL) {
+                            friend_symbol = new SgFunctionSymbol(symbol_decl);
+                        }
+                        lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), friend_symbol);
+                        if (SgSymbolTable* ns_table = lexical_friend_enclosing_scope->get_symbol_table()) {
+                            friend_symbol->set_parent(ns_table);
+                        }
+                    }
+            }
+        }
     }
 
     // ROOT CAUSE FIX: Set access modifiers for member functions from Clang AST

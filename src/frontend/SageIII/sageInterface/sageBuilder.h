@@ -1074,7 +1074,8 @@ ROSE_DLL_API SgFunctionDeclaration * buildNondefiningFunctionDeclaration(
   SgExprListExp* decoratorList = NULL,
   bool buildTemplateInstantiation = false,
   SgTemplateArgumentPtrList * templateArgumentsList = NULL,
-  SgStorageModifier::storage_modifier_enum sm = SgStorageModifier::e_default
+  SgStorageModifier::storage_modifier_enum sm = SgStorageModifier::e_default,
+  bool forceFreeFunctionScope = false
 );
 
 //! Build a prototype for an existing function declaration (defining or nondefining is fine)
@@ -1154,11 +1155,11 @@ ROSE_DLL_API SgMemberFunctionDeclaration* buildDefiningMemberFunctionDeclaration
 //! Build a function declaration with a function body
 // SgFunctionDeclaration* buildDefiningFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList * parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation, SgFunctionDeclaration* first_nondefinng_declaration);
 ROSE_DLL_API SgFunctionDeclaration*
-buildDefiningFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList * parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation = false, SgFunctionDeclaration* first_nondefinng_declaration = NULL, SgTemplateArgumentPtrList* templateArgumentsList = NULL);
+buildDefiningFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList * parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation = false, SgFunctionDeclaration* first_nondefinng_declaration = NULL, SgTemplateArgumentPtrList* templateArgumentsList = NULL, bool forceFreeFunctionScope = false);
 
 // DQ (8/28/2012): This preserves the original API with a simpler function (however for C++ at least, it is frequently not sufficient).
 // We need to decide if the SageBuilder API should include these sorts of functions.
-ROSE_DLL_API SgFunctionDeclaration* buildDefiningFunctionDeclaration(const SgName& name, SgType* return_type, SgFunctionParameterList* parameter_list, SgScopeStatement* scope = NULL);
+ROSE_DLL_API SgFunctionDeclaration* buildDefiningFunctionDeclaration(const SgName& name, SgType* return_type, SgFunctionParameterList* parameter_list, SgScopeStatement* scope = NULL, bool forceFreeFunctionScope = false);
 
 // DQ (8/28/2012): This preserves the original API with a simpler function (however for C++ at least, it is frequently not sufficient).
 // We need to decide if the SageBuilder API should include these sorts of functions.

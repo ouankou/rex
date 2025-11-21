@@ -223,6 +223,7 @@ ROSE_DLL_API extern int gensym_counter;
     */
    // DQ (9/28/2005):
    void rebuildSymbolTable (SgScopeStatement * scope);
+   void ensureSymbolParentPointers(SgNode* root);
 
    /*! \brief Clear those variable symbols with unknown type (together with initialized names) which are also not referenced by any variable references or declarations under root. If root is NULL, all symbols with unknown type will be deleted.
     */
@@ -2892,4 +2893,3 @@ void clearSharedGlobalScopes(SgProject * project);
 }// end of namespace
 
 #endif
-

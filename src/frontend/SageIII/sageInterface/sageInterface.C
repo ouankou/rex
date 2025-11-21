@@ -706,16 +706,42 @@ SageInterface::enclosingNamespaceScope( SgDeclarationStatement* declaration )
   // in the chain of scopes then this function returns NULL.
 
      ROSE_ASSERT(declaration != NULL);
-     SgScopeStatement* tempScope = declaration->get_scope();
+     SgScopeStatement* tempScope = NULL;
+     if (SgVariableDefinition* scopeVarDef = isSgVariableDefinition(declaration))
+        {
+          if (SgInitializedName* initName = scopeVarDef->get_vardefn())
+               tempScope = initName->get_scope();
+        }
+       else if (SgVariableDeclaration* scopeVarDecl = isSgVariableDeclaration(declaration))
+        {
+          const SgInitializedNamePtrList& vars = scopeVarDecl->get_variables();
+          if (vars.empty() == false && vars.front() != NULL)
+             tempScope = vars.front()->get_scope();
+        }
+       else
+        {
+          tempScope = declaration->get_scope();
+        }
+     if (tempScope == NULL)
+        {
+          tempScope = declaration->get_scope();
+        }
+     if (tempScope == NULL)
+        {
+          return NULL;
+        }
 
   // Loop back to the first namespace or stop at global scope (stop on either a namespace or the global scope)
-     while ( isSgNamespaceDefinitionStatement(tempScope) == NULL && isSgGlobal(tempScope) == NULL )
+     while ( tempScope != NULL &&
+             isSgNamespaceDefinitionStatement(tempScope) == NULL &&
+             isSgGlobal(tempScope) == NULL )
         {
-          tempScope = tempScope->get_scope();
-          ROSE_ASSERT(tempScope != NULL);
-#if 0
-          printf ("Iterating back through scopes: tempScope = %p = %s = %s \n",tempScope,tempScope->class_name().c_str(),SageInterface::get_name(tempScope).c_str());
-#endif
+          SgNode* ancestor = tempScope->get_parent();
+          while (ancestor != NULL && isSgScopeStatement(ancestor) == NULL)
+             {
+               ancestor = ancestor->get_parent();
+             }
+          tempScope = isSgScopeStatement(ancestor);
         }
 
      SgNamespaceDefinitionStatement* namespaceScope = isSgNamespaceDefinitionStatement(tempScope);
@@ -2761,8 +2787,38 @@ SageInterface::generateUniqueNameForUseAsIdentifier_support ( SgDeclarationState
 
      string s;
 
+     if (declaration->get_parent() == NULL)
+        {
+          s = "scope_unparented_decl_" + StringUtility::numberToString(reinterpret_cast<uintptr_t>(declaration));
+          return s;
+        }
+
   // string scope = SageInterface::get_name(classDeclaration->get_scope());
-     string scope = isSgGlobal(declaration->get_scope()) == NULL ? SageInterface::get_name(declaration->get_scope()) : "global";
+     SgScopeStatement* declarationScope = NULL;
+     if (SgVariableDefinition* scopeVarDef = isSgVariableDefinition(declaration))
+        {
+          if (SgInitializedName* initName = scopeVarDef->get_vardefn())
+               declarationScope = initName->get_scope();
+        }
+       else if (SgVariableDeclaration* scopeVarDecl = isSgVariableDeclaration(declaration))
+        {
+          const SgInitializedNamePtrList& vars = scopeVarDecl->get_variables();
+          if (vars.empty() == false && vars.front() != NULL)
+               declarationScope = vars.front()->get_scope();
+        }
+       else
+        {
+          declarationScope = declaration->get_scope();
+        }
+     if (declarationScope == NULL)
+        {
+          declarationScope = declaration->get_scope();
+        }
+     string scope = "global";
+     if (declarationScope != NULL)
+        {
+          scope = isSgGlobal(declarationScope) == NULL ? SageInterface::get_name(declarationScope) : "global";
+        }
 
      switch (declaration->variantT())
         {
@@ -2913,6 +2969,25 @@ SageInterface::generateUniqueNameForUseAsIdentifier_support ( SgDeclarationState
 #endif
                break;
              }
+
+         case V_SgVariableDefinition:
+            {
+              SgVariableDefinition* varDef = isSgVariableDefinition(declaration);
+              if (varDef != NULL)
+                 {
+                   SgInitializedName* initName = varDef->get_vardefn();
+                   if (initName != NULL)
+                      {
+                        string varName = initName->get_name();
+                        if (varName.empty())
+                           varName = "anonymous";
+                        s = string("scope_") + scope + "_var_" + varName;
+                        break;
+                      }
+                 }
+              s = string("scope_") + scope + "_var_decl";
+              break;
+            }
 
           default:
              {
@@ -4703,6 +4778,106 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
 #endif
    }
 
+namespace
+{
+void fixSymbolTableEntries(SgScopeStatement* scope)
+   {
+     if (scope == NULL)
+        return;
+
+     SgSymbolTable* table = scope->get_symbol_table();
+     if (table == NULL)
+        return;
+
+     if (table->get_parent() == NULL)
+        table->set_parent(scope);
+
+     SgSymbolTable::BaseHashType* entries = table->get_table();
+     if (entries == NULL)
+        return;
+
+     for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); /**/)
+        {
+          SgSymbol* symbol = it->second;
+          if (symbol == NULL)
+             {
+               it = entries->erase(it);
+               continue;
+             }
+
+          SgScopeStatement* owner = symbol->get_scope();
+          if (owner == NULL || owner != scope)
+             {
+               it = entries->erase(it);
+               continue;
+             }
+
+          if (symbol->get_parent() == NULL)
+               symbol->set_parent(table);
+
+          ++it;
+        }
+   }
+}
+
+void
+SageInterface::ensureSymbolParentPointers(SgNode* root)
+   {
+     if (root == NULL)
+        return;
+
+     class FixSymbolParents : public AstSimpleProcessing
+        {
+          public:
+               void visit(SgNode* node) override
+                  {
+                    if (SgSymbol* sym = isSgSymbol(node))
+                       {
+                         if (sym->get_parent() == NULL)
+                            {
+                              if (SgScopeStatement* owner = sym->get_scope())
+                                 {
+                                   if (SgSymbolTable* ownerTable = owner->get_symbol_table())
+                                      {
+                                        sym->set_parent(ownerTable);
+                                      }
+                                 }
+                            }
+                       }
+
+                    SgScopeStatement* scope = isSgScopeStatement(node);
+                    if (scope == NULL)
+                       return;
+
+                    fixSymbolTableEntries(scope);
+                  }
+        };
+
+     FixSymbolParents fixer;
+     fixer.traverse(root,preorder);
+
+     class FixOrphanSymbolParents : public ROSE_VisitTraversal
+        {
+          public:
+               void visit(SgNode* node) override
+                  {
+                    if (SgSymbol* sym = isSgSymbol(node))
+                       {
+                         if (sym->get_parent() == NULL)
+                            {
+                              if (SgScopeStatement* owner = sym->get_scope())
+                                 {
+                                   if (SgSymbolTable* table = owner->get_symbol_table())
+                                      sym->set_parent(table);
+                                  }
+                             }
+                        }
+                  }
+        };
+
+     FixOrphanSymbolParents orphanFixer;
+     orphanFixer.traverseMemoryPool();
+   }
 
 // #ifndef USE_ROSE
 
@@ -7849,6 +8024,8 @@ SageInterface::getScope( const SgNode* astNode )
         return tempArg->get_scope();
     else if (const SgQualifiedName* qualifiedName = isSgQualifiedName(astNode))
         return qualifiedName->get_scope();
+    else if (const SgSourceFile* sourceFile = isSgSourceFile(astNode))
+        return sourceFile->get_globalScope();
 
     // DQ (6/9/2007): This function traverses through the parents to the first scope (used for name qualification support of template arguments)
     const SgNode* parentNode = astNode;
@@ -7881,7 +8058,9 @@ SageInterface::getScope( const SgNode* astNode )
           dynamic_cast<const SgType*>(parentNode) == NULL &&
           dynamic_cast<const SgSymbol*>(parentNode) == NULL )
         {
-          printf ("Error: In SageInterface::getScope(): could not trace back to SgScopeStatement node \n");
+          fprintf(stderr,
+                  "Error: In SageInterface::getScope(): could not trace back to SgScopeStatement node for astNode=%p (%s)\n",
+                  astNode, astNode ? astNode->class_name().c_str() : "null");
           ROSE_ABORT();
         }
        else
@@ -10626,6 +10805,14 @@ std::pair<SgVariableDeclaration*, SgExpression*> SageInterface::createTempVariab
     SgType* expressionType = expression->get_type();
     SgType* variableType = expressionType;
 
+ // If callers give us a null scope (e.g., memory-pool traversals) fall back to the
+ // enclosing scope so we never manufacture a declaration with a null parent/scope.
+ // This keeps subsequent lookups/name-qualification from asserting even when we later
+ // skip structural insertion (e.g., for system-header targets).
+    if (scope == NULL)
+       scope = SageInterface::getEnclosingScope(expression, false);
+    ROSE_ASSERT(scope != NULL);
+
     //If the expression has a reference type, we need to use a pointer type for the temporary variable.
     //Else, re-assigning the variable is not possible
     bool isReferenceType = SageInterface::isReferenceType(expressionType);
@@ -10671,6 +10858,10 @@ std::pair<SgVariableDeclaration*, SgExpression*> SageInterface::createTempVariab
 
     SgVariableDeclaration* tempVarDeclaration = SageBuilder::buildVariableDeclaration(name, variableType, initializer, scope);
     ROSE_ASSERT(tempVarDeclaration != NULL);
+    if (tempVarDeclaration->get_parent() == NULL)
+       tempVarDeclaration->set_parent(scope);
+    if (tempVarDeclaration->hasExplicitScope() && tempVarDeclaration->get_scope() == NULL)
+       tempVarDeclaration->set_scope(scope);
 
     //Now create the assignment op for reevaluating the expression
     if (reEvaluate != NULL)
@@ -13742,6 +13933,26 @@ void SageInterface::appendStatement(SgStatement *stmt, SgScopeStatement* scope)
        // setting of there paremtn pointes delayed until now based on if they appear nested inside of
        // other declarations (e.g. "typedef struct { int x; } y;").
           stmt->set_parent(scope); // needed?
+
+         class RepairSymbolTables : public AstSimpleProcessing
+            {
+              public:
+                 void visit(SgNode* node) override
+                    {
+                      if (SgClassDefinition* classDef = isSgClassDefinition(node))
+                         {
+                           if (classDef->get_symbol_table() == NULL)
+                                SageInterface::rebuildSymbolTable(classDef);
+                         }
+
+                      if (SgScopeStatement* scopeStmt = isSgScopeStatement(node))
+                           fixSymbolTableEntries(scopeStmt);
+                    }
+            };
+
+         RepairSymbolTables repairTraversal;
+         repairTraversal.traverse(stmt,preorder);
+         repairTraversal.traverse(scope,preorder);
         }
 #endif
 
@@ -14009,6 +14220,20 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
    {
      ROSE_ASSERT(targetStmt &&newStmt);
      ROSE_ASSERT(targetStmt != newStmt); // should not share statement nodes!
+
+ // Don't try to mutate statements that originate from compiler-generated/system headers.
+ // GCC 14's libstdc++ exposes placeholder declarations that are not present in the
+ // surrounding statement list; attempting to insert around them leaves orphan decls/refs
+ // and trips scope assertions later in name qualification. We bail out early so the call
+ // becomes a no-op rather than crashing when walking system headers.
+     if (Sg_File_Info* fi = targetStmt->get_file_info())
+        {
+          const std::string& fname = fi->get_filenameString();
+          if (fi->isCompilerGenerated() || fi->isFrontendSpecific() ||
+              fname.find("/usr/include/") != std::string::npos)
+             return;
+        }
+
      SgNode* parent = targetStmt->get_parent();
      if (parent == NULL)
         {
@@ -14016,8 +14241,8 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
           ROSE_ASSERT(parent);
         }
 
-     if (isSgLabelStatement(parent) != NULL)
-        {
+    if (isSgLabelStatement(parent) != NULL)
+       {
 #if 0
           printf ("In SageInterface::insertStatement(): Detected case of label statement as parent, using parent of label statement \n");
 #endif
@@ -14025,7 +14250,7 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
        // parent = labelStatement->get_scope();
           parent = labelStatement->get_parent();
           ROSE_ASSERT(isSgLabelStatement(parent) == NULL);
-        }
+       }
 
 #if 0
      printf ("In SageInterface::insertStatement(): insert newStmt = %p = %s before/after targetStmt = %p = %s \n",newStmt,newStmt->class_name().c_str(),targetStmt,targetStmt->class_name().c_str());
@@ -14045,8 +14270,11 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
     // parent = ensureBasicBlockAsParent(targetStmt);
 
   // must get the new scope after ensureBasicBlockAsParent ()
-     SgScopeStatement* scope = targetStmt->get_scope();
-     ROSE_ASSERT(scope);
+    SgScopeStatement* scope = targetStmt->get_scope();
+    if (scope == NULL) {
+      scope = SageInterface::getEnclosingScope(targetStmt, false);
+    }
+    ROSE_ASSERT(scope != NULL);
 
 #if 0
      printf ("targetStmt = %p = %s \n",targetStmt,targetStmt->class_name().c_str());
@@ -14863,11 +15091,24 @@ void SageInterface::fixVariableDeclaration(SgVariableDeclaration* varDecl, SgSco
        // DQ (7/12/2012): This is not correct for C++, so don't set it here (unless we use the current scope instead of scope).
        // Yes, let's set it to the current top of the scope stack.  This might be a problem if the scope stack is not being used...
        // varDecl->set_parent(scope);
-        if (topScopeStack() != NULL)
-        {
-          varDecl->set_parent(topScopeStack());
-          ROSE_ASSERT(varDecl->get_parent() != NULL);
-        }
+        if (varDecl->get_parent() == NULL)
+           {
+             if (topScopeStack() != NULL)
+                {
+                  varDecl->set_parent(topScopeStack());
+                }
+               else
+                {
+                  varDecl->set_parent(scope);
+                }
+           }
+        if (initName->get_parent() == NULL)
+             initName->set_parent(varDecl);
+        if (SgVariableDefinition* def = isSgVariableDefinition(initName->get_declptr()))
+           {
+             if (def->get_parent() == NULL)
+                  def->set_parent(initName);
+           }
 
        // DQ (11/19/2011): C++ can have a different scope than that of the current scope.
        // symbol table
@@ -26981,4 +27222,3 @@ void SageInterface::clearSharedGlobalScopes(SgProject * project) {
   ROSE_ASSERT(hmm != nullptr);
   hmm->clear();
 }
-

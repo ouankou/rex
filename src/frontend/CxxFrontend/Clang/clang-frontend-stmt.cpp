@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "clang/AST/LambdaCapture.h"
+
 #include "clang/Lex/Lexer.h"
 
 #include "sageInterface.h"
@@ -4217,7 +4219,147 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr * lambda_expr, SgN
 #endif
     bool res = true;
 
-    // TODO
+    auto detach_declaration_from_scope = [](SgDeclarationStatement* decl) -> SgScopeStatement* {
+        if (decl == NULL) {
+            return NULL;
+        }
+
+        SgScopeStatement* original_scope = decl->get_scope();
+
+        // Remove any symbol that was registered for this declaration in the enclosing scope.
+        if (SgSymbol* associated_symbol = decl->search_for_symbol_from_symbol_table()) {
+            if (SgScopeStatement* symbol_scope = associated_symbol->get_scope()) {
+                symbol_scope->remove_symbol(associated_symbol);
+            }
+        }
+
+        if (original_scope != NULL) {
+            SageInterface::removeStatement(decl, false);
+            decl->set_parent(NULL);
+        }
+
+        return original_scope;
+    };
+
+    // Get the lambda class (closure type) from Clang
+    const clang::CXXRecordDecl* clang_lambda_class = lambda_expr->getLambdaClass();
+
+    // Get the call operator (operator()) from Clang
+    const clang::CXXMethodDecl* clang_call_operator = lambda_expr->getCallOperator();
+
+    // Convert Clang lambda class to ROSE class declaration
+    SgClassDeclaration* lambda_closure_class = NULL;
+    SgScopeStatement* lambda_closure_lexical_scope = NULL;
+    if (clang_lambda_class != NULL) {
+        SgNode* tmp_class = Traverse(const_cast<clang::CXXRecordDecl*>(clang_lambda_class));
+        lambda_closure_class = isSgClassDeclaration(tmp_class);
+
+        // Remove from enclosing scope using SageInterface so symbols/scopes stay consistent
+        lambda_closure_lexical_scope = detach_declaration_from_scope(lambda_closure_class);
+
+        // Preserve a valid scope so downstream lookups don't see NULL after detachment.
+        if (lambda_closure_class != NULL && lambda_closure_lexical_scope != NULL) {
+            lambda_closure_class->set_scope(lambda_closure_lexical_scope);
+            if (SgClassDefinition* class_def = lambda_closure_class->get_definition()) {
+                class_def->set_scope(lambda_closure_lexical_scope);
+            }
+        }
+    }
+
+    // Convert Clang call operator to ROSE function declaration
+    SgFunctionDeclaration* lambda_function = NULL;
+    SgScopeStatement* lambda_function_scope = NULL;
+    if (clang_call_operator != NULL) {
+        SgNode* tmp_func = Traverse(const_cast<clang::CXXMethodDecl*>(clang_call_operator));
+        lambda_function = isSgFunctionDeclaration(tmp_func);
+
+        lambda_function_scope = detach_declaration_from_scope(lambda_function);
+
+        // Restore the scope pointer for operator() so later queries succeed.
+        if (lambda_function != NULL) {
+            if (lambda_function_scope != NULL) {
+                lambda_function->set_scope(lambda_function_scope);
+            } else if (lambda_closure_class != NULL && lambda_closure_class->get_definition() != NULL) {
+                lambda_function->set_scope(lambda_closure_class->get_definition());
+            }
+        }
+    }
+
+    SgLambdaCaptureList* lambda_capture_list = SageBuilder::buildLambdaCaptureList();
+    unsigned total_captures = lambda_expr->capture_size();
+    unsigned capture_index = 0;
+    for (auto capture_it = lambda_expr->capture_begin(); capture_it != lambda_expr->capture_end(); ++capture_it, ++capture_index) {
+        const clang::LambdaCapture& capture = *capture_it;
+        SgExpression* capture_expression = NULL;
+        bool handled_capture = false;
+
+        if (capture.capturesThis()) {
+            capture_expression = SageBuilder::buildThisExp(NULL);
+            handled_capture = true;
+        } else if (capture.capturesVariable()) {
+            clang::ValueDecl* captured_val = capture.getCapturedVar();
+            clang::VarDecl* captured_var = llvm::dyn_cast_or_null<clang::VarDecl>(captured_val);
+            if (captured_var != NULL) {
+                // Look up the existing symbol instead of traversing again (avoids duplicate decls)
+                SgSymbol* captured_symbol = GetSymbolFromSymbolTable(captured_var);
+                if (captured_symbol == NULL) {
+                    clang::VarDecl* canonical_decl = captured_var->getCanonicalDecl();
+                    if (canonical_decl != captured_var) {
+                        captured_symbol = GetSymbolFromSymbolTable(canonical_decl);
+                    }
+                }
+
+                if (SgVariableSymbol* var_symbol = isSgVariableSymbol(captured_symbol)) {
+                    capture_expression = SageBuilder::buildVarRefExp(var_symbol);
+                    handled_capture = true;
+                } else if (captured_var->isInitCapture()) {
+                    // Create a dangling var ref for init-captures (symbol not in current scope yet)
+                    SgName capture_name(captured_var->getNameAsString());
+                    capture_expression = SageBuilder::buildVarRefExp(capture_name);
+                    handled_capture = true;
+                }
+            }
+        } else if (capture.capturesVLAType()) {
+            // VLA captures are represented on the closure type; nothing to emit in capture list.
+            continue;
+        }
+
+        if (!handled_capture || capture_expression == NULL) {
+            continue;
+        }
+
+        bool is_init_capture = lambda_expr->isInitCapture(&capture);
+        clang::LambdaCaptureKind capture_kind = capture.getCaptureKind();
+        bool capture_by_reference = (capture_kind == clang::LCK_ByRef || capture_kind == clang::LCK_This);
+
+        SgLambdaCapture* sg_capture = SageBuilder::buildLambdaCapture(capture_expression, NULL, NULL);
+        sg_capture->set_capture_by_reference(capture_by_reference);
+        sg_capture->set_implicit(capture.isImplicit());
+        sg_capture->set_pack_expansion(capture.isPackExpansion());
+        if (is_init_capture && capture_index < total_captures) {
+            clang::Expr* clang_init_expr = lambda_expr->capture_init_begin()[capture_index];
+            if (clang_init_expr != NULL) {
+                SgNode* init_node = Traverse(clang_init_expr);
+                if (SgExpression* init_expr = isSgExpression(init_node)) {
+                    sg_capture->set_source_closure_variable(init_expr);
+                    init_expr->set_parent(sg_capture);
+                }
+            }
+        }
+
+        lambda_capture_list->get_capture_list().push_back(sg_capture);
+        sg_capture->set_parent(lambda_capture_list);
+    }
+
+    SgLambdaExp* built_lambda = SageBuilder::buildLambdaExp(lambda_capture_list, lambda_closure_class, lambda_function);
+    ROSE_ASSERT(built_lambda != NULL);
+
+    clang::LambdaCaptureDefault capture_default = lambda_expr->getCaptureDefault();
+    bool has_default_capture = (capture_default != clang::LCD_None);
+    built_lambda->set_capture_default(has_default_capture);
+    built_lambda->set_default_is_by_reference(capture_default == clang::LCD_ByRef);
+
+    *node = built_lambda;
 
     return VisitExpr(lambda_expr, node) && res;
 }
