@@ -81,7 +81,7 @@ cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 
 
 # Configure with CMake (will auto-detect compilers, preferring clang-20/flang-20)
 cmake .. \
-    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
     -Denable-c=ON \
     -Denable-fortran=ON \
