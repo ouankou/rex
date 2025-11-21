@@ -123,6 +123,22 @@ FixupAstDeclarationScope::visit ( SgNode* node )
      printf ("In FixupAstDeclarationScope::visit(node = %p = %s) \n",node,node->class_name().c_str());
 #endif
 
+  // Skip declarations that originate from compiler-generated or system headers. The
+  // Clang frontend leaves many libstdc++ template instantiations in the memory pool
+  // that are not part of the user AST and do not have consistent defining/non-defining
+  // pairs. Trying to normalize their scopes produces noisy warnings and traversal
+  // failures; only process user-visible declarations here.
+     if (SgLocatedNode* located = isSgLocatedNode(node))
+        {
+          if (Sg_File_Info* fi = located->get_file_info())
+             {
+               const std::string& fname = fi->get_filenameString();
+               if (fi->isCompilerGenerated() || fi->isFrontendSpecific() ||
+                   fname.find("/usr/include/") != std::string::npos)
+                    return;
+             }
+        }
+
      SgDeclarationStatement* declaration = isSgDeclarationStatement(node);
      if (declaration != NULL)
         {
@@ -183,4 +199,3 @@ FixupAstDeclarationScope::visit ( SgNode* node )
              }
         }
    }
-

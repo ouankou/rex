@@ -14152,6 +14152,21 @@ Sg_File_Info::display_static_data( const std::string label )
 // have default values this constructor is redundant/ambiguous
 // Sg_File_Info::Sg_File_Info() {}
 
+namespace
+{
+inline int normalize_file_id_for_registration(int file_id)
+   {
+     if (file_id >= 0 && Sg_File_Info::get_fileidtoname_map().count(file_id) == 0)
+        {
+       // Fall back to compiler-generated to keep the maps consistent. Without this
+       // normalization, later validation in check_file_id() will assert when it sees
+       // an unregistered positive ID (e.g., from integer-based construction).
+          return Sg_File_Info::COMPILER_GENERATED_FILE_ID;
+        }
+     return file_id;
+   }
+}
+
 Sg_File_Info::Sg_File_Info()
    : p_file_id(COPY_FILE_ID), p_line(0), p_col(0),
      p_classificationBitField(0),
@@ -14188,11 +14203,11 @@ Sg_File_Info::Sg_File_Info ( const std::string & filename, int line, int col )
 
 // DQ (2/15/2003): added copy constructor
 Sg_File_Info::Sg_File_Info(const Sg_File_Info & X)
-   : p_file_id(X.p_file_id),
+   : p_file_id(normalize_file_id_for_registration(X.p_file_id)),
      p_line(X.p_line),
      p_col(X.p_col),
      p_classificationBitField(X.p_classificationBitField),
-     p_physical_file_id(X.p_physical_file_id),
+     p_physical_file_id(normalize_file_id_for_registration(X.p_physical_file_id)),
      p_physical_line(X.p_physical_line),
      p_source_sequence_number(X.p_source_sequence_number),
      p_fileIDsToUnparse(X.p_fileIDsToUnparse),
@@ -14204,11 +14219,11 @@ Sg_File_Info::Sg_File_Info(const Sg_File_Info & X)
 // DQ (11/6/2008): added constructor to support building objects from Dwarf
 // information (which uses a pre-resolved integer file_id instead of a string)
 Sg_File_Info::Sg_File_Info( int file_id, int line, int column )
-   : p_file_id(file_id),
+   : p_file_id(normalize_file_id_for_registration(file_id)),
      p_line(line),
      p_col(column),
      p_classificationBitField(0),
-     p_physical_file_id(NULL_FILE_ID),
+     p_physical_file_id(normalize_file_id_for_registration(file_id)),
      p_physical_line(0),
      p_source_sequence_number(0),
      p_fileIDsToUnparse(),
@@ -14330,7 +14345,7 @@ Sg_File_Info::set_file_id( int file_id )
      MLOG_INFO_C("ROSETTA", "In Sg_File_Info::set_file_id(file_id = %d) this = %p \n",file_id,this);
 #endif
 
-     p_file_id = file_id;
+     p_file_id = normalize_file_id_for_registration(file_id);
    }
 
 

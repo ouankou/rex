@@ -8,11 +8,104 @@
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
 
+#include <unordered_set>
+
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
 // DQ (8/20/2005): Make this local so that it can't be called externally!
 void postProcessingSupport (SgNode* node);
+
+namespace
+{
+// Global hook to let memory-pool traversals ignore unwanted nodes (e.g., Clang
+// system-header template instantiations that are not part of the user AST).
+Rose::MemoryPoolTraversalFilter s_memoryPoolTraversalFilter = NULL;
+const std::unordered_set<SgNode*>* s_reachableNodes = NULL;
+
+bool isUnreachableFromProject(SgNode* n)
+   {
+     if (s_reachableNodes == NULL)
+          return false;
+
+     return s_reachableNodes->find(n) == s_reachableNodes->end();
+   }
+
+struct MemoryPoolFilterGuard
+   {
+     Rose::MemoryPoolTraversalFilter previous;
+     std::unordered_set<SgNode*> reachable;
+
+     explicit MemoryPoolFilterGuard(Rose::MemoryPoolTraversalFilter next, SgNode* root)
+        : previous(Rose::getMemoryPoolTraversalFilter())
+        {
+          if (next != NULL && root != NULL)
+             {
+               // Collect all nodes reachable from the current AST root so memory-pool
+               // traversals can ignore stray nodes left in pools by the frontend.
+               struct Collector : public AstSimpleProcessing
+                  {
+                    std::unordered_set<SgNode*>& set;
+                    explicit Collector(std::unordered_set<SgNode*>& s) : set(s) {}
+                    void visit(SgNode* n) override { set.insert(n); }
+                  } collector(reachable);
+               collector.traverse(root, preorder);
+
+               s_reachableNodes = &reachable;
+               Rose::setMemoryPoolTraversalFilter(next);
+             }
+           else
+             {
+               Rose::setMemoryPoolTraversalFilter(next);
+             }
+        }
+
+     ~MemoryPoolFilterGuard()
+        {
+          s_reachableNodes = NULL;
+          Rose::setMemoryPoolTraversalFilter(previous);
+        }
+   };
+
+bool usesClangFrontend(SgNode* node)
+   {
+     if (SgProject* project = isSgProject(node))
+        {
+          for (int i = 0; i < project->numberOfFiles(); ++i)
+             {
+               if (SgSourceFile* sourceFile = isSgSourceFile(&(project->get_file(i))))
+                  {
+                    if (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+                        sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
+                        sourceFile->get_OpenCL_only())
+                         return true;
+                  }
+             }
+        }
+       else if (SgSourceFile* sourceFile = isSgSourceFile(node))
+        {
+          if (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+              sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
+              sourceFile->get_OpenCL_only())
+               return true;
+        }
+
+     return false;
+   }
+}
+
+namespace Rose
+   {
+ROSE_DLL_API void setMemoryPoolTraversalFilter(MemoryPoolTraversalFilter filter)
+   {
+     s_memoryPoolTraversalFilter = filter;
+   }
+
+ROSE_DLL_API MemoryPoolTraversalFilter getMemoryPoolTraversalFilter()
+   {
+     return s_memoryPoolTraversalFilter;
+   }
+   }
 
 // DQ (5/22/2005): Added function with better name, since none of the fixes are really
 // temporary any more.
@@ -191,6 +284,11 @@ void postProcessingSupport (SgNode* node)
   // fixups should be required, some are still required.
      if (noPostprocessing == false)
         {
+       // Skip memory-pool traversal of nodes that are not reachable from this AST root.
+       // This avoids touching stray template instantiations left in the pools by the
+       // frontend (e.g., Clang system-header artifacts) without relying on path checks.
+          MemoryPoolFilterGuard memoryPoolFilter(&isUnreachableFromProject, node);
+
 #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
           printf ("Postprocessing AST build using new EDG/Sage Translation Interface. \n");
 #endif
@@ -998,4 +1096,3 @@ void postProcessingSupport (SgNode* node)
              }
         }
    }
-

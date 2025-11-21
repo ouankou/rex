@@ -19,14 +19,17 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
           const SgNode* IS_VALID_POINTER = AST_FileIO::IS_VALID_POINTER();
 #if 0
        // Iterate over the memory pools
-          for (unsigned int i=0; i < $CLASSNAME::pools.size(); i++)
-             {
-            // objectArray[i] is a single memory pool
+         for (unsigned int i=0; i < $CLASSNAME::pools.size(); i++)
+            {
+           // objectArray[i] is a single memory pool
                for (int j=0; j < $CLASSNAME::pool_size; j++)
                   {
                     if (objectArray[i][j].p_freepointer == IS_VALID_POINTER)
                        {
-                         traversal.visit(&(objectArray[i][j]));
+                         $CLASSNAME* current = &(objectArray[i][j]);
+                         if (Rose::shouldSkipMemoryPoolTraversal(current))
+                            continue;
+                         traversal.visit(current);
                        }
                   }
              }
@@ -51,7 +54,7 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
                   }
              }
 
-       // Iterate over the saved list
+          // Iterate over the saved list
           size_t nodeListSize = nodeList.size();
           for (size_t i=0; i < nodeListSize; i++)
              {
@@ -59,9 +62,12 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
 #if 0
                traversal.visit(nodeList[i]);
 #else
-               if (nodeList[i]->p_freepointer == IS_VALID_POINTER)
+               $CLASSNAME* current = nodeList[i];
+               if (current->p_freepointer == IS_VALID_POINTER)
                   {
-                    traversal.visit(nodeList[i]);
+                    if (Rose::shouldSkipMemoryPoolTraversal(current))
+                       continue;
+                    traversal.visit(current);
                   }
 #endif
              }
@@ -94,14 +100,17 @@ $CLASSNAME::traverseMemoryPoolVisitorPattern ( ROSE_VisitorPattern & visitor )
        // Iterate over the memory pools
           for (unsigned int i=0; i < $CLASSNAME::pools.size(); i++)
              {
-            // objectArray[i] is a single memory pool
+           // objectArray[i] is a single memory pool
                for (unsigned j=0; j < $CLASSNAME::pool_size; j++)
                   {
                     if (objectArray[i][j].p_freepointer == IS_VALID_POINTER)
                        {
+                         $CLASSNAME* current = &(objectArray[i][j]);
+                         if (Rose::shouldSkipMemoryPoolTraversal(current))
+                            continue;
                       // printf ("Found a valid $CLASSNAME object in the memory pool %d at position %d \n",i,j);
                       // printf ("Calling executeVisitorMemberFunction(visitor) \n");
-                         objectArray[i][j].executeVisitorMemberFunction(visitor);
+                         current->executeVisitorMemberFunction(visitor);
                       // printf ("DONE: executeVisitorMemberFunction(visitor) \n");
                        }
                       else
@@ -142,13 +151,15 @@ $CLASSNAME::visitRepresentativeNode(ROSE_VisitTraversal & traversal)
        // find the first valid IR node, call visit function, and then leave
           while ( done == false && i < $CLASSNAME::pools.size() )
              {
-            // objectArray[i] is a single memory pool
+           // objectArray[i] is a single memory pool
                unsigned j=0;
                while (done == false && j < $CLASSNAME::pool_size)
                   {
                     if (objectArray[i][j].p_freepointer == IS_VALID_POINTER)
                        {
-                         traversal.visit(&(objectArray[i][j]));
+                         $CLASSNAME* current = &(objectArray[i][j]);
+                         if (Rose::shouldSkipMemoryPoolTraversal(current) == false)
+                            traversal.visit(current);
                          done = true;
                        }
                     j++;
@@ -224,4 +235,3 @@ $CLASSNAME::memoryUsage()
 
      return memory;
    }
-
