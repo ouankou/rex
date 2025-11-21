@@ -7817,6 +7817,13 @@ SgDeclarationStatement::testForBadGenerateTemplateName( const std::string & name
        // This could just be the input or output operators so make sure this is not that case!
           if ( (name.find("operator<<") == string::npos) && (name.find("operator>>") == string::npos) )
              {
+            // Nested template names legitimately contain ">>"/"<<". If it looks like a
+            // templated type/name (has both '<' and '>'), treat it as valid.
+               if (name.find('<') != string::npos && name.find('>') != string::npos)
+                  {
+                    return;
+                  }
+
 #if 0
             // OK, we have some sort of error to report!
                printf ("\n\n");

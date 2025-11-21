@@ -429,6 +429,20 @@
 // 202011 = OpenMP 5.1 (November 2020), matching Clang-20 default
 #define OMPVERSION 202011
 
-#endif
+// Optional filter for memory-pool traversals. AstPostProcessing uses this to skip
+// nodes originating from system headers when running with the Clang frontend so
+// that post-processing doesn't attach unrelated libstdc++ instantiations to the
+// user AST.
+namespace Rose {
+  typedef bool (*MemoryPoolTraversalFilter)(SgNode*);
+  ROSE_DLL_API void setMemoryPoolTraversalFilter(MemoryPoolTraversalFilter filter);
+  ROSE_DLL_API MemoryPoolTraversalFilter getMemoryPoolTraversalFilter();
 
+  inline bool shouldSkipMemoryPoolTraversal(SgNode* node) {
+    MemoryPoolTraversalFilter filter = getMemoryPoolTraversalFilter();
+    return filter != NULL && filter(node);
+  }
+}
+
+#endif
 

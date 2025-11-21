@@ -1748,30 +1748,10 @@ SgProject::parse()
   // never called by SgFile::callFrontEnd either.)
   // if ( !get_fileList().empty() && !get_useBackendOnly() )
 
-  // REX: Temporarily disable AstPostProcessing for Clang frontend until file ID issue is resolved.
-  // Clang triggers assertion in Sg_File_Info::get_file_id() about unregistered file IDs.
-  // See ASTPOSTPROCESSING_TODO.md for details and investigation plan.
-  // TODO: Fix Clang frontend file ID registration and enable AstPostProcessing for all frontends.
-     bool hasClangFrontendFiles = false;
-     for (int i = 0; i < numberOfFiles(); ++i)
-        {
-          SgFile* file = &(get_file(i));
-          SgSourceFile* sourceFile = isSgSourceFile(file);
-          if (sourceFile != NULL)
-             {
-            // In REX, all C/C++/UPC/CUDA/OpenCL files use Clang frontend (no EDG).
-            // Check if this is a source file that would use Clang.
-               if (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-                   sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
-                   sourceFile->get_OpenCL_only())
-                  {
-                    hasClangFrontendFiles = true;
-                    break;
-                  }
-             }
-        }
-
-     if ( (get_fileList().empty() == false) && (get_useBackendOnly() == false) && !hasClangFrontendFiles )
+  // Now that file-id validation is hardened and AstPostProcessing filters out
+  // irrelevant system-header debris, we can run the pass for all frontends
+  // (Clang and EDG). Keep the original guards that skip purely backend-only runs.
+     if ( (get_fileList().empty() == false) && (get_useBackendOnly() == false) )
         {
           AstPostProcessing(this);
         }
