@@ -14229,7 +14229,7 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
      if (Sg_File_Info* fi = targetStmt->get_file_info())
         {
           const std::string& fname = fi->get_filenameString();
-          if (fi->isCompilerGenerated() || fi->isTransformation() || fi->isFrontendSpecific() ||
+          if (fi->isCompilerGenerated() || fi->isFrontendSpecific() ||
               fname.find("/usr/include/") != std::string::npos)
              return;
         }
@@ -15096,11 +15096,24 @@ void SageInterface::fixVariableDeclaration(SgVariableDeclaration* varDecl, SgSco
        // DQ (7/12/2012): This is not correct for C++, so don't set it here (unless we use the current scope instead of scope).
        // Yes, let's set it to the current top of the scope stack.  This might be a problem if the scope stack is not being used...
        // varDecl->set_parent(scope);
-        if (topScopeStack() != NULL)
-        {
-          varDecl->set_parent(topScopeStack());
-          ROSE_ASSERT(varDecl->get_parent() != NULL);
-        }
+        if (varDecl->get_parent() == NULL)
+           {
+             if (topScopeStack() != NULL)
+                {
+                  varDecl->set_parent(topScopeStack());
+                }
+               else
+                {
+                  varDecl->set_parent(scope);
+                }
+           }
+        if (initName->get_parent() == NULL)
+             initName->set_parent(varDecl);
+        if (SgVariableDefinition* def = isSgVariableDefinition(initName->get_declptr()))
+           {
+             if (def->get_parent() == NULL)
+                  def->set_parent(initName);
+           }
 
        // DQ (11/19/2011): C++ can have a different scope than that of the current scope.
        // symbol table
