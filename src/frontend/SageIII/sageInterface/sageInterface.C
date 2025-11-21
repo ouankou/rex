@@ -10788,6 +10788,14 @@ std::pair<SgVariableDeclaration*, SgExpression*> SageInterface::createTempVariab
     SgType* expressionType = expression->get_type();
     SgType* variableType = expressionType;
 
+ // If callers give us a null scope (e.g., memory-pool traversals) fall back to the
+ // enclosing scope so we never manufacture a declaration with a null parent/scope.
+ // This keeps subsequent lookups/name-qualification from asserting even when we later
+ // skip structural insertion (e.g., for system-header targets).
+    if (scope == NULL)
+       scope = SageInterface::getEnclosingScope(expression, false);
+    ROSE_ASSERT(scope != NULL);
+
     //If the expression has a reference type, we need to use a pointer type for the temporary variable.
     //Else, re-assigning the variable is not possible
     bool isReferenceType = SageInterface::isReferenceType(expressionType);
@@ -10833,6 +10841,10 @@ std::pair<SgVariableDeclaration*, SgExpression*> SageInterface::createTempVariab
 
     SgVariableDeclaration* tempVarDeclaration = SageBuilder::buildVariableDeclaration(name, variableType, initializer, scope);
     ROSE_ASSERT(tempVarDeclaration != NULL);
+    if (tempVarDeclaration->get_parent() == NULL)
+       tempVarDeclaration->set_parent(scope);
+    if (tempVarDeclaration->hasExplicitScope() && tempVarDeclaration->get_scope() == NULL)
+       tempVarDeclaration->set_scope(scope);
 
     //Now create the assignment op for reevaluating the expression
     if (reEvaluate != NULL)
@@ -14191,6 +14203,19 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
    {
      ROSE_ASSERT(targetStmt &&newStmt);
      ROSE_ASSERT(targetStmt != newStmt); // should not share statement nodes!
+
+ // Don't try to mutate statements that originate from compiler-generated/system headers.
+ // GCC 14's libstdc++ exposes placeholder declarations that are not present in the
+ // surrounding statement list; attempting to insert around them leaves orphan decls/refs
+ // and trips scope assertions later in name qualification. We bail out early so the call
+ // becomes a no-op rather than crashing when walking system headers.
+     if (Sg_File_Info* fi = targetStmt->get_file_info())
+        {
+          const std::string& fname = fi->get_filenameString();
+          if (fi->isCompilerGenerated() || fi->isTransformation() || fi->isFrontendSpecific() ||
+              fname.find("/usr/include/") != std::string::npos)
+             return;
+        }
 
      SgNode* parent = targetStmt->get_parent();
      if (parent == NULL)

@@ -1114,7 +1114,24 @@ StatementListInsertChild( SgStatement *parent, Rose_STL_Container<Elemtype*>& st
           fflush(stdout);
 
           if (inSystemHeader == true)
-             return true;
+             {
+            // Keep any insertion node connected enough for downstream queries
+            // (even if we skip structural insertion in compiler/system headers).
+               if (n != NULL)
+                  {
+                    n->set_parent(parent);
+                    if (n->hasExplicitScope())
+                       {
+                         SgScopeStatement* parentScope = isSgScopeStatement(parent);
+                         if (parentScope == NULL)
+                              parentScope = parent->get_scope();
+
+                         if (parentScope != NULL)
+                              n->set_scope(parentScope);
+                       }
+                  }
+               return true;
+             }
           ROSE_ASSERT(false);
         }
   // ROSE_ASSERT (find(statement_or_declaration_container.begin(),statement_or_declaration_container.end(),target) != statement_or_declaration_container.end());

@@ -19,26 +19,6 @@ using namespace SageInterface;
 // used to cover SageInterface::DeclarationSets:: * 
 SageInterface::DeclarationSets* decl_set = NULL; 
 
-namespace
-{
-bool isFromSystemHeader(SgNode* node)
-   {
-     SgLocatedNode* located = isSgLocatedNode(node);
-     if (located == NULL)
-        return false;
-
-     Sg_File_Info* info = located->get_file_info();
-     if (info == NULL)
-        return false;
-
-     if (info->isCompilerGenerated() || info->isTransformation() || info->isFrontendSpecific())
-        return true;
-
-     const std::string filename = info->get_filenameString();
-     return filename.find("/usr/include/") != std::string::npos;
-   }
-}
-
 class RoseVisitor : public ROSE_VisitTraversal
 {
   public:
@@ -47,9 +27,6 @@ class RoseVisitor : public ROSE_VisitTraversal
 
 void RoseVisitor::visit ( SgNode* node)
 {
-  if (isFromSystemHeader(node))
-    return;
-
   if (SgDeclarationStatement* decl = isSgDeclarationStatement(node))
   {
     cout<<"calling enclosingNamespaceScope() "<<endl;
@@ -366,3 +343,4 @@ main ( int argc, char* argv[])
   moveVariableDeclaration (var_decl, fs);
   return backend(project);
 }
+
