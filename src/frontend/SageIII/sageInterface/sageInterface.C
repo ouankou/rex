@@ -14252,11 +14252,6 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
           ROSE_ASSERT(isSgLabelStatement(parent) == NULL);
        }
 
-     if (isSgScopeStatement(parent) == NULL)
-        {
-          return;
-        }
-
 #if 0
      printf ("In SageInterface::insertStatement(): insert newStmt = %p = %s before/after targetStmt = %p = %s \n",newStmt,newStmt->class_name().c_str(),targetStmt,targetStmt->class_name().c_str());
 #endif
