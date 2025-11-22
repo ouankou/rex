@@ -174,9 +174,12 @@ namespace AstQueryNamespace
     //Instantiate the functional which returns the list of nodes to be processed
     NodeFunctional* nodeFunc;
 
+    static_assert(std::is_invocable_v<NodeFunctional&, SgNode*>,
+                  "AstQuery requires a callable that accepts SgNode*");
+
     //When a node satisfies a functional it is added to
     //this list.
-    typedef std::invoke_result_t<NodeFunctional, SgNode*> AstQueryReturnType;
+    typedef std::invoke_result_t<NodeFunctional&, SgNode*> AstQueryReturnType;
     AstQueryReturnType listOfNodes;
     public:
     AstQuery();
@@ -265,10 +268,12 @@ namespace AstQueryNamespace
    * the criteria specified in and returned by the predicate in the second argument.
    ********************************************************************************/
 template<typename NodeFunctional>
-    std::invoke_result_t<NodeFunctional, SgNode*>
+    std::invoke_result_t<NodeFunctional&, SgNode*>
     querySubTree(SgNode* node, NodeFunctional nodeFunc, AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes,
         t_traverseOrder treeTraversalOrder = preorder)
     {
+      static_assert(std::is_invocable_v<NodeFunctional&, SgNode*>,
+                    "nodeFunc must be callable with SgNode*");
       ROSE_ASSERT(node!=NULL);
 
       AstQuery<AstSimpleProcessing,NodeFunctional> astQuery(&nodeFunc);
@@ -357,9 +362,11 @@ template<typename NodeFunctional>
    * the criteria specified in and returned by the predicate in the third argument.
    ********************************************************************************/
   template <class Iterator, class NodeFunctional>
-    std::invoke_result_t<NodeFunctional, SgNode*>
+    std::invoke_result_t<NodeFunctional&, SgNode*>
     queryRange(Iterator begin, Iterator end,
         NodeFunctional nodeFunc){
+      static_assert(std::is_invocable_v<NodeFunctional&, SgNode*>,
+                    "nodeFunc must be callable with SgNode*");
 
       AstQuery<AstQuery_DUMMY,NodeFunctional> astQuery(&nodeFunc);
 
@@ -416,9 +423,11 @@ template<typename NodeFunctional>
    * the criteria specified in and returned by the predicate in the second argument.
    ********************************************************************************/
   template<typename NodeFunctional>
-    std::invoke_result_t<NodeFunctional, SgNode*>
+    std::invoke_result_t<NodeFunctional&, SgNode*>
     queryMemoryPool(NodeFunctional nodeFunc , VariantVector* targetVariantVector = NULL)
     {
+      static_assert(std::is_invocable_v<NodeFunctional&, SgNode*>,
+                    "nodeFunc must be callable with SgNode*");
 
       AstQuery<ROSE_VisitTraversal,NodeFunctional> astQuery(&nodeFunc);
       if(targetVariantVector == NULL){
