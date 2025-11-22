@@ -210,16 +210,16 @@ flexible. An example functional is:
 
 {\mySmallFontSize
 \begin{verbatim}
-     class DefaultNodeFunctional :  public std::unary_function<SgNode*, std::list<SgNode*> > 
-     {
-       public:
-	    result_type operator()(SgNode* node ) 
-	       { 
-		 result_type returnType;
-		 returnType.push_back(node);
-		 return returnType; 
-	       }
-     };
+class DefaultNodeFunctional
+{
+  public:
+    Rose_STL_Container<SgNode*> operator()(SgNode* node)
+    {
+      Rose_STL_Container<SgNode*> returnType;
+      returnType.push_back(node);
+      return returnType;
+    }
+};
 \end{verbatim}
 }
 
@@ -1395,7 +1395,7 @@ or specify your own query order.
 \begin{verbatim}
 
   template<typename NodeFunctional>
-    typename NodeFunctional::result_type 
+    std::invoke_result_t<NodeFunctional&, SgNode*>
     AstQueryNamespace::querySubTree(SgNode* node, NodeFunctional nodeFunc, AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes,
 	t_traverseOrder treeTraversalOrder = preorder)
 \end{verbatim}
@@ -1441,7 +1441,7 @@ The following function will query the range betweeen begin and end.
 \begin{verbatim}
 
     template <class Iterator, class NodeFunctional>
-    typename NodeFunctional::result_type 
+    std::invoke_result_t<NodeFunctional&, SgNode*>
     AstQueryNamespace::queryRange(Iterator begin, Iterator end, 
 	NodeFunctional nodeFunc)
 \end{verbatim}
@@ -1483,7 +1483,7 @@ which types should be traversed as arguments.
 \begin{verbatim}
 
     template<typename NodeFunctional>
-    typename NodeFunctional::result_type 
+    std::invoke_result_t<NodeFunctional&, SgNode*>
     AstQueryNamespace::queryMemoryPool(NodeFunctional nodeFunc , VariantVector* targetVariantVector = NULL)
  \end{verbatim}
 
@@ -1514,5 +1514,3 @@ _Result AstQueryNamespace::queryMemoryPool (
     _Result (*__x)(SgNode*,_Arg), _Arg x_arg,
     VariantVector* targetVariantVector = NULL)
 \end{verbatim}
-
-

@@ -8,33 +8,27 @@ using namespace std;
 
 class NodesInVector {
     public:
-        using first_argument_type = SgNode*;
-        using second_argument_type = std::pair< VariantVector*, int*>;
-        using result_type = void*;
-	        result_type operator()(first_argument_type node, const second_argument_type accumulatedList ) const
-			{
+        void* operator()(SgNode* node, const std::pair<VariantVector*, int*>& accumulatedList) const
+        {
 
 			  if( std::find(accumulatedList.first->begin(), accumulatedList.first->end(), node->variantT() ) 
 				  != accumulatedList.first->end() )
 				(*accumulatedList.second)++;
                           return NULL;
-			};
+        };
 };
 
 class NodesInSubTree {
     public:
-        using first_argument_type = SgNode*;
-        using second_argument_type = std::pair<int*,int*>;
-        using result_type = void*;
-	        result_type operator()(first_argument_type node, const second_argument_type numberOfNodes ) const
-			{
+        void* operator()(SgNode* node, const std::pair<int*, int*>& numberOfNodes) const
+        {
 
                 if( isSgStatement(node) != NULL )
 				  (*numberOfNodes.first)++;
                 if( isSgExpression(node) != NULL )
 				  (*numberOfNodes.second)++;
                 return NULL;
-			};
+        };
 };
 
 int
@@ -86,4 +80,3 @@ main( int argc, char * argv[] )
 	 // Generate source code from AST and call the vendor's compiler
      return backend(project);
    }
-

@@ -5,6 +5,7 @@
 #include "AstProcessing.h"
 #include "astQuery.h"
 #include <functional>
+#include <type_traits>
 #include "rosedll.h"
 
 // #include "variantVector.h"
@@ -192,13 +193,16 @@ namespace NodeQuery
    * The function template
    *   querySubTree (SgNode * subTree, NodeFunctional ,
    *        AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes);
-   * returns a NodeFunctional::result_type of all nodes returned from NodeFunctional when applied to
-   * either all the nodes in a subTree or the children of the node 'subTree'.
+   * returns all nodes produced by NodeFunctional when applied to either all the nodes
+   * in a subTree or the children of the node 'subTree'.
    *******************************************************************************************/
   template<typename NodeFunctional>
-  typename NodeFunctional::result_type 
+  auto
   querySubTree ( SgNode * subTree, NodeFunctional pred, AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes)
+     -> std::invoke_result_t<NodeFunctional&, SgNode*>
      {
+       static_assert(std::is_invocable_v<NodeFunctional&, SgNode*>,
+                     "NodeQuery::querySubTree expects a callable taking SgNode*");
        return AstQueryNamespace::querySubTree(subTree,pred,defineQueryType);
      };
   // get the SgNode's conforming to the test in querySolverFunction or
@@ -355,9 +359,12 @@ namespace NodeQuery
    * in VariantVector.
    ********************************************************************************/
   template<typename NodeFunctional>
-  NodeQuerySynthesizedAttributeType
+  auto
   queryMemoryPool(NodeFunctional nodeFunc , VariantVector* targetVariantVector = NULL)
+     -> std::invoke_result_t<NodeFunctional&, SgNode*>
   {
+    static_assert(std::is_invocable_v<NodeFunctional&, SgNode*>,
+                  "NodeQuery::queryMemoryPool expects a callable taking SgNode*");
     return AstQueryNamespace::queryMemoryPool(nodeFunc,targetVariantVector);
   }
 
@@ -419,11 +426,11 @@ namespace NodeQuery
 
 /********************************************************************************
  * The function
- *  DefaultNodeFunctional::result_type
+ *  NodeQuerySynthesizedAttributeType
  *             queryMemoryPool(VariantVector& targetVariantVector);
  * will return every node in the AST with a corresponding variant in the VariantVector.
  ********************************************************************************/
-  ROSE_DLL_API DefaultNodeFunctional::result_type 
+  ROSE_DLL_API NodeQuerySynthesizedAttributeType 
   queryMemoryPool(VariantVector& targetVariantVector);
 
 

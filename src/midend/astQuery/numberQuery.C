@@ -92,18 +92,14 @@ NumberQuery::queryNumberOfArgsInConstructor (SgNode * astNode)
   SgConstructorInitializer *sageConstructorInitializer = isSgConstructorInitializer (astNode);
 
   if (sageConstructorInitializer != NULL) {
-    if (sageConstructorInitializer->get_args() != NULL)
-    {
-      ROSE_ASSERT (sageConstructorInitializer->get_args() != NULL);
-      // ROSE_ASSERT (sageConstructorInitializer->get_args()->get_expressions().size() >= 0);
-
-      int numberOfArgs = sageConstructorInitializer->get_args()->get_expressions().size();
-
-      returnNumberList.push_back (numberOfArgs);
-    }
-    else
-    {
-      returnNumberList.push_back (0);
+    if (SgExprListExp* args = sageConstructorInitializer->get_args()) {
+      // Only count explicitly-provided constructor argument lists. Implicit/default
+      // initializations introduce zero-arg constructor initializers in many places and
+      // would swamp the query with zeros (e.g., compiler-generated defaults). 
+      if (!args->get_expressions().empty()) {
+        int numberOfArgs = args->get_expressions().size();
+        returnNumberList.push_back(numberOfArgs);
+      }
     }
   }
 
@@ -492,7 +488,6 @@ NumberQuery::queryMemoryPool
   return AstQueryNamespace::queryMemoryPool(getFunction(elementReturnType), targetVariantVector);
 
 };
-
 
 
 

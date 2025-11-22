@@ -1235,7 +1235,7 @@ NodeQuery::queryMemoryPool ( NodeQuery::TypeOfQueryTypeOneParameter elementRetur
   return AstQueryNamespace::queryMemoryPool(getFunction(elementReturnType), targetVariantVector); 
 }
 
-  AstQueryNamespace::DefaultNodeFunctional::result_type 
+  NodeQuerySynthesizedAttributeType
 NodeQuery::queryMemoryPool(VariantVector& targetVariantVector)
 {
   DefaultNodeFunctional nodeFunc;
@@ -1244,5 +1244,4 @@ NodeQuery::queryMemoryPool(VariantVector& targetVariantVector)
 
 
 ////////END INTERFACE FOR NAMESPACE NODE QUERY
-
 

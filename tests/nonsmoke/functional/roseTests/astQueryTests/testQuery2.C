@@ -45,11 +45,9 @@ printNodeList ( const list<string> & localList )
 class FunctionalTest1
    {
      public:
-      using argument_type = SgNode*;
-      using result_type = NodeQuerySynthesizedAttributeType;
-	  result_type operator()(SgNode* node ) 
+	  NodeQuerySynthesizedAttributeType operator()(SgNode* node ) 
 	     { 
-	       result_type returnType;
+	       NodeQuerySynthesizedAttributeType returnType;
 	       returnType.push_back(node);
 
 	       NodeQuerySynthesizedAttributeType listToNodeQuery;
@@ -130,4 +128,3 @@ main( int argc, char * argv[] )
   // Generate source code from AST and call the vendor's compiler
      return backend(project);
    }
-
