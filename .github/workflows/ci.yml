@@ -74,11 +74,14 @@ jobs:
     # Note: Some tests are disabled due to removed boost graph headers (deBoost effort)
     # See tests/nonsmoke/functional/roseTests/astProcessingTests/CMakeLists.txt for details
 
-    # Run astInterface tests to verify Clang frontend functionality
-    - name: Run astInterface Tests
+    # Run frontend-related tests
+    - name: Run astInterface and astQuery Tests
       env:
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
       run: |
         cd $GITHUB_WORKSPACE/build
+        # astInterface exercises Clang frontend
         ctest -R astInterface -V
+        # astQuery exercises query helpers
+        ctest -R "testQuery" -V
