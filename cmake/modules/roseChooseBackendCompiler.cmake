@@ -90,6 +90,29 @@ elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "AppleClang")
     COMMAND ${CMAKE_SOURCE_DIR}/config/getAppleClangMinorVersionNumber.sh
     OUTPUT_VARIABLE BACKEND_C_COMPILER_MINOR_VERSION_NUMBER)
   string(REGEX MATCH "[0-9]+" BACKEND_C_COMPILER_MINOR_VERSION_NUMBER  ${BACKEND_C_COMPILER_MINOR_VERSION_NUMBER})
+elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "IntelLLVM")
+  if(NOT BACKEND_C_COMPILER)
+    set(BACKEND_C_COMPILER  ${CMAKE_C_COMPILER})
+  endif()
+  execute_process(
+    COMMAND basename ${BACKEND_C_COMPILER}
+    OUTPUT_VARIABLE BACKEND_C_COMPILER_NAME_WITHOUT_PATH)
+  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_C_COMPILER_NAME_WITHOUT_PATH ${BACKEND_C_COMPILER_NAME_WITHOUT_PATH})
+  if(VERBOSE)
+    message("BACKEND_C_COMPILER_NAME_WITHOUT_PATH=${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}^")
+  endif()
+  execute_process(
+    COMMAND ${BACKEND_C_COMPILER} --version
+    OUTPUT_VARIABLE _intel_c_version
+    ERROR_VARIABLE _intel_c_version_err
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_STRIP_TRAILING_WHITESPACE)
+  set(_intel_c_version_combined "${_intel_c_version}\n${_intel_c_version_err}")
+  string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _intel_c_match "${_intel_c_version_combined}")
+  if(_intel_c_match)
+    set(BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
+    set(BACKEND_C_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
+  endif()
 endif()
 
 # --------check CXX compiler -----------------------
@@ -168,6 +191,32 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
     COMMAND ${CMAKE_SOURCE_DIR}/config/getAppleClangMinorVersionNumber.sh
     OUTPUT_VARIABLE BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER)
   string(REGEX MATCH "[0-9]+" BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER  ${BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER})
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
+  if(NOT BACKEND_CXX_COMPILER)
+    set(BACKEND_CXX_COMPILER  ${CMAKE_CXX_COMPILER})
+  endif()
+  execute_process(
+    COMMAND basename ${BACKEND_CXX_COMPILER}
+    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH)
+  if(VERBOSE)
+    message("BACKEND_CXX_COMPILER= ${BACKEND_CXX_COMPILER}")
+  endif()
+  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH})
+  if(VERBOSE)
+    message("BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH= ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}")
+  endif()
+  execute_process(
+    COMMAND ${BACKEND_CXX_COMPILER} --version
+    OUTPUT_VARIABLE _intel_cxx_version
+    ERROR_VARIABLE _intel_cxx_version_err
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_STRIP_TRAILING_WHITESPACE)
+  set(_intel_cxx_version_combined "${_intel_cxx_version}\n${_intel_cxx_version_err}")
+  string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _intel_cxx_match "${_intel_cxx_version_combined}")
+  if(_intel_cxx_match)
+    set(BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
+    set(BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
+  endif()
 endif()
 
 if(enable-fortran)
@@ -235,7 +284,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   # using GCC
   set(BACKEND_CXX_IS_GNU_COMPILER 1)
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
   # using Intel C++
   set(BACKEND_CXX_IS_INTEL_COMPILER 1)
 endif()
