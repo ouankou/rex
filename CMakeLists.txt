@@ -919,7 +919,7 @@ if(enable-c)
     message(FATAL_ERROR "Unsupported CXX compiler for Linux-only build (expected GNU, Clang, or Intel)")
   endif()
 
-  # Process header paths for Linux (GNU/Clang)
+  # Process header paths for Linux (GNU/Clang/Intel)
   if(shell AND (CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM"))
     execute_process(
       COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/dirincludes "${CMAKE_BINARY_DIR}/include-staging" "${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS"
