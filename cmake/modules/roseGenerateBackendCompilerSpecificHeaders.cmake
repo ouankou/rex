@@ -23,7 +23,7 @@ endif()
 # otherwise cmake may skip executing the last ones!!!    
 execute_process(
   COMMAND ${PROJECT_SOURCE_DIR}/config/create_system_headers ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}
-    ./include-staging/${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS ${PROJECT_SOURCE_DIR} c++ gnu
+    ./include-staging/${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS ${PROJECT_SOURCE_DIR} c++ ${CXX_COMPILER_VENDOR}
   WORKING_DIRECTORY ${ROSE_TOP_BINARY_DIR}
   ERROR_VARIABLE errorVar)
 
@@ -47,7 +47,7 @@ endif()
 
 execute_process(
   COMMAND ${PROJECT_SOURCE_DIR}/config/create_system_headers ${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}
-    ./include-staging/${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS ${PROJECT_SOURCE_DIR} c gnu
+    ./include-staging/${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS ${PROJECT_SOURCE_DIR} c ${C_COMPILER_VENDOR}
   WORKING_DIRECTORY ${ROSE_TOP_BINARY_DIR}
   ERROR_VARIABLE errorVar)
 # DQ (2/3/2016): Uncomment this to allow errors to be detected.
