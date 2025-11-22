@@ -158,10 +158,6 @@ else()
   set(ROSE_LIB_DIR_NAME "lib")
 endif()
 
-if(WIN32)
-  add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-endif()
-
 # FIXME: Why do we have to have a copy of some standard built-in modules inside rose?
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/modules"  ${CMAKE_MODULE_PATH})
 
@@ -219,28 +215,6 @@ endif()
 # Compiler toolchain features
 ########################################################################################################################
 
-if(WIN32)
-  # /TP to indicate files are C++
-  # / CLR common intermediate language
-  # /GL whole program optimization
-  # /O1 optimization for small files
-  # /Ob0 disable inline expansion
-  # /MP multiple processors compilation
-  # /0s small files
-  # /wd4716 to turn no return to a warning and not an error
-  set(CMAKE_BUILD_TYPE Release)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /TP /MP /O1 /Os /GR /EHsc /wd4541 /wd4716 /bigobj")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   /wd4541 ")
-  set(CMAKE_SHARED_LINKER_FLAGS_DEBUG " ${CMAKE_SHARED_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
-  set(CMAKE_SHARED_LINKER_FLAGS_RELEASE " ${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
-  set(CMAKE_MODULE_LINKER_FLAGS_DEBUG " ${CMAKE_MODULE_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
-  set(CMAKE_MODULE_LINKER_FLAGS_RELEASE " ${CMAKE_MODULE_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
-  set(CMAKE_LINKER_FLAGS " ${CMAKE_LINKER_FLAGS} /INCREMENTAL:NO")
-  set(CMAKE_SHARED_LINKER_FLAGS " ${CMAKE_SHARED_LINKER_FLAGS} /INCREMENTAL:NO")
-  set(CMAKE_MODULE_LINKER_FLAGS " ${CMAKE_MODULE_LINKER_FLAGS} /INCREMENTAL:NO")
-  set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} /INCREMENTAL:NO")
-  set(CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS} /INCREMENTAL:NO")
-else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC -O2")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC -O2")
 
@@ -252,15 +226,9 @@ else()
   if(CMAKE_COMPILER_IS_GNUCC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=1")
   endif()
-endif()
 
-# Set ROSE_SHLIBPATH_VAR.  For Visual Studio, this is PATH.  Otherwise, it is just LD_LIBRARY_PATH.
-if(MSVC)
-  set(ROSE_SHLIBPATH_VAR "PATH")
-  add_definitions("-D__STDC_LIMIT_MACROS")
-else()
-  set(ROSE_SHLIBPATH_VAR "LD_LIBRARY_PATH")
-endif()
+# Set ROSE_SHLIBPATH_VAR. Linux-only uses LD_LIBRARY_PATH.
+set(ROSE_SHLIBPATH_VAR "LD_LIBRARY_PATH")
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 4.8)
@@ -293,9 +261,6 @@ endif()
 # CUDA
 option(enable-cuda "Enable CUDA analysis" OFF) # OFF because lack of CUDA is not handled properly
 if(enable-cuda)
-  if(APPLE)
-    message(FATAL_ERROR "CUDA analysis (enable-cuda) is not supported on macOS")
-  endif()
   find_package(CUDA REQUIRED)
   set(ROSE_BUILD_CUDA_LANGUAGE_SUPPORT 1)
 endif()
@@ -579,12 +544,8 @@ if(NOT FLEX_FOUND)
   message(FATAL_ERROR "Could not find flex command")
 endif()
 
-if(NOT WIN32)
-  find_library(M_LIB m)
-  if(NOT APPLE)
-    find_library(RT_LIB rt)
-  endif()
-endif()
+find_library(M_LIB m)
+find_library(RT_LIB rt)
 
 # This is essential to find the right include path from either build or installation tree for a translator
 if(HAVE_DLFCN_H)
@@ -642,16 +603,8 @@ if(with-alternate_backend_java_compiler)
   endif()
 endif()
 
-# define a global variable to collect all common linked third-party libraries for rose
-if(NOT WIN32)
-  if(NOT APPLE)
-    set(link_with_libraries ${M_LIB} ${RT_LIB} ${CMAKE_THREAD_LIBS_INIT})
-  else()
-    set(link_with_libraries ${M_LIB} ${CMAKE_THREAD_LIBS_INIT})
-  endif()
-else()
-  set(link_with_libraries shlwapi.lib psapi.lib)
-endif()
+# define a global variable to collect all common linked third-party libraries for rose (Linux-only)
+set(link_with_libraries ${M_LIB} ${RT_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 # Check compilers and version numbers. The module is located in src/cmake/modules.
 if(enable-c)
@@ -888,10 +841,6 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include
   ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/win32/include)
 
-if(WIN32)
-  list(APPEND ROSE_INCLUDES ${ROSE_TOP_SRC_DIR}/winspecific)
-endif()
-
 ########################################################################################################################
 # Set output directories
 ########################################################################################################################
@@ -900,10 +849,6 @@ endif()
 # directory, and all the executables to be built into a single bin directory.  If these variables are not set, then by
 # default the targets will be littered throughout the binary directory, matching the structure of the source directory.
 #
-# Organizing the output of the build directory this way is important when building on Windows.  By default, Windows
-# .exes do not know where to find their required .dlls.  The easiest way to overcome this problem is by placing the .exe
-# and all its dependent .dlls in the same directory.  We accomplish this with CMake by setting
-# CMAKE_RUNTIME_OUTPUT_DIRECTORY.
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -911,9 +856,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Set up RPATH so that our executables will be able to find their dependent
 # libraries using relative paths.
 set(origin "$ORIGIN")
-if(APPLE)
-  set(origin "@executable_path")
-endif()
 set(CMAKE_INSTALL_RPATH "${origin}/../lib;${origin}/")
 
 
@@ -944,37 +886,37 @@ if(enable-cuda)
       COMMAND cp ${ROSE_TOP_SRC_DIR}/config/preinclude-cuda.h ./include-staging/cuda_HEADERS)
 endif()
 
-#TODO: better support for other compilers & operating systems
+# Linux-only: fail fast on non-Linux platforms to avoid maintaining macOS/Windows branches.
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "This project now targets Linux only; non-Linux builds are unsupported.")
+endif()
+
+# Linux-only header discovery (GNU/Clang toolchains)
 if(enable-c)
   set(C_INCLUDE_STRING "{\"${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
 
   set(CXX_INCLUDE_STRING "{\"${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
   find_program(shell sh)
 
-  # Determine compiler vendor names for get_compiler_header_dirs script
-  # Map CMake compiler IDs to vendor names expected by the script
+  # Determine compiler vendor names for get_compiler_header_dirs script (Linux-only: GNU/Clang)
   if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(C_COMPILER_VENDOR "gnu")
-  elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "AppleClang")
+  elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
     set(C_COMPILER_VENDOR "clang")
-  elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
-    set(C_COMPILER_VENDOR "intel")
   else()
-    set(C_COMPILER_VENDOR "unknown")
+    message(FATAL_ERROR "Unsupported C compiler for Linux-only build (expected GNU or Clang)")
   endif()
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(CXX_COMPILER_VENDOR "gnu")
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(CXX_COMPILER_VENDOR "clang")
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-    set(CXX_COMPILER_VENDOR "intel")
   else()
-    set(CXX_COMPILER_VENDOR "unknown")
+    message(FATAL_ERROR "Unsupported CXX compiler for Linux-only build (expected GNU or Clang)")
   endif()
 
-  # Process header paths for Unix-like systems (GNU, Clang, Intel compilers)
-  if(shell AND (CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel"))
+  # Process header paths for Linux (GNU/Clang)
+  if(shell AND (CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
     execute_process(
       COMMAND ${shell} ${CMAKE_SOURCE_DIR}/config/dirincludes "${CMAKE_BINARY_DIR}/include-staging" "${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS"
       OUTPUT_VARIABLE C_includeString)
@@ -1025,14 +967,6 @@ if(enable-c)
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E create_symlink
       ${CMAKE_BINARY_DIR}/include-staging ${CMAKE_BINARY_DIR}/include)
-  elseif(MSVC)
-    set(INCLUDE_LIST $ENV{INCLUDE})
-    string(REPLACE "\\" "\\\\" INCLUDE_LIST "${INCLUDE_LIST}")
-    foreach(C_include_dir ${INCLUDE_LIST})
-      string(STRIP "${C_include_dir}" C_include_dir)
-      set(C_INCLUDE_STRING "${C_INCLUDE_STRING}, \"${C_include_dir}\"")
-    endforeach()
-    set(CXX_INCLUDE_STRING "${C_INCLUDE_STRING}")
   endif()
   set(C_INCLUDE_STRING "${C_INCLUDE_STRING}}")
   set(CXX_INCLUDE_STRING "${CXX_INCLUDE_STRING}}")
