@@ -8,6 +8,31 @@ if(VERBOSE)
   message("BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER=" ${BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER})
 endif()
 
+# Determine compiler vendors locally if not provided by caller (Linux-only builds)
+if(NOT DEFINED CXX_COMPILER_VENDOR)
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set(CXX_COMPILER_VENDOR "gnu")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(CXX_COMPILER_VENDOR "clang")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
+    set(CXX_COMPILER_VENDOR "intel")
+  else()
+    set(CXX_COMPILER_VENDOR "unknown")
+  endif()
+endif()
+
+if(NOT DEFINED C_COMPILER_VENDOR)
+  if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    set(C_COMPILER_VENDOR "gnu")
+  elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+    set(C_COMPILER_VENDOR "clang")
+  elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "IntelLLVM")
+    set(C_COMPILER_VENDOR "intel")
+  else()
+    set(C_COMPILER_VENDOR "unknown")
+  endif()
+endif()
+
 # GENERATE_BACKEND_CXX_COMPILER_SPECIFIC_HEADERS
 # ----------------------------------------------------
 execute_process(
