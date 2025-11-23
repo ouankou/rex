@@ -556,6 +556,9 @@ std::string ClangToSageTranslator::generate_source_position_string(clang::Source
   clang::SourceManager& SM = p_compiler_instance->getSourceManager();
   clang::FileID fID = SM.getFileID(srcLoc);
   const clang::FileEntry* fEntry = SM.getFileEntryForID(fID);
+  if (fEntry == nullptr || srcLoc.isInvalid()) {
+    return std::string("0x0_0_0");
+  }
   std::string return_string;
 
 //  return_string = string("0x") + StringUtility::numberToString(file_id) + "_" + StringUtility::numberToString(line_number) + "_" + StringUtility::numberToString(column_number);

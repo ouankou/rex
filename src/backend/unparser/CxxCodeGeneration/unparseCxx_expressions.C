@@ -1487,20 +1487,36 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                        type_name = SageInterface::get_name(type);
                    }
                }
+               bool is_pack = false;
+               if (type_name.size() >= 3 && type_name.compare(type_name.size()-3,3,"...") == 0) {
+                   is_pack = true;
+                   type_name = type_name.substr(0, type_name.size()-3);
+               }
 
-               // CLANG FRONTEND FIX: Remove "templateType_" prefix added by SageInterface::get_name()
-               // This prefix is added in sageInterface.C for SgTemplateType but should not appear
-               // in template parameter lists (e.g., "template <typename T>" not "template <typename templateType_T>")
-               const std::string prefix = "templateType_";
-               if (type_name.compare(0, prefix.length(), prefix) == 0) {
+            // CLANG FRONTEND FIX: Remove "templateType_" prefix added by SageInterface::get_name()
+            // This prefix is added in sageInterface.C for SgTemplateType but should not appear
+            // in template parameter lists (e.g., "template <typename T>" not "template <typename templateType_T>")
+               const std::string template_prefix = "templateType_";
+               if (type_name.compare(0, template_prefix.length(), template_prefix) == 0) {
                    std::string old_name = type_name;
-                   type_name = type_name.substr(prefix.length());
+                   type_name = type_name.substr(template_prefix.length());
                } else {
                }
 
-               if (is_template_header)
-                 curprint("typename ");
-               curprint(type_name);
+               const std::string prefix = is_template_header ? "class" : "typename";
+               bool placeholder_name = (type_name.empty() ||
+                                        type_name.rfind("__type_param_", 0) == 0 ||
+                                        type_name == "template_type_param");
+
+            // Emit prefix and pack marker with tight spacing (class... Args)
+               curprint(prefix);
+               if (is_pack) curprint("...");
+               if (!placeholder_name && !type_name.empty()) {
+                   curprint(" ");
+                   curprint(type_name);
+               } else if (!is_pack && !prefix.empty()) {
+                   curprint(" ");
+               }
 
                SgType* default_type = templateParameter->get_defaultTypeParameter();
                if (default_type != NULL)
@@ -1570,9 +1586,21 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                Unparse_ExprStmt::unparseTemplateParameterList (templateParameterList, info, true);
 
                // TV (03/23/2018): could either be class or typename: where is the info in EDG? where to store it in the AST?
-               curprint(" typename ");
-
-               curprint(nrdecl->get_name());
+               std::string outer_name = nrdecl->get_name().getString();
+               bool is_pack = false;
+               if (outer_name.size() >= 3 && outer_name.compare(outer_name.size()-3,3,"...") == 0) {
+                   is_pack = true;
+                   outer_name = outer_name.substr(0, outer_name.size()-3);
+               }
+               bool outer_placeholder = (outer_name.rfind("__template_template_param_", 0) == 0);
+               curprint(" class");
+               if (is_pack) curprint("...");
+               if (!outer_placeholder && !outer_name.empty()) {
+                   curprint(" ");
+                   curprint(outer_name);
+               } else if (!is_pack) {
+                   curprint(" ");
+               }
 #if 0
                printf ("unparseTemplateParameter(): case SgTemplateParameter::template_parameter: Sorry, not implemented! \n");
                ROSE_ABORT();
@@ -1739,6 +1767,11 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
 
      switch (templateArgument->get_argumentType())
         {
+          case SgTemplateArgument::start_of_pack_expansion_argument:
+             {
+               curprint("...");
+               break;
+             }
           case SgTemplateArgument::type_argument:
              {
                ASSERT_not_null(templateArgument->get_type());
@@ -1782,6 +1815,24 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
 #endif
                     templateArgumentType = templateArgument->get_unparsable_type_alias();
                   }
+
+            // Pack support: if this is a template type name ending with "...", print directly to preserve pack expansion.
+               if (SgTemplateType* ttype = isSgTemplateType(templateArgumentType)) {
+                   std::string nm = ttype->get_name().getString();
+                   if (nm.size() >= 3 && nm.compare(nm.size()-3,3,"...") == 0) {
+                       nm = nm.substr(0, nm.size()-3);
+                       curprint(nm + "...");
+                       break;
+                   }
+               }
+               if (SgNonrealType* nrt = isSgNonrealType(templateArgumentType)) {
+                   std::string nm = nrt->get_name().getString();
+                   if (nm.size() >= 3 && nm.compare(nm.size()-3,3,"...") == 0) {
+                       nm = nm.substr(0, nm.size()-3);
+                       curprint(nm + "...");
+                       break;
+                   }
+               }
 
 #if OUTPUT_DEBUGGING_INFORMATION
                printf ("In unparseTemplateArgument(): templateArgument->get_type() = %s \n",templateArgumentType->class_name().c_str());
@@ -1990,12 +2041,6 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
                newInfo.set_SkipEnumDefinition();
                unp->u_type->outputType<SgTemplateArgument>(templateArgument,assoc_type,newInfo);
 
-               break;
-             }
-
-           case SgTemplateArgument::start_of_pack_expansion_argument:
-             {
-               printf ("WARNING: start_of_pack_expansion_argument in Unparse_ExprStmt::unparseTemplateArgument (can happen from some debug output)\n");
                break;
              }
 

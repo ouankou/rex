@@ -14295,17 +14295,29 @@ SgTemplateInstantiationDecl::get_mangled_name (void) const
        // DQ (7/24/2010): Added to support type tables (at an early stage in AST construction, the get_templateName() might not be known yet.
        // ROSE_ASSERT(get_templateName().is_null() == false);
           SgName template_name = get_templateName();
-          if (template_name.is_null() == true)
-             {
-            // Use the name of the template (as defined by EDG) so that we can generate a unique string
-            // (later this is reset to excluse EDG geneated strings that don't map to the original source code).
+         if (template_name.is_null() == true)
+            {
+           // Use the name of the template (as defined by EDG) so that we can generate a unique string
+           // (later this is reset to excluse EDG geneated strings that don't map to the original source code).
                printf ("ERROR: In SgTemplateInstantiationDecl::get_mangled_name(): template_name.is_null() == true, using get_name() \n");
                template_name = get_name();
 
-            // DQ (6/1/2012): Make this an error.
-               printf ("SgTemplateInstantiationDecl::get_mangled_name(): Make this an error! \n");
-               ROSE_ASSERT(false);
-             }
+            // Fallback: try template declaration name if get_name() is empty
+               if (template_name.is_null() || template_name.getString().empty())
+                  {
+                    if (get_templateDeclaration() != NULL)
+                       {
+                         template_name = get_templateDeclaration()->get_name();
+                       }
+                  }
+
+           // DQ (6/1/2012): Make this an error.
+               if (template_name.is_null() || template_name.getString().empty())
+                  {
+                    printf ("SgTemplateInstantiationDecl::get_mangled_name(): Make this an error! \n");
+                    ROSE_ASSERT(false);
+                  }
+            }
           ROSE_ASSERT(template_name.is_null() == false);
 
 #if DEBUG_TEMPLATE_INSTANTIATION_DECL_GET_MANGLED_NAME

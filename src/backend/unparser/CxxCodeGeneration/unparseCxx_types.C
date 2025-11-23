@@ -2540,6 +2540,12 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
      SgTemplateClassDeclaration *tpldecl = isSgTemplateClassDeclaration(decl);
 
   // DQ (7/28/2013): Added assertion.
+     if (decl->get_firstNondefiningDeclaration() == NULL) {
+         decl->set_firstNondefiningDeclaration(decl);
+     }
+     if (decl != decl->get_firstNondefiningDeclaration()) {
+         decl = isSgClassDeclaration(decl->get_firstNondefiningDeclaration());
+     }
      ROSE_ASSERT(decl == decl->get_firstNondefiningDeclaration());
 
 #if DEBUG_UNPARSE_CLASS_TYPE
@@ -2626,6 +2632,15 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
           // ROOT CAUSE FIX: Check if it's a template INSTANTIATION before outputting "template "
           // Must check this BEFORE SkipClassSpecifier to handle both code paths
           bool isInstantiation = (isSgTemplateInstantiationDecl(decl) != NULL);
+          std::string dep_qualified_name;
+          {
+              std::map<SgNode*,std::string>& typeMap = SgNode::get_globalQualifiedNameMapForTypes();
+              SgClassType* class_type = isSgClassType(type);
+              auto dep_it = typeMap.find(class_type);
+              if (dep_it != typeMap.end()) {
+                  dep_qualified_name = dep_it->second;
+              }
+          }
 
           if(!info.SkipClassSpecifier())
              {
@@ -2643,13 +2658,19 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                bool shouldOutputTemplate = (tpldecl != NULL && !isInstantiation &&
                                            !decl->get_file_info()->isCompilerGenerated());
 
-               // ROOT CAUSE FIX: Also skip elaborated type (class/struct/union keyword) for
-               // compiler-generated template class declarations without proper instantiation info
-               // because they lack template arguments and will cause compile errors
-               bool skipElaboration = (tpldecl != NULL && !isInstantiation &&
-                                      decl->get_file_info()->isCompilerGenerated());
+              // ROOT CAUSE FIX: Also skip elaborated type (class/struct/union keyword) for
+              // compiler-generated template class declarations without proper instantiation info
+              // because they lack template arguments and will cause compile errors
+              bool skipElaboration = (tpldecl != NULL && !isInstantiation &&
+                                     decl->get_file_info()->isCompilerGenerated());
+              // Dependent template names (e.g., typename T::template rebind<int>) should bypass
+              // class/struct elaboration and use the fully qualified string stored on the type.
+              if (!dep_qualified_name.empty()) {
+                  curprint(dep_qualified_name);
+                  return;
+              }
 
-               if (shouldOutputTemplate) {
+              if (shouldOutputTemplate) {
                  curprint ( "template ");
                } else if (!skipElaboration) {
               // DQ (6/6/6/2007): Type elaboration goes here.
@@ -3531,6 +3552,14 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
        // DQ (10/17/2004): This assertion forced me to set the parents of typedef in the EDG/Sage connection code
        // since I could not figure out why it was not being set in the post processing which sets parents.
           ASSERT_not_null(typedef_type->get_declaration()->get_parent());
+
+       // ROOT CAUSE FIX: If we're unparsing inside the same scope as the typedef declaration
+       // (e.g., a member alias used in its own class), avoid forcing a qualified name that
+       // would drop template arguments (e.g., ::UsesDependent::rebound). Emit the local name.
+          if (info.get_current_scope() != NULL && tdecl->get_scope() == info.get_current_scope()) {
+             curprint(typedef_type->get_name().getString() + " ");
+             return;
+          }
 
 #if 0
           SgName qualifiedName = typedef_type->get_qualified_name();
@@ -5162,4 +5191,3 @@ Unparse_Type::outputType( T* referenceNode, SgType* referenceNodeType, SgUnparse
 #endif
 
    }
-

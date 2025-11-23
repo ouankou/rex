@@ -35,6 +35,10 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    rose-1540-0.C \
    rose-1541-0.C \
    rose-1701-0.C \
+   rex_template_instantiation.C \
+   rex_nested_alias_template.C \
+   rex_partial_specialization.C \
+   rex_std_template_template_param.C \
    rose-1766.C \
    rose-1789-001.C \
    rose-1814.C \
@@ -3120,4 +3124,3 @@ $(TEST_Source_passed:.C.passed=.timed_with_threshold):
 
 status:
 	@$(MAKE) $(TEST_Source_passed)
-

@@ -13890,7 +13890,7 @@ void SageInterface::appendStatement(SgStatement *stmt, SgScopeStatement* scope)
              }
         }
 
-#if 0
+#if 1
   // DQ (6/26/2013): This is an attempt to support better testing of possible redundant statements
   // that would be inserted into the current scope. This is however a bit expensive so we are using
   // this as a way to also debug the new cases where this happens.
@@ -14935,6 +14935,9 @@ void SageInterface::fixStructDeclaration(SgClassDeclaration* structDecl, SgScope
         }
 
   // DQ (9/4/2012): I want to assert this for the new EDG/ROSE connection code (at least).
+     if (nondefdecl->get_type() == NULL) {
+         nondefdecl->set_type(SgClassType::createType(nondefdecl));
+     }
      ROSE_ASSERT(nondefdecl->get_type() != NULL);
 
   // DQ (9/4/2012): This is a sign that the pointer to the type was deleted.

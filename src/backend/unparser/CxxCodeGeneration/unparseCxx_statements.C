@@ -16,6 +16,7 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 #include "unparser.h"
+#include <unordered_set>
 
 // DQ (8/31/2013):  This should only be included by source files that require it.
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
@@ -9206,6 +9207,11 @@ Unparse_ExprStmt::unparseClassDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
        // DQ (7/28/2012): This is the original code (I think it is what we really want, but we need to test this.
        // DQ (6/5/2011): Newest refactored support for name qualification.
           SgName nameQualifier = classdecl_stmt->get_qualified_name_prefix();
+       // Avoid emitting a leading "::" on primary definitions at global scope (e.g., "struct ::UsePack"),
+       // which is ill-formed for template declarations.
+          if (isSgGlobal(classdecl_stmt->get_scope()) && nameQualifier.getString() == "::") {
+             nameQualifier = "";
+          }
 
 #if 0
           printf ("In unparseClassDeclStmt(): Output SgClassDeclaration = %p = %s qualified name: nameQualifier = %s \n",classdecl_stmt,classdecl_stmt->get_name().str(),nameQualifier.str());
@@ -9713,6 +9719,24 @@ Unparse_ExprStmt::unparseClassDefnStmt(SgStatement* stmt, SgUnparse_Info& info)
           unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK1);
           curprint ( string("{"));
           unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
+
+      // Ensure class member list does not contain duplicate entries (can arise from template fixups).
+          {
+            auto& members = classdefn_stmt->get_members();
+            if (!members.empty()) {
+              std::unordered_set<SgDeclarationStatement*> seen;
+              SgDeclarationStatementPtrList::iterator it = members.begin();
+              while (it != members.end()) {
+                SgDeclarationStatement* m = *it;
+                if (m == NULL || seen.find(m) != seen.end()) {
+                  it = members.erase(it);
+                } else {
+                  seen.insert(m);
+                  ++it;
+                }
+              }
+            }
+          }
 
        // DQ (2/25/2016): Adding support for specification of AstUnparseAttribute for placement inside of a SgClassDefinition.
        // Note that this does not replace any existing declarations in the class definition.
@@ -11419,75 +11443,58 @@ Unparse_ExprStmt::unparseTemplateTypedefDeclaration(SgStatement* stmt, SgUnparse
      curprint(" /* Calling unparseTemplateDeclarationStatment_support<SgTemplateTypedefDeclaration>() */ ");
 #endif
 
-     if (templateTypedef_stmt->get_templateParameters().empty() == false)
-        {
-       // DQ (2/19/2019): The support for unparsing a SgTemplateTypedefDeclaration is different enough that this function is not useful.
-#if DEBUG_TEMPLATE_TYPEDEF
-          curprint(" /* templateParameters FOUND: Calling unparseTemplateDeclarationStatment_support<SgTemplateTypedefDeclaration>() */ ");
-#endif
-          unparseTemplateDeclarationStatment_support<SgTemplateTypedefDeclaration>(stmt,info);
-        }
-       else
-        {
-#if DEBUG_TEMPLATE_TYPEDEF
-          curprint(" /* templateParameters NOT found: Calling unparseTemplateDeclarationStatment_support<SgTemplateTypedefDeclaration>() */ ");
-#endif
+    // Unparse directly even when template parameters are present (avoid unsupported template typedef path).
+    unparseTemplateHeader<SgTemplateTypedefDeclaration>(templateTypedef_stmt,info);
 
-       // Unparse_ExprStmt::unparseTemplateParameterList( const SgTemplateParameterPtrList & templateParameterList, SgUnparse_Info& info, bool is_template_header)
-       // bool is_template_header = false;
-       // unparseTemplateParameterList(templateTypedef_stmt->get_templateParameters(),info,is_template_header);
-          unparseTemplateHeader<SgTemplateTypedefDeclaration>(templateTypedef_stmt,info);
+      // DQ (2/19/2019): I think this is how we detect the template parameters.
+    if (templateTypedef_stmt->get_templateParameters().empty() == false)
+       {
+         curprint(" /* unparse template paremeters */ ");
+       }
 
-       // DQ (2/19/2019): I think this is how we detect the template parameters.
-          if (templateTypedef_stmt->get_templateParameters().empty() == false)
-             {
-               curprint(" /* unparse template paremeters */ ");
-             }
-
-       // DQ (2/19/2019): Not clear that I want the extra "\n".
-          curprint("\nusing ");
+      // DQ (2/19/2019): Not clear that I want the extra "\n".
+    curprint("\nusing ");
 
 #if DEBUG_TEMPLATE_TYPEDEF
-          printf ("In unparseTemplateTypeDefStmt(): templateTypedef_stmt->get_name() = %s \n",templateTypedef_stmt->get_name().str());
+    printf ("In unparseTemplateTypeDefStmt(): templateTypedef_stmt->get_name() = %s \n",templateTypedef_stmt->get_name().str());
 #endif
 
-          curprint(templateTypedef_stmt->get_name().str());
+    curprint(templateTypedef_stmt->get_name().str());
 
-          curprint(" = ");
+    curprint(" = ");
 
-          SgType* base_type = templateTypedef_stmt->get_base_type();
-          ASSERT_not_null(base_type);
+    SgType* base_type = templateTypedef_stmt->get_base_type();
+    ASSERT_not_null(base_type);
 
 #if DEBUG_TEMPLATE_TYPEDEF
-          printf ("In unparseTemplateTypeDefStmt(): base_type = %p = %s \n",base_type,base_type->class_name().c_str());
+    printf ("In unparseTemplateTypeDefStmt(): base_type = %p = %s \n",base_type,base_type->class_name().c_str());
 #endif
 
-          SgUnparse_Info ninfo(info);
+    SgUnparse_Info ninfo(info);
 
-          ROSE_ASSERT(ninfo.SkipClassDefinition() == false);
-          ROSE_ASSERT(ninfo.SkipEnumDefinition()  == false);
+    ROSE_ASSERT(ninfo.SkipClassDefinition() == false);
+    ROSE_ASSERT(ninfo.SkipEnumDefinition()  == false);
 
 #if DEBUG_TEMPLATE_TYPEDEF
-          printf ("In unparseTemplateTypeDefStmt(): templateTypedef_stmt->get_declaration() = %p \n",templateTypedef_stmt->get_declaration());
+    printf ("In unparseTemplateTypeDefStmt(): templateTypedef_stmt->get_declaration() = %p \n",templateTypedef_stmt->get_declaration());
 #endif
 #if DEBUG_TEMPLATE_TYPEDEF
-          printf ("In unparseTemplateTypeDefStmt(): set reference_node_for_qualification: templateTypedef_stmt = %p = %s \n",templateTypedef_stmt,templateTypedef_stmt->class_name().c_str());
+    printf ("In unparseTemplateTypeDefStmt(): set reference_node_for_qualification: templateTypedef_stmt = %p = %s \n",templateTypedef_stmt,templateTypedef_stmt->class_name().c_str());
 #endif
-          ninfo.set_reference_node_for_qualification(templateTypedef_stmt);
+    ninfo.set_reference_node_for_qualification(templateTypedef_stmt);
 
-       // DQ (2/19/2019): Cxx_tests/test2019_153.C demonstrates that a class declaration can be define in the C++11 SgTemplateTypedefDeclaration.
-       // ROSE_ASSERT(templateTypedef_stmt->get_declaration() == NULL);
+      // DQ (2/19/2019): Cxx_tests/test2019_153.C demonstrates that a class declaration can be define in the C++11 SgTemplateTypedefDeclaration.
+      // ROSE_ASSERT(templateTypedef_stmt->get_declaration() == NULL);
 
-          if (templateTypedef_stmt->get_declaration() == NULL)
-             {
-               ninfo.set_SkipClassDefinition();
-               ninfo.set_SkipEnumDefinition();
-             }
+    if (templateTypedef_stmt->get_declaration() == NULL)
+       {
+         ninfo.set_SkipClassDefinition();
+         ninfo.set_SkipEnumDefinition();
+       }
 
-          unp->u_type->unparseType(base_type, ninfo);
+    unp->u_type->unparseType(base_type, ninfo);
 
-          curprint(";");
-        }
+    curprint(";");
 
 #if DEBUG_TEMPLATE_TYPEDEF
      printf ("Leaving unparseTemplateTypeDefStmt() = %p \n",templateTypedef_stmt);
@@ -12524,7 +12531,7 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
      ASSERT_not_null(stmt);
 
 #if 0
-      printf ("In unparseTemplateDeclarationStatment_support(stmt = %p = %s) \n",stmt,stmt->class_name().c_str());
+     printf ("In unparseTemplateDeclarationStatment_support(stmt = %p = %s) \n",stmt,stmt->class_name().c_str());
 #endif
 #if 0
      curprint("/* In unparseTemplateDeclarationStatment_support() */ \n");
@@ -12532,6 +12539,15 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
 
      T* template_stmt = dynamic_cast<T*>(stmt);
      ASSERT_not_null(template_stmt);
+
+  // Avoid emitting compiler-generated template shells that only carry cached strings.
+  // Keep only truly synthetic nodes suppressed; real source-attached templates should still unparse.
+     if (template_stmt->get_file_info()->isCompilerGenerated()) {
+        std::string fname = template_stmt->get_file_info()->get_filenameString();
+        if (fname.empty() || fname.find('/') == std::string::npos) {
+            return;
+        }
+     }
 
   // DQ (1/28/2013): This helps handle cases such as "#if 1 void foo () #endif { }"
      unparseAttachedPreprocessingInfo(template_stmt, info, PreprocessingInfo::inside);
@@ -12601,20 +12617,20 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
          }
        }
 
-       unparseTemplateHeader(template_stmt, info);
-
-       SgUnparse_Info ninfo(info);
-
        if (templateClassDeclaration != NULL) {
-         // NOTE: Frontend now caches templates before appending to scope (PR #45 fix)
-         // This defensive check remains as a safety measure since AST traversal can reach
-         // the same declaration through multiple paths (fundamental ROSE architecture).
+         // Avoid emitting the same template class twice (nondef/def pairs or cached traversals).
          static std::set<SgTemplateClassDeclaration*> unparsedTemplateClasses;
          if (unparsedTemplateClasses.find(templateClassDeclaration) != unparsedTemplateClasses.end()) {
              return;
          }
          unparsedTemplateClasses.insert(templateClassDeclaration);
+       }
 
+       unparseTemplateHeader(template_stmt, info);
+
+       SgUnparse_Info ninfo(info);
+
+       if (templateClassDeclaration != NULL) {
          ninfo.unset_SkipSemiColon();
          ninfo.set_declstatement_ptr(NULL);
          ninfo.set_declstatement_ptr(templateClassDeclaration);
@@ -12649,6 +12665,14 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
 
          ninfo.set_declstatement_ptr(NULL);
 
+         if (!info.SkipSemiColon()) curprint(";");
+
+       } else if (templateTypedefDeclaration != NULL) {
+         ninfo.unset_SkipSemiColon();
+         ninfo.set_declstatement_ptr(NULL);
+         ninfo.set_declstatement_ptr(templateTypedefDeclaration);
+         unparseTypeDefStmt(templateTypedefDeclaration, ninfo);
+         ninfo.set_declstatement_ptr(NULL);
          if (!info.SkipSemiColon()) curprint(";");
 
        } else if (templateFunctionDeclaration != NULL || templateMemberFunctionDeclaration != NULL) {
@@ -13116,6 +13140,3 @@ Unparse_ExprStmt::unparseMicrosoftAttributeDeclaration (SgStatement* stmt, SgUnp
 
 
  // EOF
-
-
-

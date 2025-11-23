@@ -5,6 +5,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 Area-01.C   dynamic_cast.C   fstream.C   inputBug317.C   inputBug327.C   
 inputForLoopLocator.C   lexPhase2003_01.C   lulesh.C   luleshTALC.C   method-defn-in-tpldecl-0.C   
 method-defn-in-tpldecl-1.C   rose-1431-0.C   rose-1540-0.C   rose-1541-0.C   rose-1701-0.C   
+rex_template_instantiation.C   rex_nested_alias_template.C   rex_partial_specialization.C   rex_std_template_template_param.C
 rose-1766.C   rose-1789-001.C   rose-1814.C   rose-1834.C   rose-1839.C  
 rose-1846.C   rose-1860.C   rose-1998.C   rose-2000-01.C   rose-2000-02.C   
 rose-2007-01.C   rose-2007-02.C   rose-2008.C   rose-2073.C   test2001_01.C   

@@ -7,6 +7,20 @@
 using namespace std;
 using namespace Rose;
 
+namespace {
+// Remove template argument syntax from a name string (best-effort).
+static std::string stripTemplateSyntax(const std::string& name) {
+  std::string out;
+  int depth = 0;
+  for (char c : name) {
+    if (c == '<') { depth++; continue; }
+    if (c == '>') { if (depth > 0) depth--; continue; }
+    if (depth == 0) out += c;
+  }
+  return out;
+}
+} // anonymous namespace
+
 // DQ (10/31/2015): Need to define this in a single location instead of in the header file included by multiple source files.
 MangledNameSupport::setType MangledNameSupport::visitedTemplateDefinitions;
 
@@ -232,6 +246,20 @@ mangleQualifiersToString (const SgScopeStatement* scope)
                case V_SgTemplateInstantiationDefn:
                   {
                     const SgClassDefinition* def = isSgClassDefinition (scope);
+
+                    if (const SgTemplateInstantiationDefn* inst_def = isSgTemplateInstantiationDefn(def)) {
+                        if (SgTemplateInstantiationDecl* inst_decl = isSgTemplateInstantiationDecl(inst_def->get_declaration())) {
+                            SgDeclarationStatement* tmpl_decl = inst_decl->get_templateDeclaration();
+                            SgTemplateArgumentPtrList& args = inst_decl->get_templateArguments();
+                            for (SgTemplateArgument* arg : args) {
+                                if (arg != nullptr &&
+                                    arg->get_argumentType() == SgTemplateArgument::template_template_argument &&
+                                    arg->get_templateDeclaration() == nullptr) {
+                                    arg->set_templateDeclaration(tmpl_decl);
+                                }
+                            }
+                        }
+                    }
 
 #define DEBUG_RECURSIVE_USE 1
 
@@ -475,13 +503,14 @@ mangleQualifiersToString (const SgScopeStatement* scope)
         }
 
   // DQ (5/31/2012): Added test for template brackets that are caught later in AstConsistencyTests.
-  // Make sure that there is no template specific syntax included in the mangled name
-  // if ( mangled_name.find('<') != string::npos )
-     if (SageInterface::hasTemplateSyntax(mangled_name) == true)
-        {
+ // Make sure that there is no template specific syntax included in the mangled name
+ // if ( mangled_name.find('<') != string::npos )
+    if (SageInterface::hasTemplateSyntax(mangled_name) == true)
+       {
        // string name = classDeclaration->get_name().str();
        // printf ("In mangleQualifiersToString(): scope = %p = %s unmangled name = %s check mangled class name = %s \n",scope,scope->class_name().c_str(),name.c_str(),mangled_name.c_str());
           printf ("In mangleQualifiersToString(): scope = %p = %s check mangled class name = %s \n",scope,scope->class_name().c_str(),mangled_name.c_str());
+          mangled_name = stripTemplateSyntax(mangled_name);
         }
 
   // ROSE_ASSERT(mangled_name.find('<') == string::npos);

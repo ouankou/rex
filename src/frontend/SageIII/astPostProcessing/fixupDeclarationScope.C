@@ -164,6 +164,32 @@ FixupAstDeclarationScope::visit ( SgNode* node )
                if (firstNondefiningDeclaration == NULL)
                   {
             	   MLOG_WARN_C("astPostProcessing", "In FixupAstDeclarationScope::visit(): firstNondefiningDeclaration == NULL for case of node = %p = %s (allowed for tutorial example transformations only) \n",node,node->class_name().c_str());
+                   if (SgTemplateInstantiationDecl* inst = isSgTemplateInstantiationDecl(declaration)) {
+                       std::cerr << "DEBUG missing firstNondef: inst name=" << inst->get_name().getString()
+                                 << " scope=" << (inst->get_scope() ? inst->get_scope()->class_name() : "null")
+                                 << " parent=" << (inst->get_parent() ? inst->get_parent()->class_name() : "null")
+                                 << std::endl;
+                       inst->set_firstNondefiningDeclaration(inst);
+                       if (inst->get_templateName().is_null() || inst->get_templateName().getString().empty()) {
+                           SgName fallback = inst->get_name();
+                           if (fallback.is_null() || fallback.getString().empty()) {
+                               if (SgTemplateClassDeclaration* tdecl = inst->get_templateDeclaration()) {
+                                   fallback = tdecl->get_name();
+                               }
+                           }
+                           inst->set_templateName(fallback);
+                       }
+                       declaration = inst;
+                       firstNondefiningDeclaration = inst;
+                   } else if (SgTemplateClassDeclaration* tdecl = isSgTemplateClassDeclaration(declaration)) {
+                       std::cerr << "DEBUG missing firstNondef: template decl name=" << tdecl->get_name().getString()
+                                 << " scope=" << (tdecl->get_scope() ? tdecl->get_scope()->class_name() : "null")
+                                 << " parent=" << (tdecl->get_parent() ? tdecl->get_parent()->class_name() : "null")
+                                 << std::endl;
+                       tdecl->set_firstNondefiningDeclaration(tdecl);
+                       declaration = tdecl;
+                       firstNondefiningDeclaration = tdecl;
+                   }
                   }
                  else
                   {

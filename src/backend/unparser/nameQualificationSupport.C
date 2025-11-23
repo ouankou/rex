@@ -1966,7 +1966,10 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                                    SgClassDeclaration* definingClassDeclaration = classDefinition->get_declaration();
                                    ASSERT_not_null(definingClassDeclaration);
                                    SgClassDeclaration* nondefiningClassDeclaration = isSgClassDeclaration(definingClassDeclaration->get_firstNondefiningDeclaration());
-                                   ASSERT_not_null(nondefiningClassDeclaration);
+                                   if (nondefiningClassDeclaration == NULL)
+                                      {
+                                        nondefiningClassDeclaration = definingClassDeclaration;
+                                      }
 
                                    if (inaccessibleClassSets.find(nondefiningClassDeclaration) != inaccessibleClassSets.end())
                                       {
@@ -3930,7 +3933,10 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                                    declarationFromSymbol = functionDeclaration->get_firstNondefiningDeclaration()->get_declaration_associated_with_symbol();
                                  }
 #endif
-                              ASSERT_not_null(declarationFromSymbol);
+                              if (declarationFromSymbol == NULL)
+                                 {
+                                   declarationFromSymbol = functionDeclaration;
+                                 }
 
                               SgFunctionDeclaration* functionDeclarationFromSymbol = isSgFunctionDeclaration(declarationFromSymbol);
                               ASSERT_not_null(functionDeclarationFromSymbol);

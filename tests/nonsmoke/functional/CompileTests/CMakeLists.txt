@@ -51,6 +51,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
    add_subdirectory(C_tests)
    add_subdirectory(C89_std_c89_tests)
    add_subdirectory(C_subset_of_Cxx_tests)
+   add_subdirectory(Cxx_tests)
    add_subdirectory(OpenClTests)
    # REX: OpenMP tests now work with Clang frontend
    if(enable-c)
@@ -112,4 +113,3 @@ else()
      #add_subdirectory(Python_tests)
   endif()
 endif() # end of ROSE_USE_CLANG_FRONTEND
-
