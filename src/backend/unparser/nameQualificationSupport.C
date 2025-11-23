@@ -11176,7 +11176,9 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
           ASSERT_not_null(type);
 
           SgNamedType* namedType = isSgNamedType(type);
-          ASSERT_not_null(namedType);
+          if (namedType == NULL) {
+             return inheritedAttribute;
+          }
 
           SgDeclarationStatement* declarationStatement = namedType->get_declaration();
           ASSERT_not_null(declarationStatement);

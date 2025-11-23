@@ -1303,11 +1303,101 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(clang::FunctionTemplateDec
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitFunctionTemplateDecl" << std::endl;
 #endif
-    if (function_template_decl != nullptr) {
-        Traverse(function_template_decl->getTemplatedDecl());
+    if (function_template_decl == nullptr) {
+        *node = NULL;
+        return false;
     }
-    *node = NULL;
-    return false;
+
+    // Reuse an existing translation if available.
+    auto it = p_decl_translation_map.find(function_template_decl);
+    if (it != p_decl_translation_map.end()) {
+        *node = it->second;
+        return true;
+    }
+
+    // Translate the templated declaration to ensure the function body/signature exists in the AST.
+    SgNode* templated_node = Traverse(function_template_decl->getTemplatedDecl());
+    SgFunctionDeclaration* func_decl = isSgFunctionDeclaration(templated_node);
+    if (func_decl == nullptr) {
+        *node = NULL;
+        return false;
+    }
+
+    // Remove the non-template declaration if it was appended to the scope so we don't emit a duplicate.
+    if (func_decl->get_parent() != nullptr) {
+        if (SgScopeStatement* parent_scope = isSgScopeStatement(func_decl->get_parent())) {
+            SgDeclarationStatementPtrList& decls = parent_scope->getDeclarationList();
+            if (std::find(decls.begin(), decls.end(), func_decl) != decls.end()) {
+                SageInterface::removeStatement(func_decl);
+            }
+        }
+        func_decl->set_parent(nullptr);
+    }
+
+    SgScopeStatement* scope = func_decl->get_scope();
+    if (scope == nullptr) scope = SageBuilder::topScopeStack();
+    if (scope == nullptr) scope = getGlobalScope();
+
+    // Build template parameters.
+    SgTemplateParameterPtrList* params =
+        translateTemplateParameterList(function_template_decl->getTemplateParameters(), nullptr);
+    ensureTemplateTemplateParamsAnchored(params);
+
+    // Copy the parameter list for the template declarations.
+    SgFunctionParameterList* params_copy =
+        isSgFunctionParameterList(SageInterface::deepCopyNode(func_decl->get_parameterList()));
+    SgTemplateFunctionDeclaration* nondef =
+        SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+            func_decl->get_name(),
+            func_decl->get_orig_return_type(),
+            params_copy,
+            scope,
+            nullptr,
+            params);
+
+    // Propagate modifiers/storage to align with the original declaration.
+    nondef->get_functionModifier() = func_decl->get_functionModifier();
+    nondef->get_declarationModifier() = func_decl->get_declarationModifier();
+
+    SgTemplateFunctionDeclaration* def = nondef;
+    if (func_decl->get_definition() != nullptr) {
+        SgFunctionParameterList* def_params_copy =
+            isSgFunctionParameterList(SageInterface::deepCopyNode(func_decl->get_parameterList()));
+        def = SageBuilder::buildDefiningTemplateFunctionDeclaration(
+            func_decl->get_name(),
+            func_decl->get_orig_return_type(),
+            def_params_copy,
+            scope,
+            nullptr,
+            nondef);
+        def->get_functionModifier() = func_decl->get_functionModifier();
+        def->get_declarationModifier() = func_decl->get_declarationModifier();
+
+        // Reuse the original function body if available.
+        if (SgFunctionDefinition* func_def = func_decl->get_definition()) {
+            if (SgTemplateFunctionDefinition* tpl_def = isSgTemplateFunctionDefinition(def->get_definition())) {
+                tpl_def->set_body(func_def->get_body());
+                if (tpl_def->get_body()) tpl_def->get_body()->set_parent(tpl_def);
+            }
+        }
+    }
+
+    applySourceRange(nondef, function_template_decl->getSourceRange());
+    applySourceRange(def, function_template_decl->getSourceRange());
+
+    // Cache using both the FunctionTemplateDecl and its templated declaration.
+    p_decl_translation_map.insert(std::make_pair(function_template_decl, def));
+    p_decl_translation_map.insert(std::make_pair(function_template_decl->getTemplatedDecl(), def));
+
+    // Insert into the current scope.
+    if (def->get_parent() == nullptr && scope != nullptr) {
+        SageInterface::appendStatement(def, scope);
+    }
+
+    delete params;
+
+    *node = def;
+    return true;
 }
 
 bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(clang::TypeAliasTemplateDecl * type_alias_template_decl, SgNode ** node) {

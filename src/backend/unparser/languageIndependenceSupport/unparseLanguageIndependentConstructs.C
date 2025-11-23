@@ -5184,25 +5184,9 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
                      break;
                  }
                  if (!emittedFallbackInclude) {
-                     // Best-effort: preserve essential standard headers when preprocessing info was lost.
-                     std::vector<std::string> defaults = {"#include <chrono>", "#include <ratio>", "#include <vector>"};
-                     for (const auto & inc : defaults) {
-                         std::string key = makeIncludeKey(sourceName, inc);
-                         if (getEmittedIncludeSet().insert(key).second) {
-                             curprint(inc + "\n");
-                         }
-                     }
-                     emittedFallbackInclude = true;
+                     // No includes were found; leave the file as-is instead of injecting defaults.
                  }
              } else {
-                 // As a last resort, emit the common headers used by template-heavy tests.
-                 std::vector<std::string> defaults = {"#include <chrono>", "#include <ratio>", "#include <vector>"};
-                 for (const auto & inc : defaults) {
-                     std::string key = makeIncludeKey(sourceName, inc);
-                     if (getEmittedIncludeSet().insert(key).second) {
-                         curprint(inc + "\n");
-                     }
-                 }
              }
             if (emittedFallbackInclude) {
                 getFilesWithIncludesEmitted().insert(sourceName);
