@@ -8655,14 +8655,10 @@ UnparseLanguageIndependentConstructs::unparseIncludeDirectiveStatement (SgStatem
     std::string includeKey       = makeIncludeKey(currentFileName, directiveString);
 
   // Avoid emitting the same include directive multiple times for a file.
-     if (getFilesWithIncludesEmitted().find(currentFileName) != getFilesWithIncludesEmitted().end()) {
-         return;
-     }
      if (getEmittedIncludeSet().find(includeKey) != getEmittedIncludeSet().end()) {
          return;
      }
      getEmittedIncludeSet().insert(includeKey);
-     getFilesWithIncludesEmitted().insert(currentFileName);
 
 #if 0
      printf ("In unparseIncludeDirectiveStatement: usingTokenUnparsing = %s \n",usingTokenUnparsing ? "true" : "false");
