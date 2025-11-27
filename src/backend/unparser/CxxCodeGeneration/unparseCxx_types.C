@@ -33,24 +33,27 @@ static std::string strip_redundant_qualification(std::string name, const SgUnpar
     name.erase(0, first_non_space);
   }
 
-  // Remove any leading global qualifiers
-  while (name.size() > 2 && name.compare(0, 2, "::") == 0) {
-    name = name.substr(2);
-  }
-
-  // Drop redundant global qualifiers that appear immediately after delimiters (e.g., "<::std::tuple>")
-  auto is_identifier_char = [](char c) {
-    return isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '>';
-  };
-  for (size_t i = 0; i + 1 < name.size(); /* increment inside */) {
-    if (name[i] == ':' && name[i+1] == ':') {
-      bool preceded_by_identifier = (i > 0) && is_identifier_char(name[i-1]);
-      if (!preceded_by_identifier) {
-        name.erase(i, 2);
-        continue;
-      }
+  // Only strip explicit global qualification when it is not required by the unparse info.
+  if (info.get_global_qualification_required() == false) {
+    // Remove any leading global qualifiers
+    while (name.size() > 2 && name.compare(0, 2, "::") == 0) {
+      name = name.substr(2);
     }
-    ++i;
+
+    // Drop redundant global qualifiers that appear immediately after delimiters (e.g., "<::std::tuple>")
+    auto is_identifier_char = [](char c) {
+      return isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '>';
+    };
+    for (size_t i = 0; i + 1 < name.size(); /* increment inside */) {
+      if (name[i] == ':' && name[i+1] == ':') {
+        bool preceded_by_identifier = (i > 0) && is_identifier_char(name[i-1]);
+        if (!preceded_by_identifier) {
+          name.erase(i, 2);
+          continue;
+        }
+      }
+      ++i;
+    }
   }
 
   // Determine enclosing class from current scope or from the named type declaration.

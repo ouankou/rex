@@ -1171,6 +1171,38 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
     return template_decl;
 }
 
+namespace {
+// Build a literal expression from an APSInt while preserving sign and (as text) width.
+SgExpression* buildIntegralTemplateArgExpr(const llvm::APSInt& value, SgType* int_type) {
+    const bool is_signed = value.isSigned();
+    const unsigned bitwidth = value.getBitWidth();
+
+    SgExpression* expr = NULL;
+    if (is_signed) {
+        // Use the widest native builder we have; valueString keeps the full precision.
+        long long v = (bitwidth <= 63) ? value.getSExtValue() : 0;
+        expr = SageBuilder::buildLongLongIntVal(v);
+    } else {
+        unsigned long long v = (bitwidth <= 64) ? value.getZExtValue() : 0;
+        expr = SageBuilder::buildUnsignedLongLongIntVal(v);
+    }
+
+    if (expr != NULL) {
+        llvm::SmallString<64> buf;
+        value.toString(buf, 10, value.isSigned());
+        std::string text(buf.begin(), buf.end());
+
+        if (SgLongLongIntVal* ll = isSgLongLongIntVal(expr)) {
+            ll->set_valueString(text);
+        } else if (SgUnsignedLongLongIntVal* ull = isSgUnsignedLongLongIntVal(expr)) {
+            ull->set_valueString(text);
+        }
+    }
+
+    return expr;
+}
+} // namespace
+
 SgTemplateArgumentPtrList
 ClangToSageTranslator::buildTemplateArguments(
     const clang::TemplateSpecializationType* clang_type) {
@@ -1196,12 +1228,7 @@ ClangToSageTranslator::buildTemplateArguments(
                 llvm::APSInt value = arg.getAsIntegral();
                 SgType* int_type = buildTypeFromQualifiedType(arg.getIntegralType());
 
-                // DEBUG
-                // std::cerr << "DEBUG: Integral argument value: " << value.getLimitedValue() << std::endl;
-
-                // Create integer literal expression
-                SgExpression* value_expr = SageBuilder::buildIntVal(
-                    value.getLimitedValue());
+                SgExpression* value_expr = buildIntegralTemplateArgExpr(value, int_type);
 
                 sg_arg = new SgTemplateArgument(
                     SgTemplateArgument::nontype_argument,

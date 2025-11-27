@@ -2,6 +2,7 @@
 #include "clang-frontend-private.hpp"
 #include <algorithm>
 #include <set>
+#include "llvm/ADT/SmallString.h"
 
 SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * decl) {
     if (decl == NULL) return NULL;
@@ -492,7 +493,24 @@ SgTemplateParameter * ClangToSageTranslator::translateTemplateParameter ( clang:
                 }
                 case clang::TemplateArgument::Integral: {
                     const llvm::APSInt& value = default_arg.getAsIntegral();
-                    sg_default_expr = SageBuilder::buildIntVal(value.getLimitedValue());
+                    bool is_signed = value.isSigned();
+                    unsigned bitwidth = value.getBitWidth();
+                    if (is_signed) {
+                        long long v = (bitwidth <= 63) ? value.getSExtValue() : 0;
+                        sg_default_expr = SageBuilder::buildLongLongIntVal(v);
+                    } else {
+                        unsigned long long v = (bitwidth <= 64) ? value.getZExtValue() : 0;
+                        sg_default_expr = SageBuilder::buildUnsignedLongLongIntVal(v);
+                    }
+                    if (SgLongLongIntVal* ll = isSgLongLongIntVal(sg_default_expr)) {
+                        llvm::SmallString<64> buf;
+                        value.toString(buf, 10, value.isSigned());
+                        ll->set_valueString(std::string(buf.begin(), buf.end()));
+                    } else if (SgUnsignedLongLongIntVal* ull = isSgUnsignedLongLongIntVal(sg_default_expr)) {
+                        llvm::SmallString<64> buf;
+                        value.toString(buf, 10, value.isSigned());
+                        ull->set_valueString(std::string(buf.begin(), buf.end()));
+                    }
                     break;
                 }
                 default:
