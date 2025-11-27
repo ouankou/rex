@@ -20,6 +20,22 @@ SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * de
     // Add this decl to the in-progress set
     p_symbol_lookup_in_progress.insert(decl);
 
+    // REX FIX: Check if the declaration has already been translated
+    // Only for Typedef/TypeAlias to avoid issues with Variables (see rex_template_instantiation.C)
+    if (llvm::isa<clang::TypedefNameDecl>(decl)) {
+        std::map<clang::Decl *, SgNode *>::iterator it_decl = p_decl_translation_map.find(decl);
+        if (it_decl != p_decl_translation_map.end()) {
+            SgNode * node = it_decl->second;
+            if (SgDeclarationStatement * decl_stmt = isSgDeclarationStatement(node)) {
+                 SgSymbol * symbol = decl_stmt->get_symbol_from_symbol_table();
+                 if (symbol != NULL) {
+                     p_symbol_lookup_in_progress.erase(decl);
+                     return symbol;
+                 }
+            }
+        }
+    }
+
     SgScopeStatement * scope = SageBuilder::topScopeStack();
 
 
@@ -1606,16 +1622,17 @@ bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(clang::TypeAliasTemplateD
     // REX FIX: Set template parameters on the declaration!
     template_typedef->get_templateParameters() = *template_params;
 
-    // Append to scope
-    if (scope) {
-        scope->append_statement(template_typedef);
-    }
+    // REX FIX: Do not append to scope here. VisitTranslationUnitDecl handles it.
+    // if (scope) {
+    //     scope->append_statement(template_typedef);
+    // }
 
     // Add to map
     p_decl_translation_map.insert(std::make_pair(type_alias_template_decl, template_typedef));
     
     *node = template_typedef;
-    return VisitRedeclarableTemplateDecl(type_alias_template_decl, node) && res;
+    // REX FIX: Do not call VisitRedeclarableTemplateDecl -> VisitTemplateDecl as it clears *node to NULL
+    return true;
 }
 
 bool ClangToSageTranslator::VisitVarTemplateDecl(clang::VarTemplateDecl * var_template_decl, SgNode ** node) {

@@ -3791,7 +3791,8 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                     }
 
                     std::string qualStr = strip_redundant_qualification(nameQualifier.str(), info, type);
-                    curprint(qualStr);
+                    // REX FIX: Prepend empty comment to ensure qualification is not stripped by unparser
+                    if (!qualStr.empty()) curprint("/* */" + qualStr);
 
                  // DQ (4/14/2018): This is not the correct way to handle the output of template instantations since this uses the internal name (with unqualified template arguments).
 
