@@ -2887,22 +2887,16 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                          // printf("DEBUG: unparseClassType for 'vector'. qualStr='%s'. Scope='%s'\n", qualStr.c_str(), scopeName.c_str());
                         }
 
-                        if (qualStr.size() > 2 && qualStr.compare(0,2,"::") == 0) {
+                        // Preserve explicit global qualification when required; otherwise trim redundancies.
+                        if (info.get_global_qualification_required() == false) {
+                          while (qualStr.size() > 2 && qualStr.compare(0,2,"::") == 0) {
                             qualStr = qualStr.substr(2);
+                          }
+                          if (qualStr == "::") {
+                            qualStr = "";
+                          }
                         }
-                        if (qualStr == "::") {
-                            // Check if we should strip it (e.g. for vector or simple names)
-                            // For vector, we want std::vector
-                            // if (nm == "vector") { ... } REMOVED
-                             
-                             // Generic stripping:
-                             // If it is ::Name, and we are in global scope, strip ::
-                             // But we don't know if we are in global scope easily here.
-                             // However, :: is usually redundant unless shadowing.
-                             // Let's strip it for now.
-                             qualStr = "";
-                         }
-                         curprint(qualStr);
+                        curprint(qualStr);
 
                          SgTemplateInstantiationDecl* templateInstantiationDeclaration = isSgTemplateInstantiationDecl(decl);
 
