@@ -2697,6 +2697,15 @@ HEADER_VARIANT_STATEMENT_END
 
 HEADER_TYPEDEF_DECLARATION_STATEMENT_START
        // void post_construction_initialization();
+
+          enum typedef_type_enum
+             {
+               e_unknown = 0,
+               e_typedef = 1,
+               e_using   = 2,
+               e_last_typedef_type
+             };
+
 #if 0
           SgStatement *get_next(int&) const;
 #endif

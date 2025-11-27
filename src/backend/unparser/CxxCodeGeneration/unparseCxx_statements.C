@@ -11546,7 +11546,8 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
      SgType* base_type = typedef_stmt->get_base_type();
      bool is_elaborated = isSgClassType(base_type) || isSgEnumType(base_type);
 
-     if (sourcefile && !sourcefile->get_C_only() && !is_elaborated) {
+     // REX FIX: Use enum to determine typedef vs using
+     if (typedef_stmt->get_typedef_type() == SgTypedefDeclaration::e_using) {
           curprint("using ");
           curprint(typedef_stmt->get_name().str());
           curprint(" = ");

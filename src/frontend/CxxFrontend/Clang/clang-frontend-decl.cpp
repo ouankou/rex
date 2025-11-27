@@ -2310,6 +2310,8 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl * typedef_decl, 
         }
     }
 
+    sg_typedef_decl->set_typedef_type(SgTypedefDeclaration::e_typedef);
+
     *node = sg_typedef_decl;
 
     return VisitTypedefNameDecl(typedef_decl, node) && res;
@@ -2330,6 +2332,8 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(clang::TypeAliasDecl * type_alias
     SgType * type = buildTypeFromQualifiedType(underlyingQualType);
 
     SgTypedefDeclaration * sg_typedef_decl = SageBuilder::buildTypedefDeclaration_nfi(name, type, SageBuilder::topScopeStack());
+
+    sg_typedef_decl->set_typedef_type(SgTypedefDeclaration::e_using);
 
     *node = sg_typedef_decl;
 

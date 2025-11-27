@@ -2689,6 +2689,9 @@ Grammar::setUpStatements ()
      TypedefDeclaration.setDataPrototype ( "SgType*", "base_type", "= NULL",
                                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
+     TypedefDeclaration.setDataPrototype ( "SgTypedefDeclaration::typedef_type_enum", "typedef_type", "= SgTypedefDeclaration::e_unknown",
+                                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   // TypedefDeclaration.setDataPrototype ( "SgTypedefType*", "type", "= NULL",
   //              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      TypedefDeclaration.setDataPrototype ( "SgTypedefType*", "type", "= NULL",
