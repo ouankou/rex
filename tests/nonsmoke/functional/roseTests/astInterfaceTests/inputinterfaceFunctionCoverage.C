@@ -209,19 +209,6 @@ int test_moveVariableDeclaration(int j)
   return j; 
 }
 
-
-// Reproduction cases for reported issues
-#include <chrono>
-#include <ratio>
-#include <tuple>
-
-template <template <typename ...> typename C, typename ... Args>
-void test_template_template() {}
-
-void test_chrono() {
-    std::chrono::duration<double, std::ratio<1, 1000>> ms(1.5);
-}
-
 int main(int argc, char* argv[])
 {
   // usage
@@ -239,11 +226,6 @@ int main(int argc, char* argv[])
   {
     cout<<"argc >1"<<endl;
   }
-  
-  test_chrono();
-  
-  // Instantiate template template
-  test_template_template<std::tuple, int>();
 
   return 0;
 }
