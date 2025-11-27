@@ -69,6 +69,12 @@ namespace SageInterface
 
   ROSE_DLL_API extern Transformation_Record trans_records;
 
+  // REX FIX: Template parameter keyword helpers
+  // SgTemplateParameter cannot store attributes directly (inherits SgSupport).
+  // So we use a global map to store the keyword.
+  ROSE_DLL_API void setTemplateParameterKeyword(SgTemplateParameter* param, std::string kw);
+  ROSE_DLL_API std::string getTemplateParameterKeyword(SgTemplateParameter* param);
+
   // DQ (4/3/2014): Added general AST support separate from the AST.
 
   // Container and API for analysis information that is outside of the AST and as a result
