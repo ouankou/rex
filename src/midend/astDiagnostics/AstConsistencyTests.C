@@ -1125,12 +1125,6 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                          break;
                        }
 
-                    case V_SgPseudoDestructorRefExp:
-                       {
-                      // Pseudo-destructor calls (e.g., p->~T()) are valid function call targets.
-                         break;
-                       }
-
                     case V_SgNonrealRefExp:
                        {
                       // TV (05/10/2018): FIXME checks ???
@@ -1140,14 +1134,6 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                     default:
                        {
                          printf ("Error case default in switch (functionExpression = %s) \n",functionExpression->class_name().c_str());
-                         if (functionExpression->get_file_info() != NULL)
-                            {
-                              std::cerr << "AstDiagnostics: unexpected function expression '"
-                                        << functionExpression->class_name() << "' at "
-                                        << functionExpression->get_file_info()->get_filenameString()
-                                        << ":" << functionExpression->get_file_info()->get_line()
-                                        << std::endl;
-                            }
                          ROSE_ABORT();
                        }
                   }
@@ -4603,26 +4589,8 @@ TestMangledNames::visit ( SgNode* node )
             // DQ (5/25/2013): This is failing for the astInterface tests: deepDelete.C
                if (decl->get_scope() == NULL)
                   {
-                    static int nullScopeWarnings = 0;
-                    if (nullScopeWarnings < 16)
-                       {
-                         std::string filename = decl->get_file_info() ? decl->get_file_info()->get_filenameString() : "<no source position>";
-                         std::string parentName = decl->get_parent() ? decl->get_parent()->class_name() : "<no parent>";
-                         fprintf(stderr, "AstConsistency(TestMangledNames): missing scope for %s at %s (parent %s)\n",
-                                 decl->class_name().c_str(), filename.c_str(), parentName.c_str());
-                         ++nullScopeWarnings;
-                       }
                  // printf ("ERROR: TestMangledNames::visit(): decl = %p = %s \n",decl,decl != NULL ? decl->class_name().c_str() : "null");
                     printf ("ERROR: TestMangledNames::visit(): decl = %p \n",decl);
-                    if (decl->get_file_info() != NULL)
-                       {
-                         std::string filename = decl->get_file_info()->get_filenameString();
-                         if (filename.find("/usr/include/") != std::string::npos)
-                            {
-                           // For declarations in system headers, tolerate missing scope information.
-                             return;
-                            }
-                       }
                   }
                ROSE_ASSERT(decl->get_scope() != NULL);
 #if 0
