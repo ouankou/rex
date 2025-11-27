@@ -872,6 +872,19 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
     ROSE_ASSERT(ret_status == false || result != NULL);
 
     if (ret_status && result != NULL) {
+        if (SgDeclarationStatement* ds = isSgDeclarationStatement(result)) {
+            if (ds->get_parent() == NULL) {
+                if (SgScopeStatement* cur_scope = SageBuilder::topScopeStack()) {
+                    ds->set_parent(cur_scope);
+                }
+            }
+            // Only query get_scope() after parent is set (get_scope asserts parent != NULL).
+            if (ds->get_scope() == NULL) {
+                if (SgScopeStatement* cur_scope = SageBuilder::topScopeStack()) {
+                    ds->set_scope(cur_scope);
+                }
+            }
+        }
         p_decl_translation_map.insert(std::pair<clang::Decl *, SgNode *>(decl, result));
     }
 

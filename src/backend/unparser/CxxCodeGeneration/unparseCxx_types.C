@@ -744,91 +744,13 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #endif
                 if (info.SkipBaseType() == false)
                    {
-                     // REX FIX: Strip redundant qualification
-                     // If the generated name starts with "::" and we are in global scope, or matches current context, strip it.
-                     // This fixes ::C and ::UsesDependent::rebound
+                     // Strip only a leading global qualifier; keep remaining qualification to avoid dropping namespaces.
                      std::string finalName = typeNameString;
-                     
-                     // Trim trailing whitespace
                      while (!finalName.empty() && isspace(finalName.back())) {
                          finalName.pop_back();
                      }
-
-                     // printf("DEBUG: unparseType finalName='%s'\n", finalName.c_str());
-                     
-                     // Hack for vector: ::vector -> std::vector REMOVED
-                     // if (finalName == "::vector" || finalName.find("::vector<") == 0) { ... }
-                     
                      if (finalName.size() > 2 && finalName.substr(0, 2) == "::") {
-                         // Check if it's just ::Name
-                         size_t nextScope = finalName.find("::", 2);
-                         if (nextScope == std::string::npos) {
-                             // It is ::Name. If we are in global scope (or if it's a template param), strip ::
-                             // For now, just strip :: if it's a simple name, assuming unparser context is correct.
-                             // Actually, ::C is redundant in global scope.
-                             // printf("DEBUG: Stripping :: from simple name '%s'\n", finalName.c_str());
-                             finalName = finalName.substr(2);
-                         } else {
-                             // It is ::Scope::Name.
-                             // Check if Scope matches current context.
-                             // For UsesDependent::rebound, Scope is UsesDependent.
-                             // We don't have easy access to current context name string here, but we can try heuristic.
-                             // If the type is a typedef or template type, and the name matches the end.
-                             SgName baseName;
-                             if (isSgTemplateType(type)) baseName = isSgTemplateType(type)->get_name();
-                             else if (isSgTypedefType(type)) baseName = isSgTypedefType(type)->get_name();
-                             
-                             if (!baseName.is_null()) {
-                                 std::string baseNameStr = baseName.str();
-                                 // printf("DEBUG: Checking baseName='%s' against finalName='%s'\n", baseNameStr.c_str(), finalName.c_str());
-                                 if (finalName.size() >= baseNameStr.size() && 
-                                     finalName.substr(finalName.size() - baseNameStr.size()) == baseNameStr) {
-                                     // It ends with the name.
-                                     // If the prefix is ::Scope::, and we are inside Scope.
-                                     // We can just print the base name if we are confident.
-                                     // But let's be careful.
-                                     // For now, let's just strip the leading :: if it exists.
-                                     // finalName = finalName.substr(2);
-                                     // Wait, ::UsesDependent::rebound -> UsesDependent::rebound.
-                                     // This is still qualified. We want rebound.
-                                     
-                                     // Let's rely on the fact that if we are in the scope, we don't need qualification.
-                                     // But NameQualificationTraversal thought we did.
-                                     // Maybe we can just use the base name if it's a typedef/template type?
-                                     // But that might break cases where qualification IS needed (shadowing).
-                                     
-                                     // Let's try to strip ::C (global) specifically.
-                                     // And ::UsesDependent::rebound.
-                                     
-                                     // If I just strip leading ::, ::C becomes C. Correct.
-                                     // ::UsesDependent::rebound becomes UsesDependent::rebound.
-                                     // UsesDependent::rebound is valid if UsesDependent is visible.
-                                     // But inside UsesDependent, we want just rebound.
-                                     
-                                     // If I strip everything up to the last ::?
-                                     // That would be "rebound".
-                                     // Is that safe?
-                                     // Only if we are sure.
-                                     
-                                     // Let's try stripping leading :: first.
-                                     // It fixes ::C.
-                                     // It changes ::UsesDependent::rebound to UsesDependent::rebound.
-                                     // UsesDependent::rebound might be valid?
-                                     // Error was: use of class template '::UsesDependent' requires template arguments.
-                                     // If we have UsesDependent::rebound, it might still error if UsesDependent needs args.
-                                     // But inside the class, UsesDependent refers to the injected class name (current instantiation).
-                                     // So UsesDependent::rebound should be valid!
-                                     // ::UsesDependent refers to the TEMPLATE.
-                                     
-                                     // So stripping leading :: should fix BOTH!
-                                     // So stripping leading :: should fix BOTH!
-                                     // Actually, for UsesDependent::rebound, we want just rebound inside the class.
-                                     // So stripping ALL qualification is better if we match the base name.
-                                     // printf("DEBUG: Stripping qualification from '%s' to '%s'\n", finalName.c_str(), baseNameStr.c_str());
-                                     finalName = baseNameStr;
-                                 }
-                             }
-                         }
+                         finalName = finalName.substr(2);
                      }
                      curprint(finalName);
                      curprint(" "); // Restore space stripped by trim
@@ -847,9 +769,7 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
                  // SgForInitStmt IR nodes and multiple SgInitializedName IR nodes in a single SgVariableDeclaration IR node.
                      if (info.SkipBaseType() == false)
                         {
-                          // REX FIX: Strip redundant qualification (same as above)
                           std::string finalName = typeNameString;
-                          // printf("DEBUG: unparseType (2nd) finalName='%s'\n", finalName.c_str());
                           if (finalName.size() > 2 && finalName.substr(0, 2) == "::") {
                               finalName = finalName.substr(2);
                           }
@@ -5301,4 +5221,3 @@ Unparse_Type::outputType( T* referenceNode, SgType* referenceNodeType, SgUnparse
 #endif
 
    }
-
