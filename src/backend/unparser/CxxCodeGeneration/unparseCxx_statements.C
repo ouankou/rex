@@ -11531,6 +11531,7 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
 
      // REX FIX: Handle SgTemplateTypedefDeclaration with 'using' syntax
      if (SgTemplateTypedefDeclaration* templateTypedef = isSgTemplateTypedefDeclaration(stmt)) {
+         unparseTemplateHeader(templateTypedef, info);
          curprint("using ");
          curprint(templateTypedef->get_name().str());
          curprint(" = ");
@@ -12658,7 +12659,9 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
          }
        }
 
-       unparseTemplateHeader(template_stmt, info);
+       if (templateTypedefDeclaration == NULL) {
+           unparseTemplateHeader(template_stmt, info);
+       }
 
        SgUnparse_Info ninfo(info);
 
