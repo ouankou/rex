@@ -26,6 +26,32 @@ using namespace Rose;
 #define OUTPUT_HIDDEN_LIST_DATA 0
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
+namespace {
+// Remove a leading global qualifier (\"::\") from a template or type name. The unparser already
+// handles necessary name qualification via scope lookup, so retaining a redundant global prefix
+// results in doubled qualification (e.g., \"<::std::tuple>\").
+std::string strip_leading_global(std::string name)
+   {
+     // Trim leading whitespace
+     size_t first_non_space = 0;
+     while (first_non_space < name.size() && isspace(name[first_non_space]))
+        {
+          ++first_non_space;
+        }
+     if (first_non_space > 0)
+        {
+          name.erase(0, first_non_space);
+        }
+
+     // Strip any leading global qualifiers
+     while (name.size() > 2 && name.compare(0,2,"::") == 0)
+        {
+          name = name.substr(2);
+        }
+     return name;
+   }
+}
+
 #ifdef _MSC_VER
 #include "Cxx_Grammar.h"
 #endif
@@ -654,7 +680,9 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
      unp->u_exprStmt->curprint ("/* In unparseTemplateName(): output templateInstantiationDeclaration->get_templateName() */ ");
 #endif
 
-     unp->u_exprStmt->curprint ( templateInstantiationDeclaration->get_templateName().str());
+     std::string templateName = templateInstantiationDeclaration->get_templateName().str();
+     templateName = strip_leading_global(templateName);
+     unp->u_exprStmt->curprint ( templateName);
 
   // DQ (8/24/2014): Made this a warning instead of an error (see unparseToString/test2004_35.C).
   // DQ (5/7/2013): I think these should be false so that the full type will be output.
@@ -685,10 +713,12 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
 void
 Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDecl* templateInstantiationFunctionDeclaration, SgUnparse_Info& info)
    {
-  // DQ (6/21/2011): Generated this function from refactored call to unparseTemplateArgumentList
+ // DQ (6/21/2011): Generated this function from refactored call to unparseTemplateArgumentList
      ASSERT_not_null(templateInstantiationFunctionDeclaration);
 
-     unp->u_exprStmt->curprint(templateInstantiationFunctionDeclaration->get_templateName().str());
+     std::string functionTemplateName = templateInstantiationFunctionDeclaration->get_templateName().str();
+     functionTemplateName = strip_leading_global(functionTemplateName);
+     unp->u_exprStmt->curprint(functionTemplateName);
 
      bool unparseTemplateArguments = templateInstantiationFunctionDeclaration->get_template_argument_list_is_explicit();
 
@@ -1609,7 +1639,11 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                }
                curprint(kw);
 
-               curprint(nrdecl->get_name());
+               std::string name_str = nrdecl->get_name().getString();
+               if (name_str.size() > 2 && name_str.compare(0,2,"::") == 0) {
+                   name_str = name_str.substr(2);
+               }
+               curprint(name_str);
 #if 0
                printf ("unparseTemplateParameter(): case SgTemplateParameter::template_parameter: Sorry, not implemented! \n");
                ROSE_ABORT();

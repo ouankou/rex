@@ -335,6 +335,26 @@ ClangToSageTranslator::translateTemplateParameterList(
     return sg_params;
 }
 
+namespace {
+// Ensure a declaration has parent and scope set using the current scope stack as fallback.
+// Logs a warning if the scope remains unset (will trip diagnostics later).
+void ensure_parent_and_scope(SgDeclarationStatement* ds) {
+    if (ds == NULL) return;
+
+    SgScopeStatement* cur_scope = SageBuilder::topScopeStack();
+    if (ds->get_parent() == NULL && cur_scope != NULL) {
+        ds->set_parent(cur_scope);
+    }
+    if (ds->get_scope() == NULL && cur_scope != NULL) {
+        ds->set_scope(cur_scope);
+    }
+    if (ds->get_scope() == NULL) {
+        MLOG_WARN_C(MLOG_FRONTEND, "Declaration %s (%p) still has null scope after translation\n",
+                    ds->class_name().c_str(), ds);
+    }
+}
+} // unnamed namespace
+
 void
 ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def) {
     SageBuilder::pushScopeStack(class_def);
@@ -351,6 +371,9 @@ ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, S
         if (SgDeclarationStatement* child_decl = isSgDeclarationStatement(sg_child)) {
             if (child_decl->get_parent() == NULL) {
                 child_decl->set_parent(class_def);
+            }
+            if (child_decl->get_scope() == NULL) {
+                child_decl->set_scope(class_def);
             }
             class_def->append_member(child_decl);
         }
@@ -873,17 +896,7 @@ SgNode * ClangToSageTranslator::Traverse(clang::Decl * decl) {
 
     if (ret_status && result != NULL) {
         if (SgDeclarationStatement* ds = isSgDeclarationStatement(result)) {
-            if (ds->get_parent() == NULL) {
-                if (SgScopeStatement* cur_scope = SageBuilder::topScopeStack()) {
-                    ds->set_parent(cur_scope);
-                }
-            }
-            // Only query get_scope() after parent is set (get_scope asserts parent != NULL).
-            if (ds->get_scope() == NULL) {
-                if (SgScopeStatement* cur_scope = SageBuilder::topScopeStack()) {
-                    ds->set_scope(cur_scope);
-                }
-            }
+            ensure_parent_and_scope(ds);
         }
         p_decl_translation_map.insert(std::pair<clang::Decl *, SgNode *>(decl, result));
     }
