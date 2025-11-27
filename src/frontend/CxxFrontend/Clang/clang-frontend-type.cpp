@@ -1069,6 +1069,25 @@ ClangToSageTranslator::buildTemplateParameters(
                 }
                 break;
 
+            case clang::TemplateArgument::Declaration: {
+                // Non-type parameter (e.g., void (*F)())
+                param_kind = SgTemplateParameter::nontype_parameter;
+                clang::ValueDecl* decl = arg.getAsDecl();
+                if (decl) {
+                    param_type = buildTypeFromQualifiedType(decl->getType());
+                } else {
+                    // Should not happen for Declaration kind
+                    param_type = SageBuilder::buildVoidType(); 
+                }
+                break;
+            }
+
+            case clang::TemplateArgument::NullPtr:
+                // Non-type parameter (e.g., nullptr)
+                param_kind = SgTemplateParameter::nontype_parameter;
+                param_type = buildTypeFromQualifiedType(arg.getNullPtrType());
+                break;
+
             default:
                 std::cerr << "Warning: Unsupported template parameter kind: "
                           << arg.getKind() << " (Pack=" << clang::TemplateArgument::Pack 
