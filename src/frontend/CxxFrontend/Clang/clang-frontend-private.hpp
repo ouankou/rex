@@ -102,7 +102,7 @@
 #else
 #  define DEBUG_VISITOR    0
 #  define DEBUG_VISIT_STMT 0
-#  define DEBUG_VISIT_DECL 0
+#  define DEBUG_VISIT_DECL 1
 #  define DEBUG_VISIT_TYPE 0
 #endif
 
@@ -352,6 +352,9 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         Language language;
 
         SgSymbol * GetSymbolFromSymbolTable(clang::NamedDecl * decl);
+
+        // Helper to ensure proper symbol table linkage for function declarations
+        void ensureFunctionSymbolLinkage(SgFunctionDeclaration* func_decl, SgScopeStatement* scope);
 
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
 
