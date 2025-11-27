@@ -431,8 +431,18 @@ SgTemplateParameter * ClangToSageTranslator::translateTemplateParameter ( clang:
         }
 
         SgType* type = buildTypeFromQualifiedType(non_type_param->getType());
+        if (type == NULL) {
+            type = SageBuilder::buildIntType();
+        }
+
+        // Build initialized name so the unparser keeps the parameter name/type when no default is present.
+        SgInitializedName* init_name = SageBuilder::buildInitializedName(SgName(name_str), type);
+        applySourceRange(init_name, non_type_param->getSourceRange());
+
         SgTemplateParameter* param = SageBuilder::buildTemplateParameter(SgTemplateParameter::nontype_parameter, type);
-        param->set_expression(SageBuilder::buildIntVal(0)); // Placeholder default
+        param->set_initializedName(init_name);
+        init_name->set_parent(param);
+        param->set_type(type);
         sg_param = param;
         
         if (non_type_param->isParameterPack()) {
