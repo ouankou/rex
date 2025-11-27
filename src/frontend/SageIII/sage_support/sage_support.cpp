@@ -6518,19 +6518,24 @@ SgFunctionCallExp::getAssociatedFunctionSymbol() const
           case V_SgStringVal:
           case V_SgBoolValExp:
           case V_SgCharVal:
-          case V_SgNullExpression:
-             {
-               // These are placeholder values from error recovery - cannot resolve to function symbol
-               // Return NULL to indicate function symbol cannot be determined
+         case V_SgNullExpression:
+            {
+              // These are placeholder values from error recovery - cannot resolve to function symbol
+              // Return NULL to indicate function symbol cannot be determined
 #if DEBUG_SAGE_SUPPORT_GETASSOCIATEDFUNCTION
-               MLOG_WARN_C("sage_support", "Function call expression has value literal %s as callee (likely from parse error recovery), returning NULL\n",
-                           functionExp->class_name().c_str());
+              MLOG_WARN_C("sage_support", "Function call expression has value literal %s as callee (likely from parse error recovery), returning NULL\n",
+                          functionExp->class_name().c_str());
 #endif
+              break;
+            }
+          case V_SgPseudoDestructorRefExp:
+             {
+            // Pseudo-destructor calls don't correspond to a function symbol in the usual sense.
                break;
              }
-          default:
-             {
-               // Send out error message before the assertion, which may fail and stop first otherwise.
+         default:
+            {
+              // Send out error message before the assertion, which may fail and stop first otherwise.
             	 MLOG_ERROR_C("sage_support", "There should be no other cases functionExp = %p = %s \n", functionExp, functionExp->class_name().c_str());
 
                ASSERT_not_null(functionExp->get_file_info());

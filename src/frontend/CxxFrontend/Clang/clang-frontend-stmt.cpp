@@ -3026,8 +3026,6 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(clang::CXXConstructExpr * cxx_
             if (arg != nullptr) {
                 // CLANG FRONTEND DEBUG: Print arg details
                 #if 0
-                std::cerr << "DEBUG VisitCXXConstructExpr:   Arg " << i
-                          << " clang type=" << arg->getStmtClassName() << std::endl;
                 #endif
 
                 // CLANG FRONTEND FIX #19: Skip default arguments
@@ -3037,8 +3035,6 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(clang::CXXConstructExpr * cxx_
                 // The allocator parameter is a default argument and should be omitted.
                 if (clang::isa<clang::CXXDefaultArgExpr>(arg)) {
                     #if 0
-                    std::cerr << "DEBUG VisitCXXConstructExpr:   Skipping arg " << i
-                              << " (default argument)" << std::endl;
                     #endif
                     continue;
                 }
@@ -3047,9 +3043,6 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(clang::CXXConstructExpr * cxx_
                 if (SgExpression *sg_expr = isSgExpression(sg_arg)) {
                     // CLANG FRONTEND DEBUG: Print what we're adding to the arg list
                     #if 0
-                    std::cerr << "DEBUG VisitCXXConstructExpr:   Adding arg " << i
-                              << " sage type=" << sg_expr->class_name()
-                              << " to args list" << std::endl;
                     #endif
                     args->append_expression(sg_expr);
                 } else {
@@ -3175,6 +3168,7 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(clang::CXXDependent
 #if DEBUG_VISIT_STMT
     std::cerr << "ClangToSageTranslator::VisitCXXDependentScopeMemberExpr" << std::endl;
 #endif
+    // std::cerr << "DEBUG: VisitCXXDependentScopeMemberExpr. Member: " << cxx_dependent_scope_member_expr->getMember().getAsString() << std::endl;
     bool res = true;
 
     // CXXDependentScopeMemberExpr represents member access on a template-dependent type
@@ -3185,8 +3179,11 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(clang::CXXDependent
     if (cxx_dependent_scope_member_expr->getBase() != NULL) {
         // Traverse the base expression
         clang::Expr* base = const_cast<clang::Expr*>(cxx_dependent_scope_member_expr->getBase());
+        // std::cerr << "DEBUG: Base Stmt Class: " << base->getStmtClassName() << std::endl;
         SgNode* tmp_base = Traverse(base);
         base_expr = isSgExpression(tmp_base);
+        // if (base_expr) std::cerr << "DEBUG: VisitCXXDependentScopeMemberExpr base node type: " << base_expr->class_name() << std::endl;
+        // else std::cerr << "DEBUG: VisitCXXDependentScopeMemberExpr base node is NULL" << std::endl;
     }
 
     // Get the member name
@@ -3540,9 +3537,10 @@ bool ClangToSageTranslator::VisitCXXUuidofExpr(clang::CXXUuidofExpr * cxx_uuidof
 }
 
 bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr * decl_ref_expr, SgNode ** node) {
-#if DEBUG_VISIT_STMT
-    std::cerr << "ClangToSageTranslator::VisitDeclRefExpr" << std::endl;
-#endif
+    // std::cerr << "DEBUG: ClangToSageTranslator::VisitDeclRefExpr" << std::endl;
+    if (clang::NamedDecl* nd = llvm::dyn_cast<clang::NamedDecl>(decl_ref_expr->getDecl())) {
+        // std::cerr << "DEBUG: DeclRefExpr to " << nd->getNameAsString() << " kind: " << nd->getDeclKindName() << std::endl;
+    }
 
     if (clang::NonTypeTemplateParmDecl* non_type_param =
             llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(decl_ref_expr->getDecl())) {
@@ -3989,7 +3987,10 @@ bool ClangToSageTranslator::VisitExtVectorElementExpr(clang::ExtVectorElementExp
 
     SgNode * tmp_base = Traverse(ext_vector_element_expr->getBase());
     SgExpression * base = isSgExpression(tmp_base);
-
+#if DEBUG_VISIT_STMT
+    // if (base) std::cerr << "DEBUG: VisitExtVectorElementExpr base node type: " << base->class_name() << std::endl;
+    // else std::cerr << "DEBUG: VisitExtVectorElementExpr base node is NULL" << std::endl;
+#endif
     ROSE_ASSERT(base != NULL);
 
     SgType * type = buildTypeFromQualifiedType(ext_vector_element_expr->getType());
@@ -4387,6 +4388,11 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
 
     SgNode * tmp_base = Traverse(member_expr->getBase());
     SgExpression * base = isSgExpression(tmp_base);
+    if (base == NULL) {
+        // std::cerr << "DEBUG: VisitMemberExpr base is NULL! Base stmt class: " << member_expr->getBase()->getStmtClassName() << std::endl;
+    } else {
+        // std::cerr << "DEBUG: VisitMemberExpr base type: " << base->class_name() << std::endl;
+    }
     ROSE_ASSERT(base != NULL);
 
     SgSymbol * sym = GetSymbolFromSymbolTable(member_expr->getMemberDecl());
@@ -4450,9 +4456,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr * member_expr, SgN
 
 #if DEBUG_VISIT_STMT
         if (tmp_member != NULL) {
-            std::cerr << "DEBUG VisitMemberExpr: Got/traversed member, node type: " << tmp_member->class_name() << std::endl;
+            // std::cerr << "DEBUG VisitMemberExpr: Got/traversed member, node type: " << tmp_member->class_name() << std::endl;
         } else {
-            std::cerr << "DEBUG VisitMemberExpr: Member not available (NULL)" << std::endl;
+            // std::cerr << "DEBUG VisitMemberExpr: Member not available (NULL)" << std::endl;
         }
 #endif
         if (tmp_member != NULL) {

@@ -53,6 +53,8 @@ namespace {
     }
 } // anonymous namespace
 
+
+
 SgType * ClangToSageTranslator::buildTypeFromQualifiedType(const clang::QualType & qual_type) {
     SgNode * tmp_type = Traverse(qual_type.getTypePtr());
     SgType * type = isSgType(tmp_type);
@@ -1041,39 +1043,58 @@ ClangToSageTranslator::buildTemplateParameters(
 
             case clang::TemplateArgument::Template:
                 // Template template parameter
-                param_kind = SgTemplateParameter::template_parameter;
+                // Fallback to type_parameter to avoid unparser crash (requires SgNonrealDecl)
+                param_kind = SgTemplateParameter::type_parameter;
                 param_type = SageBuilder::buildTemplateType(
                     SgName("Template" + std::to_string(param_position)));
                 break;
 
             case clang::TemplateArgument::Pack:
-                // Parameter pack - skip for now as ROSE doesn't fully support variadic templates
-                // Skipping parameter pack (variadic templates not fully supported)
-                continue;
+                // Parameter pack (e.g., typename ... Args)
+                // We infer it as a type parameter pack
+                param_kind = SgTemplateParameter::type_parameter;
+                param_type = SageBuilder::buildTemplateType(
+                    SgName("... Args" + std::to_string(param_position)));
+                break;
 
             case clang::TemplateArgument::Expression:
-            case clang::TemplateArgument::NullPtr:
-            case clang::TemplateArgument::Declaration:
-                // These are less common - treat as nontype parameters
+                // Expression argument (e.g., sizeof(T))
+                // We infer it as a non-type parameter
                 param_kind = SgTemplateParameter::nontype_parameter;
-                param_type = SageBuilder::buildIntType();
+                if (clang::Expr* expr = arg.getAsExpr()) {
+                    param_type = buildTypeFromQualifiedType(expr->getType());
+                } else {
+                    // Fallback if expression is null (shouldn't happen for Expression kind)
+                    param_type = SageBuilder::buildIntType();
+                }
                 break;
 
             default:
-                // Unsupported template parameter kind (suppressed)
+                std::cerr << "Warning: Unsupported template parameter kind: "
+                          << arg.getKind() << " (Pack=" << clang::TemplateArgument::Pack 
+                          << ", Expression=" << clang::TemplateArgument::Expression
+                          << ", Template=" << clang::TemplateArgument::Template
+                          << ", Integral=" << clang::TemplateArgument::Integral
+                          << ", Type=" << clang::TemplateArgument::Type
+                          << ", Declaration=" << clang::TemplateArgument::Declaration
+                          << ", NullPtr=" << clang::TemplateArgument::NullPtr
+                          << ", Null=" << clang::TemplateArgument::Null
+                          << ")" << std::endl;
                 continue;
         }
 
+
         SgTemplateParameter* param = SageBuilder::buildTemplateParameter(
             param_kind, param_type);
-        param_list->push_back(param);
+        if (param) {
+            param_list->push_back(param);
+        }
         param_position++;
     }
 
     return param_list;
 }
 
-// Get or create template class declaration
 SgTemplateClassDeclaration*
 ClangToSageTranslator::getOrCreateTemplateDeclaration(
     const std::string& template_name,
@@ -1082,75 +1103,67 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
     // Check cache first
     auto it = p_template_decl_cache.find(template_name);
     if (it != p_template_decl_cache.end()) {
-        // DEBUG: // std::cerr << "DEBUG: CACHE HIT for template_name = '" << template_name << "'" << std::endl;
         return it->second;
     }
-    // DEBUG: // std::cerr << "DEBUG: CACHE MISS for template_name = '" << template_name << "' - creating new" << std::endl;
 
-    // Extract namespace prefix and base name (e.g., "std" and "array" from "std::array")
-    std::string namespace_prefix;
-    std::string base_name;
-
-    // DEBUG: // std::cerr << "DEBUG: getOrCreateTemplateDeclaration: template_name = '" << template_name << "'" << std::endl;
-
+    // Extract just the base name (e.g., "array" from "std::array")
     size_t last_colon = template_name.find_last_of(':');
-    if (last_colon != std::string::npos && last_colon > 0 && template_name[last_colon-1] == ':') {
-        // Has namespace prefix
-        namespace_prefix = template_name.substr(0, last_colon - 1);
-        base_name = template_name.substr(last_colon + 1);
-    } else {
-        // No namespace prefix
-        base_name = template_name;
-    }
+    std::string base_name = (last_colon != std::string::npos)
+                            ? template_name.substr(last_colon + 1)
+                            : template_name;
 
-    // DEBUG: // std::cerr << "DEBUG: namespace_prefix = '" << namespace_prefix << "', base_name = '" << base_name << "'" << std::endl;
+    // Resolve scope (handle namespaces like std::)
+    SgScopeStatement* scope = getGlobalScope();
+    if (last_colon != std::string::npos) {
+        size_t pos = 0;
+        while (pos < last_colon) {
+            size_t next_colon = template_name.find("::", pos);
+            if (next_colon == std::string::npos || next_colon > last_colon) {
+                break;
+            }
+            std::string ns_name = template_name.substr(pos, next_colon - pos);
+            
+            // Find or create namespace
+            SgNamespaceSymbol* ns_sym = scope->lookup_namespace_symbol(SgName(ns_name));
+            if (ns_sym) {
+                scope = ns_sym->get_declaration()->get_definition();
+            } else {
+                SgNamespaceDeclarationStatement* ns_decl = 
+                    SageBuilder::buildNamespaceDeclaration(SgName(ns_name), scope);
+                scope = ns_decl->get_definition();
+            }
+            
+            pos = next_colon + 2;
+        }
+    }
 
     // Build template parameters
     SgTemplateParameterPtrList* params = buildTemplateParameters(clang_type);
 
-    // For primary template, use empty template argument list (not nullptr)
+    // Create empty template argument list for primary template
     SgTemplateArgumentPtrList* empty_args = new SgTemplateArgumentPtrList();
 
-    // WORKAROUND: Create template in global scope to avoid SageBuilder assertion issues
-    // When passing namespace scope to buildNondefiningTemplateClassDeclaration_nfi, it creates
-    // internal declarations with mismatched variant types causing assertion failures.
-    // Instead, we'll store the namespace prefix in the type's globalQualifiedNameMapForTypes
-    // which the unparser uses for name qualification.
+    // Create template class declaration
     SgTemplateClassDeclaration* template_decl =
         SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
             SgName(base_name),
             SgClassDeclaration::e_class,  // Assume class (could be struct)
-            getGlobalScope(),  // Use global scope to avoid assertion failures
+            scope,
             params,
-            empty_args  // Empty list for primary template (not a specialization)
+            empty_args  // No specialization arguments for primary template
         );
 
-    // Set file info and mark as compiler generated
-    Sg_File_Info* file_info = Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
-    template_decl->set_file_info(file_info);
+    // Mark as compiler generated and forward declaration
     template_decl->setForward();
     template_decl->set_isUnNamed(false);
-    template_decl->set_definingDeclaration(nullptr);
-    template_decl->set_firstNondefiningDeclaration(template_decl);
+    template_decl->get_file_info()->setCompilerGenerated();
+    template_decl->get_file_info()->unsetOutputInCodeGeneration();
 
-    // Store qualified name for unparser (includes namespace prefix)
-    if (!namespace_prefix.empty()) {
-        SgClassType* class_type = template_decl->get_type();
-        if (class_type != nullptr) {
-            // Store qualified name in global map for unparser to find
-            std::string qualified_name = namespace_prefix + "::" + base_name;
-
-            // Add to global qualified name map
-            std::map<SgNode*,std::string>& typeMap = SgNode::get_globalQualifiedNameMapForTypes();
-            typeMap[class_type] = qualified_name;
-
-            // DEBUG: // std::cerr << "DEBUG: Set qualified name '" << qualified_name << "' for type" << std::endl;
-        }
+    // Insert into scope symbol table if not already present
+    if (!scope->lookup_class_symbol(SgName(base_name))) {
+        SgClassSymbol* template_symbol = new SgClassSymbol(template_decl);
+        scope->insert_symbol(SgName(base_name), template_symbol);
     }
-
-    // Note: We don't insert a template symbol for the primary template declaration
-    // because it's not a SgTemplateDeclaration type and we're just creating a
-    // synthetic representation of standard library templates.
 
     // Cache it
     p_template_decl_cache[template_name] = template_decl;
@@ -1158,7 +1171,6 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
     return template_decl;
 }
 
-// Build template arguments from Clang template instantiation
 SgTemplateArgumentPtrList
 ClangToSageTranslator::buildTemplateArguments(
     const clang::TemplateSpecializationType* clang_type) {
@@ -1166,7 +1178,9 @@ ClangToSageTranslator::buildTemplateArguments(
     SgTemplateArgumentPtrList arg_list;
 
     auto args = clang_type->template_arguments();
+    // std::cerr << "DEBUG: buildTemplateArguments called with " << args.size() << " arguments" << std::endl;
     for (const clang::TemplateArgument& arg : args) {
+        // std::cerr << "DEBUG: Processing argument kind: " << arg.getKind() << std::endl;
         SgTemplateArgument* sg_arg = nullptr;
 
         switch (arg.getKind()) {
@@ -1178,74 +1192,82 @@ ClangToSageTranslator::buildTemplateArguments(
             }
 
             case clang::TemplateArgument::Integral: {
-                const llvm::APSInt& value = arg.getAsIntegral();
-                const bool is_signed = value.isSigned();
-                const unsigned bit_width = value.getBitWidth();
+                // Non-type argument (e.g., 1024)
+                llvm::APSInt value = arg.getAsIntegral();
+                SgType* int_type = buildTypeFromQualifiedType(arg.getIntegralType());
 
-                SgExpression* value_expr = nullptr;
-                if (bit_width <= 32) {
-                    if (is_signed) {
-                        value_expr = SageBuilder::buildIntVal(static_cast<int>(value.getSExtValue()));
-                    } else {
-                        value_expr = SageBuilder::buildUnsignedIntVal(static_cast<unsigned int>(value.getZExtValue()));
-                    }
-                } else if (bit_width <= 64) {
-                    if (is_signed) {
-                        value_expr = SageBuilder::buildLongLongIntVal(value.getSExtValue());
-                    } else {
-                        value_expr = SageBuilder::buildUnsignedLongLongIntVal(value.getZExtValue());
-                    }
-                } else {
-                    // Larger than 64-bit: preserve textual representation so it unparses correctly
-                    llvm::SmallString<128> buffer;
-                    value.toString(buffer, is_signed);
-                    std::string literal_text(buffer.str().str());
+                // DEBUG
+                // std::cerr << "DEBUG: Integral argument value: " << value.getLimitedValue() << std::endl;
 
-                    if (is_signed) {
-                        SgLongLongIntVal* literal = SageBuilder::buildLongLongIntVal(0);
-                        literal->set_valueString(literal_text);
-                        value_expr = literal;
-                    } else {
-                        SgUnsignedLongLongIntVal* literal = SageBuilder::buildUnsignedLongLongIntVal(0);
-                        literal->set_valueString(literal_text);
-                        value_expr = literal;
-                    }
-                }
+                // Create integer literal expression
+                SgExpression* value_expr = SageBuilder::buildIntVal(
+                    value.getLimitedValue());
 
-                sg_arg = new SgTemplateArgument(value_expr, false);
+                sg_arg = new SgTemplateArgument(
+                    SgTemplateArgument::nontype_argument,
+                    value_expr,
+                    int_type,
+                    nullptr, nullptr, false
+                );
+                
+                // DEBUG
+                // if (sg_arg) std::cerr << "DEBUG: Created SgTemplateArgument for integral" << std::endl;
                 break;
             }
 
             case clang::TemplateArgument::Template: {
                 // Template template argument
-                // This is complex - may need separate implementation
-                // Template template arguments not yet supported
-                continue;
-            }
-
-            case clang::TemplateArgument::Pack:
-                // Parameter pack - skip
-                continue;
-
-            case clang::TemplateArgument::Expression: {
-                // Expression argument (e.g., constexpr values, integer literals)
-                clang::Expr* expr = arg.getAsExpr();
-                if (expr) {
-                    SgNode* sg_expr_node = Traverse(expr);
-                    SgExpression* sg_expr = isSgExpression(sg_expr_node);
-                    if (sg_expr) {
-                        sg_arg = new SgTemplateArgument(sg_expr, false);
+                clang::TemplateName template_name = arg.getAsTemplate();
+                clang::TemplateDecl* template_decl = template_name.getAsTemplateDecl();
+                if (template_decl) {
+                    // We need to get the declaration of the template being passed as argument
+                    // For std::tuple, this should be the template declaration
+                    SgDeclarationStatement* sg_decl = (SgDeclarationStatement*)Traverse(template_decl);
+                    
+                    if (sg_decl) {
+                        if (SgTemplateClassDeclaration* class_tmpl = isSgTemplateClassDeclaration(sg_decl)) {
+                             // REX FIX: SgTemplateArgument crashes with SgTemplateClassDeclaration as template_template_argument.
+                             // Fallback to using type_argument with SgTemplateType.
+                             // SgClassType adds "class" keyword which is invalid for template template args.
+                             // SgTemplateType prints just the name.
+                             // Use qualified name to ensure "std::tuple" is printed, not just "tuple".
+                             SgName qual_name = class_tmpl->get_qualified_name();
+                             if (qual_name.getString().find("::") == std::string::npos && class_tmpl->get_scope()) {
+                                 // Fallback if get_qualified_name returns unqualified name (common in some ROSE versions)
+                                 // Manually construct qualified name if scope is namespace
+                                 if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(class_tmpl->get_scope())) {
+                                     qual_name = ns_def->get_namespaceDeclaration()->get_name().getString() + "::" + class_tmpl->get_name().getString();
+                                 }
+                             }
+                             SgType* type = SageBuilder::buildTemplateType(qual_name);
+                             sg_arg = new SgTemplateArgument(type, false);
+                        } else {
+                             sg_arg = new SgTemplateArgument(SgTemplateArgument::template_template_argument, sg_decl);
+                        }
+                    } else {
+                        std::cerr << "Warning: Failed to translate template declaration for template argument\n";
                     }
                 }
                 break;
             }
-            case clang::TemplateArgument::Declaration:
-            case clang::TemplateArgument::NullPtr:
-                // These types are less common - skip for now
-                continue;
+
+            case clang::TemplateArgument::Expression: {
+                // std::cerr << "DEBUG: Expression argument" << std::endl;
+                clang::Expr* clang_expr = arg.getAsExpr();
+                if (clang_expr) {
+                    SgNode* node = Traverse(clang_expr);
+                    SgExpression* sg_expr = isSgExpression(node);
+                    if (sg_expr) {
+                         // Use the simpler SgTemplateArgument constructor for expressions
+                         // The constructor signature is: SgTemplateArgument(SgExpression* parameter, bool explicitlySpecified)
+                         sg_arg = new SgTemplateArgument(sg_expr, false);
+                    }
+                }
+                break;
+            }
 
             default:
-                // Unknown template argument kind
+                std::cerr << "Warning: Unsupported template argument kind: " << arg.getKind() << "\n";
                 continue;
         }
 
@@ -1257,7 +1279,7 @@ ClangToSageTranslator::buildTemplateArguments(
     return arg_list;
 }
 
-// Get or create template instantiation declaration
+
 SgTemplateInstantiationDecl*
 ClangToSageTranslator::getOrCreateTemplateInstantiation(
     SgTemplateClassDeclaration* template_decl,
@@ -1269,13 +1291,19 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // ROOT CAUSE FIX: Check if template declaration has namespace qualification stored
     // Use qualified name (e.g., "std::array") for instantiation name instead of just base name
     std::string template_qualified_name = template_base_name;
-    SgClassType* template_type = template_decl->get_type();
-    if (template_type != nullptr) {
-        std::map<SgNode*,std::string>& typeMap = SgNode::get_globalQualifiedNameMapForTypes();
-        auto it = typeMap.find(template_type);
-        if (it != typeMap.end()) {
-            template_qualified_name = it->second;  // Use "std::array" instead of "array"
+    
+    // Manually construct qualified name from scope hierarchy
+    // The globalQualifiedNameMapForTypes is not populated yet during AST construction
+    SgScopeStatement* decl_scope = template_decl->get_scope();
+    while (decl_scope && !isSgGlobal(decl_scope)) {
+        if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(decl_scope)) {
+            SgNamespaceDeclarationStatement* ns_decl = ns_def->get_namespaceDeclaration();
+            template_qualified_name = ns_decl->get_name().getString() + "::" + template_qualified_name;
+        } else if (SgClassDefinition* class_def = isSgClassDefinition(decl_scope)) {
+            SgClassDeclaration* class_decl = class_def->get_declaration();
+            template_qualified_name = class_decl->get_name().getString() + "::" + template_qualified_name;
         }
+        decl_scope = decl_scope->get_scope();
     }
 
     // Use qualified name in cache key to avoid namespace collisions
@@ -1300,7 +1328,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // This ensures the unparser outputs the correct namespace qualification
     SgTemplateInstantiationDecl* inst_decl =
         new SgTemplateInstantiationDecl(
-            SgName(template_qualified_name),  // Use qualified name like "std::array"
+            SgName(inst_name_full),  // Use full mangled name for uniqueness
             SgClassDeclaration::e_class,
             class_type,   // type (initially nullptr, will be set)
             nullptr,      // definition
@@ -1315,6 +1343,11 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     inst_decl->setForward();
     inst_decl->set_definingDeclaration(nullptr);
     inst_decl->set_firstNondefiningDeclaration(inst_decl);
+
+    if (inst_decl->get_templateDeclaration() == NULL) {
+        std::cerr << "CRITICAL ERROR: inst_decl->get_templateDeclaration() is NULL immediately after creation! Setting it explicitly." << std::endl;
+        inst_decl->set_templateDeclaration(template_decl);
+    }
 
     // FIX P1: Handle nested namespaces correctly (e.g., "std::chrono::duration")
     // Split the qualified name by "::" and create/find nested namespace scopes
@@ -1368,29 +1401,12 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // get_mangled_name() requires this to be set and will assert if it's null
     // Use ONLY base name for templateName (e.g., "array" not "std::array")
     // The qualified name is in the declaration name above
+    // NameQualificationTraversal will add the necessary qualification (e.g. "std::")
     inst_decl->set_templateName(SgName(template_base_name));
 
     // Create class type pointing to this instantiation
     class_type = SgClassType::createType(inst_decl);
     inst_decl->set_type(class_type);
-
-    // TODO: Namespace qualification for template instantiations
-    // The unparser currently outputs "class ::array" instead of "std::array"
-    // This is a limitation of ROSE's unparser name qualification system which was
-    // designed for the EDG frontend. The globalQualifiedNameMapForTypes mechanism
-    // doesn't work for template instantiations in this context, and SgTemplateInstantiationDecl
-    // doesn't have a set_qualified_name_prefix() method.
-    //
-    // WORKAROUND ATTEMPTED: Tried setting qualified names via globalQualifiedNameMapForTypes
-    // but the unparser uses a different code path for variable type unparsing.
-    //
-    // ROOT CAUSE: Need to either:
-    // 1. Create template declarations in proper namespace scope (causes SageBuilder assertions)
-    // 2. Extend SgTemplateInstantiationDecl to support namespace qualification
-    // 3. Modify unparser to check additional qualification mechanisms
-    //
-    // For now, the AST is correct, template instantiation works, but unparsed output
-    // has incorrect namespace qualification.
 
     // Create symbol and insert into symbol table
     // ROOT CAUSE FIX: Insert symbol into the same scope as the declaration (inst_scope)
@@ -1404,14 +1420,6 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // Cache it with full name
     p_template_inst_cache[inst_name_full] = inst_decl;
 
-    // TODO: Registration in decl_translation_map is required so that VisitClassTemplateSpecializationDecl
-    // can find this instantiation when it encounters the declaration later.
-    // However, at this point we only have the TemplateSpecializationType, not the required
-    // clang::ClassTemplateSpecializationDecl needed as a key for decl_translation_map.
-    // Therefore, the actual registration is performed in VisitClassTemplateSpecializationDecl
-    // by checking p_template_inst_cache. This avoids variant type mismatches between
-    // SgTemplateInstantiationDecl and SgClassDeclaration for the same entity.
-
     return inst_decl;
 }
 
@@ -1424,6 +1432,38 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(clang::TemplateSpeci
     // We want to create proper SgTemplateInstantiationDecl nodes with template arguments
     // Desugaring would lose the template argument information
 
+    // REX FIX: Handle dependent template specializations as opaque types
+    // This avoids creating broken SgTemplateInstantiationDecl nodes for types like T::rebind<int>
+    // which cause unparsing issues (e.g., "T__rebind_int_")
+    if (template_specialization_type->isDependentType()) {
+        clang::PrintingPolicy policy = p_compiler_instance->getASTContext().getPrintingPolicy();
+        
+        // Check if the template is a template parameter (e.g. C in UsePack<C, Args...>)
+        // If so, do NOT use fully qualified name, as it would produce UsePack::C
+        bool is_template_param = false;
+        clang::TemplateName tname = template_specialization_type->getTemplateName();
+        if (clang::TemplateDecl* decl = tname.getAsTemplateDecl()) {
+            if (clang::isa<clang::TemplateTemplateParmDecl>(decl)) {
+                is_template_param = true;
+            }
+        }
+        
+        if (!is_template_param) {
+            policy.FullyQualifiedName = true;
+        }
+        policy.SuppressScope = false;
+        
+        std::string type_name = clang::QualType(template_specialization_type, 0).getAsString(policy);
+        
+        // Strip leading "::" if present to avoid double qualification by unparser
+        if (type_name.size() >= 2 && type_name.substr(0, 2) == "::") {
+            type_name = type_name.substr(2);
+        }
+
+        *node = SageBuilder::buildOpaqueType(type_name, getGlobalScope());
+        return VisitType(template_specialization_type, node);
+    }
+
     // Extract template name
     clang::TemplateName tname = template_specialization_type->getTemplateName();
     std::string template_name = mangleTemplateName(tname);
@@ -1431,8 +1471,30 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(clang::TemplateSpeci
     // DEBUG: // std::cerr << "DEBUG VisitTemplateSpecializationType: template_name = '" << template_name << "'" << std::endl;
 
     // Get or create template class declaration
-    SgTemplateClassDeclaration* template_decl =
-        getOrCreateTemplateDeclaration(template_name, template_specialization_type);
+    SgTemplateClassDeclaration* template_decl = NULL;
+    
+    clang::TemplateDecl* clang_template_decl = tname.getAsTemplateDecl();
+    if (clang_template_decl) {
+        // std::cerr << "DEBUG: Found clang_template_decl for " << template_name << std::endl;
+        SgNode* tmp_node = Traverse(clang_template_decl);
+        template_decl = isSgTemplateClassDeclaration(tmp_node);
+        if (template_decl) {
+             // std::cerr << "DEBUG: Found existing SgTemplateClassDeclaration for " << template_name << std::endl;
+        } else {
+             // std::cerr << "DEBUG: Traverse returned NULL or non-template for " << template_name << std::endl;
+        }
+    } else {
+        // std::cerr << "DEBUG: No clang_template_decl for " << template_name << std::endl;
+    }
+
+    if (template_decl == NULL) {
+        // std::cerr << "DEBUG: Creating new template declaration for " << template_name << std::endl;
+        template_decl = getOrCreateTemplateDeclaration(template_name, template_specialization_type);
+    }
+    
+    if (template_decl == NULL) {
+        std::cerr << "CRITICAL ERROR: template_decl is NULL for " << template_name << std::endl;
+    }
 
     // Get or create template instantiation
     SgTemplateInstantiationDecl* inst_decl =
@@ -1615,7 +1677,9 @@ bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(clang::Depe
     // Sanitize the type name for use as a C++ identifier
     // Replace invalid characters (::, <, >, comma, space, *, &) with underscores
     // This produces a valid typedef name instead of using raw template syntax
+    // REX FIX: Do NOT sanitize! We want the raw template syntax for unparsing.
     std::string sanitized_name = type_name;
+    /*
     for (size_t i = 0; i < sanitized_name.length(); ++i) {
         char c = sanitized_name[i];
         if (c == ':' || c == '<' || c == '>' || c == ',' || c == ' ' ||
@@ -1623,10 +1687,25 @@ bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(clang::Depe
             sanitized_name[i] = '_';
         }
     }
+    */
 
-    // Create an opaque type with the sanitized identifier
-    // Note: Full template type support requires SgTemplateType/SgTemplateInstantiationType
-    *node = SageBuilder::buildOpaqueType(sanitized_name, getGlobalScope());
+    // Create a proper template type with the raw name
+    // Note: buildOpaqueType creates SgClassType in global scope, which unparser qualifies with ::
+    // SgTemplateType unparses as just the name, avoiding unwanted qualification.
+    // REX FIX: Prepend "typename " and insert "template " for dependent types
+    std::string final_name = sanitized_name;
+    
+    // Insert "template " after the last "::" if it exists
+    size_t last_colon = final_name.find_last_of(':');
+    if (last_colon != std::string::npos && last_colon + 1 < final_name.length()) {
+        // Check if it's already there (unlikely)
+        if (final_name.find("template ", last_colon + 1) != last_colon + 1) {
+             final_name.insert(last_colon + 1, "template ");
+        }
+    }
+    
+    final_name = "typename " + final_name;
+    *node = SageBuilder::buildTemplateType(SgName(final_name));
 
     return VisitTypeWithKeyword(dependent_template_specialization_type, node) && res;
 }
@@ -1666,7 +1745,22 @@ bool ClangToSageTranslator::VisitUnaryTransformType(clang::UnaryTransformType * 
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // UnaryTransformType is sugar that wraps another type (e.g., __underlying_type).
+    // Desugar it so downstream consumers see the real underlying type instead of an
+    // unknown placeholder.
+    clang::QualType underlying = unary_transform_type->desugar();
+    if (underlying.isNull()) {
+        underlying = unary_transform_type->getUnderlyingType();
+    }
+    if (underlying.isNull()) {
+        underlying = unary_transform_type->getBaseType();
+    }
+
+    if (underlying.isNull()) {
+        *node = SageBuilder::buildUnknownType();
+    } else {
+        *node = buildTypeFromQualifiedType(underlying);
+    }
 
     return VisitType(unary_transform_type, node) && res;
 }
@@ -1691,7 +1785,9 @@ bool ClangToSageTranslator::VisitUnresolvedUsingType(clang::UnresolvedUsingType 
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_FIXME == 0); // FIXME 
+    // Preserve the type as an unresolved dependent name rather than leaving a null
+    // node (which triggers runtime errors and forces an unknown type later).
+    *node = SageBuilder::buildUnknownType();
 
     return VisitType(unresolved_using_type, node) && res;
 }

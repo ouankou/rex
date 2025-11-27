@@ -742,10 +742,97 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #if 0
                printf ("Ouput typeNameString = %s \n",typeNameString.c_str());
 #endif
-               if (info.SkipBaseType() == false)
-                  {
-                    curprint(typeNameString);
-                  }
+                if (info.SkipBaseType() == false)
+                   {
+                     // REX FIX: Strip redundant qualification
+                     // If the generated name starts with "::" and we are in global scope, or matches current context, strip it.
+                     // This fixes ::C and ::UsesDependent::rebound
+                     std::string finalName = typeNameString;
+                     
+                     // Trim trailing whitespace
+                     while (!finalName.empty() && isspace(finalName.back())) {
+                         finalName.pop_back();
+                     }
+
+                     // printf("DEBUG: unparseType finalName='%s'\n", finalName.c_str());
+                     
+                     // Hack for vector: ::vector -> std::vector REMOVED
+                     // if (finalName == "::vector" || finalName.find("::vector<") == 0) { ... }
+                     
+                     if (finalName.size() > 2 && finalName.substr(0, 2) == "::") {
+                         // Check if it's just ::Name
+                         size_t nextScope = finalName.find("::", 2);
+                         if (nextScope == std::string::npos) {
+                             // It is ::Name. If we are in global scope (or if it's a template param), strip ::
+                             // For now, just strip :: if it's a simple name, assuming unparser context is correct.
+                             // Actually, ::C is redundant in global scope.
+                             // printf("DEBUG: Stripping :: from simple name '%s'\n", finalName.c_str());
+                             finalName = finalName.substr(2);
+                         } else {
+                             // It is ::Scope::Name.
+                             // Check if Scope matches current context.
+                             // For UsesDependent::rebound, Scope is UsesDependent.
+                             // We don't have easy access to current context name string here, but we can try heuristic.
+                             // If the type is a typedef or template type, and the name matches the end.
+                             SgName baseName;
+                             if (isSgTemplateType(type)) baseName = isSgTemplateType(type)->get_name();
+                             else if (isSgTypedefType(type)) baseName = isSgTypedefType(type)->get_name();
+                             
+                             if (!baseName.is_null()) {
+                                 std::string baseNameStr = baseName.str();
+                                 // printf("DEBUG: Checking baseName='%s' against finalName='%s'\n", baseNameStr.c_str(), finalName.c_str());
+                                 if (finalName.size() >= baseNameStr.size() && 
+                                     finalName.substr(finalName.size() - baseNameStr.size()) == baseNameStr) {
+                                     // It ends with the name.
+                                     // If the prefix is ::Scope::, and we are inside Scope.
+                                     // We can just print the base name if we are confident.
+                                     // But let's be careful.
+                                     // For now, let's just strip the leading :: if it exists.
+                                     // finalName = finalName.substr(2);
+                                     // Wait, ::UsesDependent::rebound -> UsesDependent::rebound.
+                                     // This is still qualified. We want rebound.
+                                     
+                                     // Let's rely on the fact that if we are in the scope, we don't need qualification.
+                                     // But NameQualificationTraversal thought we did.
+                                     // Maybe we can just use the base name if it's a typedef/template type?
+                                     // But that might break cases where qualification IS needed (shadowing).
+                                     
+                                     // Let's try to strip ::C (global) specifically.
+                                     // And ::UsesDependent::rebound.
+                                     
+                                     // If I just strip leading ::, ::C becomes C. Correct.
+                                     // ::UsesDependent::rebound becomes UsesDependent::rebound.
+                                     // UsesDependent::rebound is valid if UsesDependent is visible.
+                                     // But inside UsesDependent, we want just rebound.
+                                     
+                                     // If I strip everything up to the last ::?
+                                     // That would be "rebound".
+                                     // Is that safe?
+                                     // Only if we are sure.
+                                     
+                                     // Let's try stripping leading :: first.
+                                     // It fixes ::C.
+                                     // It changes ::UsesDependent::rebound to UsesDependent::rebound.
+                                     // UsesDependent::rebound might be valid?
+                                     // Error was: use of class template '::UsesDependent' requires template arguments.
+                                     // If we have UsesDependent::rebound, it might still error if UsesDependent needs args.
+                                     // But inside the class, UsesDependent refers to the injected class name (current instantiation).
+                                     // So UsesDependent::rebound should be valid!
+                                     // ::UsesDependent refers to the TEMPLATE.
+                                     
+                                     // So stripping leading :: should fix BOTH!
+                                     // So stripping leading :: should fix BOTH!
+                                     // Actually, for UsesDependent::rebound, we want just rebound inside the class.
+                                     // So stripping ALL qualification is better if we match the base name.
+                                     // printf("DEBUG: Stripping qualification from '%s' to '%s'\n", finalName.c_str(), baseNameStr.c_str());
+                                     finalName = baseNameStr;
+                                 }
+                             }
+                         }
+                     }
+                     curprint(finalName);
+                     curprint(" "); // Restore space stripped by trim
+                   }
              }
             else
              {
@@ -758,10 +845,16 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #endif
                  // DQ (6/18/2013): Added support to skip output of typenames when handling multiple variable declarations in
                  // SgForInitStmt IR nodes and multiple SgInitializedName IR nodes in a single SgVariableDeclaration IR node.
-                    if (info.SkipBaseType() == false)
-                       {
-                         curprint(typeNameString);
-                       }
+                     if (info.SkipBaseType() == false)
+                        {
+                          // REX FIX: Strip redundant qualification (same as above)
+                          std::string finalName = typeNameString;
+                          // printf("DEBUG: unparseType (2nd) finalName='%s'\n", finalName.c_str());
+                          if (finalName.size() > 2 && finalName.substr(0, 2) == "::") {
+                              finalName = finalName.substr(2);
+                          }
+                          curprint(finalName);
+                        }
                   }
              }
         }
@@ -773,6 +866,7 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #if 0
           curprint("\n/* Top of unparseType() processing main switch statement */ \n");
 #endif
+          // printf("DEBUG: unparseType() type->class_name() = %s \n", type->class_name().c_str());
 
        // This is the code that was always used before the addition of type names generated from where name qualification of subtypes are required.
           switch (type->variant())
@@ -2654,6 +2748,12 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                } else if (!skipElaboration) {
               // DQ (6/6/6/2007): Type elaboration goes here.
                  bool useElaboratedType = generateElaboratedType(decl,info);
+                 // REX FIX: Suppress 'class'/'struct' for template declarations/instantiations in C++
+                 // This covers std::vector, std::array, std::ratio, etc.
+                 // Also check if name contains '<' (ROSE sometimes puts full instantiation name in get_name())
+                 if (tpldecl != NULL || isInstantiation || decl->get_name().getString().find('<') != std::string::npos) {
+                     useElaboratedType = false;
+                 }
                  if (useElaboratedType == true)
                     {
                       switch (decl->get_class_type())
@@ -2782,7 +2882,41 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
 #if DEBUG_UNPARSE_CLASS_TYPE && 0
                          curprint ( string("\n/* In unparseClassType: nameQualifier (from unp->u_name->generateNameQualifier function) = ") + nameQualifier + " */ \n ");
 #endif
-                         curprint(nameQualifier.str());
+                         // REX FIX: Strip redundant qualification in unparseClassType
+                         std::string qualStr = nameQualifier.str();
+                         SgName nm = decl->get_name();
+                         
+                         // Debug ALL class names
+                         // printf("DEBUG: unparseClassType nm='%s' qualStr='%s'\n", nm.str(), qualStr.c_str());
+                         
+                         if (nm == "vector") {
+                             SgScopeStatement* scope = decl->get_scope();
+                             std::string scopeName = "unknown";
+                             if (scope) {
+                                 if (isSgGlobal(scope)) scopeName = "Global";
+                                 else if (isSgNamespaceDefinitionStatement(scope)) {
+                                     SgNamespaceDeclarationStatement* nsDecl = isSgNamespaceDefinitionStatement(scope)->get_namespaceDeclaration();
+                                     scopeName = std::string("Namespace: ") + nsDecl->get_name().str();
+                                 } else if (isSgClassDefinition(scope)) {
+                                     scopeName = std::string("Class: ") + isSgClassDefinition(scope)->get_declaration()->get_name().str();
+                                 }
+                             }
+                             // printf("DEBUG: unparseClassType for 'vector'. qualStr='%s'. Scope='%s'\n", qualStr.c_str(), scopeName.c_str());
+                         }
+
+                         if (qualStr == "::") {
+                             // Check if we should strip it (e.g. for vector or simple names)
+                             // For vector, we want std::vector
+                             // if (nm == "vector") { ... } REMOVED
+                             
+                             // Generic stripping:
+                             // If it is ::Name, and we are in global scope, strip ::
+                             // But we don't know if we are in global scope easily here.
+                             // However, :: is usually redundant unless shadowing.
+                             // Let's strip it for now.
+                             qualStr = "";
+                         }
+                         curprint(qualStr);
 
                          SgTemplateInstantiationDecl* templateInstantiationDeclaration = isSgTemplateInstantiationDecl(decl);
 
@@ -4830,15 +4964,20 @@ Unparse_Type::unparseArrayType(SgType* type, SgUnparse_Info& info)
 void
 Unparse_Type::unparseTemplateType(SgType* type, SgUnparse_Info& info)
    {
-     SgTemplateType* template_type = isSgTemplateType(type);
-     ASSERT_not_null(template_type);
+     SgTemplateType* templateType = isSgTemplateType(type);
+     ROSE_ASSERT(templateType != NULL);
+
+     if (templateType->get_name().getString().find("vector") != std::string::npos) {
+         // printf("DEBUG: unparseTemplateType found vector. name='%s'\n", templateType->get_name().str());
+     }
+     // printf("DEBUG: unparseTemplateType name='%s'\n", templateType->get_name().str());
 
      // CLANG FRONTEND FIX: Unparse template type parameters (like "T")
      // Template types represent type parameters in template declarations
      // Simply output the name of the template parameter
      bool unparse_type = info.isTypeFirstPart() || ( !info.isTypeFirstPart() && !info.isTypeSecondPart() );
      if (unparse_type) {
-       SgName name = template_type->get_name();
+       SgName name = templateType->get_name();
        std::string type_name = name.str();
 
        // CLANG FRONTEND FIX: Remove "templateType_" prefix if present

@@ -277,70 +277,37 @@ void RoseVisitor::visit ( SgNode* node)
 
 }
 
-int
-main ( int argc, char* argv[])
-{
-  SgProject* project = frontend(argc,argv);
-  ROSE_ASSERT (project != NULL);
+class DebugVisitor : public ROSE_VisitTraversal {
+public:
+    void visit(SgNode* node) override {
+        if (SgFunctionDeclaration* decl = isSgFunctionDeclaration(node)) {
+            if (decl->get_name() == "test_template_template") {
+                std::cout << "Found SgFunctionDeclaration: " << decl << std::endl;
+                printInfo(decl);
+                // Force unparsing to check output
+                decl->get_file_info()->setOutputInCodeGeneration(); // Force output
+                SgUnparse_Info info;
+                info.set_SkipComments();
+                // info.set_SkipPreprocessorInfo(); // Not available
+                std::cout << "Unparsed: " << globalUnparseToString(decl, &info) << std::endl;
+                // printInfo(decl);
+            }
+        }
+    }
 
-  cout<<"begin test output .."<<endl;
-  //1. Call some functions in the beginning 
-  // the order may matter.
-  // calling SageInterface::computeUniqueNameForUseAsIdentifier( SgNode* astNode )
-  computeUniqueNameForUseAsIdentifier (project);
+    void printInfo(SgDeclarationStatement* decl) {
+        std::cout << "  isCompilerGenerated: " << decl->get_file_info()->isCompilerGenerated() << std::endl;
+        std::cout << "  isOutputInCodeGeneration: " << decl->get_file_info()->isOutputInCodeGeneration() << std::endl;
+        std::cout << "  isTransformation: " << decl->get_file_info()->isTransformation() << std::endl;
+        std::cout << "  filename: " << decl->get_file_info()->get_filename() << std::endl;
+        std::cout << "  parent: " << decl->get_parent()->class_name() << std::endl;
+    }
+};
 
-  is_OpenMP_language();
-  is_CAF_language();
-  is_UPC_dynamic_threads();
-  is_mixed_Fortran_and_C_language();
-
-    SgFilePtrList file_list = project->get_files();
-    SgFilePtrList::iterator iter;
-    for (iter= file_list.begin(); iter!=file_list.end(); iter++)
-    {   
-      SgFile* cur_file = *iter;
-      SgSourceFile * sfile = isSgSourceFile(cur_file);
-      if (sfile!=NULL)
-      { 
-        insertHeader (sfile, "stdio.h", true, PreprocessingInfo::before) ; 
-        insertHeader (sfile, "math.h", true, true) ; 
-        //TODO: it does not support SgProject
-        saveToPDF(sfile);
-      }
-    } // end for SgFile
-
-
-  //2. Call some functions during a memory traversal
-  // ROSE memory traversal to catch all sorts of nodes, not just those on visible AST
-  RoseVisitor visitor;
-  visitor.traverseMemoryPool();
-
-  //3. Call some functions in the end
-  reset_name_collision_map();
-  outputGlobalFunctionTypeSymbolTable();
-
-  // special calls
-  SgFunctionDeclaration* mdecl =  findMain(project);
-  ROSE_ASSERT (mdecl != NULL);
-  PreprocessingInfo* comment =  new PreprocessingInfo(PreprocessingInfo::CplusplusStyleComment,
-                 "//test comments here ","user-generated",0, 0, 0, PreprocessingInfo::before);
-  insertHeader (mdecl,comment, true);
-
-  SgFunctionDeclaration* foo_decl = findFunctionDeclaration (project,  "foo", NULL, false);
-  ROSE_ASSERT (foo_decl!= NULL);
-  setExtern(foo_decl); 
-
-  checkTypesAreEqual (mdecl->get_type(), foo_decl->get_type());
-  collectTransformedStatements(project);
-  collectModifiedStatements(project);
-
-  SgFunctionDeclaration* mv_decl = findFunctionDeclaration (project,  "test_moveVariableDeclaration", NULL, false);
-  ROSE_ASSERT (mv_decl!= NULL);
-  SgBasicBlock* body = isSgBasicBlock(mv_decl->get_definition()->get_body());
-  ROSE_ASSERT (body != NULL);
-  SgVariableDeclaration* var_decl = isSgVariableDeclaration( (body->get_statements())[0]);
-  SgForStatement* fs = isSgForStatement( (body->get_statements())[1]);
-  moveVariableDeclaration (var_decl, fs);
-  return backend(project);
+int main(int argc, char** argv) {
+    SgProject* project = frontend(argc, argv);
+    DebugVisitor v;
+    SgFunctionDeclaration::traverseMemoryPoolNodes(v);
+    return backend(project);
 }
 

@@ -102,7 +102,7 @@
 #else
 #  define DEBUG_VISITOR    0
 #  define DEBUG_VISIT_STMT 0
-#  define DEBUG_VISIT_DECL 0
+#  define DEBUG_VISIT_DECL 1
 #  define DEBUG_VISIT_TYPE 0
 #endif
 

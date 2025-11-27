@@ -115,6 +115,13 @@ ROSE_DLL_API extern int gensym_counter;
      std::string get_name () {return name;};
   };
 
+
+
+// REX FIX: SgTemplateParameter cannot store attributes directly (inherits SgSupport).
+// So we use a global map to store the keyword.
+ROSE_DLL_API void setTemplateParameterKeyword(SgTemplateParameter* param, std::string kw);
+ROSE_DLL_API std::string getTemplateParameterKeyword(SgTemplateParameter* param);
+
  //------------------------------------------------------------------------
  //@{
  /*! @name Symbol tables

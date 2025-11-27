@@ -1493,13 +1493,41 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                // in template parameter lists (e.g., "template <typename T>" not "template <typename templateType_T>")
                const std::string prefix = "templateType_";
                if (type_name.compare(0, prefix.length(), prefix) == 0) {
-                   std::string old_name = type_name;
                    type_name = type_name.substr(prefix.length());
-               } else {
                }
 
-               if (is_template_header)
-                 curprint("typename ");
+               // REX FIX: Handle pack prefix "... " - extract it for separate handling
+               bool is_pack = false;
+               const std::string pack_prefix = "... ";
+               if (type_name.compare(0, pack_prefix.length(), pack_prefix) == 0) {
+                   is_pack = true;
+                   type_name = type_name.substr(pack_prefix.length());
+               }
+
+               // REX FIX: Check if this is an anonymous parameter (empty or placeholder name after pack prefix removed)
+               // The frontend may generate __type_param_N for anonymous parameters
+               const std::string gen_prefix = "__type_param_";
+               if (type_name.compare(0, gen_prefix.length(), gen_prefix) == 0) {
+                   type_name = "";  // Anonymous parameter - suppress the generated name
+               }
+
+               if (is_template_header) {
+                 // REX FIX: Use stored keyword or default appropriately
+                 std::string stored_kw = SageInterface::getTemplateParameterKeyword(templateParameter);
+                 std::string kw;
+                 if (!stored_kw.empty()) {
+                     kw = stored_kw + " ";
+                 } else {
+                     // Default: prefer typename for anonymous parameters, class for named ones
+                     kw = type_name.empty() ? "typename " : "class ";
+                 }
+                 curprint(kw);
+                 
+                 // Print pack ellipsis after keyword if this is a pack
+                 if (is_pack) {
+                     curprint("... ");
+                 }
+               }
                curprint(type_name);
 
                SgType* default_type = templateParameter->get_defaultTypeParameter();
@@ -1569,8 +1597,17 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                SgTemplateParameterPtrList & templateParameterList = nrdecl->get_tpl_params();
                Unparse_ExprStmt::unparseTemplateParameterList (templateParameterList, info, true);
 
+               // REX FIX: Add space after template parameter list (e.g., "> class")
+               curprint(" ");
+
                // TV (03/23/2018): could either be class or typename: where is the info in EDG? where to store it in the AST?
-               curprint(" typename ");
+               // REX FIX: Use stored keyword or default to class
+               std::string kw = "class ";
+               std::string stored_kw = SageInterface::getTemplateParameterKeyword(templateParameter);
+               if (!stored_kw.empty()) {
+                   kw = stored_kw + " ";
+               }
+               curprint(kw);
 
                curprint(nrdecl->get_name());
 #if 0
@@ -1855,10 +1892,11 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
                             }
                            else
                             {
-                              if (isSgClassType(templateArgument->get_type()) != NULL)
-                                 {
-                                   curprint("class ");
-                                 }
+                                   // REX FIX: Suppress class keyword for template instantiations or if not needed
+                                   SgClassDeclaration* classDecl = isSgClassDeclaration(isSgClassType(templateArgument->get_type())->get_declaration());
+                                   if (classDecl && !isSgTemplateInstantiationDecl(classDecl)) {
+                                       curprint("class ");
+                                   }
                             }
                        }
 #endif
@@ -3004,6 +3042,7 @@ Unparse_ExprStmt::unparseFuncRefSupport(SgExpression* expr, SgUnparse_Info& info
        // DQ (4/15/2013): If there is other debug output turned on then nesting of comments inside of comments can occur in this output (see test2007_17.C).
           curprint (string("\n /* In unparseFuncRef(): put out func_name = ") + func_name + " */ \n ");
 #endif
+
        // If this is a template then the name will include template arguments which require name qualification and the name 
        // qualification will depend on where the name is referenced in the code.  So we have generate the non-canonical name 
        // with all possible qualifications and save it to be reused by the unparser when it unparses the tempated function name.
@@ -3043,6 +3082,7 @@ Unparse_ExprStmt::unparseFuncRefSupport(SgExpression* expr, SgUnparse_Info& info
             else
              {
                curprint (func_name);
+
              }
         }
 

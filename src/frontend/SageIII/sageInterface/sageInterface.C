@@ -135,7 +135,25 @@ typedef std::set<SgLabelStatement*> SgLabelStatementPtrSet;
 
 namespace SageInterface
 {
-    Transformation_Record trans_records;
+   ROSE_DLL_API Transformation_Record trans_records;
+
+  // REX FIX: Global map for template parameter keywords
+  static std::map<SgTemplateParameter*, std::string> templateKeywordMap;
+
+  void setTemplateParameterKeyword(SgTemplateParameter* param, std::string kw) {
+      if (param) {
+          templateKeywordMap[param] = kw;
+      }
+  }
+
+  std::string getTemplateParameterKeyword(SgTemplateParameter* param) {
+      if (param && templateKeywordMap.find(param) != templateKeywordMap.end()) {
+          return templateKeywordMap[param];
+      }
+      return "";
+  }
+
+  // DQ (4/3/2014): Added general AST support separate from the AST.ader file
 }
 
 // DQ (12/31/2005): This is OK if not declared in a header file
@@ -8026,6 +8044,11 @@ SageInterface::getScope( const SgNode* astNode )
         return qualifiedName->get_scope();
     else if (const SgSourceFile* sourceFile = isSgSourceFile(astNode))
         return sourceFile->get_globalScope();
+    else if (const SgDeclarationStatement* declStmt = isSgDeclarationStatement(astNode))
+       {
+         if (declStmt->get_scope() != NULL)
+              return declStmt->get_scope();
+       }
 
     // DQ (6/9/2007): This function traverses through the parents to the first scope (used for name qualification support of template arguments)
     const SgNode* parentNode = astNode;
@@ -19074,15 +19097,18 @@ SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(const vector<SgDecla
     //
     // But that first non-defining function declaration is not traversable in AST due to it is hidden.
     // The solution here is to for each defining function decl traversed, convert it to the first nondefining one to do the match.
-    SgFunctionDeclaration * func_decl = isSgFunctionDeclaration (cur_stmt);
-    if (func_decl)
-    {
-      if (func_decl->get_definingDeclaration() == func_decl )
+      SgFunctionDeclaration * func_decl = isSgFunctionDeclaration (cur_stmt);
+      if (func_decl)
       {
-        cur_stmt = func_decl->get_firstNondefiningDeclaration();
-        ROSE_ASSERT (cur_stmt != func_decl);
+        if (func_decl->get_definingDeclaration() == func_decl )
+        {
+          SgDeclarationStatement* firstDecl = func_decl->get_firstNondefiningDeclaration();
+          if (firstDecl != NULL && firstDecl != cur_stmt)
+             {
+               cur_stmt = firstDecl;
+             }
+        }
       }
-    }
     vector<SgDeclarationStatement*>::const_iterator i = find (nodevec.begin(), nodevec.end(), cur_stmt);
     if (i!=nodevec.end())
     {

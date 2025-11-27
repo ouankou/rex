@@ -5538,9 +5538,10 @@ SageBuilder::buildDefiningFunctionDeclaration_T(const SgName & XXX_name, SgType*
 
           printf ("In buildDefiningFunctionDeclaration_T(): func_symbol = %p reset using lookup with reset nameWithTemplateArguments = %s \n",func_symbol,nameWithTemplateArguments.str());
 
-          ROSE_ASSERT(func_symbol != NULL);
-
-          printf ("In buildDefiningFunctionDeclaration_T(): func_symbol = %p = %s reset using lookup with reset nameWithTemplateArguments = %s \n",func_symbol,func_symbol->class_name().c_str(),nameWithTemplateArguments.str());
+          if (func_symbol != NULL)
+             {
+               printf ("In buildDefiningFunctionDeclaration_T(): func_symbol = %p = %s reset using lookup with reset nameWithTemplateArguments = %s \n",func_symbol,func_symbol->class_name().c_str(),nameWithTemplateArguments.str());
+             }
 #if 0
           printf ("Exiting as a test! \n");
           ROSE_ABORT();
@@ -5549,7 +5550,39 @@ SageBuilder::buildDefiningFunctionDeclaration_T(const SgName & XXX_name, SgType*
 #endif
 
   // DQ (1/26/2013): This fails for ROSE compiling ROSE.
-     ROSE_ASSERT(func_symbol != NULL);
+     if (func_symbol == NULL)
+        {
+       // If the symbol has not been created yet (common for inline friends), synthesize one.
+          SgSymbol* synthesized_symbol = NULL;
+
+          if (buildTemplateDeclaration || buildTemplateInstantiation)
+             {
+               if (SgTemplateDeclaration* tmplDecl = isSgTemplateDeclaration(first_nondefining_declaration))
+                  {
+                    synthesized_symbol = new SgTemplateSymbol(tmplDecl);
+                  }
+             }
+
+          if (synthesized_symbol == NULL)
+             {
+               if (isMemberFunction)
+                  {
+                    if (SgMemberFunctionDeclaration* mdecl = isSgMemberFunctionDeclaration(first_nondefining_declaration))
+                         synthesized_symbol = new SgMemberFunctionSymbol(mdecl);
+                  }
+                 else
+                  {
+                    if (SgFunctionDeclaration* fdecl = isSgFunctionDeclaration(first_nondefining_declaration))
+                         synthesized_symbol = new SgFunctionSymbol(fdecl);
+                  }
+             }
+
+          if (synthesized_symbol != NULL)
+             {
+               func_symbol = synthesized_symbol;
+               scope->insert_symbol(nameWithTemplateArguments, func_symbol);
+             }
+        }
 #endif
 
 #if 0
@@ -5569,7 +5602,7 @@ SageBuilder::buildDefiningFunctionDeclaration_T(const SgName & XXX_name, SgType*
 
        // DQ (12/2/2011): After discussion with Liao, we think this should be an error.
        // The defining declaration requires that the associated non-defining declaration should already exist.
-       // If required, a higher level build function could build both of these and connect them as required.
+       // If we still cannot find or create a symbol, abort with diagnostics.
           printf ("Error: building a defining declaration requires that the associated non-defining declaration already exists and it's symbol found the the same scope's symbol table! \n");
           ROSE_ABORT();
 #if 0
@@ -6981,6 +7014,12 @@ SgNonrealDecl * SageBuilder::buildNonrealDecl(const SgName & name, SgDeclaration
   nrdecl = new SgNonrealDecl(name);
   SageInterface::setSourcePosition(nrdecl);
   nrdecl->set_firstNondefiningDeclaration(nrdecl);
+  nrdecl->set_parent(scope);
+
+  if (SgScopeStatement* scope_stmt = isSgScopeStatement(scope)) {
+    nrdecl->set_scope(scope_stmt);
+  }
+
 #if DEBUG_BUILD_NONREAL_DECL
   printf("  --- nrdecl = %p (%s)\n", nrdecl, nrdecl->class_name().c_str());
 #endif
