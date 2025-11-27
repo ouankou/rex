@@ -1370,6 +1370,11 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     inst_decl->setForward();
     inst_decl->set_definingDeclaration(nullptr);
     inst_decl->set_firstNondefiningDeclaration(inst_decl);
+    
+    // REX FIX: Always require global qualification for template instantiations
+    // This ensures that the unparser prints "::" (e.g. "::std::vector" or "::tuple")
+    // which prevents ambiguity when global templates are shadowed.
+    inst_decl->set_global_qualification_required(true);
 
     if (inst_decl->get_templateDeclaration() == NULL) {
         std::cerr << "CRITICAL ERROR: inst_decl->get_templateDeclaration() is NULL immediately after creation! Setting it explicitly." << std::endl;

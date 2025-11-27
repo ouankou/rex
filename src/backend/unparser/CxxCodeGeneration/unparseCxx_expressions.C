@@ -682,6 +682,9 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
 
      std::string templateName = templateInstantiationDeclaration->get_templateName().str();
      templateName = strip_leading_global(templateName);
+     if (templateInstantiationDeclaration->get_global_qualification_required()) {
+          unp->u_exprStmt->curprint("::");
+     }
      unp->u_exprStmt->curprint ( templateName);
 
   // DQ (8/24/2014): Made this a warning instead of an error (see unparseToString/test2004_35.C).
@@ -718,6 +721,9 @@ Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDec
 
      std::string functionTemplateName = templateInstantiationFunctionDeclaration->get_templateName().str();
      functionTemplateName = strip_leading_global(functionTemplateName);
+     if (templateInstantiationFunctionDeclaration->get_global_qualification_required()) {
+          unp->u_exprStmt->curprint("::");
+     }
      unp->u_exprStmt->curprint(functionTemplateName);
 
      bool unparseTemplateArguments = templateInstantiationFunctionDeclaration->get_template_argument_list_is_explicit();

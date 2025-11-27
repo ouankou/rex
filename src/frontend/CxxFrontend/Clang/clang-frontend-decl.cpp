@@ -1314,9 +1314,26 @@ bool ClangToSageTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_
 
         SgNode *child = Traverse(inner_decl);
         if (SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child)) {
-            if (decl_stmt->get_parent() == nullptr) {
-                sg_namespace_def->append_declaration(decl_stmt);
-                decl_stmt->set_parent(sg_namespace_def);
+            bool is_parent_unset = (decl_stmt->get_parent() == nullptr);
+            bool is_parent_this = (decl_stmt->get_parent() == sg_namespace_def);
+
+            if (is_parent_unset || is_parent_this) {
+                // Check if already in list to avoid duplicates
+                const SgDeclarationStatementPtrList& decls = sg_namespace_def->get_declarations();
+                bool found = false;
+                for (SgDeclarationStatement* d : decls) {
+                    if (d == decl_stmt) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    sg_namespace_def->append_declaration(decl_stmt);
+                    if (is_parent_unset) {
+                        decl_stmt->set_parent(sg_namespace_def);
+                    }
+                }
             }
         }
     }
@@ -3269,6 +3286,13 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
         }
     }
 
+    // REX FIX: Always require global qualification for template instantiations
+    // This ensures that the unparser prints "::" (e.g. "::std::sort")
+    // which prevents ambiguity when global templates are shadowed.
+    if (function_decl->getTemplateSpecializationKind() != clang::TSK_Undeclared) {
+        sg_function_decl->set_global_qualification_required(true);
+    }
+
     *node = sg_function_decl;
 
     return VisitDeclaratorDecl(function_decl, node) && res;
@@ -3591,6 +3615,10 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
     if(isStaticDecl)
     {
       sg_var_decl->get_declarationModifier().get_storageModifier().setStatic();
+    }
+
+    if (!isembedded) {
+        sg_var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(false);
     }
 
     *node = sg_var_decl;
