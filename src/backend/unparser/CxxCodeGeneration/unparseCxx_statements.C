@@ -5087,32 +5087,8 @@ Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
      SgFunctionDeclaration* funcdecl_stmt = isSgFunctionDeclaration(stmt);
      ROSE_ASSERT(funcdecl_stmt != NULL);
 
-
-
      // DQ (7/20/2008): Added support for unparsing of SgTemplateFunctionDeclaration
      SgTemplateFunctionDeclaration* templateFunctionDeclaration = isSgTemplateFunctionDeclaration(funcdecl_stmt);
-#if 0
-     printf ("Inside of Unparse_ExprStmt::unparseFuncDeclStmt (%p): class_name() = %s \n",stmt,stmt->class_name().c_str());
-#endif
-     printf ("REX_DEBUG_NEW: unparseFuncDeclStmt visiting %s (ptr=%p, type=%s)\n", funcdecl_stmt->get_name().str(), funcdecl_stmt, funcdecl_stmt->class_name().c_str());
-     fflush(stdout);
-
-     // REX DEBUG
-     bool is_template_func = (isSgTemplateFunctionDeclaration(funcdecl_stmt) != NULL);
-     bool is_template_member = (isSgTemplateMemberFunctionDeclaration(funcdecl_stmt) != NULL);
-     bool is_template = is_template_func || is_template_member;
-     printf("DEBUG: isTemplateFunction = %d (func=%d, member=%d)\n", is_template, is_template_func, is_template_member);
-     fflush(stdout);
-
-     curprint ( string("\n/* Inside of Unparse_ExprStmt::unparseFuncDeclStmt (") + StringUtility::numberToString(stmt) + "): class_name() = " + stmt->class_name() + " */ \n");
-
-     if (is_template) {
-         printf("DEBUG: Calling unparseTemplateHeader\n");
-         fflush(stdout);
-     } else {
-         printf("DEBUG: Skipping unparseTemplateHeader\n");
-         fflush(stdout);
-     }
 
   // stmt->get_startOfConstruct()->display("Inside of unparseFuncDeclStmt(): START debug");
   // stmt->get_endOfConstruct()  ->display("Inside of unparseFuncDeclStmt(): END   debug");
@@ -13199,6 +13175,5 @@ Unparse_ExprStmt::unparseMicrosoftAttributeDeclaration (SgStatement* stmt, SgUnp
 
 
  // EOF
-
 
 
