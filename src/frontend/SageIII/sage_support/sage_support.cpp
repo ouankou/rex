@@ -1076,11 +1076,11 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
                                 // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
                                    Rose::is_UPC_language = true;
                                  }
-                                else
+                               else
                                  {
-                                   file->set_C99_gnu_only();
+                                   file->set_C89_gnu_only();
 #if 0
-                                   printf ("In determineFileType(): Setting the default mode for detected C cile to C99 (specifically generated code will use: -std=gnu99 option) \n");
+                                   printf ("In determineFileType(): Setting the default mode for detected C file to C89 (generated code will use: -std=gnu89 option) \n");
 #endif
                                  }
 

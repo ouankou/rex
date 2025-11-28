@@ -345,6 +345,13 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
   // one test of this feature in the C_tests directory.
   // ROSE_ASSERT(unp->opt.get_unparse_includes_opt() == false);
 
+     if (SgFunctionDeclaration* funcDecl = isSgFunctionDeclaration(stmt)) {
+         std::string funcName = funcDecl->get_name();
+         if (funcName.rfind("__builtin_", 0) == 0) {
+             return false;
+         }
+     }
+
      if (unp->opt.get_unparse_includes_opt() == true)
         {
 #if 0

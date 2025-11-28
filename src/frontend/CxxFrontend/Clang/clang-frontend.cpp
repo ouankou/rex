@@ -254,7 +254,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     switch (language) {
         case ClangToSageTranslator::C:
             sys_dirs_list.insert(sys_dirs_list.begin(), c_config_include_dirs.begin(), c_config_include_dirs.end());
-            inc_list.push_back("clang-builtin-c.h");
             break;
         case ClangToSageTranslator::CPLUSPLUS:
             // Use configuration-driven cxx_config_include_dirs for portability
@@ -411,9 +410,10 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     switch (language) {
         case ClangToSageTranslator::C:
-            if (!(std_info.isC99() || std_info.isC11() || std_info.isC17() || std_info.isC23())) {
-                requested_std = clang::LangStandard::lang_gnu17;
-            }
+            // Force gnu89 to preserve legacy C semantics (implicit function declarations, K&R style)
+            // relied on by the existing C_tests suite.
+            requested_std = clang::LangStandard::lang_gnu89;
+            std_info = clang::LangStandard::getLangStandardForKind(requested_std);
             clang_lang = clang::Language::C;
             break;
         case ClangToSageTranslator::CPLUSPLUS:

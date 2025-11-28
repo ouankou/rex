@@ -3613,6 +3613,12 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
                printf ("option -rose:skip_unparse found \n");
           set_skip_unparse(true);
         }
+     if ( CommandlineProcessing::isOption(argv,"-rose:","(skip_unparse_cc_commands)",true) == true )
+        {
+          if ( SgProject::get_verbose() >= 1 )
+               printf ("option -rose:skip_unparse_cc_commands found \n");
+          // Legacy option: consume without forwarding to backend.
+        }
 
 
   // unparser language option

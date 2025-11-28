@@ -997,6 +997,11 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType * record_type, SgN
         *node = class_sym->get_type();
     }
 
+    // After translating the declaration, the symbol should now exist; refresh the lookup
+    if (class_sym == NULL) {
+        class_sym = isSgClassSymbol(GetSymbolFromSymbolTable(record_type->getDecl()));
+    }
+
     if (isSgClassType(*node) != NULL) {
         if (class_sym == NULL) {
             p_class_type_decl_first_see_in_type.insert(std::pair<SgClassType *, bool>(isSgClassType(*node), true));
@@ -1640,6 +1645,19 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType * typedef_type, 
         // Some typedefs (especially template-dependent ones) may not have symbols yet
         // Use unknown type as fallback - this is acceptable for incomplete C++ support
         // Cannot find a typedef symbol for the TypedefType, using unknown type
+        if (SgProject::get_verbose() > 0) {
+            std::cerr << "CFE: Missing typedef symbol for '" << typedef_type->getDecl()->getNameAsString() << "'"
+                      << std::endl;
+        }
+
+        // Try to translate the typedef declaration on demand so the symbol becomes available.
+        // This handles cases where a typedef type is referenced before its declaration is processed.
+        auto it = p_decl_translation_map.find(typedef_type->getDecl());
+        if (it == p_decl_translation_map.end()) {
+            Traverse(const_cast<clang::TypedefNameDecl *>(typedef_type->getDecl()));
+            sym = GetSymbolFromSymbolTable(typedef_type->getDecl());
+            tdef_sym = isSgTypedefSymbol(sym);
+        }
     }
 
     *node = (tdef_sym != NULL) ? tdef_sym->get_type()

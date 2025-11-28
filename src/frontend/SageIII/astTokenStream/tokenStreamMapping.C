@@ -8032,7 +8032,18 @@ buildTokenStreamMapping(SgSourceFile* sourceFile, vector<stream_element*> & toke
   // support it as a data member of the SgSourceFile IR node.  This is due in part to ROSETTA and the
   // additional requirements of the generated serialization that is a part of the AST File I/O.
   // sourceFile->set_tokenSubsequenceMap(tokenMappingTraversal.tokenStreamSequenceMap);
-     sourceFile->set_tokenSubsequenceMap(&(tokenMappingTraversal.tokenStreamSequenceMap));
+     if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(sourceFile) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end()) {
+         // Reuse the existing map instead of asserting. Clear and populate with the new traversal results.
+         std::map<SgNode*,TokenStreamSequenceToNodeMapping*> *existingMap =
+             Rose::tokenSubsequenceMapOfMapsBySourceFile[sourceFile];
+         if (existingMap != NULL) {
+             existingMap->clear();
+             existingMap->insert(tokenMappingTraversal.tokenStreamSequenceMap.begin(),
+                                 tokenMappingTraversal.tokenStreamSequenceMap.end());
+         }
+     } else {
+         sourceFile->set_tokenSubsequenceMap(&(tokenMappingTraversal.tokenStreamSequenceMap));
+     }
 
 #if DEBUG_TOKEN_STREAM_MAPPING
   // DQ (1/19/2021): This is redundant so that we don't have to call the get_tokenSubsequenceMap() function
@@ -8257,6 +8268,5 @@ buildTokenStreamMapping(SgSourceFile* sourceFile, vector<stream_element*> & toke
      ROSE_ASSERT(false);
 #endif
    }
-
 
 
