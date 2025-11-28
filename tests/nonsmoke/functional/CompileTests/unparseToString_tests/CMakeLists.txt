@@ -12,9 +12,8 @@ set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTes
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
 
-if(TESTCODE_CURRENTLY_FAILING)
-  list(REMOVE_ITEM EXAMPLE_TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
-endif()
+set(CXX_TESTCODES_TO_UNPARSE ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+list(REMOVE_ITEM CXX_TESTCODES_TO_UNPARSE ${TESTCODE_CURRENTLY_FAILING})
 
 if(REX_ENABLE_FAILING_TESTS)
   foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
@@ -33,7 +32,7 @@ if(REX_ENABLE_FAILING_TESTS)
   endforeach()
 endif()
 
-foreach(file_to_test ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
   add_test(
     NAME ut_${file_to_test}
     COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES}

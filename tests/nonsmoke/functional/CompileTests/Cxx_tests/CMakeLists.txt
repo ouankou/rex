@@ -4,6 +4,9 @@
 include(Cxx_Testcodes.cmake)
 include(Cxx_Failing_Tests.cmake)
 
+set(CXX_TESTCODES_TO_RUN ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
+
 set(ROSE_FLAGS
   --edg:no_warnings -w -rose:verbose 0
   -rose:skip_unparse_asm_commands
@@ -17,10 +20,6 @@ if(REX_ENABLE_FAILING_TESTS)
   endforeach()
 endif()
 
-if(TESTCODE_CURRENTLY_FAILING)
-  list(REMOVE_ITEM EXAMPLE_TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
-endif()
-
-foreach(file_to_test ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
 endforeach()

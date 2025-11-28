@@ -21,7 +21,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 INSTALL_PREFIX="${1:-$HOME/rex-install}"
-BUILD_TYPE="${2:-Debug}"
+BUILD_TYPE="${2:-Release}"
 BUILD_DIR="build"
 NUM_JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 

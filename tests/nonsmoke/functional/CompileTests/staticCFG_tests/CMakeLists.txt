@@ -18,9 +18,8 @@ set(ROSE_FLAGS --edg:no_warnings -w -rose:verbose 0 --edg:restrict)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
 
-if(TESTCODE_CURRENTLY_FAILING)
-  list(REMOVE_ITEM EXAMPLE_TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
-endif()
+set(CXX_TESTCODES_FOR_CFG ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+list(REMOVE_ITEM CXX_TESTCODES_FOR_CFG ${TESTCODE_CURRENTLY_FAILING})
 
 if(REX_ENABLE_FAILING_TESTS)
   foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
@@ -44,7 +43,7 @@ if(REX_ENABLE_FAILING_TESTS)
   endforeach()
 endif()
 
-foreach(file_to_test ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
 
   add_test(
     NAME testStaticCFG_Cxx_${file_to_test}

@@ -1356,10 +1356,6 @@ tests/nonsmoke/specimens/c/Makefile
 tests/nonsmoke/specimens/fortran/Makefile
 tests/nonsmoke/unit/Makefile
 tests/nonsmoke/unit/SageInterface/Makefile
-tests/roseTests/Makefile
-tests/roseTests/ompLoweringTests/Makefile
-tests/roseTests/programAnalysisTests/Makefile
-tests/roseTests/programAnalysisTests/typeTraitTests/Makefile
 tests/smoke/ExamplesForTestWriters/Makefile
 tests/smoke/Makefile
 tests/smoke/functional/Fortran/Makefile

@@ -4,16 +4,15 @@
 include(C_Testcodes.cmake)
 include(C_Failing_Tests.cmake)
 
+set(C_TESTCODES_TO_RUN ${TESTCODES_REQUIRED_TO_PASS})
+list(REMOVE_ITEM C_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
+
 if(REX_ENABLE_FAILING_TESTS)
   foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
     compile_test(${file_to_test} "C_tests_failing")
   endforeach()
 endif()
 
-if(TESTCODE_CURRENTLY_FAILING)
-  list(REMOVE_ITEM TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
-endif()
-
-foreach(file_to_test ${TESTCODES_REQUIRED_TO_PASS})
+foreach(file_to_test ${C_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "C_tests")
 endforeach()
