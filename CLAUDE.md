@@ -74,7 +74,7 @@ mkdir build && cd build
 
 # Configure with CMake
 cmake .. -DCMAKE_INSTALL_PREFIX=/path/to/install \
-         -DCMAKE_BUILD_TYPE=Release
+         -DCMAKE_BUILD_TYPE=Debug
 
 # Build (use -j for parallel builds)
 make -j8

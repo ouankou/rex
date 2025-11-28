@@ -16,8 +16,23 @@ set(ROSE_FLAGS
 
 # This populates the list EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
 
-foreach(file_to_test ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+set(CXX_TESTCODES_FOR_VIRTUAL_CFG ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+list(REMOVE_ITEM CXX_TESTCODES_FOR_VIRTUAL_CFG ${TESTCODE_CURRENTLY_FAILING})
+
+if(REX_ENABLE_FAILING_TESTS)
+  foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
+    add_test(
+      NAME testVirtualCFG_CXX_failing_${file_to_test}
+      COMMAND testVirtualCFG ${ROSE_FLAGS}
+      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+    set_tests_properties(testVirtualCFG_CXX_failing_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST_FAILING)
+  endforeach()
+endif()
+
+foreach(file_to_test ${CXX_TESTCODES_FOR_VIRTUAL_CFG})
   add_test(
     NAME testVirtualCFG_CXX_${file_to_test}
     COMMAND testVirtualCFG ${ROSE_FLAGS}

@@ -21,6 +21,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 INSTALL_PREFIX="${1:-$HOME/rex-install}"
+BUILD_TYPE="${2:-Release}"
 BUILD_DIR="build"
 NUM_JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
@@ -29,6 +30,7 @@ echo -e "${GREEN}REX Build Script with Clang Frontend${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Install prefix: $INSTALL_PREFIX"
+echo "Build type:     $BUILD_TYPE"
 echo "Build directory: $BUILD_DIR"
 echo "Parallel jobs: $NUM_JOBS"
 echo ""
@@ -81,7 +83,7 @@ cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 
 
 # Configure with CMake (will auto-detect compilers, preferring clang-20/flang-20)
 cmake .. \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
     -Denable-c=ON \
     -Denable-fortran=ON \

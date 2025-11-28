@@ -9,7 +9,7 @@
 
 ## Build, Test, and Development Commands
 - Bootstrap with LLVM Clang 20: `./build-rex.sh $HOME/rex-install` (configures, builds, installs).
-- Manual flow: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -Denable-c=ON -Denable-fortran=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`.
+- Manual flow: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -Denable-c=ON -Denable-fortran=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`.
 - Compile: `cmake --build build -j$(nproc)`; install locally with `cmake --install build`.
 - Run regression suites: `ctest --test-dir build --output-on-failure` or `cmake --build build --target check` after configuration.
 
@@ -19,7 +19,7 @@
 - Place ROSE includes before STL/third-party headers, and keep namespaces explicit in headers (no `using namespace` in public headers).
 
 ## Testing Guidelines
-- Extend existing suites by copying patterns in `tests/roseTests` (C/C++), `tests/nonsmoke` (feature smoke tests), and `tests/CompileTests` (compilation guards); name files after the feature under test (e.g., `testLoopNormalization.C`).
+- Extend existing suites by copying patterns in `tests/nonsmoke` (feature smoke tests); name files after the feature under test (e.g., `testLoopNormalization.C`).
 - Always run `ctest` (or targeted `ctest -R <pattern>`) before submitting; Fortran work should also follow the prompts in `FORTRAN_TESTING_GUIDE.md`.
 
 ## Commit & Pull Request Guidelines

@@ -1121,6 +1121,7 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                     case V_SgPntrArrRefExp:
                     case V_SgVarRefExp:
                     case V_SgTemplateMemberFunctionRefExp:
+                    case V_SgPseudoDestructorRefExp:
                        {
                          break;
                        }
