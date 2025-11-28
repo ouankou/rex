@@ -1933,7 +1933,8 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
                            else
                             {
                                    // REX FIX: Suppress class keyword for template instantiations or if not needed
-                                   SgClassDeclaration* classDecl = isSgClassDeclaration(isSgClassType(templateArgument->get_type())->get_declaration());
+                                   SgClassType* classType = isSgClassType(templateArgument->get_type());
+                                   SgClassDeclaration* classDecl = classType ? isSgClassDeclaration(classType->get_declaration()) : NULL;
                                    if (classDecl && !isSgTemplateInstantiationDecl(classDecl)) {
                                        curprint("class ");
                                    }
