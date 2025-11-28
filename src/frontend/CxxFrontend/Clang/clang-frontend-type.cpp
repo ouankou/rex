@@ -1041,13 +1041,56 @@ ClangToSageTranslator::buildTemplateParameters(
                 param_type = buildTypeFromQualifiedType(arg.getIntegralType());
                 break;
 
-            case clang::TemplateArgument::Template:
+            case clang::TemplateArgument::Template: {
                 // Template template parameter
-                // Fallback to type_parameter to avoid unparser crash (requires SgNonrealDecl)
-                param_kind = SgTemplateParameter::type_parameter;
-                param_type = SageBuilder::buildTemplateType(
-                    SgName("Template" + std::to_string(param_position)));
-                break;
+                param_kind = SgTemplateParameter::template_parameter;
+                std::string param_name = "Template" + std::to_string(param_position);
+                SgTemplateType* ttype = SageBuilder::buildTemplateType(SgName(param_name));
+
+                // Create SgNonrealDecl
+                SgScopeStatement* current_scope = SageBuilder::topScopeStack();
+                SgDeclarationScope* decl_scope = NULL;
+                int depth = 0;
+                SgScopeStatement* temp_scope = current_scope;
+                while (temp_scope && depth < 100) {
+                    decl_scope = isSgDeclarationScope(temp_scope);
+                    if (decl_scope) break;
+                    temp_scope = temp_scope->get_scope();
+                    depth++;
+                }
+
+                if (!decl_scope) {
+                     decl_scope = SageBuilder::buildDeclarationScope();
+                     if (current_scope) {
+                         decl_scope->set_parent(current_scope);
+                     } else {
+                         decl_scope->set_parent(getGlobalScope());
+                     }
+                }
+
+                SgNonrealDecl* nrdecl = SageBuilder::buildNonrealDecl(SgName(param_name), decl_scope);
+                // nrdecl->set_type(ttype); // Removed: SgNonrealDecl expects SgNonrealType
+
+                // Translate inner parameters
+                clang::TemplateName tname = arg.getAsTemplate();
+                clang::TemplateDecl* tdecl = tname.getAsTemplateDecl();
+
+                if (tdecl) {
+                    SgTemplateParameterPtrList* inner_params = translateTemplateParameterList(tdecl->getTemplateParameters(), nrdecl);
+                    if (inner_params) {
+                        nrdecl->get_tpl_params() = *inner_params;
+                        delete inner_params;
+                    }
+                }
+
+                SgTemplateParameter* param = SageBuilder::buildTemplateParameter(SgTemplateParameter::template_parameter, ttype);
+                param->set_templateDeclaration(nrdecl);
+                nrdecl->set_parent(param);
+
+                param_list->push_back(param);
+                param_position++;
+                continue;
+            }
 
             case clang::TemplateArgument::Pack:
                 // Parameter pack (e.g., typename ... Args)
