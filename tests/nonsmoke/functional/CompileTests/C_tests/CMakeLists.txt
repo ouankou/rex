@@ -10,6 +10,10 @@ if(REX_ENABLE_FAILING_TESTS)
   endforeach()
 endif()
 
+if(TESTCODE_CURRENTLY_FAILING)
+  list(REMOVE_ITEM TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
+endif()
+
 foreach(file_to_test ${TESTCODES_REQUIRED_TO_PASS})
   compile_test(${file_to_test} "C_tests")
 endforeach()

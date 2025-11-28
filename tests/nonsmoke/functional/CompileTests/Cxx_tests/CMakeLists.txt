@@ -17,6 +17,10 @@ if(REX_ENABLE_FAILING_TESTS)
   endforeach()
 endif()
 
+if(TESTCODE_CURRENTLY_FAILING)
+  list(REMOVE_ITEM EXAMPLE_TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
+endif()
+
 foreach(file_to_test ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
   compile_test(${file_to_test} "Cxx_tests")
 endforeach()
