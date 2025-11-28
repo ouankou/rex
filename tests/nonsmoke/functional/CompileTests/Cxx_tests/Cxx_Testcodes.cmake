@@ -2062,3 +2062,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test_wchars.C
   unparse-typedef-ctor.C
 )
+
+# Export variables for downstream tests
+set(ROSE__CXX_TESTS ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+set(ROSE__CXX_TESTS__BOOST "")
