@@ -10,6 +10,29 @@ set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTes
 
 # This populates the list EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
+
+if(TESTCODE_CURRENTLY_FAILING)
+  list(REMOVE_ITEM EXAMPLE_TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
+endif()
+
+if(REX_ENABLE_FAILING_TESTS)
+  foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
+    add_test(
+      NAME ut_failing_${file_to_test}
+      COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+              -c ${TESTCODE_DIR}/${file_to_test})
+    add_test(
+      NAME ua_failing_${file_to_test}
+      COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+              -c ${TESTCODE_DIR}/${file_to_test})
+
+    set_tests_properties(ua_failing_${file_to_test}
+      PROPERTIES DEPENDS ut_failing_${file_to_test} 
+      LABELS UNPARSETOSTRING_FAILING)
+  endforeach()
+endif()
+
 foreach(file_to_test ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME ut_${file_to_test}

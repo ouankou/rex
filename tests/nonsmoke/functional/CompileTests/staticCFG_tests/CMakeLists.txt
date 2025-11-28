@@ -16,6 +16,33 @@ set(ROSE_FLAGS --edg:no_warnings -w -rose:verbose 0 --edg:restrict)
 
 # This populates the list ROSE__CXX_TESTS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
+
+if(TESTCODE_CURRENTLY_FAILING)
+  list(REMOVE_ITEM EXAMPLE_TESTCODES_REQUIRED_TO_PASS ${TESTCODE_CURRENTLY_FAILING})
+endif()
+
+if(REX_ENABLE_FAILING_TESTS)
+  foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
+    add_test(
+      NAME testStaticCFG_Cxx_failing_${file_to_test}
+      COMMAND testStaticCFG ${ROSE_FLAGS}
+        -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
+        -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+    set_tests_properties(testStaticCFG_Cxx_failing_${file_to_test} PROPERTIES LABELS STATICCFGTEST_FAILING)
+
+    add_test(
+      NAME testInterproceduralCFG_Cxx_failing_${file_to_test}
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS}
+        -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
+        -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+
+    set_tests_properties(testInterproceduralCFG_Cxx_failing_${file_to_test}
+      PROPERTIES DEPENDS testStaticCFG_Cxx_failing_${file_to_test} LABELS STATICCFGTEST_FAILING)
+  endforeach()
+endif()
 
 foreach(file_to_test ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 
