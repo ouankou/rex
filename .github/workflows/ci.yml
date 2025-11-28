@@ -61,7 +61,7 @@ jobs:
           python3-dev
 
     # Simplified build using build-rex.sh script
-    - name: Build and Install
+    - name: Build and Install (Debug)
       env:
         # Set up LLVM 20 paths so "clang" command resolves to clang-20
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -73,7 +73,7 @@ jobs:
         FC: flang-${{ matrix.llvm }}
       run: |
         cd $GITHUB_WORKSPACE
-        ./build-rex.sh $GITHUB_WORKSPACE/../rex_install
+        ./build-rex.sh $GITHUB_WORKSPACE/../rex_install Debug
 
     # Note: Some tests are disabled due to removed boost graph headers (deBoost effort)
     # See tests/nonsmoke/functional/roseTests/astProcessingTests/CMakeLists.txt for details
