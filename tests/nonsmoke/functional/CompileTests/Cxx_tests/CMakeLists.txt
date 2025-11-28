@@ -4,6 +4,13 @@
 include(Cxx_Testcodes.cmake)
 include(Cxx_Failing_Tests.cmake)
 
+set(ROSE_FLAGS
+  --edg:no_warnings -w -rose:verbose 0
+  -rose:skip_unparse_asm_commands
+  -rose:skip_unparse_cc_commands
+  -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
+  )
+
 if(REX_ENABLE_FAILING_TESTS)
   foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
     compile_test(${file_to_test} "Cxx_tests_failing")
