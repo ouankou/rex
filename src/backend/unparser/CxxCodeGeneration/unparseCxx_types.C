@@ -56,23 +56,13 @@ static std::string strip_redundant_qualification(std::string name, const SgUnpar
     }
   }
 
-  // Determine enclosing class from current scope or from the named type declaration.
+  // Determine enclosing class from current scope.
   SgScopeStatement* cur_scope = info.get_current_scope();
-  SgClassDefinition* cur_class = isSgClassDefinition(cur_scope);
-  SgTemplateClassDefinition* cur_tclass = isSgTemplateClassDefinition(cur_scope);
+  SgClassDefinition* cur_class = SageInterface::getEnclosingClassDefinition(cur_scope);
   SgClassDeclaration* cur_decl = NULL;
 
   if (cur_class != NULL) {
     cur_decl = cur_class->get_declaration();
-  } else if (cur_tclass != NULL) {
-    cur_decl = isSgClassDeclaration(cur_tclass->get_declaration());
-  } else if (SgNamedType* nt = isSgNamedType(type)) {
-    if (SgDeclarationStatement* decl = nt->get_declaration()) {
-      SgClassDefinition* parent_def = SageInterface::getEnclosingClassDefinition(decl);
-      if (parent_def != NULL) {
-        cur_decl = parent_def->get_declaration();
-      }
-    }
   }
 
   if (cur_decl != NULL) {
