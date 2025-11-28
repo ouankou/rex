@@ -689,6 +689,8 @@ ClangToSageTranslator::ClangToSageTranslator(clang::CompilerInstance * compiler_
     p_decl_translation_map(),
     p_stmt_translation_map(),
     p_type_translation_map(),
+    p_template_decl_cache(),
+    p_template_inst_cache(),
     p_global_scope(NULL),
     p_class_type_decl_first_see_in_type(),
     p_enum_type_decl_first_see_in_type(),

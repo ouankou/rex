@@ -687,6 +687,7 @@ UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream (
 #if 0
                     printf ("(unparseOnlyWhitespace == true): end = %d \n",end);
 #endif
+
                  // We don't want to unparse the token at the end.
                     int j = end-1;
 
@@ -3606,6 +3607,9 @@ Unparse_ExprStmt::unparsePragmaDeclStmt (SgStatement* stmt, SgUnparse_Info& info
    }
 
 
+
+
+
 void
 Unparse_ExprStmt::unparseEmptyDeclaration (SgStatement* stmt, SgUnparse_Info& info)
    {
@@ -5081,19 +5085,16 @@ void
 Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
    {
      SgFunctionDeclaration* funcdecl_stmt = isSgFunctionDeclaration(stmt);
-     ASSERT_not_null(funcdecl_stmt);
+     ROSE_ASSERT(funcdecl_stmt != NULL);
 
-#if 0
-     printf ("Inside of unparseFuncDeclStmt(): name = %p = %s \n",funcdecl_stmt,funcdecl_stmt->get_name().str());
-  // curprint ( string("/* Inside of Unparse_ExprStmt::unparseFuncDeclStmt */";
-     curprint ( string("\n/* Inside of Unparse_ExprStmt::unparseFuncDeclStmt (" ) + StringUtility::numberToString(stmt) 
-                + "): class_name() = " + stmt->class_name().c_str() + " */ \n");
+     // DQ (7/20/2008): Added support for unparsing of SgTemplateFunctionDeclaration
+     SgTemplateFunctionDeclaration* templateFunctionDeclaration = isSgTemplateFunctionDeclaration(funcdecl_stmt);
 
   // stmt->get_startOfConstruct()->display("Inside of unparseFuncDeclStmt(): START debug");
   // stmt->get_endOfConstruct()  ->display("Inside of unparseFuncDeclStmt(): END   debug");
 
   // info.display("Inside of unparseFuncDeclStmt()");
-#endif
+
 
   // printf ("In unparseFuncDeclStmt(): info.get_current_scope() = %p = %s \n",info.get_current_scope(),info.get_current_scope()->class_name().c_str());
 
@@ -6523,6 +6524,19 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
    {
      SgMemberFunctionDeclaration* mfuncdecl_stmt = isSgMemberFunctionDeclaration(stmt);
      ASSERT_not_null(mfuncdecl_stmt);
+
+     // REX FIX: Unparse template header for member functions of template classes defined outside the class
+     if (mfuncdecl_stmt->get_definition() != NULL) {
+         SgClassDefinition *parent_class_defn = isSgClassDefinition(mfuncdecl_stmt->get_scope());
+         SgTemplateClassDefinition *template_class_defn = isSgTemplateClassDefinition(parent_class_defn);
+         if (template_class_defn) {
+             SgNode* parent = mfuncdecl_stmt->get_parent();
+             if (!isSgClassDefinition(parent) && !isSgTemplateDeclaration(parent) && !info.SkipFunctionDefinition()) {
+                 SgTemplateClassDeclaration *template_class_decl = template_class_defn->get_declaration();
+                 unparseTemplateHeader(template_class_decl, info);
+             }
+         }
+     }
 
 #if 0
      printf ("Inside of Unparse_ExprStmt::unparseMFuncDeclStmt(stmt = %p = %s) \n",stmt,stmt->class_name().c_str());
@@ -11515,6 +11529,44 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
      SgTypedefDeclaration* typedef_stmt = isSgTypedefDeclaration(stmt);
      ASSERT_not_null(typedef_stmt);
 
+     // REX FIX: Handle SgTemplateTypedefDeclaration with 'using' syntax
+     if (SgTemplateTypedefDeclaration* templateTypedef = isSgTemplateTypedefDeclaration(stmt)) {
+         unparseTemplateHeader(templateTypedef, info);
+         curprint("using ");
+         curprint(templateTypedef->get_name().str());
+         curprint(" = ");
+         unp->u_type->unparseType(templateTypedef->get_base_type(), info);
+         curprint(";");
+         return;
+     }
+
+     // REX FIX: Use 'using' syntax for typedefs in C++ mode (generic solution)
+     SgSourceFile* sourcefile = isSgSourceFile(info.get_current_source_file());
+     
+     // Check if base type is elaborated (struct/enum)
+     SgType* base_type = typedef_stmt->get_base_type();
+     bool is_elaborated = isSgClassType(base_type) || isSgEnumType(base_type);
+
+     // REX FIX: Use enum to determine typedef vs using
+     if (typedef_stmt->get_typedef_type() == SgTypedefDeclaration::e_using) {
+          curprint("using ");
+          curprint(typedef_stmt->get_name().str());
+          curprint(" = ");
+          
+          SgUnparse_Info ninfo(info);
+          bool outputTypeDefinition = typedef_stmt->get_typedefBaseTypeContainsDefiningDeclaration();
+          if (outputTypeDefinition) {
+              ninfo.set_SkipQualifiedNames();
+          } else {
+              ninfo.set_SkipClassDefinition();
+              ninfo.set_SkipEnumDefinition();
+          }
+          
+          unp->u_type->unparseType(typedef_stmt->get_base_type(), ninfo);
+          curprint(";");
+          return;
+     }
+
 #define DEBUG_TYPEDEF_DECLARATIONS 0
 
 #if DEBUG_TYPEDEF_DECLARATIONS
@@ -12498,6 +12550,9 @@ void Unparse_ExprStmt::unparseTemplateHeader(T* decl, SgUnparse_Info& info) {
 #endif
   if (!decl->get_templateParameters().empty()) {
     curprint("template ");
+
+     
+
     SgTemplateParameterPtrList tlist =  decl->get_templateParameters ();
     Unparse_ExprStmt::unparseTemplateParameterList (tlist, info, true);
     curprint("\n");
@@ -12532,6 +12587,9 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
 
      T* template_stmt = dynamic_cast<T*>(stmt);
      ASSERT_not_null(template_stmt);
+     
+     // DEBUG: Print template name
+     // printf("DEBUG: unparseTemplateDeclarationStatment_support visiting %s\n", template_stmt->get_name().str());
 
   // DQ (1/28/2013): This helps handle cases such as "#if 1 void foo () #endif { }"
      unparseAttachedPreprocessingInfo(template_stmt, info, PreprocessingInfo::inside);
@@ -12578,7 +12636,7 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
      bool unparse_template_from_ast = sourcefile != NULL && sourcefile->get_unparse_template_ast();
      unparse_template_from_ast |= ((templateFunctionDeclaration != NULL) && (templateFunctionDeclaration->get_unparse_template_ast() == true));
      unparse_template_from_ast |= ((templateMemberFunctionDeclaration != NULL) && (templateMemberFunctionDeclaration->get_unparse_template_ast() == true));
-
+     
      if (unparse_template_from_ast) {
        SgTemplateClassDeclaration * assoc_tpl_class_decl = nullptr;
        if (templateMemberFunctionDeclaration) {
@@ -12601,7 +12659,9 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
          }
        }
 
-       unparseTemplateHeader(template_stmt, info);
+       if (templateTypedefDeclaration == NULL) {
+           unparseTemplateHeader(template_stmt, info);
+       }
 
        SgUnparse_Info ninfo(info);
 
@@ -12624,8 +12684,9 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
              ninfo.set_CheckAccess();
          }
 
-         SgClassDefinition * class_defn = templateClassDeclaration->get_definition();
-         if (class_defn != NULL) {
+          SgClassDefinition * class_defn = templateClassDeclaration->get_definition();
+          // REX FIX: Check SkipClassDefinition to avoid infinite recursion/double headers
+          if (class_defn != NULL && !info.SkipClassDefinition()) {
            unparseClassDefnStmt(templateClassDeclaration->get_definition(), ninfo);
          } else {
            SgClassDeclaration::class_types class_type = templateClassDeclaration->get_class_type();
@@ -12686,6 +12747,8 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
 
        } else if (templateVariableDeclaration != NULL) {
          unparseVarDeclStmt(templateVariableDeclaration, info);
+       } else if (templateTypedefDeclaration != NULL) {
+         unparseTypeDefStmt(templateTypedefDeclaration, info);
        } else {
          printf("Error: unexpected node variant: %s\n", stmt->class_name().c_str());
          ROSE_ABORT();
@@ -13116,6 +13179,5 @@ Unparse_ExprStmt::unparseMicrosoftAttributeDeclaration (SgStatement* stmt, SgUnp
 
 
  // EOF
-
 
 

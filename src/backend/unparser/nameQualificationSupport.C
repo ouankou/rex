@@ -11170,7 +11170,15 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
           ASSERT_not_null(type);
 
           SgNamedType* namedType = isSgNamedType(type);
-          ASSERT_not_null(namedType);
+          // REX FIX: SgPseudoDestructorRefExp may have non-named types (e.g., for primitive types
+          // or template type parameters in patterns like ptr->~T() where T is not a class).
+          // Skip name qualification for such cases as they don't require it.
+          if (namedType == NULL) {
+#if DEBUG_PSEUDO_DESTRUCTOR_REF
+              MLOG_WARN_C(MLOG_UNPARSER, "Skipping name qualification for non-named type in SgPseudoDestructorRefExp\n");
+#endif
+              return inheritedAttribute;
+          }
 
           SgDeclarationStatement* declarationStatement = namedType->get_declaration();
           ASSERT_not_null(declarationStatement);

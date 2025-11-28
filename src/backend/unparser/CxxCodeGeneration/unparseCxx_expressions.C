@@ -26,6 +26,32 @@ using namespace Rose;
 #define OUTPUT_HIDDEN_LIST_DATA 0
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
+namespace {
+// Remove a leading global qualifier (\"::\") from a template or type name. The unparser already
+// handles necessary name qualification via scope lookup, so retaining a redundant global prefix
+// results in doubled qualification (e.g., \"<::std::tuple>\").
+std::string strip_leading_global(std::string name)
+   {
+     // Trim leading whitespace
+     size_t first_non_space = 0;
+     while (first_non_space < name.size() && isspace(name[first_non_space]))
+        {
+          ++first_non_space;
+        }
+     if (first_non_space > 0)
+        {
+          name.erase(0, first_non_space);
+        }
+
+     // Strip any leading global qualifiers
+     while (name.size() > 2 && name.compare(0,2,"::") == 0)
+        {
+          name = name.substr(2);
+        }
+     return name;
+   }
+}
+
 #ifdef _MSC_VER
 #include "Cxx_Grammar.h"
 #endif
@@ -654,7 +680,12 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
      unp->u_exprStmt->curprint ("/* In unparseTemplateName(): output templateInstantiationDeclaration->get_templateName() */ ");
 #endif
 
-     unp->u_exprStmt->curprint ( templateInstantiationDeclaration->get_templateName().str());
+     std::string templateName = templateInstantiationDeclaration->get_templateName().str();
+     templateName = strip_leading_global(templateName);
+     if (templateInstantiationDeclaration->get_global_qualification_required()) {
+          unp->u_exprStmt->curprint("::");
+     }
+     unp->u_exprStmt->curprint ( templateName);
 
   // DQ (8/24/2014): Made this a warning instead of an error (see unparseToString/test2004_35.C).
   // DQ (5/7/2013): I think these should be false so that the full type will be output.
@@ -685,10 +716,15 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
 void
 Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDecl* templateInstantiationFunctionDeclaration, SgUnparse_Info& info)
    {
-  // DQ (6/21/2011): Generated this function from refactored call to unparseTemplateArgumentList
+ // DQ (6/21/2011): Generated this function from refactored call to unparseTemplateArgumentList
      ASSERT_not_null(templateInstantiationFunctionDeclaration);
 
-     unp->u_exprStmt->curprint(templateInstantiationFunctionDeclaration->get_templateName().str());
+     std::string functionTemplateName = templateInstantiationFunctionDeclaration->get_templateName().str();
+     functionTemplateName = strip_leading_global(functionTemplateName);
+     if (templateInstantiationFunctionDeclaration->get_global_qualification_required()) {
+          unp->u_exprStmt->curprint("::");
+     }
+     unp->u_exprStmt->curprint(functionTemplateName);
 
      bool unparseTemplateArguments = templateInstantiationFunctionDeclaration->get_template_argument_list_is_explicit();
 
@@ -1493,13 +1529,41 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                // in template parameter lists (e.g., "template <typename T>" not "template <typename templateType_T>")
                const std::string prefix = "templateType_";
                if (type_name.compare(0, prefix.length(), prefix) == 0) {
-                   std::string old_name = type_name;
                    type_name = type_name.substr(prefix.length());
-               } else {
                }
 
-               if (is_template_header)
-                 curprint("typename ");
+               // REX FIX: Handle pack prefix "... " - extract it for separate handling
+               bool is_pack = false;
+               const std::string pack_prefix = "... ";
+               if (type_name.compare(0, pack_prefix.length(), pack_prefix) == 0) {
+                   is_pack = true;
+                   type_name = type_name.substr(pack_prefix.length());
+               }
+
+               // REX FIX: Check if this is an anonymous parameter (empty or placeholder name after pack prefix removed)
+               // The frontend may generate __type_param_N for anonymous parameters
+               const std::string gen_prefix = "__type_param_";
+               if (type_name.compare(0, gen_prefix.length(), gen_prefix) == 0) {
+                   type_name = "";  // Anonymous parameter - suppress the generated name
+               }
+
+               if (is_template_header) {
+                 // REX FIX: Use stored keyword or default appropriately
+                 std::string stored_kw = SageInterface::getTemplateParameterKeyword(templateParameter);
+                 std::string kw;
+                 if (!stored_kw.empty()) {
+                     kw = stored_kw + " ";
+                 } else {
+                     // Default: prefer typename for anonymous parameters, class for named ones
+                     kw = type_name.empty() ? "typename " : "class ";
+                 }
+                 curprint(kw);
+                 
+                 // Print pack ellipsis after keyword if this is a pack
+                 if (is_pack) {
+                     curprint("... ");
+                 }
+               }
                curprint(type_name);
 
                SgType* default_type = templateParameter->get_defaultTypeParameter();
@@ -1569,10 +1633,23 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                SgTemplateParameterPtrList & templateParameterList = nrdecl->get_tpl_params();
                Unparse_ExprStmt::unparseTemplateParameterList (templateParameterList, info, true);
 
-               // TV (03/23/2018): could either be class or typename: where is the info in EDG? where to store it in the AST?
-               curprint(" typename ");
+               // REX FIX: Add space after template parameter list (e.g., "> class")
+               curprint(" ");
 
-               curprint(nrdecl->get_name());
+               // TV (03/23/2018): could either be class or typename: where is the info in EDG? where to store it in the AST?
+               // REX FIX: Use stored keyword or default to class
+               std::string kw = "class ";
+               std::string stored_kw = SageInterface::getTemplateParameterKeyword(templateParameter);
+               if (!stored_kw.empty()) {
+                   kw = stored_kw + " ";
+               }
+               curprint(kw);
+
+               std::string name_str = nrdecl->get_name().getString();
+               if (name_str.size() > 2 && name_str.compare(0,2,"::") == 0) {
+                   name_str = name_str.substr(2);
+               }
+               curprint(name_str);
 #if 0
                printf ("unparseTemplateParameter(): case SgTemplateParameter::template_parameter: Sorry, not implemented! \n");
                ROSE_ABORT();
@@ -1855,10 +1932,12 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
                             }
                            else
                             {
-                              if (isSgClassType(templateArgument->get_type()) != NULL)
-                                 {
-                                   curprint("class ");
-                                 }
+                                   // REX FIX: Suppress class keyword for template instantiations or if not needed
+                                   SgClassType* classType = isSgClassType(templateArgument->get_type());
+                                   SgClassDeclaration* classDecl = classType ? isSgClassDeclaration(classType->get_declaration()) : NULL;
+                                   if (classDecl && !isSgTemplateInstantiationDecl(classDecl)) {
+                                       curprint("class ");
+                                   }
                             }
                        }
 #endif
@@ -3004,6 +3083,7 @@ Unparse_ExprStmt::unparseFuncRefSupport(SgExpression* expr, SgUnparse_Info& info
        // DQ (4/15/2013): If there is other debug output turned on then nesting of comments inside of comments can occur in this output (see test2007_17.C).
           curprint (string("\n /* In unparseFuncRef(): put out func_name = ") + func_name + " */ \n ");
 #endif
+
        // If this is a template then the name will include template arguments which require name qualification and the name 
        // qualification will depend on where the name is referenced in the code.  So we have generate the non-canonical name 
        // with all possible qualifications and save it to be reused by the unparser when it unparses the tempated function name.
@@ -3043,6 +3123,7 @@ Unparse_ExprStmt::unparseFuncRefSupport(SgExpression* expr, SgUnparse_Info& info
             else
              {
                curprint (func_name);
+
              }
         }
 

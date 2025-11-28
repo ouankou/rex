@@ -15,6 +15,67 @@
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
+namespace {
+// Strip a leading global qualifier and, if the name is qualified by the current (or owning)
+// class, strip that class qualification as well (e.g., UsesDependent::rebound -> rebound).
+static std::string strip_redundant_qualification(std::string name, const SgUnparse_Info& info, SgType* type) {
+  // Trim trailing whitespace
+  while (!name.empty() && isspace(name.back())) {
+    name.pop_back();
+  }
+
+  // Trim leading whitespace
+  size_t first_non_space = 0;
+  while (first_non_space < name.size() && isspace(name[first_non_space])) {
+    ++first_non_space;
+  }
+  if (first_non_space > 0) {
+    name.erase(0, first_non_space);
+  }
+
+  // Only strip explicit global qualification when it is not required by the unparse info.
+  if (info.get_global_qualification_required() == false) {
+    // Remove any leading global qualifiers
+    while (name.size() > 2 && name.compare(0, 2, "::") == 0) {
+      name = name.substr(2);
+    }
+
+    // Drop redundant global qualifiers that appear immediately after delimiters (e.g., "<::std::tuple>")
+    auto is_identifier_char = [](char c) {
+      return isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '>';
+    };
+    for (size_t i = 0; i + 1 < name.size(); /* increment inside */) {
+      if (name[i] == ':' && name[i+1] == ':') {
+        bool preceded_by_identifier = (i > 0) && is_identifier_char(name[i-1]);
+        if (!preceded_by_identifier) {
+          name.erase(i, 2);
+          continue;
+        }
+      }
+      ++i;
+    }
+  }
+
+  // Determine enclosing class from current scope.
+  SgScopeStatement* cur_scope = info.get_current_scope();
+  SgClassDefinition* cur_class = SageInterface::getEnclosingClassDefinition(cur_scope);
+  SgClassDeclaration* cur_decl = NULL;
+
+  if (cur_class != NULL) {
+    cur_decl = cur_class->get_declaration();
+  }
+
+  if (cur_decl != NULL) {
+    std::string prefix = cur_decl->get_name().getString() + "::";
+    if (name.size() > prefix.size() && name.compare(0, prefix.size(), prefix) == 0) {
+      name = name.substr(prefix.size());
+    }
+  }
+
+  return name;
+}
+} // unnamed namespace
+
 // If this is turned on then we get the message to the
 // generted code showing up in the mangled names!
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
@@ -744,8 +805,10 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #endif
                if (info.SkipBaseType() == false)
                   {
-                    curprint(typeNameString);
-                  }
+                     std::string finalName = strip_redundant_qualification(typeNameString, info, type);
+                     curprint(finalName);
+                     curprint(" "); // Restore space stripped by trim
+                   }
              }
             else
              {
@@ -758,11 +821,12 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #endif
                  // DQ (6/18/2013): Added support to skip output of typenames when handling multiple variable declarations in
                  // SgForInitStmt IR nodes and multiple SgInitializedName IR nodes in a single SgVariableDeclaration IR node.
-                    if (info.SkipBaseType() == false)
-                       {
-                         curprint(typeNameString);
-                       }
-                  }
+                     if (info.SkipBaseType() == false)
+                        {
+                          std::string finalName = strip_redundant_qualification(typeNameString, info, type);
+                          curprint(finalName);
+                        }
+                   }
              }
         }
        else
@@ -773,6 +837,7 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #if 0
           curprint("\n/* Top of unparseType() processing main switch statement */ \n");
 #endif
+          // printf("DEBUG: unparseType() type->class_name() = %s \n", type->class_name().c_str());
 
        // This is the code that was always used before the addition of type names generated from where name qualification of subtypes are required.
           switch (type->variant())
@@ -2654,6 +2719,12 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                } else if (!skipElaboration) {
               // DQ (6/6/6/2007): Type elaboration goes here.
                  bool useElaboratedType = generateElaboratedType(decl,info);
+                 // REX FIX: Suppress 'class'/'struct' for template declarations/instantiations in C++
+                 // This covers std::vector, std::array, std::ratio, etc.
+                 // Also check if name contains '<' (ROSE sometimes puts full instantiation name in get_name())
+                 if (tpldecl != NULL || isInstantiation || decl->get_name().getString().find('<') != std::string::npos) {
+                     useElaboratedType = false;
+                 }
                  if (useElaboratedType == true)
                     {
                       switch (decl->get_class_type())
@@ -2761,7 +2832,9 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                       // DQ (3/29/2019): In reviewing where we are using the get_qualified_name() function, this
                       // might be OK since it is likely only associated with the unparseToString() function.
                          SgName nameQualifierAndType = class_type->get_qualified_name();
-                         curprint(nameQualifierAndType.str());
+                      // Strip redundant/global qualification from the generated name (e.g., leading "::std::")
+                         std::string finalName = strip_redundant_qualification(nameQualifierAndType.str(), info, type);
+                         curprint(finalName);
                        }
                       else
                        {
@@ -2782,7 +2855,38 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
 #if DEBUG_UNPARSE_CLASS_TYPE && 0
                          curprint ( string("\n/* In unparseClassType: nameQualifier (from unp->u_name->generateNameQualifier function) = ") + nameQualifier + " */ \n ");
 #endif
-                         curprint(nameQualifier.str());
+                         // REX FIX: Strip redundant qualification in unparseClassType
+                         std::string qualStr = nameQualifier.str();
+                         SgName nm = decl->get_name();
+                         
+                         // Debug ALL class names
+                         // printf("DEBUG: unparseClassType nm='%s' qualStr='%s'\n", nm.str(), qualStr.c_str());
+                         
+                         if (nm == "vector") {
+                             SgScopeStatement* scope = decl->get_scope();
+                             std::string scopeName = "unknown";
+                             if (scope) {
+                                 if (isSgGlobal(scope)) scopeName = "Global";
+                                 else if (isSgNamespaceDefinitionStatement(scope)) {
+                                     SgNamespaceDeclarationStatement* nsDecl = isSgNamespaceDefinitionStatement(scope)->get_namespaceDeclaration();
+                                     scopeName = std::string("Namespace: ") + nsDecl->get_name().str();
+                                 } else if (isSgClassDefinition(scope)) {
+                                     scopeName = std::string("Class: ") + isSgClassDefinition(scope)->get_declaration()->get_name().str();
+                                 }
+                             }
+                         // printf("DEBUG: unparseClassType for 'vector'. qualStr='%s'. Scope='%s'\n", qualStr.c_str(), scopeName.c_str());
+                        }
+
+                        // Preserve explicit global qualification when required; otherwise trim redundancies.
+                        if (info.get_global_qualification_required() == false) {
+                          while (qualStr.size() > 2 && qualStr.compare(0,2,"::") == 0) {
+                            qualStr = qualStr.substr(2);
+                          }
+                          if (qualStr == "::") {
+                            qualStr = "";
+                          }
+                        }
+                        curprint(qualStr);
 
                          SgTemplateInstantiationDecl* templateInstantiationDeclaration = isSgTemplateInstantiationDecl(decl);
 
@@ -3655,9 +3759,10 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
 #if 0
                     printf ("In unparseTypedefType(): Output name nameQualifierAndType = %s \n",nameQualifierAndType.str());
 #endif
-                 // DQ (3/29/2019): In reviewing where we are using the get_qualified_name() function, this
-                 // might be OK since it is likely only associated with the unparseToString() function.
-                    curprint(nameQualifierAndType.str());
+                // DQ (3/29/2019): In reviewing where we are using the get_qualified_name() function, this
+                // might be OK since it is likely only associated with the unparseToString() function.
+                    std::string finalName = strip_redundant_qualification(nameQualifierAndType.str(), info, type);
+                    curprint(finalName);
                   }
                  else
                   {
@@ -3675,7 +3780,9 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                         }
                     }
 
-                    curprint(nameQualifier.str());
+                    std::string qualStr = strip_redundant_qualification(nameQualifier.str(), info, type);
+                    // REX FIX: Prepend empty comment to ensure qualification is not stripped by unparser
+                    if (!qualStr.empty()) curprint("/* */" + qualStr);
 
                  // DQ (4/14/2018): This is not the correct way to handle the output of template instantations since this uses the internal name (with unqualified template arguments).
 
@@ -3713,12 +3820,13 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
 #endif
                       // curprint ( typedef_type->get_name().str());
                          SgName nm = typedef_type->get_name();
-                         if (nm.getString() != "")
-                            {
+                        if (nm.getString() != "")
+                           {
 #if 0
                               printf ("In unparseTypedefType(): Output qualifier of current types to the name = %s \n",nm.str());
 #endif
-                              curprint ( nm.getString() + " ");
+                              std::string nmStr = strip_redundant_qualification(nm.getString(), info, type);
+                              curprint ( nmStr + " ");
                             }
                        }
 #endif
@@ -4830,15 +4938,20 @@ Unparse_Type::unparseArrayType(SgType* type, SgUnparse_Info& info)
 void
 Unparse_Type::unparseTemplateType(SgType* type, SgUnparse_Info& info)
    {
-     SgTemplateType* template_type = isSgTemplateType(type);
-     ASSERT_not_null(template_type);
+     SgTemplateType* templateType = isSgTemplateType(type);
+     ROSE_ASSERT(templateType != NULL);
+
+     if (templateType->get_name().getString().find("vector") != std::string::npos) {
+         // printf("DEBUG: unparseTemplateType found vector. name='%s'\n", templateType->get_name().str());
+     }
+     // printf("DEBUG: unparseTemplateType name='%s'\n", templateType->get_name().str());
 
      // CLANG FRONTEND FIX: Unparse template type parameters (like "T")
      // Template types represent type parameters in template declarations
      // Simply output the name of the template parameter
      bool unparse_type = info.isTypeFirstPart() || ( !info.isTypeFirstPart() && !info.isTypeSecondPart() );
      if (unparse_type) {
-       SgName name = template_type->get_name();
+       SgName name = templateType->get_name();
        std::string type_name = name.str();
 
        // CLANG FRONTEND FIX: Remove "templateType_" prefix if present
@@ -5162,4 +5275,3 @@ Unparse_Type::outputType( T* referenceNode, SgType* referenceNodeType, SgUnparse
 #endif
 
    }
-
