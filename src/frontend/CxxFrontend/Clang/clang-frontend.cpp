@@ -67,6 +67,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     std::vector<std::string> inc_list;
     std::string input_file;
     std::vector<std::string> passthrough_args;
+    bool user_specified_std = false;
     bool enable_openmp = false;
     bool enable_openmp_simd = false;
     bool disable_openmp_via_flag = false;
@@ -108,6 +109,19 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         // ROSE sets sageFile.set_openmp(true) and related flags automatically
         // We don't need to parse it again here
         else if (current_arg.find("-c") == 0) {}
+        else if (current_arg == "-std") {
+            user_specified_std = true;
+            passthrough_args.push_back(current_arg);
+            ++i;
+            if (i < argc)
+                passthrough_args.push_back(argv[i]);
+            else
+                break;
+        }
+        else if (current_arg.rfind("-std=", 0) == 0) {
+            user_specified_std = true;
+            passthrough_args.push_back(current_arg);
+        }
         else if (current_arg.find("-o") == 0) {
             if (current_arg.length() == 2) {
                 i++;
@@ -138,8 +152,14 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             enable_openmp_simd = true;
             enable_openmp = true;  // SIMD is a subset of OpenMP, enable full pragma capture
         }
-        else {
+        else if (!current_arg.empty() && current_arg[0] == '-') {
             // TODO -include
+#if DEBUG_ARGS
+            std::cerr << "argv[" << i << "] = " << current_arg << " preserved as passthrough option."  << std::endl;
+#endif
+            passthrough_args.push_back(current_arg);
+        }
+        else {
 #if DEBUG_ARGS
             std::cerr << "argv[" << i << "] = " << current_arg << " is neither define or include dir. Use it as input file."  << std::endl;
 #endif
@@ -410,10 +430,11 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     switch (language) {
         case ClangToSageTranslator::C:
-            // Force gnu89 to preserve legacy C semantics (implicit function declarations, K&R style)
-            // relied on by the existing C_tests suite.
-            requested_std = clang::LangStandard::lang_gnu89;
-            std_info = clang::LangStandard::getLangStandardForKind(requested_std);
+            // Default to gnu89 for legacy semantics only when the user did not request a standard.
+            if (!user_specified_std) {
+                requested_std = clang::LangStandard::lang_gnu89;
+                std_info = clang::LangStandard::getLangStandardForKind(requested_std);
+            }
             clang_lang = clang::Language::C;
             break;
         case ClangToSageTranslator::CPLUSPLUS:
