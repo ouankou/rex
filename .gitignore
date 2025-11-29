@@ -104,3 +104,5 @@ GTAGS
 
 # CMake build directory
 /build/
+
+.vscode/

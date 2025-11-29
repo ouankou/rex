@@ -2315,7 +2315,18 @@ bool ClangToSageTranslator::VisitAttributedStmt(clang::AttributedStmt * attribut
 #endif
     bool res = true;
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+    // Attributes like [[fallthrough]] wrap an inner statement. We currently drop
+    // the attribute and translate the wrapped statement directly.
+    clang::Stmt *sub_stmt = attributed_stmt->getSubStmt();
+    SgNode *sub_node = Traverse(sub_stmt);
+    if (sub_node == NULL) {
+        sub_node = SageBuilder::buildNullStatement();
+    }
+    *node = sub_node;
+
+    if (SgStatement *sg_stmt = isSgStatement(sub_node)) {
+        applySourceRange(sg_stmt, attributed_stmt->getSourceRange());
+    }
 
     return VisitValueStmt(attributed_stmt, node) && res;
 }

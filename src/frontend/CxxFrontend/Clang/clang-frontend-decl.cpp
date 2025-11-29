@@ -4,6 +4,51 @@
 #include <set>
 #include "llvm/ADT/SmallString.h"
 
+namespace {
+bool containsUnknownType(SgType *type) {
+    if (type == NULL) return true;
+
+    if (isSgTypeUnknown(type)) return true;
+    if (auto *mod = isSgModifierType(type)) {
+        return containsUnknownType(mod->get_base_type());
+    }
+    if (auto *ptr = isSgPointerType(type)) {
+        return containsUnknownType(ptr->get_base_type());
+    }
+    if (auto *memPtr = isSgPointerMemberType(type)) {
+        return containsUnknownType(memPtr->get_base_type());
+    }
+    if (auto *ref = isSgReferenceType(type)) {
+        return containsUnknownType(ref->get_base_type());
+    }
+    if (auto *rref = isSgRvalueReferenceType(type)) {
+        return containsUnknownType(rref->get_base_type());
+    }
+    if (auto *arr = isSgArrayType(type)) {
+        return containsUnknownType(arr->get_base_type());
+    }
+    if (auto *td = isSgTypedefType(type)) {
+        return containsUnknownType(td->get_base_type());
+    }
+    if (auto *func = isSgFunctionType(type)) {
+        if (containsUnknownType(func->get_return_type())) return true;
+        SgFunctionParameterTypeList *params = func->get_argument_list();
+        if (params != NULL) {
+            const SgTypePtrList &args = params->get_arguments();
+            for (SgType *arg : args) {
+                if (containsUnknownType(arg)) return true;
+            }
+        }
+        return false;
+    }
+    if (auto *declType = isSgDeclType(type)) {
+        return containsUnknownType(declType->get_base_type());
+    }
+
+    return false;
+}
+} // namespace
+
 SgSymbol * ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl * decl) {
     if (decl == NULL) return NULL;
 
@@ -2290,7 +2335,31 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl * typedef_decl, 
     SgType * sg_underlyingType = buildTypeFromQualifiedType(underlyingQualType);
     SgType * type = buildTypeFromQualifiedType(typedef_decl->getUnderlyingType());
 
+    bool type_has_unknown = containsUnknownType(type);
+    if (type_has_unknown && SgProject::get_verbose() > 0) {
+        std::cerr << "CFE: Typedef with unknown underlying type '" << name << "' spelled as '"
+                  << typedef_decl->getUnderlyingType().getAsString() << "' (sg_type="
+                  << (type != NULL ? type->class_name() : "null") << ", base="
+                  << (type != NULL && type->findBaseType() != NULL ? type->findBaseType()->class_name() : "null")
+                  << ")" << std::endl;
+    }
+
+    if (type_has_unknown) {
+        std::string spelled = typedef_decl->getUnderlyingType().getAsString();
+        type = SageBuilder::buildOpaqueType(spelled, SageBuilder::topScopeStack());
+        sg_underlyingType = type;
+    }
+
     SgTypedefDeclaration * sg_typedef_decl = SageBuilder::buildTypedefDeclaration_nfi(name, type, SageBuilder::topScopeStack());
+    if (SgProject::get_verbose() > 0) {
+        if (name == "uint8_t" || name == "uint16_t" || name == "uint32_t" ||
+            name == "in_port_t" || name == "in_addr_t") {
+            std::cerr << "CFE: Created typedef '" << name << "' with type "
+                      << (type != NULL ? type->class_name() : "null") << " (underlying "
+                      << (sg_underlyingType != NULL ? sg_underlyingType->class_name() : "null") << ")"
+                      << std::endl;
+        }
+    }
 
     // finding the bottom base type and check
     while(type->findBaseType() != type)
@@ -2582,6 +2651,7 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
     // If it is embedded, no explicit SgDeclaration should be placed for ROSE AST.
     bool isembedded = false;
     bool iscompleteDefined = false;
+    bool isNamedNonEmbeddedRecord = false;
     bool isAnonymousStructOrUnion = false;
 
     // Adding check for EaboratedType and PointerType to retrieve base EnumType
@@ -2613,6 +2683,9 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
        clang::RecordDecl* recordDeclaration = underlyingRecordType->getDecl();
        isembedded = recordDeclaration->isEmbeddedInDeclarator();
        iscompleteDefined = recordDeclaration->isCompleteDefinition();
+       isNamedNonEmbeddedRecord = !recordDeclaration->isEmbeddedInDeclarator() &&
+                                  !recordDeclaration->isAnonymousStructOrUnion() &&
+                                  recordDeclaration->getIdentifier() != NULL;
     }
 
     isAnonymousStructOrUnion = field_decl->isAnonymousStructOrUnion();
@@ -2633,6 +2706,20 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
 
     SgType * sg_fieldType = buildTypeFromQualifiedType(fieldQualType);
     SgType * type = buildTypeFromQualifiedType(field_decl->getType());
+
+    bool type_has_unknown = containsUnknownType(type);
+    if (type_has_unknown && SgProject::get_verbose() > 0) {
+        std::cerr << "CFE: Field with unknown type '" << name << "' spelled as '"
+                  << field_decl->getType().getAsString() << "' (sg_type="
+                  << (type != NULL ? type->class_name() : "null") << ", base="
+                  << (type != NULL && type->findBaseType() != NULL ? type->findBaseType()->class_name() : "null")
+                  << ")" << std::endl;
+    }
+
+    if (type_has_unknown) {
+        type = SageBuilder::buildOpaqueType(field_decl->getType().getAsString(), SageBuilder::topScopeStack());
+        sg_fieldType = type;
+    }
 
     clang::Expr * init_expr = field_decl->getInClassInitializer();
     SgNode * tmp_init = Traverse(init_expr);
@@ -2706,6 +2793,10 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
      
             std::map<SgClassType *, bool>::iterator bool_it = p_class_type_decl_first_see_in_type.find(isSgClassType(type));
             ROSE_ASSERT(bool_it != p_class_type_decl_first_see_in_type.end());
+            if (isNamedNonEmbeddedRecord) {
+                // Named records should keep their standalone definition; avoid embedding on first use.
+                bool_it->second = false;
+            }
             if (bool_it->second) {
                 var_decl->set_baseTypeDefiningDeclaration(isSgNamedType(type)->get_declaration()->get_definingDeclaration());
                 var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(true);
@@ -2774,6 +2865,15 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     //   If I am not wrong this have been fixed....
 
     SgName name(function_decl->getNameAsString());
+    std::string func_name = function_decl->getNameAsString();
+
+    bool is_builtin_decl = (function_decl->getBuiltinID() != clang::Builtin::NotBuiltin);
+    if (!is_builtin_decl && func_name.rfind("__builtin_", 0) == 0) {
+        is_builtin_decl = true;
+    }
+    if (!is_builtin_decl && p_compiler_instance != NULL) {
+        is_builtin_decl = p_compiler_instance->getSourceManager().isWrittenInBuiltinFile(function_decl->getLocation());
+    }
 
     clang::QualType funcQualType = function_decl->getType();
 
@@ -3202,6 +3302,31 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
 
     sg_function_decl->set_declarationScope(declScope);
     declScope->set_parent(sg_function_decl);
+
+    if (is_builtin_decl) {
+        auto mark_compgen = [this](SgLocatedNode* n) {
+            if (n != NULL) {
+                setCompilerGeneratedFileInfo(n);
+                if (Sg_File_Info* fi = n->get_file_info()) fi->unsetOutputInCodeGeneration();
+                if (Sg_File_Info* fi = n->get_startOfConstruct()) fi->unsetOutputInCodeGeneration();
+                if (Sg_File_Info* fi = n->get_endOfConstruct()) fi->unsetOutputInCodeGeneration();
+            }
+        };
+
+        mark_compgen(sg_function_decl);
+        mark_compgen(sg_function_decl->get_firstNondefiningDeclaration());
+        mark_compgen(sg_function_decl->get_parameterList());
+
+        SgInitializedNamePtrList& builtin_params = sg_function_decl->get_parameterList()->get_args();
+        for (SgInitializedName* param : builtin_params) {
+            mark_compgen(param);
+        }
+
+        if (SgFunctionDefinition* def = sg_function_decl->get_definition()) {
+            mark_compgen(def);
+            mark_compgen(def->get_body());
+        }
+    }
 
     ROSE_ASSERT(sg_function_decl->get_firstNondefiningDeclaration() != NULL);
 /* // TODO Fix problem with function symbols...
@@ -4013,6 +4138,23 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(clang::TranslationUnitDecl 
     for (it = decl_context->decls_begin(); it != decl_context->decls_end(); it++) {
         clang::Decl* decl = (*it);
         if (decl == nullptr) continue;
+
+        if (SgProject::get_verbose() > 0) {
+            if (clang::NamedDecl* named = llvm::dyn_cast<clang::NamedDecl>(decl)) {
+                std::string n = named->getNameAsString();
+                if (n == "uint8_t" || n == "uint16_t" || n == "uint32_t" ||
+                    n == "in_port_t" || n == "in_addr_t" || n == "in6_addr" ||
+                    n == "in_addr" || n == "sockaddr_in" || n == "ntohl" ||
+                    n == "ntohs" || n == "htonl" || n == "htons") {
+                    unsigned line = 0;
+                    if (p_compiler_instance != NULL) {
+                        line = p_compiler_instance->getSourceManager().getSpellingLineNumber(named->getLocation());
+                    }
+                    std::cerr << "CFE: TU visit '" << n << "' (" << decl->getDeclKindName()
+                              << ") @" << line << std::endl;
+                }
+            }
+        }
         SgNode * child = Traverse(decl);
 
         SgDeclarationStatement * decl_stmt = isSgDeclarationStatement(child);

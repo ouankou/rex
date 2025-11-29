@@ -108,6 +108,17 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         // ROSE sets sageFile.set_openmp(true) and related flags automatically
         // We don't need to parse it again here
         else if (current_arg.find("-c") == 0) {}
+        else if (current_arg == "-std") {
+            passthrough_args.push_back(current_arg);
+            ++i;
+            if (i < argc)
+                passthrough_args.push_back(argv[i]);
+            else
+                break;
+        }
+        else if (current_arg.rfind("-std=", 0) == 0) {
+            passthrough_args.push_back(current_arg);
+        }
         else if (current_arg.find("-o") == 0) {
             if (current_arg.length() == 2) {
                 i++;
@@ -138,8 +149,14 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
             enable_openmp_simd = true;
             enable_openmp = true;  // SIMD is a subset of OpenMP, enable full pragma capture
         }
-        else {
+        else if (!current_arg.empty() && current_arg[0] == '-') {
             // TODO -include
+#if DEBUG_ARGS
+            std::cerr << "argv[" << i << "] = " << current_arg << " preserved as passthrough option."  << std::endl;
+#endif
+            passthrough_args.push_back(current_arg);
+        }
+        else {
 #if DEBUG_ARGS
             std::cerr << "argv[" << i << "] = " << current_arg << " is neither define or include dir. Use it as input file."  << std::endl;
 #endif
@@ -254,7 +271,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     switch (language) {
         case ClangToSageTranslator::C:
             sys_dirs_list.insert(sys_dirs_list.begin(), c_config_include_dirs.begin(), c_config_include_dirs.end());
-            inc_list.push_back("clang-builtin-c.h");
             break;
         case ClangToSageTranslator::CPLUSPLUS:
             // Use configuration-driven cxx_config_include_dirs for portability
@@ -411,9 +427,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     switch (language) {
         case ClangToSageTranslator::C:
-            if (!(std_info.isC99() || std_info.isC11() || std_info.isC17() || std_info.isC23())) {
-                requested_std = clang::LangStandard::lang_gnu17;
-            }
             clang_lang = clang::Language::C;
             break;
         case ClangToSageTranslator::CPLUSPLUS:
