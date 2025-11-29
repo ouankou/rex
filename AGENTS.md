@@ -1,32 +1,60 @@
-# Repository Guidelines
+# REX (ROSE Compiler Modernization) Context
 
-## Project Structure & Module Organization
-- `src/`: core compiler sources and frontends; keep new modules close to their owning subsystem and wire them into the nearest `CMakeLists.txt`.
-- `tests/`: smoke, regression, and compile-time suites (`roseTests/`, `nonsmoke/`, `CompileTests/`); mirror source layout when adding cases.
-- `tools/`: production-ready command-line utilities; update docs alongside behavioral changes.
-- `scripts/`: build, policy, and release automation (`build-rex.sh`, `policies/`, packaging helpers); reuse existing hooks instead of duplicating logic.
-- `docs/` and `tutorial/`: user and developer reference; refresh these when public interfaces evolve.
+## Project Overview
+REX is a modernization and cleanup effort of the ROSE compiler infrastructure. It is an open-source compiler infrastructure to build source-to-source program transformation and analysis tools for large-scale applications (C, C++, Fortran, OpenMP, etc.).
 
-## Build, Test, and Development Commands
-- Bootstrap with LLVM Clang 20: `./build-rex.sh $HOME/rex-install` (configures, builds, installs).
-- Manual flow: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -Denable-c=ON -Denable-fortran=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`.
-- Compile: `cmake --build build -j$(nproc)`; install locally with `cmake --install build`.
-- Run regression suites: `ctest --test-dir build --output-on-failure` or `cmake --build build --target check` after configuration.
+**Key Differentiator:** REX exclusively uses the Clang/LLVM frontend (specifically LLVM 20) for C/C++ analysis, moving away from the legacy EDG frontend.
 
-## Coding Style & Naming Conventions
-- Match surrounding indentation (predominantly two-space indents, braces on the following line) and prefer descriptive identifiers (`Sg*` classes, `*_support` helpers).
-- Headers should provide unique include guards; avoid tabs, trailing whitespace, and duplicated headers—violations are caught by `scripts/policies`.
-- Place ROSE includes before STL/third-party headers, and keep namespaces explicit in headers (no `using namespace` in public headers).
+## Directory Structure
+*   **`src/`**: Core compiler source code.
+    *   `frontend/`: Language frontends (Clang integration).
+    *   `midend/`: Analysis and transformation passes (loops, dataflow, etc.).
+    *   `backend/`: Code generation (unparsers).
+    *   `ROSETTA/`: IR generation tools.
+*   **`tests/`**: Test suites.
+    *   `smoke/`: Quick verification tests.
+    *   `nonsmoke/`: Comprehensive regression tests.
+*   **`tools/`**: Production-ready utilities.
+*   **`scripts/`**: Build and maintenance scripts.
 
-## Testing Guidelines
-- Extend existing suites by copying patterns in `tests/nonsmoke` (feature smoke tests); name files after the feature under test (e.g., `testLoopNormalization.C`).
-- Always run `ctest` (or targeted `ctest -R <pattern>`) before submitting; Fortran work should also follow the prompts in `FORTRAN_TESTING_GUIDE.md`.
+## Build & Installation
+**Primary Build Method:** CMake (via `build-rex.sh`)
+**Strict Requirement:** LLVM/Clang 20 must be installed and findable (`llvm-config`).
 
-## Commit & Pull Request Guidelines
-- Follow the prevailing short imperative subject style (`Fix critical memory errors…`); prefix scope when helpful (e.g., `CI:`).
-- Keep commits focused and reference issues in the body (`Refs #1234`) when applicable; avoid large unrelated changes.
-- Pull requests should summarize motivation, list key changes, note test coverage, and include logs or screenshots for user-facing updates; link dependent PRs or issues explicitly.
+### Quick Start (Preferred)
+```bash
+# Configures, builds, and installs to $HOME/rex-install
+# Usage: ./build-rex.sh [install_prefix] [build_type]
+./build-rex.sh $HOME/rex-install Release
+```
 
-## Policy & Automation Checks
-- Run `scripts/policies-checker.sh <path>` before pushing; it enforces line endings, header uniqueness, and other repository rules.
-- CI expects dependencies (LLVM/Clang 20) reachable via `llvm-config`; sync submodules with `git submodule update --init --recursive` when touching third-party code.
+### Manual CMake Workflow
+```bash
+mkdir build && cd build
+cmake .. \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_INSTALL_PREFIX=$HOME/rex-install \
+    -Denable-c=ON \
+    -Denable-fortran=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build . -j$(nproc)
+cmake --install .
+```
+
+## Development Guidelines
+*   **Coding Style:** Adhere to `clang-format` default style.
+    *   Identifiers: Descriptive, often using `Sg` prefix for IR nodes (Sage).
+*   **Testing:**
+    *   Run regression tests: `ctest --test-dir build --output-on-failure`
+    *   Run specific tests: `ctest -R <regex>`
+    *   New tests: Add to `tests/nonsmoke`, mirroring source layout.
+*   **Formatting:**
+    *   Run `clang-format` on changed files before committing to ensure adherence to formatting requirements.
+
+## Critical Notes for AI Agents
+*   **Bug Fix Strategy:** Prioritize fixes in the Clang Frontend (CFE). Do not modify other core components unless absolutely necessary to resolve the root cause. Always implement long-term fixes for the root cause, avoiding per-header/function/string workarounds, hacks, or fallbacks.
+*   **Test Integrity:** **NEVER** modify tests or the test framework to mask failures. Fix the compiler, not the test.
+*   **Assertions & Error Handling:** Do not remove or soften hard assertions (`ROSE_ASSERT`) unless they are clearly proven to be design errors or temporary placeholders. When an error occurs, expose it hard and as early as possible; do not use fallbacks that silently carry the error.
+*   **Build System:** **IGNORE** `Makefile.am` and `configure.ac` unless explicitly checking for legacy compatibility. Focus entirely on `CMakeLists.txt` and `build-rex.sh`.
+*   **Clang Version:** The project is pinned to LLVM/Clang 20. Do not attempt to fix build errors by downgrading; fix the code to match the modern API.
+*   **Documentation:** Refer to `AGENTS.md` for the most up-to-date specific instructions for this cleanup branch.
