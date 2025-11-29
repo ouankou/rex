@@ -129,6 +129,13 @@ resetVariableDefinitionSupport ( const SgInitializedName* originalInitializedNam
 void
 SgInitializedName::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
    {
+  // Guard against shared nodes. When nodes are shared (not copied), this ==
+  // copy.
+  if (this == copy) {
+    // Node is shared, not copied. Skip fixup to avoid corrupting the original.
+    return;
+  }
+
   // This is the empty default inplementation, not a problem if it is called!
 
 #if DEBUG_FIXUP_COPY
@@ -280,6 +287,14 @@ SgExpression::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 void
 SgLocatedNode::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
    {
+  // Guard against shared nodes. When nodes are shared (not copied), this ==
+  // copy. Processing a shared node would corrupt the original AST by setting
+  // its pointers to the copy's values.
+  if (this == copy) {
+    // Node is shared, not copied. Skip fixup to avoid corrupting the original.
+    return;
+  }
+
 #if DEBUG_FIXUP_COPY
      printf ("Inside of SgLocatedNode::fixupCopy_scopes() for %p = %s copy = %p \n",this,this->class_name().c_str(),copy);
 #endif
@@ -352,6 +367,13 @@ SgLocatedNode::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 void
 SgScopeStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
    {
+  // Guard against shared nodes. When nodes are shared (not copied), this ==
+  // copy.
+  if (this == copy) {
+    // Node is shared, not copied. Skip fixup to avoid corrupting the original.
+    return;
+  }
+
   // We need to call the fixupCopy function from the parent of a SgVariableDeclaration because the
   // copy function in the parent of the variable declaration sets the parent of the SgVariableDeclaration
   // and we need this parent in the fixupCopy function in the SgInitializedName.
@@ -492,6 +514,16 @@ SgBasicBlock::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 void
 SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
    {
+  // Guard against shared nodes. When nodes are shared (not copied), this ==
+  // copy. Processing a shared node would corrupt the original AST by setting
+  // its pointers to the copy's values. This can happen for SgClassDefinition
+  // nodes from non-defining declarations, which are shared by
+  // SgTreeCopy::copyAst().
+  if (this == copy) {
+    // Node is shared, not copied. Skip fixup to avoid corrupting the original.
+    return;
+  }
+
 #if DEBUG_FIXUP_COPY
      printf ("Inside of SgDeclarationStatement::fixupCopy_scopes() for %p = %s copy = %p (defining = %p firstNondefining = %p) \n",
           this,this->class_name().c_str(),copy,this->get_definingDeclaration(),this->get_firstNondefiningDeclaration());
@@ -789,8 +821,53 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
   // printf ("this->hasExplicitScope() = %s \n",this->hasExplicitScope() ? "true" : "false");
      if (this->hasExplicitScope() == true)
         {
-       // printf ("Reset the scope of the copy for this = %p = %s \n",this,this->class_name().c_str());
-          FixupCopyDataMemberMacro(copyDeclarationStatement,SgScopeStatement,get_scope,set_scope)
+       // Check if this is an orphaned copy (created during fixup but not in the
+       // traversable AST). An orphaned copy either has:
+       // 1. A NULL parent (hasn't been attached to any parent yet), or
+       // 2. Its parent NOT being a copied node (i.e., the parent is NOT a VALUE
+       // in the copy map) This happens when fixupCopy_scopes creates a nested
+       // copy of a defining/non-defining declaration and either leaves its
+       // parent NULL or sets it to the original's parent (see lines 616 and 682
+       // in this file). If the copy's parent is not a copied node, we should
+       // NOT update the scope, because the orphaned copy won't be deleted by
+       // deepDelete and would have a stale scope pointer.
+       SgNode *copyParent = copyDeclarationStatement->get_parent();
+       // Check if copy's parent is a copied node (i.e., it's a VALUE in the
+       // copy map) This determines if the copy is part of the proper copy tree
+       // that will be deleted.
+       bool copyParentIsACopiedNode = false;
+       if (copyParent != NULL) {
+         for (SgCopyHelp::copiedNodeMapTypeIterator iter =
+                  help.get_copiedNodeMap().begin();
+              iter != help.get_copiedNodeMap().end(); ++iter) {
+           if (iter->second == copyParent) {
+             copyParentIsACopiedNode = true;
+             break;
+           }
+         }
+       }
+       bool isOrphanedCopy = (copyParent == NULL || !copyParentIsACopiedNode);
+#if DEBUG_FIXUP_COPY
+       printf("  [scope fixup] this = %p, copy = %p, this->parent = %p, "
+              "copy->parent = %p, copyParentIsACopiedNode = %s, isOrphanedCopy "
+              "= %s \n",
+              this, copyDeclarationStatement, this->get_parent(), copyParent,
+              copyParentIsACopiedNode ? "true" : "false",
+              isOrphanedCopy ? "true" : "false");
+#endif
+       if (!isOrphanedCopy) {
+         // printf ("Reset the scope of the copy for this = %p = %s
+         // \n",this,this->class_name().c_str());
+         FixupCopyDataMemberMacro(copyDeclarationStatement, SgScopeStatement,
+                                  get_scope, set_scope)
+       }
+#if DEBUG_FIXUP_COPY
+       else {
+         printf("Skipping scope fixup for orphaned declaration: this = %p = "
+                "%s, copy = %p \n",
+                this, this->class_name().c_str(), copy);
+       }
+#endif
 
 #if 0
        // DQ (10/21/2007): This can be OK for where a function prototype is being generated from a defining function declaration.
@@ -805,11 +882,14 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
        // Make sure that the copy sets the scopes to be the same type
           ROSE_ASSERT(copyDeclarationStatement->get_scope()->variantT() == this->get_scope()->variantT());
 
-       // DQ (2/28/2009): Make sure that the declaration and the copy are in the same file.
-       // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(copyDeclarationStatement) == SageInterface::getEnclosingSourceFile(this));
-       // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(this->get_firstNondefiningDeclaration()) == SageInterface::getEnclosingSourceFile(this));
-          if (this->get_definingDeclaration() != NULL)
-             {
+          // DQ (2025): Skip file consistency checks for orphaned declarations
+          // since they still reference the original scope. DQ (2/28/2009): Make
+          // sure that the declaration and the copy are in the same file.
+          // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(copyDeclarationStatement)
+          // == SageInterface::getEnclosingSourceFile(this));
+          // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(this->get_firstNondefiningDeclaration())
+          // == SageInterface::getEnclosingSourceFile(this));
+          if (!isOrphanedCopy && this->get_definingDeclaration() != NULL) {
             // DQ (3/4/2009): This test fails for copytest2007_34.C
                if (SageInterface::getEnclosingSourceFile(this->get_definingDeclaration()) != SageInterface::getEnclosingSourceFile(this))
                   {
@@ -817,7 +897,7 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
                     printf ("Commented out failing test for copytest2007_34.C \n");
                   }
             // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(this->get_definingDeclaration()) == SageInterface::getEnclosingSourceFile(this));
-             }
+          }
 
 #if 0
        // DQ (3/3/2009): For some declaration there is a defining and non-defining and if in copying both only one has
@@ -834,8 +914,11 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
        // DQ (3/2/2009): Make sure this is not the non-defining declaration since the defining declaration will not have been copied yet and so of course the files will not match.
        // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(copyDeclarationStatement->get_firstNondefiningDeclaration()) == SageInterface::getEnclosingSourceFile(copyDeclarationStatement));
        // if (copyDeclarationStatement->get_definingDeclaration() != NULL)
-          if (copyDeclarationStatement->get_definingDeclaration() != NULL && this != this->get_firstNondefiningDeclaration())
-             {
+
+          // Also skip for orphaned declarations.
+          if (!isOrphanedCopy &&
+              copyDeclarationStatement->get_definingDeclaration() != NULL &&
+              this != this->get_firstNondefiningDeclaration()) {
             // ROSE_ASSERT(SageInterface::getEnclosingSourceFile(copyDeclarationStatement->get_definingDeclaration()) == SageInterface::getEnclosingSourceFile(copyDeclarationStatement));
                if (SageInterface::getEnclosingSourceFile(copyDeclarationStatement->get_definingDeclaration()) != SageInterface::getEnclosingSourceFile(copyDeclarationStatement))
                   {
@@ -850,7 +933,7 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
                     printf ("Error: source files don't match for copyDeclarationStatement = %p and copyDeclarationStatement->get_definingDeclaration() = %p \n",copyDeclarationStatement,copyDeclarationStatement->get_definingDeclaration());
                     ROSE_ABORT();
                   }
-             }
+          }
         }
 
   // DQ (10/19/2007): Added test...
@@ -1454,6 +1537,13 @@ SgClassDeclaration::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 void
 SgClassDefinition::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
    {
+  // Guard against shared nodes. SgClassDefinition nodes from non-defining
+  // declarations are shared.
+  if (this == copy) {
+    // Node is shared, not copied. Skip fixup to avoid corrupting the original.
+    return;
+  }
+
   // DQ (10/19/2007): Added support to fixup the base class names
 
      ROSE_ASSERT(this->get_declaration() != NULL);
@@ -1674,18 +1764,28 @@ SgEnumDeclaration::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 
   // printf ("This is the non-defining declaration, so just fixup the SgEnumType = %p with the correct SgEnumDeclaration declaration! \n",enum_type_copy);
 
-  // FixupCopyDataMemberMacro_local_debug(enum_type_copy,SgDeclarationStatement,get_declaration,set_declaration)
-     SgCopyHelp::copiedNodeMapTypeIterator i = help.get_copiedNodeMap().find(enum_type_original->get_declaration());
-  // printf ("SgCopyHelp::copiedNodeMapTypeIterator i != help.get_copiedNodeMap().end() = %s \n",i != help.get_copiedNodeMap().end() ? "true" : "false");
-     if (i != help.get_copiedNodeMap().end())
-        {
-          SgNode* associated_node_copy = i->second;
-          ROSE_ASSERT(associated_node_copy != NULL);
-          SgDeclarationStatement* local_copy = isSgDeclarationStatement(associated_node_copy);
-          ROSE_ASSERT(local_copy != NULL);
-       // printf ("Resetting using local_copy = %p = %s \n",local_copy,local_copy->class_name().c_str());
-          enum_type_copy->set_declaration(local_copy);
-        }
+     // Only modify declaration pointer if the type was actually copied (not
+     // shared). Since SgTreeCopy shares types (types are not deep copied),
+     // enum_type_copy == enum_type_original. Modifying the shared type's
+     // declaration would corrupt the original AST.
+     // FixupCopyDataMemberMacro_local_debug(enum_type_copy,SgDeclarationStatement,get_declaration,set_declaration)
+     if (enum_type_copy != enum_type_original) {
+       SgCopyHelp::copiedNodeMapTypeIterator i =
+           help.get_copiedNodeMap().find(enum_type_original->get_declaration());
+       // printf ("SgCopyHelp::copiedNodeMapTypeIterator i !=
+       // help.get_copiedNodeMap().end() = %s \n",i !=
+       // help.get_copiedNodeMap().end() ? "true" : "false");
+       if (i != help.get_copiedNodeMap().end()) {
+         SgNode *associated_node_copy = i->second;
+         ROSE_ASSERT(associated_node_copy != NULL);
+         SgDeclarationStatement *local_copy =
+             isSgDeclarationStatement(associated_node_copy);
+         ROSE_ASSERT(local_copy != NULL);
+         // printf ("Resetting using local_copy = %p = %s
+         // \n",local_copy,local_copy->class_name().c_str());
+         enum_type_copy->set_declaration(local_copy);
+       }
+     }
 
   // Now reset the enum fields.
      const SgInitializedNamePtrList & enumFieldList_original = this->get_enumerators();
