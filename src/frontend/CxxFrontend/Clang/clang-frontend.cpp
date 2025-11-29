@@ -67,7 +67,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     std::vector<std::string> inc_list;
     std::string input_file;
     std::vector<std::string> passthrough_args;
-    bool user_specified_std = false;
     bool enable_openmp = false;
     bool enable_openmp_simd = false;
     bool disable_openmp_via_flag = false;
@@ -110,7 +109,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         // We don't need to parse it again here
         else if (current_arg.find("-c") == 0) {}
         else if (current_arg == "-std") {
-            user_specified_std = true;
             passthrough_args.push_back(current_arg);
             ++i;
             if (i < argc)
@@ -119,7 +117,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                 break;
         }
         else if (current_arg.rfind("-std=", 0) == 0) {
-            user_specified_std = true;
             passthrough_args.push_back(current_arg);
         }
         else if (current_arg.find("-o") == 0) {
@@ -430,11 +427,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     switch (language) {
         case ClangToSageTranslator::C:
-            // Default to gnu89 for legacy semantics only when the user did not request a standard.
-            if (!user_specified_std) {
-                requested_std = clang::LangStandard::lang_gnu89;
-                std_info = clang::LangStandard::getLangStandardForKind(requested_std);
-            }
             clang_lang = clang::Language::C;
             break;
         case ClangToSageTranslator::CPLUSPLUS:
