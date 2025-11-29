@@ -1376,10 +1376,6 @@ tutorial/exampleMakefile
 tutorial/outliner/Makefile
 ])
 
-# DQ (3/8/2017): Removed these directories from testing (pre-smoke and pre-nonsmoke test directories.
-# tests/CompileTests/Makefile
-# tests/CompileTests/OpenMP_tests/Makefile
-
 # DQ (10/27/2010): New Fortran tests (from gfortan test suite).
 # tests/nonsmoke/functional/CompileTests/Fortran_tests/gfortranTestSuite/Makefile
 # tests/nonsmoke/functional/CompileTests/Fortran_tests/gfortranTestSuite/gfortran.fortran-torture/Makefile

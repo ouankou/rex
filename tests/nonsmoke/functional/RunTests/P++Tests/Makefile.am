@@ -16,7 +16,7 @@ endif
 ## them directly into the test code directory (testing only the compilation with ROSE
 ## and not the execution!)
 ## Include the path to A++ and the transformation specification
-AM_CPPFLAGS = -I. -I../.. -I$(top_srcdir)/TESTS/CompileTests/A++Tests -I$(top_srcdir)/include -I$(top_srcdir)/ExamplePreprocessors/A++Preprocessor/ArrayTransformationGrammar
+AM_CPPFLAGS = -I. -I../.. -I$(top_srcdir)/include -I$(top_srcdir)/ExamplePreprocessors/A++Preprocessor/ArrayTransformationGrammar
 
 # ROSE_FLAGS = -rose:test 6
 # ROSE_FLAGS = -rose:outputGrammarTreeFiles
