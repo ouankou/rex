@@ -52,9 +52,6 @@ jobs:
           REX_DOXY_VARIANT: dev
         run: python -m sphinx -b html docs/sphinx docs/_build/html-dev
 
-      - name: Add CNAME
-        run: echo "rex.ouankou.com" > docs/_build/html-dev/CNAME
-
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
