@@ -3,7 +3,8 @@
 SPHINXOPTS    ?=
 SPHINXBUILD   ?= sphinx-build
 DOXYGEN       ?= doxygen
-DOXYFILE      ?= ../Doxyfile
+REPO_ROOT     := $(abspath ..)
+DOXYFILE      ?= $(REPO_ROOT)/docs/Doxyfile
 SOURCEDIR     = .
 BUILDDIR      = ../_build
 
@@ -13,7 +14,7 @@ help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS)
 
 doxygen:
-	$(DOXYGEN) $(DOXYFILE)
+	cd "$(REPO_ROOT)" && $(DOXYGEN) "$(DOXYFILE)"
 
 html: doxygen
 	$(SPHINXBUILD) -b html "$(SOURCEDIR)" "$(BUILDDIR)/html" $(SPHINXOPTS)
