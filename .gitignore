@@ -95,6 +95,11 @@ GTAGS
 # OS X Finder files
 .DS_Store
 
+# Docs build artifacts
+docs/_build/
+docs/doxygen-user-xml/
+docs/doxygen-dev-xml/
+
 # compiled python files
 *.pyc
 *.pyo

@@ -1,0 +1,65 @@
+name: Publish Docs
+
+on:
+  schedule:
+    # Every Thursday at 00:00 UTC
+    - cron: "0 0 * * 4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-publish-main
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Prepare build directories
+        run: |
+          mkdir -p docs/doxygen-dev-xml docs/_build/html-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r docs/requirements.txt
+
+      - name: Build Doxygen XML (dev)
+        run: doxygen docs/Doxyfile.dev
+
+      - name: Build Sphinx HTML
+        env:
+          SPHINXOPTS: "-j auto"
+          REX_DOXY_VARIANT: dev
+        run: python -m sphinx -b html docs/sphinx docs/_build/html-dev
+
+      - name: Add CNAME
+        run: echo "rex.ouankou.com" > docs/_build/html-dev/CNAME
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: docs/_build/html-dev
+          force_orphan: true
+          cname: rex.ouankou.com
