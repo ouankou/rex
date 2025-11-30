@@ -1,0 +1,44 @@
+# REX user-facing Doxygen configuration (consumed by Sphinx/Breathe by default)
+PROJECT_NAME           = "REX User API"
+PROJECT_BRIEF          = "Modernized ROSE compiler infrastructure (Clang/LLVM 20)"
+
+OUTPUT_DIRECTORY       = docs
+GENERATE_XML           = YES
+XML_OUTPUT             = doxygen-user-xml
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_MAN           = NO
+GENERATE_RTF           = NO
+GENERATE_DOCSET        = NO
+GENERATE_TREEVIEW      = NO
+
+INPUT                  = src tools tutorial exampleTranslators README.md
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hh *.hpp *.hxx *.md
+EXCLUDE_PATTERNS       = */tests/* */external/* */third_party/* */3rdPartyLibraries/* */build/* docs/_build/* */.git/*
+STRIP_FROM_PATH        = .
+SOURCE_BROWSER         = NO
+VERBATIM_HEADERS       = YES
+
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_CLASSES  = NO
+EXTRACT_LOCAL_METHODS  = NO
+EXTRACT_ANON_NSPACES   = NO
+HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_CLASSES     = YES
+HIDE_FRIEND_COMPOUNDS  = YES
+INTERNAL_DOCS          = NO
+SORT_BY_SCOPE_NAME     = YES
+JAVADOC_AUTOBRIEF      = YES
+MULTILINE_CPP_IS_BRIEF = YES
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_AS_ERROR          = NO
+
+TAB_SIZE               = 2
+USE_MDFILE_AS_MAINPAGE = README.md
