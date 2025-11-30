@@ -709,6 +709,7 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2022_01.c
   test2022_02.c
   test2022_03.c
+  rex_compound_literal_wrapped.c
   testAnsiC.c
   testCvsCpp.c
   test_CplusplusMacro_C.c

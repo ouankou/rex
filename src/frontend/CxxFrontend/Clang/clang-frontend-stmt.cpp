@@ -2909,6 +2909,73 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(clang::CompoundLiteralExpr 
 
     scope->insert_symbol(name,vsym);
 
+    // REX FIX: Check if the type is defined inside the compound literal
+    // If so, mark the declaration as non-autonomous so it gets unparsed
+    // correctly
+    if (clang::TypeSourceInfo *TInfo = compound_literal->getTypeSourceInfo()) {
+      clang::TypeLoc TL = TInfo->getTypeLoc();
+      // Drill down to the underlying TagTypeLoc, stripping common wrappers
+      // (const qualifiers, parens, attributes, arrays, pointers, elaborations).
+      while (true) {
+        bool advanced = false;
+
+        // Strip top-level qualifiers
+        TL = TL.getUnqualifiedLoc();
+
+        if (auto ParenTL = TL.getAs<clang::ParenTypeLoc>()) {
+          TL = ParenTL.getInnerLoc();
+          advanced = true;
+        } else if (auto AttrTL = TL.getAs<clang::AttributedTypeLoc>()) {
+          TL = AttrTL.getModifiedLoc();
+          advanced = true;
+        } else if (auto AdjTL = TL.getAs<clang::AdjustedTypeLoc>()) {
+          TL = AdjTL.getOriginalLoc();
+          advanced = true;
+        } else if (auto ETL = TL.getAs<clang::ElaboratedTypeLoc>()) {
+          TL = ETL.getNamedTypeLoc();
+          advanced = true;
+        } else if (auto ATL = TL.getAs<clang::ArrayTypeLoc>()) {
+          TL = ATL.getElementLoc();
+          advanced = true;
+        } else if (auto PTL = TL.getAs<clang::PointerTypeLoc>()) {
+          TL = PTL.getPointeeLoc();
+          advanced = true;
+        }
+
+        if (!advanced)
+          break;
+      }
+
+      if (auto TagTL = TL.getAs<clang::TagTypeLoc>()) {
+        if (TagTL.isDefinition()) {
+          clang::TagDecl *TD = TagTL.getDecl();
+          std::map<clang::Decl *, SgNode *>::iterator it =
+              p_decl_translation_map.find(TD);
+          if (it != p_decl_translation_map.end()) {
+            SgNode *node = it->second;
+            if (SgClassDeclaration *classDecl = isSgClassDeclaration(node)) {
+              classDecl->set_isAutonomousDeclaration(false);
+              if (classDecl->get_definingDeclaration()) {
+                if (SgClassDeclaration *defDecl = isSgClassDeclaration(
+                        classDecl->get_definingDeclaration())) {
+                  defDecl->set_isAutonomousDeclaration(false);
+                }
+              }
+            } else if (SgEnumDeclaration *enumDecl =
+                           isSgEnumDeclaration(node)) {
+              enumDecl->set_isAutonomousDeclaration(false);
+              if (enumDecl->get_definingDeclaration()) {
+                if (SgEnumDeclaration *defDecl = isSgEnumDeclaration(
+                        enumDecl->get_definingDeclaration())) {
+                  defDecl->set_isAutonomousDeclaration(false);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     *node = SageBuilder::buildCompoundLiteralExp_nfi(vsym);
 
     return VisitExpr(compound_literal, node);
