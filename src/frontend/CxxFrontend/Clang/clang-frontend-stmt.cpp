@@ -1192,7 +1192,13 @@ void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScope
         if (entry.is_openmp) {
             pragma_decl = buildOpenMPPragmaDeclaration(entry.text, entry.line, scope);
         } else {
-            pragma_decl = SageBuilder::buildPragmaDeclaration(entry.text, scope);
+            // Strip leading "#pragma" if present; SageBuilder re-adds it on unparse.
+            std::string pragma_body = entry.text;
+            const std::string prefix = "#pragma";
+            if (pragma_body.compare(0, prefix.size(), prefix) == 0) {
+                pragma_body = trimWhitespace(pragma_body.substr(prefix.size()));
+            }
+            pragma_decl = SageBuilder::buildPragmaDeclaration(pragma_body, scope);
             if (pragma_decl != NULL) {
                 pragma_decl->set_parent(scope);
             }
@@ -1227,7 +1233,12 @@ SgStatement* ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt* 
         if (entry.is_openmp) {
             pragma_decl = buildOpenMPPragmaDeclaration(entry.text, entry.line, wrapper_block);
         } else {
-            pragma_decl = SageBuilder::buildPragmaDeclaration(entry.text, wrapper_block);
+            std::string pragma_body = entry.text;
+            const std::string prefix = "#pragma";
+            if (pragma_body.compare(0, prefix.size(), prefix) == 0) {
+                pragma_body = trimWhitespace(pragma_body.substr(prefix.size()));
+            }
+            pragma_decl = SageBuilder::buildPragmaDeclaration(pragma_body, wrapper_block);
             if (pragma_decl != NULL) {
                 pragma_decl->set_parent(wrapper_block);
             }
