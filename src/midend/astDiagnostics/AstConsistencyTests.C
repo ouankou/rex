@@ -2597,15 +2597,26 @@ TestAstForProperlySetDefiningAndNondefiningDeclarations::visit ( SgNode* node )
      SgDeclarationStatement* firstNondefiningDeclaration = NULL;
      if (declaration != NULL)
         {
-          ROSE_ASSERT(declaration != NULL);
+       if (declaration->get_scope() == NULL) {
+         printf(
+             "Error: declaration with NULL scope encountered: %p = %s = %s \n",
+             declaration, declaration->class_name().c_str(),
+             SageInterface::get_name(declaration).c_str());
+       }
+       ROSE_ASSERT(declaration->get_scope() != NULL);
 
-          definingDeclaration         = declaration->get_definingDeclaration();
-          firstNondefiningDeclaration = declaration->get_firstNondefiningDeclaration();
+       ROSE_ASSERT(declaration != NULL);
 
-          if (definingDeclaration == NULL && firstNondefiningDeclaration == NULL)
-             {
-               printf ("Error: TestAstForProperlySetDefiningAndNondefiningDeclarations::visit() --- declaration = %p = %s \n",declaration,declaration->class_name().c_str());
-             }
+       definingDeclaration = declaration->get_definingDeclaration();
+       firstNondefiningDeclaration =
+           declaration->get_firstNondefiningDeclaration();
+
+       if (definingDeclaration == NULL && firstNondefiningDeclaration == NULL) {
+         printf("Error: "
+                "TestAstForProperlySetDefiningAndNondefiningDeclarations::"
+                "visit() --- declaration = %p = %s \n",
+                declaration, declaration->class_name().c_str());
+       }
           ROSE_ASSERT(definingDeclaration != NULL || firstNondefiningDeclaration != NULL);
 
        // DQ (7/23/2005): The scopes should match!

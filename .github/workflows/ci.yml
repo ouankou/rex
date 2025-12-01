@@ -79,7 +79,7 @@ jobs:
     # See tests/nonsmoke/functional/roseTests/astProcessingTests/CMakeLists.txt for details
 
     # Run frontend-related tests
-    - name: Run astInterface and astQuery Tests
+    - name: Run astInterface, translator, and astQuery Tests
       env:
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
@@ -87,5 +87,7 @@ jobs:
         cd $GITHUB_WORKSPACE/build
         # astInterface exercises Clang frontend
         ctest -R astInterface -V
+        # translatorTests (excluding two known disabled cases in CTest)
+        ctest -R "Translator_" -V
         # astQuery exercises query helpers
         ctest -R "testQuery" -V

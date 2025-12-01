@@ -2,6 +2,25 @@
 
 #include "fixupDeclarationScope.h"
 
+namespace {
+// Attempt to recover a scope from the parent chain when the explicit scope is
+// missing.
+SgScopeStatement *infer_scope_from_parent(SgDeclarationStatement *decl) {
+  if (decl == NULL)
+    return NULL;
+
+  SgNode *parent = decl->get_parent();
+  while (parent != NULL) {
+    if (SgScopeStatement *scope = isSgScopeStatement(parent)) {
+      return scope;
+    }
+    parent = parent->get_parent();
+  }
+
+  return NULL;
+}
+} // namespace
+
 void fixupAstDeclarationScope( SgNode* node )
    {
   // This function was designed to fixup what I thought were inconsistancies in how the 
@@ -50,7 +69,15 @@ void fixupAstDeclarationScope( SgNode* node )
                     firstNondefiningDeclaration->get_firstNondefiningDeclaration(),firstNondefiningDeclaration->get_firstNondefiningDeclaration()->class_name().c_str());
              }
 
+       // At this point scopes should have been set by the builders/frontends; inference is a last resort.
           SgScopeStatement* correctScope = firstNondefiningDeclaration->get_scope();
+
+          if (correctScope == NULL) {
+            correctScope = infer_scope_from_parent(firstNondefiningDeclaration);
+            if (correctScope != NULL) {
+              firstNondefiningDeclaration->set_scope(correctScope);
+            }
+          }
 
        // DQ (11/24/2020): Debugging code segregation tool.
           if (correctScope == NULL)
@@ -123,26 +150,44 @@ FixupAstDeclarationScope::visit ( SgNode* node )
      printf ("In FixupAstDeclarationScope::visit(node = %p = %s) \n",node,node->class_name().c_str());
 #endif
 
-  // Skip declarations that originate from compiler-generated or system headers. The
-  // Clang frontend leaves many libstdc++ template instantiations in the memory pool
-  // that are not part of the user AST and do not have consistent defining/non-defining
-  // pairs. Trying to normalize their scopes produces noisy warnings and traversal
-  // failures; only process user-visible declarations here.
-     if (SgLocatedNode* located = isSgLocatedNode(node))
-        {
-     if (Sg_File_Info* fi = located->get_file_info())
-         {
-           if (fi->isCompilerGenerated() || fi->isFrontendSpecific() ||
-               SageInterface::insideSystemHeader(located))
-                return;
-         }
-    }
-
      SgDeclarationStatement* declaration = isSgDeclarationStatement(node);
      if (declaration != NULL)
         {
+       if (declaration->get_scope() == NULL) {
+         SgScopeStatement *inferred_scope =
+             infer_scope_from_parent(declaration);
+         if (inferred_scope != NULL) {
+           declaration->set_scope(inferred_scope);
+           if (declaration->get_parent() == NULL) {
+             declaration->set_parent(inferred_scope);
+           }
+         } else {
+           MLOG_WARN_C("astPostProcessing",
+                       "Unable to infer scope for declaration %p (%s)",
+                       declaration, declaration->class_name().c_str());
+         }
+       }
+
        // SgDeclarationStatement* definingDeclaration         = declaration->get_definingDeclaration();
           SgDeclarationStatement* firstNondefiningDeclaration = declaration->get_firstNondefiningDeclaration();
+
+          if (firstNondefiningDeclaration != NULL &&
+              firstNondefiningDeclaration->get_scope() == NULL) {
+            SgScopeStatement *inferred_scope =
+                infer_scope_from_parent(firstNondefiningDeclaration);
+            if (inferred_scope != NULL) {
+              firstNondefiningDeclaration->set_scope(inferred_scope);
+              if (firstNondefiningDeclaration->get_parent() == NULL) {
+                firstNondefiningDeclaration->set_parent(inferred_scope);
+              }
+            } else {
+              MLOG_WARN_C("astPostProcessing",
+                          "Unable to infer scope for "
+                          "firstNondefiningDeclaration %p (%s)",
+                          firstNondefiningDeclaration,
+                          firstNondefiningDeclaration->class_name().c_str());
+            }
+          }
 
        // Note that these declarations don't follow the same rules (namely the get_firstNondefiningDeclaration() can be NULL).
           if ( isSgFunctionParameterList(node)    ||

@@ -400,20 +400,27 @@ ClangToSageTranslator::translateTemplateParameterList(
 namespace {
 // Ensure a declaration has parent and scope set using the current scope stack as fallback.
 // Logs a warning if the scope remains unset (will trip diagnostics later).
-void ensure_parent_and_scope(SgDeclarationStatement* ds) {
-    if (ds == NULL) return;
+void diagnose_null_scope(SgDeclarationStatement *ds, const char *context) {
+  if (ds == NULL || ds->get_scope() != NULL)
+    return;
+  MLOG_WARN_C(MLOG_FRONTEND,
+              "Declaration %s (%p) created with NULL scope in %s\n",
+              ds->class_name().c_str(), ds, context);
+}
 
-    SgScopeStatement* cur_scope = SageBuilder::topScopeStack();
-    if (ds->get_parent() == NULL && cur_scope != NULL) {
-        ds->set_parent(cur_scope);
-    }
-    if (ds->get_scope() == NULL && cur_scope != NULL) {
-        ds->set_scope(cur_scope);
-    }
-    if (ds->get_scope() == NULL) {
-        MLOG_WARN_C(MLOG_FRONTEND, "Declaration %s (%p) still has null scope after translation\n",
-                    ds->class_name().c_str(), ds);
-    }
+void ensure_parent_and_scope(SgDeclarationStatement *ds,
+                             const char *context = "ClangToSageTranslator") {
+  if (ds == NULL)
+    return;
+
+  SgScopeStatement *cur_scope = SageBuilder::topScopeStack();
+  if (ds->get_parent() == NULL && cur_scope != NULL) {
+    ds->set_parent(cur_scope);
+  }
+  if (ds->get_scope() == NULL && cur_scope != NULL) {
+    ds->set_scope(cur_scope);
+  }
+  diagnose_null_scope(ds, context);
 }
 } // unnamed namespace
 
@@ -437,7 +444,14 @@ ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, S
             if (child_decl->get_scope() == NULL) {
                 child_decl->set_scope(class_def);
             }
-            class_def->append_member(child_decl);
+            diagnose_null_scope(child_decl, "populateClassDefinition");
+
+            const SgDeclarationStatementPtrList &members =
+                class_def->get_members();
+            if (std::find(members.begin(), members.end(), child_decl) ==
+                members.end()) {
+              class_def->append_member(child_decl);
+            }
         }
     }
 
@@ -590,36 +604,19 @@ SgTemplateParameter * ClangToSageTranslator::translateTemplateParameter ( clang:
         }
 
         // Create SgNonrealDecl to represent the template template parameter
-        // SgNonrealDecl needs a SgDeclarationScope.
-        // We traverse up the scope stack to find the nearest declaration scope.
+        // using the current scope.
         SgScopeStatement* current_scope = SageBuilder::topScopeStack();
-        SgDeclarationScope* decl_scope = NULL;
-        int depth = 0;
-        
-        while (current_scope && depth < 100) {
-            decl_scope = isSgDeclarationScope(current_scope);
-            if (decl_scope) break;
-            current_scope = current_scope->get_scope();
-            depth++;
+        ROSE_ASSERT(current_scope != NULL);
+
+        SgDeclarationScope *decl_scope = isSgDeclarationScope(current_scope);
+        if (decl_scope == NULL) {
+          decl_scope = SageBuilder::buildDeclarationScope();
+          decl_scope->set_parent(current_scope);
         }
 
-        if (!decl_scope) {
-             // Fallback to global scope if no declaration scope found
-             decl_scope = isSgDeclarationScope(getGlobalScope());
-        }
-        
-        if (!decl_scope) {
-             // SgGlobal is not a SgDeclarationScope, so we must create one.
-             decl_scope = SageBuilder::buildDeclarationScope();
-             if (SageBuilder::topScopeStack()) {
-                 decl_scope->set_parent(SageBuilder::topScopeStack());
-             } else {
-                 decl_scope->set_parent(getGlobalScope());
-             }
-        }
-        
         SgNonrealDecl* nrdecl = SageBuilder::buildNonrealDecl(SgName(name_str), decl_scope);
-        
+        diagnose_null_scope(nrdecl, "TemplateTemplateParmDecl");
+
         // Create the template parameter with parameter_template kind
         // Use SgTemplateType with the parameter name
         SgTemplateType* param_type = SageBuilder::buildTemplateType(SgName(name_str));
@@ -1200,6 +1197,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl * friend_decl, SgN
     ensure_scope_and_parent(sg_decl, current_scope);
     ensure_scope_and_parent(sg_decl->get_firstNondefiningDeclaration(), current_scope);
     ensure_scope_and_parent(sg_decl->get_definingDeclaration(), current_scope);
+    diagnose_null_scope(sg_decl, "FriendDecl");
 
     if (sg_decl->get_firstNondefiningDeclaration() == NULL)
          sg_decl->set_firstNondefiningDeclaration(sg_decl);
@@ -2516,8 +2514,11 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl * using_decl, SgNode
     using_stmt->set_definingDeclaration(using_stmt);
     using_stmt->set_firstNondefiningDeclaration(using_stmt);
 
-    // Note: Scope is set automatically by parent visitor, don't set it explicitly here
-    // as some statement types don't support explicit scope setting
+    if (SgScopeStatement *current_scope = SageBuilder::topScopeStack()) {
+      using_stmt->set_scope(current_scope);
+      using_stmt->set_parent(current_scope);
+    }
+    diagnose_null_scope(using_stmt, "UsingDecl");
 
     *node = using_stmt;
 
@@ -3995,6 +3996,13 @@ bool ClangToSageTranslator::VisitUnresolvedUsingValueDecl(clang::UnresolvedUsing
     init_name->set_parent(using_stmt);
     using_stmt->set_definingDeclaration(using_stmt);
     using_stmt->set_firstNondefiningDeclaration(using_stmt);
+
+    SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+    if (current_scope != NULL) {
+      using_stmt->set_scope(current_scope);
+      using_stmt->set_parent(current_scope);
+    }
+    diagnose_null_scope(using_stmt, "UnresolvedUsingValueDecl");
 
     *node = using_stmt;
 

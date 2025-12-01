@@ -1,5 +1,6 @@
-#include "sage3basic.h"
 #include "clang-frontend-private.hpp"
+#include "sage3basic.h"
+#include "sageInterface.h"
 
 #include <cctype>
 #include "llvm/ADT/SmallString.h"
@@ -50,6 +51,15 @@ namespace {
             result += arg_str;
         }
         return result;
+    }
+
+    void diagnose_null_scope(SgDeclarationStatement *decl,
+                             const char *context) {
+      if (decl == NULL || decl->get_scope() != NULL)
+        return;
+      MLOG_WARN_C(MLOG_FRONTEND,
+                  "Declaration %s (%p) created with NULL scope in %s\n",
+                  decl->class_name().c_str(), decl, context);
     }
 } // anonymous namespace
 
@@ -1054,26 +1064,16 @@ ClangToSageTranslator::buildTemplateParameters(
 
                 // Create SgNonrealDecl
                 SgScopeStatement* current_scope = SageBuilder::topScopeStack();
-                SgDeclarationScope* decl_scope = NULL;
-                int depth = 0;
-                SgScopeStatement* temp_scope = current_scope;
-                while (temp_scope && depth < 100) {
-                    decl_scope = isSgDeclarationScope(temp_scope);
-                    if (decl_scope) break;
-                    temp_scope = temp_scope->get_scope();
-                    depth++;
-                }
-
-                if (!decl_scope) {
-                     decl_scope = SageBuilder::buildDeclarationScope();
-                     if (current_scope) {
-                         decl_scope->set_parent(current_scope);
-                     } else {
-                         decl_scope->set_parent(getGlobalScope());
-                     }
+                ROSE_ASSERT(current_scope != NULL);
+                SgDeclarationScope *decl_scope =
+                    isSgDeclarationScope(current_scope);
+                if (decl_scope == NULL) {
+                  decl_scope = SageBuilder::buildDeclarationScope();
+                  decl_scope->set_parent(current_scope);
                 }
 
                 SgNonrealDecl* nrdecl = SageBuilder::buildNonrealDecl(SgName(param_name), decl_scope);
+                diagnose_null_scope(nrdecl, "TemplateTemplateArgument");
                 // nrdecl->set_type(ttype); // Removed: SgNonrealDecl expects SgNonrealType
 
                 // Translate inner parameters
@@ -1090,7 +1090,6 @@ ClangToSageTranslator::buildTemplateParameters(
 
                 SgTemplateParameter* param = SageBuilder::buildTemplateParameter(SgTemplateParameter::template_parameter, ttype);
                 param->set_templateDeclaration(nrdecl);
-                nrdecl->set_parent(param);
 
                 param_list->push_back(param);
                 param_position++;
