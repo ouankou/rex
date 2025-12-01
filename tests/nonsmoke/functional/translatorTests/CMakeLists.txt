@@ -8,6 +8,7 @@ add_executable(ompVariableCollecting ompVariableCollecting.C)
 add_executable(label_stmt_file_info_translator label_stmt_file_info_translator.C)
 add_executable(testConstDeclarations testConstDeclarations.C)
 add_executable(testPragmaInBody testPragmaInBody.C)
+add_executable(rex_genericPragma rex_genericPragma.C)
 add_executable(querySubTree querySubTree.C)
 add_executable(moveStatementsBetweenBlocks moveStatementsBetweenBlocks.C)
 add_executable(testCopyAndDelete testCopyAndDelete.C)
@@ -26,6 +27,7 @@ target_link_libraries(ompVariableCollecting ROSE_DLL ${link_with_libraries})
 target_link_libraries(label_stmt_file_info_translator ROSE_DLL ${link_with_libraries})
 target_link_libraries(testConstDeclarations ROSE_DLL ${link_with_libraries})
 target_link_libraries(testPragmaInBody ROSE_DLL ${link_with_libraries})
+target_link_libraries(rex_genericPragma ROSE_DLL ${link_with_libraries})
 target_link_libraries(querySubTree ROSE_DLL ${link_with_libraries})
 target_link_libraries(moveStatementsBetweenBlocks ROSE_DLL ${link_with_libraries})
 target_link_libraries(testCopyAndDelete ROSE_DLL ${link_with_libraries})
@@ -61,6 +63,10 @@ if(enable-c)
   add_test(
     NAME Translator_testPragmaInBody
     COMMAND testPragmaInBody -c ${_translator_input_dir}/input_testPragmaInBody.c)
+
+  add_test(
+    NAME Translator_rex_genericPragma
+    COMMAND rex_genericPragma -c ${_translator_input_dir}/input_rex_genericPragma.c)
 
   add_test(
     NAME Translator_label_stmt_file_info
