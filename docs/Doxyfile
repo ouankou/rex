@@ -15,6 +15,7 @@ GENERATE_TREEVIEW      = NO
 INPUT                  = src tools tutorial exampleTranslators README.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hh *.hpp *.hxx *.md
+EXCLUDE                = src/frontend/SageIII/ompparser src/frontend/SageIII/accparser
 EXCLUDE_PATTERNS       = */tests/* */external/* */third_party/* */3rdPartyLibraries/* */build/* docs/_build/* */.git/*
 STRIP_FROM_PATH        = .
 SOURCE_BROWSER         = NO
