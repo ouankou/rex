@@ -69,6 +69,7 @@ void fixupAstDeclarationScope( SgNode* node )
                     firstNondefiningDeclaration->get_firstNondefiningDeclaration(),firstNondefiningDeclaration->get_firstNondefiningDeclaration()->class_name().c_str());
              }
 
+       // At this point scopes should have been set by the builders/frontends; inference is a last resort.
           SgScopeStatement* correctScope = firstNondefiningDeclaration->get_scope();
 
           if (correctScope == NULL) {
