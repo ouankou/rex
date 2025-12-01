@@ -149,7 +149,7 @@
 #  define FAIL_TODO 1
 #endif
 
-// PP Callbacks to capture OpenMP pragmas before Clang processes them
+// PP Callbacks to capture pragmas before Clang processes them
 class RoseOpenMPPragmaCallback : public clang::PPCallbacks {
 private:
     // Use (FileID, line) pair as key to handle pragmas from multiple files correctly
@@ -260,12 +260,7 @@ public:
         }
         pos = skipWhitespace(original_text, pos);
 
-        // Check for "omp"
-        if (original_text.compare(pos, 3, "omp") != 0) {
-            return;
-        }
-
-        // This is an OMP pragma - store with (FileID, line) key to handle multi-file TUs
+        // Store with (FileID, line) key to handle multi-file TUs
         line_to_pragma[std::make_pair(file_id, line)] = original_text;
         for (unsigned offset = 1; offset < line_count; ++offset) {
             pragma_continuation_lines.insert(std::make_pair(file_id, line + offset));

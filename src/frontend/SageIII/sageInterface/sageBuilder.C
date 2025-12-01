@@ -40,6 +40,39 @@ using namespace std;
 using namespace Rose;
 using namespace SageInterface;
 
+namespace {
+
+// Ensure newly built declarations always carry a parent/scope from the current
+// scope stack. This is intentionally strict to surface scope plumbing issues
+// early.
+void attachScopeAndParent(SgDeclarationStatement *decl,
+                          SgScopeStatement *explicit_scope,
+                          const char *context) {
+  if (decl == NULL) {
+    return;
+  }
+
+  SgScopeStatement *scope =
+      explicit_scope != NULL ? explicit_scope : SageBuilder::topScopeStack();
+  if (scope == NULL) {
+    scope = isSgScopeStatement(decl->get_parent());
+  }
+
+  if (scope != NULL) {
+    decl->set_scope(scope);
+    if (decl->get_parent() == NULL) {
+      decl->set_parent(scope);
+    }
+  }
+
+  if (decl->get_scope() == NULL && SgProject::get_verbose() > 0) {
+    std::cerr << "WARNING: declaration " << decl->class_name()
+              << " created without scope in " << context << std::endl;
+  }
+}
+
+} // namespace
+
 namespace EDG_ROSE_Translation
    {
   // DQ (6/3/2019): The case of outlining to a seperate file will have transformations
@@ -6972,6 +7005,11 @@ SgTemplateParameter * SageBuilder::buildTemplateParameter (SgTemplateParameter::
   SgTemplateParameter* result = new SgTemplateParameter(parameterType, t);
   ROSE_ASSERT (result);
   setOneSourcePositionForTransformation(result);
+  if (result->get_parent() == NULL) {
+    if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
+      result->set_parent(scope);
+    }
+  }
   return result;
 }
 
@@ -7001,23 +7039,34 @@ SgTemplateParameterVal* SageBuilder::buildTemplateParameterVal_nfi(int template_
 
 #define DEBUG_BUILD_NONREAL_DECL 0
 
-SgNonrealDecl * SageBuilder::buildNonrealDecl(const SgName & name, SgDeclarationScope * scope, SgDeclarationScope * child_scope) {
-  ROSE_ASSERT(scope != NULL);
+SgNonrealDecl *SageBuilder::buildNonrealDecl(const SgName &name,
+                                             SgDeclarationScope *scope,
+                                             SgDeclarationScope *child_scope) {
 #if DEBUG_BUILD_NONREAL_DECL
   printf("ENTER SageBuilder::buildNonrealDecl\n");
   printf("  --- name = %s\n", name.str());
-  printf("  --- scope = %p (%s)\n", scope, scope->class_name().c_str());
+  if (scope != NULL)
+    printf("  --- scope = %p (%s)\n", scope, scope->class_name().c_str());
+  else
+    printf("  --- scope = <null>\n");
 #endif
+
+  SgScopeStatement *scope_from_stack = SageBuilder::topScopeStack();
+  SgScopeStatement *effective_scope =
+      scope_from_stack != NULL ? scope_from_stack : isSgScopeStatement(scope);
+  ROSE_ASSERT(effective_scope != NULL);
 
   SgNonrealDecl * nrdecl = NULL;
 
   nrdecl = new SgNonrealDecl(name);
   SageInterface::setSourcePosition(nrdecl);
   nrdecl->set_firstNondefiningDeclaration(nrdecl);
-  nrdecl->set_parent(scope);
+  attachScopeAndParent(nrdecl, effective_scope,
+                       "SageBuilder::buildNonrealDecl");
 
-  if (SgScopeStatement* scope_stmt = isSgScopeStatement(scope)) {
-    nrdecl->set_scope(scope_stmt);
+  if (scope != NULL && scope->get_parent() == NULL &&
+      scope != effective_scope) {
+    scope->set_parent(effective_scope);
   }
 
 #if DEBUG_BUILD_NONREAL_DECL
@@ -7025,14 +7074,14 @@ SgNonrealDecl * SageBuilder::buildNonrealDecl(const SgName & name, SgDeclaration
 #endif
 
   SgNonrealSymbol * symbol = new SgNonrealSymbol(nrdecl);
-  scope->insert_symbol(name, symbol);
+  effective_scope->insert_symbol(name, symbol);
 #if DEBUG_BUILD_NONREAL_DECL
   printf("  --- symbol = %p (%s)\n", symbol, symbol->class_name().c_str());
 #endif
 
   SgNonrealType * type = new SgNonrealType();
   type->set_declaration(nrdecl);
-  type->set_parent(scope);
+  type->set_parent(effective_scope);
   nrdecl->set_type(type);
   // FIXME (???) insert `type` in `scope`
 #if DEBUG_BUILD_NONREAL_DECL
