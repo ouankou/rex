@@ -35,5 +35,5 @@
 ## Variants
 
 - `docs/Doxyfile` (user) covers public surface; Sphinx/Breathe XML path is `docs/doxygen-user-xml`.
-- `docs/Doxyfile.dev` (developer) exposes the full surface (private/internal) to `docs/doxygen-dev-xml`.
+- `docs/Doxyfile.dev` (developer) focuses on headers, includes private/internal members, but skips undocumented/local/anon entries and heavy third-party headers; output is `docs/doxygen-dev-xml`.
 - Choose the variant at build time via `REX_DOXY_VARIANT=user|dev` when invoking `sphinx-build`. The publish workflow uses the user variant.
