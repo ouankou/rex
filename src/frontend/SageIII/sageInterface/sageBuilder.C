@@ -7051,9 +7051,10 @@ SgNonrealDecl *SageBuilder::buildNonrealDecl(const SgName &name,
     printf("  --- scope = <null>\n");
 #endif
 
-  SgScopeStatement *scope_from_stack = SageBuilder::topScopeStack();
-  SgScopeStatement *effective_scope =
-      scope_from_stack != NULL ? scope_from_stack : isSgScopeStatement(scope);
+  SgScopeStatement *effective_scope = isSgScopeStatement(scope);
+  if (effective_scope == NULL) {
+    effective_scope = SageBuilder::topScopeStack();
+  }
   ROSE_ASSERT(effective_scope != NULL);
 
   SgNonrealDecl * nrdecl = NULL;
