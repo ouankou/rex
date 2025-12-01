@@ -1072,7 +1072,7 @@ bool ClangToSageTranslator::VisitCapturedStmt(clang::CapturedStmt * captured_stm
     return VisitStmt(captured_stmt, node) && res;
 }
 
-bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<std::pair<unsigned, std::string>>& pragmas) {
+bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<CapturedPragma>& pragmas) {
     pragmas.clear();
 
     if (p_openmp_pragma_callback == nullptr || stmt == nullptr || p_compiler_instance == nullptr) {
@@ -1099,12 +1099,18 @@ bool ClangToSageTranslator::collectOpenMPPragmas(clang::Stmt* stmt, std::vector<
     for (unsigned search_line = stmt_line; search_line > 0; --search_line) {
 
         if (p_openmp_pragma_callback->getPragmaAtLine(file_id, search_line, pragma_text)) {
-            std::string extracted = extractOpenMPDirective(pragma_text);
-            if (!extracted.empty()) {
-                pragmas.emplace_back(search_line, extracted);
-                found_any = true;
-                continue_across_multiline_directive = true;
+            bool is_openmp = p_openmp_pragma_callback->isOpenMPPragmaAtLine(file_id, search_line);
+            std::string directive_text = pragma_text;
+            if (is_openmp) {
+                std::string extracted = extractOpenMPDirective(pragma_text);
+                if (extracted.empty()) {
+                    continue;
+                }
+                directive_text = extracted;
             }
+            pragmas.push_back({search_line, directive_text, is_openmp});
+            found_any = true;
+            continue_across_multiline_directive = true;
             continue;
         }
 
@@ -1176,13 +1182,21 @@ void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScope
         return;
     }
 
-    std::vector<std::pair<unsigned, std::string>> pragmas;
+    std::vector<CapturedPragma> pragmas;
     if (!collectOpenMPPragmas(stmt, pragmas)) {
         return;
     }
 
     for (const auto& entry : pragmas) {
-        SgPragmaDeclaration* pragma_decl = buildOpenMPPragmaDeclaration(entry.second, entry.first, scope);
+        SgPragmaDeclaration* pragma_decl = NULL;
+        if (entry.is_openmp) {
+            pragma_decl = buildOpenMPPragmaDeclaration(entry.text, entry.line, scope);
+        } else {
+            pragma_decl = SageBuilder::buildPragmaDeclaration(entry.text, scope);
+            if (pragma_decl != NULL) {
+                pragma_decl->set_parent(scope);
+            }
+        }
         if (pragma_decl == NULL) {
             continue;
         }
@@ -1200,7 +1214,7 @@ SgStatement* ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt* 
         return NULL;
     }
 
-    std::vector<std::pair<unsigned, std::string>> pragmas;
+    std::vector<CapturedPragma> pragmas;
     if (!collectOpenMPPragmas(stmt, pragmas)) {
         return statement;
     }
@@ -1209,7 +1223,15 @@ SgStatement* ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt* 
     setCompilerGeneratedFileInfo(wrapper_block, true);
 
     for (const auto& entry : pragmas) {
-        SgPragmaDeclaration* pragma_decl = buildOpenMPPragmaDeclaration(entry.second, entry.first, wrapper_block);
+        SgPragmaDeclaration* pragma_decl = NULL;
+        if (entry.is_openmp) {
+            pragma_decl = buildOpenMPPragmaDeclaration(entry.text, entry.line, wrapper_block);
+        } else {
+            pragma_decl = SageBuilder::buildPragmaDeclaration(entry.text, wrapper_block);
+            if (pragma_decl != NULL) {
+                pragma_decl->set_parent(wrapper_block);
+            }
+        }
         if (pragma_decl != NULL) {
             wrapper_block->append_statement(pragma_decl);
         }

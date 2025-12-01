@@ -3,6 +3,7 @@
 # define _CLANG_FRONTEND_PRIVATE_HPP_
 
 #include "clang-frontend.hpp"
+#include "sage3basic.h"
 
 #include <iostream>
 #include <vector>
@@ -154,9 +155,26 @@ class RoseOpenMPPragmaCallback : public clang::PPCallbacks {
 private:
     // Use (FileID, line) pair as key to handle pragmas from multiple files correctly
     std::map<std::pair<clang::FileID, unsigned>, std::string> line_to_pragma;
+    std::set<std::pair<clang::FileID, unsigned>> openmp_lines;
     std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
     clang::SourceManager& p_source_manager;
     clang::Preprocessor& p_preprocessor;
+
+    static bool isOpenMPPragmaText(const std::string& text) {
+        size_t pos = 0;
+        auto skipWS = [](const std::string& s, size_t p) {
+            while (p < s.size() && (s[p] == ' ' || s[p] == '\t')) ++p;
+            return p;
+        };
+        // Expect leading '#'
+        if (pos >= text.size() || text[pos] != '#') return false;
+        pos = skipWS(text, pos + 1);
+        // "pragma"
+        if (pos + 6 > text.size() || text.compare(pos, 6, "pragma") != 0) return false;
+        pos = skipWS(text, pos + 6);
+        // "omp"
+        return (pos + 3 <= text.size() && text.compare(pos, 3, "omp") == 0);
+    }
 
 public:
     // Helper function to check if character is whitespace (space or tab)
@@ -262,6 +280,9 @@ public:
 
         // Store with (FileID, line) key to handle multi-file TUs
         line_to_pragma[std::make_pair(file_id, line)] = original_text;
+        if (isOpenMPPragmaText(original_text)) {
+            openmp_lines.insert(std::make_pair(file_id, line));
+        }
         for (unsigned offset = 1; offset < line_count; ++offset) {
             pragma_continuation_lines.insert(std::make_pair(file_id, line + offset));
         }
@@ -280,6 +301,10 @@ public:
 
     size_t getCount() const {
         return line_to_pragma.size();
+    }
+
+    bool isOpenMPPragmaAtLine(clang::FileID file_id, unsigned line) const {
+        return openmp_lines.count(std::make_pair(file_id, line)) > 0;
     }
 
     bool isContinuationLine(clang::FileID file_id, unsigned line) const {
@@ -336,6 +361,12 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // Value: Template instantiation declaration
         std::map<std::string, SgTemplateInstantiationDecl*> p_template_inst_cache;
 
+        struct CapturedPragma {
+            unsigned line;
+            std::string text;
+            bool is_openmp;
+        };
+
         // Recursion guard for GetSymbolFromSymbolTable to prevent infinite loops
         // when resolving symbols that reference each other (e.g., template members)
         std::set<clang::NamedDecl*> p_symbol_lookup_in_progress;
@@ -380,7 +411,8 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             SgDeclarationStatement* owning_template);
 
         void populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def);
-        bool collectOpenMPPragmas(clang::Stmt* stmt, std::vector<std::pair<unsigned, std::string>>& pragmas);
+        struct CapturedPragma;
+        bool collectOpenMPPragmas(clang::Stmt* stmt, std::vector<CapturedPragma>& pragmas);
         SgPragmaDeclaration* buildOpenMPPragmaDeclaration(const std::string& directive, unsigned pragma_line, SgScopeStatement* scope);
         void appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScopeStatement* scope);
         SgStatement* wrapStatementWithOpenMPPragmas(clang::Stmt* stmt, SgStatement* statement);
