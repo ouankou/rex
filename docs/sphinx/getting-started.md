@@ -21,23 +21,13 @@ For a manual CMake flow, see the root `BUILDING_WITH_CLANG.md` guide. Be sure th
    ```
 2. Produce the Doxygen XML (Breathe/Exhale consumes it):
    ```bash
-   # User-facing surface (default)
    doxygen docs/Doxyfile
-
-   # Developer/full surface (optional)
-   doxygen docs/Doxyfile.dev
    ```
 3. Build the HTML site with Sphinx:
    ```bash
-   # User docs (default)
    sphinx-build -b html docs/sphinx docs/_build/html
-
-   # Developer docs (point Sphinx at the dev XML)
-   REX_DOXY_VARIANT=dev sphinx-build -b html docs/sphinx docs/_build/html-dev
    ```
 4. Open `docs/_build/html/index.html` in your browser.
 
-`docs/Doxyfile` is scoped to the `src`, `tools`, `tutorial`, and `exampleTranslators`
-directories and skips test/build trees to keep the run lean. `docs/Doxyfile.dev`
-exposes the full surface (private/internal) and is noisier/slow; use it only when
-you need the exhaustive view.
+`docs/Doxyfile` is scoped to the `src` tree (headers only) and skips test/build
+trees, submodules, and heavy third-party copies to keep the run manageable.
