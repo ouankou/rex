@@ -1,10 +1,10 @@
-# REX user-facing Doxygen configuration (consumed by Sphinx/Breathe by default)
-PROJECT_NAME           = "REX User API"
+# REX Doxygen configuration (header-only, dev-focused surface)
+PROJECT_NAME           = "REX API"
 PROJECT_BRIEF          = "Modernized ROSE compiler infrastructure (Clang/LLVM 20)"
 
-OUTPUT_DIRECTORY       = docs
+OUTPUT_DIRECTORY       = docs/doxygen-xml
 GENERATE_XML           = YES
-XML_OUTPUT             = doxygen-user-xml
+XML_OUTPUT             = xml
 GENERATE_HTML          = NO
 GENERATE_LATEX         = NO
 GENERATE_MAN           = NO
@@ -12,25 +12,25 @@ GENERATE_RTF           = NO
 GENERATE_DOCSET        = NO
 GENERATE_TREEVIEW      = NO
 
-INPUT                  = src tools tutorial exampleTranslators README.md
+INPUT                  = src README.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hh *.hpp *.hxx *.md
 EXCLUDE                = src/frontend/SageIII/ompparser src/frontend/SageIII/accparser
-EXCLUDE_PATTERNS       = */tests/* */external/* */third_party/* */3rdPartyLibraries/* */build/* docs/_build/* */.git/*
+EXCLUDE_PATTERNS       = */tests/* */external/* */third_party/* */3rdPartyLibraries/* */build/* docs/_build/* */.git/* tools/compilationDatabase2Makefile/nlohmann/* src/util/nlohmann/*
 STRIP_FROM_PATH        = .
 SOURCE_BROWSER         = NO
 VERBATIM_HEADERS       = YES
 
-EXTRACT_ALL            = NO
-EXTRACT_PRIVATE        = NO
-EXTRACT_STATIC         = NO
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
 EXTRACT_LOCAL_CLASSES  = NO
 EXTRACT_LOCAL_METHODS  = NO
 EXTRACT_ANON_NSPACES   = NO
 HIDE_UNDOC_MEMBERS     = YES
 HIDE_UNDOC_CLASSES     = YES
-HIDE_FRIEND_COMPOUNDS  = YES
-INTERNAL_DOCS          = NO
+HIDE_FRIEND_COMPOUNDS  = NO
+INTERNAL_DOCS          = YES
 SORT_BY_SCOPE_NAME     = YES
 JAVADOC_AUTOBRIEF      = YES
 MULTILINE_CPP_IS_BRIEF = YES

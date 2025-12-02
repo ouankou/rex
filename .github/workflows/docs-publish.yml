@@ -26,7 +26,7 @@ jobs:
 
       - name: Prepare build directories
         run: |
-          mkdir -p docs/doxygen-dev-xml docs/_build/html-dev
+          mkdir -p docs/doxygen-xml docs/_build/html docs/_build/doctrees
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,20 +43,19 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r docs/requirements.txt
 
-      - name: Build Doxygen XML (dev)
-        run: doxygen docs/Doxyfile.dev
+      - name: Build Doxygen XML
+        run: doxygen docs/Doxyfile
 
       - name: Build Sphinx HTML
         env:
           SPHINXOPTS: "-j auto"
-          REX_DOXY_VARIANT: dev
-        run: python -m sphinx -b html docs/sphinx docs/_build/html-dev
+        run: python -m sphinx -d docs/_build/doctrees -b html docs/sphinx docs/_build/html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: docs/_build/html-dev
+          publish_dir: docs/_build/html
           force_orphan: true
           cname: rex.ouankou.com

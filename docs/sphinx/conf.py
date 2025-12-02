@@ -13,8 +13,7 @@ author = "REX contributors"
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent.parent
-_DOXY_VARIANT = os.environ.get("REX_DOXY_VARIANT", "user")
-_DOXYGEN_XML = _REPO_ROOT / "docs" / f"doxygen-{_DOXY_VARIANT}-xml"
+_DOXYGEN_XML = _REPO_ROOT / "docs" / "doxygen-xml" / "xml"
 
 version = ""
 release = ""
@@ -124,7 +123,6 @@ exhale.graph.ExhaleRoot.filePostProcess = _skip_files_without_soup
 
 if not (_DOXYGEN_XML / "index.xml").exists():
     raise FileNotFoundError(
-        f"Doxygen XML not found at {_DOXYGEN_XML} for variant '{_DOXY_VARIANT}'. "
-        "Run `doxygen docs/Doxyfile` (user) or `doxygen docs/Doxyfile.dev` (dev) "
-        "before building the Sphinx docs, and set REX_DOXY_VARIANT=user|dev to match."
+        f"Doxygen XML not found at {_DOXYGEN_XML}. "
+        "Run `doxygen docs/Doxyfile` before building the Sphinx docs."
     )

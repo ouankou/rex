@@ -97,8 +97,7 @@ GTAGS
 
 # Docs build artifacts
 docs/_build/
-docs/doxygen-user-xml/
-docs/doxygen-dev-xml/
+docs/doxygen-xml/
 
 # compiled python files
 *.pyc
