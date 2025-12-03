@@ -30,4 +30,5 @@ For a manual CMake flow, see the root `BUILDING_WITH_CLANG.md` guide. Be sure th
 4. Open `docs/_build/html/index.html` in your browser.
 
 `docs/Doxyfile` is scoped to the `src` tree (headers only) and skips test/build
-trees, submodules, and heavy third-party copies to keep the run manageable.
+trees, submodules, and heavy third-party copies to keep the run manageable. The
+HTML uses `sphinx-book-theme`.
