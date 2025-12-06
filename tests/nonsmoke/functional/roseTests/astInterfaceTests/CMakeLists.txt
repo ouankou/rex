@@ -61,6 +61,7 @@ set(noinst_programs
   interfaceFunctionCoverage
   buildTemplateClass
   buildUsingDirectiveStatement
+  templateQualification
 )
 
 # Fortran-specific executables (only build when enable-fortran=ON)
@@ -307,6 +308,17 @@ add_test(
   NAME astInterface_buildJavaPackage
   COMMAND buildJavaPackage ${TEST_CXXFLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/inputbuildJavaPackage.C
 )
+
+# templateQualification test - tests Issue #59 template qualification fixes
+# DISABLED: Test currently fails - requires CFE template translation fixes from Issue #59
+# Tests that:
+#   1. Non-type template parameters preserve names (no "template<0>")
+#   2. No redundant global qualifiers (no "::std::vector")
+# Uses test_template_qualification.cpp as input
+# add_test(
+#   NAME astInterface_templateQualification
+#   COMMAND templateQualification ${TEST_CXXFLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_template_qualification.cpp
+# )
 
 # Fortran tests (only if Fortran support is enabled)
 if(enable-fortran)
