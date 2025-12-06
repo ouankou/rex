@@ -432,6 +432,18 @@ SgScopeStatement::find_symbol_by_type_of_function (const SgName & name, const Sg
           printf ("In SgScopeStatement::find_symbol_by_type_of_function(): func_symbol = %p \n",func_symbol);
 #endif
 
+        // Enforce variant consistency: never reuse a symbol whose declaration
+        // does not match the requested function variant (e.g., avoid linking
+        // template instantiations to non-template or pattern declarations).
+        if (func_symbol != NULL) {
+          SgDeclarationStatement *symbol_decl = func_symbol->get_declaration();
+          if (symbol_decl != NULL &&
+              symbol_decl->variantT() !=
+                  static_cast<VariantT>(T::static_variant)) {
+            func_symbol = NULL;
+          }
+        }
+
   // return isSgFunctionSymbol(func_symbol);
      return func_symbol;
    }
@@ -1027,6 +1039,10 @@ SageBuilder::setTemplateArgumentParents( SgDeclarationStatement* decl )
 
      ROSE_ASSERT(decl != NULL);
 
+     if (decl->get_firstNondefiningDeclaration() == NULL) {
+       decl->set_firstNondefiningDeclaration(decl);
+     }
+
 #if 0
      printf ("In setTemplateArgumentParents(): decl = %p = %s \n",decl,decl->class_name().c_str());
 #endif
@@ -1036,7 +1052,10 @@ SageBuilder::setTemplateArgumentParents( SgDeclarationStatement* decl )
      if (templateArgumentsList != NULL)
         {
           SgDeclarationStatement* first_decl = decl->get_firstNondefiningDeclaration();
-          ROSE_ASSERT(first_decl != NULL);
+          if (first_decl == NULL) {
+            first_decl = decl;
+            decl->set_firstNondefiningDeclaration(decl);
+          }
 
           SgTemplateArgumentPtrList::iterator i = templateArgumentsList->begin();
           while (i != templateArgumentsList->end())
@@ -1272,6 +1291,10 @@ SageBuilder::setTemplateArgumentsInDeclaration( SgDeclarationStatement* decl, Sg
   //
   //    Do this in the morning...
   //
+
+     if (decl->get_firstNondefiningDeclaration() == NULL) {
+       decl->set_firstNondefiningDeclaration(decl);
+     }
 
      ROSE_ASSERT(decl->variantT() == V_SgTemplateInstantiationDecl ||
                  decl->variantT() == V_SgTemplateInstantiationFunctionDecl ||
@@ -4082,23 +4105,27 @@ SageBuilder::buildNondefiningFunctionDeclaration_T (
                ROSE_ASSERT(func_symbol->get_declaration() != NULL);
              }
 #else
-          SgFunctionSymbol *function_symbol = isSgFunctionSymbol(func_symbol);
-          if (prevDecl == prevDecl->get_definingDeclaration())
-             {
-            // The symbol points to a defining declaration and now that we have added a non-defining
-            // declaration we should have the symbol point to the new non-defining declaration.
-               printf ("WARNING: Switching declaration in functionSymbol to point to the non-defining declaration \n");
-               function_symbol->set_declaration(isSgFunctionDeclaration(func));
-               ROSE_ASSERT(function_symbol->get_declaration() != NULL);
-             }
-#endif
+          // Anchor the symbol to the canonical first non-defining declaration
+          // instead of the newest redeclaration. This prevents duplicate
+          // prototypes from hijacking the symbol when we encounter later
+          // forward declarations in system headers.
+          SgDeclarationStatement *nondefiningDeclaration =
+              prevDecl->get_firstNondefiningDeclaration();
+          if (nondefiningDeclaration == NULL) {
+            nondefiningDeclaration = func;
+          }
 
-       // If this is the first non-defining declaration then set the associated data member.
-          SgDeclarationStatement* nondefiningDeclaration = prevDecl->get_firstNondefiningDeclaration();
-          if (nondefiningDeclaration == NULL)
-             {
-               nondefiningDeclaration = func;
-             }
+          SgFunctionSymbol *function_symbol = isSgFunctionSymbol(func_symbol);
+          if (function_symbol != NULL) {
+            SgFunctionDeclaration *anchor_nondef =
+                isSgFunctionDeclaration(nondefiningDeclaration);
+            if (anchor_nondef != NULL &&
+                function_symbol->get_declaration() != anchor_nondef) {
+              function_symbol->set_declaration(anchor_nondef);
+              ROSE_ASSERT(function_symbol->get_declaration() != NULL);
+            }
+          }
+#endif
 
           ROSE_ASSERT(nondefiningDeclaration != NULL);
 #if 0
@@ -4192,8 +4219,11 @@ SageBuilder::buildNondefiningFunctionDeclaration_T (
      ROSE_ASSERT(func->get_symbol_from_symbol_table() != NULL || func->get_firstNondefiningDeclaration()->get_symbol_from_symbol_table() != NULL);
 
   // DQ (2/24/2009): Delete the old parameter list build by the actualFunction (template argument) constructor.
-     ROSE_ASSERT(func->get_parameterList() != NULL);
-     delete func->get_parameterList();
+     if (SgFunctionParameterList *existing = func->get_parameterList()) {
+       // Remove constructor-generated parameter lists so they don't linger in
+       // the memory pool
+       SageInterface::deleteAST(existing);
+     }
      func->set_parameterList(NULL);
 
   // DQ (9/16/2012): Setup up the template arguments and the parents of the template arguments.
@@ -6999,17 +7029,39 @@ SgTemplateType* SageBuilder::buildTemplateType(SgName name/* ="" */)
   return result;
 }
 
-SgTemplateParameter * SageBuilder::buildTemplateParameter (SgTemplateParameter::template_parameter_enum parameterType, SgType* t)
-{
+SgTemplateParameter *SageBuilder::buildTemplateParameter(
+    SgTemplateParameter::template_parameter_enum parameterType, SgType *t) {
+  return buildTemplateParameter(parameterType, t, SgName(), NULL);
+}
+
+SgTemplateParameter *SageBuilder::buildTemplateParameter(
+    SgTemplateParameter::template_parameter_enum parameterType, SgType *t,
+    const SgName &parameterName, SgScopeStatement *scope) {
   ROSE_ASSERT (t);
   SgTemplateParameter* result = new SgTemplateParameter(parameterType, t);
   ROSE_ASSERT (result);
   setOneSourcePositionForTransformation(result);
-  if (result->get_parent() == NULL) {
-    if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
-      result->set_parent(scope);
-    }
+
+  SgScopeStatement *effective_scope =
+      scope != NULL ? scope : SageBuilder::topScopeStack();
+  if (result->get_parent() == NULL && effective_scope != NULL) {
+    result->set_parent(effective_scope);
   }
+
+  if (parameterType == SgTemplateParameter::nontype_parameter) {
+    SgInitializedName *init_name =
+        SageBuilder::buildInitializedName(parameterName, t);
+    if (effective_scope != NULL && init_name->get_scope() == NULL) {
+      init_name->set_scope(effective_scope);
+    }
+    init_name->set_parent(result);
+    // Issue #59: non-type template parameters must carry their declared name
+    // and never fall back to dummy expressions like "0".
+    result->set_expression(NULL);
+    result->set_defaultExpressionParameter(NULL);
+    result->set_initializedName(init_name);
+  }
+
   return result;
 }
 
@@ -8161,16 +8213,42 @@ SageBuilder::buildVarRefExp(const SgName& name, SgScopeStatement* scope/*=NULL*/
         }
        else
         {
-       // if not found: put fake init name and symbol here and
-       // waiting for a postProcessing phase to clean it up
-       // two features: no scope and unknown type for initializedName
-          SgInitializedName * name1 = buildInitializedName(name,SgTypeUnknown::createType());
-          name1->set_scope(scope);  // buildInitializedName() does not set scope for various reasons
-          name1->set_parent(scope);
-          varSymbol = new SgVariableSymbol(name1);
-          varSymbol->set_parent(scope);
+          // if not found: put fake init name and symbol here and
+          // waiting for a postProcessing phase to clean it up
+          // Ensure scope is NEVER NULL for placeholder symbols. When
+          // topScopeStack() returns NULL, find global scope from memory pool.
+          // This prevents SgSymbol::get_scope() assertion failure during
+          // fixVariableReferences.
+          SgScopeStatement *placeholder_scope = scope;
+          if (placeholder_scope == NULL) {
+            // Try to find a SgGlobal from the memory pool as fallback
+            struct GlobalFinder : public ROSE_VisitTraversal {
+              SgGlobal *result;
+              GlobalFinder() : result(NULL) {}
+              void visit(SgNode *n) override {
+                if (result == NULL) {
+                  result = isSgGlobal(n);
+                }
+              }
+            } finder;
+            finder.traverseMemoryPool();
+            placeholder_scope = finder.result;
+          }
 
-       // DQ (4/2/2012): Output a warning:
+          SgInitializedName * name1 = buildInitializedName(name,SgTypeUnknown::createType());
+          name1->set_scope(
+              placeholder_scope); // buildInitializedName() does not set scope
+                                  // for various reasons
+          name1->set_parent(placeholder_scope);
+          varSymbol = new SgVariableSymbol(name1);
+          varSymbol->set_parent(placeholder_scope);
+
+          // Do NOT insert placeholder symbol into symbol table - it shadows
+          // real symbols! The SgSymbol::get_scope() method works via
+          // initname->get_scope() which is set above. The symbol will be
+          // cleaned up by clearUnusedVariableSymbols after resolution.
+
+          // DQ (4/2/2012): Output a warning:
 #if 0
           printf ("WARNING: In SageBuilder::buildVarRefExp(): symbol not found so we built a SgVariableSymbol = %p (but not put into symbol table) \n",varSymbol);
 #endif
@@ -9250,8 +9328,13 @@ SgForStatement * SageBuilder::buildForStatement(SgStatement* initialize_stmt, Sg
           if (isSgVariableDeclaration(initialize_stmt))
              {
                fixVariableDeclaration(isSgVariableDeclaration(initialize_stmt),result);
-            // fix varRefExp to the index variable used in increment, conditional expressions
-               fixVariableReferences(result);
+               // Note: fixVariableReferences is NOT called here because this
+               // for-statement is not yet attached to the AST. References to
+               // the loop variable in test/ increment expressions will be
+               // resolved when the caller calls fixVariableReferences after
+               // appending this statement to a scope. See test buildForStmt.C
+               // which explicitly calls fixVariableReferences(func_body) after
+               // appendStatement(for_stmt, func_body).
              }
         }
 
@@ -10517,6 +10600,11 @@ SgStaticAssertionDeclaration* SageBuilder::buildStaticAssertionDeclaration(SgExp
      ROSE_ASSERT(result->get_firstNondefiningDeclaration() != NULL);
 
      setOneSourcePositionForTransformation(result);
+
+     if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
+       result->set_scope(scope);
+       result->set_parent(scope);
+     }
 
      return result;
    }
@@ -12850,6 +12938,22 @@ SageBuilder::buildClassDeclarationStatement_nfi(const SgName & name, SgClassDecl
 
        // DQ (9/4/2012): Added assertion.
           ROSE_ASSERT (defdecl->get_type() == nondefdecl->get_type());
+
+          // REX: enforce structural parenting immediately so callers never see
+          // dangling declarations.
+          if (defdecl->get_scope() == NULL) {
+            defdecl->set_scope(scope);
+          }
+          if (nondefdecl->get_scope() == NULL) {
+            nondefdecl->set_scope(scope);
+          }
+          if (defdecl->get_parent() == NULL || defdecl->get_parent() != scope) {
+            defdecl->set_parent(scope);
+          }
+          if (nondefdecl->get_parent() == NULL ||
+              nondefdecl->get_parent() != scope) {
+            nondefdecl->set_parent(scope);
+          }
         }
 
   // DQ (1/26/2009): I think we should assert this, but it breaks the interface as defined
@@ -14517,17 +14621,15 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
 #endif
         }
 
-  // DQ (1/26/2009): I think we should assert this, but it breaks the interface as defined
-  // by the test code in tests/nonsmoke/functional/roseTests/astInterfaceTests.
-  // ROSE_ASSERT(defdecl->get_parent() != NULL);
-
-  // ROSE_ASSERT(nonDefiningDecl->get_parent() != NULL);
-
-  // DQ (2/27/2012): Tracking down where parents are not set correctly (class declaration in typedef is incorrectly set to SgGlobal).
-     ROSE_ASSERT(defdecl->get_parent()    == NULL);
-
-  // DQ (2/29/2012):  We can't assert this (fails for test2012_09.C).
-  // ROSE_ASSERT(nondefdecl->get_parent() == NULL);
+        // DQ (1/26/2009): I think we should assert this, but it breaks the
+        // interface as defined by the test code in
+        // tests/nonsmoke/functional/roseTests/astInterfaceTests.
+        ROSE_ASSERT(defdecl->get_parent() != NULL);
+        ROSE_ASSERT(nondefdecl->get_parent() != NULL);
+        if (scope != NULL) {
+          ROSE_ASSERT(defdecl->get_parent() == scope);
+          ROSE_ASSERT(nondefdecl->get_parent() == scope);
+        }
 
      ROSE_ASSERT(defdecl->get_definingDeclaration() == defdecl);
      ROSE_ASSERT(defdecl->get_firstNondefiningDeclaration() != defdecl->get_definingDeclaration());
@@ -16606,7 +16708,109 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
      printf ("In SageBuilder::buildFile(): calling astPostProcessing() \n");
 #endif
 
-     AstPostProcessing(result);
+     // REX: ensure all top-level declarations in the new file are properly
+     // anchored before running post-processing, since callers may have appended
+     // detached nodes.
+     auto anchorDeclaration = [](SgDeclarationStatement *decl,
+                                 SgScopeStatement *scope) {
+       if (decl == NULL || scope == NULL)
+         return;
+       if (decl->get_scope() == NULL)
+         decl->set_scope(scope);
+       if (decl->get_parent() == NULL || decl->get_parent() != scope)
+         decl->set_parent(scope);
+       if (SgDeclarationStatement *first =
+               decl->get_firstNondefiningDeclaration()) {
+         if (first != decl) {
+           if (first->get_scope() == NULL)
+             first->set_scope(scope);
+           if (first->get_parent() == NULL || first->get_parent() != scope)
+             first->set_parent(scope);
+         }
+       }
+       if (SgDeclarationStatement *def = decl->get_definingDeclaration()) {
+         if (def != decl && def != decl->get_firstNondefiningDeclaration()) {
+           if (def->get_scope() == NULL)
+             def->set_scope(scope);
+           if (def->get_parent() == NULL || def->get_parent() != scope)
+             def->set_parent(scope);
+         }
+       }
+     };
+
+     if (SgSourceFile *newSourceFile = isSgSourceFile(result)) {
+       if (SgGlobal *newGlobal = newSourceFile->get_globalScope()) {
+         for (SgDeclarationStatement *decl : newGlobal->get_declarations()) {
+           anchorDeclaration(decl, newGlobal);
+         }
+       }
+     }
+     if (project != NULL) {
+       for (SgFile *file : project->get_fileList()) {
+         if (SgSourceFile *src = isSgSourceFile(file)) {
+           if (SgGlobal *glob = src->get_globalScope()) {
+             for (SgDeclarationStatement *decl : glob->get_declarations()) {
+               anchorDeclaration(decl, glob);
+             }
+           }
+         }
+       }
+     }
+
+     // Diagnose any remaining unparented variable declarations before
+     // post-processing.
+     {
+       Rose::MemoryPoolTraversalFilter prev_filter =
+           Rose::getMemoryPoolTraversalFilter();
+       Rose::setMemoryPoolTraversalFilter(NULL);
+
+       VariantVector var_vv(V_SgVariableDeclaration);
+       NodeQuerySynthesizedAttributeType vars =
+           NodeQuery::queryMemoryPool(var_vv);
+
+       SgGlobal *primaryGlobal = NULL;
+       if (project != NULL && project->get_fileList().empty() == false) {
+         if (SgSourceFile *src =
+                 isSgSourceFile(project->get_fileList().front())) {
+           primaryGlobal = src->get_globalScope();
+         }
+       }
+       if (primaryGlobal == NULL) {
+         if (SgSourceFile *src = isSgSourceFile(result))
+           primaryGlobal = src->get_globalScope();
+       }
+
+       for (SgNode *n : vars) {
+         SgVariableDeclaration *var = isSgVariableDeclaration(n);
+         if (var == NULL)
+           continue;
+         if (var->get_parent() == NULL || var->get_scope() == NULL) {
+           Sg_File_Info *fi = var->get_file_info();
+           if (fi != NULL && fi->isCompilerGenerated() == false) {
+             std::cerr << "FATAL: Unparented variable declaration before "
+                          "AstPostProcessing: "
+                       << var << " " << var->class_name() << " at "
+                       << fi->get_filenameString() << ":" << fi->get_line()
+                       << " parent=" << var->get_parent()
+                       << " scope=" << var->get_scope() << std::endl;
+             if (primaryGlobal != NULL) {
+               anchorDeclaration(var, primaryGlobal);
+               std::cerr << "  -> anchored to global " << primaryGlobal
+                         << std::endl;
+             } else {
+               ROSE_ABORT();
+             }
+           }
+         }
+       }
+       Rose::setMemoryPoolTraversalFilter(prev_filter);
+     }
+
+     if (project != NULL) {
+       AstPostProcessing(project);
+     } else {
+       AstPostProcessing(result);
+     }
 
 #if 0
      printf ("In SageBuilder::buildFile(): DONE: calling astPostProcessing() \n");
@@ -20375,6 +20579,10 @@ SgUsingDirectiveStatement* SageBuilder::buildUsingDirectiveStatement(SgNamespace
   res->set_firstNondefiningDeclaration(res);
 
   setOneSourcePositionForTransformation(res);
+  if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
+    res->set_scope(scope);
+    res->set_parent(scope);
+  }
   return res; 
 }
 

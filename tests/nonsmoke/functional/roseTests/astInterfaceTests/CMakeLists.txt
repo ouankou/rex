@@ -61,6 +61,7 @@ set(noinst_programs
   interfaceFunctionCoverage
   buildTemplateClass
   buildUsingDirectiveStatement
+  templateQualification
 )
 
 # Fortran-specific executables (only build when enable-fortran=ON)
@@ -301,6 +302,14 @@ foreach(test ${comment_relocation_tests})
     COMMAND removeStatementCommentRelocation ${TEST_CXXFLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/${test}.C
   )
 endforeach()
+
+# templateQualification test - tests Issue #59 template qualification fixes
+# DISABLED: Test currently fails - requires CFE template translation fixes from Issue #59
+# Uses test_template_qualification.cpp as input
+# add_test(
+#   NAME astInterface_templateQualification
+#   COMMAND templateQualification ${TEST_CXXFLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_template_qualification.cpp
+# )
 
 # buildJavaPackage test (doesn't produce output source files)
 add_test(

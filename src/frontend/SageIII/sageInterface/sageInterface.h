@@ -2092,7 +2092,7 @@ void setParameterList(actualFunction *func,SgFunctionParameterList *paralist) {
         {
           if (func->get_parameterList() != paralist)
              {
-               delete func->get_parameterList();
+            SageInterface::deleteAST(func->get_parameterList());
              }
         }
 

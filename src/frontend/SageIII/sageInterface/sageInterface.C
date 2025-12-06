@@ -1508,6 +1508,38 @@ SageInterface::get_name ( const SgDeclarationStatement* declaration )
           return SageInterface::get_name (directive);
         }
 
+        // Emit diagnostic early when declarations reach here without a parent
+        // and attempt recovery for static assertions that were left orphaned.
+        if (declaration->get_parent() == NULL) {
+          if (const SgStaticAssertionDeclaration *sa_decl =
+                  isSgStaticAssertionDeclaration(declaration)) {
+            SgStaticAssertionDeclaration *mutable_decl =
+                const_cast<SgStaticAssertionDeclaration *>(sa_decl);
+            if (mutable_decl->get_scope() == NULL) {
+              if (SgGlobal *global =
+                      SageInterface::getGlobalScope(mutable_decl)) {
+                mutable_decl->set_scope(global);
+              }
+            }
+            if (mutable_decl->get_parent() == NULL &&
+                mutable_decl->get_scope() != NULL) {
+              mutable_decl->set_parent(mutable_decl->get_scope());
+            }
+          }
+        }
+        if (declaration->get_parent() == NULL) {
+          std::cerr << "FATAL: get_name called on declaration "
+                    << declaration->class_name() << "@" << declaration
+                    << " with NULL parent";
+          if (declaration->get_file_info() != NULL) {
+            std::cerr << " ("
+                      << declaration->get_file_info()->get_filenameString()
+                      << ":" << declaration->get_file_info()->get_line() << ")";
+          }
+          std::cerr << std::endl;
+          ROSE_ABORT();
+        }
+
      switch (declaration->variantT())
         {
        // DQ (12/28/2011): Added seperate support for new design of template IR nodes.
@@ -6599,6 +6631,12 @@ SageInterface::lookupVariableSymbolInParentScopes (const SgName &  name, SgScope
           cscope = SageBuilder::topScopeStack();
      ROSE_ASSERT(cscope != NULL);
 
+#if 0
+     // Debug output
+     std::cerr << "[DEBUG lookupVariableSymbolInParentScopes] Looking for '" << name.getString()
+               << "' starting from scope " << cscope << " (" << cscope->class_name() << ")" << std::endl;
+#endif
+
      while ((cscope != NULL) && (symbol == NULL))
         {
        // I think this will resolve SgAliasSymbols to be a SgClassSymbol where the alias is of a SgClassSymbol.
@@ -7154,7 +7192,6 @@ SageInterface::setSourcePositionForTransformation(SgNode *root)
 #endif
    }
 
-
 #if 0
 // DQ (5/1/2012): New function with improved name (still preserving the previous interface).
 void
@@ -7683,6 +7720,67 @@ SgNode * SageInterface::deepCopyNode (const SgNode* n)
   if (n!= NULL)
   {
      rt = n->copy (g_treeCopy);
+     if (rt != NULL) {
+       struct ClearCopiedSymbolTables : public AstSimpleProcessing {
+         void visit(SgNode *node) override {
+           if (SgScopeStatement *scope = isSgScopeStatement(node)) {
+             SgSymbolTable *fresh = new SgSymbolTable();
+             fresh->set_parent(scope);
+             scope->set_symbol_table(fresh);
+           }
+         }
+       };
+       ClearCopiedSymbolTables clearer;
+       clearer.traverse(rt, preorder);
+
+       // Re-wire scopes/symbols so the copy is self-contained.
+       const_cast<SgNode *>(n)->fixupCopy_scopes(rt, g_treeCopy);
+
+       struct ResetCopyScopes : public AstSimpleProcessing {
+         void visit(SgNode *node) override {
+           if (SgDeclarationStatement *ds = isSgDeclarationStatement(node)) {
+             SgScopeStatement *enclosing = isSgScopeStatement(ds->get_parent());
+             if (enclosing == NULL) {
+               // Only call getEnclosingScope if we have a valid parent chain to
+               // traverse. For detached subtrees (root nodes from deepCopy),
+               // the parent is NULL and getEnclosingScope would trigger a
+               // get_scope() assertion.
+               if (ds->get_parent() != NULL) {
+                 enclosing = SageInterface::getEnclosingScope(ds);
+               }
+             }
+             if (enclosing != NULL && ds->get_scope() != enclosing) {
+               ds->set_scope(enclosing);
+             }
+           } else if (SgInitializedName *in = isSgInitializedName(node)) {
+             // Only traverse if we have a valid parent chain
+             SgScopeStatement *enclosing = NULL;
+             if (in->get_parent() != NULL) {
+               enclosing = SageInterface::getEnclosingScope(in);
+               if (enclosing == NULL && in->get_parent() != NULL) {
+                 enclosing = SageInterface::getEnclosingScope(in->get_parent());
+               }
+             }
+             if (enclosing == NULL) {
+               enclosing = isSgScopeStatement(in->get_parent());
+             }
+             if (enclosing == NULL) {
+               enclosing = SageBuilder::topScopeStack();
+             }
+             if (enclosing != NULL && in->get_scope() != enclosing) {
+               in->set_scope(enclosing);
+             }
+           }
+         }
+       };
+       ResetCopyScopes resetter;
+       resetter.traverse(rt, preorder);
+
+       clearer.traverse(rt, preorder);
+       const_cast<SgNode *>(n)->fixupCopy_symbols(rt, g_treeCopy);
+
+       const_cast<SgNode *>(n)->fixupCopy_references(rt, g_treeCopy);
+     }
      SageInterface::setSourcePositionForTransformation (rt);
   }
   //  return n ? n->copy (g_treeCopy) : 0;
@@ -8012,7 +8110,6 @@ static  void getSwitchCasesHelper(SgStatement* top, vector<SgStatement*>& result
     getSwitchCasesHelper(sw->get_body(), result);
     return result;
   }
-
 
 #endif
 
@@ -9346,7 +9443,6 @@ SageInterface::isDataMemberReference(SgVarRefExp* varRefExp)
      return returnValue;
    }
 
-
 #if 0
 bool
 SageInterface::isAddressTaken(SgVarRefExp* varRefExp)
@@ -9604,8 +9700,6 @@ SgStatement* SageInterface::getEnclosingStatement(SgNode* n) {
   while (n && !isSgStatement(n)) n = n->get_parent();
   return isSgStatement(n);
 }
-
-
 
 #if 1
 // DQ (11/19/2020): We need to expand the use of this to cover deffered transformations of common SageInterface transformations (e.g. replaceStatement).
@@ -10412,7 +10506,6 @@ SageInterface::findSurroundingStatementFromSameFile(SgStatement* targetStmt, boo
 
      return surroundingStatement;
    }
-
 
 #ifndef USE_ROSE
 //! Deep delete a sub AST tree. It uses postorder traversal to delete each child node.
@@ -11329,7 +11422,6 @@ void SageInterface::myRemoveStatement(SgStatement* stmt) {
     parent->replace_statement(stmt, new SgNullStatement(TRANS_FILE));
   }
 }
-
 
 #ifndef USE_ROSE
 std::set<SgLabelStatement*> SageInterface::findUnusedLabels (SgNode* top)
@@ -13938,6 +14030,21 @@ void SageInterface::appendStatement(SgStatement *stmt, SgScopeStatement* scope)
 
      if (skipAddingStatement == false)
         {
+       // Set parent early so that fixStatement and insertStatementInScope
+       // can successfully traverse the parent chain for get_scope()
+       // operations. This is critical for deep-copied statements which start
+       // with NULL parent.
+       if (stmt->get_parent() == NULL) {
+         stmt->set_parent(scope);
+       }
+
+       // Also set the scope for declaration statements early
+       if (SgDeclarationStatement *declStmt = isSgDeclarationStatement(stmt)) {
+         if (declStmt->get_scope() == NULL) {
+           declStmt->set_scope(scope);
+         }
+       }
+
        // catch-all for statement fixup
        // Must fix it before insert it into the scope,
        // printf ("In appendStatementList(): Calling fixStatement() \n");
@@ -14440,7 +14547,6 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
         }
      } // end if autoMovePreprocessingInfo
 
-
 #if 0
      printf ("In SageInterface::insertStatement(): after processing associated comments \n");
      reportNodesMarkedAsModified(scope);
@@ -14893,18 +14999,12 @@ void SageInterface::fixStructDeclaration(SgClassDeclaration* structDecl, SgScope
      if (nondefdecl->get_scope() == NULL)
           nondefdecl->set_scope(scope);
 
-#if 0
      if (structDecl->get_parent() == NULL)
           structDecl->set_parent(scope);
      if (nondefdecl->get_parent() == NULL)
           nondefdecl->set_parent(scope);
-#else
-  // printf ("*** WARNING: In SageInterface::fixStructDeclaration(): Commented out the setting of the parent (of input class declaration and the nondefining declaration) to be the same as the scope (set only if NULL) \n");
-
-  // DQ (7/21/2012): Can we assert this here? NO!
-  // ROSE_ASSERT(structDecl->get_parent() == NULL);
-  // ROSE_ASSERT(nondefdecl->get_parent() == NULL);
-#endif
+     if (defdecl != NULL && defdecl->get_parent() == NULL)
+       defdecl->set_parent(scope);
 
      SgName name = structDecl->get_name();
 
@@ -15200,8 +15300,36 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
   {
     varRef= isSgVarRefExp(*i);
     ROSE_ASSERT(varRef->get_symbol());
-    SgInitializedName* initname= varRef->get_symbol()->get_declaration();
 
+    // Ensure the symbol is actually an SgVariableSymbol (not a corrupted
+    // pointer)
+    SgVariableSymbol *varSymbol = isSgVariableSymbol(varRef->get_symbol());
+    if (varSymbol == NULL) {
+      std::cerr << "FATAL: SgVarRefExp contains corrupted symbol (not "
+                   "SgVariableSymbol)\n"
+                << "  varRef=" << varRef << "\n"
+                << "  symbol=" << varRef->get_symbol() << "\n"
+                << "  symbol class_name()="
+                << varRef->get_symbol()->class_name() << "\n"
+                << std::flush;
+      ROSE_ABORT();
+    }
+
+    SgInitializedName *initname = varSymbol->get_declaration();
+
+    if (initname == NULL) {
+      std::cerr << "[DEBUG fixVariableReferences] Symbol with NULL declaration "
+                   "found:\n"
+                << "  varRef=" << varRef << "\n"
+                << "  symbol=" << varSymbol << " (" << varSymbol->class_name()
+                << ")\n"
+                << "  symbol name=" << varSymbol->get_name().getString() << "\n"
+                << "  parent=" << varRef->get_parent() << " ("
+                << (varRef->get_parent() ? varRef->get_parent()->class_name()
+                                         : "NULL")
+                << ")\n"
+                << std::flush;
+    }
     ROSE_ASSERT (initname != NULL);
     if (initname->get_type()==SgTypeUnknown::createType())
       //    if ((initname->get_scope()==NULL) && (initname->get_type()==SgTypeUnknown::createType()))
@@ -15221,15 +15349,60 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
         {
             // make sure the lhs operand has been fixed
             counter += fixVariableReferences(arrowExp->get_lhs_operand_i());
-            SgType* lhs_type = arrowExp->get_lhs_operand_i()->get_type() ;
+
+            SgExpression *lhs_expr = arrowExp->get_lhs_operand_i();
+            SgType *lhs_type = lhs_expr->get_type();
+            if (lhs_type == NULL || isSgTypeUnknown(lhs_type)) {
+              if (SgVarRefExp *lhs_ref = isSgVarRefExp(lhs_expr)) {
+                if (SgVariableSymbol *sym = lhs_ref->get_symbol()) {
+                  lhs_type = sym->get_type();
+                }
+                if (lhs_type == NULL || isSgTypeUnknown(lhs_type)) {
+                  if (SgVariableSymbol *resolved =
+                          lookupVariableSymbolInParentScopes(
+                              lhs_ref->get_symbol()->get_name(),
+                              getEnclosingScope(arrowExp))) {
+                    lhs_ref->set_symbol(resolved);
+                    lhs_type = resolved->get_type();
+                  }
+                }
+              }
+            }
+            ROSE_ASSERT(lhs_type != NULL);
             lhs_type = lhs_type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
             SgPointerType* ptrType = isSgPointerType(lhs_type);
+            if (ptrType == NULL) {
+              std::cerr << "FATAL: fixVariableReferences encountered "
+                           "non-pointer lhs for arrow expression\n";
+              std::cerr << "  lhs expr: " << lhs_expr->class_name() << " type: "
+                        << (lhs_type ? lhs_type->class_name() : "NULL") << "\n";
+              if (SgVarRefExp *lhs_ref = isSgVarRefExp(lhs_expr)) {
+                if (SgVariableSymbol *sym = lhs_ref->get_symbol()) {
+                  std::cerr << "  lhs symbol type: "
+                            << (sym->get_type() ? sym->get_type()->class_name()
+                                                : "NULL")
+                            << "\n";
+                } else {
+                  std::cerr << "  lhs has NULL symbol\n";
+                }
+              }
+              std::cerr << std::flush;
+            }
             ROSE_ASSERT(ptrType);
             SgClassType* clsType = isSgClassType(ptrType->get_base_type()-> stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE));
-            ROSE_ASSERT(clsType);
+            ROSE_ASSERT(clsType != NULL);
             SgClassDeclaration* decl = isSgClassDeclaration(clsType->get_declaration());
+            if (decl == NULL) {
+              std::cerr << "FATAL: pointer base type missing declaration in "
+                           "fixVariableReferences arrow\n";
+              ROSE_ABORT();
+            }
             decl = isSgClassDeclaration(decl->get_definingDeclaration());
-            ROSE_ASSERT(decl);
+            if (decl == NULL) {
+              std::cerr << "FATAL: pointer base type has no defining "
+                           "declaration in fixVariableReferences arrow\n";
+              ROSE_ABORT();
+            }
 
          // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
          // realSymbol = lookupSymbolInParentScopes(varName, decl->get_definition());
@@ -15239,7 +15412,8 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
         {
          // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
          // realSymbol = lookupSymbolInParentScopes(varName,getScope(varRef));
-            realSymbol = lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+         realSymbol = lookupVariableSymbolInParentScopes(
+             varName, getEnclosingScope(arrowExp));
         }
       }
       else if (SgDotExp* dotExp = isSgDotExp(varRef->get_parent()))
@@ -15249,13 +15423,31 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
             // make sure the lhs operand has been fixed
             counter += fixVariableReferences(dotExp->get_lhs_operand_i());
 
-            SgType* lhs_type = dotExp->get_lhs_operand_i()->get_type() ;
+            SgExpression *lhs_expr = dotExp->get_lhs_operand_i();
+            SgType *lhs_type = lhs_expr->get_type();
+            if (lhs_type == NULL || isSgTypeUnknown(lhs_type)) {
+              if (SgVarRefExp *lhs_ref = isSgVarRefExp(lhs_expr)) {
+                if (SgVariableSymbol *sym = lhs_ref->get_symbol()) {
+                  lhs_type = sym->get_type();
+                }
+              }
+            }
+            ROSE_ASSERT(lhs_type != NULL);
             lhs_type = lhs_type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
             SgClassType* clsType = isSgClassType(lhs_type);
             ROSE_ASSERT(clsType);
             SgClassDeclaration* decl = isSgClassDeclaration(clsType->get_declaration());
+            if (decl == NULL) {
+              std::cerr << "FATAL: dot expression base class type missing "
+                           "declaration\n";
+              ROSE_ABORT();
+            }
             decl = isSgClassDeclaration(decl->get_definingDeclaration());
-            ROSE_ASSERT(decl);
+            if (decl == NULL) {
+              std::cerr << "FATAL: dot expression base class type missing "
+                           "defining declaration\n";
+              ROSE_ABORT();
+            }
 
          // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
          // realSymbol = lookupSymbolInParentScopes(varName, decl->get_definition());
@@ -15264,25 +15456,85 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
         else
          // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
          // realSymbol = lookupSymbolInParentScopes(varName,getScope(varRef));
-            realSymbol = lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+         realSymbol = lookupVariableSymbolInParentScopes(
+             varName, getEnclosingScope(dotExp));
       }
       else
 #endif
       {
-         // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
-         // realSymbol = lookupSymbolInParentScopes(varName,getScope(varRef));
-            realSymbol = lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+        // We want to lookup variable symbols not just any symbol.
+        // Use getEnclosingScope to avoid calling get_scope() on placeholder
+        // symbols.
+        SgScopeStatement *lookup_scope = getEnclosingScope(varRef);
+        if (lookup_scope != NULL)
+          realSymbol =
+              lookupVariableSymbolInParentScopes(varName, lookup_scope);
       }
 
       // should find a real symbol at this final fixing stage!
       // This function can be called any time, not just final fixing stage
       if (realSymbol==NULL)
       {
-        //cerr<<"Error: cannot find a symbol for "<<varName.getString()<<endl;
-        //ROSE_ASSERT(realSymbol);
+        if (SgFunctionDefinition *func_def =
+                getEnclosingFunctionDefinition(varRef, true)) {
+          if (SgFunctionDeclaration *func_decl = func_def->get_declaration()) {
+            if (SgFunctionParameterList *params =
+                    func_decl->get_parameterList()) {
+              const SgInitializedNamePtrList &args = params->get_args();
+              for (SgInitializedName *arg : args) {
+                if (arg != NULL && arg->get_name() == varName) {
+                  if (SgVariableSymbol *param_sym = isSgVariableSymbol(
+                          arg->get_symbol_from_symbol_table())) {
+                    realSymbol = param_sym;
+                  } else {
+                    SgVariableSymbol *new_sym = new SgVariableSymbol(arg);
+                    SgScopeStatement *symbol_scope = arg->get_scope();
+                    if (symbol_scope == NULL) {
+                      symbol_scope =
+                          func_def->get_body() != NULL
+                              ? static_cast<SgScopeStatement *>(
+                                    func_def->get_body())
+                              : static_cast<SgScopeStatement *>(func_def);
+                    }
+                    if (symbol_scope == NULL) {
+                      std::cerr
+                          << "FATAL: cannot establish scope for parameter '"
+                          << varName.getString()
+                          << "' when repairing symbol tables\n";
+                      ROSE_ABORT();
+                    }
+                    if (arg->get_scope() == NULL) {
+                      arg->set_scope(symbol_scope);
+                    }
+                    symbol_scope->insert_symbol(varName, new_sym);
+                    new_sym->set_parent(symbol_scope->get_symbol_table());
+                    realSymbol = new_sym;
+                  }
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (realSymbol == NULL) {
+          SgScopeStatement *err_scope = getEnclosingScope(varRef);
+          std::cerr << "FATAL: cannot find a symbol for '"
+                    << varName.getString() << "' (scope="
+                    << (err_scope ? err_scope->class_name() : "NULL") << ")"
+                    << std::endl;
+          ROSE_ABORT();
+        }
       }
       else {
         // release placeholder initname and symbol
+        // Skip if realSymbol is the same placeholder (happens when
+        // placeholder is inserted into global scope and found by lookup).
+        // Only replace if realSymbol has a proper type (not SgTypeUnknown).
+        if (realSymbol == varRef->get_symbol()) {
+          // Found the same placeholder - skip replacement
+          continue;
+        }
         ROSE_ASSERT(realSymbol!=(varRef->get_symbol()));
 #if 0
         // CH (5/12/2010):
@@ -15361,8 +15613,12 @@ void SageInterface::clearUnusedVariableSymbols(SgNode* root /*= NULL */)
     {
         SgVariableSymbol* symbolToDelete = isSgVariableSymbol(*i);
         ROSE_ASSERT(symbolToDelete);
-        if (symbolToDelete->get_declaration()->get_type() != SgTypeUnknown::createType())
-            continue;
+        // Skip symbols with NULL declaration or non-unknown types
+        SgInitializedName *decl = symbolToDelete->get_declaration();
+        if (decl == NULL)
+          continue;
+        if (decl->get_type() != SgTypeUnknown::createType())
+          continue;
         // symbol with a declaration of SgTypeUnknown will be deleted
         bool toDelete = true;
 
@@ -18569,11 +18825,11 @@ getAssociatedDeclaration( SgScopeStatement* scope )
 
           case V_SgClassDefinition:
           case V_SgTemplateInstantiationDefn: // Liao, 5/12/2009
-             {
-               SgClassDefinition* classDefinition = isSgClassDefinition(scope);
-               declaration = classDefinition->get_declaration();
-               break;
-             }
+          case V_SgTemplateClassDefinition: {
+            SgClassDefinition *classDefinition = isSgClassDefinition(scope);
+            declaration = classDefinition->get_declaration();
+            break;
+          }
 
           // CLANG FRONTEND FIX: Handle function definitions
           case V_SgFunctionDefinition:
@@ -18838,6 +19094,13 @@ CollectDependentDeclarationsTraversal::visit(SgNode *astNode)
 
   // DQ (2/22/2009): Changing the semantics for this function,
   // just save the original declaration, not a copy of it.
+
+  // Skip orphaned declarations that are not attached to the AST.
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(astNode)) {
+    if (decl->get_parent() == NULL) {
+      return;
+    }
+  }
 
 #if 0
   // Debugging support.
