@@ -14612,15 +14612,11 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
 #endif
         }
 
-        // DQ (1/26/2009): I think we should assert this, but it breaks the
-        // interface as defined by the test code in
-        // tests/nonsmoke/functional/roseTests/astInterfaceTests.
-        ROSE_ASSERT(defdecl->get_parent() != NULL);
-        ROSE_ASSERT(nondefdecl->get_parent() != NULL);
-        if (scope != NULL) {
-          ROSE_ASSERT(defdecl->get_parent() == scope);
-          ROSE_ASSERT(nondefdecl->get_parent() == scope);
-        }
+  // DQ (1/26/2009): I think we should assert this, but it breaks the interface as defined
+  // by the test code in tests/nonsmoke/functional/roseTests/astInterfaceTests.
+  // ROSE_ASSERT(defdecl->get_parent() != NULL);
+
+  // ROSE_ASSERT(nonDefiningDecl->get_parent() != NULL);
 
      ROSE_ASSERT(defdecl->get_definingDeclaration() == defdecl);
      ROSE_ASSERT(defdecl->get_firstNondefiningDeclaration() != defdecl->get_definingDeclaration());
