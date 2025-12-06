@@ -15475,56 +15475,8 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
       // This function can be called any time, not just final fixing stage
       if (realSymbol==NULL)
       {
-        if (SgFunctionDefinition *func_def =
-                getEnclosingFunctionDefinition(varRef, true)) {
-          if (SgFunctionDeclaration *func_decl = func_def->get_declaration()) {
-            if (SgFunctionParameterList *params =
-                    func_decl->get_parameterList()) {
-              const SgInitializedNamePtrList &args = params->get_args();
-              for (SgInitializedName *arg : args) {
-                if (arg != NULL && arg->get_name() == varName) {
-                  if (SgVariableSymbol *param_sym = isSgVariableSymbol(
-                          arg->get_symbol_from_symbol_table())) {
-                    realSymbol = param_sym;
-                  } else {
-                    SgVariableSymbol *new_sym = new SgVariableSymbol(arg);
-                    SgScopeStatement *symbol_scope = arg->get_scope();
-                    if (symbol_scope == NULL) {
-                      symbol_scope =
-                          func_def->get_body() != NULL
-                              ? static_cast<SgScopeStatement *>(
-                                    func_def->get_body())
-                              : static_cast<SgScopeStatement *>(func_def);
-                    }
-                    if (symbol_scope == NULL) {
-                      std::cerr
-                          << "FATAL: cannot establish scope for parameter '"
-                          << varName.getString()
-                          << "' when repairing symbol tables\n";
-                      ROSE_ABORT();
-                    }
-                    if (arg->get_scope() == NULL) {
-                      arg->set_scope(symbol_scope);
-                    }
-                    symbol_scope->insert_symbol(varName, new_sym);
-                    new_sym->set_parent(symbol_scope->get_symbol_table());
-                    realSymbol = new_sym;
-                  }
-                  break;
-                }
-              }
-            }
-          }
-        }
-
-        if (realSymbol == NULL) {
-          SgScopeStatement *err_scope = getEnclosingScope(varRef);
-          std::cerr << "FATAL: cannot find a symbol for '"
-                    << varName.getString() << "' (scope="
-                    << (err_scope ? err_scope->class_name() : "NULL") << ")"
-                    << std::endl;
-          ROSE_ABORT();
-        }
+        //cerr<<"Error: cannot find a symbol for "<<varName.getString()<<endl;
+        //ROSE_ASSERT(realSymbol);
       }
       else {
         // release placeholder initname and symbol

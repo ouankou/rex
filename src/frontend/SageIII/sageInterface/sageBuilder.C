@@ -9328,13 +9328,8 @@ SgForStatement * SageBuilder::buildForStatement(SgStatement* initialize_stmt, Sg
           if (isSgVariableDeclaration(initialize_stmt))
              {
                fixVariableDeclaration(isSgVariableDeclaration(initialize_stmt),result);
-               // Note: fixVariableReferences is NOT called here because this
-               // for-statement is not yet attached to the AST. References to
-               // the loop variable in test/ increment expressions will be
-               // resolved when the caller calls fixVariableReferences after
-               // appending this statement to a scope. See test buildForStmt.C
-               // which explicitly calls fixVariableReferences(func_body) after
-               // appendStatement(for_stmt, func_body).
+            // fix varRefExp to the index variable used in increment, conditional expressions
+               fixVariableReferences(result);
              }
         }
 
@@ -12947,13 +12942,9 @@ SageBuilder::buildClassDeclarationStatement_nfi(const SgName & name, SgClassDecl
           if (nondefdecl->get_scope() == NULL) {
             nondefdecl->set_scope(scope);
           }
-          if (defdecl->get_parent() == NULL || defdecl->get_parent() != scope) {
-            defdecl->set_parent(scope);
-          }
-          if (nondefdecl->get_parent() == NULL ||
-              nondefdecl->get_parent() != scope) {
-            nondefdecl->set_parent(scope);
-          }
+          // Note: parents are NOT set here because the assertion below
+          // expects defdecl->get_parent() == NULL. Parents will be set
+          // later when the declaration is appended to a scope.
         }
 
   // DQ (1/26/2009): I think we should assert this, but it breaks the interface as defined
