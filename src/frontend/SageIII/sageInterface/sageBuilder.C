@@ -432,6 +432,18 @@ SgScopeStatement::find_symbol_by_type_of_function (const SgName & name, const Sg
           printf ("In SgScopeStatement::find_symbol_by_type_of_function(): func_symbol = %p \n",func_symbol);
 #endif
 
+        // Enforce variant consistency: never reuse a symbol whose declaration
+        // does not match the requested function variant (e.g., avoid linking
+        // template instantiations to non-template or pattern declarations).
+        if (func_symbol != NULL) {
+          SgDeclarationStatement *symbol_decl = func_symbol->get_declaration();
+          if (symbol_decl != NULL &&
+              symbol_decl->variantT() !=
+                  static_cast<VariantT>(T::static_variant)) {
+            func_symbol = NULL;
+          }
+        }
+
   // return isSgFunctionSymbol(func_symbol);
      return func_symbol;
    }
@@ -7008,6 +7020,38 @@ SgTemplateParameter * SageBuilder::buildTemplateParameter (SgTemplateParameter::
   if (result->get_parent() == NULL) {
     if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
       result->set_parent(scope);
+    }
+  }
+  return result;
+}
+
+SgTemplateParameter *SageBuilder::buildTemplateParameter(
+    SgTemplateParameter::template_parameter_enum parameterType, SgType *t,
+    const SgName &parameterName, SgScopeStatement *scope) {
+  ROSE_ASSERT(t);
+  SgTemplateParameter *result = new SgTemplateParameter(parameterType, t);
+  ROSE_ASSERT(result);
+  setOneSourcePositionForTransformation(result);
+
+  // For non-type parameters, create an initialized name with the parameter
+  // name so it unparsed correctly (e.g., "template<int N>" instead of
+  // "template<int 0>").
+  if (parameterType == SgTemplateParameter::nontype_parameter) {
+    SgInitializedName *initName =
+        SageBuilder::buildInitializedName(parameterName, t, NULL);
+    ROSE_ASSERT(initName != NULL);
+    initName->set_parent(result);
+    if (scope != NULL) {
+      initName->set_scope(scope);
+    }
+    result->set_initializedName(initName);
+  }
+
+  if (result->get_parent() == NULL) {
+    if (scope != NULL) {
+      result->set_parent(scope);
+    } else if (SgScopeStatement *stackScope = SageBuilder::topScopeStack()) {
+      result->set_parent(stackScope);
     }
   }
   return result;

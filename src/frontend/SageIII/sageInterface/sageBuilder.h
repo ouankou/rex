@@ -515,6 +515,9 @@ ROSE_DLL_API SgTemplateType* buildTemplateType(SgName name="");
 //! Build a template parameter, passing enum kind and SgTemplateType
 //! template_parameter_enum { parameter_undefined = 0, type_parameter = 1, nontype_parameter = 2,  template_parameter = 3}
 ROSE_DLL_API SgTemplateParameter * buildTemplateParameter (SgTemplateParameter::template_parameter_enum parameterType, SgType*);
+ROSE_DLL_API SgTemplateParameter *buildTemplateParameter(
+    SgTemplateParameter::template_parameter_enum parameterType, SgType *,
+    const SgName &parameterName, SgScopeStatement *scope);
 
 //! Build a declaration of a non-real class or class-member representing template parameters and their members
 ROSE_DLL_API SgNonrealDecl * buildNonrealDecl(const SgName & name, SgDeclarationScope * scope, SgDeclarationScope * child_scope = NULL);

@@ -18569,6 +18569,7 @@ getAssociatedDeclaration( SgScopeStatement* scope )
 
           case V_SgClassDefinition:
           case V_SgTemplateInstantiationDefn: // Liao, 5/12/2009
+          case V_SgTemplateClassDefinition:   // Template class definitions
              {
                SgClassDefinition* classDefinition = isSgClassDefinition(scope);
                declaration = classDefinition->get_declaration();
