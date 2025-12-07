@@ -2472,9 +2472,15 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
       }
 
       // Insert symbol (for the forward decl/type)
-      if (!scope->symbol_exists(name)) {
+      // ROOT CAUSE FIX: Use full mangled name for symbol table to avoid
+      // conflicts between specializations (e.g. MyTemplate_int vs
+      // MyTemplate_double)
+      SgName symbol_name =
+          inst_name_full.empty() ? name : SgName(inst_name_full);
+
+      if (!scope->symbol_exists(symbol_name)) {
         SgClassSymbol *class_symbol = new SgClassSymbol(instantiationDecl);
-        scope->insert_symbol(name, class_symbol);
+        scope->insert_symbol(symbol_name, class_symbol);
       }
     } else {
       // We found an existing declaration, so we don't create a new non-defining
