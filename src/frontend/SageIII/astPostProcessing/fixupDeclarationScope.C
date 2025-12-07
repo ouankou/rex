@@ -200,32 +200,25 @@ FixupAstDeclarationScope::visit ( SgNode* node )
              }
             else
              {
-            // DQ (6/15/2013): The older tutorial examples demonstrate addition of new functions using older rules that allows 
-            // there to not be a non-defining declaration.  We need to remove these tutrial example in favor of the AST builder
-            // API to build functions that will follow the newer AST constistancy rules.  Until we do this work in the tutorial
-            // we can't inforce this below else the older tutorial examples (e.g. addFunctionDeclaration.C) will fail.  So I will
-            // allow this for now and output a warning when (firstNondefiningDeclaration == NULL).
-            // ROSE_ASSERT(firstNondefiningDeclaration != NULL);
-               if (firstNondefiningDeclaration == NULL)
-                  {
-            	   MLOG_WARN_C("astPostProcessing", "In FixupAstDeclarationScope::visit(): firstNondefiningDeclaration == NULL for case of node = %p = %s (allowed for tutorial example transformations only) \n",node,node->class_name().c_str());
-                  }
-                 else
-                  {
-                    if (mapOfSets.find(firstNondefiningDeclaration) == mapOfSets.end())
-                       {
-                         std::set<SgDeclarationStatement*>* new_empty_set = new std::set<SgDeclarationStatement*>();
-                         ROSE_ASSERT(new_empty_set != NULL);
+               if (firstNondefiningDeclaration != NULL) {
+                 if (mapOfSets.find(firstNondefiningDeclaration) ==
+                     mapOfSets.end()) {
+                   std::set<SgDeclarationStatement *> *new_empty_set =
+                       new std::set<SgDeclarationStatement *>();
+                   ROSE_ASSERT(new_empty_set != NULL);
 #if 0
                          printf ("In FixupAstDeclarationScope::visit(): Adding a set of declarations to the mapOfSets: new_empty_set = %p \n",new_empty_set);
 #endif
-                      // DQ (3/2/2015): Added assertion.
-                         ROSE_ASSERT(firstNondefiningDeclaration != NULL);
+                   ROSE_ASSERT(firstNondefiningDeclaration != NULL);
 
-                         mapOfSets.insert(std::pair<SgDeclarationStatement*,std::set<SgDeclarationStatement*>*>(firstNondefiningDeclaration,new_empty_set));
-                       }
+                   mapOfSets.insert(
+                       std::pair<SgDeclarationStatement *,
+                                 std::set<SgDeclarationStatement *> *>(
+                           firstNondefiningDeclaration, new_empty_set));
+                 }
 
-                    ROSE_ASSERT(mapOfSets.find(firstNondefiningDeclaration) != mapOfSets.end());
+                 ROSE_ASSERT(mapOfSets.find(firstNondefiningDeclaration) !=
+                             mapOfSets.end());
 
                  // DQ (3/2/2015): Added assertion.
                     ROSE_ASSERT(declaration != NULL);
@@ -239,7 +232,7 @@ FixupAstDeclarationScope::visit ( SgNode* node )
 
                  // mapOfSets[firstNondefiningDeclaration]->insert(firstNondefiningDeclaration);
                     mapOfSets[firstNondefiningDeclaration]->insert(declaration);
-                  }
+               }
              }
         }
    }

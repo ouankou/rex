@@ -9,8 +9,6 @@ list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
 
 set(ROSE_FLAGS
   --edg:no_warnings -w -rose:verbose 0
-  -rose:skip_unparse_asm_commands
-  -rose:skip_unparse_cc_commands
   -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
   )
 
