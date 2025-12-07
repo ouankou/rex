@@ -25,33 +25,92 @@ namespace {
         return result;
     }
 
+    } // namespace
+
     // Generate unique name for template instantiation
     // Note: Must not contain < > characters for ROSE mangling
-    std::string mangleTemplateInstantiation(
-        const std::string& template_name,
-        const clang::TemplateSpecializationType* spec_type) {
-        std::string result = template_name + "_";
-        auto args = spec_type->template_arguments();
-        bool first = true;
-        for (const clang::TemplateArgument& arg : args) {
-            if (!first) result += "_";
-            first = false;
+    std::string ClangToSageTranslator::getTemplateQualifiedName(
+        SgTemplateClassDeclaration *template_decl) {
+      std::string template_base_name = template_decl->get_name().getString();
+      std::string template_qualified_name = template_base_name;
 
-            std::string arg_str;
-            llvm::raw_string_ostream arg_stream(arg_str);
-            arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream, true);
-            arg_stream.flush();
-
-            // Replace special characters that can't be in mangled names
-            for (char& c : arg_str) {
-                if (c == '<' || c == '>' || c == ',' || c == ' ' || c == ':' || c == '*' || c == '&') {
-                    c = '_';
-                }
-            }
-            result += arg_str;
+      SgScopeStatement *decl_scope = template_decl->get_scope();
+      while (decl_scope && !isSgGlobal(decl_scope)) {
+        if (SgNamespaceDefinitionStatement *ns_def =
+                isSgNamespaceDefinitionStatement(decl_scope)) {
+          SgNamespaceDeclarationStatement *ns_decl =
+              ns_def->get_namespaceDeclaration();
+          template_qualified_name =
+              ns_decl->get_name().getString() + "::" + template_qualified_name;
+        } else if (SgClassDefinition *class_def =
+                       isSgClassDefinition(decl_scope)) {
+          SgClassDeclaration *class_decl = class_def->get_declaration();
+          template_qualified_name = class_decl->get_name().getString() +
+                                    "::" + template_qualified_name;
         }
-        return result;
+        decl_scope = decl_scope->get_scope();
+      }
+      return template_qualified_name;
     }
+
+    std::string ClangToSageTranslator::mangleTemplateInstantiation(
+        const std::string &template_name,
+        const clang::TemplateSpecializationType *spec_type) {
+      std::string result = template_name + "_";
+      auto args = spec_type->template_arguments();
+      bool first = true;
+      for (const clang::TemplateArgument &arg : args) {
+        if (!first)
+          result += "_";
+        first = false;
+
+        std::string arg_str;
+        llvm::raw_string_ostream arg_stream(arg_str);
+        arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
+                  true);
+        arg_stream.flush();
+
+        // Replace special characters that can't be in mangled names
+        for (char &c : arg_str) {
+          if (c == '<' || c == '>' || c == ',' || c == ' ' || c == ':' ||
+              c == '*' || c == '&') {
+            c = '_';
+          }
+        }
+        result += arg_str;
+      }
+      return result;
+    }
+
+    std::string ClangToSageTranslator::mangleTemplateInstantiation(
+        const std::string &template_name,
+        const clang::TemplateArgumentList &args) {
+      std::string result = template_name + "_";
+      bool first = true;
+      for (unsigned i = 0; i < args.size(); ++i) {
+        const clang::TemplateArgument &arg = args.get(i);
+        if (!first)
+          result += "_";
+        first = false;
+
+        std::string arg_str;
+        llvm::raw_string_ostream arg_stream(arg_str);
+        arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
+                  true);
+        arg_stream.flush();
+
+        for (char &c : arg_str) {
+          if (c == '<' || c == '>' || c == ',' || c == ' ' || c == ':' ||
+              c == '*' || c == '&') {
+            c = '_';
+          }
+        }
+        result += arg_str;
+      }
+      return result;
+    }
+
+    namespace {
 
     void diagnose_null_scope(SgDeclarationStatement *decl,
                              const char *context) {
@@ -61,9 +120,7 @@ namespace {
                   "Declaration %s (%p) created with NULL scope in %s\n",
                   decl->class_name().c_str(), decl, context);
     }
-} // anonymous namespace
-
-
+    } // anonymous namespace
 
 SgType * ClangToSageTranslator::buildTypeFromQualifiedType(const clang::QualType & qual_type) {
     SgNode * tmp_type = Traverse(qual_type.getTypePtr());
@@ -1383,21 +1440,8 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
 
     // ROOT CAUSE FIX: Check if template declaration has namespace qualification stored
     // Use qualified name (e.g., "std::array") for instantiation name instead of just base name
-    std::string template_qualified_name = template_base_name;
-    
-    // Manually construct qualified name from scope hierarchy
-    // The globalQualifiedNameMapForTypes is not populated yet during AST construction
-    SgScopeStatement* decl_scope = template_decl->get_scope();
-    while (decl_scope && !isSgGlobal(decl_scope)) {
-        if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(decl_scope)) {
-            SgNamespaceDeclarationStatement* ns_decl = ns_def->get_namespaceDeclaration();
-            template_qualified_name = ns_decl->get_name().getString() + "::" + template_qualified_name;
-        } else if (SgClassDefinition* class_def = isSgClassDefinition(decl_scope)) {
-            SgClassDeclaration* class_decl = class_def->get_declaration();
-            template_qualified_name = class_decl->get_name().getString() + "::" + template_qualified_name;
-        }
-        decl_scope = decl_scope->get_scope();
-    }
+    std::string template_qualified_name =
+        getTemplateQualifiedName(template_decl);
 
     // Use qualified name in cache key to avoid namespace collisions
     // Example: "std::array<int>" and "my_ns::array<int>" must have different cache keys

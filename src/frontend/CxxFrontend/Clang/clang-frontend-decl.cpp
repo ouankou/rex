@@ -2399,19 +2399,45 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
     SgTemplateInstantiationDecl *instantiationDecl = NULL;
     SgTemplateInstantiationDecl *firstNondefiningDeclaration = NULL;
 
-    // Check for existing symbol in the scope
-    SgSymbol *existing_symbol = scope->lookup_symbol(name);
-    if (existing_symbol) {
-      SgClassSymbol *class_symbol = isSgClassSymbol(existing_symbol);
-      if (class_symbol) {
-        SgClassDeclaration *existing_decl = class_symbol->get_declaration();
-        firstNondefiningDeclaration =
-            isSgTemplateInstantiationDecl(existing_decl);
+    // Traverse the specialized template to ensure it exists in the AST and we
+    // have the ROSE node
+    SgTemplateClassDeclaration *primary_template_decl = NULL;
+    if (specialized_template) {
+      SgNode *primary_node = Traverse(specialized_template);
+      primary_template_decl = isSgTemplateClassDeclaration(primary_node);
+    }
+
+    // ROOT CAUSE FIX: Check instantiation cache first
+    // This connects explicit specializations to the same nodes used by implicit
+    // instantiations
+    std::string inst_name_full;
+    if (primary_template_decl) {
+      std::string template_qualified_name =
+          getTemplateQualifiedName(primary_template_decl);
+      inst_name_full = mangleTemplateInstantiation(
+          template_qualified_name, class_tpl_spec_decl->getTemplateArgs());
+
+      auto cache_it = p_template_inst_cache.find(inst_name_full);
+      if (cache_it != p_template_inst_cache.end()) {
+        firstNondefiningDeclaration = cache_it->second;
+      }
+    }
+
+    // Check for existing symbol in the scope if not found in cache
+    if (firstNondefiningDeclaration == NULL) {
+      SgSymbol *existing_symbol = scope->lookup_symbol(name);
+      if (existing_symbol) {
+        SgClassSymbol *class_symbol = isSgClassSymbol(existing_symbol);
+        if (class_symbol) {
+          SgClassDeclaration *existing_decl = class_symbol->get_declaration();
+          firstNondefiningDeclaration =
+              isSgTemplateInstantiationDecl(existing_decl);
 #if 0
-            if (firstNondefiningDeclaration) {
-                std::cout << "Reuse existing SgTemplateInstantiationDecl: " << firstNondefiningDeclaration << " name: " << firstNondefiningDeclaration->get_name().getString() << std::endl;
-            }
+                if (firstNondefiningDeclaration) {
+                    std::cout << "Reuse existing SgTemplateInstantiationDecl: " << firstNondefiningDeclaration << " name: " << firstNondefiningDeclaration->get_name().getString() << std::endl;
+                }
 #endif
+        }
       }
     }
 
@@ -2421,6 +2447,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
 
       instantiationDecl = new SgTemplateInstantiationDecl(
           name, class_kind, NULL, NULL, NULL, forward_args);
+
+      // Register in cache immediately
+      p_template_inst_cache[inst_name_full] = instantiationDecl;
 
       firstNondefiningDeclaration = instantiationDecl;
       instantiationDecl->set_firstNondefiningDeclaration(
@@ -2459,13 +2488,6 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
     // check it
     if (instantiationDecl->get_templateDeclaration() == NULL) {
       // Link to the primary template declaration
-      // Traverse the specialized template to ensure it exists in the AST
-      SgTemplateClassDeclaration *primary_template_decl = NULL;
-      if (specialized_template) {
-        SgNode *primary_node = Traverse(specialized_template);
-        primary_template_decl = isSgTemplateClassDeclaration(primary_node);
-      }
-
       if (primary_template_decl) {
         instantiationDecl->set_templateDeclaration(primary_template_decl);
       }
