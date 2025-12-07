@@ -400,6 +400,22 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         SgTemplateParameterPtrList* buildTemplateParameters(
             const clang::TemplateSpecializationType* clang_type);
 
+        // Helper: Get qualified name for a template declaration (e.g.,
+        // "std::array")
+        std::string
+        getTemplateQualifiedName(SgTemplateClassDeclaration *template_decl);
+
+        // Helper: Generate mangled name for instantiation cache key
+        std::string mangleTemplateInstantiation(
+            const std::string &template_name,
+            const clang::TemplateSpecializationType *spec_type);
+
+        // Helper: Generate mangled name for instantiation cache key (overload
+        // for declarations)
+        std::string
+        mangleTemplateInstantiation(const std::string &template_name,
+                                    const clang::TemplateArgumentList &args);
+
         // Helper: Translate template parameter lists on declarations
         SgTemplateParameter* translateTemplateParameter(
             clang::NamedDecl* param_decl,
