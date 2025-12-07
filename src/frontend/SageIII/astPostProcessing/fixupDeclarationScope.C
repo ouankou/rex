@@ -208,7 +208,12 @@ FixupAstDeclarationScope::visit ( SgNode* node )
             // ROSE_ASSERT(firstNondefiningDeclaration != NULL);
                if (firstNondefiningDeclaration == NULL)
                   {
-            	   MLOG_WARN_C("astPostProcessing", "In FixupAstDeclarationScope::visit(): firstNondefiningDeclaration == NULL for case of node = %p = %s (allowed for tutorial example transformations only) \n",node,node->class_name().c_str());
+                 MLOG_WARN_C(
+                     "astPostProcessing",
+                     "In FixupAstDeclarationScope::visit(): "
+                     "firstNondefiningDeclaration == NULL for case of node = "
+                     "%p = %s (declaration chain is incomplete)\n",
+                     node, node->class_name().c_str());
                   }
                  else
                   {

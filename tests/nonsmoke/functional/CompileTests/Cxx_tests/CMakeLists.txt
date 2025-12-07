@@ -23,3 +23,11 @@ endif()
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
 endforeach()
+
+add_test(
+  NAME Cxx_tests_test_issue6_specialization
+  COMMAND ${translator}
+    -rose:verbose 0
+    -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test_issue6_specialization.cpp)
+set_tests_properties(Cxx_tests_test_issue6_specialization PROPERTIES LABELS "Cxx_tests")

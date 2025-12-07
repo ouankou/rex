@@ -553,15 +553,28 @@ SgInitializedName::asm_register_name_enum ClangToSageTranslator::get_sgAsmRegist
 
 std::string ClangToSageTranslator::generate_source_position_string(clang::SourceLocation srcLoc)
 {
+  if (!srcLoc.isValid()) {
+    return "0x0_0_0";
+  }
+
   clang::SourceManager& SM = p_compiler_instance->getSourceManager();
   clang::FileID fID = SM.getFileID(srcLoc);
-  const clang::FileEntry* fEntry = SM.getFileEntryForID(fID);
-  std::string return_string;
+  const clang::FileEntry *fEntry = SM.getFileEntryForID(fID);
 
-//  return_string = string("0x") + StringUtility::numberToString(file_id) + "_" + StringUtility::numberToString(line_number) + "_" + StringUtility::numberToString(column_number);
-  return_string = std::string("0x") + std::to_string(fEntry->getUID()) + "_" + std::to_string(SM.getSpellingLineNumber(srcLoc)) + "_" + std::to_string(SM.getSpellingColumnNumber(srcLoc));
-  return return_string;
+  unsigned uid = 0;
+  if (fEntry != NULL) {
+    uid = fEntry->getUID();
+  }
 
+  unsigned line = 0;
+  unsigned column = 0;
+  // These accessors are safe for valid SourceLocations even when the FileEntry
+  // is missing
+  line = SM.getSpellingLineNumber(srcLoc);
+  column = SM.getSpellingColumnNumber(srcLoc);
+
+  return std::string("0x") + std::to_string(uid) + "_" + std::to_string(line) +
+         "_" + std::to_string(column);
 }
 
 

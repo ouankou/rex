@@ -1297,53 +1297,248 @@ ClangToSageTranslator::buildTemplateArguments(
                 SgExpression* value_expr = buildIntegralTemplateArgExpr(value, int_type);
 
                 sg_arg = new SgTemplateArgument(
-                    SgTemplateArgument::nontype_argument,
-                    value_expr,
-                    int_type,
-                    nullptr, nullptr, false
-                );
-                
+                    SgTemplateArgument::nontype_argument, false, int_type,
+                    value_expr, nullptr, false);
+
                 // DEBUG
                 // if (sg_arg) std::cerr << "DEBUG: Created SgTemplateArgument for integral" << std::endl;
                 break;
             }
 
+            case clang::TemplateArgument::Declaration: {
+              clang::ValueDecl *value_decl = arg.getAsDecl();
+              clang::QualType param_qt = arg.getParamTypeForDecl();
+              SgType *param_type = buildTypeFromQualifiedType(param_qt);
+
+              SgInitializedName *init_name = nullptr;
+              SgExpression *expr = nullptr;
+              SgNode *sg_decl = nullptr;
+
+              if (value_decl) {
+                sg_decl = Traverse(value_decl);
+                init_name = isSgInitializedName(sg_decl);
+
+                if (init_name == nullptr) {
+                  auto it_map = p_decl_translation_map.find(value_decl);
+                  if (it_map != p_decl_translation_map.end()) {
+                    init_name = isSgInitializedName(it_map->second);
+                    if (init_name == nullptr) {
+                      if (auto *var_decl =
+                              isSgVariableDeclaration(it_map->second)) {
+                        if (!var_decl->get_variables().empty()) {
+                          init_name = var_decl->get_variables()[0];
+                        }
+                      }
+                    }
+                  }
+                }
+
+                if (init_name) {
+                  expr = SageBuilder::buildVarRefExp(init_name);
+                  if (param_qt->isPointerType() ||
+                      param_qt->isMemberPointerType()) {
+                    expr = SageBuilder::buildAddressOfOp(expr);
+                  }
+                } else if (clang::FunctionDecl *func_decl =
+                               llvm::dyn_cast<clang::FunctionDecl>(
+                                   value_decl)) {
+                  SgNode *func_node = sg_decl ? sg_decl : Traverse(func_decl);
+                  if (auto *sg_func_decl = isSgFunctionDeclaration(func_node)) {
+                    SgFunctionDeclaration *first_nondef =
+                        isSgFunctionDeclaration(
+                            sg_func_decl->get_firstNondefiningDeclaration());
+                    SgFunctionSymbol *sym = nullptr;
+                    if (first_nondef != nullptr) {
+                      sym = isSgFunctionSymbol(
+                          first_nondef->get_symbol_from_symbol_table());
+                    }
+                    if (sym == nullptr) {
+                      sym = isSgFunctionSymbol(
+                          sg_func_decl->get_symbol_from_symbol_table());
+                    }
+                    if (sym != nullptr) {
+                      expr = SageBuilder::buildFunctionRefExp(sym);
+                    }
+                  }
+                }
+
+                if (expr == nullptr && value_decl->getIdentifier() != nullptr) {
+                  expr = SageBuilder::buildVarRefExp(
+                      SgName(value_decl->getNameAsString()),
+                      SageBuilder::topScopeStack());
+                  if (param_qt->isPointerType() ||
+                      param_qt->isMemberPointerType()) {
+                    expr = SageBuilder::buildAddressOfOp(expr);
+                  }
+                }
+              }
+
+              sg_arg = new SgTemplateArgument(
+                  SgTemplateArgument::nontype_argument, false, param_type, expr,
+                  nullptr, false);
+              if (init_name != nullptr) {
+                sg_arg->set_initializedName(init_name);
+              }
+              sg_arg->set_type(param_type);
+              break;
+            }
+
+            case clang::TemplateArgument::NullPtr: {
+              SgType *null_type =
+                  buildTypeFromQualifiedType(arg.getNullPtrType());
+              SgExpression *null_expr = SageBuilder::buildNullExpression();
+              sg_arg = new SgTemplateArgument(
+                  SgTemplateArgument::nontype_argument, false, null_type,
+                  null_expr, nullptr, false);
+              break;
+            }
+
             case clang::TemplateArgument::Template: {
                 // Template template argument
-                clang::TemplateName template_name = arg.getAsTemplate();
+                clang::TemplateName template_name =
+                    arg.getAsTemplateOrTemplatePattern();
                 clang::TemplateDecl* template_decl = template_name.getAsTemplateDecl();
                 if (template_decl) {
                     // We need to get the declaration of the template being passed as argument
                     // For std::tuple, this should be the template declaration
-                    SgDeclarationStatement* sg_decl = (SgDeclarationStatement*)Traverse(template_decl);
-                    
-                    if (sg_decl) {
-                        if (SgTemplateClassDeclaration* class_tmpl = isSgTemplateClassDeclaration(sg_decl)) {
-                             // REX FIX: SgTemplateArgument crashes with SgTemplateClassDeclaration as template_template_argument.
-                             // Fallback to using type_argument with SgTemplateType.
-                             // SgClassType adds "class" keyword which is invalid for template template args.
-                             // SgTemplateType prints just the name.
-                             // Use qualified name to ensure "std::tuple" is printed, not just "tuple".
-                             SgName qual_name = class_tmpl->get_qualified_name();
-                             if (qual_name.getString().find("::") == std::string::npos && class_tmpl->get_scope()) {
-                                 // Fallback if get_qualified_name returns unqualified name (common in some ROSE versions)
-                                 // Manually construct qualified name if scope is namespace
-                                 if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(class_tmpl->get_scope())) {
-                                     qual_name = ns_def->get_namespaceDeclaration()->get_name().getString() + "::" + class_tmpl->get_name().getString();
-                                 }
-                             }
-                             SgType* type = SageBuilder::buildTemplateType(qual_name);
-                             sg_arg = new SgTemplateArgument(type, false);
-                        } else {
-                             sg_arg = new SgTemplateArgument(SgTemplateArgument::template_template_argument, sg_decl);
-                        }
-                    } else {
-                        std::cerr << "Warning: Failed to translate template declaration for template argument\n";
+                    SgTemplateDeclaration *templateDecl = NULL;
+                    SgNode *raw_decl = Traverse(template_decl);
+                    if (SgDeclarationStatement *sg_decl =
+                            isSgDeclarationStatement(raw_decl)) {
+                      templateDecl = isSgTemplateDeclaration(sg_decl);
                     }
+                    if (templateDecl == NULL) {
+                      auto it_map = p_decl_translation_map.find(template_decl);
+                      if (it_map != p_decl_translation_map.end()) {
+                        templateDecl = isSgTemplateDeclaration(it_map->second);
+                      }
+                    }
+                    if (templateDecl == NULL) {
+                      if (auto *class_tmpl =
+                              llvm::dyn_cast<clang::ClassTemplateDecl>(
+                                  template_decl)) {
+                        auto it_templated = p_decl_translation_map.find(
+                            class_tmpl->getTemplatedDecl());
+                        if (it_templated != p_decl_translation_map.end()) {
+                          templateDecl =
+                              isSgTemplateDeclaration(it_templated->second);
+                        } else {
+                          templateDecl = isSgTemplateDeclaration(
+                              Traverse(class_tmpl->getTemplatedDecl()));
+                        }
+                      }
+                    }
+
+                    if (templateDecl != NULL) {
+                      if (SgTemplateClassDeclaration *class_tmpl =
+                              isSgTemplateClassDeclaration(templateDecl)) {
+                        // REX FIX: SgTemplateArgument crashes with
+                        // SgTemplateClassDeclaration as
+                        // template_template_argument. Fallback to using
+                        // type_argument with SgTemplateType. SgClassType adds
+                        // "class" keyword which is invalid for template
+                        // template args. SgTemplateType prints just the name.
+                        // Use qualified name to ensure "std::tuple" is printed,
+                        // not just "tuple".
+                        SgName qual_name = class_tmpl->get_qualified_name();
+                        if (qual_name.getString().find("::") ==
+                                std::string::npos &&
+                            class_tmpl->get_scope()) {
+                          // Fallback if get_qualified_name returns unqualified
+                          // name (common in some ROSE versions) Manually
+                          // construct qualified name if scope is namespace
+                          if (SgNamespaceDefinitionStatement *ns_def =
+                                  isSgNamespaceDefinitionStatement(
+                                      class_tmpl->get_scope())) {
+                            qual_name =
+                                ns_def->get_namespaceDeclaration()
+                                    ->get_name()
+                                    .getString() +
+                                "::" + class_tmpl->get_name().getString();
+                          }
+                        }
+                        SgType *type =
+                            SageBuilder::buildTemplateType(qual_name);
+                        sg_arg = new SgTemplateArgument(type, false);
+                      } else {
+                        sg_arg = new SgTemplateArgument(
+                            SgTemplateArgument::template_template_argument,
+                            templateDecl);
+                        if (sg_arg->get_templateDeclaration() == NULL) {
+                          sg_arg->set_templateDeclaration(templateDecl);
+                        }
+                      }
+                    } else {
+                      std::cerr << "Warning: Failed to translate template "
+                                   "declaration for template argument\n";
+                    }
+                } else {
+                  std::string tmpl_name = mangleTemplateName(template_name);
+                  SgType *type =
+                      SageBuilder::buildTemplateType(SgName(tmpl_name));
+                  sg_arg = new SgTemplateArgument(type, false);
+                }
+                if (sg_arg == nullptr) {
+                  std::string tmpl_name = mangleTemplateName(template_name);
+                  SgType *type =
+                      SageBuilder::buildTemplateType(SgName(tmpl_name));
+                  sg_arg = new SgTemplateArgument(type, false);
                 }
                 break;
             }
 
+            case clang::TemplateArgument::TemplateExpansion: {
+              clang::TemplateName template_name =
+                  arg.getAsTemplateOrTemplatePattern();
+              clang::TemplateDecl *template_decl =
+                  template_name.getAsTemplateDecl();
+              if (template_decl) {
+                SgTemplateDeclaration *templateDecl = NULL;
+                SgNode *raw_decl = Traverse(template_decl);
+                if (SgDeclarationStatement *sg_decl =
+                        isSgDeclarationStatement(raw_decl)) {
+                  templateDecl = isSgTemplateDeclaration(sg_decl);
+                }
+                if (templateDecl == NULL) {
+                  auto it_map = p_decl_translation_map.find(template_decl);
+                  if (it_map != p_decl_translation_map.end()) {
+                    templateDecl = isSgTemplateDeclaration(it_map->second);
+                  }
+                }
+                if (templateDecl == NULL) {
+                  if (auto *class_tmpl =
+                          llvm::dyn_cast<clang::ClassTemplateDecl>(
+                              template_decl)) {
+                    auto it_templated = p_decl_translation_map.find(
+                        class_tmpl->getTemplatedDecl());
+                    if (it_templated != p_decl_translation_map.end()) {
+                      templateDecl =
+                          isSgTemplateDeclaration(it_templated->second);
+                    } else {
+                      templateDecl = isSgTemplateDeclaration(
+                          Traverse(class_tmpl->getTemplatedDecl()));
+                    }
+                  }
+                }
+                if (templateDecl != NULL) {
+                  sg_arg = new SgTemplateArgument(
+                      SgTemplateArgument::template_template_argument,
+                      templateDecl);
+                  if (sg_arg->get_templateDeclaration() == NULL) {
+                    sg_arg->set_templateDeclaration(templateDecl);
+                  }
+                }
+              }
+              if (sg_arg == nullptr) {
+                std::string tmpl_name = mangleTemplateName(template_name);
+                SgType *type =
+                    SageBuilder::buildTemplateType(SgName(tmpl_name));
+                sg_arg = new SgTemplateArgument(type, false);
+              }
+              break;
+            }
+
+            case clang::TemplateArgument::StructuralValue:
             case clang::TemplateArgument::Expression: {
                 // std::cerr << "DEBUG: Expression argument" << std::endl;
                 clang::Expr* clang_expr = arg.getAsExpr();
@@ -1359,12 +1554,206 @@ ClangToSageTranslator::buildTemplateArguments(
                 break;
             }
 
+            case clang::TemplateArgument::Pack: {
+              for (const clang::TemplateArgument &elem : arg.pack_elements()) {
+                SgTemplateArgumentPtrList nested;
+                // Recurse by calling buildTemplateArguments on a synthetic
+                // single-argument list? Directly handle each element using same
+                // switch via emplace-back mechanism.
+                clang::TemplateArgument::ArgKind kind = elem.getKind();
+                // Use a small helper by reusing convert logic through a lambda.
+                switch (kind) {
+                case clang::TemplateArgument::Type: {
+                  SgType *arg_type =
+                      buildTypeFromQualifiedType(elem.getAsType());
+                  nested.push_back(new SgTemplateArgument(arg_type, false));
+                  break;
+                }
+                case clang::TemplateArgument::Integral: {
+                  llvm::APSInt value = elem.getAsIntegral();
+                  SgType *int_type =
+                      buildTypeFromQualifiedType(elem.getIntegralType());
+                  SgExpression *value_expr =
+                      buildIntegralTemplateArgExpr(value, int_type);
+                  nested.push_back(new SgTemplateArgument(
+                      SgTemplateArgument::nontype_argument, false, int_type,
+                      value_expr, nullptr, false));
+                  break;
+                }
+                case clang::TemplateArgument::Declaration: {
+                  clang::ValueDecl *value_decl = elem.getAsDecl();
+                  clang::QualType param_qt = elem.getParamTypeForDecl();
+                  SgType *param_type = buildTypeFromQualifiedType(param_qt);
+
+                  SgInitializedName *init_name = nullptr;
+                  SgExpression *expr = nullptr;
+                  SgNode *sg_decl = nullptr;
+
+                  if (value_decl) {
+                    sg_decl = Traverse(value_decl);
+                    init_name = isSgInitializedName(sg_decl);
+                    if (init_name == nullptr) {
+                      auto it_map = p_decl_translation_map.find(value_decl);
+                      if (it_map != p_decl_translation_map.end()) {
+                        init_name = isSgInitializedName(it_map->second);
+                        if (init_name == nullptr) {
+                          if (auto *var_decl =
+                                  isSgVariableDeclaration(it_map->second)) {
+                            if (!var_decl->get_variables().empty()) {
+                              init_name = var_decl->get_variables()[0];
+                            }
+                          }
+                        }
+                      }
+                    }
+                    if (init_name) {
+                      expr = SageBuilder::buildVarRefExp(init_name);
+                      if (param_qt->isPointerType() ||
+                          param_qt->isMemberPointerType()) {
+                        expr = SageBuilder::buildAddressOfOp(expr);
+                      }
+                    } else if (clang::FunctionDecl *func_decl =
+                                   llvm::dyn_cast<clang::FunctionDecl>(
+                                       value_decl)) {
+                      SgNode *func_node =
+                          sg_decl ? sg_decl : Traverse(func_decl);
+                      if (auto *sg_func_decl =
+                              isSgFunctionDeclaration(func_node)) {
+                        SgFunctionDeclaration *first_nondef =
+                            isSgFunctionDeclaration(
+                                sg_func_decl
+                                    ->get_firstNondefiningDeclaration());
+                        SgFunctionSymbol *sym = nullptr;
+                        if (first_nondef != nullptr) {
+                          sym = isSgFunctionSymbol(
+                              first_nondef->get_symbol_from_symbol_table());
+                        }
+                        if (sym == nullptr) {
+                          sym = isSgFunctionSymbol(
+                              sg_func_decl->get_symbol_from_symbol_table());
+                        }
+                        if (sym != nullptr) {
+                          expr = SageBuilder::buildFunctionRefExp(sym);
+                        }
+                      }
+                    }
+                    if (expr == nullptr &&
+                        value_decl->getIdentifier() != nullptr) {
+                      expr = SageBuilder::buildVarRefExp(
+                          SgName(value_decl->getNameAsString()),
+                          SageBuilder::topScopeStack());
+                      if (param_qt->isPointerType() ||
+                          param_qt->isMemberPointerType()) {
+                        expr = SageBuilder::buildAddressOfOp(expr);
+                      }
+                    }
+                  }
+
+                  SgTemplateArgument *decl_arg = new SgTemplateArgument(
+                      SgTemplateArgument::nontype_argument, false, param_type,
+                      expr, nullptr, false);
+                  if (init_name != nullptr) {
+                    decl_arg->set_initializedName(init_name);
+                  }
+                  decl_arg->set_type(param_type);
+                  if (decl_arg->get_expression() == NULL &&
+                      decl_arg->get_initializedName() == NULL) {
+                    std::cerr << "ERROR: nested nontype template argument "
+                                 "missing expression/init (kind "
+                              << elem.getKind() << ")\n";
+                  }
+                  nested.push_back(decl_arg);
+                  break;
+                }
+                case clang::TemplateArgument::NullPtr: {
+                  SgType *null_type =
+                      buildTypeFromQualifiedType(elem.getNullPtrType());
+                  SgExpression *null_expr = SageBuilder::buildNullExpression();
+                  nested.push_back(new SgTemplateArgument(
+                      SgTemplateArgument::nontype_argument, false, null_type,
+                      null_expr, nullptr, false));
+                  break;
+                }
+                case clang::TemplateArgument::Expression:
+                case clang::TemplateArgument::StructuralValue: {
+                  if (SgExpression *sg_expr =
+                          isSgExpression(Traverse(elem.getAsExpr()))) {
+                    nested.push_back(new SgTemplateArgument(sg_expr, false));
+                  }
+                  break;
+                }
+                case clang::TemplateArgument::Template:
+                case clang::TemplateArgument::TemplateExpansion: {
+                  clang::TemplateName tname =
+                      elem.getAsTemplateOrTemplatePattern();
+                  clang::TemplateDecl *tdecl = tname.getAsTemplateDecl();
+                  if (tdecl) {
+                    SgTemplateDeclaration *templateDecl = NULL;
+                    SgNode *raw_decl = Traverse(tdecl);
+                    if (SgDeclarationStatement *sg_decl =
+                            isSgDeclarationStatement(raw_decl)) {
+                      templateDecl = isSgTemplateDeclaration(sg_decl);
+                    }
+                    if (templateDecl == NULL) {
+                      auto it_map = p_decl_translation_map.find(tdecl);
+                      if (it_map != p_decl_translation_map.end()) {
+                        templateDecl = isSgTemplateDeclaration(it_map->second);
+                      }
+                    }
+                    if (templateDecl == NULL) {
+                      if (auto *class_tmpl =
+                              llvm::dyn_cast<clang::ClassTemplateDecl>(tdecl)) {
+                        auto it_templated = p_decl_translation_map.find(
+                            class_tmpl->getTemplatedDecl());
+                        if (it_templated != p_decl_translation_map.end()) {
+                          templateDecl =
+                              isSgTemplateDeclaration(it_templated->second);
+                        } else {
+                          templateDecl = isSgTemplateDeclaration(
+                              Traverse(class_tmpl->getTemplatedDecl()));
+                        }
+                      }
+                    }
+                    if (templateDecl != NULL) {
+                      SgTemplateArgument *tmpl_arg = new SgTemplateArgument(
+                          SgTemplateArgument::template_template_argument,
+                          templateDecl);
+                      tmpl_arg->set_templateDeclaration(templateDecl);
+                      nested.push_back(tmpl_arg);
+                    }
+                  } else {
+                    std::string tmpl_name = mangleTemplateName(tname);
+                    SgType *type =
+                        SageBuilder::buildTemplateType(SgName(tmpl_name));
+                    nested.push_back(new SgTemplateArgument(type, false));
+                  }
+                  break;
+                }
+                default:
+                  break;
+                }
+                for (SgTemplateArgument *nested_arg : nested) {
+                  arg_list.push_back(nested_arg);
+                }
+              }
+              sg_arg = nullptr; // Pack already expanded into arg_list
+              break;
+            }
+
             default:
                 std::cerr << "Warning: Unsupported template argument kind: " << arg.getKind() << "\n";
                 continue;
         }
 
         if (sg_arg) {
+          if (sg_arg->get_argumentType() ==
+                  SgTemplateArgument::nontype_argument &&
+              sg_arg->get_expression() == NULL &&
+              sg_arg->get_initializedName() == NULL) {
+            std::cerr << "ERROR: built nontype template argument without "
+                         "expression/init (kind "
+                      << arg.getKind() << ")\n";
+          }
             arg_list.push_back(sg_arg);
         }
     }
@@ -1501,6 +1890,26 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // The qualified name is in the declaration name above
     // NameQualificationTraversal will add the necessary qualification (e.g. "std::")
     inst_decl->set_templateName(SgName(template_base_name));
+
+    // Sanity check: ensure non-type arguments carry an expression or
+    // initialized name
+    {
+      int arg_index = 0;
+      for (SgTemplateArgument *arg : inst_decl->get_templateArguments()) {
+        if (arg != NULL &&
+            arg->get_argumentType() == SgTemplateArgument::nontype_argument) {
+          if (arg->get_expression() == NULL &&
+              arg->get_initializedName() == NULL) {
+            std::cerr << "ERROR: template instantiation '"
+                      << inst_decl->get_name().getString()
+                      << "' has empty nontype argument at index " << arg_index
+                      << "\n";
+            ROSE_ABORT();
+          }
+        }
+        ++arg_index;
+      }
+    }
 
     // Create class type pointing to this instantiation
     class_type = SgClassType::createType(inst_decl);
