@@ -4336,6 +4336,7 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
      optionCount = sla(argv, "-rose:", "($)", "(read_instructions_only)",1);
 
      optionCount = sla(argv, "-rose:", "($)", "(skip_unparse_asm_commands)",1);
+     optionCount = sla(argv, "-rose:", "($)", "(skip_unparse_cc_commands)",1);
 
   // DQ (8/26/2007): Disassembly support from segments (true) instead of sections (false, default).
      optionCount = sla(argv, "-rose:", "($)", "(aggressive)",1);
