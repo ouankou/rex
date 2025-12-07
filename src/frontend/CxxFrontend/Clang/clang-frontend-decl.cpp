@@ -2392,123 +2392,147 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
       }
     };
 
-    SgTemplateArgumentPtrList forward_args;
-    build_args(forward_args);
+    // Implement Two-Declaration Pattern for consistency
+    // Always create a non-defining declaration (forward decl) and a defining
+    // declaration if this is a definition.
 
-    // Create the Forward Declaration (Non-Defining)
-    SgTemplateInstantiationDecl *forward_decl = new SgTemplateInstantiationDecl(
-        name, class_kind, NULL, NULL, NULL, forward_args);
-    forward_decl->set_scope(scope);
-    forward_decl->set_parent(scope);
-    forward_decl->set_templateName(name);
+    SgTemplateInstantiationDecl *instantiationDecl = NULL;
+    SgTemplateInstantiationDecl *firstNondefiningDeclaration = NULL;
 
-    for (SgTemplateArgument *arg : forward_args) {
-      arg->set_parent(forward_decl);
-    }
-
-    forward_decl->set_firstNondefiningDeclaration(forward_decl);
-    forward_decl->set_definingDeclaration(NULL);
-    forward_decl->setForward();
-
-    // Set type for forward decl
-    SgClassType *class_type = SgClassType::createType(forward_decl);
-    forward_decl->set_type(class_type);
-
-    // Link to primary template
-    if (specialized_template) {
-      auto it = p_decl_translation_map.find(specialized_template);
-      if (it == p_decl_translation_map.end()) {
-        // Ensure primary template is translated
-        Traverse(specialized_template);
-        it = p_decl_translation_map.find(specialized_template);
-      }
-
-      if (it != p_decl_translation_map.end()) {
-        if (SgTemplateClassDeclaration *primary_decl =
-                isSgTemplateClassDeclaration(it->second)) {
-          forward_decl->set_templateDeclaration(primary_decl);
-        }
-      } else {
-        std::cerr << "Warning: Could not translate primary template for "
-                     "specialization: "
-                  << name.getString() << std::endl;
+    // Check for existing symbol in the scope
+    SgSymbol *existing_symbol = scope->lookup_symbol(name);
+    if (existing_symbol) {
+      SgClassSymbol *class_symbol = isSgClassSymbol(existing_symbol);
+      if (class_symbol) {
+        SgClassDeclaration *existing_decl = class_symbol->get_declaration();
+        firstNondefiningDeclaration =
+            isSgTemplateInstantiationDecl(existing_decl);
+#if 0
+            if (firstNondefiningDeclaration) {
+                std::cout << "Reuse existing SgTemplateInstantiationDecl: " << firstNondefiningDeclaration << " name: " << firstNondefiningDeclaration->get_name().getString() << std::endl;
+            }
+#endif
       }
     }
 
-    applySourceRange(forward_decl, class_tpl_spec_decl->getSourceRange());
+    if (firstNondefiningDeclaration == NULL) {
+      SgTemplateArgumentPtrList forward_args;
+      build_args(forward_args);
 
-    // Determine which declaration to return and cache
-    SgTemplateInstantiationDecl *result_decl = forward_decl;
+      instantiationDecl = new SgTemplateInstantiationDecl(
+          name, class_kind, NULL, NULL, NULL, forward_args);
 
-    // If this is a definition, create the Defining Declaration
-    if (class_tpl_spec_decl->isThisDeclarationADefinition()) {
+      firstNondefiningDeclaration = instantiationDecl;
+      instantiationDecl->set_firstNondefiningDeclaration(
+          firstNondefiningDeclaration);
+      instantiationDecl->set_definingDeclaration(NULL);
+      instantiationDecl->set_forward(true);
+      instantiationDecl->set_templateName(name);
+
+      SgClassType *type = SgClassType::createType(instantiationDecl);
+      instantiationDecl->set_type(type);
+
+      // setStatementSourcePosition(instantiationDecl, class_tpl_spec_decl);
+      applySourceRange(instantiationDecl,
+                       class_tpl_spec_decl->getSourceRange());
+      instantiationDecl->set_scope(scope);
+      instantiationDecl->set_parent(scope);
+
+      for (SgTemplateArgument *arg : forward_args) {
+        arg->set_parent(instantiationDecl);
+      }
+
+      // Insert symbol (for the forward decl/type)
+      if (!scope->symbol_exists(name)) {
+        SgClassSymbol *class_symbol = new SgClassSymbol(instantiationDecl);
+        scope->insert_symbol(name, class_symbol);
+      }
+    } else {
+      // We found an existing declaration, so we don't create a new non-defining
+      // one.
+      instantiationDecl = firstNondefiningDeclaration;
+      // setStatementSourcePosition(instantiationDecl, class_tpl_spec_decl); //
+      // Don't reset position of reused decl
+    }
+
+    // Set specialized template for the non-defining declaration (if new) or
+    // check it
+    if (instantiationDecl->get_templateDeclaration() == NULL) {
+      // Link to the primary template declaration
+      // Traverse the specialized template to ensure it exists in the AST
+      SgTemplateClassDeclaration *primary_template_decl = NULL;
+      if (specialized_template) {
+        SgNode *primary_node = Traverse(specialized_template);
+        primary_template_decl = isSgTemplateClassDeclaration(primary_node);
+      }
+
+      if (primary_template_decl) {
+        instantiationDecl->set_templateDeclaration(primary_template_decl);
+      }
+    }
+
+    bool isDef = class_tpl_spec_decl->isThisDeclarationADefinition();
+    if (isDef) {
       SgTemplateArgumentPtrList defining_args;
       build_args(defining_args);
 
-      SgTemplateInstantiationDecl *defining_decl =
+      // Create defining declaration
+      SgTemplateInstantiationDecl *definingDecl =
           new SgTemplateInstantiationDecl(name, class_kind, NULL, NULL, NULL,
                                           defining_args);
-      defining_decl->set_scope(scope);
-      defining_decl->set_parent(scope);
-      defining_decl->set_templateName(name);
-      defining_decl->set_type(
-          class_type); // Share the type? Or create new? Usually share.
+
+      // Link defining and non-defining declarations
+      definingDecl->set_firstNondefiningDeclaration(
+          firstNondefiningDeclaration);
+      firstNondefiningDeclaration->set_definingDeclaration(definingDecl);
+      definingDecl->set_definingDeclaration(definingDecl);
+
+      // This is a definition
+      definingDecl->set_forward(false);
+      definingDecl->set_templateName(name);
+      definingDecl->set_type(firstNondefiningDeclaration->get_type());
+
+      // setStatementSourcePosition(definingDecl, class_tpl_spec_decl);
+      applySourceRange(definingDecl, class_tpl_spec_decl->getSourceRange());
+      definingDecl->set_scope(scope);
+      definingDecl->set_parent(scope);
 
       for (SgTemplateArgument *arg : defining_args) {
-        arg->set_parent(defining_decl);
+        arg->set_parent(definingDecl);
       }
 
-      // Linkage
-      defining_decl->set_firstNondefiningDeclaration(forward_decl);
-      defining_decl->set_definingDeclaration(defining_decl);
-
-      forward_decl->set_definingDeclaration(defining_decl);
-
       // Copy primary template link
-      defining_decl->set_templateDeclaration(
-          forward_decl->get_templateDeclaration());
-
-      applySourceRange(defining_decl, class_tpl_spec_decl->getSourceRange());
+      definingDecl->set_templateDeclaration(
+          firstNondefiningDeclaration->get_templateDeclaration());
 
       // Build definition body
       SgTemplateInstantiationDefn *class_def =
-          new SgTemplateInstantiationDefn(defining_decl);
-      defining_decl->set_definition(class_def);
-      class_def->set_parent(defining_decl);
+          new SgTemplateInstantiationDefn(definingDecl);
+      definingDecl->set_definition(class_def);
+      class_def->set_parent(definingDecl);
+      // setStatementSourcePosition(class_def, class_tpl_spec_decl);
       applySourceRange(class_def, class_tpl_spec_decl->getSourceRange());
 
-      // Cache the defining declaration BEFORE populating members to avoid
-      // infinite recursion
-      p_decl_translation_map.insert(
-          std::make_pair(class_tpl_spec_decl, defining_decl));
+      instantiationDecl = definingDecl; // Return the defining declaration
+    }
 
-      // Populate members
-      SageBuilder::pushScopeStack(class_def);
-      populateClassDefinition(class_tpl_spec_decl, class_def);
+    // Ensure we return the correct node
+    *node = instantiationDecl;
+    p_decl_translation_map.insert(
+        std::pair<clang::Decl *, SgNode *>(class_tpl_spec_decl, *node));
+
+    // Process scope stack and children if it is a definition
+    if (isDef) {
+      SageBuilder::pushScopeStack(
+          isSgScopeStatement(instantiationDecl->get_definition()));
+
+      populateClassDefinition(
+          class_tpl_spec_decl,
+          isSgClassDefinition(instantiationDecl->get_definition()));
+
       SageBuilder::popScopeStack();
-
-      result_decl = defining_decl;
-
-    } else {
-      // Cache forward declaration
-      p_decl_translation_map.insert(
-          std::make_pair(class_tpl_spec_decl, result_decl));
     }
 
-    // Insert symbol (for the forward decl/type)
-    if (!scope->symbol_exists(name)) {
-      SgClassSymbol *class_symbol = new SgClassSymbol(forward_decl);
-      scope->insert_symbol(name, class_symbol);
-    }
-
-    // Sanity check
-    ROSE_ASSERT(result_decl->get_firstNondefiningDeclaration() != NULL);
-    if (result_decl->get_definingDeclaration()) {
-      ROSE_ASSERT(result_decl->get_firstNondefiningDeclaration() !=
-                  result_decl->get_definingDeclaration());
-    }
-
-    *node = result_decl;
     return true;
 }
 
