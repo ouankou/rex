@@ -799,6 +799,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2011_30.C
   test2011_31.C
   test2025_issue83.cpp
+  test2025_issue83_redeclarations.cpp
   test2011_32.C
   test2011_33.C
   test2011_34.C
