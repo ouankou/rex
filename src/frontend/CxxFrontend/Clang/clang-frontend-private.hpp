@@ -426,6 +426,11 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             clang::TemplateParameterList* param_list,
             SgDeclarationStatement* owning_template);
 
+        bool
+        translateFunctionDeclCommon(clang::FunctionDecl *function_decl,
+                                    clang::FunctionTemplateDecl *template_decl,
+                                    SgNode **node);
+
         void populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def);
         struct CapturedPragma;
         bool collectOpenMPPragmas(clang::Stmt* stmt, std::vector<CapturedPragma>& pragmas);
