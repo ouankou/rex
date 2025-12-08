@@ -1601,15 +1601,26 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(clang::FunctionTemplateDec
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitFunctionTemplateDecl" << std::endl;
 #endif
-    if (function_template_decl != nullptr) {
-        // REX FIX: Traverse the templated declaration (FunctionDecl) which will now create
-        // a SgTemplateFunctionDeclaration if it detects it is a template pattern.
-        // We return that node so it is mapped to the FunctionTemplateDecl as well.
-        *node = Traverse(function_template_decl->getTemplatedDecl());
-    } else {
-        *node = NULL;
+    if (function_template_decl == NULL) {
+      *node = NULL;
+      return false;
     }
-    return true;
+
+    clang::FunctionDecl *templated_decl =
+        function_template_decl->getTemplatedDecl();
+    if (templated_decl == NULL) {
+      *node = NULL;
+      return false;
+    }
+
+    bool res = translateFunctionDeclCommon(templated_decl,
+                                           function_template_decl, node);
+
+    if (res && *node != NULL) {
+      p_decl_translation_map.insert(std::make_pair(templated_decl, *node));
+    }
+
+    return res;
 }
 
 bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(clang::TypeAliasTemplateDecl * type_alias_template_decl, SgNode ** node) {
@@ -2172,36 +2183,6 @@ static SgExpression *buildIntegralTemplateArgExpr(const llvm::APSInt &value,
 
   return expr;
 }
-
-// Helper to translate single template argument
-// Requires access to ClangToSageTranslator methods (buildTypeFromQualifiedType,
-// Traverse) Since those are protected/private, we can't easily make a
-// standalone static helper unless we use friend or accessors. However,
-// buildTypeFromQualifiedType is protected. Wait, Traverse is public.
-// buildTypeFromQualifiedType is protected. ClangToSageTranslator* trans is
-// passed.
-//
-// Use a macro or simple static function if we can access protected members.
-// Actually, buildTypeFromQualifiedType is protected. We can't call it from a
-// static function unless it's a member or friend. But we are in
-// clang-frontend-decl.cpp, which implements methods of ClangToSageTranslator.
-// We can make translateTemplateArgument a member function if we add it to the
-// header. But we want to avoid header modification.
-//
-// Alternative: We can cast to a subclass exposing the protected member? No
-// that's hacky. Or we can invoke VisitType on the QualType? VisitType takes
-// SgNode**.
-//
-// Let's implement it inside the VisitClassTemplateSpecializationDecl method or
-// carefully use what we have.
-//
-// Actually, for buildTypeFromQualifiedType, we can try to assume it's available
-// or use public API if possible.
-//
-// Wait, define a static helper inside the *file* doesn't give it access to
-// protected members of the class. BUT, ClangToSageTranslator *is* the class. We
-// are implementing a member function. We can add a helper using lambda inside
-// the method? Or just inline the loop. The loop is not that huge.
 
 bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTemplateSpecializationDecl * class_tpl_spec_decl, SgNode ** node) {
   // Ensure we handle Partial Specializations separately (fallback to
@@ -3281,7 +3262,9 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl * field_decl, SgNode
     return VisitDeclaratorDecl(field_decl, node) && res; 
 }
 
-bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_decl, SgNode ** node) {
+bool ClangToSageTranslator::translateFunctionDeclCommon(
+    clang::FunctionDecl *function_decl,
+    clang::FunctionTemplateDecl *template_decl, SgNode **node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitFunctionDecl" << std::endl;
 #endif
@@ -3536,7 +3519,9 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     SgFunctionDeclaration * sg_function_decl;
 
     // REX FIX: Check if this is a function template pattern
-    clang::FunctionTemplateDecl* templateDecl = function_decl->getDescribedFunctionTemplate();
+    clang::FunctionTemplateDecl *templateDecl =
+        template_decl != NULL ? template_decl
+                              : function_decl->getDescribedFunctionTemplate();
     SgTemplateParameterPtrList* templateParams = NULL;
     if (templateDecl) {
         // Translate template parameters
@@ -3549,27 +3534,146 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     if (function_decl->isThisDeclarationADefinition()) {
         // Build friend free-function definitions as free functions regardless of lexical class scope.
         bool builder_force_free_scope = isFriendFreeFunction;
-        SgScopeStatement* builder_scope = proper_scope;
-        
-        // NOTE: Template function handling is complex due to ROSE's API requirements.
-        // For now, we use regular function declarations for all cases.
-        // Template parameters are translated but not attached to define declarations.
-        // This allows most code to work while template function support is being developed.
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, builder_scope, builder_force_free_scope);
-        
-        sg_function_decl->set_definingDeclaration(sg_function_decl);
+        SgScopeStatement *builder_scope = proper_scope;
 
-        if (function_decl->isVariadic()) {
-            sg_function_decl->hasEllipses();
-        }
+        if (templateDecl) {
+          // Template definitions require a prior non-defining declaration for
+          // SageBuilder. Reuse an existing one when a forward declaration was
+          // already seen to keep declaration/definition chains consistent.
+          SgTemplateFunctionDeclaration *first_nondef = NULL;
 
-        // CLANG FRONTEND FIX: Set declptr for all function parameters
-        // declptr should point to the function declaration for parameters
-        SgInitializedNamePtrList & param_names = param_list->get_args();
-        for (SgInitializedName* param : param_names) {
-            if (param != NULL) {
-                param->set_declptr(sg_function_decl);
+          if (function_decl->getFirstDecl() != function_decl) {
+            auto map_it = p_decl_translation_map.find(function_decl->getFirstDecl());
+            if (map_it != p_decl_translation_map.end()) {
+              first_nondef = isSgTemplateFunctionDeclaration(map_it->second);
             }
+            if (first_nondef == NULL) {
+              auto tmpl_it = p_decl_translation_map.find(templateDecl);
+              if (tmpl_it != p_decl_translation_map.end()) {
+                first_nondef = isSgTemplateFunctionDeclaration(tmpl_it->second);
+              }
+            }
+            if (first_nondef == NULL) {
+              SgSymbol *tmp_symbol = GetSymbolFromSymbolTable(function_decl->getFirstDecl());
+              if (SgTemplateSymbol *tmpl_sym = isSgTemplateSymbol(tmp_symbol)) {
+                first_nondef = isSgTemplateFunctionDeclaration(tmpl_sym->get_declaration());
+              } else if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(tmp_symbol)) {
+                first_nondef = isSgTemplateFunctionDeclaration(func_sym->get_declaration());
+              }
+            }
+          }
+
+          if (first_nondef == NULL) {
+            SgFunctionParameterList *first_param_list =
+                SageBuilder::buildFunctionParameterList_nfi();
+            applySourceRange(first_param_list, function_decl->getSourceRange());
+
+            for (SgInitializedName *init_name : param_list->get_args()) {
+              if (init_name == NULL)
+                continue;
+
+              SgInitializer *cloned_init = NULL;
+              if (SgInitializer *init = init_name->get_initializer()) {
+                if (SgExpression *expr_init = isSgExpression(init)) {
+                  cloned_init = SageBuilder::buildAssignInitializer_nfi(
+                      SageInterface::copyExpression(expr_init),
+                      expr_init->get_type());
+                }
+              }
+
+              SgInitializedName *cloned_param =
+                  SageBuilder::buildInitializedName_nfi(
+                      init_name->get_name(), init_name->get_type(), cloned_init);
+              cloned_param->set_scope(SageBuilder::topScopeStack());
+              cloned_param->set_parent(first_param_list);
+              first_param_list->append_arg(cloned_param);
+            }
+
+            if (function_decl->isVariadic()) {
+              SgName empty = "";
+              SgType *ellipses_type = SgTypeEllipse::createType();
+              SgInitializedName *ellipses_param =
+                  SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
+                                                        NULL);
+              ellipses_param->set_scope(SageBuilder::topScopeStack());
+              ellipses_param->set_parent(first_param_list);
+              first_param_list->append_arg(ellipses_param);
+            }
+
+            first_nondef =
+                SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+                    name, ret_type, first_param_list, builder_scope, NULL,
+                    templateParams);
+            ROSE_ASSERT(first_nondef != NULL);
+
+            applySourceRange(first_nondef, function_decl->getSourceRange());
+            first_param_list->set_parent(first_nondef);
+            if (function_decl->isVariadic())
+              first_nondef->hasEllipses();
+          }
+
+          first_nondef->set_firstNondefiningDeclaration(first_nondef);
+
+          if (SgFunctionParameterList *first_param_list = first_nondef->get_parameterList()) {
+            for (SgInitializedName *param : first_param_list->get_args()) {
+              if (param != NULL) {
+                param->set_declptr(first_nondef);
+              }
+            }
+          }
+
+          // Fix for Issue 84: Friend template definitions inside a class should
+          // be in the enclosing scope
+          // SageBuilder::buildDefiningTemplateFunctionDeclaration does not
+          // accept a forceFreeFunctionScope flag unlike
+          // buildDefiningFunctionDeclaration, so we must rely on passing the
+          // correct scope.
+          SgScopeStatement *target_scope = builder_scope;
+          if (builder_force_free_scope &&
+              lexical_friend_enclosing_scope != NULL) {
+            target_scope = lexical_friend_enclosing_scope;
+          }
+
+          SgTemplateFunctionDeclaration *defining_template =
+              SageBuilder::buildDefiningTemplateFunctionDeclaration(
+                  name, ret_type, param_list, target_scope, NULL, first_nondef);
+
+          sg_function_decl = defining_template;
+          sg_function_decl->set_definingDeclaration(sg_function_decl);
+
+          if (function_decl->isVariadic()) {
+            sg_function_decl->hasEllipses();
+          }
+
+          for (SgInitializedName *param : param_list->get_args()) {
+            if (param != NULL) {
+              param->set_declptr(sg_function_decl);
+            }
+          }
+
+          if (defining_template->get_firstNondefiningDeclaration() == NULL) {
+            defining_template->set_firstNondefiningDeclaration(first_nondef);
+          }
+          first_nondef->set_definingDeclaration(defining_template);
+        } else {
+          sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(
+              name, ret_type, param_list, builder_scope,
+              builder_force_free_scope);
+
+          sg_function_decl->set_definingDeclaration(sg_function_decl);
+
+          if (function_decl->isVariadic()) {
+            sg_function_decl->hasEllipses();
+          }
+
+          // CLANG FRONTEND FIX: Set declptr for all function parameters
+          // declptr should point to the function declaration for parameters
+          SgInitializedNamePtrList &param_names = param_list->get_args();
+          for (SgInitializedName *param : param_names) {
+            if (param != NULL) {
+              param->set_declptr(sg_function_decl);
+            }
+          }
         }
 
         // Only process the function body if it exists
@@ -3785,32 +3889,45 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     if (isFriendFreeFunction && lexical_friend_enclosing_scope != NULL) {
         SgFunctionDeclaration* symbol_decl = isSgFunctionDeclaration(sg_function_decl->get_firstNondefiningDeclaration());
         if (symbol_decl == NULL) symbol_decl = sg_function_decl;
-            if (symbol_decl != NULL) {
-                SgFunctionSymbol* friend_symbol = NULL;
-                if (SgSymbol* class_symbol = symbol_decl->search_for_symbol_from_symbol_table()) {
-                    if (SgFunctionSymbol* class_func_sym = isSgFunctionSymbol(class_symbol)) {
-                        if (SgScopeStatement* class_scope = class_func_sym->get_scope()) {
-                            class_scope->remove_symbol(class_func_sym);
-                        }
-                        // Do not reuse the class-owned symbol to avoid stale scope metadata; build a fresh one below.
-                        friend_symbol = NULL;
-                    }
-                }
 
-                SgType* symbol_type = symbol_decl->get_type();
-                if (symbol_type != NULL) {
-                    SgFunctionSymbol* existing_sym =
-                        lexical_friend_enclosing_scope->lookup_function_symbol(symbol_decl->get_name(), symbol_type);
-                    if (existing_sym == NULL) {
-                        if (friend_symbol == NULL) {
-                            friend_symbol = new SgFunctionSymbol(symbol_decl);
-                        }
-                        lexical_friend_enclosing_scope->insert_symbol(symbol_decl->get_name(), friend_symbol);
-                        if (SgSymbolTable* ns_table = lexical_friend_enclosing_scope->get_symbol_table()) {
-                            friend_symbol->set_parent(ns_table);
-                        }
-                    }
+        // REX FIX: If scope is already correct (e.g. handled during
+        // construction), skip symbol patching to avoid type mismatches (e.g.
+        // replacing SgTemplateSymbol with SgFunctionSymbol). This is critical
+        // for friend templates where SageBuilder created the correct
+        // SgTemplateSymbol.
+        if (symbol_decl != NULL &&
+            symbol_decl->get_scope() != lexical_friend_enclosing_scope) {
+          SgFunctionSymbol *friend_symbol = NULL;
+          if (SgSymbol *class_symbol =
+                  symbol_decl->search_for_symbol_from_symbol_table()) {
+            if (SgFunctionSymbol *class_func_sym =
+                    isSgFunctionSymbol(class_symbol)) {
+              if (SgScopeStatement *class_scope = class_func_sym->get_scope()) {
+                class_scope->remove_symbol(class_func_sym);
+              }
+              // Do not reuse the class-owned symbol to avoid stale scope
+              // metadata; build a fresh one below.
+              friend_symbol = NULL;
             }
+          }
+
+          SgType *symbol_type = symbol_decl->get_type();
+          if (symbol_type != NULL) {
+            SgFunctionSymbol *existing_sym =
+                lexical_friend_enclosing_scope->lookup_function_symbol(
+                    symbol_decl->get_name(), symbol_type);
+            if (existing_sym == NULL) {
+              if (friend_symbol == NULL) {
+                friend_symbol = new SgFunctionSymbol(symbol_decl);
+              }
+              lexical_friend_enclosing_scope->insert_symbol(
+                  symbol_decl->get_name(), friend_symbol);
+              if (SgSymbolTable *ns_table =
+                      lexical_friend_enclosing_scope->get_symbol_table()) {
+                friend_symbol->set_parent(ns_table);
+              }
+            }
+          }
         }
     }
 
@@ -3849,6 +3966,12 @@ bool ClangToSageTranslator::VisitFunctionDecl(clang::FunctionDecl * function_dec
     *node = sg_function_decl;
 
     return VisitDeclaratorDecl(function_decl, node) && res;
+}
+
+bool ClangToSageTranslator::VisitFunctionDecl(
+    clang::FunctionDecl *function_decl, SgNode **node) {
+  return translateFunctionDeclCommon(
+      function_decl, function_decl->getDescribedFunctionTemplate(), node);
 }
 
 bool ClangToSageTranslator::VisitCXXDeductionGuideDecl(clang::CXXDeductionGuideDecl * cxx_deduction_guide_decl, SgNode ** node) {

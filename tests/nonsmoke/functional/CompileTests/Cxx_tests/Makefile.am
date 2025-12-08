@@ -20,6 +20,7 @@ include $(top_srcdir)/tests/nonsmoke/functional/input_codes/cxx/Makefile_variabl
 #                  of ROSE testcodes.
 #
 EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
+   test2025_issue84_friend_template_in_class.cpp \
    Area-01.C \
    dynamic_cast.C \
    fstream.C \
