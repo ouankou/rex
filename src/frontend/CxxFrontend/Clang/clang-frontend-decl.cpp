@@ -3568,54 +3568,89 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         if (templateDecl) {
           // Template definitions require a prior non-defining declaration for
-          // SageBuilder.
-          SgFunctionParameterList *first_param_list =
-              SageBuilder::buildFunctionParameterList_nfi();
-          applySourceRange(first_param_list, function_decl->getSourceRange());
+          // SageBuilder. Reuse an existing one when a forward declaration was
+          // already seen to keep declaration/definition chains consistent.
+          SgTemplateFunctionDeclaration *first_nondef = NULL;
 
-          for (SgInitializedName *init_name : param_list->get_args()) {
-            if (init_name == NULL)
-              continue;
-
-            SgInitializer *cloned_init = NULL;
-            if (SgInitializer *init = init_name->get_initializer()) {
-              if (SgExpression *expr_init = isSgExpression(init)) {
-                cloned_init = SageBuilder::buildAssignInitializer_nfi(
-                    SageInterface::copyExpression(expr_init),
-                    expr_init->get_type());
+          if (function_decl->getFirstDecl() != function_decl) {
+            auto map_it = p_decl_translation_map.find(function_decl->getFirstDecl());
+            if (map_it != p_decl_translation_map.end()) {
+              first_nondef = isSgTemplateFunctionDeclaration(map_it->second);
+            }
+            if (first_nondef == NULL) {
+              auto tmpl_it = p_decl_translation_map.find(templateDecl);
+              if (tmpl_it != p_decl_translation_map.end()) {
+                first_nondef = isSgTemplateFunctionDeclaration(tmpl_it->second);
               }
             }
-
-            SgInitializedName *cloned_param =
-                SageBuilder::buildInitializedName_nfi(
-                    init_name->get_name(), init_name->get_type(), cloned_init);
-            cloned_param->set_scope(SageBuilder::topScopeStack());
-            cloned_param->set_parent(first_param_list);
-            first_param_list->append_arg(cloned_param);
+            if (first_nondef == NULL) {
+              SgSymbol *tmp_symbol = GetSymbolFromSymbolTable(function_decl->getFirstDecl());
+              if (SgTemplateSymbol *tmpl_sym = isSgTemplateSymbol(tmp_symbol)) {
+                first_nondef = isSgTemplateFunctionDeclaration(tmpl_sym->get_declaration());
+              } else if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(tmp_symbol)) {
+                first_nondef = isSgTemplateFunctionDeclaration(func_sym->get_declaration());
+              }
+            }
           }
 
-          if (function_decl->isVariadic()) {
-            SgName empty = "";
-            SgType *ellipses_type = SgTypeEllipse::createType();
-            SgInitializedName *ellipses_param =
-                SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
-                                                      NULL);
-            ellipses_param->set_scope(SageBuilder::topScopeStack());
-            ellipses_param->set_parent(first_param_list);
-            first_param_list->append_arg(ellipses_param);
+          if (first_nondef == NULL) {
+            SgFunctionParameterList *first_param_list =
+                SageBuilder::buildFunctionParameterList_nfi();
+            applySourceRange(first_param_list, function_decl->getSourceRange());
+
+            for (SgInitializedName *init_name : param_list->get_args()) {
+              if (init_name == NULL)
+                continue;
+
+              SgInitializer *cloned_init = NULL;
+              if (SgInitializer *init = init_name->get_initializer()) {
+                if (SgExpression *expr_init = isSgExpression(init)) {
+                  cloned_init = SageBuilder::buildAssignInitializer_nfi(
+                      SageInterface::copyExpression(expr_init),
+                      expr_init->get_type());
+                }
+              }
+
+              SgInitializedName *cloned_param =
+                  SageBuilder::buildInitializedName_nfi(
+                      init_name->get_name(), init_name->get_type(), cloned_init);
+              cloned_param->set_scope(SageBuilder::topScopeStack());
+              cloned_param->set_parent(first_param_list);
+              first_param_list->append_arg(cloned_param);
+            }
+
+            if (function_decl->isVariadic()) {
+              SgName empty = "";
+              SgType *ellipses_type = SgTypeEllipse::createType();
+              SgInitializedName *ellipses_param =
+                  SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
+                                                        NULL);
+              ellipses_param->set_scope(SageBuilder::topScopeStack());
+              ellipses_param->set_parent(first_param_list);
+              first_param_list->append_arg(ellipses_param);
+            }
+
+            first_nondef =
+                SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+                    name, ret_type, first_param_list, builder_scope, NULL,
+                    templateParams);
+            ROSE_ASSERT(first_nondef != NULL);
+
+            applySourceRange(first_nondef, function_decl->getSourceRange());
+            first_param_list->set_parent(first_nondef);
+            if (function_decl->isVariadic())
+              first_nondef->hasEllipses();
           }
 
-          SgTemplateFunctionDeclaration *first_nondef =
-              SageBuilder::buildNondefiningTemplateFunctionDeclaration(
-                  name, ret_type, first_param_list, builder_scope, NULL,
-                  templateParams);
-          ROSE_ASSERT(first_nondef != NULL);
-
-          applySourceRange(first_nondef, function_decl->getSourceRange());
-          first_param_list->set_parent(first_nondef);
-          if (function_decl->isVariadic())
-            first_nondef->hasEllipses();
           first_nondef->set_firstNondefiningDeclaration(first_nondef);
+
+          if (SgFunctionParameterList *first_param_list = first_nondef->get_parameterList()) {
+            for (SgInitializedName *param : first_param_list->get_args()) {
+              if (param != NULL) {
+                param->set_declptr(first_nondef);
+              }
+            }
+          }
 
           SgTemplateFunctionDeclaration *defining_template =
               SageBuilder::buildDefiningTemplateFunctionDeclaration(
@@ -3632,12 +3667,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           for (SgInitializedName *param : param_list->get_args()) {
             if (param != NULL) {
               param->set_declptr(sg_function_decl);
-            }
-          }
-
-          for (SgInitializedName *param : first_param_list->get_args()) {
-            if (param != NULL) {
-              param->set_declptr(first_nondef);
             }
           }
 
