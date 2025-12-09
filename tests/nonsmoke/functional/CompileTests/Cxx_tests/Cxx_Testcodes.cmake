@@ -9,6 +9,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   lexPhase2003_01.C
   lulesh.C
   luleshTALC.C
+  rex_test2025_template_call.cpp
   method-defn-in-tpldecl-0.C
   method-defn-in-tpldecl-1.C
   rose-1431-0.C

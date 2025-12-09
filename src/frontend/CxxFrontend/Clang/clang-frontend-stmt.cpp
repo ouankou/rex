@@ -3770,74 +3770,159 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr * decl_ref_expr,
           if (var_sym != NULL) 
              {
                *node = SageBuilder::buildVarRefExp(var_sym);
-             }
-            else 
-             {
-               if (func_sym != NULL)
-                  {
-                    *node = SageBuilder::buildFunctionRefExp(func_sym);
+          } else {
+            if (func_sym != NULL) {
+              SgFunctionSymbol *ref_func_sym = func_sym;
 
-                    // ROOT CAUSE FIX: Set qualified name prefix (namespace) from Clang declaration
-                    // This preserves namespace information (e.g., std::) even when scope is global
-                    SgFunctionRefExp* func_ref = isSgFunctionRefExp(*node);
-                    if (func_ref != NULL) {
-                        clang::FunctionDecl* func_decl = llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl());
-                        if (func_decl != NULL) {
-                            std::string qualified_name = func_decl->getQualifiedNameAsString();
-                            std::string simple_name = func_decl->getNameAsString();
-                            // Extract namespace prefix by removing simple name from qualified name
-                            if (qualified_name.length() > simple_name.length() &&
-                                qualified_name.substr(qualified_name.length() - simple_name.length()) == simple_name) {
-                                // Remove the simple name and the trailing ::
-                                std::string namespace_prefix = qualified_name.substr(0, qualified_name.length() - simple_name.length());
-                                if (namespace_prefix.length() >= 2 && namespace_prefix.substr(namespace_prefix.length() - 2) == "::") {
-                                    namespace_prefix = namespace_prefix.substr(0, namespace_prefix.length() - 2);
-                                }
-                                if (!namespace_prefix.empty()) {
-                                    // Add to global qualified name map so unparser can retrieve it
-                                    SgNode::get_globalQualifiedNameMapForNames()[func_ref] = namespace_prefix + "::";
-                                }
-                            }
-                        }
+              if (decl_ref_expr->hasExplicitTemplateArgs()) {
+                clang::TemplateArgumentListInfo arg_info;
+                decl_ref_expr->copyTemplateArgumentsInto(arg_info);
+
+                // Mark arguments as explicitly specified so the unparser keeps
+                // them
+                SgTemplateArgumentPtrList template_args =
+                    buildTemplateArguments(arg_info, true);
+
+                SgScopeStatement *func_scope = func_sym->get_scope();
+                if (func_scope == NULL) {
+                  func_scope = SageBuilder::topScopeStack();
+                }
+
+                SgFunctionType *func_type =
+                    isSgFunctionType(func_sym->get_type());
+                SgType *ret_type =
+                    func_type != NULL ? func_type->get_return_type() : NULL;
+                if (ret_type == NULL) {
+                  ret_type = SageBuilder::buildUnknownType();
+                }
+
+                SgFunctionParameterList *param_list = NULL;
+                if (func_type != NULL &&
+                    func_type->get_argument_list() != NULL) {
+                  param_list = SageBuilder::buildFunctionParameterList_nfi(
+                      func_type->get_argument_list());
+                } else {
+                  param_list = SageBuilder::buildFunctionParameterList_nfi();
+                }
+
+                SgTemplateInstantiationFunctionDecl *inst_decl =
+                    isSgTemplateInstantiationFunctionDecl(
+                        SageBuilder::buildNondefiningFunctionDeclaration(
+                            func_sym->get_name(), ret_type, param_list,
+                            func_scope,
+                            /*decoratorList=*/NULL,
+                            /*buildTemplateInstantiation=*/true, &template_args,
+                            SgStorageModifier::e_default,
+                            /*forceFreeFunctionScope=*/false));
+
+                if (inst_decl != NULL) {
+                  inst_decl->set_template_argument_list_is_explicit(true);
+                  inst_decl->get_templateArguments() = template_args;
+
+                  SgFunctionDeclaration *base_decl =
+                      isSgFunctionDeclaration(func_sym->get_declaration());
+                  if (base_decl != NULL) {
+                    if (SgTemplateFunctionDeclaration *tmpl_decl =
+                            isSgTemplateFunctionDeclaration(base_decl)) {
+                      inst_decl->set_templateDeclaration(tmpl_decl);
+                      inst_decl->set_templateName(tmpl_decl->get_name());
+                    } else if (
+                        SgTemplateFunctionDeclaration *first_nondef =
+                            isSgTemplateFunctionDeclaration(
+                                base_decl->get_firstNondefiningDeclaration())) {
+                      inst_decl->set_templateDeclaration(first_nondef);
+                      inst_decl->set_templateName(first_nondef->get_name());
                     }
                   }
-                 else
-                  {
-                    if (enum_sym != NULL)
-                       {
-                         // ROOT CAUSE FIX: Get enum declaration from the type instead of parent
-                         // The Clang frontend may not set parent pointers correctly for enum constants
-                         // But the type is always set correctly to an SgEnumType
-                         SgInitializedName* init_name = enum_sym->get_declaration();
-                         SgEnumDeclaration * enum_decl = NULL;
 
-                         if (init_name != NULL && init_name->get_type() != NULL) {
-                             SgEnumType* enum_type = isSgEnumType(init_name->get_type());
-                             if (enum_type != NULL) {
-                                 enum_decl = isSgEnumDeclaration(enum_type->get_declaration());
-                             }
-                         }
-
-                         // Fallback: try getting from parent if type method didn't work
-                         if (enum_decl == NULL && init_name != NULL) {
-                             enum_decl = isSgEnumDeclaration(init_name->get_parent());
-                         }
-
-                         ROSE_ASSERT(enum_decl != NULL);
-                         SgName name = enum_sym->get_name();
-                         *node = SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
-                       }
-                      else
-                       {
-                         if (sym != NULL)
-                            {
-                              std::cerr << "Runtime error: Unknown type of symbol for a declaration reference." << std::endl;
-                              std::cerr << "    sym->class_name() = " << sym->class_name()  << std::endl;
-                              ROSE_ABORT();
-                            }
-                       }
+                  SgFunctionSymbol *inst_sym = isSgFunctionSymbol(
+                      inst_decl->get_symbol_from_symbol_table());
+                  if (inst_sym == NULL && func_scope != NULL &&
+                      func_type != NULL) {
+                    inst_sym = func_scope->lookup_function_symbol(
+                        func_sym->get_name(), func_type);
                   }
-             }
+                  if (inst_sym != NULL) {
+                    ref_func_sym = inst_sym;
+                  }
+                }
+              }
+
+              *node = SageBuilder::buildFunctionRefExp(ref_func_sym);
+
+              // ROOT CAUSE FIX: Set qualified name prefix (namespace) from
+              // Clang declaration This preserves namespace information (e.g.,
+              // std::) even when scope is global
+              SgFunctionRefExp *func_ref = isSgFunctionRefExp(*node);
+              if (func_ref != NULL) {
+                clang::FunctionDecl *func_decl =
+                    llvm::dyn_cast<clang::FunctionDecl>(
+                        decl_ref_expr->getDecl());
+                if (func_decl != NULL) {
+                  std::string qualified_name =
+                      func_decl->getQualifiedNameAsString();
+                  std::string simple_name = func_decl->getNameAsString();
+                  // Extract namespace prefix by removing simple name from
+                  // qualified name
+                  if (qualified_name.length() > simple_name.length() &&
+                      qualified_name.substr(qualified_name.length() -
+                                            simple_name.length()) ==
+                          simple_name) {
+                    // Remove the simple name and the trailing ::
+                    std::string namespace_prefix = qualified_name.substr(
+                        0, qualified_name.length() - simple_name.length());
+                    if (namespace_prefix.length() >= 2 &&
+                        namespace_prefix.substr(namespace_prefix.length() -
+                                                2) == "::") {
+                      namespace_prefix = namespace_prefix.substr(
+                          0, namespace_prefix.length() - 2);
+                    }
+                    if (!namespace_prefix.empty()) {
+                      // Add to global qualified name map so unparser can
+                      // retrieve it
+                      SgNode::get_globalQualifiedNameMapForNames()[func_ref] =
+                          namespace_prefix + "::";
+                    }
+                  }
+                }
+              }
+            } else {
+              if (enum_sym != NULL) {
+                // ROOT CAUSE FIX: Get enum declaration from the type instead of
+                // parent The Clang frontend may not set parent pointers
+                // correctly for enum constants But the type is always set
+                // correctly to an SgEnumType
+                SgInitializedName *init_name = enum_sym->get_declaration();
+                SgEnumDeclaration *enum_decl = NULL;
+
+                if (init_name != NULL && init_name->get_type() != NULL) {
+                  SgEnumType *enum_type = isSgEnumType(init_name->get_type());
+                  if (enum_type != NULL) {
+                    enum_decl =
+                        isSgEnumDeclaration(enum_type->get_declaration());
+                  }
+                }
+
+                // Fallback: try getting from parent if type method didn't work
+                if (enum_decl == NULL && init_name != NULL) {
+                  enum_decl = isSgEnumDeclaration(init_name->get_parent());
+                }
+
+                ROSE_ASSERT(enum_decl != NULL);
+                SgName name = enum_sym->get_name();
+                *node = SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
+              } else {
+                if (sym != NULL) {
+                  std::cerr << "Runtime error: Unknown type of symbol for a "
+                               "declaration reference."
+                            << std::endl;
+                  std::cerr << "    sym->class_name() = " << sym->class_name()
+                            << std::endl;
+                  ROSE_ABORT();
+                }
+              }
+            }
+          }
         }
        else
         {
