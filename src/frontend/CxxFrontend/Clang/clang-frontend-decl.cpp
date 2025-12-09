@@ -1199,6 +1199,10 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl * friend_decl, SgN
     ensure_scope_and_parent(sg_decl->get_definingDeclaration(), current_scope);
     diagnose_null_scope(sg_decl, "FriendDecl");
 
+    // REX FIX: Issue 99
+    // Ensure that the body of the friend function definition points back to the
+    // definition. This is required for VirtualCFG and other analyses.
+
     if (sg_decl->get_firstNondefiningDeclaration() == NULL)
          sg_decl->set_firstNondefiningDeclaration(sg_decl);
     if (sg_decl->get_definingDeclaration() == NULL)
@@ -1254,6 +1258,20 @@ bool ClangToSageTranslator::VisitFriendTemplateDecl(clang::FriendTemplateDecl * 
          sg_decl->set_firstNondefiningDeclaration(sg_decl);
     if (sg_decl->get_definingDeclaration() == NULL)
          sg_decl->set_definingDeclaration(sg_decl);
+
+    // REX FIX: Issue 99
+    // Ensure that the body of the friend function definition points back to the
+    // definition. This is required for VirtualCFG and other analyses.
+    if (SgFunctionDeclaration *func_decl =
+            isSgFunctionDeclaration(sg_decl->get_definingDeclaration())) {
+      if (SgFunctionDefinition *def = func_decl->get_definition()) {
+        if (SgBasicBlock *body = def->get_body()) {
+          if (body->get_parent() != def) {
+            body->set_parent(def);
+          }
+        }
+      }
+    }
 
     *node = sg_decl;
     return VisitDecl(friend_template_decl, node) && res;
@@ -3700,6 +3718,24 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 SageInterface::deleteAST(sg_function_decl->get_definition()->get_body());
 
             SageBuilder::pushScopeStack(function_definition);
+
+            clang::Stmt *body_stmt = function_decl->getBody();
+            if (body_stmt) {
+              // Check if the body has already been translated and attached to
+              // another parent (e.g., a template definition) If so, we must
+              // remove it from the cache to force a fresh translation for this
+              // new definition otherwise we would steal the body from the
+              // template.
+              std::map<clang::Stmt *, SgNode *>::iterator it =
+                  p_stmt_translation_map.find(body_stmt);
+              if (it != p_stmt_translation_map.end()) {
+                SgBasicBlock *existing_body = isSgBasicBlock(it->second);
+                if (existing_body && existing_body->get_parent() != NULL &&
+                    existing_body->get_parent() != function_definition) {
+                  p_stmt_translation_map.erase(it);
+                }
+              }
+            }
 
             SgNode * tmp_body = Traverse(function_decl->getBody());
             SgBasicBlock * body = isSgBasicBlock(tmp_body);
