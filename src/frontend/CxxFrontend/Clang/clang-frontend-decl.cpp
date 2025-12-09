@@ -3794,6 +3794,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               std::cerr << "Traverse(function_decl->getBody()) returned a "
                            "non-SgBasicBlock node: "
                         << tmp_body->class_name() << std::endl;
+              res = false;
             }
             if (body != NULL) {
               // DQ (11/24/2020): This fails for test2020_00.C (in C_tests).
