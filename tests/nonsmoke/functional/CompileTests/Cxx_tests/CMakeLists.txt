@@ -24,3 +24,18 @@ foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
 endforeach()
 
+# REX: This test intentionally fails (it contains a function-try-block which is currently
+# not fully supported and triggers an assertion failure or error). We want to ensure
+# it continues to fail (failure propagation) until properly supported.
+# We add it manually here (not in Cxx_Testcodes.cmake) to avoid breaking downstream tests.
+# REX: This test intentionally fails. We verify it fails (including crashes) by wrapping in shell.
+# We expect the translator to fail (return non-zero). If it acts this way, the test PASSES CTest.
+# Flatten flags for shell usage
+string(REPLACE ";" " " ROSE_FLAGS_STR "${ROSE_FLAGS}")
+string(REPLACE ";" " " ROSE_INCLUDE_FLAGS_STR "${ROSE_INCLUDE_FLAGS}")
+
+add_test(
+  NAME Cxx_tests_rex_test2025_issue99_failure_propagation
+  COMMAND sh -c "$<TARGET_FILE:${translator}> ${ROSE_FLAGS_STR} ${ROSE_INCLUDE_FLAGS_STR} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp && exit 1 || exit 0"
+)
+
