@@ -3714,28 +3714,16 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 */
             SgFunctionDefinition * function_definition = sg_function_decl->get_definition();
 
-            if (sg_function_decl->get_definition()->get_body() != NULL)
-                SageInterface::deleteAST(sg_function_decl->get_definition()->get_body());
-
-            SageBuilder::pushScopeStack(function_definition);
+            // P1 Badge Fix: Recursive Cache Invalidation.
+            // We must invalidate the cache for the body statements and
+            // declarations BEFORE potentially deleting the existing body AST.
+            // This prevents Use-After-Free (accessing deleted nodes parents)
+            // and ensures we don't reuse "stolen" nodes from templates. We
+            // erase unconditionally because we are about to rebuild the body
+            // for this definition.
 
             clang::Stmt *body_stmt = function_decl->getBody();
             if (body_stmt) {
-              // Check if the body has already been translated and attached to
-              // another parent (e.g., a template definition) If so, we must
-              // remove it from the cache to force a fresh translation for this
-              // new definition otherwise we would steal the body from the
-              // template.
-              //
-              // Check if the body has already been translated and attached to
-              // another parent (e.g., a template definition) If so, we must
-              // remove it from the cache to force a fresh translation for this
-              // new definition otherwise we would steal the body from the
-              // template.
-              //
-              // P1 Badge Fix: Must be recursive and handle Decls. If children
-              // are reused, they will be stolen.
-
               std::function<void(clang::Decl *)> recursive_invalidate_decl;
               std::function<void(clang::Stmt *)> recursive_invalidate_stmt;
 
@@ -3744,13 +3732,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                   return;
                 auto it = p_decl_translation_map.find(d);
                 if (it != p_decl_translation_map.end()) {
-                  SgNode *node = it->second;
-                  // If shared/cached, remove it.
-                  // We check parent to be safe, but generally we want fresh
-                  // nodes.
-                  if (node && node->get_parent() != function_definition) {
-                    p_decl_translation_map.erase(it);
-                  }
+                  p_decl_translation_map.erase(it);
                 }
 
                 // Recurse into DeclContext (e.g. structs)
@@ -3777,10 +3759,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                   return;
                 auto it = p_stmt_translation_map.find(s);
                 if (it != p_stmt_translation_map.end()) {
-                  SgNode *node = it->second;
-                  if (node && node->get_parent() != function_definition) {
-                    p_stmt_translation_map.erase(it);
-                  }
+                  p_stmt_translation_map.erase(it);
                 }
 
                 // Handle DeclStmt specifically to descend into Decls
@@ -3799,20 +3778,42 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               recursive_invalidate_stmt(body_stmt);
             }
 
+            if (sg_function_decl->get_definition()->get_body() != NULL)
+              SageInterface::deleteAST(
+                  sg_function_decl->get_definition()->get_body());
+
+            SageBuilder::pushScopeStack(function_definition);
+
             SgNode * tmp_body = Traverse(function_decl->getBody());
             SgBasicBlock * body = isSgBasicBlock(tmp_body);
 
             SageBuilder::popScopeStack();
 
-            if (tmp_body != NULL && body == NULL) {
-                std::cerr << "Runtime error: tmp_body != NULL && body == NULL" << std::endl;
-                res = false;
+            if (body == NULL && tmp_body != NULL) {
+              std::cerr << "Traverse(function_decl->getBody()) returned a "
+                           "non-SgBasicBlock node: "
+                        << tmp_body->class_name() << std::endl;
             }
-            else {
-                function_definition->set_body(body);
+            if (body != NULL) {
+              // DQ (11/24/2020): This fails for test2020_00.C (in C_tests).
+              // It seems that even though function_definition was used to set
+              // the scope in the connection to the body, that the body's parent
+              // is set to NULL. ROSE_ASSERT(body->get_parent() ==
+              // function_definition);
+              if (body->get_parent() != function_definition) {
+#if 0
+                      printf ("In visitFunctionDecl(): resetting the body parent to function_definition = %p = %s \n",
+                           function_definition,function_definition->class_name().c_str());
+#endif
                 body->set_parent(function_definition);
-                applySourceRange(function_definition, function_decl->getSourceRange());
+              }
+              ROSE_ASSERT(body->get_parent() == function_definition);
             }
+
+            function_definition->set_body(body);
+            body->set_parent(function_definition);
+            applySourceRange(function_definition,
+                             function_decl->getSourceRange());
 
             sg_function_decl->set_definition(function_definition);
             function_definition->set_parent(sg_function_decl);
