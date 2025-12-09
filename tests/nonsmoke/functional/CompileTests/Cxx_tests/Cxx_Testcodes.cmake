@@ -798,10 +798,10 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2011_29.C
   test2011_30.C
   test2011_31.C
-  test2025_issue83.cpp
-  test2025_issue84_friend_template_in_class.cpp
-  test2025_issue83_redeclarations.cpp
-  test2025_issue83_collisions.cpp
+  rex_test2025_issue83.cpp
+  rex_test2025_issue84_friend_template_in_class.cpp
+  rex_test2025_issue83_redeclarations.cpp
+  rex_test2025_issue83_collisions.cpp
   rex_test2025_issue84_function_template.cpp
   test2011_32.C
   test2011_33.C
@@ -2066,8 +2066,14 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test_simple_int.C
   test_wchars.C
   unparse-typedef-ctor.C
+  rex_test2025_issue99.cpp
+  rex_test2025_issue99_recursive.cpp
+  rex_test2025_issue99_uaf.cpp
 )
 
 # Export variables for downstream tests
 set(ROSE__CXX_TESTS ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 set(ROSE__CXX_TESTS__BOOST "")
+
+set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS__FAILING_ON_ROSE_CLANG
+_CXX_TESTS__BOOST "")

@@ -1,6 +1,7 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
 #include <algorithm>
+#include <functional>
 #include <set>
 #include "llvm/ADT/SmallString.h"
 
@@ -1199,6 +1200,10 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl * friend_decl, SgN
     ensure_scope_and_parent(sg_decl->get_definingDeclaration(), current_scope);
     diagnose_null_scope(sg_decl, "FriendDecl");
 
+    // REX FIX: Issue 99
+    // Ensure that the body of the friend function definition points back to the
+    // definition. This is required for VirtualCFG and other analyses.
+
     if (sg_decl->get_firstNondefiningDeclaration() == NULL)
          sg_decl->set_firstNondefiningDeclaration(sg_decl);
     if (sg_decl->get_definingDeclaration() == NULL)
@@ -1254,6 +1259,20 @@ bool ClangToSageTranslator::VisitFriendTemplateDecl(clang::FriendTemplateDecl * 
          sg_decl->set_firstNondefiningDeclaration(sg_decl);
     if (sg_decl->get_definingDeclaration() == NULL)
          sg_decl->set_definingDeclaration(sg_decl);
+
+    // REX FIX: Issue 99
+    // Ensure that the body of the friend function definition points back to the
+    // definition. This is required for VirtualCFG and other analyses.
+    if (SgFunctionDeclaration *func_decl =
+            isSgFunctionDeclaration(sg_decl->get_definingDeclaration())) {
+      if (SgFunctionDefinition *def = func_decl->get_definition()) {
+        if (SgBasicBlock *body = def->get_body()) {
+          if (body->get_parent() != def) {
+            body->set_parent(def);
+          }
+        }
+      }
+    }
 
     *node = sg_decl;
     return VisitDecl(friend_template_decl, node) && res;
@@ -3696,8 +3715,73 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 */
             SgFunctionDefinition * function_definition = sg_function_decl->get_definition();
 
+            // P1 Badge Fix: Recursive Cache Invalidation.
+            // We must invalidate the cache for the body statements and
+            // declarations BEFORE potentially deleting the existing body AST.
+            // This prevents Use-After-Free (accessing deleted nodes parents)
+            // and ensures we don't reuse "stolen" nodes from templates. We
+            // erase unconditionally because we are about to rebuild the body
+            // for this definition.
+
+            clang::Stmt *body_stmt = function_decl->getBody();
+            if (body_stmt) {
+              std::function<void(clang::Decl *)> recursive_invalidate_decl;
+              std::function<void(clang::Stmt *)> recursive_invalidate_stmt;
+
+              recursive_invalidate_decl = [&](clang::Decl *d) {
+                if (!d)
+                  return;
+                auto it = p_decl_translation_map.find(d);
+                if (it != p_decl_translation_map.end()) {
+                  p_decl_translation_map.erase(it);
+                }
+
+                // Recurse into DeclContext (e.g. structs)
+                if (auto *ctx = llvm::dyn_cast<clang::DeclContext>(d)) {
+                  for (auto *child : ctx->decls()) {
+                    recursive_invalidate_decl(child);
+                  }
+                }
+
+                // Handle FunctionDecl body
+                if (auto *fd = llvm::dyn_cast<clang::FunctionDecl>(d)) {
+                  if (fd->hasBody())
+                    recursive_invalidate_stmt(fd->getBody());
+                }
+                // Handle VarDecl init
+                if (auto *vd = llvm::dyn_cast<clang::VarDecl>(d)) {
+                  if (vd->getInit())
+                    recursive_invalidate_stmt(vd->getInit());
+                }
+              };
+
+              recursive_invalidate_stmt = [&](clang::Stmt *s) {
+                if (!s)
+                  return;
+                auto it = p_stmt_translation_map.find(s);
+                if (it != p_stmt_translation_map.end()) {
+                  p_stmt_translation_map.erase(it);
+                }
+
+                // Handle DeclStmt specifically to descend into Decls
+                if (auto *ds = llvm::dyn_cast<clang::DeclStmt>(s)) {
+                  for (auto *d : ds->decls()) {
+                    recursive_invalidate_decl(d);
+                  }
+                }
+
+                // Handle Stmt children
+                for (auto *child : s->children()) {
+                  recursive_invalidate_stmt(child);
+                }
+              };
+
+              recursive_invalidate_stmt(body_stmt);
+            }
+
             if (sg_function_decl->get_definition()->get_body() != NULL)
-                SageInterface::deleteAST(sg_function_decl->get_definition()->get_body());
+              SageInterface::deleteAST(
+                  sg_function_decl->get_definition()->get_body());
 
             SageBuilder::pushScopeStack(function_definition);
 
@@ -3706,18 +3790,60 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
             SageBuilder::popScopeStack();
 
-            if (tmp_body != NULL && body == NULL) {
-                std::cerr << "Runtime error: tmp_body != NULL && body == NULL" << std::endl;
-                res = false;
+            if (body == NULL && tmp_body != NULL) {
+              std::cerr << "Traverse(function_decl->getBody()) returned a "
+                           "non-SgBasicBlock node: "
+                        << tmp_body->class_name() << std::endl;
+              res = false;
             }
-            else {
-                function_definition->set_body(body);
+            if (body != NULL) {
+              // DQ (11/24/2020): This fails for test2020_00.C (in C_tests).
+              // It seems that even though function_definition was used to set
+              // the scope in the connection to the body, that the body's parent
+              // is set to NULL. ROSE_ASSERT(body->get_parent() ==
+              // function_definition);
+              if (body->get_parent() != function_definition) {
+#if 0
+                      printf ("In visitFunctionDecl(): resetting the body parent to function_definition = %p = %s \n",
+                           function_definition,function_definition->class_name().c_str());
+#endif
                 body->set_parent(function_definition);
-                applySourceRange(function_definition, function_decl->getSourceRange());
+              }
+              ROSE_ASSERT(body->get_parent() == function_definition);
             }
+
+            function_definition->set_body(body);
+            if (body) {
+                body->set_parent(function_definition);
+            }
+            applySourceRange(function_definition,
+                             function_decl->getSourceRange());
 
             sg_function_decl->set_definition(function_definition);
             function_definition->set_parent(sg_function_decl);
+
+            // P1 Badge Fix: Ensure consistency of the function symbol after
+            // potential re-translation. If the symbol was created but lost its
+            // declaration link (or points to NULL), fix it. Also, if the symbol
+            // is MISSING (e.g. friend function not added to scope correctly),
+            // create it. This prevents assertions in backend unparsing
+            // (nameQualificationSupport).
+            if (sg_function_decl) {
+              SgFunctionSymbol *sym = isSgFunctionSymbol(
+                  sg_function_decl->get_symbol_from_symbol_table());
+              if (sym == NULL) {
+                // Create missing symbol
+                SgScopeStatement *scope = sg_function_decl->get_scope();
+                if (scope) {
+                  sym = new SgFunctionSymbol(sg_function_decl);
+                  scope->insert_symbol(sg_function_decl->get_name(), sym);
+                }
+              }
+
+              if (sym && sym->get_declaration() == NULL) {
+                sym->set_declaration(sg_function_decl);
+              }
+            }
         }
         else {
             // Function declaration without body (e.g., template function in header, forward declaration)

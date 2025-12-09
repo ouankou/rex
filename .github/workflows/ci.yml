@@ -91,3 +91,5 @@ jobs:
         ctest -R "Translator_" -V
         # astQuery exercises query helpers
         ctest -R "testQuery" -V
+        # Run all rex-prefixed regression tests
+        ctest -R rex -V
