@@ -3726,15 +3726,77 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               // remove it from the cache to force a fresh translation for this
               // new definition otherwise we would steal the body from the
               // template.
-              std::map<clang::Stmt *, SgNode *>::iterator it =
-                  p_stmt_translation_map.find(body_stmt);
-              if (it != p_stmt_translation_map.end()) {
-                SgBasicBlock *existing_body = isSgBasicBlock(it->second);
-                if (existing_body && existing_body->get_parent() != NULL &&
-                    existing_body->get_parent() != function_definition) {
-                  p_stmt_translation_map.erase(it);
+              //
+              // Check if the body has already been translated and attached to
+              // another parent (e.g., a template definition) If so, we must
+              // remove it from the cache to force a fresh translation for this
+              // new definition otherwise we would steal the body from the
+              // template.
+              //
+              // P1 Badge Fix: Must be recursive and handle Decls. If children
+              // are reused, they will be stolen.
+
+              std::function<void(clang::Decl *)> recursive_invalidate_decl;
+              std::function<void(clang::Stmt *)> recursive_invalidate_stmt;
+
+              recursive_invalidate_decl = [&](clang::Decl *d) {
+                if (!d)
+                  return;
+                auto it = p_decl_translation_map.find(d);
+                if (it != p_decl_translation_map.end()) {
+                  SgNode *node = it->second;
+                  // If shared/cached, remove it.
+                  // We check parent to be safe, but generally we want fresh
+                  // nodes.
+                  if (node && node->get_parent() != function_definition) {
+                    p_decl_translation_map.erase(it);
+                  }
                 }
-              }
+
+                // Recurse into DeclContext (e.g. structs)
+                if (auto *ctx = llvm::dyn_cast<clang::DeclContext>(d)) {
+                  for (auto *child : ctx->decls()) {
+                    recursive_invalidate_decl(child);
+                  }
+                }
+
+                // Handle FunctionDecl body
+                if (auto *fd = llvm::dyn_cast<clang::FunctionDecl>(d)) {
+                  if (fd->hasBody())
+                    recursive_invalidate_stmt(fd->getBody());
+                }
+                // Handle VarDecl init
+                if (auto *vd = llvm::dyn_cast<clang::VarDecl>(d)) {
+                  if (vd->getInit())
+                    recursive_invalidate_stmt(vd->getInit());
+                }
+              };
+
+              recursive_invalidate_stmt = [&](clang::Stmt *s) {
+                if (!s)
+                  return;
+                auto it = p_stmt_translation_map.find(s);
+                if (it != p_stmt_translation_map.end()) {
+                  SgNode *node = it->second;
+                  if (node && node->get_parent() != function_definition) {
+                    p_stmt_translation_map.erase(it);
+                  }
+                }
+
+                // Handle DeclStmt specifically to descend into Decls
+                if (auto *ds = llvm::dyn_cast<clang::DeclStmt>(s)) {
+                  for (auto *d : ds->decls()) {
+                    recursive_invalidate_decl(d);
+                  }
+                }
+
+                // Handle Stmt children
+                for (auto *child : s->children()) {
+                  recursive_invalidate_stmt(child);
+                }
+              };
+
+              recursive_invalidate_stmt(body_stmt);
             }
 
             SgNode * tmp_body = Traverse(function_decl->getBody());
@@ -3754,6 +3816,29 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
             sg_function_decl->set_definition(function_definition);
             function_definition->set_parent(sg_function_decl);
+
+            // P1 Badge Fix: Ensure consistency of the function symbol after
+            // potential re-translation. If the symbol was created but lost its
+            // declaration link (or points to NULL), fix it. Also, if the symbol
+            // is MISSING (e.g. friend function not added to scope correctly),
+            // create it. This prevents assertions in backend unparsing
+            // (nameQualificationSupport).
+            if (sg_function_decl) {
+              SgFunctionSymbol *sym = isSgFunctionSymbol(
+                  sg_function_decl->get_symbol_from_symbol_table());
+              if (sym == NULL) {
+                // Create missing symbol
+                SgScopeStatement *scope = sg_function_decl->get_scope();
+                if (scope) {
+                  sym = new SgFunctionSymbol(sg_function_decl);
+                  scope->insert_symbol(sg_function_decl->get_name(), sym);
+                }
+              }
+
+              if (sym && sym->get_declaration() == NULL) {
+                sym->set_declaration(sg_function_decl);
+              }
+            }
         }
         else {
             // Function declaration without body (e.g., template function in header, forward declaration)

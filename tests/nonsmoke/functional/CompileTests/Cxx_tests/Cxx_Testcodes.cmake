@@ -2067,6 +2067,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test_wchars.C
   unparse-typedef-ctor.C
   rex_test2025_issue99.cpp
+  rex_test2025_issue99_recursive.cpp
 )
 
 # Export variables for downstream tests
