@@ -1,4 +1,5 @@
 set(TESTCODE_CURRENTLY_FAILING
+  rex_test2025_issue99_failure_propagation.cpp
   c++trick.C
   certSignalExample.C
   lexPhase2003_02.C

@@ -2069,6 +2069,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue99.cpp
   rex_test2025_issue99_recursive.cpp
   rex_test2025_issue99_uaf.cpp
+  rex_test2025_issue99_failure_propagation.cpp
 )
 
 # Export variables for downstream tests
