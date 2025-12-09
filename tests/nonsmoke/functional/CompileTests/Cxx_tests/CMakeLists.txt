@@ -24,6 +24,18 @@ foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
 endforeach()
 
+# Verify explicit template arguments are preserved in calls
+add_test(
+  NAME Cxx_tests_rex_test2025_template_call_explicit_args
+  COMMAND sh -c "\"$@\" && grep \"foo<5>\" rose_rex_test2025_template_call.cpp | grep -v \"//\" && grep \"foo<10>\" rose_rex_test2025_template_call.cpp | grep -v \"//\" && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_template_call.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_template_call.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2025_template_call_explicit_args PROPERTIES LABELS Cxx_tests)
+
 # REX: This test intentionally fails (it contains a function-try-block which is currently
 # not fully supported and triggers an assertion failure or error). We want to ensure
 # it continues to fail (failure propagation) until properly supported.
@@ -35,4 +47,3 @@ add_test(
   NAME Cxx_tests_rex_test2025_issue99_failure_propagation
   COMMAND sh -c "\"$@\" && exit 1 || exit 0" dummy $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp
 )
-

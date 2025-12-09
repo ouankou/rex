@@ -1326,109 +1326,113 @@ SgExpression* buildIntegralTemplateArgExpr(const llvm::APSInt& value, SgType* in
 }
 } // namespace
 
-SgTemplateArgumentPtrList
-ClangToSageTranslator::buildTemplateArguments(
-    const clang::TemplateSpecializationType* clang_type) {
+SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
+    const clang::TemplateArgument &arg, bool explicitlySpecified) {
+  SgTemplateArgument *sg_arg = nullptr;
 
-    SgTemplateArgumentPtrList arg_list;
-
-    auto args = clang_type->template_arguments();
-    // std::cerr << "DEBUG: buildTemplateArguments called with " << args.size() << " arguments" << std::endl;
-    for (const clang::TemplateArgument& arg : args) {
-        // std::cerr << "DEBUG: Processing argument kind: " << arg.getKind() << std::endl;
-        SgTemplateArgument* sg_arg = nullptr;
-
-        switch (arg.getKind()) {
-            case clang::TemplateArgument::Type: {
-                // Type argument (e.g., double)
-                SgType* arg_type = buildTypeFromQualifiedType(arg.getAsType());
-                sg_arg = new SgTemplateArgument(arg_type, false);
-                break;
-            }
-
-            case clang::TemplateArgument::Integral: {
-                // Non-type argument (e.g., 1024)
-                llvm::APSInt value = arg.getAsIntegral();
-                SgType* int_type = buildTypeFromQualifiedType(arg.getIntegralType());
-
-                SgExpression* value_expr = buildIntegralTemplateArgExpr(value, int_type);
-
-                sg_arg = new SgTemplateArgument(
-                    SgTemplateArgument::nontype_argument,
-                    value_expr,
-                    int_type,
-                    nullptr, nullptr, false
-                );
-                
-                // DEBUG
-                // if (sg_arg) std::cerr << "DEBUG: Created SgTemplateArgument for integral" << std::endl;
-                break;
-            }
-
-            case clang::TemplateArgument::Template: {
-                // Template template argument
-                clang::TemplateName template_name = arg.getAsTemplate();
-                clang::TemplateDecl* template_decl = template_name.getAsTemplateDecl();
-                if (template_decl) {
-                    // We need to get the declaration of the template being passed as argument
-                    // For std::tuple, this should be the template declaration
-                    SgDeclarationStatement* sg_decl = (SgDeclarationStatement*)Traverse(template_decl);
-                    
-                    if (sg_decl) {
-                        if (SgTemplateClassDeclaration* class_tmpl = isSgTemplateClassDeclaration(sg_decl)) {
-                             // REX FIX: SgTemplateArgument crashes with SgTemplateClassDeclaration as template_template_argument.
-                             // Fallback to using type_argument with SgTemplateType.
-                             // SgClassType adds "class" keyword which is invalid for template template args.
-                             // SgTemplateType prints just the name.
-                             // Use qualified name to ensure "std::tuple" is printed, not just "tuple".
-                             SgName qual_name = class_tmpl->get_qualified_name();
-                             if (qual_name.getString().find("::") == std::string::npos && class_tmpl->get_scope()) {
-                                 // Fallback if get_qualified_name returns unqualified name (common in some ROSE versions)
-                                 // Manually construct qualified name if scope is namespace
-                                 if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(class_tmpl->get_scope())) {
-                                     qual_name = ns_def->get_namespaceDeclaration()->get_name().getString() + "::" + class_tmpl->get_name().getString();
-                                 }
-                             }
-                             SgType* type = SageBuilder::buildTemplateType(qual_name);
-                             sg_arg = new SgTemplateArgument(type, false);
-                        } else {
-                             sg_arg = new SgTemplateArgument(SgTemplateArgument::template_template_argument, sg_decl);
-                        }
-                    } else {
-                        std::cerr << "Warning: Failed to translate template declaration for template argument\n";
-                    }
-                }
-                break;
-            }
-
-            case clang::TemplateArgument::Expression: {
-                // std::cerr << "DEBUG: Expression argument" << std::endl;
-                clang::Expr* clang_expr = arg.getAsExpr();
-                if (clang_expr) {
-                    SgNode* node = Traverse(clang_expr);
-                    SgExpression* sg_expr = isSgExpression(node);
-                    if (sg_expr) {
-                         // Use the simpler SgTemplateArgument constructor for expressions
-                         // The constructor signature is: SgTemplateArgument(SgExpression* parameter, bool explicitlySpecified)
-                         sg_arg = new SgTemplateArgument(sg_expr, false);
-                    }
-                }
-                break;
-            }
-
-            default:
-                std::cerr << "Warning: Unsupported template argument kind: " << arg.getKind() << "\n";
-                continue;
-        }
-
-        if (sg_arg) {
-            arg_list.push_back(sg_arg);
-        }
+  switch (arg.getKind()) {
+  case clang::TemplateArgument::Type: {
+    SgType *arg_type = buildTypeFromQualifiedType(arg.getAsType());
+    if (arg_type != NULL) {
+      sg_arg = new SgTemplateArgument(arg_type, explicitlySpecified);
     }
+    break;
+  }
 
-    return arg_list;
+  case clang::TemplateArgument::Integral: {
+    llvm::APSInt value = arg.getAsIntegral();
+    SgType *int_type = buildTypeFromQualifiedType(arg.getIntegralType());
+
+    SgExpression *value_expr = buildIntegralTemplateArgExpr(value, int_type);
+
+    sg_arg =
+        new SgTemplateArgument(SgTemplateArgument::nontype_argument, value_expr,
+                               int_type, nullptr, nullptr, explicitlySpecified);
+    break;
+  }
+
+  case clang::TemplateArgument::Template: {
+    clang::TemplateDecl *template_decl =
+        arg.getAsTemplate().getAsTemplateDecl();
+    if (template_decl != nullptr) {
+      SgDeclarationStatement *sg_decl =
+          (SgDeclarationStatement *)Traverse(template_decl);
+
+      if (sg_decl != nullptr) {
+        if (SgTemplateClassDeclaration *class_tmpl =
+                isSgTemplateClassDeclaration(sg_decl)) {
+          SgName qual_name = class_tmpl->get_qualified_name();
+          if (qual_name.getString().find("::") == std::string::npos &&
+              class_tmpl->get_scope()) {
+            if (SgNamespaceDefinitionStatement *ns_def =
+                    isSgNamespaceDefinitionStatement(class_tmpl->get_scope())) {
+              qual_name =
+                  ns_def->get_namespaceDeclaration()->get_name().getString() +
+                  "::" + class_tmpl->get_name().getString();
+            }
+          }
+          SgType *type = SageBuilder::buildTemplateType(qual_name);
+          sg_arg = new SgTemplateArgument(type, explicitlySpecified);
+        } else {
+          sg_arg = new SgTemplateArgument(
+              SgTemplateArgument::template_template_argument, sg_decl);
+        }
+      } else {
+        std::cerr << "Warning: Failed to translate template declaration "
+                     "for template argument\n";
+      }
+    }
+    break;
+  }
+
+  case clang::TemplateArgument::Expression: {
+    clang::Expr *clang_expr = arg.getAsExpr();
+    if (clang_expr != nullptr) {
+      SgNode *node = Traverse(clang_expr);
+      if (SgExpression *sg_expr = isSgExpression(node)) {
+        sg_arg = new SgTemplateArgument(sg_expr, explicitlySpecified);
+      }
+    }
+    break;
+  }
+
+  default:
+    std::cerr << "Warning: Unsupported template argument kind: "
+              << arg.getKind() << "\n";
+    break;
+  }
+
+  return sg_arg;
 }
 
+SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
+    const clang::TemplateSpecializationType *clang_type) {
+
+  SgTemplateArgumentPtrList arg_list;
+
+  auto args = clang_type->template_arguments();
+  for (const clang::TemplateArgument &arg : args) {
+    if (SgTemplateArgument *sg_arg = translateTemplateArgument(arg, false)) {
+      arg_list.push_back(sg_arg);
+    }
+  }
+
+  return arg_list;
+}
+
+SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
+    const clang::TemplateArgumentListInfo &arg_info, bool explicitlySpecified) {
+  SgTemplateArgumentPtrList arg_list;
+
+  for (const clang::TemplateArgumentLoc &arg_loc : arg_info.arguments()) {
+    if (SgTemplateArgument *sg_arg = translateTemplateArgument(
+            arg_loc.getArgument(), explicitlySpecified)) {
+      arg_list.push_back(sg_arg);
+    }
+  }
+
+  return arg_list;
+}
 
 SgTemplateInstantiationDecl*
 ClangToSageTranslator::getOrCreateTemplateInstantiation(

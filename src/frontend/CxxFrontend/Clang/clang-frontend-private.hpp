@@ -395,6 +395,14 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // Helper: Build template arguments from Clang
         SgTemplateArgumentPtrList buildTemplateArguments(
             const clang::TemplateSpecializationType* clang_type);
+        SgTemplateArgumentPtrList
+        buildTemplateArguments(const clang::TemplateArgumentListInfo &arg_info,
+                               bool explicitlySpecified = false);
+
+        // Helper: Translate a single template argument
+        SgTemplateArgument *
+        translateTemplateArgument(const clang::TemplateArgument &arg,
+                                  bool explicitlySpecified = false);
 
         // Helper: Build template parameters (inferred from arguments)
         SgTemplateParameterPtrList* buildTemplateParameters(
