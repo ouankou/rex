@@ -3812,7 +3812,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             }
 
             function_definition->set_body(body);
-            body->set_parent(function_definition);
+            if (body) {
+                body->set_parent(function_definition);
+            }
             applySourceRange(function_definition,
                              function_decl->getSourceRange());
 
