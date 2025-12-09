@@ -29,13 +29,10 @@ endforeach()
 # it continues to fail (failure propagation) until properly supported.
 # We add it manually here (not in Cxx_Testcodes.cmake) to avoid breaking downstream tests.
 # REX: This test intentionally fails. We verify it fails (including crashes) by wrapping in shell.
-# We expect the translator to fail (return non-zero). If it acts this way, the test PASSES CTest.
-# Flatten flags for shell usage
-string(REPLACE ";" " " ROSE_FLAGS_STR "${ROSE_FLAGS}")
-string(REPLACE ";" " " ROSE_INCLUDE_FLAGS_STR "${ROSE_INCLUDE_FLAGS}")
-
+# We use "$@" to pass all arguments safely to the translator command, preserving quoting.
+# If "$@" returns 0 (success), we exit 1 (fail). If it returns non-zero (fail), we exit 0 (pass).
 add_test(
   NAME Cxx_tests_rex_test2025_issue99_failure_propagation
-  COMMAND sh -c "$<TARGET_FILE:${translator}> ${ROSE_FLAGS_STR} ${ROSE_INCLUDE_FLAGS_STR} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp && exit 1 || exit 0"
+  COMMAND sh -c "\"$@\" && exit 1 || exit 0" dummy $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp
 )
 
