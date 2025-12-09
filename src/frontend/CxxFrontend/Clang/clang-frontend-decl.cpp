@@ -1,6 +1,7 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
 #include <algorithm>
+#include <functional>
 #include <set>
 #include "llvm/ADT/SmallString.h"
 
