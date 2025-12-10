@@ -58,3 +58,16 @@ add_test(
   NAME Cxx_tests_rex_test2025_issue99_failure_propagation
   COMMAND sh -c "\"$@\" && exit 1 || exit 0" dummy $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp
 )
+
+# REX: New test for Issue 87 (Functions inside namespaces lost)
+# We verify that "void bar()" is present in the output associated with namespace behavior.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue87_namespace
+  COMMAND sh -c "\"$@\" && grep \"void bar()\" rose_rex_test2025_issue87_namespace.cpp && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_issue87_namespace.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue87_namespace.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2025_issue87_namespace PROPERTIES LABELS Cxx_tests)
