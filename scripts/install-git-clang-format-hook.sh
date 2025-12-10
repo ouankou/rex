@@ -30,6 +30,16 @@ fi
 
 mapfile -t staged_files < <(git diff --cached --name-only)
 
+if [[ ${#staged_files[@]} -gt 0 ]]; then
+  mapfile -t unstaged_conflicts < <(git diff --name-only -- "${staged_files[@]}")
+  if [[ ${#unstaged_conflicts[@]} -gt 0 ]]; then
+    echo "Cannot run git-clang-format: these files have unstaged changes:" >&2
+    printf '  %s\n' "${unstaged_conflicts[@]}" >&2
+    echo "Stash or stage them before committing." >&2
+    exit 1
+  fi
+fi
+
 if git rev-parse --verify HEAD >/dev/null 2>&1; then
   base=HEAD
 else
