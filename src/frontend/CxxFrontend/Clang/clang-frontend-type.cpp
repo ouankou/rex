@@ -877,6 +877,9 @@ bool ClangToSageTranslator::VisitPackExpansionType(clang::PackExpansionType * pa
     SgType* pattern_type = buildTypeFromQualifiedType(pattern);
 
     if (pattern_type != NULL) {
+      if (SgTemplateType *template_type = isSgTemplateType(pattern_type)) {
+        template_type->set_packed(true);
+      }
         // Use the pattern type directly - the pack expansion is handled at a higher level
         *node = pattern_type;
     } else {

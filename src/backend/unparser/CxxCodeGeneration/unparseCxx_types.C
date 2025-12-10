@@ -4963,6 +4963,9 @@ Unparse_Type::unparseTemplateType(SgType* type, SgUnparse_Info& info)
        }
 
        curprint(type_name);
+       if (templateType->get_packed()) {
+         curprint(" ...");
+       }
        curprint(" ");
      }
    }
