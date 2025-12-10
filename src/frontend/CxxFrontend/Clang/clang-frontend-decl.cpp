@@ -2960,7 +2960,53 @@ bool ClangToSageTranslator::VisitUsingDirectiveDecl(clang::UsingDirectiveDecl * 
         if (it != p_decl_translation_map.end()) {
             sg_ns_decl = isSgNamespaceDeclarationStatement(it->second);
         }
-        // If not found, we leave it as NULL - post-processing will handle it
+
+        // If not found, create a stub namespace declaration
+        // This handles implicit namespaces from system headers (like std)
+        // checking
+        if (sg_ns_decl == NULL) {
+          SgScopeStatement *scope = NULL;
+          clang::DeclContext *parent_ctx = clang_ns_decl->getDeclContext();
+
+          if (parent_ctx->isTranslationUnit()) {
+            scope = p_global_scope;
+          } else if (clang::NamespaceDecl *parent_ns =
+                         llvm::dyn_cast<clang::NamespaceDecl>(parent_ctx)) {
+            // If the parent namespace is not global, we try to find it in the
+            // translation map
+            std::map<clang::Decl *, SgNode *>::iterator parent_it =
+                p_decl_translation_map.find(parent_ns);
+            if (parent_it != p_decl_translation_map.end()) {
+              SgNamespaceDeclarationStatement *parent_sg_decl =
+                  isSgNamespaceDeclarationStatement(parent_it->second);
+              if (parent_sg_decl) {
+                scope = parent_sg_decl->get_definition();
+              }
+            }
+          }
+
+          // Fallback to global scope if we couldn't resolve the parent scope
+          if (scope == NULL) {
+            scope = p_global_scope;
+          }
+
+          // Construct the name
+          SgName name(clang_ns_decl->getNameAsString());
+          bool isAnonymous = clang_ns_decl->isAnonymousNamespace();
+          if (isAnonymous || name.getString().empty()) {
+            name = "__anonymous_namespace_" + generate_source_position_string(
+                                                  clang_ns_decl->getBeginLoc());
+          }
+
+          // Create the namespace stub using SageBuilder
+          // This will handle symbol table lookups and creating/reusing
+          // definitions
+          sg_ns_decl = SageBuilder::buildNamespaceDeclaration_nfi(
+              name, isAnonymous, scope);
+
+          // Register it in the map so we don't create it again
+          p_decl_translation_map[clang_ns_decl] = sg_ns_decl;
+        }
     }
 
     // Build the using directive statement using the existing builder
