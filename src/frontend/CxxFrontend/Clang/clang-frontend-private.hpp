@@ -446,7 +446,12 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         void appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScopeStatement* scope);
         SgStatement* wrapStatementWithOpenMPPragmas(clang::Stmt* stmt, SgStatement* statement);
 
-    public:
+        // Helper: Ensure a namespace declaration exists (creating stubs if
+        // needed, recursively)
+        SgNamespaceDeclarationStatement *
+        ensureNamespaceDeclaration(clang::NamespaceDecl *ns_decl);
+
+      public:
         ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file);
 
         virtual ~ClangToSageTranslator();

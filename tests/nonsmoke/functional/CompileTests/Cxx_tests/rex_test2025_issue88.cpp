@@ -1,7 +1,3 @@
-// Test Issue 88: Using Directive Crash
-// Expected: using namespace std should be translated
-// Actual: ASSERTION FAILURE crash (sometimes)
-
 #include <new>
 
 namespace ns {

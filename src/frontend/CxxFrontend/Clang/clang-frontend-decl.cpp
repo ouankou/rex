@@ -2939,6 +2939,65 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl * using_decl, SgNode
     return VisitNamedDecl(using_decl, node) && res;
 }
 
+// Helper to ensure a namespace declaration exists (creating stubs if needed)
+SgNamespaceDeclarationStatement *
+ClangToSageTranslator::ensureNamespaceDeclaration(
+    clang::NamespaceDecl *ns_decl) {
+  if (ns_decl == NULL)
+    return NULL;
+
+  // Check if already translated
+  std::map<clang::Decl *, SgNode *>::iterator it =
+      p_decl_translation_map.find(ns_decl);
+  if (it != p_decl_translation_map.end()) {
+    return isSgNamespaceDeclarationStatement(it->second);
+  }
+
+  // Not found, create a stub
+  SgScopeStatement *scope = NULL;
+  clang::DeclContext *parent_ctx = ns_decl->getDeclContext();
+
+  if (parent_ctx->isTranslationUnit()) {
+    scope = p_global_scope;
+  } else if (clang::NamespaceDecl *parent_ns =
+                 llvm::dyn_cast<clang::NamespaceDecl>(parent_ctx)) {
+    // Recursively ensure parent namespace exists
+    SgNamespaceDeclarationStatement *parent_sg_decl =
+        ensureNamespaceDeclaration(parent_ns);
+    if (parent_sg_decl) {
+      scope = parent_sg_decl->get_definition();
+    }
+  }
+
+  // Fallback to global scope if we couldn't resolve the parent scope
+  // (This shouldn't happen for valid namespaces, but safety first)
+  if (scope == NULL) {
+    scope = p_global_scope;
+  }
+
+  // Construct the name
+  SgName name(ns_decl->getNameAsString());
+  bool isAnonymous = ns_decl->isAnonymousNamespace();
+  if (isAnonymous || name.getString().empty()) {
+    name = "__anonymous_namespace_" +
+           generate_source_position_string(ns_decl->getBeginLoc());
+  }
+
+  // Create the namespace stub using SageBuilder
+  // This will handle symbol table lookups and creating/reusing definitions
+  SgNamespaceDeclarationStatement *sg_ns_decl =
+      SageBuilder::buildNamespaceDeclaration_nfi(name, isAnonymous, scope);
+
+  // ROOT CAUSE FIX: Do NOT register the stub in the translation map.
+  // If we register it, subsequent traversals of the actual namespace definition
+  // (e.g. from system headers) will see the map entry and skip translation,
+  // leaving the namespace empty and causing unparser crashes. By not
+  // registering it, we allow 'VisitNamespaceDecl' to run normally when
+  // encountered later. p_decl_translation_map[ns_decl] = sg_ns_decl;
+
+  return sg_ns_decl;
+}
+
 bool ClangToSageTranslator::VisitUsingDirectiveDecl(clang::UsingDirectiveDecl * using_directive_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToSageTranslator::VisitUsingDirectiveDecl" << std::endl;
@@ -2949,65 +3008,12 @@ bool ClangToSageTranslator::VisitUsingDirectiveDecl(clang::UsingDirectiveDecl * 
     // Build a SgUsingDirectiveStatement to represent the using directive
 
     // Get the namespace being imported
-    // Note: We only check if it's already translated, we don't traverse it
-    // to avoid pulling in the entire namespace contents
     clang::NamespaceDecl* clang_ns_decl = using_directive_decl->getNominatedNamespace();
-    SgNamespaceDeclarationStatement* sg_ns_decl = NULL;
 
-    if (clang_ns_decl != NULL) {
-        // Check if namespace was already translated
-        std::map<clang::Decl *, SgNode *>::iterator it = p_decl_translation_map.find(clang_ns_decl);
-        if (it != p_decl_translation_map.end()) {
-            sg_ns_decl = isSgNamespaceDeclarationStatement(it->second);
-        }
-
-        // If not found, create a stub namespace declaration
-        // This handles implicit namespaces from system headers (like std)
-        // checking
-        if (sg_ns_decl == NULL) {
-          SgScopeStatement *scope = NULL;
-          clang::DeclContext *parent_ctx = clang_ns_decl->getDeclContext();
-
-          if (parent_ctx->isTranslationUnit()) {
-            scope = p_global_scope;
-          } else if (clang::NamespaceDecl *parent_ns =
-                         llvm::dyn_cast<clang::NamespaceDecl>(parent_ctx)) {
-            // If the parent namespace is not global, we try to find it in the
-            // translation map
-            std::map<clang::Decl *, SgNode *>::iterator parent_it =
-                p_decl_translation_map.find(parent_ns);
-            if (parent_it != p_decl_translation_map.end()) {
-              SgNamespaceDeclarationStatement *parent_sg_decl =
-                  isSgNamespaceDeclarationStatement(parent_it->second);
-              if (parent_sg_decl) {
-                scope = parent_sg_decl->get_definition();
-              }
-            }
-          }
-
-          // Fallback to global scope if we couldn't resolve the parent scope
-          if (scope == NULL) {
-            scope = p_global_scope;
-          }
-
-          // Construct the name
-          SgName name(clang_ns_decl->getNameAsString());
-          bool isAnonymous = clang_ns_decl->isAnonymousNamespace();
-          if (isAnonymous || name.getString().empty()) {
-            name = "__anonymous_namespace_" + generate_source_position_string(
-                                                  clang_ns_decl->getBeginLoc());
-          }
-
-          // Create the namespace stub using SageBuilder
-          // This will handle symbol table lookups and creating/reusing
-          // definitions
-          sg_ns_decl = SageBuilder::buildNamespaceDeclaration_nfi(
-              name, isAnonymous, scope);
-
-          // Register it in the map so we don't create it again
-          p_decl_translation_map[clang_ns_decl] = sg_ns_decl;
-        }
-    }
+    // Ensure the namespace exists in the AST (creating stubs if needed,
+    // supporting nested namespaces)
+    SgNamespaceDeclarationStatement *sg_ns_decl =
+        ensureNamespaceDeclaration(clang_ns_decl);
 
     // Build the using directive statement using the existing builder
     SgUsingDirectiveStatement* using_dir_stmt = SageBuilder::buildUsingDirectiveStatement(sg_ns_decl);
