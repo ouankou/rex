@@ -3518,6 +3518,49 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 } else if (SgNamespaceDefinitionStatement* ns_def = isSgNamespaceDefinitionStatement(context_node)) {
                     proper_scope = ns_def;
                 }
+            } else if (llvm::isa<clang::NamespaceDecl>(context_decl)) {
+              // REX FIX Issue 87: Functions inside namespaces lost.
+              // If the context is a namespace but it's not in the map yet, it
+              // likely means we are currently traversing it
+              // (VisistNamespaceDecl pushes scope). We must verify that the top
+              // of the scope stack is indeed the namespace we expect.
+              clang::NamespaceDecl *ns_decl =
+                  llvm::cast<clang::NamespaceDecl>(context_decl);
+              SgScopeStatement *topScope = SageBuilder::topScopeStack();
+
+              if (SgNamespaceDefinitionStatement *nsDef =
+                      isSgNamespaceDefinitionStatement(topScope)) {
+                // REX FIX CAUTION: Do not mess with system headers (std
+                // namespace) as it breaks regressions. Only apply this fix for
+                // user code.
+                bool inSystemHeader = false;
+                if (p_compiler_instance) {
+                  inSystemHeader =
+                      p_compiler_instance->getSourceManager().isInSystemHeader(
+                          ns_decl->getLocation());
+                }
+
+                if (!inSystemHeader) {
+                  SgNamespaceDeclarationStatement *nsDeclObj =
+                      nsDef->get_namespaceDeclaration();
+                  bool match = false;
+
+                  if (ns_decl->isAnonymousNamespace()) {
+                    if (nsDeclObj->get_isUnnamedNamespace()) {
+                      match = true;
+                    }
+                  } else {
+                    if (nsDeclObj->get_name().getString() ==
+                        ns_decl->getNameAsString()) {
+                      match = true;
+                    }
+                  }
+
+                  if (match) {
+                    proper_scope = topScope;
+                  }
+                }
+              }
             }
         }
     }
