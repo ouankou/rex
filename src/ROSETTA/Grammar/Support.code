@@ -21061,6 +21061,9 @@ void SgTemplateParameter::post_construction_initialization()
      p_templateDeclaration                 = NULL;
      p_defaultTemplateDeclarationParameter = NULL;
 #endif
+
+  // Default to non-pack; the frontend sets this when encountering a parameter pack.
+     p_is_parameter_pack = false;
    }
 
 // Different constructors for use in building the different types of parameters possible

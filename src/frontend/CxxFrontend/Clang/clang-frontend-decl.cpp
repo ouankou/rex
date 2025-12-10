@@ -480,12 +480,6 @@ SgTemplateParameter * ClangToSageTranslator::translateTemplateParameter ( clang:
         // Leave them empty so the unparser knows they're anonymous
         // The placeholder names like __type_param_0 are not needed
 
-        if (type_param->isParameterPack()) {
-             // REX FIX: ROSE unparser doesn't seem to check for pack flag on type parameters.
-             // Prepend "..." to the name so it prints "typename ... Args".
-             name_str = "... " + name_str;
-        }
-
         SgTemplateType* template_type = SageBuilder::buildTemplateType(SgName(name_str));
         sg_param = SageBuilder::buildTemplateParameter(SgTemplateParameter::type_parameter, template_type);
 
@@ -505,25 +499,7 @@ SgTemplateParameter * ClangToSageTranslator::translateTemplateParameter ( clang:
                 }
             }
         }
-        
-        if (type_param->isParameterPack()) {
-             // REX FIX: Handle parameter packs
-             // Assuming SgTemplateParameter has set_is_parameter_pack based on grep
-             // If this fails to compile, we need to find the correct method/member.
-             // But usually ROSE follows this naming convention.
-             // Also, we need to make sure we don't need to wrap it in SgTemplateParameterPack?
-             // SgTemplateParameterPack is usually for arguments. For parameters, it's a flag.
-             // Let's try the flag.
-             // Wait, I need to verify if set_parameterType(template_parameter_pack) is the way.
-             // But grep showed set_is_parameter_pack.
-             // I'll try calling it.
-             // sg_param->set_parameterType(SgTemplateParameter::template_parameter_pack); 
-             // No, let's try the boolean setter.
-             // Actually, I can't call it if I don't know the name for sure.
-             // But I'll try.
-             // sg_param->set_is_parameter_pack(true); // This is risky without verification.
-             // Let's try to find the method name via grep again but with context.
-        }
+        sg_param->set_is_parameter_pack(type_param->isParameterPack());
     } else if (clang::NonTypeTemplateParmDecl* non_type_param = llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(param_decl)) {
         std::string name_str = non_type_param->getNameAsString();
         if (name_str.empty()) {
@@ -538,16 +514,15 @@ SgTemplateParameter * ClangToSageTranslator::translateTemplateParameter ( clang:
         // Build initialized name so the unparser keeps the parameter name/type when no default is present.
         SgInitializedName* init_name = SageBuilder::buildInitializedName(SgName(name_str), type);
         applySourceRange(init_name, non_type_param->getSourceRange());
+        init_name->set_is_parameter_pack(non_type_param->isParameterPack());
 
         SgTemplateParameter* param = SageBuilder::buildTemplateParameter(SgTemplateParameter::nontype_parameter, type);
         param->set_initializedName(init_name);
         init_name->set_parent(param);
         param->set_type(type);
         sg_param = param;
-        
-        if (non_type_param->isParameterPack()) {
-             // sg_param->set_is_parameter_pack(true);
-        }
+
+        sg_param->set_is_parameter_pack(non_type_param->isParameterPack());
 
         // NOTE: Template parameters don't set declptr. SgTemplateParameter is an SgSupport node,
         // not an SgDeclarationStatement, so it cannot be used with set_declptr().
@@ -640,10 +615,9 @@ SgTemplateParameter * ClangToSageTranslator::translateTemplateParameter ( clang:
         // e.g., "template <typename ...> typename C" - the outer "typename" before C
         std::string outer_kw = template_template_param->wasDeclaredWithTypename() ? "typename" : "class";
         SageInterface::setTemplateParameterKeyword(sg_param, outer_kw);
-        
-        if (template_template_param->isParameterPack()) {
-             // sg_param->set_is_parameter_pack(true);
-        }
+
+        sg_param->set_is_parameter_pack(
+            template_template_param->isParameterPack());
     } else {
         std::cerr << "Warning: Unsupported template parameter kind: "
                   << param_decl->getDeclKindName() << std::endl;

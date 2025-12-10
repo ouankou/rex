@@ -47,3 +47,14 @@ add_test(
   NAME Cxx_tests_rex_test2025_issue99_failure_propagation
   COMMAND sh -c "\"$@\" && exit 1 || exit 0" dummy $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp
 )
+
+add_test(
+  NAME Cxx_tests_rex_test2025_variadic_template_packs
+  COMMAND sh -c "\"$@\" && grep -E \"template <typename\\s*\\.\\.\\.\" rose_rex_test2025_variadic_template_packs.cpp | grep -v \"//\" && grep -E \"template <int\\s*\\.\\.\\.\" rose_rex_test2025_variadic_template_packs.cpp | grep -v \"//\" && grep -E \"class\\s*\\.\\.\\s*Templates\" rose_rex_test2025_variadic_template_packs.cpp | grep -v \"//\" && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_variadic_template_packs.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_variadic_template_packs.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2025_variadic_template_packs PROPERTIES LABELS Cxx_tests)

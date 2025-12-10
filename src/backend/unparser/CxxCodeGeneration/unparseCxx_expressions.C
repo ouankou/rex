@@ -1532,13 +1532,7 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                    type_name = type_name.substr(prefix.length());
                }
 
-               // REX FIX: Handle pack prefix "... " - extract it for separate handling
-               bool is_pack = false;
-               const std::string pack_prefix = "... ";
-               if (type_name.compare(0, pack_prefix.length(), pack_prefix) == 0) {
-                   is_pack = true;
-                   type_name = type_name.substr(pack_prefix.length());
-               }
+               bool is_pack = templateParameter->get_is_parameter_pack();
 
                // REX FIX: Check if this is an anonymous parameter (empty or placeholder name after pack prefix removed)
                // The frontend may generate __type_param_N for anonymous parameters
@@ -1591,6 +1585,12 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
 
           case SgTemplateParameter::nontype_parameter:
              {
+            bool is_pack = templateParameter->get_is_parameter_pack();
+            if (!is_pack && templateParameter->get_initializedName() != NULL) {
+              is_pack = templateParameter->get_initializedName()
+                            ->get_is_parameter_pack();
+            }
+
                if (templateParameter->get_expression() != NULL)
                   {
 #if 0
@@ -1614,6 +1614,9 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                       SgUnparse_Info ninfo(info);
                       unp->u_type->unparseType(type,ninfo);
                     }
+                    if (is_pack) {
+                      curprint("... ");
+                    }
                     curprint(templateParameter->get_initializedName()->get_name());
                   }
 
@@ -1628,6 +1631,7 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
 #if 0
                printf ("unparseTemplateParameter(): case SgTemplateParameter::template_parameter: output name = %s \n",templateDeclaration->get_name().str());
 #endif
+               bool is_pack = templateParameter->get_is_parameter_pack();
                curprint("template ");
 
                SgTemplateParameterPtrList & templateParameterList = nrdecl->get_tpl_params();
@@ -1644,6 +1648,9 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                    kw = stored_kw + " ";
                }
                curprint(kw);
+               if (is_pack) {
+                 curprint("... ");
+               }
 
                std::string name_str = nrdecl->get_name().getString();
                if (name_str.size() > 2 && name_str.compare(0,2,"::") == 0) {
