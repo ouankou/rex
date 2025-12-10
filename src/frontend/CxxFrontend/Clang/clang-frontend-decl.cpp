@@ -3671,9 +3671,76 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(clang::TypeAliasDecl * type_alias
 
     SgName name(type_alias_decl->getNameAsString());
     clang::QualType underlyingQualType = type_alias_decl->getUnderlyingType();
-    SgType * type = buildTypeFromQualifiedType(underlyingQualType);
+    SgType *type = NULL;
+
+    // Prefer explicit template specialization type to preserve template
+    // arguments.
+    const clang::Type *qt = underlyingQualType.getTypePtr();
+    const clang::Type *named = qt;
+    if (const clang::ElaboratedType *elab =
+            llvm::dyn_cast<clang::ElaboratedType>(qt)) {
+      named = elab->getNamedType().getTypePtr();
+    }
+    if (const clang::TemplateSpecializationType *spec =
+            llvm::dyn_cast<clang::TemplateSpecializationType>(named)) {
+      clang::TemplateName tname = spec->getTemplateName();
+      if (clang::TemplateDecl *clang_tpl = tname.getAsTemplateDecl()) {
+        if (SgNode *tpl_node = Traverse(clang_tpl)) {
+          if (SgTemplateClassDeclaration *tpl_decl =
+                  isSgTemplateClassDeclaration(tpl_node)) {
+            SgTemplateInstantiationDecl *inst =
+                getOrCreateTemplateInstantiation(tpl_decl, spec);
+            type = inst->get_type();
+          }
+        }
+      }
+    }
+
+    if (type == NULL) {
+      type = buildTypeFromQualifiedType(underlyingQualType);
+    }
+
+    // Ensure template argument list is populated on the instantiation type.
+    if (SgClassType *cls_type = isSgClassType(type)) {
+      if (SgTemplateInstantiationDecl *inst =
+              isSgTemplateInstantiationDecl(cls_type->get_declaration())) {
+        if (inst->get_templateArguments().empty()) {
+          const clang::Type *qt = underlyingQualType.getTypePtr();
+          const clang::Type *named = qt;
+          if (const clang::ElaboratedType *elab =
+                  llvm::dyn_cast<clang::ElaboratedType>(qt)) {
+            named = elab->getNamedType().getTypePtr();
+          }
+          if (const clang::TemplateSpecializationType *spec =
+                  llvm::dyn_cast<clang::TemplateSpecializationType>(named)) {
+            SgTemplateArgumentPtrList args = buildTemplateArguments(spec);
+            inst->get_templateArguments() = args;
+            for (SgTemplateArgument *arg : inst->get_templateArguments()) {
+              if (arg != NULL)
+                arg->set_parent(inst);
+            }
+          }
+        }
+      }
+    }
 
     SgTypedefDeclaration * sg_typedef_decl = SageBuilder::buildTypedefDeclaration_nfi(name, type, SageBuilder::topScopeStack());
+
+    // Preserve the spelled underlying type for name qualification during
+    // unparsing
+    clang::PrintingPolicy policy =
+        p_compiler_instance->getASTContext().getPrintingPolicy();
+    policy.FullyQualifiedName = true;
+    policy.SuppressScope = false;
+    std::string spelled_underlying = underlyingQualType.getAsString(policy);
+    if (spelled_underlying.compare(0, 2, "::") == 0) {
+      spelled_underlying.erase(0, 2);
+    }
+    if (!spelled_underlying.empty()) {
+      auto &type_name_map = SgNode::get_globalTypeNameMap();
+      type_name_map[sg_typedef_decl] = spelled_underlying;
+      type_name_map[type] = spelled_underlying;
+    }
 
     sg_typedef_decl->set_typedef_type(SgTypedefDeclaration::e_using);
 
@@ -5225,7 +5292,29 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
    // Pei-Hung (09/01/2022) In test2022_3.c, the variable symbol needs to be avaiable before processing the RHS.
    // calling buildVariableDeclaration_nfi to get the symbol in place.
    SgVariableDeclaration * sg_var_decl = SageBuilder::buildVariableDeclaration_nfi(name,type, NULL ,SageBuilder::topScopeStack());
- 
+
+   // Record the spelled variable type for name qualification during unparsing
+   const clang::Type *unqualified_type = var_decl->getType().getTypePtr();
+   if (!unqualified_type->isArrayType() &&
+       !unqualified_type->isFunctionType()) {
+     clang::PrintingPolicy var_policy =
+         p_compiler_instance->getASTContext().getPrintingPolicy();
+     var_policy.FullyQualifiedName = true;
+     var_policy.SuppressScope = false;
+     std::string spelled_var_type = var_decl->getType().getAsString(var_policy);
+     if (spelled_var_type.compare(0, 2, "::") == 0) {
+       spelled_var_type.erase(0, 2);
+     }
+     if (!spelled_var_type.empty()) {
+       auto &type_name_map = SgNode::get_globalTypeNameMap();
+       for (SgInitializedName *init_name : sg_var_decl->get_variables()) {
+         if (init_name != NULL) {
+           type_name_map[init_name] = spelled_var_type;
+         }
+       }
+     }
+   }
+
    // CLANG FRONTEND FIX: Check if variable has an initializer before traversing
    clang::Expr * init_expr = var_decl->getInit();
     SgExpression * expr = NULL;

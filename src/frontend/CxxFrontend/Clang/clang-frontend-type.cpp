@@ -1664,6 +1664,21 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(clang::TemplateSpeci
     *node = inst_decl->get_type();
     ROSE_ASSERT(*node != nullptr);
 
+    // Preserve explicit template arguments in the generated type name for
+    // unparsing
+    clang::PrintingPolicy policy =
+        p_compiler_instance->getASTContext().getPrintingPolicy();
+    policy.FullyQualifiedName = true;
+    policy.SuppressScope = false;
+    std::string type_name =
+        clang::QualType(template_specialization_type, 0).getAsString(policy);
+    if (type_name.compare(0, 2, "::") == 0) {
+      type_name.erase(0, 2);
+    }
+    if (!type_name.empty()) {
+      SgNode::get_globalTypeNameMap()[*node] = type_name;
+    }
+
     return VisitType(template_specialization_type, node);
 }
 
@@ -1907,6 +1922,25 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
 #endif
 
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
+
+    // Preserve fully qualified spelling for elaborated types (e.g.,
+    // Container<int>::value_type)
+    clang::PrintingPolicy policy =
+        p_compiler_instance->getASTContext().getPrintingPolicy();
+    policy.FullyQualifiedName = true;
+    policy.SuppressScope = false;
+    std::string qualified_name =
+        elaborated_type->getNamedType().getAsString(policy);
+    if (qualified_name.compare(0, 2, "::") == 0) {
+      qualified_name.erase(0, 2);
+    }
+
+    if (!qualified_name.empty()) {
+      auto &type_name_map = SgNode::get_globalTypeNameMap();
+      if (type_name_map.find(type) == type_name_map.end()) {
+        type_name_map[type] = qualified_name;
+      }
+    }
 
     // CLANG FRONTEND NOTE: ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
     // and struct/class/enum keywords that provide "sugar" for the type reference.
