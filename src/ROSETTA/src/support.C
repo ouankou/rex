@@ -2478,7 +2478,9 @@ Specifiers that can have only one value (implemented with a protected enum varia
   // DQ (11/21/2011): template parameters can be "int U = 42" in which case "U" needs to be an initialized name (see test2011_157.C).
      TemplateParameter.setDataPrototype     ( "SgInitializedName*", "initializedName", "= NULL",
                                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
+     TemplateParameter.setDataPrototype(
+         "bool", "is_parameter_pack", "= false", NO_CONSTRUCTOR_PARAMETER,
+         BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
      TemplateArgument.setFunctionPrototype ( "HEADER_TEMPLATE_ARGUMENT", "../Grammar/Support.code");
      TemplateArgument.setDataPrototype     ( "SgTemplateArgument::template_argument_enum"   , "argumentType", "= argument_undefined",
@@ -2860,23 +2862,3 @@ Specifiers that can have only one value (implemented with a protected enum varia
     OpenclAccessModeModifier.setFunctionSource ( "SOURCE_OPENCL_ACCESS_MODE_MODIFIER", "../Grammar/Support.code" );
 
    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -10,6 +10,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   lulesh.C
   luleshTALC.C
   rex_test2025_template_call.cpp
+  rex_test2025_variadic_template_params.cpp
   method-defn-in-tpldecl-0.C
   method-defn-in-tpldecl-1.C
   rose-1431-0.C

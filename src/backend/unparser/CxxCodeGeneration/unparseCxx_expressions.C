@@ -1532,13 +1532,7 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                    type_name = type_name.substr(prefix.length());
                }
 
-               // REX FIX: Handle pack prefix "... " - extract it for separate handling
-               bool is_pack = false;
-               const std::string pack_prefix = "... ";
-               if (type_name.compare(0, pack_prefix.length(), pack_prefix) == 0) {
-                   is_pack = true;
-                   type_name = type_name.substr(pack_prefix.length());
-               }
+               bool is_pack = templateParameter->get_is_parameter_pack();
 
                // REX FIX: Check if this is an anonymous parameter (empty or placeholder name after pack prefix removed)
                // The frontend may generate __type_param_N for anonymous parameters
@@ -1554,14 +1548,25 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                  if (!stored_kw.empty()) {
                      kw = stored_kw + " ";
                  } else {
-                     // Default: prefer typename for anonymous parameters, class for named ones
-                     kw = type_name.empty() ? "typename " : "class ";
+                   // Default: prefer typename for anonymous parameters, class
+                   // for named ones
+                   kw = type_name.empty() ? "typename " : "class ";
                  }
                  curprint(kw);
                  
                  // Print pack ellipsis after keyword if this is a pack
                  if (is_pack) {
-                     curprint("... ");
+                   curprint("...");
+                   if (!type_name.empty()) {
+                     curprint(" ");
+                   }
+                 }
+               } else if (is_pack) {
+                 // Even outside of template headers, preserve the pack marker
+                 // before the name
+                 curprint("...");
+                 if (!type_name.empty()) {
+                   curprint(" ");
                  }
                }
                curprint(type_name);
@@ -1597,25 +1602,33 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                     printf ("unparseTemplateParameter(): case SgTemplateParameter::nontype_parameter: templateParameter->get_expression() = %p = %s \n",templateParameter->get_expression(),templateParameter->get_expression()->class_name().c_str());
 #endif
                     unp->u_exprStmt->unparseExpression(templateParameter->get_expression(),info);
-                  }
-                 else
-                  {
-                    ASSERT_not_null(templateParameter->get_initializedName());
+               } else {
+                 ASSERT_not_null(templateParameter->get_initializedName());
 
-                    SgType* type = templateParameter->get_initializedName()->get_type();
-                    ASSERT_not_null(type);
+                 SgType *type =
+                     templateParameter->get_initializedName()->get_type();
+                 ASSERT_not_null(type);
 #if 0
                     printf ("unparseTemplateParameter(): case SgTemplateParameter::nontype_parameter: templateParameter->get_initializedName()->get_type() = %p = %s \n",type,type->class_name().c_str());
 #endif
                  // DQ (9/10/2014): Note that this will unparse "int T" which we want in the template header, but not in the template parameter list.
                  // unp->u_type->outputType<SgInitializedName>(templateParameter->get_initializedName(),type,info);
-                    // TV (03/20/2018) only if it is a template header (not a specialization)
-                    if (is_template_header) {
-                      SgUnparse_Info ninfo(info);
-                      unp->u_type->unparseType(type,ninfo);
-                    }
-                    curprint(templateParameter->get_initializedName()->get_name());
-                  }
+                 // TV (03/20/2018) only if it is a template header (not a
+                 // specialization)
+                 if (is_template_header) {
+                   SgUnparse_Info ninfo(info);
+                   unp->u_type->unparseType(type, ninfo);
+                 }
+                 const SgName &param_name =
+                     templateParameter->get_initializedName()->get_name();
+                 if (templateParameter->get_is_parameter_pack()) {
+                   curprint("...");
+                   if (!param_name.getString().empty()) {
+                     curprint(" ");
+                   }
+                 }
+                 curprint(param_name);
+               }
 
                break;
              }
@@ -1648,6 +1661,12 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                std::string name_str = nrdecl->get_name().getString();
                if (name_str.size() > 2 && name_str.compare(0,2,"::") == 0) {
                    name_str = name_str.substr(2);
+               }
+               if (templateParameter->get_is_parameter_pack()) {
+                 curprint("...");
+                 if (!name_str.empty()) {
+                   curprint(" ");
+                 }
                }
                curprint(name_str);
 #if 0

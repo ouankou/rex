@@ -21061,6 +21061,9 @@ void SgTemplateParameter::post_construction_initialization()
      p_templateDeclaration                 = NULL;
      p_defaultTemplateDeclarationParameter = NULL;
 #endif
+
+  // REX: template parameter packs default to false unless explicitly marked
+     p_is_parameter_pack = false;
    }
 
 // Different constructors for use in building the different types of parameters possible
@@ -21126,35 +21129,40 @@ SgTemplateParameter::SgTemplateParameter ( SgTemplateDeclaration* parameter, SgT
 bool
 SgTemplateParameter::is_matching_type    (const SgTemplateParameter & X, const SgTemplateParameter & Y)
    {
-     return (X.get_parameterType() == SgTemplateParameter::type_parameter) && (X.get_parameterType() == Y.get_parameterType());
+     return (X.get_parameterType() == SgTemplateParameter::type_parameter) &&
+            (X.get_parameterType() == Y.get_parameterType()) &&
+            (X.get_is_parameter_pack() == Y.get_is_parameter_pack());
    }
 
 bool
 SgTemplateParameter::is_matching_nontype (const SgTemplateParameter & X, const SgTemplateParameter & Y)
    {
-     return (X.get_parameterType() == SgTemplateParameter::nontype_parameter) && (X.get_parameterType() == Y.get_parameterType());
+     return (X.get_parameterType() == SgTemplateParameter::nontype_parameter) &&
+            (X.get_parameterType() == Y.get_parameterType()) &&
+            (X.get_is_parameter_pack() == Y.get_is_parameter_pack());
    }
 
 bool
 SgTemplateParameter::is_matching_template(const SgTemplateParameter & X, const SgTemplateParameter & Y)
    {
-     return (X.get_parameterType() == SgTemplateParameter::template_parameter) && (X.get_parameterType() == Y.get_parameterType());
+     return (X.get_parameterType() == SgTemplateParameter::template_parameter) &&
+            (X.get_parameterType() == Y.get_parameterType()) &&
+            (X.get_is_parameter_pack() == Y.get_is_parameter_pack());
    }
 
 // DQ (5/19/2014): This is added to symetry in the functions that are template on either SgTemplateArgument or SgTemplateParameter.
 bool
 SgTemplateParameter::is_matching_template_pack_expansion (const SgTemplateParameter & X, const SgTemplateParameter & Y)
    {
-  // There is not associated value for the SgTemplateParameter enums, so this function should always return SgTemplateParameter::is_matching_kind().
-  // return true;
-  // return (X.get_parameterType() == Y.get_parameterType());
-     return is_matching_kind(X,Y);
+  // Treat pack matching as both parameters being marked as packs and of the same base kind.
+     return X.get_is_parameter_pack() && Y.get_is_parameter_pack() && is_matching_kind(X,Y);
    }
 
 bool
 SgTemplateParameter::is_matching_kind (const SgTemplateParameter & X, const SgTemplateParameter & Y)
    {
-     return (X.get_parameterType() == Y.get_parameterType());
+     return (X.get_parameterType() == Y.get_parameterType()) &&
+            (X.get_is_parameter_pack() == Y.get_is_parameter_pack());
    }
 
 
@@ -21218,6 +21226,12 @@ SgTemplateParameter::get_mangled_name (void) const
 #endif
 
      string str_mangled_name (mangled_name.str());
+
+  // Encode parameter pack distinction so packs don't collide with non-pack manglings.
+     if (get_is_parameter_pack())
+        {
+          str_mangled_name += "__pack";
+        }
 
 #if 0
   // DQ (9/24/2012): Added test for template syntax in the generated mangled name (convert to std::string so we can simplify the test).
