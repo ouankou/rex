@@ -57,7 +57,7 @@ if [[ $status -gt 1 ]]; then
 fi
 
 if [[ ${#staged_files[@]} -gt 0 ]]; then
-  mapfile -t format_targets < <(git diff --name-only --diff-filter=M -- "${staged_files[@]}")
+  mapfile -t format_targets < <(git diff --name-only --diff-filter=AM -- "${staged_files[@]}")
   if [[ ${#format_targets[@]} -gt 0 ]]; then
     git add -- "${format_targets[@]}"
   fi
