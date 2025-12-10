@@ -5293,10 +5293,12 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
    // calling buildVariableDeclaration_nfi to get the symbol in place.
    SgVariableDeclaration * sg_var_decl = SageBuilder::buildVariableDeclaration_nfi(name,type, NULL ,SageBuilder::topScopeStack());
 
-   // Record the spelled variable type for name qualification during unparsing
+   // Record the spelled variable type for name qualification during unparsing.
+   // Skip embedded definitions (e.g., "class X { ... } var;") to avoid losing
+   // the in-place class definition during unparsing.
    const clang::Type *unqualified_type = var_decl->getType().getTypePtr();
    if (!unqualified_type->isArrayType() &&
-       !unqualified_type->isFunctionType()) {
+       !unqualified_type->isFunctionType() && !isembedded) {
      clang::PrintingPolicy var_policy =
          p_compiler_instance->getASTContext().getPrintingPolicy();
      var_policy.FullyQualifiedName = true;

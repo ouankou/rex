@@ -1923,22 +1923,26 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
 
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
 
-    // Preserve fully qualified spelling for elaborated types (e.g.,
-    // Container<int>::value_type)
-    clang::PrintingPolicy policy =
-        p_compiler_instance->getASTContext().getPrintingPolicy();
-    policy.FullyQualifiedName = true;
-    policy.SuppressScope = false;
-    std::string qualified_name =
-        elaborated_type->getNamedType().getAsString(policy);
-    if (qualified_name.compare(0, 2, "::") == 0) {
-      qualified_name.erase(0, 2);
-    }
+    // Preserve fully qualified spelling for template elaborated types (e.g.,
+    // Container<int>::value_type). Avoid touching non-template classes that
+    // may carry in-place definitions (e.g., "class X { ... } var;").
+    if (llvm::isa<clang::TemplateSpecializationType>(
+            elaborated_type->getNamedType().getTypePtr())) {
+      clang::PrintingPolicy policy =
+          p_compiler_instance->getASTContext().getPrintingPolicy();
+      policy.FullyQualifiedName = true;
+      policy.SuppressScope = false;
+      std::string qualified_name =
+          elaborated_type->getNamedType().getAsString(policy);
+      if (qualified_name.compare(0, 2, "::") == 0) {
+        qualified_name.erase(0, 2);
+      }
 
-    if (!qualified_name.empty()) {
-      auto &type_name_map = SgNode::get_globalTypeNameMap();
-      if (type_name_map.find(type) == type_name_map.end()) {
-        type_name_map[type] = qualified_name;
+      if (!qualified_name.empty()) {
+        auto &type_name_map = SgNode::get_globalTypeNameMap();
+        if (type_name_map.find(type) == type_name_map.end()) {
+          type_name_map[type] = qualified_name;
+        }
       }
     }
 
