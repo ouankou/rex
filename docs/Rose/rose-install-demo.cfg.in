@@ -717,8 +717,7 @@ RECURSIVE              = NO
 # Note that relative paths are relative to the directory from which doxygen is
 # run.
 
-EXCLUDE                = @top_srcdir@/src/frontend/CxxFrontend/EDG \
-                         @top_srcdir@/AST_RewriteMechanism/testRewrite.h \
+EXCLUDE                = @top_srcdir@/AST_RewriteMechanism/testRewrite.h \
                          @top_srcdir@/AST_RewriteMechanism/testRewrite.C \
                          @top_srcdir@/AST_RewriteMechanism/testNewRewrite.h \
                          @top_srcdir@/AST_RewriteMechanism/testNewRewrite.C \

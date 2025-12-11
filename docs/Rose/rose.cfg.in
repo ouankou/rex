@@ -862,7 +862,6 @@ INPUT                  = @top_srcdir@/docs/Rose/MainPage.dox \
                          @top_pwd@/src/frontend/SageIII \
                          @top_srcdir@/src/frontend/frontend.docs \
                          @top_srcdir@/docs/testDoxygen \
-                         @top_srcdir@/src/frontend/CxxFrontend/EDG/edgRose \
                          @top_srcdir@/src/frontend/OpenFortranParser_SAGE_Connection \
                          @top_srcdir@/src/frontend/SageIII/ \
                          @top_srcdir@/src/frontend/SageIII/sage.docs \
@@ -960,8 +959,7 @@ RECURSIVE              = NO
 # Note that relative paths are relative to the directory from which doxygen is
 # run.
 
-EXCLUDE                = @top_srcdir@/src/frontend/CxxFrontend/EDG \
-                         @top_srcdir@/src/frontend/SageIII/sageInterface/highLevelInterface.h \
+EXCLUDE                = @top_srcdir@/src/frontend/SageIII/sageInterface/highLevelInterface.h \
                          @top_srcdir@/src/midend/ompLowering/libgomp_g.h \
                          @top_srcdir@/util/testStrings.C \
                          @top_srcdir@/util/roseString.h \

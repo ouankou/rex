@@ -17,11 +17,7 @@ AM_CPPFLAGS = -Winvalid-pch $(ROSE_INCLUDES)
 # JJW (8/3/2008): See src/frontend/CxxFrontend/Makefile.am.forBinaryEDG for
 # more information on this process.
 # TV (08/2012): changed 'libroseEDGlibraries' to 'libroseCxxlibraries' while adding Clang support to ROSE
-if ROSE_USE_CLANG_FRONTEND
-   libroseCxxlibraries = frontend/CxxFrontend/Clang/libroseClangFrontend.la
-else
-   libroseCxxlibraries = frontend/CxxFrontend/EDG/libroseEDG.la
-endif
+libroseCxxlibraries = frontend/CxxFrontend/Clang/libroseClangFrontend.la
 
 if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
    libroseOpenFortranParserlibraries = frontend/OpenFortranParser_SAGE_Connection/libroseFortran.la
@@ -146,9 +142,6 @@ rose_config_installed_ldflags =			\
 	$(RT_LIBS)				\
 	$(ROSE_INTEL_COMPILER_MATH_LIBS)	\
 	-lm
-if ROSE_USE_EDG_QUAD_FLOAT
-  rose_config_installed_ldflags += -lquadmath
-endif
 rose_config_cfgdir = $(libdir)
 rose_config_cfg_DATA = rose-config.cfg
 
@@ -308,14 +301,7 @@ cleanTest:
 # DQ (9/14/2006): These are required!
 # Note that uninstall-hook does not work, but uninstall-local does.
 uninstall-local:
-	rm -f $(DESTDIR)$(libdir)/libedg.so
 	rm -f $(DESTDIR)$(libdir)/librose.so
 	@echo "************************************************************"
 	@echo "**** make uninstall rule complete (terminated normally) ****"
 	@echo "************************************************************"
-
-rebuildPrelinker:
-	rm -f frontend/CxxFrontend/EDG/EDG_3.3/util/edg_prelink.lo
-	rm -f frontend/SageIII/Cxx_Grammar.lo
-	$(MAKE)
-
