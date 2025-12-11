@@ -482,14 +482,6 @@ if(enable-advanced-warnings)
   set(ROSE_USE_UNIFORM_ADVANCED_WARNINGS_SUPPORT 1)
 endif()
 
-option(enable-edg-cuda "Build EDG 4.0 with CUDA support" OFF)
-option(enable-edg-opencl "Build EDG 4.0 with OpenCL support" OFF)
-
-option(enable-edg_union_struct_debugging "Should EDG Union/Struct debugging support be used?" OFF)
-if(enable-edg_union_struct_debugging)
-  set(USE_ROSE_EDG_DEBUGGING_SUPPORT 1)
-endif()
-
 option(enable-gnu-extensions "Enable internal support in ROSE for GNU language extensions" OFF)
 if(enable-gnu-extensions)
   set(ROSE_SUPPORT_GNU_EXTENSIONS TRUE)
@@ -610,7 +602,7 @@ set(link_with_libraries ${M_LIB} ${RT_LIB} ${CMAKE_THREAD_LIBS_INIT})
 if(enable-c)
   include(roseChooseBackendCompiler)
   include(roseGenerateBackendCompilerSpecificHeaders)
-  install(DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/ DESTINATION include/edg)
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/ DESTINATION include/clang)
 else()
   # These are required to be defined even when C/C++ analysis is not enabled, but their values don't matter
   set(BACKEND_C_COMPILER_NAME_WITHOUT_PATH "no_compiler")
@@ -777,7 +769,6 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/sage_support
   ${ROSE_TOP_SRC_DIR}/src/ROSETTA/src/
   ${ROSE_TOP_SRC_DIR}/src
-  ${ROSE_TOP_SRC_DIR}/src/frontend/CxxFrontend/EDG/EDG_SAGE_Connection/
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astFixup
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astPostProcessing

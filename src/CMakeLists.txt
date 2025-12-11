@@ -176,11 +176,6 @@ set(LINK_FILES
   libhpdf
   ${CMAKE_DL_LIBS})
 
-# ???
-if(NOT BINARY_EDG)
-  add_definitions(-DUSE_FAKE_EDG)
-endif()
-
 # Depending on which language analysis (frontend) features are enabled in ROSE, we may need some additional libraries.
 if(enable-fortran)
   list(APPEND LINK_FILES roseFortran)

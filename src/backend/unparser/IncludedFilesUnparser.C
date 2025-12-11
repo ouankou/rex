@@ -2360,8 +2360,11 @@ void IncludedFilesUnparser::visit(SgNode* node)
                        }
 
                  // DQ (10/17/2019): We are getting a few too many files detected as containing transformations, so debugging this.
-                    if (normalizedFileName == "/data1/ROSE_CompileTree/git_LINUX-64bit-6.1.0-EDG50-BOOST_1_60-rose_development-rc_install/include/edg/g++_HEADERS/hdrs5/bits/stl_bvector.h")
-                       {
+                       if (normalizedFileName ==
+                           "/data1/ROSE_CompileTree/"
+                           "git_LINUX-64bit-6.1.0-CLANG20-BOOST_1_60-rose_"
+                           "development-rc_install/include/clang/g++_HEADERS/"
+                           "hdrs5/bits/stl_bvector.h") {
                          printf ("ERROR: node = %s normalizedFileName = %s \n",node->class_name().c_str(),normalizedFileName.c_str());
 
                       // DQ (10/17/2019): Debugging code.
@@ -2374,7 +2377,6 @@ void IncludedFilesUnparser::visit(SgNode* node)
                          printf ("Exiting as a test! \n");
                          ROSE_ABORT();
                        }
-
                   }
 
 #if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
@@ -2423,5 +2425,3 @@ void IncludedFilesUnparser::visit(SgNode* node)
         }
 #endif
    }
-
-

@@ -55,7 +55,6 @@ FILES_NOT_REQUIRED_FOR_DISTRIBUTIONS = \
      acx_libxml2.m4 \
      choose-backend-compiler.m4 \
      compiler-defs.m4 \
-     EDG.m4 \
      enable-rosehpct.m4 \
      generate-backend-compiler-specific-headers.m4 \
      ROSE.m4 \
@@ -68,7 +67,6 @@ FILES_NOT_REQUIRED_FOR_DISTRIBUTIONS = \
      support-purify.m4 \
      support-rpath.m4 \
      support-visualization.m4 \
-     use_edg_source_code.m4 \
      wave.m4 \
      config.guess \
      depend \
@@ -79,4 +77,3 @@ FILES_NOT_REQUIRED_FOR_DISTRIBUTIONS = \
 # DQ (9/2/2006): I don't think these are required except in the development version of ROSE
 REMOVED_FROM_EXTRA_DIST = \
      acx_libxml2.m4
-

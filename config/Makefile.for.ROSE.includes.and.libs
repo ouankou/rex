@@ -63,11 +63,6 @@ if ROSE_PCH
   ROSE_PCH_INCLUDE = -Winvalid-pch -fPIC -DPIC
 endif
 
-if ROSE_USE_EDG_QUAD_FLOAT
-  ROSE_QUAD_FLOAT_MATH = -lquadmath
-endif
-
-
 # DQ (1/9/2010): Added use of libimf with libm (the two go together when using Intel icc and icpc)
 if USING_INTEL_COMPILER
 #  ROSE_INTEL_COMPILER_MATH_LIBS = -limf -lm

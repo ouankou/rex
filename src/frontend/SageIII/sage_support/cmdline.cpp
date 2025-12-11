@@ -47,11 +47,15 @@ makeSysIncludeList(const Rose_STL_Container<string>& dirs, Rose_STL_Container<st
 #endif
 
 #ifdef _MSC_VER
-     string includeBase = findRoseSupportPathFromBuild("include-staging", "include\\edg");
-     // NP (3/18/2020) Need to switch the slash direction
-     for(int i = 0; i < includeBase.length(); ++i) if(includeBase[i] == '/') includeBase[i] = '\\';
+  string includeBase =
+      findRoseSupportPathFromBuild("include-staging", "include\\clang");
+  // NP (3/18/2020) Need to switch the slash direction
+  for (int i = 0; i < includeBase.length(); ++i)
+    if (includeBase[i] == '/')
+      includeBase[i] = '\\';
 #else
-     string includeBase = findRoseSupportPathFromBuild("include-staging", "include/edg");
+  string includeBase =
+      findRoseSupportPathFromBuild("include-staging", "include/clang");
 #endif
      for (Rose_STL_Container<string>::const_iterator i = dirs.begin(); i != dirs.end(); ++i)
         {

@@ -174,7 +174,18 @@ if test "x$enable_smaller_generated_files" = "xyes"; then
 fi
 
 # This is the support for using EDG as the frontend in ROSE.
-ROSE_SUPPORT_EDG
+AC_MSG_NOTICE([EDG frontend support removed; disabling legacy EDG toggles])
+edg_major_version_number=0
+edg_minor_version_number=0
+AC_SUBST(ROSE_EDG_MAJOR_VERSION_NUMBER, [$edg_major_version_number])
+AC_SUBST(ROSE_EDG_MINOR_VERSION_NUMBER, [$edg_minor_version_number])
+AM_CONDITIONAL(ROSE_USE_EDG_VERSION_5_0, [false])
+AM_CONDITIONAL(ROSE_USE_EDG_VERSION_6_0, [false])
+AM_CONDITIONAL(ROSE_USE_EDG_VERSION_6_3, [false])
+AM_CONDITIONAL(ROSE_HAS_EDG_SOURCE, [false])
+AM_CONDITIONAL(BINARY_EDG_TARBALL_ENABLED, [false])
+AM_CONDITIONAL(ROSE_USE_EDG_QUAD_FLOAT, [false])
+AM_CONDITIONAL(ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION, [false])
 
 # This is the support for using Clang as a frontend in ROSE not the support for Clang as a compiler to compile ROSE source code.
 ROSE_SUPPORT_CLANG
@@ -200,40 +211,6 @@ else
 fi
 AC_SUBST(ROSE_SUPPORT_MICROSOFT_EXTENSIONS)
 AM_CONDITIONAL(ROSE_USE_MICROSOFT_EXTENSIONS, [test "x$enable_microsoft_extensions" = xyes])
-
-# TV (12/31/2018): Defining macro to detect the support of __float128 in EDG
-#   Only valid if compiling ROSE using GNU compiler (depends on -lquadmath)
-AC_LANG(C++)
-AX_COMPILER_VENDOR
-
-ac_save_LIBS="$LIBS"
-LIBS="$ac_save_LIBS -lquadmath"
-AC_LINK_IFELSE([
-            AC_LANG_PROGRAM([[#include <quadmath.h>]])],
-            [rose_use_edg_quad_float=yes],
-            [rose_use_edg_quad_float=no])
-LIBS="$ac_save_LIBS"
-
-if test "$ROSE_SUPPORT_MICROSOFT_EXTENSIONS" == "TRUE"; then
-  rose_use_edg_quad_float=no
-fi
-
-if test "x$rose_use_edg_quad_float" == "xyes"; then
-  AC_DEFINE([ROSE_USE_EDG_QUAD_FLOAT], [], [Enables support for __float80 and __float128 in EDG.])
-fi
-AC_SUBST(ROSE_USE_EDG_QUAD_FLOAT)
-AM_CONDITIONAL(ROSE_USE_EDG_QUAD_FLOAT, [ test $rose_use_edg_quad_float == yes ])
-unset ax_cv_cxx_compiler_vendor
-
-# DQ (9/16/2012): Added support for debugging output of new EDG/ROSE connection.  More specifically
-# if this is not enabled then it skips the use of output spew in the new EDG/ROSE connection code.
-AC_ARG_ENABLE(debug_output_for_new_edg_interface,
-    AS_HELP_STRING([--enable-debug_output_for_new_edg_interface], [Enable debugging output (spew) of new EDG/ROSE connection]))
-AM_CONDITIONAL(ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION, [test "x$enable_debug_output_for_new_edg_interface" = xyes])
-if test "x$enable_debug_output_for_new_edg_interface" = "xyes"; then
-  AC_MSG_WARN([using this mode causes large volumes of output spew (internal debugging only)!])
-  AC_DEFINE([ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION], [], [Controls large volumes of output spew useful for debugging new EDG/ROSE connection code])
-fi
 
 # DQ (6/7/2013): Added support for new Fortran front-end development.
 AC_ARG_ENABLE(experimental_fortran_frontend,
@@ -637,15 +614,6 @@ ROSE_SUPPORT_LONG_MAKE_CHECK_RULE
 # Make the use of longer test optional where it is used in some ROSE/tests directories
 AM_CONDITIONAL(ROSE_USE_LONG_MAKE_CHECK_RULE,test "$with_ROSE_LONG_MAKE_CHECK_RULE" = yes)
 
-# Check for availability of wget (used for downloading the EDG binaries used in ROSE).
-AC_CHECK_TOOL(ROSE_WGET_PATH, [wget], [no])
-AM_CONDITIONAL(ROSE_USE_WGET, [test "$ROSE_WGET_PATH" != "no"])
-if test "$ROSE_WGET_PATH" = "no"; then
-   AC_MSG_FAILURE([wget was not found; ROSE requires wget to download EDG binaries automatically])
-else
-   # Not clear if we really should have ROSE configure automatically do something like this.
-   AC_MSG_NOTICE([ROSE might use wget to automatically download EDG binaries as required during the build])
-fi
 # Check for availability of ps2pdf, part of ghostscript (used for generating pdf files).
 AC_CHECK_TOOL(ROSE_PS2PDF_PATH, [ps2pdf], [no])
 AM_CONDITIONAL(ROSE_USE_PS2PDF, [test "$ROSE_PS2PDF_PATH" != "no"])
@@ -689,9 +657,6 @@ ROSE_SUPPORT_LIBHARU
 ROSE_SUPPORT_LLVM
 
 AM_CONDITIONAL(ROSE_USE_LLVM,test ! "$with_llvm" = no)
-
-# Control use of debugging support to convert most unions in EDG to structs.
-ROSE_SUPPORT_EDG_DEBUGGING
 
 # Call supporting macro for Omni OpenMP
 #
@@ -992,23 +957,9 @@ AC_DEFUN([ROSE_SUPPORT_ROSE_PART_3],
 [
 # Begin macro ROSE_SUPPORT_ROSE_PART_3.
 
-## Setup the EDG specific stuff
-SETUP_EDG
-
-
-ROSE_ARG_ENABLE(
-  [alternate-edg-build-cpu],
-  [for alternate EDG build cpu],
-  [allows you to generate EDG binaries with a different CPU type in the name string]
-)
-
-#The build_triplet_without_redhat variable is used only in src/frontend/CxxFrontend/Makefile.am to determine the binary edg name
+# Legacy compatibility: provide a stable build triplet substitution even without EDG.
 build_triplet_without_redhat=`${srcdir}/config/cleanConfigGuessOutput "$build" "$build_cpu" "$build_vendor"`
-if test "x$CONFIG_HAS_ROSE_ENABLE_ALTERNATE_EDG_BUILD_CPU" = "xyes"; then
-  # Manually modify the build CPU <build_cpu>-<build_vendor>-<build>
-  build_triplet_without_redhat="$(echo "$build_triplet_without_redhat" | sed 's/^[[^-]]*\(.*\)/'$ROSE_ENABLE_ALTERNATE_EDG_BUILD_CPU'\1/')"
-fi
-AC_SUBST(build_triplet_without_redhat) dnl This is done even with EDG source, since it is used to determine the binary to make in roseFreshTest
+AC_SUBST(build_triplet_without_redhat)
 
 # End macro ROSE_SUPPORT_ROSE_PART_3.
 ])
@@ -1132,27 +1083,6 @@ AC_MSG_NOTICE([subdirs = "$subdirs"])
 AC_CONFIG_SUBDIRS([libltdl])
 
 # This list should be the same as in build (search for Makefile.in)
-
-CLASSPATH_COND_IF([ROSE_HAS_EDG_SOURCE], [test "x$has_edg_source" = "xyes"], [
-AC_CONFIG_FILES([
-src/frontend/CxxFrontend/EDG/Makefile
-src/frontend/CxxFrontend/EDG/EDG_5.0/Makefile
-src/frontend/CxxFrontend/EDG/EDG_5.0/misc/Makefile
-src/frontend/CxxFrontend/EDG/EDG_5.0/src/Makefile
-src/frontend/CxxFrontend/EDG/EDG_5.0/src/disp/Makefile
-src/frontend/CxxFrontend/EDG/EDG_5.0/lib/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.0/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.0/misc/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.0/src/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.0/src/disp/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.0/lib/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.3/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.3/misc/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.3/src/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.3/src/disp/Makefile
-src/frontend/CxxFrontend/EDG/EDG_6.3/lib/Makefile
-src/frontend/CxxFrontend/EDG/edgRose/Makefile
-])], [])
 
 # End macro ROSE_SUPPORT_ROSE_PART_5.
 ]
@@ -1331,7 +1261,6 @@ tests/nonsmoke/functional/roseTests/astQueryTests/Makefile
 tests/nonsmoke/functional/roseTests/astSymbolTableTests/Makefile
 tests/nonsmoke/functional/roseTests/astTokenStreamTests/Makefile
 tests/nonsmoke/functional/roseTests/fileLocation_tests/Makefile
-tests/nonsmoke/functional/roseTests/loopProcessingTests/Makefile
 tests/nonsmoke/functional/roseTests/mergeTraversal_tests/Makefile
 tests/nonsmoke/functional/roseTests/ompLoweringTests/Makefile
 tests/nonsmoke/functional/roseTests/ompLoweringTests/fortran/Makefile
@@ -1454,4 +1383,3 @@ AC_CONFIG_COMMANDS([rosePublicConfig.h],[
 # End macro ROSE_SUPPORT_ROSE_PART_7.
 ]
 )
-

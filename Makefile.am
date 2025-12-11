@@ -196,15 +196,6 @@ check-policies: enforce_policies
 EXTRA_DIST += cmake CMakeLists.txt rose_config.h.in.cmake stamp-h.in stamp-h1.in COPYRIGHT \
              LicenseInformation build 
 
-# The bincompat-sig file contains the SHA1 part of the EDG binary tarball name and must be generated anew
-# each time we make a distribution because we don't want to distribute stale information.
-EXTRA_DIST += bincompat-sig
-.PHONY: cleanSig
-cleanSig:
-	rm -rf bincompat-sig
-bincompat-sig: cleanSig
-	$(srcdir)/scripts/edg-generate-sig > $@
-
 # clean-local explanation:
 # Remove template repositories.  No source code is compiled, but configuration
 #   tests may have created template repositories here.
@@ -240,15 +231,8 @@ install-exec-local:
 
 install-data-local: uninstall-local
 	-mkdir -p $(DESTDIR)$(includedir)
-if ROSE_USE_CLANG_FRONTEND
 	mkdir -p "$(DESTDIR)$(includedir)"
 	cp -R $(top_builddir)/include-staging/* "$(DESTDIR)$(includedir)"
-else
-#	DQ (11/1/2011): The EDG 4.x support does not require a separate include-staging directory.
-	mkdir -p "$(DESTDIR)$(includedir)/edg"
-	cp -R $(top_builddir)/include-staging/* "$(DESTDIR)$(includedir)/edg"
-endif
-#	endif
 	@echo '*****************************************************************'
 	@echo '***** make install-data rule complete (terminated normally) *****'
 	@echo '*****************************************************************'
@@ -285,14 +269,6 @@ if ROSE_USE_LLVM
    DISTCHECK_CONFIGURE_FLAGS += --with-llvm=$(llvm_path)
 endif
 
-# DQ (4/22/2005): To make clear when binaries are in the distribution as 
-# opposed to EDG source code we rename the final generated distribution.
-# JJW (8/3/2008): This is only used for source distributions now --
-# source_with_binary_edg_dist does its own renaming
-rename_distribution:
-	new_name="$(distdir)-source-with-EDG-source.tar.gz"; \
-	cp $(distdir).tar.gz $$new_name
-
 distdir = $(PACKAGE)-$(VERSION)$(DOT_SVNREV)
 
 dist-hook:
@@ -320,15 +296,13 @@ dist-hook:
 # We could build our own ROSE specific wrapper for dist and distcheck.
 dist-after:
 	@echo "Running dist hook rule ..."
-	@$(MAKE) rename_distribution
 
 # hook rule to be run after distcheck rule
 distcheck-after:
 	@echo "Running distcheck hook rule ..."
-	@$(MAKE) rename_distribution
 
 # CLEANFILES = rose_binary_compatibility_signature rose_binary_compatibility_signature_src
-CLEANFILES = rose_binary_compatibility_signature bincompat-sig
+CLEANFILES = rose_binary_compatibility_signature
 
 find_rose_lock_files:
 #	du -a | grep rose_performance_report_lockfile
@@ -354,16 +328,6 @@ docs: FORCE_DOCS_TO_BE_MADE
 	else \
 	   echo "Please look at the ROSE web site for documentation (www.roseCompiler.org)"; \
 	fi
-
-if ROSE_HAS_EDG_SOURCE
-# This rule generates the simple binary tarball for the directories: EDG and EDG_SAGE_Connection
-binary_edg_tarball: 
-	$(MAKE) -C src/frontend/CxxFrontend binary_edg_tarball
-
-upload_edg_binary:
-	$(MAKE) -C src/frontend/CxxFrontend upload_edg_binary
-
-endif
 
 # DQ (12/16/2009): Added interesting "git" feature by Liao.
 # It is unclear if it is very meaningful since it represents 
@@ -566,8 +530,6 @@ remove_codecov_files:
 # lcov command to generate the html files.
 lcov:
 	lcov --capture \
--d src/frontend/CxxFrontend/EDG/edgRose/.libs \
--d src/frontend/CxxFrontend/EDG/EDG_5.0/src/.libs \
 -d src/frontend/OpenFortranParser_SAGE_Connection/.libs \
 -d src/frontend/SageIII/sage_support/.libs \
 -d src/frontend/SageIII/ompparser/.libs \
@@ -626,8 +588,6 @@ lcov_genhtml: coverage.info
 	genhtml --title ROSE --legend --demangle-cpp --prefix $(top_srcdir) --prefix $(top_pwd) --output-directory lcov_output coverage.info
 
 # DQ (2/22/2016): We can't include directories that ere not configured.
-# -d src/frontend/CxxFrontend/EDG/EDG_4.9/misc
-# -d src/frontend/CxxFrontend/EDG/EDG_4.9/src/.libs
 
 # DQ (2/22/2016): The file genhtml has an error.
 # genhtml: ERROR: cannot read /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.8.3--dq-development-rc-lcov/src/3rdPartyLibraries/POET/poet_yacc.y
@@ -662,11 +622,8 @@ all-lcov.info:
 librose-lcov.info: all-lcov.info
 	lcov --extract $< "$(top_srcdir)/src/*" > $@
 	lcov --remove librose-lcov.info \
-        "$(top_srcdir)/src/frontend/CxxFrontend/EDG/edgRose/debugging.*" \
-        "$(top_srcdir)/src/frontend/CxxFrontend/EDG/edgRose/edgGraph.*" \
         "$(top_srcdir)/src/midend/programAnalysis/OpenAnalysis/*" \
         "$(top_srcdir)/src/midend/programAnalysis/genericDataflow/*" \
-        "$(top_srcdir)/src/frontend/CxxFrontend/EDG/EDG_5.0/*" \
         "$(top_srcdir)/src/midend/programAnalysis/dominanceAnalysis/*" \
         "$(top_srcdir)/src/midend/programAnalysis/pointerAnal/*" \
         "$(top_srcdir)/src/src/midend/programAnalysis/staticInterproceduralSlicing/*" \
@@ -707,7 +664,6 @@ librose_lcov_web_pages: librose-lcov.info
 # src/midend/programTransformation/astOutlining
 
 # Generate a directory containing the HTML representation of the coverage information for the ROSE library proper.
-# THIS INCLUDES EDG SOURCES; DO NOT DISTRIBUTE THIS DIRECTORY
 librose_lcov_web_pages: librose-lcov.info
 	genhtml                                 \
                  --title librose                 \

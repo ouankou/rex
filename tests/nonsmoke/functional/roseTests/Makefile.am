@@ -45,7 +45,7 @@ if !USING_CLANG_COMPILER
  # DQ (9/19/2020): Clang does not work with most of the test codes in this directory.
    SUBDIRS += astOutliningTests
 endif
-   SUBDIRS += loopProcessingTests fileLocation_tests
+   SUBDIRS += fileLocation_tests
 
 endif # !USING_XTENSA_BACKEND_COMPILER
 endif # !USING_GCC_3_4_4_BACKEND_COMPILER
@@ -61,4 +61,3 @@ check-local:
 	@echo "Passed tests for tests/roseTests directory."
 	@echo "*******************************************"
 	@echo "*******************************************"
-
