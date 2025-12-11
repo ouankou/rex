@@ -602,6 +602,7 @@ set(link_with_libraries ${M_LIB} ${RT_LIB} ${CMAKE_THREAD_LIBS_INIT})
 if(enable-c)
   include(roseChooseBackendCompiler)
   include(roseGenerateBackendCompilerSpecificHeaders)
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/ DESTINATION include/clang)
 else()
   # These are required to be defined even when C/C++ analysis is not enabled, but their values don't matter
   set(BACKEND_C_COMPILER_NAME_WITHOUT_PATH "no_compiler")
