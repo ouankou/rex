@@ -9110,10 +9110,11 @@ Unparse_ExprStmt::unparseClassDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
             // ASSERT_not_null(classdecl_stmt->get_parent());
                SgClassDefinition *cdefn = isSgClassDefinition(classdecl_stmt->get_parent());
 
-               if(cdefn && cdefn->get_declaration()->get_class_type() == SgClassDeclaration::e_class)
-                  {
-                    ninfo.set_CheckAccess();
-                  }
+               if (cdefn != NULL &&
+                   cdefn->get_declaration()->get_class_type() ==
+                       SgClassDeclaration::e_class) {
+                 ninfo.set_CheckAccess();
+               }
 
             // DQ (8/19/2004): Removed functions using old attribute mechanism (old CC++ mechanism)
             // printf ("Commented out get_suppress_global(classdecl_stmt) \n");
@@ -9581,7 +9582,42 @@ Unparse_ExprStmt::unparseClassDefnStmt(SgStatement* stmt, SgUnparse_Info& info)
   // function we have to get the the type from the non-defining declaration uniformally. Same way each time so that
   // the pointer test will be meaningful.
   // ninfo.set_current_context(classdefn_stmt->get_declaration()->get_type());
-     ASSERT_not_null(classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration());
+     ROSE_ASSERT(classdefn_stmt != NULL);
+     ROSE_ASSERT(classdefn_stmt->get_declaration() != NULL);
+
+     if (classdefn_stmt->get_declaration() == NULL) {
+       printf("Error: classdefn_stmt->get_declaration() == NULL\n");
+     } else {
+       // printf("classdefn_stmt->get_declaration() = %p =
+       // %s\n",classdefn_stmt->get_declaration(),classdefn_stmt->get_declaration()->get_name().str());
+       // SgNode* firstNondef =
+       // classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration();
+       // printf("firstNondefiningDeclaration = %p\n",firstNondef);
+       SgDeclarationStatement *decl = classdefn_stmt->get_declaration();
+       if (decl->get_firstNondefiningDeclaration() == NULL) {
+         fprintf(stderr, "FAIL : ASSERTION:NULL pointer: "
+                         "classdefn_stmt->get_declaration()->get_"
+                         "firstNondefiningDeclaration()\n");
+         SgClassDeclaration *named = isSgClassDeclaration(decl);
+         if (named)
+           fprintf(stderr, "  decl = %p name = %s\n", decl,
+                   named->get_name().str());
+         else
+           fprintf(stderr, "  decl = %p (not a struct/class declaration?)\n",
+                   decl);
+         if (isSgTemplateInstantiationDecl(decl)) {
+           fprintf(stderr, "  isSgTemplateInstantiationDecl=true\n");
+         }
+         if (isSgTemplateClassDeclaration(decl)) {
+           fprintf(stderr, "  isSgTemplateClassDeclaration=true\n");
+         }
+         if (isSgClassDeclaration(decl)) {
+           fprintf(stderr, "  isSgClassDeclaration=true\n");
+         }
+       }
+     }
+     ROSE_ASSERT(
+         classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration());
      SgClassDeclaration* classDeclaration = isSgClassDeclaration(classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration());
      ASSERT_not_null(classDeclaration->get_type());
 
@@ -9723,7 +9759,23 @@ Unparse_ExprStmt::unparseClassDefnStmt(SgStatement* stmt, SgUnparse_Info& info)
                curprint ( string("\n#pragma pack(") + StringUtility::numberToString(packingAlignment) + string(")"));
              }
 
-          ninfo.set_isUnsetAccess();
+             // ISSUE-107 FIX: Initialize access modifier based on class type to
+             // prevent spurious output
+             if (classdefn_stmt->get_declaration() != NULL) {
+               SgClassDeclaration *decl = classdefn_stmt->get_declaration();
+               if (decl->get_class_type() == SgClassDeclaration::e_class) {
+                 ninfo.set_isPrivateAccess();
+               } else if (decl->get_class_type() ==
+                              SgClassDeclaration::e_struct ||
+                          decl->get_class_type() ==
+                              SgClassDeclaration::e_union) {
+                 ninfo.set_isPublicAccess();
+               } else {
+                 ninfo.set_isUnsetAccess();
+               }
+             } else {
+               ninfo.set_isUnsetAccess();
+             }
           unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK1);
           curprint ( string("{"));
           unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);

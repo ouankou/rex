@@ -2232,10 +2232,16 @@ Specifiers that can have only one value (implemented with a protected enum varia
      StorageModifier.setDataPrototype("bool", "thread_local_storage","= false",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     AccessModifier.setDataPrototype("SgAccessModifier::access_modifier_enum", "modifier", "= SgAccessModifier::e_unknown",
-                                    NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     AccessModifier.setDataPrototype(
+         "SgAccessModifier::access_modifier_enum", "modifier",
+         "= SgAccessModifier::e_unknown", CONSTRUCTOR_PARAMETER,
+         BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     AccessModifier.setDataPrototype(
+         "bool", "is_explicit", "= false", NO_CONSTRUCTOR_PARAMETER,
+         BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // Note that more than one value can be set, so this implements a bit vector of flags to be used.
+     // Note that more than one value can be set, so this implements a bit
+     // vector of flags to be used.
      FunctionModifier.setDataPrototype("SgBitVector", "modifierVector", "",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // DQ (1/3/2009): Added support for GNU constructor priority (added paramter "N" as in "void f __attribute__((constructor (N)));")

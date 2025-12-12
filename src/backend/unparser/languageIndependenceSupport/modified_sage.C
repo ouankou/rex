@@ -1405,139 +1405,164 @@ Unparse_MOD_SAGE::printSpecifier1 ( SgDeclarationStatement * decl_stmt, SgUnpars
 
      if (info.CheckAccess())
         {
-          ASSERT_not_null(decl_stmt);
-          bool flag = false;
+       ASSERT_not_null(decl_stmt);
 
-          if (info.isPrivateAccess())
-             {
-            // If the current declaration access setting if different from the one stored in
-            // info then set flag to true, so that the access specified will be output.
-               if (!decl_stmt->get_declarationModifier().get_accessModifier().isPrivate())
-                    flag = true;
+       // ISSUE-107 FIX: If access is unknown (implicit), it matches the
+       // current context. Do not print anything and do not reset the info
+       // state.
+       if (decl_stmt->get_declarationModifier()
+               .get_accessModifier()
+               .get_modifier() != SgAccessModifier::e_unknown) {
+         bool flag = false;
+         if (decl_stmt->get_declarationModifier()
+                 .get_accessModifier()
+                 .get_is_explicit()) {
+           flag = true;
+         }
+
+         if (info.isPrivateAccess()) {
+           // If the current declaration access setting if different from the
+           // one stored in info then set flag to true, so that the access
+           // specified will be output.
+           if (!decl_stmt->get_declarationModifier()
+                    .get_accessModifier()
+                    .isPrivate())
+             flag = true;
+         } else {
+           if (info.isProtectedAccess()) {
+             // If the current declaration access setting if different from
+             // the one stored in info then set flag to true, so that the
+             // access specified will be output.
+             if (!decl_stmt->get_declarationModifier()
+                      .get_accessModifier()
+                      .isProtected())
+               flag = true;
+           } else {
+             if (info.isPublicAccess()) {
+               // If the current declaration access setting if different from
+               // the one stored in info then set flag to true, so that the
+               // access specified will be output.
+               if (!decl_stmt->get_declarationModifier()
+                        .get_accessModifier()
+                        .isPublic())
+                 flag = true;
+             } else {
+               // Initially for the first data member of a class, the info
+               // values for isPrivateAccess, isProtectedAccess, and
+               // isPublicAccess, are not set.  In this case the flag is set
+               // to true (here).  This forces the first access keyword to be
+               // output. flag = true;
+
+               if (info.isDefaultAccess()) {
+                 // If the current declaration access setting if different
+                 // from the one stored in info then set flag to true, so
+                 // that the access specified will be output.
+                 if (!decl_stmt->get_declarationModifier()
+                          .get_accessModifier()
+                          .isDefault()) {
+                   // DQ (8/12/2020): test this line that was previously
+                   // commented out.
+                   flag = true;
+                 }
+               } else {
+                 // Initially for the first data member of a class, the info
+                 // values for isPrivateAccess, isProtectedAccess, and
+                 // isPublicAccess, are not set.  In this case the flag is
+                 // set to true (here).  This forces the first access keyword
+                 // to be output.
+                 flag = true;
+               }
              }
-            else
-             {
-               if (info.isProtectedAccess())
-                  {
-                 // If the current declaration access setting if different from the one stored in
-                 // info then set flag to true, so that the access specified will be output.
-                    if (!decl_stmt->get_declarationModifier().get_accessModifier().isProtected())
-                         flag = true;
-                  }
-                 else
-                  {
-                    if (info.isPublicAccess())
-                       {
-                      // If the current declaration access setting if different from the one stored in
-                      // info then set flag to true, so that the access specified will be output.
-                         if (!decl_stmt->get_declarationModifier().get_accessModifier().isPublic())
-                              flag = true;
-                       }
-                      else
-                       {
-                      // Initially for the first data member of a class, the info values for isPrivateAccess,
-                      // isProtectedAccess, and isPublicAccess, are not set.  In this case the flag is set
-                      // to true (here).  This forces the first access keyword to be output.
-                      // flag = true;
+           }
+         }
 
-                         if (info.isDefaultAccess())
-                            {
-                           // If the current declaration access setting if different from the one stored in
-                           // info then set flag to true, so that the access specified will be output.
-                              if (!decl_stmt->get_declarationModifier().get_accessModifier().isDefault())
-                                 {
-                                // DQ (8/12/2020): test this line that was previously commented out.
-                                   flag = true;
-                                 }
-                            }
-                           else
-                            {
-                           // Initially for the first data member of a class, the info values for isPrivateAccess,
-                           // isProtectedAccess, and isPublicAccess, are not set.  In this case the flag is set
-                           // to true (here).  This forces the first access keyword to be output.
-                              flag = true;
-                            }
-                       }
-                  }
-             }
-
-       // Unset the access so it can be reset from an error value below
-          info.set_isUnsetAccess();
+         // Unset the access so it can be reset from an error value below
+         info.set_isUnsetAccess();
 
 #if 0
-       // Note that a better implementation would take the "flag" out of the 3 nested conditionals below.
-          printf ("flag = %s \n",flag ? "true" : "false");
-          printf ("decl_stmt->get_declarationModifier().get_accessModifier().isPrivate()   = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isPrivate()   ? "true" : "false");
-          printf ("decl_stmt->get_declarationModifier().get_accessModifier().isProtected() = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isProtected() ? "true" : "false");
-          printf ("decl_stmt->get_declarationModifier().get_accessModifier().isPublic()    = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isPublic()    ? "true" : "false");
-          printf ("decl_stmt->get_declarationModifier().get_accessModifier().isDefault()   = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isDefault()   ? "true" : "false");
+            // Note that a better implementation would take the "flag" out of the 3 nested conditionals below.
+               printf ("flag = %s \n",flag ? "true" : "false");
+               printf ("decl_stmt->get_declarationModifier().get_accessModifier().isPrivate()   = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isPrivate()   ? "true" : "false");
+               printf ("decl_stmt->get_declarationModifier().get_accessModifier().isProtected() = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isProtected() ? "true" : "false");
+               printf ("decl_stmt->get_declarationModifier().get_accessModifier().isPublic()    = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isPublic()    ? "true" : "false");
+               printf ("decl_stmt->get_declarationModifier().get_accessModifier().isDefault()   = %s \n",decl_stmt->get_declarationModifier().get_accessModifier().isDefault()   ? "true" : "false");
 #endif
-          if (decl_stmt->get_declarationModifier().get_accessModifier().isPrivate())
-             {
-               info.set_isPrivateAccess();
-               if (flag)
-                  {
-                    curprint( "private: ");
-                 // printf ("Output PRIVATE keyword! \n");
-                  }
+         if (decl_stmt->get_declarationModifier()
+                 .get_accessModifier()
+                 .isPrivate()) {
+           info.set_isPrivateAccess();
+           if (flag) {
+             curprint("private: ");
+             // printf ("Output PRIVATE keyword! \n");
+           }
+         } else {
+           if (decl_stmt->get_declarationModifier()
+                   .get_accessModifier()
+                   .isProtected()) {
+             info.set_isProtectedAccess();
+             if (flag) {
+               curprint("protected: ");
+               // printf ("Output PROTECTED keyword! \n");
              }
-            else
-             {
-               if (decl_stmt->get_declarationModifier().get_accessModifier().isProtected())
-                  {
-                    info.set_isProtectedAccess();
-                    if (flag)
-                       {
-                         curprint( "protected: ");
-                      // printf ("Output PROTECTED keyword! \n");
-                       }
-                  }
-                 else
-                  {
+           } else {
 #if 0
-                 /* default, always print Public */
-                    ROSE_ASSERT (decl_stmt->get_declarationModifier().get_accessModifier().isPublic() == true);
-                    info.set_isPublicAccess();
-                    if (flag)
-                       {
-                         curprint( "public: ");
-                      // printf ("Output PUBLIC keyword! \n");
-                       }
-#else
-                 // DQ (8/12/2020): Default and Public are no longer the same thing.
-                    if (decl_stmt->get_declarationModifier().get_accessModifier().isPublic() == true)
-                       {
+                      /* default, always print Public */
+                         ROSE_ASSERT (decl_stmt->get_declarationModifier().get_accessModifier().isPublic() == true);
                          info.set_isPublicAccess();
                          if (flag)
                             {
                               curprint( "public: ");
                            // printf ("Output PUBLIC keyword! \n");
                             }
-                       }
-                      else
-                       {
-                      // default case, nothing to be output.
-                         if (decl_stmt->get_declarationModifier().get_accessModifier().isDefault() == true)
-                            {
-                              info.set_isDefaultAccess();
-                              // CLANG FIX: Don't output debug comment for default access
-                              // Default access means: private for classes, public for structs
-                              // No keyword should be output in this case
-                            }
-                       }
+#else
+             // DQ (8/12/2020): Default and Public are no longer the same
+             // thing.
+             if (decl_stmt->get_declarationModifier()
+                     .get_accessModifier()
+                     .isPublic() == true) {
+               info.set_isPublicAccess();
+               if (flag) {
+                 curprint("public: ");
+                 // printf ("Output PUBLIC keyword! \n");
+               }
+             } else {
+               // default case, nothing to be output.
+               if (decl_stmt->get_declarationModifier()
+                       .get_accessModifier()
+                       .isDefault() == true) {
+                 info.set_isDefaultAccess();
+                 // CLANG FIX: Don't output debug comment for default access
+                 // Default access means: private for classes, public for
+                 // structs No keyword should be output in this case
+               }
+             }
 
 #endif
-                  }
-             }
+           }
+         }
 #if 0
-          printf ("Was this reset: info.isPrivateAccess()   = %s \n",info.isPrivateAccess()   ? "true" : "false");
-          printf ("Was this reset: info.isProtectedAccess() = %s \n",info.isProtectedAccess() ? "true" : "false");
-          printf ("Was this reset: info.isPublicAccess()    = %s \n",info.isPublicAccess()    ? "true" : "false");
-          printf ("Was this reset: info.isDefaultAccess()   = %s \n",info.isDefaultAccess()    ? "true" : "false");
+               printf ("Was this reset: info.isPrivateAccess()   = %s \n",info.isPrivateAccess()   ? "true" : "false");
+               printf ("Was this reset: info.isProtectedAccess() = %s \n",info.isProtectedAccess() ? "true" : "false");
+               printf ("Was this reset: info.isPublicAccess()    = %s \n",info.isPublicAccess()    ? "true" : "false");
+               printf ("Was this reset: info.isDefaultAccess()   = %s \n",info.isDefaultAccess()    ? "true" : "false");
 #endif
-       // If must have been set to one of the three values (but not left unset)
-          ROSE_ASSERT(info.isUnsetAccess() == false);
-        }
+         // If must have been set to one of the three values (but not left
+         // unset)
+         if (info.isUnsetAccess()) {
+           std::cerr
+               << "FAIL : ASSERTION:require: info.isUnsetAccess() == false"
+               << std::endl;
+           std::cerr << "Node: " << decl_stmt->class_name() << " " << decl_stmt
+                     << std::endl;
+           if (SgFunctionDeclaration *fd = isSgFunctionDeclaration(decl_stmt)) {
+             std::cerr << "Name: " << fd->get_name().str() << std::endl;
+           }
+           // std::cerr << "Unparsed: " << unparseStatement(decl_stmt) <<
+           // std::endl;
+         }
+         ROSE_ASSERT(info.isUnsetAccess() == false);
+       }
+     }
    }
 
 
