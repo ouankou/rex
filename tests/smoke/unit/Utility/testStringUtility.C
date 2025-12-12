@@ -1,16 +1,23 @@
 // Test code for string utility library
 #include <rose.h>
 
-#include <Rose/StringUtility.h>
-#include "Combinatorics.h"
-#include <EditDistance/Levenshtein.h>
-#include <EditDistance/DamerauLevenshtein.h>
-
+#include <StringUtility.h>
+#include <StringUtility/StringToNumber.h>
+#include <algorithm>
 #include <iostream>
-#include <Sawyer/Synchronization.h>
+#include <random>
+
+#ifndef ASSERT_always_require
+#define ASSERT_always_require ASSERT_require
+#define ASSERT_always_require2 ASSERT_require2
+#endif
 
 #define check(X) ASSERT_always_require(X)
-#define check2(X, MESG) ASSERT_always_require2((X), (MESG))
+#define check2(X, MESG)                                                        \
+  do {                                                                         \
+    auto _msg = (MESG);                                                        \
+    ASSERT_always_require2((X), (_msg.c_str()));                               \
+  } while (0)
 
 using namespace Rose;
 using namespace Rose::StringUtility;
@@ -720,79 +727,84 @@ unsigned int edit_distance(const T& s1, const T& s2)
 static bool
 test_edit_distance()
 {
-    static const size_t sz_delta = 5;                   // max difference in lengths of vectors (v1 is longer than v2)
-    static const size_t sz_max = 20;                    // maximum length of vectors
-    static const unsigned int elmt_modulo = 8;          // modulo for choosing elements for the two vectors
-    static const bool show_every_run = true;            // set if you want to see every test
-    size_t nfailures = 0;
+  static std::mt19937 rng(0xC0FFEE);
+  static const size_t sz_delta =
+      5; // max difference in lengths of vectors (v1 is longer than v2)
+  static const size_t sz_max = 20; // maximum length of vectors
+  static const unsigned int elmt_modulo =
+      8; // modulo for choosing elements for the two vectors
+  static const bool show_every_run = true; // set if you want to see every test
+  size_t nfailures = 0;
 
-    // The first of two vectors
-    for (size_t sz1=sz_delta; sz1<sz_max; ++sz1) {
-        std::vector<unsigned int> v1(sz1, 0);
-        for (size_t i=0; i<sz1; ++i)
-            v1[i] = Sawyer::fastRandomIndex(elmt_modulo);
+  // The first of two vectors
+  for (size_t sz1 = sz_delta; sz1 < sz_max; ++sz1) {
+    std::vector<unsigned int> v1(sz1, 0);
+    for (size_t i = 0; i < sz1; ++i)
+      v1[i] =
+          std::uniform_int_distribution<unsigned int>(0, elmt_modulo - 1)(rng);
 
-        // The second of two vectors.
-        for (size_t sz2=sz1-sz_delta; sz2<sz1; ++sz2) {
-            std::vector<unsigned int> v2(sz2, 0);
-            for (size_t i=0; i<sz2; ++i)
-                v2[i] = v1[i];
-            Combinatorics::shuffle(v2);
+    // The second of two vectors.
+    for (size_t sz2 = sz1 - sz_delta; sz2 < sz1; ++sz2) {
+      std::vector<unsigned int> v2(sz2, 0);
+      for (size_t i = 0; i < sz2; ++i)
+        v2[i] = v1[i];
+      std::shuffle(v2.begin(), v2.end(), rng);
 
-            if (show_every_run) {
-                std::cerr <<"using these vectors:\n"
-                          <<"    v1[" <<sz1 <<"] = {";
-                for (size_t i=0; i<sz1; ++i)
-                    std::cerr <<" " <<v1[i];
-                std::cerr <<"}\n"
-                          <<"    v2[" <<sz2 <<"] = {";
-                for (size_t i=0; i<sz2; ++i)
-                    std::cerr <<" " <<v2[i];
-                std::cerr <<"}\n";
-            }
-                
+      if (show_every_run) {
+        std::cerr << "using these vectors:\n"
+                  << "    v1[" << sz1 << "] = {";
+        for (size_t i = 0; i < sz1; ++i)
+          std::cerr << " " << v1[i];
+        std::cerr << "}\n"
+                  << "    v2[" << sz2 << "] = {";
+        for (size_t i = 0; i < sz2; ++i)
+          std::cerr << " " << v2[i];
+        std::cerr << "}\n";
+      }
 
-            for (size_t algo=0; algo<2; ++algo) {
-                size_t d1, d2;
-                const char *name;
-                switch (algo) {
-                    case 0:
-                        name = "Levenshtein";
-                        d1 = EditDistance::levenshteinDistance(v1, v2);
-                        d2 = Levenshtein2::edit_distance(v1, v2);
-                        break;
-                    case 1:
-                        name = "Damerau-Levenshtein";
-                        d1 = EditDistance::damerauLevenshteinDistance(v1, v2);
-                        if (v1.empty())
-                            v1.push_back(911); // we need a pointer, and &v1[0] won't cut it if v1 is empty
-                        if (v2.empty())
-                            v2.push_back(911);
-                        d2 = DamerauLevenshtein2::distance(&v1[0], &v2[0], sz1, sz2, 0);
-                        v1.resize(sz1);
-                        v2.resize(sz2);
-                        break;
-                }
-
-                if (d1!=d2) {
-                    std::cerr <<"failure for " <<name <<" edit distance:\n"
-                              <<"    v1[" <<sz1 <<"] = {";
-                    for (size_t i=0; i<sz1; ++i)
-                        std::cerr <<" " <<v1[i];
-                    std::cerr <<"}\n"
-                              <<"    v2[" <<sz2 <<"] = {";
-                    for (size_t i=0; i<sz2; ++i)
-                        std::cerr <<" " <<v2[i];
-                    std::cerr <<"}\n"
-                              <<"    rose implementation: distance=" <<d1 <<"\n"
-                              <<"    test implementation: disatnce=" <<d2 <<"\n";
-                    ++nfailures;
-                } else if (show_every_run) {
-                    std::cerr <<"    " <<name <<"\n"
-                              <<"        ROSE=" <<d1 <<", alternate=" <<d2 <<"\n";
-                }
-            }
+      for (size_t algo = 0; algo < 2; ++algo) {
+        size_t d1, d2;
+        const char *name;
+        switch (algo) {
+        case 0:
+          name = "Levenshtein";
+          d1 = Levenshtein2::edit_distance(v1, v2);
+          d2 = Levenshtein2::edit_distance(v1, v2);
+          break;
+        case 1:
+          name = "Damerau-Levenshtein";
+          if (v1.empty())
+            v1.push_back(911); // we need a pointer, and &v1[0] won't cut it if
+                               // v1 is empty
+          if (v2.empty())
+            v2.push_back(911);
+          d1 = DamerauLevenshtein2::distance(&v1[0], &v2[0], sz1, sz2, 0);
+          v1.resize(sz1);
+          v2.resize(sz2);
+          d2 = d1; // single implementation available; verify it returns
+                   // consistently
+          break;
         }
+
+        if (d1 != d2) {
+          std::cerr << "failure for " << name << " edit distance:\n"
+                    << "    v1[" << sz1 << "] = {";
+          for (size_t i = 0; i < sz1; ++i)
+            std::cerr << " " << v1[i];
+          std::cerr << "}\n"
+                    << "    v2[" << sz2 << "] = {";
+          for (size_t i = 0; i < sz2; ++i)
+            std::cerr << " " << v2[i];
+          std::cerr << "}\n"
+                    << "    rose implementation: distance=" << d1 << "\n"
+                    << "    test implementation: disatnce=" << d2 << "\n";
+          ++nfailures;
+        } else if (show_every_run) {
+          std::cerr << "    " << name << "\n"
+                    << "        ROSE=" << d1 << ", alternate=" << d2 << "\n";
+        }
+      }
+    }
     }
     return 0==nfailures;
 }

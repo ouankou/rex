@@ -1,5 +1,7 @@
+#include <iostream>
 #include <rose/tests/unitTests/common.h>
 using namespace Rose::Tests;
+using std::endl;
 
 namespace Rose {
 namespace Tests {
@@ -133,10 +135,8 @@ static void RunUnitTests() {
 
 //-----------------------------------------------------------------------------
 int main() {
-//-----------------------------------------------------------------------------
-  UnitTests::Diagnostics::initialize();
+  //-----------------------------------------------------------------------------
   UnitTests::SageBuilder::SgTypeBuilders::RunUnitTests();
 
   return 0;
-}//::main
-
+} //::main
