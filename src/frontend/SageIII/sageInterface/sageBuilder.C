@@ -14314,13 +14314,6 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
             //         = new SgTemplateClassDeclaration(nameWithTemplateSpecializationArguments,kind,classType,(SgClassDefinition*)NULL);
                defdecl = new SgTemplateClassDeclaration (nameWithoutTemplateArguments,kind,NULL,classDef);
 
-               // DEBUG ISSUE 107
-               if (nameWithoutTemplateArguments.getString() == "enable_if") {
-                 printf("ISSUE-107: buildClassDeclaration_nfi Created "
-                        "SgTemplateClassDeclaration for enable_if! node=%p\n",
-                        defdecl);
-               }
-
                // ISSUE-107 FIX: Immediately self-link to prevent NULL
                // firstNondefiningDeclaration
                if (defdecl->get_firstNondefiningDeclaration() == NULL) {
@@ -14668,27 +14661,8 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
      ROSE_ASSERT(nondefdecl->get_symbol_from_symbol_table() != NULL);
 #endif
 
-        // DEBUG ISSUE-107: Ensure firstNondefiningDeclaration is set before
-        // returning
-        if (defdecl->get_firstNondefiningDeclaration() == NULL) {
-          printf(
-              "ISSUE-107 DEBUG: buildClassDeclaration_nfi returning with NULL "
-              "firstNondefiningDeclaration! defdecl=%p name=%s variant=%d\n",
-              defdecl, defdecl->get_name().str(), defdecl->variantT());
-          fflush(stdout);
-        }
         ROSE_ASSERT(defdecl->get_firstNondefiningDeclaration() != NULL);
 
-#if 1
-        if (defdecl->get_name().getString().find("enable_if") !=
-                std::string::npos ||
-            defdecl->get_name() == "A") {
-          printf("ISSUE-107: End of buildClassDeclaration_nfi for %s. "
-                 "defdecl=%p firstNondefining=%p\n",
-                 defdecl->get_name().str(), defdecl,
-                 defdecl->get_firstNondefiningDeclaration());
-        }
-#endif
         return defdecl;
 }
 
@@ -15116,16 +15090,6 @@ SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(const SgName& XXX_name
      printf ("Leaving buildNondefiningTemplateClassDeclaration_nfi(): Calling get_symbol_from_symbol_table() \n");
      ROSE_ASSERT(nondefdecl->get_symbol_from_symbol_table() != NULL);
 #endif
-
-     // DEBUG ISSUE-107: Print enable_if at exit
-     if (nondefdecl->get_name().getString().find("enable_if") !=
-         std::string::npos) {
-       printf("ISSUE-107 DEBUG: buildNondefiningTemplateClassDeclaration_nfi "
-              "EXIT nondefdecl=%p name=%s firstNondefiningDecl=%p\n",
-              nondefdecl, nondefdecl->get_name().str(),
-              nondefdecl->get_firstNondefiningDeclaration());
-       fflush(stdout);
-     }
 
      return nondefdecl;
    }
