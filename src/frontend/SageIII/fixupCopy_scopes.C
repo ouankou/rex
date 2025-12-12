@@ -429,10 +429,6 @@ SgGlobal::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
      const SgDeclarationStatementPtrList & statementList_original = this->getDeclarationList();
      const SgDeclarationStatementPtrList & statementList_copy     = global_copy->getDeclarationList();
 
-     printf("SgGlobal::fixupCopy_scopes: original list size %zu, copy list "
-            "size %zu\n",
-            statementList_original.size(), statementList_copy.size());
-
      SgDeclarationStatementPtrList::const_iterator i_original = statementList_original.begin();
      SgDeclarationStatementPtrList::const_iterator i_copy     = statementList_copy.begin();
 
@@ -440,13 +436,7 @@ SgGlobal::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
      while ( (i_original != statementList_original.end()) && (i_copy != statementList_copy.end()) )
         {
        // Print what we are visiting
-       if ((*i_original)->variantT() == V_SgTemplateClassDeclaration ||
-           (*i_original)->variantT() == V_SgClassDeclaration) {
-         printf("SgGlobal::fixupCopy_scopes: Visiting %p %s name=%s\n",
-                *i_original, (*i_original)->class_name().c_str(),
-                (*i_original)->get_definingDeclaration() ? "defines"
-                                                         : "forward");
-       }
+
           (*i_original)->fixupCopy_scopes(*i_copy,help);
 
           i_original++;
@@ -760,25 +750,11 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
          SgDeclarationStatement *originalFirstNonDef =
              this->get_firstNondefiningDeclaration();
 
-         // DEBUG ISSUE-107
-         SgTemplateClassDeclaration *tpl =
-             isSgTemplateClassDeclaration(copyDeclarationStatement);
-         if (tpl) {
-           printf("ISSUE-107 DEBUG: fixupCopy for TplClass. this=%p copy=%p "
-                  "name=%s\n",
-                  this, copyDeclarationStatement, tpl->get_name().str());
-         }
-
          if (originalFirstNonDef) {
            SgNode *copyOfFirstNonDef = NULL;
            if (help.get_copiedNodeMap().find(originalFirstNonDef) !=
                help.get_copiedNodeMap().end()) {
              copyOfFirstNonDef = help.get_copiedNodeMap()[originalFirstNonDef];
-           }
-
-           if (tpl) {
-             printf("ISSUE-107 DEBUG: found in map? %d copyOfFirstNonDef=%p\n",
-                    (copyOfFirstNonDef != NULL), copyOfFirstNonDef);
            }
 
            // If the original's firstNondef is in the map (it should be!), use
