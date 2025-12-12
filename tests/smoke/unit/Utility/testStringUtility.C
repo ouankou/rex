@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <iostream>
 #include <random>
+#include <unordered_map>
 
 #ifndef ASSERT_always_require
 #define ASSERT_always_require ASSERT_require
@@ -724,6 +725,58 @@ unsigned int edit_distance(const T& s1, const T& s2)
 }
 } // namespace
 
+template <class T>
+static unsigned int referenceLevenshtein(const T& s1, const T& s2) {
+  const size_t len1 = s1.size(), len2 = s2.size();
+  std::vector<std::vector<unsigned int>> d(len1 + 1, std::vector<unsigned int>(len2 + 1));
+  for (size_t i = 0; i <= len1; ++i)
+    d[i][0] = i;
+  for (size_t j = 0; j <= len2; ++j)
+    d[0][j] = j;
+  for (size_t i = 1; i <= len1; ++i) {
+    for (size_t j = 1; j <= len2; ++j) {
+      unsigned int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+      d[i][j] = std::min({d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost});
+    }
+  }
+  return d[len1][len2];
+}
+
+template <class T>
+static unsigned int referenceDamerauLevenshtein(const T& s1, const T& s2) {
+  // Optimal string alignment version (adjacent transpositions)
+  const size_t len1 = s1.size(), len2 = s2.size();
+  const size_t maxdist = len1 + len2;
+  std::vector<std::vector<unsigned int>> d(len1 + 2, std::vector<unsigned int>(len2 + 2, 0));
+  d[0][0] = maxdist;
+  for (size_t i = 0; i <= len1; ++i) {
+    d[i + 1][1] = i;
+    d[i + 1][0] = maxdist;
+  }
+  for (size_t j = 0; j <= len2; ++j) {
+    d[1][j + 1] = j;
+    d[0][j + 1] = maxdist;
+  }
+
+  std::unordered_map<typename T::value_type, size_t> lastRow;
+  for (size_t i = 1; i <= len1; ++i) {
+    size_t lastMatchCol = 0;
+    for (size_t j = 1; j <= len2; ++j) {
+      size_t i1 = lastRow.count(s2[j - 1]) ? lastRow[s2[j - 1]] : 0;
+      size_t j1 = lastMatchCol;
+      unsigned int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+      if (cost == 0)
+        lastMatchCol = j;
+      d[i + 1][j + 1] =
+          std::min({d[i][j] + cost, d[i + 1][j] + 1, d[i][j + 1] + 1,
+                    d[i1][j1] + static_cast<unsigned int>(i - i1 - 1) + 1 +
+                        static_cast<unsigned int>(j - j1 - 1)});
+    }
+    lastRow[s1[i - 1]] = i;
+  }
+  return d[len1 + 1][len2 + 1];
+}
+
 static bool
 test_edit_distance()
 {
@@ -768,7 +821,7 @@ test_edit_distance()
         switch (algo) {
         case 0:
           name = "Levenshtein";
-          d1 = Levenshtein2::edit_distance(v1, v2);
+          d1 = referenceLevenshtein(v1, v2);
           d2 = Levenshtein2::edit_distance(v1, v2);
           break;
         case 1:
@@ -778,11 +831,10 @@ test_edit_distance()
                                // v1 is empty
           if (v2.empty())
             v2.push_back(911);
-          d1 = DamerauLevenshtein2::distance(&v1[0], &v2[0], sz1, sz2, 0);
+          d1 = referenceDamerauLevenshtein(v1, v2);
+          d2 = DamerauLevenshtein2::distance(&v1[0], &v2[0], sz1, sz2, 0);
           v1.resize(sz1);
           v2.resize(sz2);
-          d2 = d1; // single implementation available; verify it returns
-                   // consistently
           break;
         }
 
