@@ -3,9 +3,6 @@
 
 SUBDIRS =
 
-# MS (1/25/21): include json-related code
-SUBDIRS += json
-
 if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
    SUBDIRS += fortran-parser
 endif
