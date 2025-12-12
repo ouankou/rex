@@ -1127,8 +1127,6 @@ exampleTranslators/documentedExamples/simpleTranslatorExamples/Makefile
 exampleTranslators/documentedExamples/simpleTranslatorExamples/exampleMakefile
 LicenseInformation/Makefile
 scripts/Makefile
-src/3rdPartyLibraries/json/Makefile
-src/3rdPartyLibraries/json/nlohmann/Makefile
 src/3rdPartyLibraries/Makefile
 src/3rdPartyLibraries/antlr-jars/Makefile
 src/3rdPartyLibraries/fortran-parser/Makefile

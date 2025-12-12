@@ -1,9 +1,0 @@
-This directory contains code related to generation of JSON-formatted
-outputs.
-
-nlohmann:
-
-This is the common nlohmann json library that is widely used in the
-C++ community.  The license allows it to be freely distributed with
-the constraint that the include file be in $(prefix)/nlohmann/json.hpp
--- the "nlohmann" part shall be preserved.
