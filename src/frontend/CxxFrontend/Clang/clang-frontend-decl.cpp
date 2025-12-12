@@ -3151,7 +3151,7 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
     // non-defining declaration has already claimed ownership (parent pointers
     // set). Reusing them would detach them from the non-defining declaration,
     // violating AST invariants.
-    SgTemplateParameterPtrList specialization_args_for_def;
+    SgTemplateArgumentPtrList specialization_args_for_def;
 
     // Re-iterate over Clang arguments to build new ROSE arguments
     const clang::TemplateArgumentList &args_for_def =
@@ -3178,15 +3178,15 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
                   isSgDeclarationStatement(node)) {
             if (arg_decl->isTemplateDecl()) {
               std::string qual_name = arg_decl->getQualifiedNameAsString();
-              if (clang::ClassTemplateDecl *class_tmpl =
-                      llvm::dyn_cast<clang::ClassTemplateDecl>(arg_decl)) {
+              if (SgTemplateClassDeclaration *sg_class_tmpl =
+                      isSgTemplateClassDeclaration(sg_decl)) {
                 if (SgNamespaceDefinitionStatement *ns_def =
                         isSgNamespaceDefinitionStatement(
-                            class_tmpl->get_scope())) {
+                            sg_class_tmpl->get_scope())) {
                   qual_name = ns_def->get_namespaceDeclaration()
                                   ->get_name()
                                   .getString() +
-                              "::" + class_tmpl->get_name().getString();
+                              "::" + sg_class_tmpl->get_name().getString();
                 }
               }
               SgType *type = SageBuilder::buildTemplateType(qual_name);
