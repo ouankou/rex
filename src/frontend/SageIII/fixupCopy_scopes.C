@@ -433,13 +433,13 @@ SgGlobal::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
      SgDeclarationStatementPtrList::const_iterator i_copy     = statementList_copy.begin();
 
   // Iterate over both lists to match up the correct pairs of SgStatement objects
-     while ( (i_original != statementList_original.end()) && (i_copy != statementList_copy.end()) )
-        {
-          (*i_original)->fixupCopy_scopes(*i_copy,help);
+     while ((i_original != statementList_original.end()) &&
+            (i_copy != statementList_copy.end())) {
+       (*i_original)->fixupCopy_scopes(*i_copy, help);
 
-          i_original++;
-          i_copy++;
-        }
+       i_original++;
+       i_copy++;
+     }
 
   // Call the base class fixupCopy member function
      SgScopeStatement::fixupCopy_scopes(copy,help);
@@ -527,10 +527,6 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 #if DEBUG_FIXUP_COPY
      printf ("Inside of SgDeclarationStatement::fixupCopy_scopes() for %p = %s copy = %p (defining = %p firstNondefining = %p) \n",
           this,this->class_name().c_str(),copy,this->get_definingDeclaration(),this->get_firstNondefiningDeclaration());
-#endif
-
-#if DEBUG_FIXUP_COPY_OUTPUT_MAP
-     outputMap(help);
 #endif
 
   // Need to fixup the scopes and defining and non-defining declaration.
@@ -626,6 +622,12 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
                this->get_firstNondefiningDeclaration()->fixupCopy_scopes(copyOfFirstNondefiningDeclarationNode,help);
 
             // copyOfFirstNondefiningDeclaration = isSgDeclarationStatement(copyOfFirstNondefiningDeclarationNode);
+               SgDeclarationStatement *copyOfFirstNondefiningDeclaration =
+                   isSgDeclarationStatement(
+                       copyOfFirstNondefiningDeclarationNode);
+               ROSE_ASSERT(copyOfFirstNondefiningDeclaration != NULL);
+               copyDeclarationStatement->set_firstNondefiningDeclaration(
+                   copyOfFirstNondefiningDeclaration);
              }
             else
              {
@@ -734,10 +736,37 @@ SgDeclarationStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
   // If this is a declaration which is a defining declaration, then the copy should be as well.
      if (this->get_definingDeclaration() == this)
         {
-       // printf ("This is a DEFINING declaration this %p = %s copyDeclarationStatement = %p = %s \n",this,this->class_name().c_str(),copyDeclarationStatement,copyDeclarationStatement->class_name().c_str());
-          copyDeclarationStatement->set_definingDeclaration(copyDeclarationStatement);
+       copyDeclarationStatement->set_definingDeclaration(
+           copyDeclarationStatement);
 
-       // If this is the defining declaration the we can reset the defining declaration on the firstNondefiningDeclaration (if it has been updated)
+       // ISSUE-107 FIX: ROOT CAUSE
+       // When copying a defining declaration, we MUST ensure the copy's
+       // firstNondefiningDeclaration is correctly set. It should point to the
+       // COPY of the original's firstNondefiningDeclaration.
+       if (copyDeclarationStatement->get_firstNondefiningDeclaration() ==
+           NULL) {
+         SgDeclarationStatement *originalFirstNonDef =
+             this->get_firstNondefiningDeclaration();
+
+         if (originalFirstNonDef) {
+           SgNode *copyOfFirstNonDef = NULL;
+           if (help.get_copiedNodeMap().find(originalFirstNonDef) !=
+               help.get_copiedNodeMap().end()) {
+             copyOfFirstNonDef = help.get_copiedNodeMap()[originalFirstNonDef];
+           }
+
+           // If the original's firstNondef is in the map (it should be!), use
+           // it. If originalFirstNonDef == this, then copyOfFirstNonDef will be
+           // copyDeclarationStatement (correct).
+           if (copyOfFirstNonDef) {
+             SgDeclarationStatement *copyDecl =
+                 isSgDeclarationStatement(copyOfFirstNonDef);
+             ROSE_ASSERT(copyDecl != NULL);
+             copyDeclarationStatement->set_firstNondefiningDeclaration(
+                 copyDecl);
+           }
+         }
+       }
           if (this->get_firstNondefiningDeclaration() != copyDeclarationStatement->get_firstNondefiningDeclaration())
              {
             // printf ("This is the defining declaration, so we can reset the defining declaration on the firstNondefiningDeclaration \n");

@@ -17339,6 +17339,17 @@ SgTemplateClassDefinition::set_declaration(SgTemplateClassDeclaration* new_val)
    {
   // QY: 10-4-04 removed declaration pointer. use parent pointer instead
      ROSE_ASSERT(this != NULL);
+     
+     // ISSUE-107 ROOT CAUSE FIX: When a definition sets its declaration pointer,
+     // ensure the declaration has a valid firstNondefiningDeclaration.
+     // This prevents the case where the unparser traverses via get_declaration()
+     // and finds a declaration with NULL firstNondefiningDeclaration.
+     if (new_val != NULL) {
+         if (new_val->get_firstNondefiningDeclaration() == NULL) {
+             new_val->set_firstNondefiningDeclaration(new_val);
+         }
+     }
+     
      set_parent(new_val);
    }
 

@@ -14314,6 +14314,12 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
             //         = new SgTemplateClassDeclaration(nameWithTemplateSpecializationArguments,kind,classType,(SgClassDefinition*)NULL);
                defdecl = new SgTemplateClassDeclaration (nameWithoutTemplateArguments,kind,NULL,classDef);
 
+               // ISSUE-107 FIX: Immediately self-link to prevent NULL
+               // firstNondefiningDeclaration
+               if (defdecl->get_firstNondefiningDeclaration() == NULL) {
+                 defdecl->set_firstNondefiningDeclaration(defdecl);
+               }
+
             // DQ (2/27/2018): We should be able to enforce this, it should have always been true.
                ROSE_ASSERT(defdecl->get_type() == NULL);
 #if 0
@@ -14655,9 +14661,10 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
      ROSE_ASSERT(nondefdecl->get_symbol_from_symbol_table() != NULL);
 #endif
 
-     return defdecl;
-   }
+        ROSE_ASSERT(defdecl->get_firstNondefiningDeclaration() != NULL);
 
+        return defdecl;
+}
 
 SgClassDeclaration* SageBuilder::buildStructDeclaration(const string& name, SgScopeStatement* scope/*=NULL*/)
    {
@@ -14794,6 +14801,11 @@ SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(const SgName& XXX_name
        // DQ (9/12/2012): We want to include the template specialization into the name where it is required.
        // nondefdecl = new SgTemplateClassDeclaration(name,kind,classType,(SgClassDefinition*)NULL);
           nondefdecl = new SgTemplateClassDeclaration(nameWithTemplateSpecializationArguments,kind,classType,(SgClassDefinition*)NULL);
+          // ISSUE-107 FIX: Immediately self-link to prevent NULL
+          // firstNondefiningDeclaration
+          if (nondefdecl->get_firstNondefiningDeclaration() == NULL) {
+            nondefdecl->set_firstNondefiningDeclaration(nondefdecl);
+          }
 
 #if 0
        // DQ (3/4/2018): relax this requirement for SgTemplateInstantiationClassDeclaration.
@@ -14871,6 +14883,11 @@ SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(const SgName& XXX_name
        else // build a nondefnining declaration if it does not exist
         {
           nondefdecl = new SgTemplateClassDeclaration(nameWithTemplateSpecializationArguments,kind,(SgClassType*)NULL,(SgClassDefinition*)NULL);
+          // ISSUE-107 FIX: Immediately self-link to prevent NULL
+          // firstNondefiningDeclaration
+          if (nondefdecl->get_firstNondefiningDeclaration() == NULL) {
+            nondefdecl->set_firstNondefiningDeclaration(nondefdecl);
+          }
           ROSE_ASSERT(nondefdecl != NULL);
 
        // DQ (9/10/2012): Initialize the template parameter list.
@@ -15184,6 +15201,15 @@ SageBuilder::buildTemplateClassDeclaration_nfi(const SgName& XXX_name, SgClassDe
           printf ("Building a defining declaration \n");
 #endif
           defdecl = new SgTemplateClassDeclaration (nameWithTemplateSpecializationArguments,kind,NULL,classDef);
+
+          // ISSUE-107 ROOT CAUSE FIX: Immediately self-link
+          // firstNondefiningDeclaration after construction to prevent any
+          // intermediate state where the declaration has NULL
+          // firstNondefiningDeclaration. This will be overwritten later with
+          // the correct nondefdecl pointer.
+          if (defdecl->get_firstNondefiningDeclaration() == NULL) {
+            defdecl->set_firstNondefiningDeclaration(defdecl);
+          }
         }
 
      ROSE_ASSERT(defdecl != NULL);
@@ -15263,12 +15289,20 @@ SageBuilder::buildTemplateClassDeclaration_nfi(const SgName& XXX_name, SgClassDe
       // DQ (9/16/2012): Test this previously setup firstNondefiningDeclaration.
          ROSE_ASSERT(nondefdecl->get_firstNondefiningDeclaration() == nondefdecl);
          testTemplateArgumentParents(nondefdecl);
+         // ISSUE-107 FIX: Ensure defdecl points to the first nondefining
+         // declaration
+         defdecl->set_firstNondefiningDeclaration(nondefdecl);
        } else {
 #if 0
          printf("  start build non-defn decl for %p\n",defdecl);
 #endif
       // DQ (1/25/2009): We only want to build a new declaration if we can't reuse the existing declaration.
          nondefdecl = new SgTemplateClassDeclaration(nameWithTemplateSpecializationArguments,kind,NULL,NULL);
+         // ISSUE-107 FIX: Immediately self-link to prevent NULL
+         // firstNondefiningDeclaration
+         if (nondefdecl->get_firstNondefiningDeclaration() == NULL) {
+           nondefdecl->set_firstNondefiningDeclaration(nondefdecl);
+         }
          ROSE_ASSERT(nondefdecl != NULL);
 
          nondefdecl->set_firstNondefiningDeclaration(nondefdecl);
@@ -15483,6 +15517,8 @@ SageBuilder::buildTemplateClassDeclaration_nfi(const SgName& XXX_name, SgClassDe
      printf ("Leaving buildTemplateClassDeclaration_nfi(): Calling get_symbol_from_symbol_table() \n");
      ROSE_ASSERT(defdecl->get_symbol_from_symbol_table() != NULL);
 #endif
+
+     ROSE_ASSERT(defdecl->get_firstNondefiningDeclaration() != NULL);
 
      return defdecl;
    }

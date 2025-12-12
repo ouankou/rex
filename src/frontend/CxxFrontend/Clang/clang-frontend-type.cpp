@@ -1279,6 +1279,10 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
             empty_args  // No specialization arguments for primary template
         );
 
+    // REX FIX: Ensure firstNondefiningDeclaration is set to avoid unparser
+    // crash (ua test).
+    template_decl->set_firstNondefiningDeclaration(template_decl);
+
     // Mark as compiler generated and forward declaration
     template_decl->setForward();
     template_decl->set_isUnNamed(false);
@@ -1487,7 +1491,14 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     inst_decl->setForward();
     inst_decl->set_definingDeclaration(nullptr);
     inst_decl->set_firstNondefiningDeclaration(inst_decl);
-    
+
+    if (inst_name_full.find("__conditional") != std::string::npos ||
+        inst_name_full.find("conditional") != std::string::npos) {
+      std::cerr << "DEBUG: getOrCreateTemplateInstantiation created: "
+                << inst_name_full << " at " << inst_decl << " firstNondef: "
+                << inst_decl->get_firstNondefiningDeclaration() << std::endl;
+    }
+
     // REX FIX: Always require global qualification for template instantiations
     // This ensures that the unparser prints "::" (e.g. "::std::vector" or "::tuple")
     // which prevents ambiguity when global templates are shadowed.
@@ -1776,18 +1787,36 @@ bool ClangToSageTranslator::VisitTypeWithKeyword(clang::TypeWithKeyword * type_w
     return VisitType(type_with_keyword, node) && res;
 }
 
-bool ClangToSageTranslator::VisitDependentNameType(clang::DependentNameType * dependent_name_type, SgNode ** node) {
-#if DEBUG_VISIT_TYPE
-    std::cerr << "ClangToSageTranslator::DependentNameType" << std::endl;
-#endif
-    bool res = true;
+bool ClangToSageTranslator::VisitDependentNameType(
+    clang::DependentNameType *dependent_name_type, SgNode **node) {
+  bool res = true;
 
-    // TODO: Full support for dependent names not yet implemented
-    // Dependent names (e.g., T::value_type) depend on template parameters
-    // For now, use a generic unknown type scoped to global scope to avoid ROSE-1378
-    *node = SageBuilder::buildOpaqueType("dependent_name", getGlobalScope());
+  // REX FIX: Construct the full name of the dependent type (e.g., "typename
+  // T::type") instead of using a generic "dependent_name" placeholder.
+  std::string type_name;
+  llvm::raw_string_ostream stream(type_name);
 
-    return VisitTypeWithKeyword(dependent_name_type, node) && res;
+  // Print the qualifier (e.g. "enable_if<true, T>::")
+  if (dependent_name_type->getQualifier()) {
+    dependent_name_type->getQualifier()->print(
+        stream, p_compiler_instance->getASTContext().getPrintingPolicy());
+  }
+
+  // Print the identifier (e.g. "type")
+  const clang::IdentifierInfo *id = dependent_name_type->getIdentifier();
+  if (id) {
+    stream << id->getName();
+  }
+  stream.flush();
+
+  // Dependent names are almost always "typename ..." in this context
+  if (type_name.find("typename ") != 0) {
+    type_name = "typename " + type_name;
+  }
+
+  *node = SageBuilder::buildOpaqueType(type_name, getGlobalScope());
+
+  return VisitTypeWithKeyword(dependent_name_type, node) && res;
 }
 
 bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(clang::DependentTemplateSpecializationType * dependent_template_specialization_type, SgNode ** node) {
