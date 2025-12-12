@@ -3146,11 +3146,83 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
   nonDefiningDecl->set_firstNondefiningDeclaration(nonDefiningDecl);
 
   if (class_tpl_part_spec_decl->isThisDeclarationADefinition()) {
+    // REX FIX: Create FRESH specialization arguments for the defining
+    // declaration We cannot reuse 'specialization_args' because the
+    // non-defining declaration has already claimed ownership (parent pointers
+    // set). Reusing them would detach them from the non-defining declaration,
+    // violating AST invariants.
+    SgTemplateParameterPtrList specialization_args_for_def;
+
+    // Re-iterate over Clang arguments to build new ROSE arguments
+    const clang::TemplateArgumentList &args_for_def =
+        class_tpl_part_spec_decl->getTemplateArgs();
+    for (unsigned i = 0; i < args_for_def.size(); i++) {
+      const clang::TemplateArgument &arg = args_for_def[i];
+      SgTemplateArgument *sg_arg = NULL;
+
+      // Duplicate logic from above to create SgTemplateArgument
+      // Note: We use the same translation logic but produce new nodes
+      switch (arg.getKind()) {
+      case clang::TemplateArgument::Type: {
+        SgType *sg_type = buildTypeFromQualifiedType(arg.getAsType());
+        if (sg_type) {
+          sg_arg = new SgTemplateArgument(sg_type, false);
+        }
+        break;
+      }
+      case clang::TemplateArgument::Declaration: {
+        clang::ValueDecl *arg_decl = arg.getAsDecl();
+        if (arg_decl) {
+          SgNode *node = Traverse(arg_decl);
+          if (SgDeclarationStatement *sg_decl =
+                  isSgDeclarationStatement(node)) {
+            if (arg_decl->isTemplateDecl()) {
+              std::string qual_name = arg_decl->getQualifiedNameAsString();
+              if (clang::ClassTemplateDecl *class_tmpl =
+                      llvm::dyn_cast<clang::ClassTemplateDecl>(arg_decl)) {
+                if (SgNamespaceDefinitionStatement *ns_def =
+                        isSgNamespaceDefinitionStatement(
+                            class_tmpl->get_scope())) {
+                  qual_name = ns_def->get_namespaceDeclaration()
+                                  ->get_name()
+                                  .getString() +
+                              "::" + class_tmpl->get_name().getString();
+                }
+              }
+              SgType *type = SageBuilder::buildTemplateType(qual_name);
+              sg_arg = new SgTemplateArgument(type, false);
+            } else {
+              sg_arg = new SgTemplateArgument(
+                  SgTemplateArgument::template_template_argument, sg_decl);
+              sg_arg->set_templateDeclaration(sg_decl);
+            }
+          }
+        }
+        break;
+      }
+      case clang::TemplateArgument::Expression: {
+        clang::Expr *clang_expr = arg.getAsExpr();
+        if (clang_expr) {
+          SgNode *node = Traverse(clang_expr);
+          SgExpression *sg_expr = isSgExpression(node);
+          if (sg_expr) {
+            sg_arg = new SgTemplateArgument(sg_expr, false);
+          }
+        }
+        break;
+      }
+      default:
+        break;
+      }
+      if (sg_arg)
+        specialization_args_for_def.push_back(sg_arg);
+    }
+
     // Create proper defining declaration
     SgTemplateClassDeclaration *definingDecl =
         SageBuilder::buildTemplateClassDeclaration_nfi(
             name, class_kind, scope, nonDefiningDecl, template_params,
-            &specialization_args);
+            &specialization_args_for_def);
 
     *node = definingDecl;
     p_decl_translation_map[class_tpl_part_spec_decl] = definingDecl;
