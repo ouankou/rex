@@ -3127,6 +3127,7 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
       }
       break;
     }
+
     default:
       break;
     }
@@ -3161,8 +3162,9 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
       SgTemplateArgument *sg_arg = NULL;
 
       // Duplicate logic from above to create SgTemplateArgument
-      // Note: We use the same translation logic but produce new nodes
       switch (arg.getKind()) {
+        // ... cases ...
+
       case clang::TemplateArgument::Type: {
         SgType *sg_type = buildTypeFromQualifiedType(arg.getAsType());
         if (sg_type) {
@@ -3207,6 +3209,86 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
           SgExpression *sg_expr = isSgExpression(node);
           if (sg_expr) {
             sg_arg = new SgTemplateArgument(sg_expr, false);
+          }
+        }
+        break;
+      }
+      case clang::TemplateArgument::Integral: {
+        llvm::APSInt value = arg.getAsIntegral();
+        SgType *int_type = buildTypeFromQualifiedType(arg.getIntegralType());
+        SgExpression *value_expr = NULL;
+        if (isSgTypeBool(int_type)) {
+          value_expr = SageBuilder::buildBoolValExp(value.getBoolValue());
+        } else {
+          value_expr = buildIntegralTemplateArgExpr(value, int_type);
+        }
+
+        std::string val_str;
+        if (isSgTypeBool(int_type)) {
+          val_str = value.getBoolValue() ? "true" : "false";
+        } else {
+          llvm::SmallString<16> Str;
+          value.toString(Str);
+          val_str = Str.c_str();
+        }
+
+        SgName arg_name = val_str;
+        SgAssignInitializer *init =
+            SageBuilder::buildAssignInitializer_nfi(value_expr, int_type);
+        // SgInitializedName needs a valid scope, but SgTemplateArgument's init
+        // name serves as a wrapper. We set scope to NULL or global scope? Loop
+        // 1 sets nothing (NULL parent).
+        SgInitializedName *init_name =
+            SageBuilder::buildInitializedName_nfi(arg_name, int_type, init);
+        init_name->set_scope(SageBuilder::topScopeStack());
+
+        sg_arg = new SgTemplateArgument(SgTemplateArgument::nontype_argument,
+                                        false, int_type, NULL, NULL, false);
+        sg_arg->set_initializedName(init_name);
+        break;
+      }
+      case clang::TemplateArgument::Template: {
+        clang::TemplateName template_name_arg = arg.getAsTemplate();
+        clang::TemplateDecl *template_decl_arg =
+            template_name_arg.getAsTemplateDecl();
+        if (template_decl_arg) {
+          SgNode *traverse_result = Traverse(template_decl_arg);
+          SgDeclarationStatement *sg_decl =
+              isSgDeclarationStatement(traverse_result);
+
+          if (SgTemplateParameter *param =
+                  isSgTemplateParameter(traverse_result)) {
+            if (SgDeclarationStatement *inner_decl =
+                    param->get_templateDeclaration()) {
+              if (isSgNonrealDecl(inner_decl)) {
+                sg_decl = inner_decl;
+              }
+            }
+          }
+
+          if (sg_decl) {
+            if (SgTemplateClassDeclaration *class_tmpl =
+                    isSgTemplateClassDeclaration(sg_decl)) {
+              // Reuse logic for name qualification
+              SgName qual_name = class_tmpl->get_qualified_name();
+              if (qual_name.getString().find("::") == std::string::npos &&
+                  class_tmpl->get_scope()) {
+                if (SgNamespaceDefinitionStatement *ns_def =
+                        isSgNamespaceDefinitionStatement(
+                            class_tmpl->get_scope())) {
+                  qual_name = ns_def->get_namespaceDeclaration()
+                                  ->get_name()
+                                  .getString() +
+                              "::" + class_tmpl->get_name().getString();
+                }
+              }
+              SgType *type = SageBuilder::buildTemplateType(qual_name);
+              sg_arg = new SgTemplateArgument(type, false);
+            } else {
+              sg_arg = new SgTemplateArgument(
+                  SgTemplateArgument::template_template_argument, sg_decl);
+              sg_arg->set_templateDeclaration(sg_decl);
+            }
           }
         }
         break;
