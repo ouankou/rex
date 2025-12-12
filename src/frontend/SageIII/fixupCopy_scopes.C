@@ -433,15 +433,13 @@ SgGlobal::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
      SgDeclarationStatementPtrList::const_iterator i_copy     = statementList_copy.begin();
 
   // Iterate over both lists to match up the correct pairs of SgStatement objects
-     while ( (i_original != statementList_original.end()) && (i_copy != statementList_copy.end()) )
-        {
-       // Print what we are visiting
+     while ((i_original != statementList_original.end()) &&
+            (i_copy != statementList_copy.end())) {
+       (*i_original)->fixupCopy_scopes(*i_copy, help);
 
-          (*i_original)->fixupCopy_scopes(*i_copy,help);
-
-          i_original++;
-          i_copy++;
-        }
+       i_original++;
+       i_copy++;
+     }
 
   // Call the base class fixupCopy member function
      SgScopeStatement::fixupCopy_scopes(copy,help);
