@@ -1,6 +1,11 @@
 #include <rose.h>
 #include <Rose/SourceLocation.h>
 
+#ifndef ASSERT_always_require
+#define ASSERT_always_require ASSERT_require
+#define ASSERT_always_forbid ASSERT_forbid
+#endif
+
 using namespace Rose;
 
 int main() {

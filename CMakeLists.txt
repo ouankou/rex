@@ -869,6 +869,10 @@ configure_file(cmake/CTestCustom.cmake.in ${CMAKE_BINARY_DIR}/CTestCustom.cmake 
 
 # Create include-staging directory for compiler headers (used by multiple language frontends)
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include-staging")
+# Stage public headers expected under include/Rose in install tree.
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include-staging/Rose")
+file(COPY ${ROSE_TOP_SRC_DIR}/src/Rose/SourceLocation.h
+     DESTINATION ${CMAKE_BINARY_DIR}/include-staging/Rose)
 
 if(enable-cuda)
     execute_process(
@@ -959,10 +963,11 @@ if(enable-c)
     #
     # The setup of CMake for ROSE, on the other hand, does not make this distinction. Instead, the CMake system utilizes
     # a single directory $ROSE_CMAKE_BIN/include for the same purpose.
-    execute_process(
-      COMMAND ${CMAKE_COMMAND} -E create_symlink
-      ${CMAKE_BINARY_DIR}/include-staging ${CMAKE_BINARY_DIR}/include)
-  endif()
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+    ${CMAKE_BINARY_DIR}/include-staging ${CMAKE_BINARY_DIR}/include)
+endif()
+install(FILES ${ROSE_TOP_SRC_DIR}/src/Rose/SourceLocation.h DESTINATION include/Rose)
   set(C_INCLUDE_STRING "${C_INCLUDE_STRING}}")
   set(CXX_INCLUDE_STRING "${CXX_INCLUDE_STRING}}")
 else()

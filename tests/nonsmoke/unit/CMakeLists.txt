@@ -1,0 +1,5 @@
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/SageInterface/CMakeLists.txt")
+  add_subdirectory(SageInterface)
+else()
+  message(STATUS "Skipping nonsmoke/unit/SageInterface (only enabled for GNU compilers in Automake)")
+endif()

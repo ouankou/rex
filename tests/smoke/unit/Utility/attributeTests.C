@@ -3,6 +3,14 @@
 #include <rose.h>
 #include <sstream>
 
+#ifndef ASSERT_always_require
+#define ASSERT_always_require ASSERT_require
+#define ASSERT_always_require2 ASSERT_require2
+#define ASSERT_always_forbid ASSERT_forbid
+#define ASSERT_always_forbid2 ASSERT_forbid2
+#define ASSERT_always_not_null ASSERT_not_null
+#endif
+
 // Counts how many instances of class T are currently allocated.
 template<class T>
 class AllocationCounter {
