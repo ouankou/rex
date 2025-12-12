@@ -70,4 +70,4 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue87_namespace.cpp
 )
-set_tests_properties(Cxx_tests_rex_test2025_issue87_namespace PROPERTIES LABELS Cxx_tests)
+

@@ -508,6 +508,9 @@ ClangToSageTranslator::populateClassDefinition(clang::RecordDecl* record_decl, S
               // the unparser to distinguish user intent.
 
               mod.set_is_explicit(explicit_access_context);
+              if (explicit_access_context) {
+                explicit_access_context = false;
+              }
 
               // Track current access for our own logic if needed, though with
               // the new architecture we rely less on this state for stripping.
