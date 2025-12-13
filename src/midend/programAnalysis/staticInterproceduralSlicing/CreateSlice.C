@@ -135,13 +135,13 @@ BooleanSafeKeeper CreateSlice::evaluateSynthesizedAttribute(SgNode * node, Boole
                                                 // check if the node is from the sourcefile or goes to the source file, if so kill it
                                                 // make shure to delete only stuff, the belongs to an unparsed file
 //                                              if ((*cand)->get_file_info ()->isOutputInCodeGeneration ())
-                                                if (currentFile &&(*cand)->get_file_info ()->isSameFile(currentFile)) {
-#ifndef _MSC_VER                                                        
-                                                //LowLevelRewrite::remove(isSgStatement(*cand));
-						SageInterface::removeStatement(isSgStatement(*cand));
-#endif
-        //                                      delete (*cand);
-                                                }
+                        if (currentFile &&
+                            (*cand)->get_file_info()->isSameFile(currentFile)) {
+                          // LowLevelRewrite::remove(isSgStatement(*cand));
+                          SageInterface::removeStatement(isSgStatement(*cand));
+                          //                                      delete
+                          //                                      (*cand);
+                        }
                                         }
                                 }
                                 else if (isSgTypedefDeclaration(*cand) ||isSgClassDeclaration(*cand))
@@ -190,17 +190,16 @@ BooleanSafeKeeper CreateSlice::evaluateSynthesizedAttribute(SgNode * node, Boole
                                 {
                                                 // make shure to delete only stuff, the belongs to an unparsed file
 //                                              if (node->get_file_info ()->isOutputInCodeGeneration ())
-                                        if (currentFile && node->get_file_info ()->isSameFile(currentFile)) {
-#ifndef _MSC_VER
-                                                        //LowLevelRewrite::remove(isSgStatement(node));
-                                                        SageInterface::removeStatement(isSgStatement(node));
-#else
- #pragma message ("WARNING: No implementation for Windows yet.")
- ROSE_ABORT();
-
-#endif
-                                }
-                                //      delete(node);
+                                                if (currentFile &&
+                                                    node->get_file_info()
+                                                        ->isSameFile(
+                                                            currentFile)) {
+                                                  // LowLevelRewrite::remove(isSgStatement(node));
+                                                  SageInterface::
+                                                      removeStatement(
+                                                          isSgStatement(node));
+                                                }
+                                                //      delete(node);
                                 }
                         }
                 }

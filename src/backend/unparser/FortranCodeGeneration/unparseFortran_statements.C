@@ -13,10 +13,6 @@
 // Interestingly it must be at the top of the list of include files.
 #include "rose_config.h"
 
-#ifdef _MSC_VER
-#define strncasecmp _strnicmp
-#endif
-
 using namespace std;
 using namespace Rose;
 
@@ -972,31 +968,37 @@ FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(SgStat
         {
        // This define is copied from OFP actionEnum.h This needs to be better handled later (using a proper enum type).
 #define IntentSpecBase 600
-#ifndef _MSC_VER
-                        // tps (02/02/2010) : error C2513: 'const int' : no variable declared before '='
-          const int IN    = IntentSpecBase+0;
-          const int OUT   = IntentSpecBase+1;
-          const int INOUT = IntentSpecBase+2;
+       // tps (02/02/2010) : error C2513: 'const int' : no variable declared
+       // before '='
+       const int IN = IntentSpecBase + 0;
+       const int OUT = IntentSpecBase + 1;
+       const int INOUT = IntentSpecBase + 2;
 
-          string intentString;
-          switch(attributeSpecificationStatement->get_intent())
-             {
-               case IN:    intentString = "in";    break;
-               case OUT:   intentString = "out";   break;
-               case INOUT: intentString = "inout"; break;
+       string intentString;
+       switch (attributeSpecificationStatement->get_intent()) {
+       case IN:
+         intentString = "in";
+         break;
+       case OUT:
+         intentString = "out";
+         break;
+       case INOUT:
+         intentString = "inout";
+         break;
 
-               default:
-                  {
-                    printf ("Error: default reached attributeSpecificationStatement->get_intent() = %d \n",attributeSpecificationStatement->get_intent());
-                    ROSE_ABORT();
-                  }
-             }
+       default: {
+         printf("Error: default reached "
+                "attributeSpecificationStatement->get_intent() = %d \n",
+                attributeSpecificationStatement->get_intent());
+         ROSE_ABORT();
+       }
+       }
 
-          curprint("(" + intentString + ")");
-#endif
-        }
+       curprint("(" + intentString + ")");
+     }
 
-  // The parameter statement is a bit different from the other attribute statements (perhaps enough for it to be it's own IR node.
+     // The parameter statement is a bit different from the other attribute
+     // statements (perhaps enough for it to be it's own IR node.
      if (attributeSpecificationStatement->get_attribute_kind() == SgAttributeSpecificationStatement::e_parameterStatement)
         {
           ASSERT_not_null(attributeSpecificationStatement->get_parameter_list());

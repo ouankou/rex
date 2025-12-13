@@ -51,10 +51,10 @@ numberToString(double x) {
     return std::string(numberString);
 }
 
-#if !defined(_MSC_VER) &&                                                                                                      \
-    defined(BACKEND_CXX_IS_GNU_COMPILER) &&                                                                                    \
-    ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 && BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER > 6) ||                      \
-     BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4) &&                                                                         \
+#if defined(BACKEND_CXX_IS_GNU_COMPILER) &&                                    \
+    ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 &&                        \
+      BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER > 6) ||                        \
+     BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4) &&                         \
     __WORDSIZE == 64
 std::string
 numberToString( __int128 x) {

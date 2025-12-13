@@ -199,11 +199,10 @@ void PreprocessingInfo::unpacked( char* storePointer )
 #endif
 
 #ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// DQ (11/29/2009): MSVC does not understnad use of "true" in macros.
-// #if CAN_NOT_COMPILE_WITH_ROSE != true
-// #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
-// #ifndef USE_ROSE
-  // DQ and AS (6/23/2006): and the stuff of Wave specific macro support ...
+     // #if CAN_NOT_COMPILE_WITH_ROSE != true
+     // #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
+     // #ifndef USE_ROSE
+     // DQ and AS (6/23/2006): and the stuff of Wave specific macro support ...
      tokenStream      = NULL;
      macroDef         = NULL;
      macroCall        = NULL;
@@ -224,14 +223,11 @@ void PreprocessingInfo::unpacked( char* storePointer )
 // ********************************************
 
 #ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// DQ (11/29/2009): MSVC does not understnad use of "true" in macros.
-// #if CAN_NOT_COMPILE_WITH_ROSE != true
-// #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
-// #ifndef USE_ROSE
-// AS(012006) Added to support macros
-PreprocessingInfo::rose_macro_call*
-PreprocessingInfo::get_macro_call()
-   {
+   // #if CAN_NOT_COMPILE_WITH_ROSE != true
+   // #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
+   // #ifndef USE_ROSE
+   // AS(012006) Added to support macros
+   PreprocessingInfo::rose_macro_call *PreprocessingInfo::get_macro_call() {
      return macroCall;
    }
 #endif
@@ -533,7 +529,6 @@ PreprocessingInfo::PreprocessingInfo(rose_include_directive* inclDir, RelativePo
      p_isTransformation = false;
    }
 #endif
-
 
 #ifndef ROSE_SKIP_COMPILATION_OF_WAVE
 PreprocessingInfo::PreprocessingInfo( token_type directive, token_list_container expression, bool expression_value, DirectiveType dirType, RelativePositionType relPos )

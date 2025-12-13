@@ -19,14 +19,7 @@ namespace StringUtility {
 // systems.
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-enum OSType {
-    OS_TYPE_UNKNOWN,
-    OS_TYPE_LINUX,
-    OS_TYPE_OSX,
-    OS_TYPE_WINDOWS,
-    OS_TPYE_WINDOWSXP
-};
+enum OSType { OS_TYPE_UNKNOWN, OS_TYPE_LINUX };
 
 /** String with source location information.
  *

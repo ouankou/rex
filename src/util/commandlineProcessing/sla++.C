@@ -3,10 +3,6 @@
 #include <rose_config.h>
 #include <assert.h>
 
-// DQ (3/22/2009): Added MSVS support for ROSE.
-#include "rose_msvc.h"
-
-
 /*
 String list assignment (sla) functions to process assignment instructions and flags.
 Copyright (C) 1998,1999 Brian T. N. Gunney
@@ -105,11 +101,7 @@ Return: The number of value found.  If pname is not a list, the number of
   #endif
 #endif
 
-#if (_WIN32)
-// #include <regex.h>
-#else
- #include <regex.h>
-#endif
+#include <regex.h>
 #include <string.h>
 
 // DQ (11/4/2009): This is no longer required for modern C++ compilers!

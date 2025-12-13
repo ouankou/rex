@@ -725,7 +725,7 @@ LIBBUILTIN(objc_read_weak, "GG*", "f", "/objc/objc-auto.h", OBJC_LANG)
 // id objc_assign_weak(id value, id *location)
 LIBBUILTIN(objc_assign_weak, "GGG*", "f", "/objc/objc-auto.h", OBJC_LANG)
 // id objc_assign_ivar(id value, id dest, ptrdiff_t offset)
-// FIXME. Darwin has ptrdiff_t typedef'ed to int.
+// FIXME: ptrdiff_t is modeled as int here.
 LIBBUILTIN(objc_assign_ivar, "GGGi", "f", "/objc/objc-auto.h", OBJC_LANG)
 // id objc_assign_global(id val, id *dest)
 LIBBUILTIN(objc_assign_global, "GGG*", "f", "/objc/objc-auto.h", OBJC_LANG)

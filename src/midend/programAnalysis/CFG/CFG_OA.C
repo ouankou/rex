@@ -33,8 +33,6 @@ OpenAnalysis::ROSE_CFG_Wrap :: ~ROSE_CFG_Wrap()
 }
 #endif
 
-#ifndef _MSC_VER
-
 // DQ (1/9/2010): This should not be required now (see fix below)!
 // #ifndef USE_ROSE
 // DQ (8/29/2009): EDG reports  this as an error:
@@ -51,10 +49,6 @@ void OpenAnalysis::BuildCFG ( AstInterface& fa, const AstNodePtr& head, BuildCFG
   OA2ROSE_CFG_Translate( wrap, ng);
 }
 // #endif
-#endif
-
-
-#ifndef _MSC_VER
 
 // DQ (1/9/2010): This should not be required now (see fix below)!
 // #ifndef USE_ROSE
@@ -100,16 +94,3 @@ void OpenAnalysis::OA2ROSE_CFG_Translate ( ROSE_CFG_Wrap& wrap, BuildCFGConfig<N
    }
 }
 // #endif
-
-#endif
-
-
-
-
-
-
-
-
-
-
-

@@ -10,10 +10,6 @@
 #include <vector>
 #include <list>
 
-#ifdef _MSC_VER
-#include <time.h>
-#endif
-
 #include <assert.h>
 
 #include "rosedll.h"
@@ -290,4 +286,3 @@ class ROSE_DLL_API TimingPerformance :
 // }
 
 #endif
-

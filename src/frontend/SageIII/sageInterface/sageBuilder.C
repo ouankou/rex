@@ -10565,10 +10565,10 @@ SgStaticAssertionDeclaration* SageBuilder::buildStaticAssertionDeclaration(SgExp
      return result;
    }
 
-
-// DQ (8/17/2014): Adding support for Microsoft MSVC specific attributes.
-SgMicrosoftAttributeDeclaration* SageBuilder::buildMicrosoftAttributeDeclaration (const SgName & attribute_string)
-   {
+   // DQ (8/17/2014): Adding support for MS-style attributes.
+   SgMicrosoftAttributeDeclaration *
+   SageBuilder::buildMicrosoftAttributeDeclaration(
+       const SgName &attribute_string) {
      SgMicrosoftAttributeDeclaration* result = new SgMicrosoftAttributeDeclaration(attribute_string);
      ROSE_ASSERT(result != NULL);
 
@@ -16293,10 +16293,10 @@ SageBuilder::fixupSharingSourcePosition(SgNode* subtreeRoot, int new_file_id)
 SgFile*
 SageBuilder::buildFile(const std::string& inputFileName, const std::string& outputFileName, SgProject* project/*=NULL*/, bool clear_globalScopeAcrossFiles /*=false*/)
    {
-// Note that ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT defines a reduced set of ROSE to support front-end specific development.
-// It is mostly used by quinlan to support laptop development where the smaller set of files permits one to do limited
-// development work on a Mac (even with OSX's poor performance with large numbers of debug symbols).  This is an
-// infrequently used option.
+// Note that ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT defines a reduced set of
+// ROSE to support front-end specific development. It is mostly used to reduce
+// compile times and simplify debugging by building a smaller set of files. This
+// is an infrequently used option.
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 
 #if 0

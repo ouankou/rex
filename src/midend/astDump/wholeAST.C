@@ -2562,23 +2562,22 @@ void
 SimpleColorMemoryPoolTraversal::markFirstAST ()
    {
   // Mark the IR node that are in the first AST before the deep AST copy
-#ifdef _MSC_VER
-   // DQ (11/27/2009): I think that MSVC is correct and this should be a const_iterator (GNU is lacks because it is a const reference).
-     set<SgNode*>::const_iterator i = setOfIRnodes.begin();
-#else
-     set<SgNode*>::iterator i = setOfIRnodes.begin();
-#endif
-     while (i != setOfIRnodes.end())
-        {
-          string additionalNodeOptions = "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at \\N\",sides=6,peripheries=1,color=\"blue\",fillcolor=peru,fontname=\"7x13bold\",fontcolor=black,style=filled";
-       // Make this statement different in the generated dot graph
+  set<SgNode *>::const_iterator i = setOfIRnodes.begin();
+  while (i != setOfIRnodes.end()) {
+    string additionalNodeOptions =
+        "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
+        "\\N\",sides=6,peripheries=1,color=\"blue\",fillcolor=peru,fontname="
+        "\"7x13bold\",fontcolor=black,style=filled";
+    // Make this statement different in the generated dot graph
 
-       // DQ (5/14/2006): this is an error when processing stdio.h
-       // string labelWithSourceCode = string("\\n  ") + node->unparseToString() + "  ";
-          string labelWithSourceCode = "\\n" +  StringUtility::numberToString(*i) + "  ";
+    // DQ (5/14/2006): this is an error when processing stdio.h
+    // string labelWithSourceCode = string("\\n  ") + node->unparseToString() +
+    // "  ";
+    string labelWithSourceCode =
+        "\\n" + StringUtility::numberToString(*i) + "  ";
 
-          NodeType graphNode(*i,labelWithSourceCode,additionalNodeOptions);
-          addNode(graphNode);
+    NodeType graphNode(*i, labelWithSourceCode, additionalNodeOptions);
+    addNode(graphNode);
 #if 0
           additionalNodeOptions = "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at \\N\",sides=6,peripheries=1,color=\"blue\",fillcolor=peru,fontname=\"7x13bold\",fontcolor=white,style=filled";
        // Make this statement different in the generated dot graph
@@ -2591,27 +2590,21 @@ SimpleColorMemoryPoolTraversal::markFirstAST ()
           addNode(graphNode2);
 #endif
           i++;
-        }
+  }
    }
 
 void
 SimpleColorMemoryPoolTraversal::buildExcludeList ()
    {
   // Mark the IR node that are in the first AST before the deep AST copy
-#ifdef _MSC_VER
-   // DQ (11/27/2009): I think that MSVC is correct and this should be a const_iterator (GNU is lacks because it is a const reference).
-     set<SgNode*>::const_iterator i = setOfIRnodes.begin();
-#else
-     set<SgNode*>::iterator i = setOfIRnodes.begin();
-#endif
-     while (i != setOfIRnodes.end())
-        {
+  set<SgNode *>::const_iterator i = setOfIRnodes.begin();
+  while (i != setOfIRnodes.end()) {
 #if 0
           printf ("In SimpleColorMemoryPoolTraversal::buildExcludeList(): skipping node = %p = %s = %s \n",*i,(*i)->class_name().c_str(),SageInterface::get_name(*i).c_str());
 #endif
           skipNode(*i);
           i++;
-        }
+  }
    }
 
 void

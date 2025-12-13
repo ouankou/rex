@@ -115,7 +115,7 @@ namespace Outliner
        typedef std::vector<SgFunctionDeclaration *> FuncDeclList_t;
        FuncDeclList_t targetFriends;
 
-    // DQ (12/5/2019): Added ROSE_DLL_API prefix for Windows support (too all of these functions).
+    // DQ (12/5/2019): Added ROSE_DLL_API for shared-library symbol visibility.
        ROSE_DLL_API DeferredTransformation();
        ROSE_DLL_API DeferredTransformation(SgClassDefinition* class_definition, SgDeclarationStatement* target_class_member, SgDeclarationStatement* new_function_prototype);
        ROSE_DLL_API DeferredTransformation (const DeferredTransformation& X); //! Copy constructor.
@@ -148,7 +148,7 @@ namespace Outliner
  // DeferredTransformation deferredTransformation;
     SageInterface::DeferredTransformation deferredTransformation;
 
- // DQ (12/5/2019): Added ROSE_DLL_API prefix for Windows support (too all of these functions).
+    // DQ (12/5/2019): Added ROSE_DLL_API for shared-library symbol visibility.
     ROSE_DLL_API Result (void); //! Sets all fields to 0
 
  // DQ (11/19/2020): DeferredTransformation support was moved to the SageInterface namespace to support more general usage.

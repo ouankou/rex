@@ -1225,7 +1225,7 @@ HEADER_CAST_EXPRESSION_START
             // Not clear if these really need to be present.
             // e_reference_cast        = 7, /*!< C++ reference cast (base class cast) */
             // e_rvalue_reference_cast = 8,  /*!< C++ rvalue reference cast (base class cast to rvalue) */
-               e_safe_cast             = 8, /*!< C++ MSVC specific safe cast */
+               e_safe_cast             = 8, /*!< C++ vendor-specific safe cast */
                e_last_cast  /*!< Last entry in enum of cast types */
              };
 

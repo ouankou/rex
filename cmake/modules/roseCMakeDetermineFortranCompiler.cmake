@@ -96,16 +96,6 @@ ENDIF(NOT CMAKE_Fortran_COMPILER)
 
 MARK_AS_ADVANCED(CMAKE_Fortran_COMPILER)  
 
-# Build a small source file to identify the compiler.
-IF(${CMAKE_GENERATOR} MATCHES "Visual Studio")
-  SET(CMAKE_Fortran_COMPILER_ID_RUN 1)
-  SET(CMAKE_Fortran_PLATFORM_ID "Windows")
-
-  # TODO: Set the compiler id.  It is probably MSVC but
-  # the user may be using an integrated Intel compiler.
-  # SET(CMAKE_Fortran_COMPILER_ID "MSVC")
-ENDIF(${CMAKE_GENERATOR} MATCHES "Visual Studio")
-
 IF(NOT CMAKE_Fortran_COMPILER_ID_RUN)
   SET(CMAKE_Fortran_COMPILER_ID_RUN 1)
 
@@ -116,7 +106,7 @@ IF(NOT CMAKE_Fortran_COMPILER_ID_RUN)
     # Try compiling to an object file only.
     "-c"
 
-    # Intel on windows does not preprocess by default.
+    # Some Intel compilers do not preprocess by default.
     "-fpp"
     )
 
@@ -141,14 +131,6 @@ IF(NOT CMAKE_Fortran_COMPILER_ID_RUN)
           "Determining if the Fortran compiler is GNU failed with "
           "the following output:\n${CMAKE_COMPILER_OUTPUT}\n\n")
       ENDIF("${CMAKE_COMPILER_OUTPUT}" MATCHES ".*THIS_IS_GNU.*" )
-      IF(NOT CMAKE_Fortran_PLATFORM_ID)
-        IF("${CMAKE_COMPILER_OUTPUT}" MATCHES ".*THIS_IS_MINGW.*" )
-          SET(CMAKE_Fortran_PLATFORM_ID "MinGW")
-        ENDIF("${CMAKE_COMPILER_OUTPUT}" MATCHES ".*THIS_IS_MINGW.*" )
-        IF("${CMAKE_COMPILER_OUTPUT}" MATCHES ".*THIS_IS_CYGWIN.*" )
-          SET(CMAKE_Fortran_PLATFORM_ID "Cygwin")
-        ENDIF("${CMAKE_COMPILER_OUTPUT}" MATCHES ".*THIS_IS_CYGWIN.*" )
-      ENDIF(NOT CMAKE_Fortran_PLATFORM_ID)
     ENDIF(NOT CMAKE_COMPILER_RETURN)
   ENDIF(NOT CMAKE_Fortran_COMPILER_ID)
 
@@ -156,11 +138,6 @@ IF(NOT CMAKE_Fortran_COMPILER_ID_RUN)
   IF("${CMAKE_Fortran_COMPILER_ID}" MATCHES "GNU")
     SET(CMAKE_COMPILER_IS_GNUG77 1)
   ENDIF("${CMAKE_Fortran_COMPILER_ID}" MATCHES "GNU")
-  IF("${CMAKE_Fortran_PLATFORM_ID}" MATCHES "MinGW")
-    SET(CMAKE_COMPILER_IS_MINGW 1)
-  ELSEIF("${CMAKE_Fortran_PLATFORM_ID}" MATCHES "Cygwin")
-    SET(CMAKE_COMPILER_IS_CYGWIN 1)
-  ENDIF("${CMAKE_Fortran_PLATFORM_ID}" MATCHES "MinGW")
 ENDIF(NOT CMAKE_Fortran_COMPILER_ID_RUN)
 
 INCLUDE(CMakeFindBinUtils)

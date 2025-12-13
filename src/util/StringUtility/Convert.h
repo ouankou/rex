@@ -21,10 +21,9 @@ ROSE_UTIL_API std::string convertToLowerCase(const std::string &inputString);
 
 /** Normalizes line termination.
  *
- *  Changes ASCII-based line termination conventions used by various operating systems into the LF (line-feed) termination used
- *  by Multics, Unix and Unix-like systems (GNU/Linux, Mac OS X, FreeBSD, AIX, Xenix, etc.), BeOS, Amiga, RISC OS and others.
- *  Any occurrance of CR+LF, LF+CR, or CR by itself (in that order of left-to-right matching) is replaced by a single LF
- *  character. */
+ *  Changes ASCII-based line termination conventions into LF (line-feed)
+ * termination. Any occurrence of CR+LF, LF+CR, or CR by itself (in that order
+ * of left-to-right matching) is replaced by a single LF character. */
 ROSE_UTIL_API std::string fixLineTermination(const std::string &input);
 
 /** Insert a prefix string before every line.

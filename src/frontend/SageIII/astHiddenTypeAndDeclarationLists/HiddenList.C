@@ -559,7 +559,6 @@ InheritedAttributeSgScopeStatement HiddenListComputationTraversal :: evaluateInh
                         SetSgSymbolPointers AvailableHidden_Types;
                         SetSgSymbolPointers ElaboratingForcingHidden_Types;
 
-#ifndef _MSC_VER
                         // for gprof
                         CallIntersection_F(
                             inheritedAttribute.pointer_VectorScopeStack,
@@ -570,17 +569,11 @@ InheritedAttributeSgScopeStatement HiddenListComputationTraversal :: evaluateInh
                             ElaboratingForcingHidden_Types,
                             this->UsingDirRelativeToDeclarations,
                             this->UsingDeclRelativeToDeclarations,
-                            this->UsingDirRelativeToDeclarations_2,
-                            this->UsingDeclRelativeToDeclarations_2,
+                                                        this->UsingDirRelativeToDeclarations_2,
+                                                        this->UsingDeclRelativeToDeclarations_2,
                                                         this->UsingDirectivesSet,
                                                         this->UsingDeclarationsSet
                         );
-#else
-// tps (12/7/2009) This is currently not defined since it fails in Release mode
-#pragma message ("WARNING: HiddenList: InheritedAttributeSgScopeStatement: UsingDirectivesSet commented out right now.")
-ROSE_ABORT();
-
-#endif
                         if(!AvailableHidden_Functions_Variables.empty() || !AvailableHidden_Types.empty() || !ElaboratingForcingHidden_Types.empty()  ) {
 
                                 #ifdef HIDDEN_LIST_DEBUG
@@ -1395,7 +1388,6 @@ ROSE_ABORT();
                 #endif
 
                 // start intersection process of the current symbol table with the current scope
-#ifndef _MSC_VER
                 CallIntersection(
                     inheritedAttribute.pointer_VectorScopeStack,
                     inheritedAttribute.depth,
@@ -1410,12 +1402,6 @@ ROSE_ABORT();
                     this->UsingDirectivesSet,
                     this->UsingDeclarationsSet
                 );
-#else
-                                                        // tps (12/7/2009) This is currently not defines since it fails in Release mode
-#pragma message ("WARNING: HiddenList: InheritedAttributeSgScopeStatement4: UsingDirectivesSet commented out right now.")
- ROSE_ABORT();
-
-#endif
 
                 if(!AvailableHidden_Functions_Variables.empty() || !AvailableHidden_Types.empty() || !ElaboratingForcingHidden_Types.empty()  ) {
 

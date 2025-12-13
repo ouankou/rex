@@ -267,8 +267,6 @@
 #define BACKEND_X10_COMPILER_NAME_WITH_PATH "${BACKEND_X10_COMPILER_NAME_WITH_PATH}"
 
 /* REX: EDG-specific consistency tests removed - not applicable to Clang frontend */
-/* Define if building universal (internal helper macro) */
-#undef AC_APPLE_UNIVERSAL_BUILD
 
 /* Include path for backend C++ compiler. */
 #cmakedefine CXX_INCLUDE_STRING @CXX_INCLUDE_STRING@
@@ -476,7 +474,7 @@
 /* Location of ROSE Compile Tree. */
 #define ROSE_COMPILE_TREE_PATH ${ROSE_TOP_BINARY_DIR}
 
-/* PATH on Windows, LD_LIBRARY_PATH everywhere else. */
+/* Runtime shared library path environment variable (Linux: LD_LIBRARY_PATH). */
 #define ROSE_SHLIBPATH_VAR "${ROSE_SHLIBPATH_VAR}"
 
 /* REX: EDG frontend has been removed - Clang/LLVM is now the only frontend.
@@ -581,26 +579,17 @@
 //AS don't know what to do with this
 #undef USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
 
-/* Wine provides access to Windows header files for analysis of windows
-   applications under Linux. */
-//AS Don't know what to do with this
-#undef USE_ROSE_WINDOWS_ANALYSIS_SUPPORT
-
 /* Version number of package */
 //AS Don't know what to do with this
 
 #define VERSION "0.9.10"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
-   significant byte first (like Motorola and SPARC, unlike Intel). */
-#if defined AC_APPLE_UNIVERSAL_BUILD
-# if defined __BIG_ENDIAN__
-#  define WORDS_BIGENDIAN 1
-# endif
+   significant byte first. */
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#define WORDS_BIGENDIAN 1
 #else
-# ifndef WORDS_BIGENDIAN
-#  undef WORDS_BIGENDIAN
-# endif
+#undef WORDS_BIGENDIAN
 #endif
 
 /* Define to 1 if the X Window System is missing or not being used. */

@@ -3,11 +3,6 @@
 #include <string.h>
 #include <cstdio> // Liao, 7/10/2009, required by GCC 4.4.0
 
-#ifdef _MSC_VER
-// DQ (11/26/2009): This is required to support MSVC specific code below.
-#include "assert.h"
-#endif
-
 using namespace std;
 
 namespace annotation{
@@ -158,15 +153,9 @@ string read_id( istream& in )
 void read_id( istream& in, const string& s)
 {
   string r = read_id(in);
-  if (r != s)
-  {
-#ifdef _MSC_VER
-          printf ("MSVC specific code comments out the use of throw expression... (exiting) \n");
-          // tps: todo Windows. Not reached yet.
-          ROSE_ABORT();
-#else
-          throw ReadError("read identifier error: expecting '" + s + "' instead of '" + r + "'");
-#endif
+  if (r != s) {
+    throw ReadError("read identifier error: expecting '" + s +
+                    "' instead of '" + r + "'");
   }
 }
 
@@ -186,15 +175,9 @@ string read_num( istream& in )
   char c = read_ch(in);
   if (!in.good())
       return "";
-  if (!is_num(c))
-  {
-#ifdef _MSC_VER
-          printf ("MSVC specific code comments out the use of throw expression... (exiting) \n");
-          // tps: todo Windows. Not reached yet.
-          ROSE_ABORT();
-#else
-    throw ReadError("read number error: expecting numerics instead of " + string(1,c) );
-#endif
+  if (!is_num(c)) {
+    throw ReadError("read number error: expecting numerics instead of " +
+                    string(1, c));
   }
   string buf = "";
   buf.push_back(c);
@@ -219,4 +202,3 @@ string read_operator( istream& in )
   }
   return buf;
 }
-

@@ -78,66 +78,6 @@ main(int argc, char** argv)
     ROSE_ASSERT(classification.getLibraryName() == "stdc++");
     ROSE_ASSERT(classification.getDistanceFromSourceDirectory() == 8);
 
-    // #### OS X tests ####
-
-    // NOTE: Don't use this overloaded call to classifyFileName in real code
-    // it is used here only so that OSX and Windows cases can be tested
-    // on GNU/Linux
-
-    home = "/Users/stutsman1/";
-    // Also testing here to see if leaving trailing slash off works
-    sourceDir = home + "src/svn-rose";
-
-    OSType os = OS_TYPE_OSX;
-
-    classification = classifyFileName("/System/Library/Frameworks/Tk.framework"
-                                      "/Headers/tk.h",
-                                      sourceDir, os);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_LIBRARY);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_UNKNOWN);
-    ROSE_ASSERT(classification.getDistanceFromSourceDirectory() == 9);
-
-    classification = classifyFileName("/usr/include/stdio.h",
-                                      sourceDir, os);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_LIBRARY);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_C);
-    ROSE_ASSERT(classification.getDistanceFromSourceDirectory() == 6);
-
-    classification = classifyFileName(sourceDir + "/" + "include/stdio.h",
-                                      sourceDir, os);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_USER);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_USER);
-    ROSE_ASSERT(classification.getDistanceFromSourceDirectory() == 0);
-
-    classification = classifyFileName(slashes + home + "/include/stdio.h",
-                                      sourceDir, os);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_UNKNOWN);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_UNKNOWN);
-
-    classification = classifyFileName(home + "/usr/include/boost/boost-1_35/filesystem.hpp",
-                                      sourceDir, os);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_UNKNOWN);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_UNKNOWN);
-    ROSE_ASSERT(classification.getDistanceFromSourceDirectory() == 6);
-
-    // #### Windows tests ####
-
-    home = "C:\\Documents and Settings\\stutsman1\\";
-    sourceDir = home + "src\\svn-rose\\";
-    os = OS_TYPE_WINDOWS;
-
-    classification = classifyFileName("C:\\Program Files"
-                                      "\\Microsoft Visual Studio"
-                                      "\\MSVC\\Include\\stdio.h",
-                                      sourceDir, os);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_LIBRARY);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_UNKNOWN);
-
-    classification = classifyFileName(sourceDir + "src\\rose.h",
-                                      sourceDir, os);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_USER);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_USER);
-
     // Test header filename cleanup routine
 
     ROSE_ASSERT(stripDotsFromHeaderFileName(". FileNameClassifier.h") ==

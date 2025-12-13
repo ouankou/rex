@@ -7491,32 +7491,24 @@ UnparseLanguageIndependentConstructs::unparseBoolVal(SgExpression* expr, SgUnpar
         {
        // The C language does not support boolean values (C99 does, as I recall)
        // we want to print the boolean values as numerical values
-       // DQ (11/29/2009): get_value() returns an "int" and MSVC issues a warning for mixed type predicates.
        // if (bool_val->get_value() == true)
-          if (bool_val->get_value() != 0)
-             {
-               curprint("1");
-             }
-            else
-             {
-               curprint("0");
-             }
+       if (bool_val->get_value() != 0) {
+         curprint("1");
+       } else {
+         curprint("0");
+       }
         }
        else
         {
        // This is the C++ case (and any language supporting boolean values).
 
        // print them as "true" or "false"
-       // DQ (11/29/2009): get_value() returns an "int" and MSVC issues a warning for mixed type predicates.
        // if (bool_val->get_value() == true)
-          if (bool_val->get_value() != 0)
-             {
-               curprint("true");
-             }
-            else
-             {
-               curprint("false");
-             }
+       if (bool_val->get_value() != 0) {
+         curprint("true");
+       } else {
+         curprint("false");
+       }
         }
    }
 

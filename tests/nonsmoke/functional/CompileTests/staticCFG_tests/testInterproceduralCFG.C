@@ -1,12 +1,9 @@
-// Example translator to generate dot files of virtual, interprocedural control flow graphs
-#include "rose.h"
+// Example translator to generate dot files of virtual, interprocedural control
+// flow graphs
 #include "interproceduralCFG.h"
-#include <string>
-#ifndef _MSC_VER
+#include "rose.h"
 #include <err.h>
-#else
-#define warnx printf
-#endif
+#include <string>
 
 using namespace std;
 

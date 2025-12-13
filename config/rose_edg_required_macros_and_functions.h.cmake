@@ -642,9 +642,8 @@ was just float or double for complex<float> or complex<double>.
 /* gcc uses the C99 name _Complex_I in <complex.h>, but our EDG doesn't handle
    the GCC extension that they define it to. */
 #define _Complex_I __I__
-/* Disable inclusion of complex.h on Linux */
+/* Disable inclusion of complex.h (EDG compatibility). */
 #define _COMPLEX_H
-/* Disable inclusion of complex.h on Mac OS X */
 #define __COMPLEX__
 
 /* Defined this to avoid warnings (e.g. test2001_11.C) from 3.4.6 systems header files. */
@@ -673,15 +672,5 @@ was just float or double for complex<float> or complex<double>.
 #define __is_polymorphic (type)
 #define __is_union (type)
 #endif
-
-/* 
-   DQ (7/15/2009): Added support for MS Windows Code 
-   It might be that this file in included too late when using WINE.
- */
-#ifdef USE_ROSE_WINDOWS_ANALYSIS_SUPPORT
- #define __builtin_ms_va_list __builtin_va_list
- #define __ms_va_list va_list
-#endif
-
 
 #endif // !ROSE_USE_NEW_EDG_INTERFACE

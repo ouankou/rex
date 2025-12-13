@@ -50,9 +50,7 @@ typedef std::vector<std::list<token_type> > token_container_container;
 //Include files to get the current path
 #include <unistd.h>
 
-#ifndef _MSC_VER
 #include <sys/param.h>
-#endif
 
 // #include <iostream>
 // #include <fstream>
@@ -497,13 +495,4 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
 #endif
    }
 
-
-// EOF
-
-
-
-
-
-
-
-
+   // EOF

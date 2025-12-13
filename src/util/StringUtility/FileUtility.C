@@ -4,10 +4,9 @@
 #include <StringUtility.h>
 #include <FileUtility.h>
 
-#include <rose_config.h>
-#include <IntegerOps.h>
-#include "rose_msvc.h"                                  // DQ (3/22/2009): Added MSVS support for ROSE.
 #include "mlog.h"
+#include <IntegerOps.h>
+#include <rose_config.h>
 
 // Other includes
 #include <cstring>
@@ -18,17 +17,11 @@
 #include <sstream>
 #include <rose_config.h>
 
-#if !ROSE_MICROSOFT_OS
-# include <sys/param.h>                                 // AS added to support the function getAbsolutePathFromRelativePath
-# include <dirent.h>                                    /* readdir(), etc.                    */
-# include <sys/stat.h>                                  /* stat(), etc.                       */
-# include <libgen.h>                                    /* basename(), dirame()               */
-# include <unistd.h>                                    /* getcwd(), etc.                     */
-#else
-# include <windows.h>                                   // DQ (11/27/2009): this is required for use of GetFullPathName()
-# include "Shlwapi.h"
-# include <unistd.h>                                    // tps (11/10/2009): This is needed in windows to find the realpath
-#endif
+#include <dirent.h> /* readdir(), etc.                    */
+#include <libgen.h> /* basename(), dirame()               */
+#include <sys/param.h> // AS added to support the function getAbsolutePathFromRelativePath
+#include <sys/stat.h> /* stat(), etc.                       */
+#include <unistd.h>   /* getcwd(), etc.                     */
 
 namespace Rose {
 namespace StringUtility {
@@ -38,12 +31,6 @@ std::list<std::string>
 findfile(std::string patternString, std::string pathString) {
      std::list<std::string> patternMatches;
 
-#if ROSE_MICROSOFT_OS
-         printf ("Error: MSVS implementation of findfile required (not implemented) \n");
-#define __builtin_constant_p(exp) (0)
-         // tps: todo Windows: have not hit this assert yet.
-         ROSE_ABORT();
-#else
      DIR* dir;                        /* pointer to the scanned directory. */
      struct dirent* entry;      /* pointer to one directory entry.   */
   // struct stat dir_stat; /* used by stat().                   */
@@ -66,12 +53,9 @@ findfile(std::string patternString, std::string pathString) {
         */
           std::string entryName = entry->d_name; 
           if (entryName.find(patternString) != std::string::npos) {
-               patternMatches.push_back(pathString+"/"+entryName);
-
+            patternMatches.push_back(pathString + "/" + entryName);
           }
-
      }
-#endif
      return patternMatches;
 }
 
@@ -117,11 +101,6 @@ getAbsolutePathFromRelativePath(const std::string &relativePath, bool printError
      char resolved_path[MAXPATHLEN];
      resolved_path[0] = '\0';
 
-#if ROSE_MICROSOFT_OS
-         // tps (08/19/2010): added this function
-         PathCanonicalize(resolved_path,relativePath.c_str());
-         std::string resultingPath=std::string(resolved_path);
-#else
   // DQ (9/3/2006): Note that "realpath()" 
   // can return an error if it processes a file or directory that does not exist.  This is 
   // a problem for include paths that are specified on the commandline and which don't exist; 
@@ -132,7 +111,6 @@ getAbsolutePathFromRelativePath(const std::string &relativePath, bool printError
          std::string resultingPath = "";
          if (rp!=NULL)
            resultingPath = std::string(rp);
-#endif
 
          //printf("resultingPath == %s    printErrorIfAny == %d \n",resultingPath.c_str(),printErrorIfAny);
   // If there was an error then resultingPath is NULL, else it points to resolved_path.
@@ -255,28 +233,12 @@ stripPathFromFileName(const std::string & fileNameWithPath) {
   // returns: svn-LINUX-64bit-4.2
 
      std::string returnString;
-     char c_version[PATH_MAX]; 
-     ROSE_ASSERT (fileNameWithPath.size() + 1 < PATH_MAX);
+     char c_version[PATH_MAX];
+     ROSE_ASSERT(fileNameWithPath.size() + 1 < PATH_MAX);
      strcpy(c_version, fileNameWithPath.c_str());
-
-#if ROSE_MICROSOFT_OS
-//       printf ("Error: basename() not available in MSVS (work around not implemented) \n");
-//       ROSE_ASSERT(false);
-   char drive[_MAX_DRIVE];
-   char dir[_MAX_DIR];
-   char fname[_MAX_FNAME];
-   char ext[_MAX_EXT];
-
-   _splitpath(c_version,drive,dir,fname,ext);
-         // tps (08/17/2010) - Made this work under Windows. 
-         std::string fnamestr(fname);
-         std::string extstr(ext);
-         returnString = fnamestr+extstr;
-#else
      returnString = basename(c_version);
-#endif
 
-         return returnString;
+     return returnString;
 #endif
 
 #if 0
@@ -375,33 +337,17 @@ fileNameSuffix(const std::string &fileNameWithSuffix) {
 // DQ (3/15/2005): New, simpler and better implementation suggested function from Tom, thanks Tom!
 std::string
 getPathFromFileName(const std::string &fileNameWithPath) {
-     char c_version[PATH_MAX]; 
-     ROSE_ASSERT (fileNameWithPath.size() + 1 < PATH_MAX);
-     strcpy(c_version, fileNameWithPath.c_str());
+  char c_version[PATH_MAX];
+  ROSE_ASSERT(fileNameWithPath.size() + 1 < PATH_MAX);
+  strcpy(c_version, fileNameWithPath.c_str());
+  std::string returnString = dirname(c_version);
+  // dirname returns a "." if fileNameWithPath does not contain "/"'s
+  // I am not sure why this function was written and so, preserve the
+  // functionality using empty return string in such cases.
 
-#if ROSE_MICROSOFT_OS
-   char drive[_MAX_DRIVE];
-   char dir[_MAX_DIR];
-   char fname[_MAX_FNAME];
-   char ext[_MAX_EXT];
-
-         _splitpath(c_version,drive,dir,fname,ext);
-//       printf ("Error: dirname() not supported in MSVS 9work around not implemented) \n");
-//       printf ("dirname = %s \n",dir);
-         // tps (08/17/2010) - Made this work under Windows.
-         std::string drivestr(drive);
-         std::string dirstr(dir);
-         std::string returnString = drivestr+dirstr;
-//       ROSE_ASSERT(false);
-#else
-     std::string returnString = dirname(c_version);
-#endif
-     //dirname returns a "." if fileNameWithPath does not contain "/"'s
-     //I am not sure why this function was written and so, preserve the functionality using empty return string in such cases.
-
-     if(returnString == ".")
-          returnString = "";
-     return returnString;
+  if (returnString == ".")
+    returnString = "";
+  return returnString;
 
 #if 0
      string::size_type positionOfSlash = fileNameWithPath.rfind('/');

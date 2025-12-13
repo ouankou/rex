@@ -1,15 +1,13 @@
 #include <iostream>
 #include <fstream>
-//#include <rose.h>
-#include <string>
-#ifndef _MSC_VER
-#include <err.h>
-#endif
+// #include <rose.h>
 #include "SgGraphTemplate.h"
 #include "graphProcessing.h"
 #include "staticCFG.h"
-/* Testing the graph traversal mechanism now implementing in AstProcessing.h (inside src/midend/astProcessing/)*/
-
+#include <err.h>
+#include <string>
+/* Testing the graph traversal mechanism now implementing in AstProcessing.h
+ * (inside src/midend/astProcessing/)*/
 
 using namespace std;
 using namespace boost;
@@ -119,10 +117,12 @@ int main(int argc, char *argv[]) {
 
    //cfg.buildFullCFG();
     stringstream ss;
-    string fileName= StringUtility::stripPathFromFileName(mainDef->get_file_info()->get_filenameString());
-    string dotFileName1=fileName+"."+ mainDef->get_declaration()->get_name() +".dot";
+    string fileName=
+   StringUtility::stripPathFromFileName(mainDef->get_file_info()->get_filenameString());
+    string dotFileName1=fileName+"."+ mainDef->get_declaration()->get_name()
+   +".dot";
 
-    cfgToDot(mainDef,dotFileName1); 
+    cfgToDot(mainDef,dotFileName1);
     //cfg->buildFullCFG();
     SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
     g = cfg.getGraph();
@@ -134,7 +134,6 @@ int main(int argc, char *argv[]) {
     vis->constructPathAnalyzer(mg);
     //cfg.clearNodesAndEdges();
     std::cout << "finished" << std::endl;
-    std::cout << "tltnodes: " << vis->tltnodes << " paths: " << vis->paths << std::endl;
-    delete vis;
+    std::cout << "tltnodes: " << vis->tltnodes << " paths: " << vis->paths <<
+   std::endl; delete vis;
 */
-

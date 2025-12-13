@@ -7,16 +7,11 @@
 #if 1
 // file locking support
 #include <errno.h>
-#include <stdio.h>
 #include <fcntl.h>
-#include <unistd.h>
-#ifndef _MSC_VER
+#include <stdio.h>
 #include <sys/resource.h>
 #include <sys/time.h>
-#else
-#include <windows.h>            // getpagesize()
-#include "timing.h"             // gettimeofday()
-#endif
+#include <unistd.h>
 #endif
 
 #include "AstStatistics.h"
@@ -99,20 +94,7 @@ ROSE_MemoryUsage::getMemoryUsageKilobytes() const
      return ((long)getNumberOfResidentPages() * (long)getPageSizeBytes()) / (long)1024;
    }
 
-int
-ROSE_MemoryUsage::getPageSizeBytes() const
-   {
-#ifdef _MSC_VER
-
-     // CH (4/6/2010): Windows's version of `getpagesize()'
-     SYSTEM_INFO system_info;
-     GetSystemInfo(&system_info);
-     return static_cast<int>(system_info.dwPageSize);
-
-#else
-     return getpagesize();
-#endif
-   }
+   int ROSE_MemoryUsage::getPageSizeBytes() const { return getpagesize(); }
 
 #if 0
 long int
@@ -122,9 +104,7 @@ ROSE_MemoryUsage::getCurrentMemoryUsage()
    }
 #endif
 
-double
-ROSE_MemoryUsage::getPageSizeMegabytes() const
-   {
+   double ROSE_MemoryUsage::getPageSizeMegabytes() const {
      return getPageSizeBytes() / (1024.0 * 1024.0);
    }
 
@@ -356,17 +336,10 @@ double time_stamp()
      struct timeval t;
      double time;
 
-#ifdef _MSC_VER 
-     LARGE_INTEGER ticks, ticksPerSec;
-     QueryPerformanceFrequency(&ticksPerSec); 
-     QueryPerformanceCounter(&ticks);    
-     time = ticks.QuadPart / (double) ticksPerSec.QuadPart;
-#else
      gettimeofday(&t, NULL);
 
-     time = (double)(t.tv_sec + (1.0e-6*t.tv_usec));
-#endif
-  // printf ("In AstPerformance: time_stamp(): time = %f \n",time);
+     time = (double)(t.tv_sec + (1.0e-6 * t.tv_usec));
+     // printf ("In AstPerformance: time_stamp(): time = %f \n",time);
 
      return time;
    }
@@ -452,11 +425,7 @@ AstPerformance::getLock()
           if ( counter > 0 )
                printf ("Waiting for lock! counter = %lu userTolerance = %lu \n",counter,userTolerance);
 
-#ifdef _MSC_VER
-          Sleep(1000);
-#else
           sleep(1);
-#endif
           counter++;
 
        // DQ (8/24/2008): If after waiting a short while and the lock is still there, then report the issue.
@@ -1121,5 +1090,4 @@ AstPerformance::accumulateTime ( RoseTimeType & startTime, double & accumulatedT
    {
      accumulatedTime += ProcessingPhase::getCurrentDelta(startTime);
      numberFunctionCalls += 1.0;
-   }
-
+}

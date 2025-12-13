@@ -1,13 +1,11 @@
 #include <iostream>
 #include <fstream>
-//#include <rose.h>
-#include <string>
-#ifndef _MSC_VER
-#include <err.h>
-#endif
-#include <boost/graph/adjacency_list.hpp>
+// #include <rose.h>
 #include "graphProcessing.h"
 #include <assert.h>
+#include <boost/graph/adjacency_list.hpp>
+#include <err.h>
+#include <string>
 
 using namespace std;
 using namespace boost;

@@ -5,11 +5,7 @@
 #include <BlockingAnal.h>
 #include <SymbolicExpr.h>
 
-#ifndef _MSC_VER
 #include <sys/time.h>
-#else
-#include "timing.h"
-#endif
 
 #define DEBUG
 
@@ -623,5 +619,4 @@ double GetWallTime(void)
       }
       gettimeofday(&tp, NULL);
       return( ((double) (tp.tv_sec - start)) + (tp.tv_usec-startu)/1000000.0 );
-   }
-
+}

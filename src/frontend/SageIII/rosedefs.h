@@ -16,11 +16,6 @@
 #define Rose_STL_Container std::vector
 
 // DQ (2/5/2010): include stdint.h always.
-// #ifdef _MSC_VER
-// #include "stdint.h"
-// //typedef __int64 uint64_t;
-// #endif
-
 #include "stdint.h"
 typedef uint64_t rose_addr_t; /* address and size (file and memory) */
 

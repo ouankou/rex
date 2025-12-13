@@ -147,13 +147,10 @@ Outliner::outline (SgPragmaDeclaration* decl)
        ASTtools::moveAfterPreprocInfo (decl, result.call_);
 
 #if 1
-       // This will search the parent for the location of decl, but this is not found
-#ifndef _MSC_VER
-	   //LowLevelRewrite::remove (decl);
-	   SageInterface::removeStatement (decl);
-#else
-	   ROSE_ASSERT(false);
-#endif
+       // This will search the parent for the location of decl, but this is not
+       // found
+       // LowLevelRewrite::remove (decl);
+       SageInterface::removeStatement(decl);
 #else
        // DQ (2/24/2009): Added more direct concept of remove.
        // We just want a more direct and simpler concept of remove (remove the AST, 

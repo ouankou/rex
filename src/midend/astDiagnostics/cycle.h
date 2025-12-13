@@ -161,16 +161,6 @@ INLINE_ELAPSED(__inline__)
 #define HAVE_TICK_COUNTER
 #endif
 
-/* MacOS/Mach (Darwin) time-base register interface (unlike UpTime,
-   from Carbon, requires no additional libraries to be linked). */
-#if defined(HAVE_MACH_ABSOLUTE_TIME) && defined(HAVE_MACH_MACH_TIME_H) && !defined(HAVE_TICK_COUNTER)
-#include <mach/mach_time.h>
-typedef uint64_t ticks;
-#define getticks mach_absolute_time
-INLINE_ELAPSED(__inline__)
-#define HAVE_TICK_COUNTER
-#endif
-
 /*----------------------------------------------------------------*/
 /*
  * Pentium cycle counter 
@@ -188,33 +178,6 @@ static __inline__ ticks getticks(void)
 }
 
 INLINE_ELAPSED(__inline__)
-
-#define HAVE_TICK_COUNTER
-#define TIME_MIN 5000.0   /* unreliable pentium IV cycle counter */
-#endif
-
-/* Visual C++ -- thanks to Morten Nissov for his help with this */
-#if _MSC_VER >= 1200 && _M_IX86 >= 500 && !defined(HAVE_TICK_COUNTER)
-#include <windows.h>
-typedef LARGE_INTEGER ticks;
-#define RDTSC __asm __emit 0fh __asm __emit 031h /* hack for VC++ 5.0 */
-
-static __inline ticks getticks(void)
-{
-     ticks retval;
-
-     __asm {
-          RDTSC
-          mov retval.HighPart, edx
-          mov retval.LowPart, eax
-     }
-     return retval;
-}
-
-static __inline double elapsed(ticks t1, ticks t0)
-{  
-     return (double)(t1.QuadPart - t0.QuadPart);
-}  
 
 #define HAVE_TICK_COUNTER
 #define TIME_MIN 5000.0   /* unreliable pentium IV cycle counter */
@@ -249,17 +212,6 @@ static ticks getticks(void)
     asm(" rdtsc; shl    $0x20,%rdx; mov    %eax,%eax; or     %rdx,%rax;    ");
 }
 INLINE_ELAPSED(__inline__)
-#define HAVE_TICK_COUNTER
-#endif
-
-/* Visual C++ */
-#if _MSC_VER >= 1400 && (defined(_M_AMD64) || defined(_M_X64)) && !defined(HAVE_TICK_COUNTER)
-typedef ULONG64 ticks;
-
-#define getticks __rdtsc
-
-INLINE_ELAPSED(__inline)
-
 #define HAVE_TICK_COUNTER
 #endif
 
@@ -314,26 +266,6 @@ static inline ticks getticks(void)
 }
 
 INLINE_ELAPSED(inline)
-
-#define HAVE_TICK_COUNTER
-#endif
-
-/* Microsoft Visual C++ */
-#if defined(_MSC_VER) && defined(_M_IA64) && !defined(HAVE_TICK_COUNTER)
-typedef unsigned __int64 ticks;
-
-#  ifdef __cplusplus
-extern "C"
-#  endif
-ticks __getReg(int whichReg);
-#pragma intrinsic(__getReg)
-
-static __inline ticks getticks(void)
-{
-     volatile ticks temp;
-     temp = __getReg(3116);
-     return temp;
-}
 
 #define HAVE_TICK_COUNTER
 #endif

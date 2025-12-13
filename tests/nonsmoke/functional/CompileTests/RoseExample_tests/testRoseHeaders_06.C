@@ -128,10 +128,7 @@ namespace ELF{
 
 // Laksono (12/06/2010): we include PHPFrontend.h if and only if a PHP support is required
 #ifdef USE_ROSE_PHP_SUPPORT
-#ifndef _MSC_VER
-// tps (11/23/2009) : Commented out right now to make progress in Windows
 #include "PHPFrontend.h"
-#endif
 #endif
 
 // Include PythonFrontend.h if and only if a Python support is required
@@ -140,9 +137,7 @@ namespace ELF{
 #endif
 
 // Support for Xen/Ether hypervisor
-#ifndef _MSC_VER
 #include "ether.h"
-#endif
 
 // King84 (2010.08.03) : Now that everything is defined we can include all the implementation files for templates.
 #define TEMPLATE_IMPLEMENTATIONS

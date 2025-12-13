@@ -416,9 +416,8 @@ SgTreeTraversal(const SgTreeTraversal &other)
 {
 }
 
-
-// DQ (3/30/2017): This is not called and is not required for Linux compilers, but appears 
-// to be required when compiling with MSVC (Microsoft Windows).
+// DQ (3/30/2017): This is not called and is not required by most Linux
+// toolchains, but is retained for completeness.
 template<class InheritedAttributeType, class SynthesizedAttributeType>
 const SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType> &
 SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
@@ -641,11 +640,6 @@ traverseInputFiles(SgProject* projectNode)
     SgTreeTraversal<DummyAttribute, SynthesizedAttributeType>
         ::traverseInputFiles(projectNode, da, postorder);
 }
-#ifdef _MSC_VER
-//class BooleanQueryInheritedAttributeType;
-#include "../astQuery/booleanQuery.h"
-#include "../astQuery/booleanQueryInheritedAttribute.h"
-#endif
 // MS: 07/29/04
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 SynthesizedAttributeType SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
@@ -970,14 +964,5 @@ atTraversalEnd()
 #include "AstSimpleProcessing.h" // that's a non-templated class which is put in a different file (for gcc to compile&link properly)
 
 #include "AstCombinedProcessing.h"
-
-// DQ (3/20/2009): Wrap this in a test to make sure that Cygwin is not being used.
-// This causes a problem:
-//      error: there are no arguments to �cvLoadImage� that depend on a template parameter, so a declaration of <function name> must be available
-// which requires:
-//      -fpermissive to compile without error (and then it generates a lot of warnings).
-#if !_MSC_VER
-//  #include "AstSharedMemoryParallelProcessing.h"
-#endif
 
 #endif

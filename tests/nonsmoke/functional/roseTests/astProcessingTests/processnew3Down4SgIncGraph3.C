@@ -1,16 +1,15 @@
 #include <iostream>
 #include <fstream>
-//#include <rose.h>
-#include <string>
-#ifndef _MSC_VER
-#include <err.h>
-#endif
+// #include <rose.h>
 #include "SgGraphTemplate.h"
 #include "graphProcessing.h"
+#include <err.h>
+#include <string>
 
 #include "staticCFG.h"
 #include "interproceduralCFG.h"
-/* Testing the graph traversal mechanism now implementing in AstProcessing.h (inside src/midend/astProcessing/)*/
+/* Testing the graph traversal mechanism now implementing in AstProcessing.h
+ * (inside src/midend/astProcessing/)*/
 #include <sys/time.h>
 #include <sys/resource.h>
 using namespace std;

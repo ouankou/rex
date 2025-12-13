@@ -121,14 +121,6 @@ string get_type_name(SgType* t)
      unp->u_sage->curprint("/* In get_type_name() */ ");
 #endif
 
-  // CH (4/7/2010): This issue is because of using a MSVC keyword 'cdecl' as a variable name
-
-//#ifndef _MSCx_VER
-//#pragma message ("WARNING: Commented out body of get_type_name()")
-//         printf ("Error: Commented out body of get_type_name() \n");
-//         ROSE_ASSERT(false);
-//         return "ERROR IN get_type_name()";
-//#else
      switch (t->variant())
         {
           case T_UNKNOWN:                 return "UNKNOWN";
@@ -396,12 +388,12 @@ string get_type_name(SgType* t)
               {
                 SgClassType* class_type = isSgClassType(t);
                 ASSERT_not_null(class_type);
-             // CH (4/7/2010): 'cdecl' is a keywork of MSVC
-             // SgClassDeclaration* cdecl;
-                SgClassDeclaration* decl = isSgClassDeclaration(class_type->get_declaration());
+                SgClassDeclaration *decl =
+                    isSgClassDeclaration(class_type->get_declaration());
 
-             // DQ (3/29/2019): We don't what the qualified name, this is an error for C++11 test2019_316.C.
-             // SgName nm = decl->get_qualified_name();
+                // DQ (3/29/2019): We don't what the qualified name, this is an
+                // error for C++11 test2019_316.C. SgName nm =
+                // decl->get_qualified_name();
                 SgName nm = decl->get_name();
 #if 0
                 printf ("In get_type_name(%p): case T_CLASS: nm = %s \n",t,nm.str());
@@ -2591,8 +2583,6 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
 
   // DQ (1/9/2014): These should have been setup to be the same.
      ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
-
-  // CH (4/7/2010): This issue is because of using a MSVC keyword 'cdecl' as a variable name
 
      SgClassType* class_type = isSgClassType(type);
      ASSERT_not_null(class_type);

@@ -1888,7 +1888,7 @@ struct DeferredTransformation
      SgStatement* transformationToOverwriteFirstStatementInInterval;
      SgBasicBlock* blockOfStatementsToOutline;
 
-  // DQ (12/5/2019): Added ROSE_DLL_API prefix for Windows support (too all of these functions).
+     // DQ (12/5/2019): Added ROSE_DLL_API prefix for shared-library visibility.
      ROSE_DLL_API DeferredTransformation();
      ROSE_DLL_API DeferredTransformation(SgClassDefinition* class_definition, SgDeclarationStatement* target_class_member, SgDeclarationStatement* new_function_prototype);
      ROSE_DLL_API DeferredTransformation (const DeferredTransformation& X); //! Copy constructor.

@@ -19,7 +19,7 @@ stmt_pos findPosition(SgNode *n)
         }
      ROSE_ABORT();
 
-  /* Avoid MSVC warning */
+     /* Unreachable */
      return stmt_pos(&stmts, stmts.end(), bb);
    }
 
@@ -157,5 +157,4 @@ pair<SgBasicBlock *, SgNode *> findBasicBlockForStmt(SgStatement *stmt)
 SgStatement *findIfStmtForSC(SgExpression *expr)
    {
      return findNearestParentOfType<SgIfStmt, isSgIfStmt>(expr).first;
-   }
-
+}

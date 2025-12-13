@@ -1,16 +1,7 @@
 add_subdirectory(CxxCodeGeneration)
 add_subdirectory(languageIndependenceSupport)
 add_subdirectory(formatSupport)
-
-if(WIN32)
-  message("WARNING : Fortran and PHP not supported yet on Windows")
-else()
-  # tps (11/23/2009) commented out fortran and php for windows for now
-
-  # Excluding these subdirectories based on which analyses languages are supported is not sufficient because
-  # the headers are still included from unparser.h and so need to still be installed.
-  add_subdirectory(FortranCodeGeneration)
-endif()
+add_subdirectory(FortranCodeGeneration)
 
 ########### next target ###############
 

@@ -96,11 +96,6 @@ mergeAST_tests:
    This tests the AST merge mechanism that is an atomic operation in ROSE and supports
    whole program analysis (acorss many files).
 
-MicrosoftWindows_tests:
-   This tests the use of ROSE in Microsoft Windoes mode (requires seperate configure
-   option).  These tests also require the use of a seperate library of Linux header
-   files to represent the MS Windows environment.
-
 nameQualificationAndTypeElaboration_tests:
    This directory contains some name qualification tests, but many more name qualification
    tests are a part of the Cxx_tests directory test codes.
@@ -216,4 +211,3 @@ setenv ROSE_TEST_JAVA_PATH "/usr/apps/java/jdk1.6.0_11"; setenv ROSE_TEST_BOOST_
 
 Configure command line for Thrifty:
    /home/dquinlan/ROSE/git-dq-cxx-rc/configure --with-ROSE_LONG_MAKE_CHECK_RULE=yes --prefix=/home/dquinlan/ROSE/ROSE_CompileTree/git_LINUX-64bit-4.2.4-dq-cxx-rc-thrifty_install --with-boost=/home/dquinlan/local/boost_1_42_0_installTree-gxx-4.2.4 --with-alternate_backend_C_compiler=/nfs/casc/overture/ROSE/git/sescutils-ins//bin/gcc --with-alternate_backend_Cxx_compiler=/nfs/casc/overture/ROSE/git/sescutils-ins//bin/g++
-

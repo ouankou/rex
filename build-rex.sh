@@ -23,7 +23,7 @@ NC='\033[0m' # No Color
 INSTALL_PREFIX="${1:-$HOME/rex-install}"
 BUILD_TYPE="${2:-Release}"
 BUILD_DIR="build"
-NUM_JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+NUM_JOBS=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}REX Build Script with Clang Frontend${NC}"
@@ -47,6 +47,11 @@ export LD_LIBRARY_PATH="${GCC_PREFIX}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 # Check if we're in the repository root
 if [ ! -f "CMakeLists.txt" ]; then
     echo -e "${RED}Error: CMakeLists.txt not found. Please run this script from the repository root.${NC}"
+    exit 1
+fi
+
+if [ "$(uname -s)" != "Linux" ]; then
+    echo -e "${RED}Error: This project targets Linux only.${NC}"
     exit 1
 fi
 

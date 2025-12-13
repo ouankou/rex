@@ -18,14 +18,12 @@ class SgLabelSymbol;
 class SgLabelRefExp;
 class SgStatement;
 
-#ifndef _MSC_VER
 SgStatement* isSgStatement(SgNode* node);
 const SgStatement* isSgStatement(const SgNode* node);
 SgExpression* isSgExpression(SgNode* node);
 const SgExpression* isSgExpression(const SgNode* node);
 SgInitializedName* isSgInitializedName(SgNode* node);
-const SgInitializedName* isSgInitializedName(const SgNode* node);
-#endif
+const SgInitializedName *isSgInitializedName(const SgNode *node);
 
 namespace VirtualCFG {
 

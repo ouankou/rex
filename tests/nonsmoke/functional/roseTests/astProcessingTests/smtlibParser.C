@@ -1,15 +1,13 @@
 #include <iostream>
 #include <fstream>
-//#include <rose.h>
-#include <string>
-#ifndef _MSC_VER
-#include <err.h>
-#endif
+// #include <rose.h>
 #include "SgGraphTemplate.h"
 #include "graphProcessing.h"
 #include "staticCFG.h"
-/* Testing the graph traversal mechanism now implementing in AstProcessing.h (inside src/midend/astProcessing/)*/
-
+#include <err.h>
+#include <string>
+/* Testing the graph traversal mechanism now implementing in AstProcessing.h
+ * (inside src/midend/astProcessing/)*/
 
 using namespace std;
 using namespace boost;
@@ -838,4 +836,3 @@ for (Rose_STL_Container<SgGraphNode*>::iterator i = exprList.begin(); i != exprL
 */
 
 //          SgExprStatement* expr = isSgExprStatement(*i);
-

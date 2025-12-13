@@ -81,7 +81,7 @@ test_prefixLines() {
     check(prefixLines("aaa\r", "L", false, true)  == "aaa\rL");
     check(prefixLines("aaa\r", "L", true, true)   == "Laaa\rL");
 
-    check(prefixLines("aaa\r\n", "L", false, false) == "aaa\r\n"); // CR-LF (DOS/Windows)
+    check(prefixLines("aaa\r\n", "L", false, false) == "aaa\r\n"); // CRLF
     check(prefixLines("aaa\r\n", "L", true, false)  == "Laaa\r\n");
     check(prefixLines("aaa\r\n", "L", false, true)  == "aaa\r\nL");
     check(prefixLines("aaa\r\n", "L", true, true)   == "Laaa\r\nL");
@@ -97,7 +97,8 @@ test_prefixLines() {
     check(prefixLines("aaa\rbbb", "L", false, true)  == "aaa\rLbbb");
     check(prefixLines("aaa\rbbb", "L", true, true)   == "Laaa\rLbbb");
 
-    check(prefixLines("aaa\r\nbbb", "L", false, false) == "aaa\r\nLbbb"); // CR-LF (DOS/Windows)
+    check(prefixLines("aaa\r\nbbb", "L", false, false) ==
+          "aaa\r\nLbbb"); // CRLF
     check(prefixLines("aaa\r\nbbb", "L", true, false)  == "Laaa\r\nLbbb");
     check(prefixLines("aaa\r\nbbb", "L", false, true)  == "aaa\r\nLbbb");
     check(prefixLines("aaa\r\nbbb", "L", true, true)   == "Laaa\r\nLbbb");

@@ -2,10 +2,6 @@
  *  \file NameGenerator.cc
  *  \brief Class to generate numbered names.
  */
-// tps (12/09/2009) : Playing with precompiled headers in Windows. Requires rose.h as the first line in source files.
-
-
-
 #include <sstream>
 #include "NameGenerator.hh"
 

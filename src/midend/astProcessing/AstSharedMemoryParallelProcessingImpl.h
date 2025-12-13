@@ -8,12 +8,8 @@
 # ifdef ROSE_HAVE_PTHREAD_H                             // POSIX threads are available?
 #  include <pthread.h>
 # else
-   // This should all be switched to Boost Threads instead, which is more portable
-#  ifdef _MSC_VER
-#   pragma message ("POSIX threads are unavailable on this platform.")
-#  else
-#   warning "POSIX threads are unavailable on this platform."
-#  endif
+// This should all be switched to Boost Threads instead, which is more portable
+#warning "POSIX threads are unavailable on this platform."
 # endif
 #endif
 

@@ -5,8 +5,6 @@
 #include <rose_config.h>
 #include "fileoffsetbits.h"
 
-// DQ (3/22/2009): Added MSVS support for ROSE.
-#include "rose_msvc.h"
 #include "rose_paths.h"
 
 #include <stdio.h>
@@ -14,14 +12,12 @@
 
 // We need to separate the construction of the code for ROSE from the ROSE code
 // #include FSTREAM_HEADER_FILE
-#include <fstream>
-#include <sys/types.h>
-#include <sys/stat.h>
-#if !ROSE_MICROSOFT_OS
-#include <dirent.h>
-#include <unistd.h>
-#endif
 #include "FileUtility.h"
+#include <dirent.h>
+#include <fstream>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 // This class is used to cache files read in as part of the processing of a grammar
 class GrammarFile {

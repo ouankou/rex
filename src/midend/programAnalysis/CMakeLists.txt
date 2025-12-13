@@ -1,12 +1,6 @@
 add_subdirectory(CallGraphAnalysis)
 add_subdirectory(OAWrap)
-
-# DQ (11/25/2009) Comment out under Windows.
-if(WIN32)
-  message("Commented out use of OpenAnalysis in Windows.")
-else()
-  add_subdirectory(CFG)
-endif()
+add_subdirectory(CFG)
 
 add_subdirectory(bitvectorDataflow)
 add_subdirectory(VirtualFunctionAnalysis)

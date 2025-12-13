@@ -129,8 +129,6 @@ inline Int pow4(Int x)
   return pow2(x2);
 }
 
-#if !defined(_WIN32)
-
 inline Real abs(Real x)
 {
   return fabs(x);
@@ -141,10 +139,6 @@ inline Real abs(Real x)
 //   return fabs(x);
 // }
 
-#endif
-
-#if !defined(HP700) && !defined(_WIN32)
-
 inline Double abs(Double x)
 {
   return fabs(x);
@@ -154,8 +148,6 @@ inline Double abs(Double x)
 // {
 //   return fabs(x);
 // }
-
-#endif
 
 inline float max(float x, float y)
 {
@@ -2536,5 +2528,4 @@ inline T min(const Indexable<T,A> &rhs)
 ///////////////////////////////////////////////////////////////////////////
 
    // if defined(USE_EXPRESSION_TEMPLATES)
-#endif 
-
+#endif

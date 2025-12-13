@@ -17,22 +17,16 @@
 // DQ (2/11/2010): Added so that we can detect what compiler is being used to compile this file.
 #include "rose_config.h"
 
-// DQ (3/22/2009): Added MSVS support for ROSE.
-#include "rose_msvc.h"
-
-#include <algorithm>
-#include <map>
-#include <filesystem>
-#include <cassert>
 #include "FileUtility.h"
-#include <StringUtility.h>
 #include "mlog.h"
+#include <StringUtility.h>
+#include <algorithm>
+#include <cassert>
+#include <cstdlib>
+#include <filesystem>
+#include <map>
 
-// DQ (3/22/2009): Windows does not have this header.
-#if ROSE_MICROSOFT_OS
-#else
 #include <sys/utsname.h>
-#endif
 
 using namespace std;
 using namespace Rose;
@@ -415,58 +409,24 @@ using namespace Rose;
             return distance(l, lvec.end()) + distance(r, rvec.end());
         }
 
-Rose::StringUtility::OSType
-Rose::StringUtility::getOSType()
-    {
-#if ROSE_MICROSOFT_OS
-    OSVERSIONINFO osvi;
-    BOOL bIsWindowsXPorLater;
+        Rose::StringUtility::OSType Rose::StringUtility::getOSType() {
+          struct utsname val;
 
-    ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+          int ret = uname(&val);
+          if (ret == -1)
+            return OS_TYPE_UNKNOWN;
 
-    GetVersionEx(&osvi);
-
-    bIsWindowsXPorLater = 
-       ( (osvi.dwMajorVersion > 5) ||
-       ( (osvi.dwMajorVersion == 5) && (osvi.dwMinorVersion >= 1) ));
-            
-        string sysname;
-        if (bIsWindowsXPorLater)
-                sysname="WindowsXP";
-        else
-                sysname="Windows";
-
-#else
-            struct utsname val;
-
-            int ret = uname(&val);
-            if (ret == -1)
-                return OS_TYPE_UNKNOWN;
-
-            string sysname = val.sysname;
-#endif
-            if (sysname == "Linux")
-                return OS_TYPE_LINUX;
-            else if (sysname == "Darwin")
-                return OS_TYPE_OSX;
-            else if (sysname == "WindowsXP")
-                return OS_TPYE_WINDOWSXP;
-            else if (sysname == "Windows")
-                return OS_TYPE_WINDOWS;
-            else
-                return OS_TYPE_UNKNOWN;
+          string sysname = val.sysname;
+          if (sysname == "Linux")
+            return OS_TYPE_LINUX;
+          else
+            return OS_TYPE_UNKNOWN;
         }
 
-    void
-Rose::StringUtility::homeDir(string& dir)
-    {
-        const char* home = getenv("HOME");
-#ifdef _MSC_VER
-#define __builtin_constant_p(exp) (0)
-#endif
-            ROSE_ASSERT(home);
-            dir = home;
+        void Rose::StringUtility::homeDir(string &dir) {
+          const char *home = getenv("HOME");
+          ROSE_ASSERT(home);
+          dir = home;
         }
 
     // Update FileNameInfo class with details about where the
@@ -522,36 +482,16 @@ Rose::StringUtility::homeDir(string& dir)
                 }
             }
 
-            // Consider all non-absolute paths to be application code
-            if (os == OS_TYPE_WINDOWS)
-            {
-                // Ensure all appPaths are given with a trailing slash since
-                // they represent directories
-                if (appPath.empty() || *(appPath.end() - 1) != '\\')
-                    appPath += '\\';
+            // Consider all non-absolute paths to be application code.
+            // Ensure all appPaths are given with a trailing slash since they
+            // represent directories.
+            if (appPath.empty() || *(appPath.end() - 1) != '/')
+              appPath += '/';
 
-                // Tricky for Windows, make sure it doesn't just start
-                // with a drive letter
-                if (fileName.length() < 2 || fileName[1] != ':')
-                {
-                    return FileNameClassification(FILENAME_LOCATION_USER,
-                            "User", //FILENAME_LIBRARY_USER,
-                            0);
-                }
-            }
-            else
-            {
-                // Ensure all appPaths are given with a trailing slash since
-                // they represent directories
-                if (appPath.empty() || *(appPath.end() - 1) != '/')
-                    appPath += '/';
-
-                if (!startsWith(fileName, "/"))
-                {
-                    return FileNameClassification(FILENAME_LOCATION_USER,
-                            "User", //FILENAME_LIBRARY_USER,
-                            0);
-                }
+            if (!startsWith(fileName, "/")) {
+              return FileNameClassification(FILENAME_LOCATION_USER,
+                                            "User", // FILENAME_LIBRARY_USER,
+                                            0);
             }
 
             // If this is anywhere in the home dir or whitelis
@@ -575,30 +515,6 @@ Rose::StringUtility::homeDir(string& dir)
             {
                 if (startsWith(fileName, "/usr") ||
                         startsWith(fileName, "/opt"))
-                {
-                    return FileNameClassification(FILENAME_LOCATION_LIBRARY,
-                            classifyLibrary(fileName),
-                            directoryDistance(fileName,
-                                appPath));
-                }
-            }
-            else if (os == OS_TYPE_OSX)
-            {
-                if (startsWith(fileName, "/usr") ||
-                        startsWith(fileName, "/opt") ||
-                        startsWith(fileName, "/System"))
-                {
-                    return FileNameClassification(FILENAME_LOCATION_LIBRARY,
-                            classifyLibrary(fileName),
-                            directoryDistance(fileName,
-                                appPath));
-                }
-            }
-            else if (os == OS_TYPE_WINDOWS)
-            {
-                // TODO Need to convert Windows fileName and appPath to be
-                // UNIX style to run directoryDistance on it
-                if (startsWith(fileName, "C:\\Program Files"))
                 {
                     return FileNameClassification(FILENAME_LOCATION_LIBRARY,
                             classifyLibrary(fileName),
@@ -640,7 +556,5 @@ Rose::StringUtility::stripDotsFromHeaderFileName(const string& name)
      return name.substr(name.find(" ") + 1);
    }
 
-// } namespace
-// } namespace
-
-
+   // } namespace
+   // } namespace

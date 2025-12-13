@@ -1,8 +1,6 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
-#ifndef _MSC_VER
 #include <err.h>
-#endif
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
@@ -26,8 +24,8 @@ namespace VirtualCFG {
     return s;
   }
 
-  CFGNode::CFGNode(SgNode* node, unsigned int index): node(node), index(index) {
-#ifndef _MSC_VER 
+  CFGNode::CFGNode(SgNode *node, unsigned int index)
+      : node(node), index(index) {
     assert (!node || isSgStatement(node) || isSgExpression(node) || isSgInitializedName(node));
    
     // Liao 11/8/2010, defUseAnalysis/DefUseAnalysis_perFunction.cpp calls CFGNode(NULL, 0), which triggers the warning unnecessarily
@@ -39,7 +37,6 @@ namespace VirtualCFG {
       SageInterface::dumpInfo(node);
       ROSE_ABORT ();
     }
-#endif
   }
 
   string CFGNode::toString() const {
@@ -50,7 +47,10 @@ namespace VirtualCFG {
           case 1: s << "After parameters("; break;
           case 2: s << "After pre-initialization("; break;
           case 3: s << "End("; break;
-          default: { ROSE_ASSERT (!"Bad index"); /* Avoid MSVC warning. */ return "error"; }
+          default: {
+            ROSE_ASSERT(!"Bad index");
+            return "error";
+          }
       }
       s << isSgFunctionDefinition(node)->get_declaration()->get_qualified_name().str() << ")" << std::endl; 
     }
@@ -592,9 +592,7 @@ EdgeConditionKind CFGEdge::condition() const
       ROSE_ASSERT (isSgAssignInitializer(v1->get_initializer()));
       return isSgAssignInitializer(v1->get_initializer())->get_operand();
     } else {
-      ROSE_ASSERT (!"Bad statement type in getExpressionForTest");
-
-   // DQ (11/29/2009): Avoid MSVC warning about missign return stmt.
+      ROSE_ASSERT(!"Bad statement type in getExpressionForTest");
       return NULL;
     }
   }
@@ -956,7 +954,10 @@ CFGNode getCFGTargetOfFortranLabelSymbol(SgLabelSymbol* sym)
                        }
              }
 
-          default: { ROSE_ASSERT (!"Invalid Fortran label type"); /* avoid MSVC warning of no return stmt */ return st->cfgForEnd(); }
+             default: {
+               ROSE_ASSERT(!"Invalid Fortran label type");
+               return st->cfgForEnd();
+             }
         }
    }
 

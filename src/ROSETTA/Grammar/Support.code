@@ -13359,9 +13359,6 @@ SgName::operator==(const SgName& n1) const
      return p_char == n1.p_char;
    }
 
-#ifdef _MSC_VER
-#define strncasecmp _strnicmp
-#endif
 // DQ (11/27/2010): Added support for case insensitive name matching.
 bool
 SgName::caseInsensitiveEquality ( const SgName & x, const SgName & y )
@@ -15832,7 +15829,7 @@ int SgFile::buildAST( std::vector<std::string> argv, std::vector<std::string> in
      MLOG_INFO_C("ROSETTA", "Base class of virtual function, SgFile::buildAST(), called by mistake! \n");
      ROSE_ASSERT(false);
 
-  // tps (12/11/2009): Windows error : needs a return value
+  // Unreachable
      return 0;
    }
 
@@ -16556,10 +16553,6 @@ SgFile::get_project()
 // Removed: void SgFile::build_EDG_CommandLine() - EDG frontend has been removed
 // Moved to sage_support.cpp: void SgFile::usage ( int status )
 
-#ifdef _MSC_VER
-#include <direct.h>   // getcwd()
-#endif
-
  //! get the current directory
 string
 SgFile::getWorkingDirectory ()
@@ -16571,15 +16564,7 @@ SgFile::getWorkingDirectory ()
      for (i=0; i < maxPathNameLength; i++)
           currentDirectory[i] = '\0';  // set to NULL string
 
-// CH (4/8/2010): "direct.h" in MSVC provides getcwd()
-//#ifdef _MSCx_VER
-//#pragma message ("WARNING: support for Linux getcwd() unavailable in Microsoft Visual Studio.")
-//   MLOG_INFO_C("ROSETTA", "Error: support for Linux getcwd() unavailable in Microsoft Visual Studio.");
-//   assert(false);
-//     char* returnString = NULL;
-//#else
      char* returnString = getcwd(currentDirectory,maxPathNameLength - 1);
-//#endif
      assert (returnString != NULL);
      currentDirectory[maxPathNameLength - 1] = 0; // Just in case
 

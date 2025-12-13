@@ -13,12 +13,6 @@
 
 #include "AstTraversal.h"
 #include "astPostProcessing.h"
-#ifdef _MSC_VER
-#include <io.h>
-#include <direct.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#endif
 
 // jichi (9/29/2009): Add test for Fortran language
 #define IS_FORTRAN_LANGUAGE() \

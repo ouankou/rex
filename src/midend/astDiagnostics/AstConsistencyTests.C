@@ -136,29 +136,24 @@ AstTests::isCorrectAst(SgProject* sageProject)
      TestAstProperties t;
      bool returnValue = t.traverse(sageProject).val;
 
-     if ( SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL )
-        {
-          printf ("\nAST Diagnostics: Fequency of IR nodes missing ending source postion info: \n");
-#ifdef __CYGWIN__
-       // PC (9/18/2006): Diagnostic fails on cygwin
-          puts("Diagnostic fails on cygwin");
-#else
-          bool found = false;
-          for (int i = V_SgModifier; i != V_SgNumVariants; i++)
-             {
-               if (t.nodeWithoutFileInfoFrequencyCount[i] > 0)
-                  {
-                    found = true;
-                    printf ("     Frequency at %s = %d \n",getVariantName(VariantT(i)).c_str(),t.nodeWithoutFileInfoFrequencyCount[i]);
-                  }
-             }
+     if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL) {
+       printf("\nAST Diagnostics: Fequency of IR nodes missing ending source "
+              "postion info: \n");
+       bool found = false;
+       for (int i = V_SgModifier; i != V_SgNumVariants; i++) {
+         if (t.nodeWithoutFileInfoFrequencyCount[i] > 0) {
+           found = true;
+           printf("     Frequency at %s = %d \n",
+                  getVariantName(VariantT(i)).c_str(),
+                  t.nodeWithoutFileInfoFrequencyCount[i]);
+         }
+       }
 
-          if (found == false)
-             {
-               printf ("PASSED: All IR nodes have both starting and ending position information \n");
-             }
-#endif
-        }
+       if (found == false) {
+         printf("PASSED: All IR nodes have both starting and ending position "
+                "information \n");
+       }
+     }
 
      return returnValue;
    }
