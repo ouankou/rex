@@ -1,9 +1,11 @@
-#include "sage3basic.h"
 #include "clang-frontend-private.hpp"
+#include "sage3basic.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/Support/raw_ostream.h"
 #include <algorithm>
+#include <cctype>
 #include <functional>
 #include <set>
-#include "llvm/ADT/SmallString.h"
 
 namespace {
 bool containsUnknownType(SgType *type) {
@@ -47,6 +49,43 @@ bool containsUnknownType(SgType *type) {
     }
 
     return false;
+}
+
+static std::string trimWhitespace(std::string s) {
+  size_t first = 0;
+  while (first < s.size() &&
+         std::isspace(static_cast<unsigned char>(s[first]))) {
+    ++first;
+  }
+  s.erase(0, first);
+
+  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
+    s.pop_back();
+  }
+  return s;
+}
+
+static std::string
+buildTemplateInstantiationName(const std::string &base_name,
+                               const clang::TemplateArgumentList &args) {
+  if (args.size() == 0)
+    return base_name;
+
+  std::string result = base_name;
+  result += "<";
+  for (unsigned i = 0; i < args.size(); ++i) {
+    if (i > 0)
+      result += " , ";
+
+    std::string arg_str;
+    llvm::raw_string_ostream arg_stream(arg_str);
+    args.get(i).print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
+                      /*IncludeType*/ true);
+    arg_stream.flush();
+    result += trimWhitespace(arg_str);
+  }
+  result += ">";
+  return result;
 }
 } // namespace
 
@@ -2601,6 +2640,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
     SgTemplateArgumentPtrList template_args;
     const clang::TemplateArgumentList &args =
         class_tpl_spec_decl->getTemplateArgs();
+    SgName name_with_template_args(
+        buildTemplateInstantiationName(name.getString(), args));
 
     // Helper lambda to build args (to avoid code duplication)
     auto build_args = [&](SgTemplateArgumentPtrList &target_list) {
@@ -2745,7 +2786,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
       build_args(forward_args);
 
       instantiationDecl = new SgTemplateInstantiationDecl(
-          name, class_kind, NULL, NULL, NULL, forward_args);
+          name_with_template_args, class_kind, NULL, NULL, NULL, forward_args);
+      instantiationDecl->get_templateArguments() = forward_args;
 
       // Register in cache immediately
       p_template_inst_cache[inst_name_full] = instantiationDecl;
@@ -2776,7 +2818,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
       instantiationDecl->set_scope(scope);
       instantiationDecl->set_parent(scope);
 
-      for (SgTemplateArgument *arg : forward_args) {
+      for (SgTemplateArgument *arg :
+           instantiationDecl->get_templateArguments()) {
         arg->set_parent(instantiationDecl);
       }
 
@@ -2795,6 +2838,21 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
       // We found an existing declaration, so we don't create a new non-defining
       // one.
       instantiationDecl = firstNondefiningDeclaration;
+      if (instantiationDecl != NULL &&
+          instantiationDecl->get_name() != name_with_template_args) {
+        instantiationDecl->set_name(name_with_template_args);
+      }
+      if (instantiationDecl->get_templateArguments().empty()) {
+        SgTemplateArgumentPtrList recovered_args;
+        build_args(recovered_args);
+        instantiationDecl->get_templateArguments() = recovered_args;
+      }
+      for (SgTemplateArgument *arg :
+           instantiationDecl->get_templateArguments()) {
+        if (arg != NULL) {
+          arg->set_parent(instantiationDecl);
+        }
+      }
       // setStatementSourcePosition(instantiationDecl, class_tpl_spec_decl); //
       // Don't reset position of reused decl
     }
@@ -2815,8 +2873,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
 
       // Create defining declaration
       SgTemplateInstantiationDecl *definingDecl =
-          new SgTemplateInstantiationDecl(name, class_kind, NULL, NULL, NULL,
-                                          defining_args);
+          new SgTemplateInstantiationDecl(name_with_template_args, class_kind,
+                                          NULL, NULL, NULL, defining_args);
+      definingDecl->get_templateArguments() = defining_args;
 
       // Link defining and non-defining declarations
       definingDecl->set_firstNondefiningDeclaration(
@@ -2842,7 +2901,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(clang::ClassTem
       definingDecl->set_scope(scope);
       definingDecl->set_parent(scope);
 
-      for (SgTemplateArgument *arg : defining_args) {
+      for (SgTemplateArgument *arg : definingDecl->get_templateArguments()) {
         arg->set_parent(definingDecl);
       }
 
@@ -3671,9 +3730,62 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(clang::TypeAliasDecl * type_alias
 
     SgName name(type_alias_decl->getNameAsString());
     clang::QualType underlyingQualType = type_alias_decl->getUnderlyingType();
-    SgType * type = buildTypeFromQualifiedType(underlyingQualType);
+    SgType *type = NULL;
 
-    SgTypedefDeclaration * sg_typedef_decl = SageBuilder::buildTypedefDeclaration_nfi(name, type, SageBuilder::topScopeStack());
+    // Prefer explicit template specialization type to preserve template
+    // arguments.
+    const clang::Type *qt = underlyingQualType.getTypePtr();
+    const clang::Type *named = qt;
+    if (const clang::ElaboratedType *elab =
+            llvm::dyn_cast<clang::ElaboratedType>(qt)) {
+      named = elab->getNamedType().getTypePtr();
+    }
+    if (const clang::TemplateSpecializationType *spec =
+            llvm::dyn_cast<clang::TemplateSpecializationType>(named)) {
+      clang::TemplateName tname = spec->getTemplateName();
+      if (clang::TemplateDecl *clang_tpl = tname.getAsTemplateDecl()) {
+        if (SgNode *tpl_node = Traverse(clang_tpl)) {
+          if (SgTemplateClassDeclaration *tpl_decl =
+                  isSgTemplateClassDeclaration(tpl_node)) {
+            SgTemplateInstantiationDecl *inst =
+                getOrCreateTemplateInstantiation(tpl_decl, spec);
+            type = inst->get_type();
+          }
+        }
+      }
+    }
+
+    if (type == NULL) {
+      type = buildTypeFromQualifiedType(underlyingQualType);
+    }
+
+    // Ensure template argument list is populated on the instantiation type.
+    if (SgClassType *cls_type = isSgClassType(type)) {
+      if (SgTemplateInstantiationDecl *inst =
+              isSgTemplateInstantiationDecl(cls_type->get_declaration())) {
+        if (inst->get_templateArguments().empty()) {
+          const clang::Type *qt = underlyingQualType.getTypePtr();
+          const clang::Type *named = qt;
+          if (const clang::ElaboratedType *elab =
+                  llvm::dyn_cast<clang::ElaboratedType>(qt)) {
+            named = elab->getNamedType().getTypePtr();
+          }
+          if (const clang::TemplateSpecializationType *spec =
+                  llvm::dyn_cast<clang::TemplateSpecializationType>(named)) {
+            SgTemplateArgumentPtrList args = buildTemplateArguments(spec);
+            inst->get_templateArguments() = args;
+            for (SgTemplateArgument *arg : inst->get_templateArguments()) {
+              if (arg != NULL)
+                arg->set_parent(inst);
+            }
+          }
+        }
+      }
+    }
+
+    SgTypedefDeclaration *sg_typedef_decl =
+        SageBuilder::buildTypedefDeclaration_nfi(name, type,
+                                                 SageBuilder::topScopeStack());
 
     sg_typedef_decl->set_typedef_type(SgTypedefDeclaration::e_using);
 
@@ -5225,7 +5337,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl * var_decl, SgNode ** no
    // Pei-Hung (09/01/2022) In test2022_3.c, the variable symbol needs to be avaiable before processing the RHS.
    // calling buildVariableDeclaration_nfi to get the symbol in place.
    SgVariableDeclaration * sg_var_decl = SageBuilder::buildVariableDeclaration_nfi(name,type, NULL ,SageBuilder::topScopeStack());
- 
+
    // CLANG FRONTEND FIX: Check if variable has an initializer before traversing
    clang::Expr * init_expr = var_decl->getInit();
     SgExpression * expr = NULL;

@@ -11604,7 +11604,7 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
           curprint("using ");
           curprint(typedef_stmt->get_name().str());
           curprint(" = ");
-          
+
           SgUnparse_Info ninfo(info);
           bool outputTypeDefinition = typedef_stmt->get_typedefBaseTypeContainsDefiningDeclaration();
           if (outputTypeDefinition) {
@@ -11613,7 +11613,7 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
               ninfo.set_SkipClassDefinition();
               ninfo.set_SkipEnumDefinition();
           }
-          
+
           unp->u_type->unparseType(typedef_stmt->get_base_type(), ninfo);
           curprint(";");
           return;
@@ -12030,8 +12030,9 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
 
           SgUnparse_Info ninfo_for_type(ninfo);
 
-       // DQ (1/10/2007): Set the current declaration statement so that if required we can do
-       // context dependent searches of the AST to determine if name qualification is required.
+          // DQ (1/10/2007): Set the current declaration statement so that if
+          // required we can do context dependent searches of the AST to
+          // determine if name qualification is required.
           ninfo_for_type.set_declstatement_ptr(NULL);
           ninfo_for_type.set_declstatement_ptr(typedef_stmt);
 
@@ -13229,7 +13230,4 @@ Unparse_ExprStmt::unparseMicrosoftAttributeDeclaration (SgStatement* stmt, SgUnp
 #endif
    }
 
-
- // EOF
-
-
+   // EOF
