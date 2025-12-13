@@ -4925,7 +4925,135 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         templateDecl->getTemplateParameters(), NULL);
   }
 
-  if (function_decl->isThisDeclarationADefinition()) {
+  const bool isTemplateMemberFunction =
+      templateDecl != NULL && llvm::isa<clang::CXXMethodDecl>(function_decl);
+  unsigned int functionConstVolatileFlags = 0;
+  if (isTemplateMemberFunction) {
+    auto *method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
+    if (method_decl->isConst()) {
+      functionConstVolatileFlags |= SgMemberFunctionType::e_const;
+    }
+    if (method_decl->isVolatile()) {
+      functionConstVolatileFlags |= SgMemberFunctionType::e_volatile;
+    }
+    clang::Qualifiers qualifiers = method_decl->getMethodQualifiers();
+    if (qualifiers.hasRestrict()) {
+      functionConstVolatileFlags |= SgMemberFunctionType::e_restrict;
+    }
+    switch (method_decl->getRefQualifier()) {
+    case clang::RQ_LValue:
+      functionConstVolatileFlags |=
+          SgMemberFunctionType::e_ref_qualifier_lvalue;
+      break;
+    case clang::RQ_RValue:
+      functionConstVolatileFlags |=
+          SgMemberFunctionType::e_ref_qualifier_rvalue;
+      break;
+    case clang::RQ_None:
+      break;
+    }
+  }
+
+  // Template member/function instantiations synthesized by Clang are often
+  // marked as definitions (they can carry the template body), but translating
+  // them as ordinary functions causes collisions: multiple instantiations share
+  // the same (unmangled) name and signature. Represent implicit instantiations
+  // as template instantiations with explicit template arguments so each
+  // instantiation has a unique name in the class scope.
+  bool handled_template_instantiation = false;
+  if (templateDecl == NULL &&
+      function_decl->getTemplateSpecializationKind() ==
+          clang::TSK_ImplicitInstantiation &&
+      function_decl->getPrimaryTemplate() != NULL) {
+    const clang::TemplateArgumentList *clang_args =
+        function_decl->getTemplateSpecializationArgs();
+    if (clang_args != NULL) {
+      SgTemplateArgumentPtrList template_args;
+      template_args.reserve(clang_args->size());
+      for (const clang::TemplateArgument &arg : clang_args->asArray()) {
+        if (SgTemplateArgument *sg_arg = translateTemplateArgument(arg, true)) {
+          template_args.push_back(sg_arg);
+        }
+      }
+
+      if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+        unsigned int methodConstVolatileFlags = 0;
+        auto *method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
+        if (method_decl->isConst()) {
+          methodConstVolatileFlags |= SgMemberFunctionType::e_const;
+        }
+        if (method_decl->isVolatile()) {
+          methodConstVolatileFlags |= SgMemberFunctionType::e_volatile;
+        }
+        clang::Qualifiers qualifiers = method_decl->getMethodQualifiers();
+        if (qualifiers.hasRestrict()) {
+          methodConstVolatileFlags |= SgMemberFunctionType::e_restrict;
+        }
+        switch (method_decl->getRefQualifier()) {
+        case clang::RQ_LValue:
+          methodConstVolatileFlags |=
+              SgMemberFunctionType::e_ref_qualifier_lvalue;
+          break;
+        case clang::RQ_RValue:
+          methodConstVolatileFlags |=
+              SgMemberFunctionType::e_ref_qualifier_rvalue;
+          break;
+        case clang::RQ_None:
+          break;
+        }
+
+        sg_function_decl =
+            SageBuilder::buildNondefiningMemberFunctionDeclaration(
+                name, ret_type, param_list, proper_scope,
+                /*decoratorList=*/NULL, methodConstVolatileFlags,
+                /*buildTemplateInstantiation=*/true, &template_args);
+      } else {
+        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
+            name, ret_type, param_list, proper_scope, /*decoratorList=*/NULL,
+            /*buildTemplateInstantiation=*/true, &template_args,
+            SgStorageModifier::e_default,
+            /*forceFreeFunctionScope=*/isFriendFreeFunction);
+      }
+
+      if (sg_function_decl != NULL) {
+        sg_function_decl->set_firstNondefiningDeclaration(sg_function_decl);
+
+        // Mark explicit argument list on the instantiation decl and connect to
+        // the primary template declaration when available.
+        if (SgTemplateInstantiationFunctionDecl *inst_func =
+                isSgTemplateInstantiationFunctionDecl(sg_function_decl)) {
+          inst_func->set_template_argument_list_is_explicit(true);
+          inst_func->get_templateArguments() = template_args;
+          if (SgNode *tmpl_node =
+                  Traverse(function_decl->getPrimaryTemplate())) {
+            if (SgTemplateFunctionDeclaration *tmpl_decl =
+                    isSgTemplateFunctionDeclaration(tmpl_node)) {
+              inst_func->set_templateDeclaration(tmpl_decl);
+              inst_func->set_templateName(tmpl_decl->get_name());
+            }
+          }
+        } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+                       isSgTemplateInstantiationMemberFunctionDecl(
+                           sg_function_decl)) {
+          inst_member->set_template_argument_list_is_explicit(true);
+          inst_member->get_templateArguments() = template_args;
+          if (SgNode *tmpl_node =
+                  Traverse(function_decl->getPrimaryTemplate())) {
+            if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                    isSgTemplateMemberFunctionDeclaration(tmpl_node)) {
+              inst_member->set_templateDeclaration(tmpl_decl);
+              inst_member->set_templateName(tmpl_decl->get_name());
+            }
+          }
+        }
+
+        handled_template_instantiation = true;
+      }
+    }
+  }
+
+  if (!handled_template_instantiation &&
+      function_decl->isThisDeclarationADefinition()) {
     // Build friend free-function definitions as free functions regardless of
     // lexical class scope.
     bool builder_force_free_scope = isFriendFreeFunction;
@@ -4935,124 +5063,248 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       // Template definitions require a prior non-defining declaration for
       // SageBuilder. Reuse an existing one when a forward declaration was
       // already seen to keep declaration/definition chains consistent.
-      SgTemplateFunctionDeclaration *first_nondef = NULL;
+      if (isTemplateMemberFunction) {
+        SgTemplateMemberFunctionDeclaration *first_nondef = NULL;
 
-      if (function_decl->getFirstDecl() != function_decl) {
-        auto map_it =
-            p_decl_translation_map.find(function_decl->getFirstDecl());
-        if (map_it != p_decl_translation_map.end()) {
-          first_nondef = isSgTemplateFunctionDeclaration(map_it->second);
-        }
-        if (first_nondef == NULL) {
-          auto tmpl_it = p_decl_translation_map.find(templateDecl);
-          if (tmpl_it != p_decl_translation_map.end()) {
-            first_nondef = isSgTemplateFunctionDeclaration(tmpl_it->second);
-          }
-        }
-        if (first_nondef == NULL) {
-          SgSymbol *tmp_symbol =
-              GetSymbolFromSymbolTable(function_decl->getFirstDecl());
-          if (SgTemplateSymbol *tmpl_sym = isSgTemplateSymbol(tmp_symbol)) {
+        if (function_decl->getFirstDecl() != function_decl) {
+          auto map_it =
+              p_decl_translation_map.find(function_decl->getFirstDecl());
+          if (map_it != p_decl_translation_map.end()) {
             first_nondef =
-                isSgTemplateFunctionDeclaration(tmpl_sym->get_declaration());
-          } else if (SgFunctionSymbol *func_sym =
-                         isSgFunctionSymbol(tmp_symbol)) {
-            first_nondef =
-                isSgTemplateFunctionDeclaration(func_sym->get_declaration());
+                isSgTemplateMemberFunctionDeclaration(map_it->second);
           }
-        }
-      }
-
-      if (first_nondef == NULL) {
-        SgFunctionParameterList *first_param_list =
-            SageBuilder::buildFunctionParameterList_nfi();
-        applySourceRange(first_param_list, function_decl->getSourceRange());
-
-        for (SgInitializedName *init_name : param_list->get_args()) {
-          if (init_name == NULL)
-            continue;
-
-          SgInitializer *cloned_init = NULL;
-          if (SgInitializer *init = init_name->get_initializer()) {
-            if (SgExpression *expr_init = isSgExpression(init)) {
-              cloned_init = SageBuilder::buildAssignInitializer_nfi(
-                  SageInterface::copyExpression(expr_init),
-                  expr_init->get_type());
+          if (first_nondef == NULL) {
+            auto tmpl_it = p_decl_translation_map.find(templateDecl);
+            if (tmpl_it != p_decl_translation_map.end()) {
+              first_nondef =
+                  isSgTemplateMemberFunctionDeclaration(tmpl_it->second);
             }
           }
-
-          SgInitializedName *cloned_param =
-              SageBuilder::buildInitializedName_nfi(
-                  init_name->get_name(), init_name->get_type(), cloned_init);
-          cloned_param->set_scope(SageBuilder::topScopeStack());
-          cloned_param->set_parent(first_param_list);
-          first_param_list->append_arg(cloned_param);
-        }
-
-        if (function_decl->isVariadic()) {
-          SgName empty = "";
-          SgType *ellipses_type = SgTypeEllipse::createType();
-          SgInitializedName *ellipses_param =
-              SageBuilder::buildInitializedName_nfi(empty, ellipses_type, NULL);
-          ellipses_param->set_scope(SageBuilder::topScopeStack());
-          ellipses_param->set_parent(first_param_list);
-          first_param_list->append_arg(ellipses_param);
-        }
-
-        first_nondef = SageBuilder::buildNondefiningTemplateFunctionDeclaration(
-            name, ret_type, first_param_list, builder_scope, NULL,
-            templateParams);
-        ROSE_ASSERT(first_nondef != NULL);
-
-        applySourceRange(first_nondef, function_decl->getSourceRange());
-        first_param_list->set_parent(first_nondef);
-        if (function_decl->isVariadic())
-          first_nondef->hasEllipses();
-      }
-
-      first_nondef->set_firstNondefiningDeclaration(first_nondef);
-
-      if (SgFunctionParameterList *first_param_list =
-              first_nondef->get_parameterList()) {
-        for (SgInitializedName *param : first_param_list->get_args()) {
-          if (param != NULL) {
-            param->set_declptr(first_nondef);
+          if (first_nondef == NULL) {
+            SgSymbol *tmp_symbol =
+                GetSymbolFromSymbolTable(function_decl->getFirstDecl());
+            if (SgTemplateSymbol *tmpl_sym = isSgTemplateSymbol(tmp_symbol)) {
+              first_nondef = isSgTemplateMemberFunctionDeclaration(
+                  tmpl_sym->get_declaration());
+            } else if (SgFunctionSymbol *func_sym =
+                           isSgFunctionSymbol(tmp_symbol)) {
+              first_nondef = isSgTemplateMemberFunctionDeclaration(
+                  func_sym->get_declaration());
+            }
           }
         }
-      }
 
-      // Fix for Issue 84: Friend template definitions inside a class should
-      // be in the enclosing scope
-      // SageBuilder::buildDefiningTemplateFunctionDeclaration does not
-      // accept a forceFreeFunctionScope flag unlike
-      // buildDefiningFunctionDeclaration, so we must rely on passing the
-      // correct scope.
-      SgScopeStatement *target_scope = builder_scope;
-      if (builder_force_free_scope && lexical_friend_enclosing_scope != NULL) {
-        target_scope = lexical_friend_enclosing_scope;
-      }
+        if (first_nondef == NULL) {
+          SgFunctionParameterList *first_param_list =
+              SageBuilder::buildFunctionParameterList_nfi();
+          applySourceRange(first_param_list, function_decl->getSourceRange());
 
-      SgTemplateFunctionDeclaration *defining_template =
-          SageBuilder::buildDefiningTemplateFunctionDeclaration(
-              name, ret_type, param_list, target_scope, NULL, first_nondef);
+          for (SgInitializedName *init_name : param_list->get_args()) {
+            if (init_name == NULL)
+              continue;
 
-      sg_function_decl = defining_template;
-      sg_function_decl->set_definingDeclaration(sg_function_decl);
+            SgInitializer *cloned_init = NULL;
+            if (SgInitializer *init = init_name->get_initializer()) {
+              if (SgExpression *expr_init = isSgExpression(init)) {
+                cloned_init = SageBuilder::buildAssignInitializer_nfi(
+                    SageInterface::copyExpression(expr_init),
+                    expr_init->get_type());
+              }
+            }
 
-      if (function_decl->isVariadic()) {
-        sg_function_decl->hasEllipses();
-      }
+            SgInitializedName *cloned_param =
+                SageBuilder::buildInitializedName_nfi(
+                    init_name->get_name(), init_name->get_type(), cloned_init);
+            cloned_param->set_scope(SageBuilder::topScopeStack());
+            cloned_param->set_parent(first_param_list);
+            first_param_list->append_arg(cloned_param);
+          }
 
-      for (SgInitializedName *param : param_list->get_args()) {
-        if (param != NULL) {
-          param->set_declptr(sg_function_decl);
+          if (function_decl->isVariadic()) {
+            SgName empty = "";
+            SgType *ellipses_type = SgTypeEllipse::createType();
+            SgInitializedName *ellipses_param =
+                SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
+                                                      NULL);
+            ellipses_param->set_scope(SageBuilder::topScopeStack());
+            ellipses_param->set_parent(first_param_list);
+            first_param_list->append_arg(ellipses_param);
+          }
+
+          first_nondef =
+              SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
+                  name, ret_type, first_param_list, builder_scope, NULL,
+                  functionConstVolatileFlags, templateParams);
+          ROSE_ASSERT(first_nondef != NULL);
+
+          applySourceRange(first_nondef, function_decl->getSourceRange());
+          first_param_list->set_parent(first_nondef);
+          if (function_decl->isVariadic())
+            first_nondef->hasEllipses();
         }
-      }
 
-      if (defining_template->get_firstNondefiningDeclaration() == NULL) {
-        defining_template->set_firstNondefiningDeclaration(first_nondef);
+        first_nondef->set_firstNondefiningDeclaration(first_nondef);
+
+        if (SgFunctionParameterList *first_param_list =
+                first_nondef->get_parameterList()) {
+          for (SgInitializedName *param : first_param_list->get_args()) {
+            if (param != NULL) {
+              param->set_declptr(first_nondef);
+            }
+          }
+        }
+
+        SgScopeStatement *target_scope = builder_scope;
+        if (builder_force_free_scope &&
+            lexical_friend_enclosing_scope != NULL) {
+          target_scope = lexical_friend_enclosing_scope;
+        }
+
+        SgTemplateMemberFunctionDeclaration *defining_template =
+            SageBuilder::buildDefiningTemplateMemberFunctionDeclaration(
+                name, ret_type, param_list, target_scope, NULL,
+                functionConstVolatileFlags, first_nondef);
+
+        sg_function_decl = defining_template;
+        sg_function_decl->set_definingDeclaration(sg_function_decl);
+
+        if (function_decl->isVariadic()) {
+          sg_function_decl->hasEllipses();
+        }
+
+        for (SgInitializedName *param : param_list->get_args()) {
+          if (param != NULL) {
+            param->set_declptr(sg_function_decl);
+          }
+        }
+
+        if (defining_template->get_firstNondefiningDeclaration() == NULL) {
+          defining_template->set_firstNondefiningDeclaration(first_nondef);
+        }
+        first_nondef->set_definingDeclaration(defining_template);
+      } else {
+        SgTemplateFunctionDeclaration *first_nondef = NULL;
+
+        if (function_decl->getFirstDecl() != function_decl) {
+          auto map_it =
+              p_decl_translation_map.find(function_decl->getFirstDecl());
+          if (map_it != p_decl_translation_map.end()) {
+            first_nondef = isSgTemplateFunctionDeclaration(map_it->second);
+          }
+          if (first_nondef == NULL) {
+            auto tmpl_it = p_decl_translation_map.find(templateDecl);
+            if (tmpl_it != p_decl_translation_map.end()) {
+              first_nondef = isSgTemplateFunctionDeclaration(tmpl_it->second);
+            }
+          }
+          if (first_nondef == NULL) {
+            SgSymbol *tmp_symbol =
+                GetSymbolFromSymbolTable(function_decl->getFirstDecl());
+            if (SgTemplateSymbol *tmpl_sym = isSgTemplateSymbol(tmp_symbol)) {
+              first_nondef =
+                  isSgTemplateFunctionDeclaration(tmpl_sym->get_declaration());
+            } else if (SgFunctionSymbol *func_sym =
+                           isSgFunctionSymbol(tmp_symbol)) {
+              first_nondef =
+                  isSgTemplateFunctionDeclaration(func_sym->get_declaration());
+            }
+          }
+        }
+
+        if (first_nondef == NULL) {
+          SgFunctionParameterList *first_param_list =
+              SageBuilder::buildFunctionParameterList_nfi();
+          applySourceRange(first_param_list, function_decl->getSourceRange());
+
+          for (SgInitializedName *init_name : param_list->get_args()) {
+            if (init_name == NULL)
+              continue;
+
+            SgInitializer *cloned_init = NULL;
+            if (SgInitializer *init = init_name->get_initializer()) {
+              if (SgExpression *expr_init = isSgExpression(init)) {
+                cloned_init = SageBuilder::buildAssignInitializer_nfi(
+                    SageInterface::copyExpression(expr_init),
+                    expr_init->get_type());
+              }
+            }
+
+            SgInitializedName *cloned_param =
+                SageBuilder::buildInitializedName_nfi(
+                    init_name->get_name(), init_name->get_type(), cloned_init);
+            cloned_param->set_scope(SageBuilder::topScopeStack());
+            cloned_param->set_parent(first_param_list);
+            first_param_list->append_arg(cloned_param);
+          }
+
+          if (function_decl->isVariadic()) {
+            SgName empty = "";
+            SgType *ellipses_type = SgTypeEllipse::createType();
+            SgInitializedName *ellipses_param =
+                SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
+                                                      NULL);
+            ellipses_param->set_scope(SageBuilder::topScopeStack());
+            ellipses_param->set_parent(first_param_list);
+            first_param_list->append_arg(ellipses_param);
+          }
+
+          first_nondef =
+              SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+                  name, ret_type, first_param_list, builder_scope, NULL,
+                  templateParams);
+          ROSE_ASSERT(first_nondef != NULL);
+
+          applySourceRange(first_nondef, function_decl->getSourceRange());
+          first_param_list->set_parent(first_nondef);
+          if (function_decl->isVariadic())
+            first_nondef->hasEllipses();
+        }
+
+        first_nondef->set_firstNondefiningDeclaration(first_nondef);
+
+        if (SgFunctionParameterList *first_param_list =
+                first_nondef->get_parameterList()) {
+          for (SgInitializedName *param : first_param_list->get_args()) {
+            if (param != NULL) {
+              param->set_declptr(first_nondef);
+            }
+          }
+        }
+
+        // Fix for Issue 84: Friend template definitions inside a class should
+        // be in the enclosing scope
+        // SageBuilder::buildDefiningTemplateFunctionDeclaration does not
+        // accept a forceFreeFunctionScope flag unlike
+        // buildDefiningFunctionDeclaration, so we must rely on passing the
+        // correct scope.
+        SgScopeStatement *target_scope = builder_scope;
+        if (builder_force_free_scope &&
+            lexical_friend_enclosing_scope != NULL) {
+          target_scope = lexical_friend_enclosing_scope;
+        }
+
+        SgTemplateFunctionDeclaration *defining_template =
+            SageBuilder::buildDefiningTemplateFunctionDeclaration(
+                name, ret_type, param_list, target_scope, NULL, first_nondef);
+
+        sg_function_decl = defining_template;
+        sg_function_decl->set_definingDeclaration(sg_function_decl);
+
+        if (function_decl->isVariadic()) {
+          sg_function_decl->hasEllipses();
+        }
+
+        for (SgInitializedName *param : param_list->get_args()) {
+          if (param != NULL) {
+            param->set_declptr(sg_function_decl);
+          }
+        }
+
+        if (defining_template->get_firstNondefiningDeclaration() == NULL) {
+          defining_template->set_firstNondefiningDeclaration(first_nondef);
+        }
+        first_nondef->set_definingDeclaration(defining_template);
       }
-      first_nondef->set_definingDeclaration(defining_template);
     } else {
       sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(
           name, ret_type, param_list, builder_scope, builder_force_free_scope);
@@ -5210,19 +5462,36 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       // create it. This prevents assertions in backend unparsing
       // (nameQualificationSupport).
       if (sg_function_decl) {
-        SgFunctionSymbol *sym = isSgFunctionSymbol(
-            sg_function_decl->get_symbol_from_symbol_table());
-        if (sym == NULL) {
-          // Create missing symbol
-          SgScopeStatement *scope = sg_function_decl->get_scope();
-          if (scope) {
-            sym = new SgFunctionSymbol(sg_function_decl);
-            scope->insert_symbol(sg_function_decl->get_name(), sym);
+        SgSymbol *symbol = sg_function_decl->get_symbol_from_symbol_table();
+        if (symbol == NULL) {
+          // Only synthesize symbols for non-template functions. Template
+          // declarations use dedicated template symbols (not SgFunctionSymbol),
+          // and forcing a function symbol breaks later lookup/instantiation.
+          if (isSgTemplateFunctionDeclaration(sg_function_decl) == NULL &&
+              isSgTemplateMemberFunctionDeclaration(sg_function_decl) == NULL) {
+            if (SgScopeStatement *scope = sg_function_decl->get_scope()) {
+              SgFunctionSymbol *new_sym = NULL;
+              if (SgMemberFunctionDeclaration *member_decl =
+                      isSgMemberFunctionDeclaration(sg_function_decl)) {
+                new_sym = new SgMemberFunctionSymbol(member_decl);
+              } else {
+                new_sym = new SgFunctionSymbol(sg_function_decl);
+              }
+              scope->insert_symbol(sg_function_decl->get_name(), new_sym);
+              symbol = new_sym;
+            }
           }
         }
 
-        if (sym && sym->get_declaration() == NULL) {
-          sym->set_declaration(sg_function_decl);
+        if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(symbol)) {
+          if (func_sym->get_declaration() == NULL) {
+            if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+                    sg_function_decl->get_firstNondefiningDeclaration())) {
+              func_sym->set_declaration(first_nondef);
+            } else {
+              func_sym->set_declaration(sg_function_decl);
+            }
+          }
         }
       }
     } else {
@@ -5279,15 +5548,24 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       sg_function_decl->set_type_syntax_is_available(true);
       sg_function_decl->set_oldStyleDefinition(true);
     }
-  } else {
+  } else if (!handled_template_instantiation) {
     if (templateDecl) {
-      sg_function_decl =
-          SageBuilder::buildNondefiningTemplateFunctionDeclaration(
-              name, ret_type, param_list, proper_scope, NULL, templateParams);
+      if (isTemplateMemberFunction) {
+        sg_function_decl =
+            SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
+                name, ret_type, param_list, proper_scope, NULL,
+                functionConstVolatileFlags, templateParams);
+        param_list->set_parent(sg_function_decl);
+        sg_function_decl->set_parameterList(param_list);
+      } else {
+        sg_function_decl =
+            SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+                name, ret_type, param_list, proper_scope, NULL, templateParams);
 
-      // Set parameter list parent
-      param_list->set_parent(sg_function_decl);
-      sg_function_decl->set_parameterList(param_list);
+        // Set parameter list parent
+        param_list->set_parent(sg_function_decl);
+        sg_function_decl->set_parameterList(param_list);
+      }
     } else {
       sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
           name, ret_type, param_list, proper_scope, NULL, false, NULL,
@@ -5538,7 +5816,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   // This ensures that the unparser prints "::" (e.g. "::std::sort")
   // which prevents ambiguity when global templates are shadowed.
   if (function_decl->getTemplateSpecializationKind() != clang::TSK_Undeclared) {
-    sg_function_decl->set_global_qualification_required(true);
+    // Only enforce a leading global qualifier for instantiations that live in a
+    // namespace scope. Avoid forcing "::" for translation-unit scope
+    // instantiations (e.g., friend templates injected into the global scope),
+    // which can otherwise produce duplicated qualifiers like "::::foo".
+    if (llvm::isa<clang::NamespaceDecl>(function_decl->getDeclContext())) {
+      sg_function_decl->set_global_qualification_required(true);
+    }
   }
 
   *node = sg_function_decl;
