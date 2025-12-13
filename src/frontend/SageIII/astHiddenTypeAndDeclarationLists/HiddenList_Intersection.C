@@ -541,13 +541,7 @@ namespace Hidden_List_Computation {
                                                                                 // take a look into this->UsingDirectivesSet to find out if the using directive that brings this symbol
                                                                                 //  into the scope has already been encountered yet
 
-// CH (4/7/2010): At least MSVC 9.0 can compile the following code
-//#ifdef _MSCx_VER
                                                                                 SetSgUsingDirectiveStatementsWithSgScopeStatement::iterator it_UsingDirectivesSet;
-//#else
-//                                                                              // tps (04/07/2009) : Problems with Hiddenlist
-//#pragma message ("WARNING : HiddenList_Intersection : SetSgUsingDirectiveStatementsWithSgScopeStatement not defined")
-//#endif
                                                                                 UsingDirectiveWithScope dummy_UsingDirectiveWithScope;
 
                                                                                 dummy_UsingDirectiveWithScope.using_dir = it_symbol_hashmap->second->si_using_dir;
@@ -557,8 +551,6 @@ namespace Hidden_List_Computation {
                                                                                 // Robert Preissl, June 27 2007: To find an element in a SetSgUsingDirectiveStatementsWithSgScopeStatement we need to
                                                                                 //  specify the scope & the SgUsingDirectiveStatement (-> look at comparator cmp_UsingDirectiveWithScope in HiddenList.h)
                                                                                 dummy_UsingDirectiveWithScope.scope = isSgScopeStatement(it_symbol_hashmap->second->si_using_dir->get_parent());
-// CH (4/7/2010): This issue is fixed by adding 'const' to compare function.
-//#ifdef _MSCx_VER
                                                                                 it_UsingDirectivesSet = UsingDirectivesSet.find( dummy_UsingDirectiveWithScope );
 
                                                                                 if(it_UsingDirectivesSet != UsingDirectivesSet.end() ) {
@@ -588,9 +580,6 @@ namespace Hidden_List_Computation {
                                                                                         }
                                                                         }
                                                                         else 
-//#else
-//#pragma message ("WARNING : HiddenList_Intersection : Code does not work under Windows")
-//#endif
                                                                         {
                                                                                 cout << "ERROR: isSgUsingDirectiveStatement not found in UsingDirectivesSet" << endl;
 
@@ -603,13 +592,7 @@ namespace Hidden_List_Computation {
                                                                         //  using directive that brings this symbol
                                                                         //  into the scope has already been encountered yet
 
-// CH (4/7/2010): This issue is fixed by adding 'const' to compare function.
-//#ifdef _MSCx_VER
                                                                         SetSgUsingDeclarationWithScopeWithSgScopeStatement::iterator it_UsingDeclarationsSet;
-//#else
-//                                                                      //tps (12/7/2009) : Problems in Windows in Release Mode
-//#pragma message ("WARNING : HiddenList_Intersection : Code does not work under Windows")
-//#endif
                                                                         UsingDeclarationWithScope dummy_UsingDeclarationWithScope;
 
                                                                         dummy_UsingDeclarationWithScope.using_decl = it_symbol_hashmap->second->si_using_decl;
@@ -622,8 +605,6 @@ namespace Hidden_List_Computation {
                                                                         //  comparator cmp_UsingDirectiveWithScope in HiddenList.h)
                                                                         dummy_UsingDeclarationWithScope.scope = isSgScopeStatement(it_symbol_hashmap->second->si_using_decl->get_parent());
 
-// CH (4/7/2010): This issue is fixed by adding 'const' to compare function.
-//#ifdef _MSCx_VER
                                                                         it_UsingDeclarationsSet = UsingDeclarationsSet.find( dummy_UsingDeclarationWithScope );
 
                                                                         if(it_UsingDeclarationsSet != UsingDeclarationsSet.end() ) {
@@ -653,10 +634,6 @@ namespace Hidden_List_Computation {
                                                                                 }
 
                                                                         }
-//#else
-//                                                                      //tps (12/7/2009) : Problems in Windows in Release Mode
-//#pragma message ("WARNING : HiddenList_Intersection : Code does not work under Windows")
-//#endif
 
                                                                 }
                                                                 else {
@@ -2141,4 +2118,3 @@ void Intersection_with_FunctionDeclaration (
 // DQ (5/21/2013): I think that we can and should remove this file.
 // for the moment I will comment out the whole file.
 #endif
-

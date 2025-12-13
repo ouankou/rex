@@ -184,25 +184,11 @@ struct ulong1
   unsigned long x;
 };
 
-struct 
-/*#if defined (_WIN32)
-       __builtin_align__(8)
-#else
-       __builtin_align__(2*sizeof(long int))
-#endif*/
-                                             long2
-{
+struct long2 {
   long int x, y;
 };
 
-struct 
-/*#if defined (_WIN32)
-       __builtin_align__(8)
-#else
-       __builtin_align__(2*sizeof(unsigned long int))
-#endif*/
-                                                      ulong2
-{
+struct ulong2 {
   unsigned long int x, y;
 };
 
@@ -959,4 +945,3 @@ cudaBindTexture( size_t*                          offset,
 #ifdef __managed__
 # undef __managed__
 #endif
-

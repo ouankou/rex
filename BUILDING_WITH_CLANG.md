@@ -2,6 +2,8 @@
 
 This guide explains how to build REX (ROSE EXascale compiler) with the experimental Clang/LLVM frontend for C language analysis.
 
+REX targets Linux only; non-Linux builds are unsupported.
+
 ## Overview
 
 REX has transitioned from the proprietary EDG frontend to an experimental Clang/LLVM-based frontend. This new frontend supports:
@@ -33,10 +35,6 @@ REX has transitioned from the proprietary EDG frontend to an experimental Clang/
 
    # Fedora/RHEL
    sudo dnf install gcc-c++ git perl flex bison
-
-   # macOS
-   xcode-select --install
-   brew install flex bison
    ```
 
 #### LLVM/Clang Frontend
@@ -48,9 +46,6 @@ REX has transitioned from the proprietary EDG frontend to an experimental Clang/
 
    # Fedora/RHEL
    sudo dnf install llvm clang clang-devel
-
-   # macOS (Homebrew)
-   brew install llvm
    ```
 
 #### Required Libraries
@@ -62,9 +57,6 @@ REX has transitioned from the proprietary EDG frontend to an experimental Clang/
 
    # Fedora/RHEL
    sudo dnf install boost-devel
-
-   # macOS
-   brew install boost
    ```
 
 6. **Compression libraries**
@@ -74,9 +66,6 @@ REX has transitioned from the proprietary EDG frontend to an experimental Clang/
 
    # Fedora/RHEL
    sudo dnf install zlib-devel libzstd-devel
-
-   # macOS
-   brew install zlib zstd
    ```
 
 7. **XML library**
@@ -86,9 +75,6 @@ REX has transitioned from the proprietary EDG frontend to an experimental Clang/
 
    # Fedora/RHEL
    sudo dnf install libxml2-devel
-
-   # macOS
-   brew install libxml2
    ```
 
 8. **OpenCL (optional, for OpenCL analysis)**
@@ -291,9 +277,6 @@ sudo apt-get install libzstd-dev
 
 # Fedora/RHEL
 sudo dnf install libzstd-devel
-
-# macOS
-brew install zstd
 ```
 
 ### Submodule Errors

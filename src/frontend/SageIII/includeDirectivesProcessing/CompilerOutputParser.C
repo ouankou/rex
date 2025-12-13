@@ -26,7 +26,6 @@ FILE* CompilerOutputParser::getCompilerOutput(const vector<string>& argv, bool i
     ROSE_ASSERT(!argv.empty());
     int pipeDescriptors[2];
 
-#if !ROSE_MICROSOFT_OS
     int pipeErr = pipe(pipeDescriptors);
     if (pipeErr == -1) {
         perror("pipe");
@@ -72,11 +71,6 @@ FILE* CompilerOutputParser::getCompilerOutput(const vector<string>& argv, bool i
         }
         return fdopen(pipeDescriptors[0], "r");
     }
-#else
-    // tps: does not work right now. Have not hit this assert yet.
-    printf("Error: no MSVS implementation available popenReadFromVector() (not implemented) \n");
-    ROSE_ABORT();
-#endif
 }
 
 void CompilerOutputParser::addIncludedFilesToMap(const string& includingFileName, const set<string>& includedFiles) {

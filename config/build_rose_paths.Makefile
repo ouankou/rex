@@ -1,6 +1,6 @@
 # This file supports the generation of rose_paths.C
 # DQ (4/5/2009): Changed the generated file from a C file to a C++ file, so that it
-# would be more consistant with the rest of C++ and work better with MSVC.
+# would be more consistant with the rest of the C++ codebase.
 src/util/rose_paths.C: Makefile
 	@@true > src/util/rose_paths.C
 	@@echo "#include <string>" >> src/util/rose_paths.C

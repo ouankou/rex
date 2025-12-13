@@ -12,11 +12,7 @@
 // Use Brian Gunney's String List Assignent (SLA) library
 #include "sla.h"
 
-#ifdef _MSC_VER
-#else
-# include <time.h>
-#endif
-
+#include <time.h>
 
 // DQ (12/31/2005): This is allowed in C files where it can not
 // effect the users application (just not in header files).
@@ -125,9 +121,6 @@ CommandlineProcessing::generateArgcArgvFromList ( Rose_STL_Container<string> arg
            ROSE_ABORT();
         }
 
-#ifdef _MSC_VER
-#define __builtin_constant_p(exp) (0)
-#endif
      ROSE_ASSERT (argv == NULL);
      argc = argList.size();
      argv = (char**) malloc ((argc+1) * sizeof(char**));

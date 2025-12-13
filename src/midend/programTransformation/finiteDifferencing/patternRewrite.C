@@ -213,11 +213,7 @@ class NullPattern: public Pattern {
   virtual SgNode* subst(PatternVariables& vars) const {
     ROSE_ASSERT (!"Should not use NullPattern in substitutions");
     abort();
-
-#ifdef _MSC_VER
-        #pragma message ("patternrewrite: Returning arbitrary value")
-    return false; // Windows requires return value
-#endif
+    return nullptr;
   }
 };
 
@@ -281,11 +277,7 @@ class AddIntsPattern: public Pattern {
 
   virtual bool match(SgNode* top, PatternVariables& vars) const {
     ROSE_ABORT ();
-
-#ifdef _MSC_VER
-        #pragma message ("patternRewrite: Returning arbitrary value")
-    return false; // Windows requires return value
-#endif
+    return false;
   }
 
   virtual SgNode* subst(PatternVariables& vars) const {

@@ -64,16 +64,13 @@ class CustomAstDOTGenerationNodeType
           std::string labelString;
           std::string optionString;
 
-          CustomAstDOTGenerationNodeType (SgNode* node, std::string label, std::string options )
-             : target(node), labelString(label), optionString(options)
-             {
-#ifdef _MSC_VER
-//#define __builtin_constant_p(exp) (0)
-#endif
-               ROSE_ASSERT(node != NULL);
-               ROSE_ASSERT(labelString.size() < 8000);
-               ROSE_ASSERT(optionString.size() < 8000);
-             }
+          CustomAstDOTGenerationNodeType(SgNode *node, std::string label,
+                                         std::string options)
+              : target(node), labelString(label), optionString(options) {
+            ROSE_ASSERT(node != NULL);
+            ROSE_ASSERT(labelString.size() < 8000);
+            ROSE_ASSERT(optionString.size() < 8000);
+          }
 
        // DQ (3/21/2007): Added copy constructor
           CustomAstDOTGenerationNodeType ( const CustomAstDOTGenerationNodeType & X )
@@ -315,5 +312,4 @@ class ROSE_DLL_API CustomMemoryPoolDOTGeneration
          void internal_init(s_Filter_Flags* f = NULL);
    };
 
-#endif //WHOLE_AST_H
-
+#endif // WHOLE_AST_H

@@ -17,11 +17,7 @@
 #    endif
 #    ifdef _REENTRANT
         // User wnats multi-thread support, but POSIX is unavailable. Consider using Boost Threads which are more portable.
-#       ifdef _MSC_VER
-#           pragma message("POSIX threads are not available; synchronization being skipped")
-#       else
-#           warning "POSIX threads are not available; synchronization being skipped"
-#       endif
+#       warning "POSIX threads are not available; synchronization being skipped"
 #    endif
 #endif
 
@@ -75,8 +71,7 @@ std::vector<unsigned char*> $CLASSNAME::pools;
         } while (0);
 #endif
 
-// DQ (11/1/2016): This is redundant and repeated hundreds to times which is misleading.
-// This macro appears to be set within code within ROSETTA, but only for when _MSC_VER is true.
+// DQ (11/1/2016): This is redundant and repeated hundreds of times, which is misleading.
 #define USE_CPP_NEW_DELETE_OPERATORS FALSE
 // #define USE_CPP_NEW_DELETE_OPERATORS TRUE
 

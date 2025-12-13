@@ -78,33 +78,9 @@ Grammar::Grammar ( const string& inputGrammarName,
   // JJW 2-12-2008 Use a file for this list so the numbers will be more stable
      {
 
-#if 1
-                 // TPS (11/4/2009) : This will work now not using cygwin
-           std::string astNodeListFilename = std::string(ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR) + "/src/ROSETTA/astNodeList";
-#else
-           // DQ (4/4/2009): MSVS is not interpreting the type correctly here...(fixed rose_paths.[hC])
-           // DQ (4/11/2009): Using cygwin generated rose_paths.C files so need to map cygwin file prefix to Windows file prefix.
-           std::string astNodeListFilename = ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR + "/src/ROSETTA/astNodeList";
-           string prefixString = ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR;
-           printf("prefix == %s\n",prefixString.c_str());
-           size_t prefixLocation = astNodeListFilename.find(prefixString);
-           ROSE_ASSERT(prefixLocation != string::npos);
-           ROSE_ASSERT(prefixLocation == 0);
-           astNodeListFilename = astNodeListFilename.substr(prefixLocation+prefixString.length());
-           astNodeListFilename = "C:" + astNodeListFilename;
-           int i = 0;
-           while (i != astNodeListFilename.length())
-              {
-                        if (astNodeListFilename[i] == '/')
-                           {
-                          // DQ (4/11/2009): My laptop version of Windows requires '\\' but it was
-                          // not a problem for the desktop version of windows to use '\'.
-                                 astNodeListFilename[i] = '\\';
-                           }
-                        i++;
-              }
-           printf ("astNodeListFilename = %s \n",astNodeListFilename.c_str());
-#endif
+       std::string astNodeListFilename =
+           std::string(ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR) +
+           "/src/ROSETTA/astNodeList";
        std::ifstream astNodeList(astNodeListFilename.c_str());
        size_t c = 1;
        while (astNodeList) {
@@ -1899,7 +1875,7 @@ Grammar::buildHeaderStringBeforeMarker( const string& marker, const string& file
      }
      ROSE_ASSERT (!"Marker not found");
 
-  // DQ (11/28/2009): MSVC warns that this function should return a value from all paths.
+     // Unreachable
      return headerFileTemplate;
    }
 
@@ -1923,7 +1899,7 @@ Grammar::buildHeaderStringAfterMarker( const string& marker, const string& fileN
      }
      ROSE_ASSERT (!"Marker not found");
 
-  // DQ (11/28/2009): MSVC warns that this function should return a value from all paths.
+     // Unreachable
      return headerFileTemplate;
    }
 
@@ -2272,10 +2248,9 @@ Grammar::buildSourceFiles( AstNodeClass & node, StringUtility::FileWithLineNumbe
 
      StringUtility::FileWithLineNumbers sourceBeforeInsertion;
 #if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-  // DQ (12/29/2009): Add this to the top of each file.
-        // tps (01/06/2010) : If we include sage3.h instead of rose.h on Windows these files are
-                // currently only 7MB instead of 17MB - still to large though
-         string sourceHeader = "#include \"sage3basic.h\"   // sage3 from grammar.C \nusing namespace std;\n\n";
+     // DQ (12/29/2009): Add this to the top of each file.
+     string sourceHeader = "#include \"sage3basic.h\"   // sage3 from "
+                           "grammar.C \nusing namespace std;\n\n";
      sourceBeforeInsertion.push_back(StringUtility::StringWithLineNumber(sourceHeader, "", 1));
 #else
   // StringUtility::FileWithLineNumbers sourceBeforeInsertion = buildHeaderStringBeforeMarker(sourceFileInsertionSeparator, fileName);
@@ -2455,12 +2430,11 @@ Grammar::buildVariants()
 void
 Grammar::buildIncludesForSeparateHeaderFiles( AstNodeClass & node, StringUtility::FileWithLineNumbers & outputFile )
    {
-  // DQ (12/28/2009): New function to support generation of includes for separate header files.
-  // This work is optionally included as an alternative to the generation of huge 300K line files.
-  // This is only a performance issue and perhaps an optimization issue for compiling ROSE on
-  // machines without large memories (or for 32bit machines).  It is also an attempt to address
-  // the complexity of handling Windows and the MSVC compiler (which does not appear to like
-  // large single files).
+  // DQ (12/28/2009): New function to support generation of includes for
+  // separate header files. This work is optionally included as an alternative
+  // to the generation of huge 300K line files. This is primarily a performance
+  // issue and can help work around compiler limits for extremely large
+  // translation units.
 
   // printf ("At TOP of Grammar::buildIncludesForSeparateHeaderFiles() \n");
 
@@ -3134,13 +3108,6 @@ Grammar::buildCode ()
      includeHeaderString += "// The header file (\"rose_config.h\") should only be included by source files that require it.\n";
      string includeHeader_rose_config ="#include \"rose_config.h\"\n\n";
      includeHeaderString += includeHeader_rose_config;
-
-     string defines1 = "#if _MSC_VER\n";
-     string defines2 = "#define USE_CPP_NEW_DELETE_OPERATORS 0\n";
-     string defines3 = "#endif\n\n";
-     includeHeaderString += defines1;
-     includeHeaderString += defines2;
-     includeHeaderString += defines3;
 
 #define DEBUG_NEW_DELETE_IN_MEMORY_POOL 0
 #if DEBUG_NEW_DELETE_IN_MEMORY_POOL

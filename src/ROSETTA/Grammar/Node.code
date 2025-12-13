@@ -13,8 +13,6 @@ HEADER_NODE_PREDECLARATION_START
 
 #include "Cxx_Grammar.h"
 
-#define __builtin_constant_p(exp) (0)
-
 class PreprocessingInfo;
 class AstRegExAttribute;
 class AstAttribute;
@@ -24,12 +22,6 @@ class AstAttributeMechanism;
 #define NELMTS(X)       (sizeof(X)/sizeof((X)[0]))      /* number of elements in a static-sized array */
 #define DUMP_FIELD_WIDTH        64                      /* min columns to use for member names in dump() functions */
 #include <semaphore.h>
-#ifndef _MSC_VER
-// mutex does not work on Windows
-// Pei-Hung (07/28/2016) 'sem_init' has been explicitly marked deprecated in OSX El Capitan
-#if defined(__APPLE__) && defined(__MACH__)
-// mutex does not work on Mac
-#else
 class mutex
    {
   // This class was added by Valentin David (summer of 2007) as part of support for Stratego using a Java interface.
@@ -50,11 +42,9 @@ class mutex
 
           void unlock ()
              {
-               sem_post(&mut);
-             }
+	               sem_post(&mut);
+	             }
    };
-#endif
-#endif
 //! Declarations to be placed at the top of the header file for this grammar
 /*! The typedefs simplify the resulting generated code.  Note that the use of STL
     for the list types requires the use of an additional typedef to a pointer of that
@@ -362,22 +352,20 @@ namespace rose_hash
 
 /*! \brief Hash name support for symbol tables within ROSE.
  */
-     struct hash_integer
-        {
-       // tps (11/17/2009) : Changed this so that it works under Windows.
-       // CH (4/9/2010): Use boost::hash instead
-          size_t operator()(const int n) const
-             {
+	     struct hash_integer
+	        {
+	       // CH (4/9/2010): Use boost::hash instead
+	          size_t operator()(const int n) const
+	             {
                return n;
              }
         };
 
-     struct hash_integer_pair
-        {
-       // tps (11/17/2009) : Changed this so that it works under Windows.
-       // CH (4/9/2010): Use boost::hash instead
-          size_t operator()(const std::pair<int,int> & p) const
-             {
+	     struct hash_integer_pair
+	        {
+	       // CH (4/9/2010): Use boost::hash instead
+	          size_t operator()(const std::pair<int,int> & p) const
+	             {
             // DQ (4/30/2009): This subject should be reviewed!
             // Since this is a hash function, it might not a problem if we have
             // overflow (also the values should not be so large as to be a problem).
@@ -410,12 +398,11 @@ namespace rose_hash
              }
         };
 
-     struct hash_graph_node
-        {
-       // tps (11/17/2009) : Changed this so that it works under Windows.
-       // CH (4/9/2010): Use boost::hash instead
-          size_t operator()(const SgGraphNode* ptr) const
-             {
+	     struct hash_graph_node
+	        {
+	       // CH (4/9/2010): Use boost::hash instead
+	          size_t operator()(const SgGraphNode* ptr) const
+	             {
                return (size_t) ptr;
              }
         };

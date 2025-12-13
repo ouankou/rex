@@ -11,9 +11,7 @@
 #ifndef ROSE_SKIP_COMPILATION_OF_WAVE
 ///////////////////////////////////////////////////////////////////////////////
 //  Include Wave itself
-#ifndef _MSC_VER
 #include <boost/wave.hpp>
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // Include the lexer stuff
@@ -885,5 +883,3 @@ bool AttributeListMap::found_include_directive(TokenT directive, std::string rel
 #endif
 
 #endif
-
-

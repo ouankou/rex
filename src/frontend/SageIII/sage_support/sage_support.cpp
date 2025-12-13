@@ -70,14 +70,6 @@ extern const std::string ROSE_OFP_VERSION_STRING;
 // DQ (11/30/2015): Adding general support fo the detection of macro expansions and include file expansions.
 void detectMacroOrIncludeFileExpansions(SgSourceFile* sourceFile);
 
-
-#ifdef _MSC_VER
-// DQ (11/29/2009): MSVC does not support sprintf, but "_snprintf" is equivalent
-// (note: printf_S is the safer version but with a different function argument list).
-// We can use a macro to handle this portability issue for now.
-#define snprintf _snprintf
-#endif
-
 // DQ (2/12/2011): Added const so that this could be called in get_mangled() (and more generally).
 // std::string SgValueExp::get_constant_folded_value_as_string()
 std::string
@@ -474,14 +466,6 @@ findRoseSupportPathFromBuild(const string& buildTreeLocation,
   if (inInstallTree) {
     return installTreePath + "/" + installTreeLocation;
   } else {
-    #ifdef _MSC_VER
-  #ifndef CMAKE_INTDIR
-  #define CMAKE_INTDIR ""
-  #endif
-    if (buildTreeLocation.compare(0, 3, "lib") == 0 || buildTreeLocation.compare(0, 3, "bin") == 0) {
-      return string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/" + buildTreeLocation + "/" + CMAKE_INTDIR;
-    }
-    #endif
     return string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/" + buildTreeLocation;
   }
 }
@@ -624,10 +608,8 @@ isBinaryExecutableFile ( string sourceFilename )
      int character0 = fgetc(f);
      int character1 = fgetc(f);
 
-  // The first character of an ELF binary is '\127' and for a PE binary it is 'M'
-  // Note also that some MS-DOS headers can start with "ZM" instead of "MZ" due to
-  // early confusion about little endian handling for MS-DOS where it was ported
-  // to not x86 plaforms.  I am not clear how wide spread loaders of this type are.
+     // The first character of an ELF binary is '\127'. Some other executable
+     // formats begin with 'M'.
 
      if (character0 == 127 || character0 == 77)
         {
@@ -646,13 +628,12 @@ bool
 isLibraryArchiveFile ( string sourceFilename )
    {
   // The if this is a "*.a" file, not that "*.so" files
-  // will appear as an executable (same for Windows "*.dll"
-  // files.
+  // will appear as an executable.
 
-     bool returnValue = false;
+  bool returnValue = false;
 
-     if ( SgProject::get_verbose() > 1 )
-          printf ("Inside of isLibraryArchiveFile(%s) \n",sourceFilename.c_str());
+  if (SgProject::get_verbose() > 1)
+    printf("Inside of isLibraryArchiveFile(%s) \n", sourceFilename.c_str());
 
   // Open file for reading
      FILE* f = fopen(sourceFilename.c_str(), "rb");
@@ -844,19 +825,14 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
             // Made changes to this file and string utilities function getAbsolutePathFromRelativePath by cloning it with name getAbsolutePathFromRelativePathWithErrors
             // Also refer to script that tests -- reasonably exhaustively -- to various combinarions of input files.
 
-       // Zack Galbreath 1/9/2014: Windows absolute paths do not begin with "/".
-       // The following printf could cause problems for our testing systems because
-       // it contains the word "error".
-       // [Robb P Matzke 2017-04-21]: Such a low-level utility function as this shouldn't be emitting output at all, especially
-       // not on standard output, because it makes it problematic to call this in situations where the file might not
-       // exist.
-       #ifndef _MSC_VER
-          //if (sourceFilename.substr(0,targetSubstring.size()) != targetSubstring)
-          //     printf ("sourceFilename encountered an error in filename\n");
-       #endif
+          // [Robb P Matzke 2017-04-21]: Such a low-level utility function as
+          // this shouldn't be emitting output at all, especially not on
+          // standard output, because it makes it problematic to call this in
+          // situations where the file might not exist.
 
-       // DQ (11/29/2006): Even if this is C mode, we have to define the __cplusplus macro
-       // if we detect we are processing a source file using a C++ filename extension.
+          // DQ (11/29/2006): Even if this is C mode, we have to define the
+          // __cplusplus macro if we detect we are processing a source file
+          // using a C++ filename extension.
           string filenameExtension = StringUtility::fileNameSuffix(sourceFilename);
 
 #if 0
@@ -5009,15 +4985,6 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
      ROSE_ABORT();
 #endif
 
-  // Support for compiling .C files as C++ on Visual Studio
-#ifdef _MSC_VER
-     if (get_Cxx_only() == true)
-        {
-          vector<string>::iterator pos = compilerCmdLine.begin() + 1;
-          compilerCmdLine.insert(pos, "/TP");
-        }
-#endif
-
      int returnValueForCompiler = 0;
 
   // error checking
@@ -5032,17 +4999,13 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
              {
                printf ("calling systemFromVector() \n");
                printf ("Number of command line arguments: %" PRIuPTR "\n", compilerCmdLine.size());
-               for (size_t i = 0; i < compilerCmdLine.size(); ++i)
-                  {
-#ifdef _MSC_VER
-                    printf ("Backend compiler arg[%Iu]: = %s\n", i, compilerCmdLine[i].c_str());
-#else
-                    printf ("Backend compiler arg[%" PRIuPTR "]: = %s\n", i, compilerCmdLine[i].c_str());
-#endif
-                  }
+               for (size_t i = 0; i < compilerCmdLine.size(); ++i) {
+                 printf("Backend compiler arg[%" PRIuPTR "]: = %s\n", i,
+                        compilerCmdLine[i].c_str());
+               }
                printf("End of command line for backend compiler\n");
 
-            // DQ (6/19/2020): Error checking for embedded application name.
+               // DQ (6/19/2020): Error checking for embedded application name.
                string finalCommandLine = CommandlineProcessing::generateStringFromArgList(compilerCmdLine,false,false);
                printf ("finalCommandLine = %s \n",finalCommandLine.c_str());
                size_t substringPosition = finalCommandLine.find("TestUnparseHeaders");
@@ -6136,17 +6099,11 @@ StringUtility::popen_wrapper ( const string & command, vector<string> & result )
 
      result = vector<string>();
 
-     // CH (4/6/2010): The Windows version of popen is _popen
-#ifdef _MSC_VER
-     if ((fp = _popen(command.c_str (), "r")) == nullptr)
-#else
-     if ((fp = popen(command.c_str (), "r")) == nullptr)
-#endif
-        {
-          cerr << "Files or processes cannot be created" << endl;
-          returnValue = false;
-          return returnValue;
-        }
+     if ((fp = popen(command.c_str(), "r")) == nullptr) {
+       cerr << "Files or processes cannot be created" << endl;
+       returnValue = false;
+       return returnValue;
+     }
 
      string  current_string;
      while (fgets(buffer, sizeof (buffer), fp))
@@ -6162,12 +6119,7 @@ StringUtility::popen_wrapper ( const string & command, vector<string> & result )
           result.push_back (current_string.substr (0, current_string.size () - 1));
         }
 
-#ifdef _MSC_VER
-     if (_pclose(fp) == -1)
-#else
-     if (pclose(fp) == -1)
-#endif
-        {
+        if (pclose(fp) == -1) {
           cerr << ("Cannot execute pclose");
           returnValue = false;
         }
@@ -6577,26 +6529,9 @@ SgFunctionCallExp::getAssociatedFunctionSymbol() const
 void preventConstructionOnStack(SgNode* n)
    {
 #ifndef NDEBUG
-#ifdef _MSC_VER
-  // DQ (11/28/2009): This was a fix suggested by Robb.
-  // void* frameaddr = 0;
-  // Build an "auto" variable (should be located near the stack frame, I think).
-  // tps (12/4/2009)
-#if _MSC_VER >= 1600  // 1600 == VC++ 10.0
-  // ../Grammar/Cxx_GlobalDeclarations.macro(32): error C3530: 'auto' cannot be combined with any other type-specifier
-     unsigned int nonStackFrameReferenceVariable;
-    #pragma message ( " Cxx_GlobalDeclarations.macro: __builtin_frame_address not known in Windows. Workaround in VS 10.0")
-#else
-     auto unsigned int nonStackFrameReferenceVariable;
-#endif
-     void* frameaddr = &nonStackFrameReferenceVariable;
+  void *frameaddr = __builtin_frame_address(0);
 
-#else
-  // GNU compiler specific code
-     void* frameaddr = __builtin_frame_address(0);
-#endif // _MSC_VER
-
-     signed long dist = (char*)n - (char*)frameaddr;
+  signed long dist = (char *)n - (char *)frameaddr;
 
   // DQ (12/6/2009): This fails for the 4.0.4 compiler, but only in 64-bit when run with Hudson.
   // I can't reporduce the problem using the 4.0.4 compiler, but it is uniformally a problem
@@ -6623,8 +6558,8 @@ void preventConstructionOnStack(SgNode* n)
      assert (dist < -10000 || dist > 10000);
 #endif
 #else
-  // For all other compilers make this an error (e.g. on Windows MSVC, Intel icc, etc.).
-     assert (dist < -10000 || dist > 10000);
+  // For all other compilers make this an error.
+  assert(dist < -10000 || dist > 10000);
 #endif // __GNUC__
 
 #endif // NDEBUG

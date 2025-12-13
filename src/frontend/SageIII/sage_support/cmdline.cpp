@@ -46,25 +46,12 @@ makeSysIncludeList(const Rose_STL_Container<string>& dirs, Rose_STL_Container<st
      printf ("In makeSysIncludeList(): top: argString_result_top = %s \n",argString_result_top.c_str());
 #endif
 
-#ifdef _MSC_VER
-  string includeBase =
-      findRoseSupportPathFromBuild("include-staging", "include\\clang");
-  // NP (3/18/2020) Need to switch the slash direction
-  for (int i = 0; i < includeBase.length(); ++i)
-    if (includeBase[i] == '/')
-      includeBase[i] = '\\';
-#else
   string includeBase =
       findRoseSupportPathFromBuild("include-staging", "include/clang");
-#endif
-     for (Rose_STL_Container<string>::const_iterator i = dirs.begin(); i != dirs.end(); ++i)
-        {
-          ROSE_ASSERT (!i->empty());
-#ifdef _MSC_VER
-          string fullPath = (*i)[1] == ':' ? *i : (includeBase + "\\" + *i);
-#else
-          string fullPath = (*i)[0] == '/' ? *i : (includeBase + "/" + *i);
-#endif
+  for (Rose_STL_Container<string>::const_iterator i = dirs.begin();
+       i != dirs.end(); ++i) {
+    ROSE_ASSERT(!i->empty());
+    string fullPath = (*i)[0] == '/' ? *i : (includeBase + "/" + *i);
 
 #if 1
        // DQ (11/8/2011): We want to exclude the /usr/include directory since it will be search automatically by EDG.
@@ -133,7 +120,7 @@ makeSysIncludeList(const Rose_STL_Container<string>& dirs, Rose_STL_Container<st
           std::string argString_result = CommandlineProcessing::generateStringFromArgList(result,false,false);
           printf ("In makeSysIncludeList(): bottom of loop: argString_result = %s \n",argString_result.c_str());
 #endif
-        }
+  }
 
 #if 0
      std::string argString_result = CommandlineProcessing::generateStringFromArgList(result,false,false);
@@ -327,136 +314,148 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
   // being confused with the source file name that is to be read by EDG and translated.
 
   // DQ (1/6/2008): Added another test for a rose option that takes a filename
-     if ( argument == "-o" ||                               // Used to specify output file to compiler
-          argument == "-opt" ||                             // Used in loopProcessor
-       // DQ (1/13/2009): This option should only have a single leading "-", not two.
-       // argument == "--include" ||                        // Used for preinclude list (to include some header files before all others, common requirement for compiler)
-          argument == "-include" ||                         // Used for preinclude file list (to include some header files before all others, common requirement for compiler)
-          argument == "-isystem" ||                         // Used for preinclude directory list (to specify include paths to be search before all others, common requirement for compiler)
+     if (argument == "-o" ||   // Used to specify output file to compiler
+         argument == "-opt" || // Used in loopProcessor
+         // DQ (1/13/2009): This option should only have a single leading "-",
+         // not two. argument == "--include" ||                        // Used
+         // for preinclude list (to include some header files before all others,
+         // common requirement for compiler)
+         argument == "-include" || // Used for preinclude file list (to include
+                                   // some header files before all others,
+                                   // common requirement for compiler)
+         argument ==
+             "-isystem" || // Used for preinclude directory list (to specify
+                           // include paths to be search before all others,
+                           // common requirement for compiler)
 
-          // Darwin options
-          argument == "-dylib_file" ||                      // -dylib_file <something>:<something>
-          argument == "-framework"  ||                      // -iframeworkdir (see man page for Apple GCC)
-
-          // ROSE options
-          argument == "-rose:output" ||                     // Used to specify output file to ROSE
-          argument == "-rose:o" ||                          // Used to specify output file to ROSE (alternative to -rose:output)
-          argument == "-rose:compilationPerformanceFile" || // Use to output performance information about ROSE compilation phases
-          argument == "-rose:verbose" ||                    // Used to specify output of internal information about ROSE phases
-          argument == "-rose:test" ||
-          argument == "-rose:backendCompileFormat" ||
-          argument == "-rose:outputFormat" ||
+         // ROSE options
+         argument == "-rose:output" || // Used to specify output file to ROSE
+         argument == "-rose:o" ||      // Used to specify output file to ROSE
+                                       // (alternative to -rose:output)
+         argument ==
+             "-rose:compilationPerformanceFile" || // Use to output performance
+                                                   // information about ROSE
+                                                   // compilation phases
+         argument == "-rose:verbose" || // Used to specify output of internal
+                                        // information about ROSE phases
+         argument == "-rose:test" ||
+         argument == "-rose:backendCompileFormat" ||
+         argument == "-rose:outputFormat" ||
 #if 0
        // DQ (1/21/2017): Moved to be an option that has three parameters (rose option, edg option, and edg option's parameter).
           argument == "-edg_parameter:" ||
           argument == "--edg_parameter:" ||
 #endif
-          argument == "-rose:generateSourcePositionCodes" ||
-          argument == "-rose:embedColorCodesInGeneratedCode" ||
-          argument == "-rose:instantiation" ||
-          argument == "-rose:includeCommentsAndDirectives" ||
-          argument == "-rose:includeCommentsAndDirectivesFrom" ||
-          argument == "-rose:excludeCommentsAndDirectives" ||
-          argument == "-rose:excludeCommentsAndDirectivesFrom" ||
-          argument == "-rose:includePath" ||
-          argument == "-rose:excludePath" ||
-          argument == "-rose:includeFile" ||
-          argument == "-rose:excludeFile" ||
+         argument == "-rose:generateSourcePositionCodes" ||
+         argument == "-rose:embedColorCodesInGeneratedCode" ||
+         argument == "-rose:instantiation" ||
+         argument == "-rose:includeCommentsAndDirectives" ||
+         argument == "-rose:includeCommentsAndDirectivesFrom" ||
+         argument == "-rose:excludeCommentsAndDirectives" ||
+         argument == "-rose:excludeCommentsAndDirectivesFrom" ||
+         argument == "-rose:includePath" || argument == "-rose:excludePath" ||
+         argument == "-rose:includeFile" || argument == "-rose:excludeFile" ||
 
-          // TOO1 (2/13/2014): Starting to refactor CLI handling into separate namespaces
-          Rose::Cmdline::Unparser::OptionRequiresArgument(argument) ||
-          Rose::Cmdline::Fortran::OptionRequiresArgument(argument) ||
-          //Rose::Cmdline::Java::OptionRequiresArgument(argument) ||
+         // TOO1 (2/13/2014): Starting to refactor CLI handling into separate
+         // namespaces
+         Rose::Cmdline::Unparser::OptionRequiresArgument(argument) ||
+         Rose::Cmdline::Fortran::OptionRequiresArgument(argument) ||
+         // Rose::Cmdline::Java::OptionRequiresArgument(argument) ||
 
-       // negara1 (08/16/2011)
-          argument == "-rose:unparseHeaderFilesRootFolder" ||
+         // negara1 (08/16/2011)
+         argument == "-rose:unparseHeaderFilesRootFolder" ||
 
-       // DQ (11/6/2018): Adding support to specify the root directory of an application for header file unparsing and token based unparsing).
-          argument == "-rose:applicationRootDirectory" ||
+         // DQ (11/6/2018): Adding support to specify the root directory of an
+         // application for header file unparsing and token based unparsing).
+         argument == "-rose:applicationRootDirectory" ||
 
-       // DQ (8/20/2008): Add support for Qing's options!
-          argument == "-annot" ||
-          argument == "-bs" ||
-          isOptionTakingThirdParameter(argument) ||
+         // DQ (8/20/2008): Add support for Qing's options!
+         argument == "-annot" || argument == "-bs" ||
+         isOptionTakingThirdParameter(argument) ||
 
-       // DQ (9/30/2008): Added support for java class specification required for Fortran use of OFP.
-          argument == "--class" ||
+         // DQ (9/30/2008): Added support for java class specification required
+         // for Fortran use of OFP.
+         argument == "--class" ||
 
-       // AS (02/20/08):  When used with -M or -MM, -MF specifies a file to write
-       // the dependencies to. Need to tell ROSE to ignore that output paramater
-          argument == "-MF" ||
-          argument == "-MT" || argument == "-MQ" ||
-          argument == "-outputdir" ||  // FMZ (12/22/1009) added for caf compiler
+         // AS (02/20/08):  When used with -M or -MM, -MF specifies a file to
+         // write the dependencies to. Need to tell ROSE to ignore that output
+         // paramater
+         argument == "-MF" || argument == "-MT" || argument == "-MQ" ||
+         argument == "-outputdir" || // FMZ (12/22/1009) added for caf compiler
 
-       // DQ (9/19/2010): UPC support for upc_threads to define the "THREADS" variable.
-          argument == "-rose:upc_threads" ||
+         // DQ (9/19/2010): UPC support for upc_threads to define the "THREADS"
+         // variable.
+         argument == "-rose:upc_threads" ||
 
-       // DQ (9/26/2011): Added support for detection of dangling pointers within translators built using ROSE.
-          argument == "-rose:detect_dangling_pointers" ||   // Used to specify level of debugging support for optional detection of dangling pointers
+         // DQ (9/26/2011): Added support for detection of dangling pointers
+         // within translators built using ROSE.
+         argument ==
+             "-rose:detect_dangling_pointers" || // Used to specify level of
+                                                 // debugging support for
+                                                 // optional detection of
+                                                 // dangling pointers
 
-       // DQ (1/16/2012): Added all of the currently defined dot file options.
-          argument == "-rose:dotgraph:commentAndDirectiveFilter" ||
-          argument == "-rose:dotgraph:ctorInitializerListFilter" ||
-          argument == "-rose:dotgraph:defaultColorFilter" ||
-          argument == "-rose:dotgraph:defaultFilter" ||
-          argument == "-rose:dotgraph:edgeFilter" ||
-          argument == "-rose:dotgraph:emptySymbolTableFilter" ||
+         // DQ (1/16/2012): Added all of the currently defined dot file options.
+         argument == "-rose:dotgraph:commentAndDirectiveFilter" ||
+         argument == "-rose:dotgraph:ctorInitializerListFilter" ||
+         argument == "-rose:dotgraph:defaultColorFilter" ||
+         argument == "-rose:dotgraph:defaultFilter" ||
+         argument == "-rose:dotgraph:edgeFilter" ||
+         argument == "-rose:dotgraph:emptySymbolTableFilter" ||
 
-       // DQ (7/22/2012): Added support to ignore some specific empty IR nodes.
-          argument == "-rose:dotgraph:emptyBasicBlockFilter" ||
-          argument == "-rose:dotgraph:emptyFunctionParameterListFilter" ||
+         // DQ (7/22/2012): Added support to ignore some specific empty IR
+         // nodes.
+         argument == "-rose:dotgraph:emptyBasicBlockFilter" ||
+         argument == "-rose:dotgraph:emptyFunctionParameterListFilter" ||
 
-          argument == "-rose:dotgraph:expressionFilter" ||
-          argument == "-rose:dotgraph:fileInfoFilter" ||
-          argument == "-rose:dotgraph:frontendCompatibilityFilter" ||
-          argument == "-rose:dotgraph:symbolFilter" ||
-          argument == "-rose:dotgraph:typeFilter" ||
-          argument == "-rose:dotgraph:variableDeclarationFilter" ||
-          argument == "-rose:dotgraph:noFilter" ||
+         argument == "-rose:dotgraph:expressionFilter" ||
+         argument == "-rose:dotgraph:fileInfoFilter" ||
+         argument == "-rose:dotgraph:frontendCompatibilityFilter" ||
+         argument == "-rose:dotgraph:symbolFilter" ||
+         argument == "-rose:dotgraph:typeFilter" ||
+         argument == "-rose:dotgraph:variableDeclarationFilter" ||
+         argument == "-rose:dotgraph:noFilter" ||
 
-       // DQ (1/8/2014): We need the "-x" option which takes a single option to specify the language "c" or "c++".
-       // This is required where within the "git" build system the input file is "/dev/null" which does not have
-       // a suffix from which to compute the associated language.
-          argument == "-x" ||
+         // DQ (1/8/2014): We need the "-x" option which takes a single option
+         // to specify the language "c" or "c++". This is required where within
+         // the "git" build system the input file is "/dev/null" which does not
+         // have a suffix from which to compute the associated language.
+         argument == "-x" ||
 
-       // DQ (1/20/2014): Adding support for gnu's -undefined option.
-          argument == "-u" ||
-          argument == "-undefined" ||
+         // DQ (1/20/2014): Adding support for gnu's -undefined option.
+         argument == "-u" || argument == "-undefined" ||
 
-       // DQ (1/26/2014): Support for usage such as -version-info 8:9:8
-          argument == "-version-info" ||
+         // DQ (1/26/2014): Support for usage such as -version-info 8:9:8
+         argument == "-version-info" ||
 
-       // DQ (1/30/2014): Support for usage such as -rose:unparse_tokens_testing 4
-          argument == "-rose:unparse_tokens_testing" ||
+         // DQ (1/30/2014): Support for usage such as
+         // -rose:unparse_tokens_testing 4
+         argument == "-rose:unparse_tokens_testing" ||
 
-       // DQ (12/10/2016): This does not take a parameter on any later version compiler that I know of.
-       // DQ (1/26/2014): Support for make dependence option -MM <file name for dependence info>
-       // argument == "-MM" ||
+         // DQ (12/10/2016): This does not take a parameter on any later version
+         // compiler that I know of. DQ (1/26/2014): Support for make dependence
+         // option -MM <file name for dependence info> argument == "-MM" ||
 
-       // DQ (3/25/2014): We need the icpc/icc [-fp-model <arg>]  command-line compiler option to be
-       // passed to the backend compiler properly.  The [-fp-model] option always has a single argument.
-          argument == "-fp-model" ||
+         // DQ (3/25/2014): We need the icpc/icc [-fp-model <arg>]  command-line
+         // compiler option to be passed to the backend compiler properly.  The
+         // [-fp-model] option always has a single argument.
+         argument == "-fp-model" ||
 
-       // DQ (1/21/2015): -diag-disable can take a collection of optional parameters: e.g. cpu-dispatch
-          argument == "-diag-enable"  ||
-          argument == "-diag-disable" ||
-          argument == "-diag-error"   ||
-          argument == "-diag-warning" ||
-          argument == "-diag-remark"  ||
+         // DQ (1/21/2015): -diag-disable can take a collection of optional
+         // parameters: e.g. cpu-dispatch
+         argument == "-diag-enable" || argument == "-diag-disable" ||
+         argument == "-diag-error" || argument == "-diag-warning" ||
+         argument == "-diag-remark" ||
 
-       // TOO1 (5/14/2015): Add support for GCC --param, e.g. "--param inline-unit-growth=900" found in Valgrind
-          argument == "--param" ||    // --param variable=value
+         // TOO1 (5/14/2015): Add support for GCC --param, e.g. "--param
+         // inline-unit-growth=900" found in Valgrind
+         argument == "--param" || // --param variable=value
 
-       // Peihung (03/09/2020): Add support for ifort v.19
-          argument == "-align"  ||
-          argument == "-warn"  ||
-          argument == "-check"  ||
-          argument == "-debug"  ||
-          argument == "-debug-parameters"  ||
-          false)
-        {
+         // Peihung (03/09/2020): Add support for ifort v.19
+         argument == "-align" || argument == "-warn" || argument == "-check" ||
+         argument == "-debug" || argument == "-debug-parameters" || false) {
           result = true;
-        }
+     }
 
   // printf ("In CommandlineProcessing::isOptionTakingFileName(): argument = %s result = %s \n",argument.c_str(),result ? "true" : "false");
 
@@ -1380,66 +1379,6 @@ SgProject::processCommandLine(const vector<string>& input_argv)
                   }
              }
 
-        // TOO1 (11/23/2013):
-        // (Darwin linker) -dylib_file <library_name.dylib>:<library_name.dylib>
-          if (argv[i].compare("-dylib_file") == 0)
-             {
-               if (SgProject::get_verbose() > 1)
-                  {
-                    std::cout << "[INFO] [Cmdline] "
-                              << "Processing -dylib_file"
-                              << std::endl;
-                  }
-
-               if (argv.size() == (i+1))
-                  {
-                    throw std::runtime_error("Missing required argument to -dylib_file");
-                  }
-                 else
-                  {
-                 // TODO: Save library argument; for now just skip over the argument
-                    ++i;
-                    if (SgProject::get_verbose() > 1)
-                       {
-                         std::cout << "[INFO] [Cmdline] "
-                                   << "Processing -dylib_file: argument="
-                                   << "'" << argv[i] << "'"
-                                   << std::endl;
-                       }
-                    ROSE_ASSERT(! "Not implemented yet");
-                  }
-             }
-
-        // TOO1 (01/22/2014):
-        // (Darwin linker) -framework dir
-          if (argv[i].compare("-framework") == 0)
-             {
-               if (SgProject::get_verbose() > 1)
-                  {
-                    std::cout << "[INFO] [Cmdline] "
-                              << "Processing -framework"
-                              << std::endl;
-                  }
-
-               if (argv.size() == (i+1))
-                  {
-                    throw std::runtime_error("Missing required argument to -framework");
-                  }
-                 else
-                  {
-                 // TODO: Save framework argument; for now just skip over the argument
-                    ++i;
-                    if (SgProject::get_verbose() > 1)
-                       {
-                         std::cout << "[INFO] [Cmdline] "
-                                   << "Processing -framework argument="
-                                   << "'" << argv[i] << "'"
-                                   << std::endl;
-                       }
-                    ROSE_ASSERT(! "Not implemented yet");
-                  }
-             }
-
        // look only for -l library files (library files)
           if ( (length > 2) && (argv[i][0] == '-') && (argv[i][1] == 'l') )
              {
@@ -1591,12 +1530,7 @@ NormalizeIncludePathOptions (std::vector<std::string>& argv)
                         << std::endl;
                 }
           }
-#ifdef _MSC_VER
-          // ensure that the path is quoted on Windows.
-          r_argv.push_back("-I\"" + arg + "\"");
-#else
           r_argv.push_back("-I" + arg + "");
-#endif
       }
       else if ((arg.size() >= 2) && (arg[0] == '-') && (arg[1] == 'I'))
       {
@@ -1609,19 +1543,8 @@ NormalizeIncludePathOptions (std::vector<std::string>& argv)
           {
               looking_for_include_path_arg = true;
               continue; // next iteration should be the path argument
-          }
-          else
-          {
-              // no normalization required for -I<path>, but ensure
-              // that the path is quoted on Windows.
-#ifdef _MSC_VER
-              if (arg[2] != '"')
-              {
-                  arg.insert(2, "\"");
-                  arg.append("\"");
-              }
-#endif
-              r_argv.push_back(arg);
+          } else {
+            r_argv.push_back(arg);
           }
       }
       else // not an include path option
@@ -3375,31 +3298,34 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
   // Allows handling of OpenMP "!$omp" directives in free form and "c$omp", *$omp and "!$omp" directives in fixed form, enables "!$" conditional
   // compilation sentinels in free form and "c$", "*$" and "!$" sentinels in fixed form and when linking arranges for the OpenMP runtime library
   // to be linked in. (Not implemented yet).
-     set_openmp(false);
-     //string ompmacro="-D_OPENMP="+ boost::to_string(OMPVERSION); // Mac OS complains this function does not exist!
-     string ompmacro="-D_OPENMP="+ StringUtility::numberToString(OMPVERSION);
-     ROSE_ASSERT (get_openmp() == false);
-     // We parse OpenMP and then stop now since Building OpenMP AST nodes is a work in progress.
-     // so the default behavior is to turn on them all
-     // TODO turn them to false when parsing-> AST creation -> translation are finished
-     ROSE_ASSERT (get_openmp_parse_only() == true);
-     ROSE_ASSERT (get_openmp_ast_only() == false);
-     ROSE_ASSERT (get_openmp_lowering() == false);
+        set_openmp(false);
+        string ompmacro =
+            "-D_OPENMP=" + StringUtility::numberToString(OMPVERSION);
+        ROSE_ASSERT(get_openmp() == false);
+        // We parse OpenMP and then stop now since Building OpenMP AST nodes is
+        // a work in progress. so the default behavior is to turn on them all
+        // TODO turn them to false when parsing-> AST creation -> translation
+        // are finished
+        ROSE_ASSERT(get_openmp_parse_only() == true);
+        ROSE_ASSERT(get_openmp_ast_only() == false);
+        ROSE_ASSERT(get_openmp_lowering() == false);
 
-     // Check if OpenMP is explicitly disabled via -fopenmp=0/false/disabled
-     bool openmp_explicitly_disabled = false;
-     for (size_t i = 0; i < argv.size(); i++) {
-         string current_arg = argv[i];
-         if (current_arg.find("-fopenmp=") == 0) {
-             string value = current_arg.substr(9);
-             std::transform(value.begin(), value.end(), value.begin(),
-                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-             if (value == "0" || value == "false" || value == "disabled") {
-                 openmp_explicitly_disabled = true;
-                 break;
-             }
-         }
-     }
+        // Check if OpenMP is explicitly disabled via -fopenmp=0/false/disabled
+        bool openmp_explicitly_disabled = false;
+        for (size_t i = 0; i < argv.size(); i++) {
+          string current_arg = argv[i];
+          if (current_arg.find("-fopenmp=") == 0) {
+            string value = current_arg.substr(9);
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char c) {
+                             return static_cast<char>(std::tolower(c));
+                           });
+            if (value == "0" || value == "false" || value == "disabled") {
+              openmp_explicitly_disabled = true;
+              break;
+            }
+          }
+        }
 
      if ( CommandlineProcessing::isOption(argv,"-rose:","(OpenMP|openmp)",true) == true
          ||CommandlineProcessing::isOption(argv,"-","(openmp|fopenmp|fopenmp-simd)",true) == true
@@ -4779,10 +4705,8 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
         {
        // Search dir for header files, after all directories specified by -I but
        // before the standard system directories.
-#ifndef _MSC_VER
-          compilerNameString.push_back("-isystem");
-          compilerNameString.push_back(std::string(ROSE_BOOST_PATH) + "/include");
-#endif
+       compilerNameString.push_back("-isystem");
+       compilerNameString.push_back(std::string(ROSE_BOOST_PATH) + "/include");
         }
 #endif
 
@@ -6189,11 +6113,7 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
        // where only a minimum configuration options are used and not all macros are defined.
 #ifdef ROSE_INSTALLATION_PATH
        string include_path(ROSE_INSTALLATION_PATH);
-#ifndef _MSC_VER
        include_path += "/include/rose";
-#else
-       include_path += "\\include\\rose";
-#endif
        compilerNameString.insert(iter_last_inc, "-I"+include_path);
 #endif
      }
@@ -6244,16 +6164,11 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
                      printf ("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& \n");
                      printf ("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& \n");
 #endif
-#ifndef _MSC_VER
-                     compilerNameString.push_back("-o");
-                     compilerNameString.push_back(currentDirectory + "/" + objectFileName);
-#else
-                     compilerNameString.push_back("/Fo" + currentDirectory + "\\" + objectFileName);
-#endif
+                 compilerNameString.push_back("-o");
+                 compilerNameString.push_back(currentDirectory + "/" +
+                                              objectFileName);
 
-                  }
-                 else
-                  {
+               } else {
 #if DEBUG_COMPILER_COMMAND_LINE
                     printf ("In buildCompilerCommandLineOptions: get_compileOnly() == true: get_multifile_support() = %s \n",get_multifile_support() ? "true" : "false");
 #endif
@@ -6341,12 +6256,9 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
                          printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
                          printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
 #endif
-#ifndef _MSC_VER
                          compilerNameString.push_back("-o");
-                         compilerNameString.push_back(currentDirectory + "/" + objectFileName);
-#else
-                         compilerNameString.push_back("/Fo" + currentDirectory + "\\" + objectFileName);
-#endif
+                         compilerNameString.push_back(currentDirectory + "/" +
+                                                      objectFileName);
 #if 0
                          printf ("Added -o %s/%s \n",currentDirectory.c_str(),objectFileName.c_str());
 #endif
@@ -6361,7 +6273,7 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
                          printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
 #endif
                        }
-                  }
+               }
              }
         }
        else
@@ -6433,12 +6345,9 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
                  printf ("###################################################### \n");
 #endif
 
-#ifndef _MSC_VER
                  compilerNameString.push_back("-o");
-                 compilerNameString.push_back(currentDirectory + "/" + objectFileName);
-#else
-                 compilerNameString.push_back("/Fo" + currentDirectory + "\\" + objectFileName);
-#endif
+                 compilerNameString.push_back(currentDirectory + "/" +
+                                              objectFileName);
              }
         }
 

@@ -113,20 +113,11 @@ class ROSE_DLL_API ChainableTypeLayoutGenerator {
     ChainableTypeLayoutGenerator* beginning;
     StructCustomizedSizes* custom_sizes;
 
-    ChainableTypeLayoutGenerator(ChainableTypeLayoutGenerator* nx, StructCustomizedSizes* sizes=NULL)
-#ifdef _MSC_VER
-      : next(NULL), beginning(NULL), custom_sizes(sizes)
-      {
-     // DQ (11/27/2009): MSVC reports a warning when "this" is used in the preinitialization list.
-                beginning = this;
-                this->setNext(nx);
-          }
-#else
-      : next(NULL), beginning(this), custom_sizes(sizes)
-      {
-                this->setNext(nx);
-          }
-#endif
+    ChainableTypeLayoutGenerator(ChainableTypeLayoutGenerator *nx,
+                                 StructCustomizedSizes *sizes = NULL)
+        : next(NULL), beginning(this), custom_sizes(sizes) {
+      this->setNext(nx);
+    }
 
   protected:
     void setNext(ChainableTypeLayoutGenerator* nx) {

@@ -41,181 +41,96 @@ namespace KeepGoing {
  std::string expectations_filename__pass;
  std::string path_prefix;
 
- std::map <SgFile* , std::string> File2StringMap; 
+ std::map<SgFile *, std::string> File2StringMap;
 
-#ifndef _MSC_VER
-struct sigaction SignalAction;
-#endif //_MSC_VER
+ struct sigaction SignalAction;
 
-bool set_signal_handler(SignalHandlerFunction handler)
-{
-#ifndef _MSC_VER
-    SignalAction.sa_flags   = 0;
-    SignalAction.sa_handler = handler;
+ bool set_signal_handler(SignalHandlerFunction handler) {
+   SignalAction.sa_flags = 0;
+   SignalAction.sa_handler = handler;
 
-    sigemptyset(&SignalAction.sa_mask);
+   sigemptyset(&SignalAction.sa_mask);
 
-    sigaction(SIGSEGV, &SignalAction, 0);
-    sigaction(SIGABRT, &SignalAction, 0);
-#else
-    ROSE_ASSERT(! "[FATAL] KeepGoing feature not supported yet on Windows");
-#endif //_MSC_VER
+   sigaction(SIGSEGV, &SignalAction, 0);
+   sigaction(SIGABRT, &SignalAction, 0);
 
-    return true;
-}
+   return true;
+ }
 
-namespace Frontend {
-  #ifndef _MSC_VER
-    sigjmp_buf jmp_target;
-  #endif //_MSC_VER
-  void SignalHandler(int sig)
-  {
-      std::cout
-          << "[WARN] "
-          << "Caught signal="
-#ifndef _MSC_VER
-          << "'" << strsignal(sig) << "' "
-#else
-          << "'" << sig << "' "
-#endif
-          << "during frontend processing"
-          << std::endl;
+ namespace Frontend {
+ sigjmp_buf jmp_target;
+ void SignalHandler(int sig) {
+   std::cout << "[WARN] "
+             << "Caught signal="
+             << "'" << strsignal(sig) << "' "
+             << "during frontend processing" << std::endl;
 
-      #ifndef _MSC_VER
-          siglongjmp(Frontend::jmp_target, -1);
-      #else
-          ROSE_ASSERT(! "[FATAL] KeepGoing feature not supported yet on Windows");
-      #endif //_MSC_VER
-  }
+   siglongjmp(Frontend::jmp_target, -1);
+ }
 
-  namespace Commandline {
-    #ifndef _MSC_VER
-      sigjmp_buf jmp_target;
-    #endif //_MSC_VER
-    void SignalHandler(int sig)
-    {
-        std::cout
-            << "[WARN] "
-            << "Caught signal="
-#ifndef _MSC_VER
-          << "'" << strsignal(sig) << "' "
-#else
-          << "'" << sig << "' "
-#endif
-            << "during commandline processing in frontend processing"
-            << std::endl;
+ namespace Commandline {
+ sigjmp_buf jmp_target;
+ void SignalHandler(int sig) {
+   std::cout << "[WARN] "
+             << "Caught signal="
+             << "'" << strsignal(sig) << "' "
+             << "during commandline processing in frontend processing"
+             << std::endl;
 
-        #ifndef _MSC_VER
-            siglongjmp(Frontend::Commandline::jmp_target, -1);
-        #else
-            ROSE_ASSERT(! "[FATAL] KeepGoing feature not supported yet on Windows");
-        #endif //_MSC_VER
-    }
-  }// ::Rose::KeepGoing::Frontend::Commandline
+   siglongjmp(Frontend::Commandline::jmp_target, -1);
+ }
+ } // namespace Commandline
 
-  namespace SecondaryPass {
-    #ifndef _MSC_VER
-      sigjmp_buf jmp_target;
-    #endif //_MSC_VER
-    void SignalHandler(int sig)
-    {
-        std::cout
-            << "[WARN] "
-            << "Caught signal="
-#ifndef _MSC_VER
-          << "'" << strsignal(sig) << "' "
-#else
-          << "'" << sig << "' "
-#endif
-            << "during secondary pass in frontend processing"
-            << std::endl;
+ namespace SecondaryPass {
+ sigjmp_buf jmp_target;
+ void SignalHandler(int sig) {
+   std::cout << "[WARN] "
+             << "Caught signal="
+             << "'" << strsignal(sig) << "' "
+             << "during secondary pass in frontend processing" << std::endl;
 
-        #ifndef _MSC_VER
-            siglongjmp(Frontend::SecondaryPass::jmp_target, -1);
-        #else
-            ROSE_ASSERT(! "[FATAL] KeepGoing feature not supported yet on Windows");
-        #endif //_MSC_VER
-    }
-  }// ::Rose::KeepGoing::Frontend::SecondaryPass
-}// ::Rose::KeepGoing::Frontend
+   siglongjmp(Frontend::SecondaryPass::jmp_target, -1);
+ }
+ } // namespace SecondaryPass
+ } // namespace Frontend
 
-namespace Midend {
-  #ifndef _MSC_VER
-    sigjmp_buf jmp_target;
-  #endif //_MSC_VER
-  void SignalHandler(int sig)
-  {
-      std::cout
-          << "[WARN] "
-          << "Caught signal="
-#ifndef _MSC_VER
-          << "'" << strsignal(sig) << "' "
-#else
-          << "'" << sig << "' "
-#endif
-          << "during midend processing"
-          << std::endl;
+ namespace Midend {
+ sigjmp_buf jmp_target;
+ void SignalHandler(int sig) {
+   std::cout << "[WARN] "
+             << "Caught signal="
+             << "'" << strsignal(sig) << "' "
+             << "during midend processing" << std::endl;
 
-      #ifndef _MSC_VER
-          siglongjmp(Midend::jmp_target, -1);
-      #else
-          ROSE_ASSERT(! "[FATAL] KeepGoing feature not supported yet on Windows");
-      #endif //_MSC_VER
-  }
-}// ::Rose::KeepGoing::Midend
+   siglongjmp(Midend::jmp_target, -1);
+ }
+ } // namespace Midend
 
-namespace Backend 
-{
-  namespace Unparser {
-    #ifndef _MSC_VER
-      sigjmp_buf jmp_target;
-    #endif //_MSC_VER
-    void SignalHandler(int sig)
-    {
-        std::cout
-            << "[WARN] "
-            << "Caught signal="
-#ifndef _MSC_VER
-          << "'" << strsignal(sig) << "' "
-#else
-          << "'" << sig << "' "
-#endif
-            << "during backend unparser processing"
-            << std::endl;
-  
-        #ifndef _MSC_VER
-            siglongjmp(Backend::Unparser::jmp_target, -1);
-        #else
-            ROSE_ASSERT(! "[FATAL] KeepGoing feature not supported yet on Windows");
-        #endif //_MSC_VER
-    }
-  }// ::Rose::KeepGoing::Backend::Unparser
-  
-  namespace Compiler {
-    #ifndef _MSC_VER
-      sigjmp_buf jmp_target;
-    #endif //_MSC_VER
-    void SignalHandler(int sig)
-    {
-        std::cout
-            << "[WARN] "
-            << "Caught signal="
-#ifndef _MSC_VER
-          << "'" << strsignal(sig) << "' "
-#else
-          << "'" << sig << "' "
-#endif
-            << "during backend compiler processing"
-            << std::endl;
-  
-        #ifndef _MSC_VER
-            siglongjmp(Backend::Compiler::jmp_target, -1);
-        #else
-            ROSE_ASSERT(! "[FATAL] KeepGoing feature not supported yet on Windows");
-        #endif //_MSC_VER
-    }
-  }// ::Rose::KeepGoing::Backend::Compiler
-}// ::Rose::KeepGoing::Backend
+ namespace Backend {
+ namespace Unparser {
+ sigjmp_buf jmp_target;
+ void SignalHandler(int sig) {
+   std::cout << "[WARN] "
+             << "Caught signal="
+             << "'" << strsignal(sig) << "' "
+             << "during backend unparser processing" << std::endl;
+
+   siglongjmp(Backend::Unparser::jmp_target, -1);
+ }
+ } // namespace Unparser
+
+ namespace Compiler {
+ sigjmp_buf jmp_target;
+ void SignalHandler(int sig) {
+   std::cout << "[WARN] "
+             << "Caught signal="
+             << "'" << strsignal(sig) << "' "
+             << "during backend compiler processing" << std::endl;
+
+   siglongjmp(Backend::Compiler::jmp_target, -1);
+ }
+ } // namespace Compiler
+ } // namespace Backend
 }// ::Rose::KeepGoing
 }// Rose
 

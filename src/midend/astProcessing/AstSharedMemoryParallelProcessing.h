@@ -23,12 +23,8 @@ struct AstSharedMemoryParallelProcessingSynchronizationInfo
     pthread_cond_t *synchronizationEvent;
     // signal sent by workers when they exit
     pthread_cond_t *threadFinishedEvent;
-# else
-#  ifdef _MSC_VER
-#   pragma message ("POSIX threads are unavailable on this platform");
-#  else
-#   warning "POSIX threads are unavailable on this platform."
-#  endif
+#else
+#warning "POSIX threads are unavailable on this platform."
 # endif
 #endif
 

@@ -150,8 +150,8 @@ bool expressionTreeEqual(SgExpression* a, SgExpression* b) {
   cerr << a->sage_class_name() << endl;
   ROSE_ASSERT (!"FIXME");
 
-  /* Avoid MSVC warning */
-     return false;
+  /* Unreachable */
+  return false;
 }
 
 //~ } // namespace legacy

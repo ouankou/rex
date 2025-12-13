@@ -8,9 +8,7 @@
 
 #include "sageGeneric.h"
 
-#ifndef _MSC_VER
 #include <err.h>
-#endif
 
 using namespace std;
 using namespace Rose;
@@ -1611,5 +1609,4 @@ GetOneFuncDeclarationPerFunction::operator()(SgNode* node )
       returnType.push_back(node);
   }
   return returnType;
-}
-
+  }

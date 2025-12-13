@@ -123,13 +123,12 @@ Grammar::setUpTypes ()
   // to specify product rules with more than one AstNodeClass or nonTerminal object
   // (under some circomstances at least).
 #define ROSETTA_BUG false
-#if !ROSE_MICROSOFT_OS
 #if ROSETTA_BUG
   // Dummy AstNodeClass so that we can add avoid the NonTerminal copy constructor (this may be a bug)
   // I think that this is not a problem now (Terminals can be reused in multiple BNF statements) though
   // except as a work around this makes little sense.
-     NEW_TERMINAL_MACRO ( UnknownMemberFunctionType , "UnknownMemberFunctionType", "UnknownMemberFunctionTag" );
-#endif
+     NEW_TERMINAL_MACRO(UnknownMemberFunctionType, "UnknownMemberFunctionType",
+                        "UnknownMemberFunctionTag");
 #endif
 
      NEW_NONTERMINAL_MACRO (MemberFunctionType,

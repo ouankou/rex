@@ -32,17 +32,8 @@
 #include "CompilerOutputParser.h"
 #include "IncludingPreprocessingInfosCollector.h"
 
-#ifdef _MSC_VER
-//#pragma message ("WARNING: wait.h header file not available in MSVC.")
-#else
-#include <sys/wait.h>
-#endif
-
-#ifdef _MSC_VER
-//#pragma message ("WARNING: libgen.h header file not available in MSVC.")
-#else
 #include <libgen.h>
-#endif
+#include <sys/wait.h>
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
@@ -68,4 +59,3 @@ namespace Frontend {
 }
 
 #endif // ROSE_SAGESUPPORT_H
-

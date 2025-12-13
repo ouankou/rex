@@ -104,15 +104,6 @@ ENDIF (NOT _CMAKE_TOOLCHAIN_LOCATION)
 #   SET(CMAKE_COMPILER_IS_GNUCXX_RUN 1)
 # ENDIF(BEOS)
 
-# Build a small source file to identify the compiler.
-IF(${CMAKE_GENERATOR} MATCHES "Visual Studio")
-  SET(CMAKE_CXX_COMPILER_ID_RUN 1)
-  SET(CMAKE_CXX_PLATFORM_ID "Windows")
-
-  # TODO: Set the compiler id.  It is probably MSVC but
-  # the user may be using an integrated Intel compiler.
-  # SET(CMAKE_CXX_COMPILER_ID "MSVC")
-ENDIF(${CMAKE_GENERATOR} MATCHES "Visual Studio")
 IF(NOT CMAKE_CXX_COMPILER_ID_RUN)
   SET(CMAKE_CXX_COMPILER_ID_RUN 1)
 
@@ -135,26 +126,21 @@ IF(NOT CMAKE_CXX_COMPILER_ID_RUN)
   IF("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     SET(CMAKE_COMPILER_IS_GNUCXX 1)
   ENDIF("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-  IF("${CMAKE_CXX_PLATFORM_ID}" MATCHES "MinGW")
-    SET(CMAKE_COMPILER_IS_MINGW 1)
-  ELSEIF("${CMAKE_CXX_PLATFORM_ID}" MATCHES "Cygwin")
-    SET(CMAKE_COMPILER_IS_CYGWIN 1)
-  ENDIF("${CMAKE_CXX_PLATFORM_ID}" MATCHES "MinGW")
 ENDIF(NOT CMAKE_CXX_COMPILER_ID_RUN)
 
 # if we have a g++ cross compiler, they have usually some prefix, like 
-# e.g. powerpc-linux-g++, arm-elf-g++ or i586-mingw32msvc-g++
+# e.g. powerpc-linux-g++ or arm-elf-g++
 # the other tools of the toolchain usually have the same prefix
 # NAME_WE cannot be used since then this test will fail for names lile
-# "arm-unknown-nto-qnx6.3.0-gcc.exe", where BASENAME would be 
+# "arm-unknown-nto-qnx6.3.0-gcc", where BASENAME would be
 # "arm-unknown-nto-qnx6" instead of the correct "arm-unknown-nto-qnx6.3.0-"
 IF (CMAKE_CROSSCOMPILING  
     AND "${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU"
     AND NOT _CMAKE_TOOLCHAIN_PREFIX)
   GET_FILENAME_COMPONENT(COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
-  IF (COMPILER_BASENAME MATCHES "^(.+-)[gc]\\+\\+(\\.exe)?$")
+  IF (COMPILER_BASENAME MATCHES "^(.+-)[gc]\\+\\+$")
     SET(_CMAKE_TOOLCHAIN_PREFIX ${CMAKE_MATCH_1})
-  ENDIF (COMPILER_BASENAME MATCHES "^(.+-)[gc]\\+\\+(\\.exe)?$")
+  ENDIF (COMPILER_BASENAME MATCHES "^(.+-)[gc]\\+\\+$")
 
   # if "llvm-" is part of the prefix, remove it, since llvm doesn't have its own binutils
   # but uses the regular ar, objcopy, etc. (instead of llvm-objcopy etc.)

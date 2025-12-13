@@ -100,19 +100,6 @@ message(STATUS "Compiler selection: Using ${_C_COMPILER_DISPLAY} and ${_CXX_COMP
 
 project(ROSE CXX C)
 
-# CMake 2.8.12 and newer has support for using @rpath in a target’s install name. This was enabled by setting the target
-# property MACOSX_RPATH. The @rpath in an install name is a more flexible and powerful mechanism than @executable_path
-# or @loader_path for locating shared libraries.
-#
-# CMake 3.0 and later prefer CMP0042 to be ON by default. Projects wanting @rpath in a target’s install name may remove
-# any setting of the INSTALL_NAME_DIR and CMAKE_INSTALL_NAME_DIR variables.
-#
-# CMP0042 was introduced in CMake version 3.0. CMake version 3.0.2 warns when the policy is not set and uses OLD
-# behavior.
-if(POLICY_CMP0042)
-  cmake_policy(SET CMP0042 NEW)
-endif()
-
 # CMP0054 causes CMake to only interpret "if()" arguments as variables or keywords when unquoted. CMake 3.1 and above no
 # longer implicitly dereference variables or interpret keywords in an if() command argument when it is a Quoted Argument
 # or a Bracket Argument. The OLD behavior for this policy is to dereference variables and interpret keywords even if
@@ -668,11 +655,11 @@ if(VERBOSE)
   # this is used when searching for libraries e.g. using the FIND_LIBRARY() command.
   message(STATUS "CMAKE_LIBRARY_PATH:                 ${CMAKE_LIBRARY_PATH}")
 
-  # the complete system name, e.g. "Linux-2.4.22", "FreeBSD-5.4-RELEASE" or "Windows 5.1"
-  message(STATUS "CMAKE_SYSTEM:                       ${CMAKE_SYSTEM}")
+	  # the complete system name (e.g. "Linux-6.x.y")
+	  message(STATUS "CMAKE_SYSTEM:                       ${CMAKE_SYSTEM}")
 
-  # the short system name, e.g. "Linux", "FreeBSD" or "Windows"
-  message(STATUS "CMAKE_SYSTEM_NAME:                  ${CMAKE_SYSTEM_NAME}")
+	  # the short system name (e.g. "Linux")
+	  message(STATUS "CMAKE_SYSTEM_NAME:                  ${CMAKE_SYSTEM_NAME}")
 
   # only the version part of CMAKE_SYSTEM
   message(STATUS "CMAKE_SYSTEM_VERSION:               ${CMAKE_SYSTEM_VERSION}")
@@ -680,32 +667,8 @@ if(VERBOSE)
   # the processor name (e.g. "Intel(R) Pentium(R) M processor 2.00GHz")
   message(STATUS "CMAKE_SYSTEM_PROCESSOR:             ${CMAKE_SYSTEM_PROCESSOR}")
 
-  # is TRUE on all UNIX-like OS's, including Apple OS X and CygWin
-  message(STATUS "UNIX:                               ${UNIX}")
-
-  # is TRUE on Windows, including CygWin
-  message(STATUS "WIN32:                              ${WIN32}")
-
-  # is TRUE on Apple OS X
-  message(STATUS "APPLE:                              ${APPLE}")
-
-  # is TRUE when using the MinGW compiler in Windows
-  message(STATUS "MINGW:                              ${MINGW}")
-
-  # is TRUE on Windows when using the CygWin version of cmake
-  message(STATUS "CYGWIN:                             ${CYGWIN}")
-
-  # is TRUE on Windows when using a Borland compiler
-  message(STATUS "BORLAND:                            ${BORLAND}")
-
-  # Microsoft compiler
-  message(STATUS "MSVC:                               ${MSVC}")
-  message(STATUS "MSVC_IDE:                           ${MSVC_IDE}")
-  message(STATUS "MSVC60:                             ${MSVC60}")
-  message(STATUS "MSVC70:                             ${MSVC70}")
-  message(STATUS "MSVC71:                             ${MSVC71}")
-  message(STATUS "MSVC80:                             ${MSVC80}")
-  message(STATUS "CMAKE_COMPILER_2005:                ${CMAKE_COMPILER_2005}")
+	  # is TRUE on UNIX-like OS's
+	  message(STATUS "UNIX:                               ${UNIX}")
 
   # set this to true if you don't want to rebuild the object files if the rules have changed,
   # but not the actual source files or headers (e.g. if you changed the some compiler switches)
@@ -881,7 +844,7 @@ if(enable-cuda)
       COMMAND cp ${ROSE_TOP_SRC_DIR}/config/preinclude-cuda.h ./include-staging/cuda_HEADERS)
 endif()
 
-# Linux-only: fail fast on non-Linux platforms to avoid maintaining macOS/Windows branches.
+# Linux-only: fail fast on non-Linux platforms.
 if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(FATAL_ERROR "This project now targets Linux only; non-Linux builds are unsupported.")
 endif()

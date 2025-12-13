@@ -1007,10 +1007,8 @@ Grammar::setUpSupport ()
      File.setDataPrototype("SgStringList","originalCommandLineArgumentList", "",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-#if !ROSE_MICROSOFT_OS
 // DQ (4/25/2009): Must fix code in sageInterface/sageBuilder.C before we can use the proper BUILD_LIST_ACCESS_FUNCTIONS macro above.
 #warning "This should be using the BUILD_LIST_ACCESS_FUNCTIONS"
-#endif
 
   // Modified ROSE to hold variables into the File object
   // DQ (8/10/2004): modified to be an int instead of a bool
@@ -1807,19 +1805,21 @@ Grammar::setUpSupport ()
      Project.setDataPrototype("SgStringList","originalCommandLineArgumentList", "",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-#if !ROSE_MICROSOFT_OS
 // DQ (4/25/2009): Must fix code in sageInterface/sageBuilder.C before we can use the proper BUILD_LIST_ACCESS_FUNCTIONS macro above.
 #warning "This should be using the BUILD_LIST_ACCESS_FUNCTIONS"
-#endif
 
-     Project.setDataPrototype("int","frontendErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("int","javacErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("int","ecjErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("int","midendErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  Project.setDataPrototype("int", "frontendErrorCode", "= 0",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
+  Project.setDataPrototype("int", "javacErrorCode", "= 0",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
+  Project.setDataPrototype("int", "ecjErrorCode", "= 0",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
+  Project.setDataPrototype("int", "midendErrorCode", "= 0",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
   // DQ (11/1/2015): Build the access functions, but don't let the set_* access function set the "p_isModified" flag.
   // Project.setDataPrototype("int","backendErrorCode", "= 0",
   //                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);

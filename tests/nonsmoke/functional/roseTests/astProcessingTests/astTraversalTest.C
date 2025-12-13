@@ -451,12 +451,10 @@ void runCombinedTests(SgProject *root, std::vector<unsigned long> *referenceResu
 void runParallelTests(SgProject *root, std::vector<unsigned long> *referenceResults)
 {
 #ifndef _REENTRANT                                      // Does user want multi-thread support? (e.g., g++ -pthread)
-# ifdef _MSC_VER
-#  pragma message("AstSharedMemoryParallelSimpleProcessing is not tested when the user has disabled parallel support")
-# else
-#  warning "AstSharedMemoryParalleSimpleProcessing is not tested when the user has disabled parallel support";
-# endif
-    std::cerr <<"AstSharedMemoryParallelSimpleProcessing is not tested when the user has disable parallel support.\n";
+#warning                                                                       \
+    "AstSharedMemoryParallelSimpleProcessing is not tested when the user has disabled parallel support"
+  std::cerr << "AstSharedMemoryParallelSimpleProcessing is not tested when the "
+               "user has disable parallel support.\n";
 #else
     struct timeval beginTime, endTime;
     size_t i;

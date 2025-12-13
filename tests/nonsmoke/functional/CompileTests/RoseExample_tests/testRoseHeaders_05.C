@@ -30,16 +30,12 @@
 #endif
 #include <inttypes.h>
 
-
-#include <semaphore.h>
 #include "fileoffsetbits.h"
 #include "rosedll.h"
-//tps (05/04/2010): Added compatibility
-#ifdef _MSC_VER
-  #define snprintf _snprintf
-#endif
+#include <semaphore.h>
 
-// George Vulov (Aug. 23, 2010): This macro is not available in OS X by default
+// George Vulov (Aug. 23, 2010): This macro is not available on some systems by
+// default
 #ifndef TEMP_FAILURE_RETRY
 #define TEMP_FAILURE_RETRY(expression) \
     ({ \
@@ -68,16 +64,6 @@
 // from the final released version of the source code).
 #define PRINT_DEVELOPER_WARNINGS 0
 // #define PRINT_DEVELOPER_WARNINGS 1
-
-// Part of debuging use of SUN 6.1 compiler
-#if defined(__WIN32__) || defined (__WIN16__)
-#error "WIN macros should not be defined (test in sage3.h)"
-#endif
-
-// Part of debuging use of SUN 6.1 compiler
-#if defined(__MSDOS__) && defined(_Windows)
-#error "MSDOS macros should not be defined"
-#endif
 
 // DQ (4/21/2009): Added test to debug use of _FILE_OFFSET_BITS macro in controling size of "struct stat"
 // #if defined(_FILE_OFFSET_BITS)
@@ -138,17 +124,14 @@
 // Clearly it might be important to have some function that modify their input parameters but a simple design would disallow it!
 #define PRINT_SIDE_EFFECT_WARNINGS false
 
-
-// DQ (10/21/2004): We require a relaxed level of internal error checking for manually generated AST fragments!
-// This is required for get through the current regression tests associated with the loop processing code which
-// does not follwo the new rules for what qualifies as a valid AST.  Time is needed for the AST Interface code 
-// to be adapted to the new rules.  Not clear how this will effect the unparser!!!
-// In the future we want to make this value "TRUE" this is a work around until then.
-#ifdef _MSC_VER
-#define STRICT_ERROR_CHECKING 0
-#else
+// DQ (10/21/2004): We require a relaxed level of internal error checking for
+// manually generated AST fragments! This is required for get through the
+// current regression tests associated with the loop processing code which does
+// not follwo the new rules for what qualifies as a valid AST.  Time is needed
+// for the AST Interface code to be adapted to the new rules.  Not clear how
+// this will effect the unparser!!! In the future we want to make this value
+// "TRUE" this is a work around until then.
 #define STRICT_ERROR_CHECKING false
-#endif
 
 // DQ (11/7/2007): Reimplementation of "fixup" support for the AST copy mechanism.
 // This version separates the fixup into three phases:
@@ -164,41 +147,26 @@
 //    3) Setup the references (SgVarRefExp objects pointers to SgVariableSymbol objects) 
 #define ALT_FIXUP_COPY 1
 
-
-// AJ (10/21/2004) : the current version of g++ 3.2.3 has the "hash_map" deprecated - this
-// deprecated hash_map is // in the global namespace and generates a warning every time
-// the file gets included. The "ext/hash_map" is the newer version of the hash_map but
-// it is no longer in the global namespace or std ( since the hash_map is not part of
-// the standard STL) but in the compiler specific namespace (__gnu_cxx). Because of this,
-// we have opted for using the newer version and explicitly using the namespace __gnu_cxx
-// See below the using namespace section. If there is a need to change this to a more 
-// standard include "hash_map", please make sure you have selected the right namespace for 
-// using the hash_map and modify the section below
-// for that.
-// Liao, 7/10/2009 
-//#if __GNUC__ > 4 ||
+// AJ (10/21/2004) : the current version of g++ 3.2.3 has the "hash_map"
+// deprecated - this deprecated hash_map is // in the global namespace and
+// generates a warning every time the file gets included. The "ext/hash_map" is
+// the newer version of the hash_map but it is no longer in the global namespace
+// or std ( since the hash_map is not part of the standard STL) but in the
+// compiler specific namespace (__gnu_cxx). Because of this, we have opted for
+// using the newer version and explicitly using the namespace __gnu_cxx See
+// below the using namespace section. If there is a need to change this to a
+// more standard include "hash_map", please make sure you have selected the
+// right namespace for using the hash_map and modify the section below for that.
+// Liao, 7/10/2009
+// #if __GNUC__ > 4 ||
 //  (__GNUC__ == 4 && (__GNUC_MINOR__ > 3 ||
 //                   (__GNUC_MINOR__ == 3 &&
 //                    __GNUC_PATCHLEVEL__ >= 0)))
-//#include <unordered_map>
-//#else   
+// #include <unordered_map>
+// #else
 
-
-
-//#endif
-#if 1
-#ifdef _MSC_VER
-// DQ (11/4/2009): MS Visual Studio version of hash_multimap
-//#include <cliext/hash_map>
-#else
-// DQ (11/4/2009): Use the GNU depricated stuff (what works in ROSE at the moment)
-// tps (01/25/2010) : deprecated - does not work in setup.h
-// CH (04/28/2010) : We don't need it anymore
-//#include <ext/hash_map>
-#endif
-#endif
-
-// tps (01/22/2010) :refactored
+// #endif
+//  tps (01/22/2010) :refactored
 #include "rosedefs.h"
 // Support for preprocessors declarations and comments
 #include "rose_attributes_list.h"
@@ -327,18 +295,14 @@ namespace Exec { namespace ELF { class ElfFileHeader; }; };
 
 // DQ (4/10/2010): Moved Dwarf and Intel Pin headers to here from rose.h.
 // DQ (11/7/2008): Added Dwarf support to ROSE AST (applies only to binary executables generated with dwarf debugging information).
-#ifndef _MSC_VER
-// tps (11/23/2009) : Commented out right now to make progress in Windows
-   #ifdef ROSE_HAVE_LIBDWARF
-      #include "dwarfSupport.h"
-   #endif
+#ifdef ROSE_HAVE_LIBDWARF
+#include "dwarfSupport.h"
+#endif
 
 // DQ (3/8/2009): Added support for Intel Pin (Dynamic binary Instrumentation)
-// tps (11/23/2009) : Commented out right now to make progress in Windows
-   #ifdef USE_ROSE_INTEL_PIN_SUPPORT
+#ifdef USE_ROSE_INTEL_PIN_SUPPORT
 // Note that pin.H (in it's header files) will define "TRUE" and "FALSE" as macros.
-      #include "IntelPinSupport.h"
-   #endif
+#include "IntelPinSupport.h"
 #endif
 
 // DQ (1/30/2013): Make this a smaller file.

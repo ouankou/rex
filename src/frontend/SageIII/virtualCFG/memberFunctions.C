@@ -938,7 +938,10 @@ unsigned int SgForAllStatement::cfgFindChildIndex(SgNode* tgt) {
     return 2;
   } else if (tgt == this->get_body()) {
     return 4;
-  } else { ROSE_ASSERT (!"Bad child in SgForAllStatement::cfgFindChildIndex()"); /* avoid MSVC warning. */ return 0; }
+  } else {
+    ROSE_ASSERT(!"Bad child in SgForAllStatement::cfgFindChildIndex()");
+    return 0;
+  }
 }
 
 unsigned int SgForAllStatement::cfgFindNextChildIndex(SgNode* n) {
@@ -4476,9 +4479,8 @@ SgCastExp::cfgFindChildIndex(SgNode* n)
    {
      if (n == this->get_operand()) return 0;
 
-         ROSE_ASSERT (!"Bad child in cfgFindChildIndex on SgCastExp");
-         // DQ (11/29/2009): Avoid MSVC warning about missing return.
-         return 0;
+     ROSE_ASSERT(!"Bad child in cfgFindChildIndex on SgCastExp");
+     return 0;
    }
 
 
@@ -5134,7 +5136,6 @@ SgDesignatedInitializer::cfgFindChildIndex(SgNode* n)
      if (n == this->get_memberInit()) return 0;
      ROSE_ASSERT (!"Bad child in cfgFindChildIndex on SgDesignatedInitializer");
 
-     // DQ (11/29/2009): Avoid MSVC warning about missing return.
      return 0;
    }
 
@@ -6120,6 +6121,4 @@ SgTypeExpression::cfgInEdges(unsigned int idx)
      return result;
    }
 
-
 #endif
-

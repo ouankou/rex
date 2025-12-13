@@ -13,11 +13,7 @@
 
 #include "wholeAST_API.h"
 
-#ifdef _MSC_VER
-#include <direct.h>     // getcwd
-#else
-#include "plugin.h"  // dlopen() is not available on Windows
-#endif
+#include "plugin.h"
 
 #include <time.h>
 
@@ -421,16 +417,11 @@ frontend (const std::vector<std::string>& argv, bool frontendConstantFolding )
   // printf ("In frontend(const std::vector<std::string>& argv): frontendConstantFolding = %s \n",frontendConstantFolding == true ? "true" : "false");
 
   // We parse plugin related command line options before calling project();
-     std::vector<std::string> argv2= argv;  // workaround const argv
-#ifdef _MSC_VER
-    if ( SgProject::get_verbose() >= 1 )
-        printf ("Note: Dynamic Loadable Plugins are not supported on Microsoft Windows yet. Skipping Rose::processPluginCommandLine () ...\n");
-#else
+     std::vector<std::string> argv2 = argv; // workaround const argv
      Rose::processPluginCommandLine(argv2);
-#endif
 
-  // Error code checks and reporting are done in SgProject constructor
-  // return new SgProject (argc,argv);
+     // Error code checks and reporting are done in SgProject constructor
+     // return new SgProject (argc,argv);
      SgProject* project = new SgProject (argv2,frontendConstantFolding);
      ROSE_ASSERT (project != NULL);
 
@@ -445,13 +436,8 @@ frontend (const std::vector<std::string>& argv, bool frontendConstantFolding )
      //Rose::AST::cmdline::graphviz.frontend.exec(project);
      //Rose::AST::cmdline::checker.frontend.exec(project);
 
-  // Connect to Ast Plugin Mechanism
-#ifdef _MSC_VER
-    if ( SgProject::get_verbose() >= 1 )
-        printf ("Note: Dynamic Loadable Plugins are not supported on Microsoft Windows yet. Skipping Rose::obtainAndExecuteActions ()\n");
-#else
+     // Connect to Ast Plugin Mechanism
      Rose::obtainAndExecuteActions(project);
-#endif
 
      SageInterface::ensureSymbolParentPointers(project);
      return project;
@@ -1397,13 +1383,8 @@ Rose::getWorkingDirectory ()
   // DQ (9/5/2006): Increase the buffer size
   // const int maxPathNameLength = 1024;
      const unsigned int maxPathNameLength = 10000;
-     char* currentDirectory = new char [maxPathNameLength+1];
-
-
-  // CH (4/7/2010): In MSVC, the header file "direct.h" contains function 'getcwd'
-
-
-         const char* getcwdResult = getcwd(currentDirectory,maxPathNameLength);
+     char *currentDirectory = new char[maxPathNameLength + 1];
+     const char *getcwdResult = getcwd(currentDirectory, maxPathNameLength);
 
      if (!getcwdResult) {
        perror("getcwd: ");

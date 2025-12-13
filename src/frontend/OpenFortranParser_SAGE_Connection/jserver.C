@@ -133,7 +133,7 @@ jserver_start(JvmT* je)
   JavaVMInitArgs jvm_args;  /* VM initialization args.  */
   // Rasmussen (6/28/2017): Bumped to latest(?), unsure why 1_4 was used
   // Rasmussen (2/13/2019): Increased JNI version to 1.8.  This should
-  // remove need to install legacy jdk version 1.6 from Apple.
+  // remove need to install legacy jdk version 1.6.
   jvm_args.version = JNI_VERSION_1_8;
   jvm_args.ignoreUnrecognized = JNI_FALSE;
 
@@ -263,5 +263,4 @@ jserver_getJavaStringClass()
 }// ::Rose::Frontend::Fortran::Ofp
 }// ::Rose::Frontend::Fortran
 }// ::Rose::Frontend
-}// ::Rose
-
+} // namespace Rose

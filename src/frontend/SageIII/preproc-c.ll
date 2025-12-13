@@ -499,13 +499,13 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
   // preproc_column_num += strlen(yytext);
   // preproc_column_num += str.length();
 
-  // DQ (12/26/2018): This is reset when we see a windows CR LF pair.
+  // DQ (12/26/2018): This is reset when we see a CRLF pair.
      if (str.length() == 2)
         {
           if (str[0] == '\r' && str[1] == '\n')
              {
 #if 0
-               printf ("Found a CR LF Windows line ending pair, reset the column number \n");
+	               printf ("Found a CRLF line ending pair, reset the column number \n");
 #endif
                preproc_column_num = 1;
              }
@@ -523,7 +523,7 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
      ROSE_token_stream_pointer->push_back(p_se);
 
 #if 0
-  // DQ (11/29/2018): Investigating form-feeds and windows line endings (and how the token-based unparsing is removing them).
+  // DQ (11/29/2018): Investigating form-feeds and CRLF line endings (and how the token-based unparsing is removing them).
      if (p_tok_elem->token_id == C_CXX_WHITESPACE)
         {
           printf ("p_se->beginning_fpi.line_num   = (%d,%d) \n",p_se->beginning_fpi.line_num,p_se->beginning_fpi.column_num);

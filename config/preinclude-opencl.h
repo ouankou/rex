@@ -6,42 +6,13 @@
 
 #if defined( __GNUC__ )
 //  #define OPENCL_ALIGNED(_x)          __attribute__ ((aligned(_x)))
-    #define OPENCL_ALIGNED(_x)
-#elif defined( _WIN32) && (_MSC_VER)
-    /* Alignment keys neutered on windows because MSVC can't swallow function arguments with alignment requirements     */
-    /* http://msdn.microsoft.com/en-us/library/373ak2y1%28VS.71%29.aspx                                                 */
-    /* #include <crtdefs.h>                                                                                             */
-    /* #define OPENCL_ALIGNED(_x)          _CRT_ALIGN(_x)                                                                   */
-    #define OPENCL_ALIGNED(_x)
+#define OPENCL_ALIGNED(_x)
 #else
    #warning  Need to implement some method to align data here
    #define  OPENCL_ALIGNED(_x)
 #endif
 
   /* Scalar Types  */
-
-#if (defined (_WIN32) && defined(_MSC_VER))
-
-typedef signed   __int8         opencl_char;
-typedef unsigned __int8         opencl_uchar;
-typedef signed   __int16        opencl_short;
-typedef unsigned __int16        opencl_ushort;
-typedef signed   __int32        opencl_int;
-typedef unsigned __int32        opencl_uint;
-typedef signed   __int64        opencl_long;
-typedef unsigned __int64        opencl_ulong;
-
-typedef float                   opencl_float;
-typedef double                  opencl_double;
-
-typedef unsigned __int16        half;
-
-typedef unsigned __int32        size_t;
-
-typedef uint32_t intptr_t;
-typedef uint32_t uintptr_t;
-
-#else
 
 #include <stdint.h>
 
@@ -58,8 +29,6 @@ typedef float           opencl_float    __attribute__((aligned(4)));
 typedef double          opencl_double   __attribute__((aligned(8)));
 
 typedef uint16_t        half     __attribute__((aligned(2)));
-
-#endif
 
 typedef uint32_t ptrdiff_t;
 
@@ -667,6 +636,4 @@ event_t async_work_group_copy (__global float16 *dst, const __local float16 *src
 void prefetch (const __global float16 *p, size_t num_elements);
 #endif /* SKIP_OPENCL_SPECIFIC_DEFINITION */
 
-  /* Miscellaneous Functions (TODO) */
-
-
+/* Miscellaneous Functions (TODO) */

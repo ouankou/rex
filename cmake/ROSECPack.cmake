@@ -35,11 +35,7 @@ set(CPACK_SOURCE_PACKAGE_FILE_NAME "ROSE")
 
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/ROSECPackOptions.cmake")
 
-if(APPLE)
-  set(CPACK_PACKAGING_INSTALL_PREFIX "/Applications/ROSE")
-else()
-  set(CPACK_PACKAGING_INSTALL_PREFIX "/")
-endif()
+set(CPACK_PACKAGING_INSTALL_PREFIX "/")
 
 # -------------------------------------------------------------------------
 # Install ROSE

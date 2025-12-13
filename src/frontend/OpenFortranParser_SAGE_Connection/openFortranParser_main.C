@@ -94,16 +94,9 @@ int openFortranParser_main(int argc, char **argv)
         std::error_code ec;
         fs::path normalized_dir = dir;
         if (require_jvm) {
-            fs::path lib_candidate = dir;
-#ifdef __APPLE__
-            lib_candidate /= "libjvm.dylib";
-#elif defined(_WIN32)
-            lib_candidate /= "jvm.dll";
-#else
-            lib_candidate /= "libjvm.so";
-#endif
-            if (!fs::exists(lib_candidate, ec))
-                return;
+          fs::path lib_candidate = dir / "libjvm.so";
+          if (!fs::exists(lib_candidate, ec))
+            return;
         }
         std::string normalized = fs::weakly_canonical(dir, ec).string();
         if (ec || normalized.empty())

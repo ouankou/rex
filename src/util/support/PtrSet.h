@@ -46,13 +46,9 @@ class PtrSetWrap
     void operator ++() { Advance(); }
     void operator ++(int) { Advance(); }
     bool ReachEnd() const { return p == impl->end(); }
-    VoidPtrSet::iterator remove_constness(VoidPtrSet::const_iterator itr) const
-    {
-    #ifdef _MSC_VER
-      return const_cast<VoidPtrSet*>(this->impl)->erase(itr, itr);
-    #else
+    VoidPtrSet::iterator
+    remove_constness(VoidPtrSet::const_iterator itr) const {
       return itr;
-    #endif
     }
     friend class PtrSetWrap<T>;
   };
@@ -96,13 +92,8 @@ class PtrSetWrap
   const_iterator find(const T* t) const { return Iterator(&impl,impl.find((void*)t)); }
   iterator begin() { return Iterator(&impl); }
   iterator end() { return Iterator(&impl, impl.end()); }
-  VoidPtrSet::iterator remove_constness(VoidPtrSet::const_iterator itr) const
-  {
-    #ifdef _MSC_VER
-    return const_cast<PtrSetWrap<T>*>(this)->impl.erase(itr, itr);
-    #else
+  VoidPtrSet::iterator remove_constness(VoidPtrSet::const_iterator itr) const {
     return itr;
-    #endif
   }
 
   bool IsMember( const T* t) const 

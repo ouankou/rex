@@ -13,17 +13,12 @@
 
 #if 1
 // file locking support
-#include <errno.h>
-#include <stdio.h>
-#include <fcntl.h>
 #include <cstring>
-#include <unistd.h>
-#ifndef _MSC_VER
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <sys/resource.h>
-#else
-#include <windows.h>            // getpagesize()
-#include "timing.h"             // gettimeofday()
-#endif
+#include <unistd.h>
 #endif
 
 #define DEBUG_CALLGRAPH 0
@@ -223,11 +218,7 @@ NewCallGraph::getLock()
           if ( counter > 0 )
                printf ("Waiting for lock! counter = %lu userTolerance = %lu \n",counter,userTolerance);
 
-#ifdef _MSC_VER
-          Sleep(1000);
-#else
           sleep(1);
-#endif
           counter++;
 
        // DQ (8/24/2008): If after waiting a short while and the lock is still there, then report the issue.
@@ -768,5 +759,4 @@ NewCallGraph::buildCallGraph (SgProject* project)
      generateCallGraphFile(project,treeTraversal);
 
      return status;
-   }
-
+}

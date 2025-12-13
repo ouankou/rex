@@ -2,11 +2,7 @@ include_directories( ${ROSE_INCLUDES} )
 
 ########### next target ###############
 
-if(WIN32)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR_DEFINED=\"${CMAKE_SOURCE_DIR}\"")
-else()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -DROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR_DEFINED=\"${CMAKE_SOURCE_DIR}\"")
-endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -DROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR_DEFINED=\"${CMAKE_SOURCE_DIR}\"")
 
 # Rasmussen (04/17/2019): Support for ATerms has been deprecated as it is no longer needed
 # and likely never fully implemented nor tested.  Files remain in the src tree but are no
@@ -73,9 +69,6 @@ add_dependencies(CxxGrammarMetaProgram roseUtil)
 
 # build ROSETTA code generator
 set(link_libs ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-if(WIN32)
-  list(APPEND link_libs shlwapi.lib)
-endif()
 target_link_libraries(CxxGrammarMetaProgram ${link_libs} roseUtil)
 
 if(enable-smaller-generated-files)
@@ -113,7 +106,6 @@ else()
     # STRING(REGEX REPLACE "\\\\" "/" META_EXE_LOC ${META_EXE_LOC} )
     # COMMAND echo  "META_EXE_LOC =  ${META_EXE_LOC} ARGS ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/"
     COMMAND CxxGrammarMetaProgram
-    # COMMAND "C:/ROSE/git-rose-tps/build/src/ROSETTA/src/Debug/CxxGrammarMetaProgram.exe "
     ARGS ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/)
 endif()
 

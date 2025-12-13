@@ -24,12 +24,6 @@ in the build tree
 #include "sage3basic.h" // Sage Interface and Builders
 #include "sageBuilder.h"
 
-#ifdef _MSC_VER
-  #undef IN
-  #undef OUT
-  #undef DUPLICATE
-#endif
-
 using namespace OmpSupport;
 using namespace SageInterface;
 

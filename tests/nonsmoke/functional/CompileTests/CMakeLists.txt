@@ -72,15 +72,10 @@ if(enable-c)
   # add_subdirectory(P++Tests)
   # add_subdirectory(A++Code)
   add_subdirectory(ExpressionTemplateExample_tests)
-  add_subdirectory(hiddenTypeAndDeclarationListTests)
-  add_subdirectory(sizeofOperation_tests)
-  
-  # MicrosoftWindows_tests are obsolete
-  # if (with-wine)
-  #   add_subdirectory(MicrosoftWindows_tests)
-  # endif()
+	  add_subdirectory(hiddenTypeAndDeclarationListTests)
+	  add_subdirectory(sizeofOperation_tests)
 
-  add_subdirectory(nameQualificationAndTypeElaboration_tests)
+	  add_subdirectory(nameQualificationAndTypeElaboration_tests)
   
   # NewEDGInterface_C_tests is obsolete
   # if(enable-new-edg-interface)
@@ -102,4 +97,3 @@ endif()
 if(enable-python)
    #add_subdirectory(Python_tests)
 endif()
-

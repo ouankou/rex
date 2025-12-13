@@ -5862,13 +5862,14 @@ NameQualificationTraversal::traverseType ( SgType* type, SgNode* nodeReferenceTo
 #endif
              }
 
-       // DQ (7/13/2011): OSX can have types that are about 2487 characters long (see test2004_35.C).
-       // This is symptematic of an error which causes the whole class to be included with the class
-       // definition.  This was fixed by calling unparseInfoPointer->set_SkipClassDefinition() above.
-       // if (typeNameString.length() > 6000)
-       // if (typeNameString.length() > 600)
-          if (typeNameString.length() > 6000)
-             {
+             // DQ (7/13/2011): Some standard library types can be very long
+             // (see test2004_35.C). This is symptematic of an error which
+             // causes the whole class to be included with the class definition.
+             // This was fixed by calling
+             // unparseInfoPointer->set_SkipClassDefinition() above. if
+             // (typeNameString.length() > 6000) if (typeNameString.length() >
+             // 600)
+             if (typeNameString.length() > 6000) {
                if (SgProject::get_verbose() > 0)
                   {
                     MLOG_WARN_C(MLOG_UNPARSER, "Warning: type names should not be this long...(unless this is boost) typeNameString.length() = %" PRIuPTR " \n",typeNameString.length());

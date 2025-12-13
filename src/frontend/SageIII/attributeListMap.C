@@ -12,9 +12,7 @@
 // Include files to get the current path
 #include <unistd.h>
 
-#ifndef _MSC_VER
 #include <sys/param.h>
-#endif
 
 #ifndef ROSE_SKIP_COMPILATION_OF_WAVE
 #if 1

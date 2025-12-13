@@ -1284,21 +1284,10 @@ SageInterface::set_name ( SgInitializedName *initializedNameNode, SgName new_nam
   // erase the name from there
      scope_stmt->get_symbol_table()->get_table()->erase(found_it);
 
-  // insert the new_name in the symbol table
-// CH (4/9/2010): Use boost::unordered instead
-//#ifdef _MSCx_VER
-#if 0
-  // DQ (11/28/2009): Unclear if this code is a problem (testing).
-
-// CH (4/7/2010): It seems that the following code can be compiled under MSVC 9.0
-//#pragma message ("WARNING: this code does not apprear to compile with MSVC.")
-//       printf ("ERROR: this code does not apprear to compile with MSVC. \n");
-//       ROSE_ASSERT(false);
-     found_it = scope_stmt->get_symbol_table()->get_table()->insert(pair<SgName,SgSymbol*> ( new_name,associated_symbol));
-#else
-     found_it = scope_stmt->get_symbol_table()->get_table()->insert(pair<SgName,SgSymbol*> ( new_name,associated_symbol));
-#endif
-  // if insertion failed
+     // insert the new_name in the symbol table
+     found_it = scope_stmt->get_symbol_table()->get_table()->insert(
+         pair<SgName, SgSymbol *>(new_name, associated_symbol));
+     // if insertion failed
      if (found_it == scope_stmt->get_symbol_table()->get_table()->end())
         {
           printf ("Warning: insertion of new symbol failed \n");
@@ -7697,19 +7686,17 @@ void SageInterface::changeContinuesToGotos(SgStatement* stmt, SgLabelStatement* 
      std::vector<SgContinueStmt*> continues = SageInterface::findContinueStmts(stmt);
      for (std::vector<SgContinueStmt*>::iterator i = continues.begin(); i != continues.end(); ++i)
         {
-          SgGotoStatement* gotoStatement = SageBuilder::buildGotoStatement(label);
+       SgGotoStatement *gotoStatement = SageBuilder::buildGotoStatement(label);
        // printf ("Building gotoStatement #1 = %p \n",gotoStatement);
-#ifndef _MSC_VER
-          //LowLevelRewrite::replace(*i, make_unit_list( gotoStatement ) );
-	  SageInterface::insertStatementListBefore(*i, make_unit_list( gotoStatement));
-          SageInterface::removeStatement(*i);
+       // LowLevelRewrite::replace(*i, make_unit_list( gotoStatement ) );
+       SageInterface::insertStatementListBefore(*i,
+                                                make_unit_list(gotoStatement));
+       SageInterface::removeStatement(*i);
+     }
 #else
-          ROSE_ABORT();
-#endif
-        }
-#else
-          printf ("Not supported in mode: ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT (LowLevelRewrite::replace() is unavailable)");
-          ROSE_ABORT();
+  printf("Not supported in mode: ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT "
+         "(LowLevelRewrite::replace() is unavailable)");
+  ROSE_ABORT();
 #endif
    }
 
@@ -9914,7 +9901,6 @@ void SageInterface::removeStatement(SgStatement* targetStmt, bool autoRelocatePr
   // translator and a number of input codes that represent a range of contexts which exercise different
   // cases in the code below.
 
-#ifndef _MSC_VER
   // This function only supports the removal of a whole statement (not an expression within a statement)
      ROSE_ASSERT (targetStmt != NULL);
 
@@ -10004,11 +9990,7 @@ void SageInterface::removeStatement(SgStatement* targetStmt, bool autoRelocatePr
           resetInternalMapsForTargetStatement(targetStmt);
 
           parentStatement->remove_statement(targetStmt);
-        }
-#else
-     printf ("Error: This is not supported within Microsoft Windows (I forget why). \n");
-     ROSE_ABORT();
-#endif
+     }
 
 #endif
    }
@@ -13572,19 +13554,15 @@ SgAssignInitializer* SageInterface::splitExpression(SgExpression* from, string n
   }
 
   bool SageInterface::isConstantTrue(SgExpression* e) {
-  switch (e->variantT()) {
-#ifdef _MSC_VER
-  // DQ (11/28/2009): This fixes a warning in MSVC (likely p_value should be a "bool" instead of an "int").
-    case V_SgBoolValExp: return (isSgBoolValExp(e)->get_value() != 0);
-#else
-    case V_SgBoolValExp: return (isSgBoolValExp(e)->get_value() == true);
-#endif
+    switch (e->variantT()) {
+    case V_SgBoolValExp:
+      return (isSgBoolValExp(e)->get_value() != 0);
     case V_SgIntVal: return isSgIntVal(e)->get_value() != 0;
     case V_SgCastExp: return isConstantTrue(isSgCastExp(e)->get_operand());
     case V_SgNotOp: return isConstantFalse(isSgNotOp(e)->get_operand());
     case V_SgAddressOfOp: return true;
     default: return false;
-  }
+    }
   }
 
   bool SageInterface::isConstantFalse(SgExpression* e) {
@@ -21779,9 +21757,6 @@ bool SageInterface::isLambdaFunction (SgFunctionDeclaration* func)
 bool SageInterface::isLambdaCapturedVariable (SgVarRefExp* varRef)
 {
   bool rt = false;
-#ifdef  _MSC_VER
-  #pragma message ("WARNING: MSVC does not handle isLambdaCapturedVariable() properly.")
-#else
   ROSE_ASSERT (varRef!= NULL);
   SgNode* parent = varRef->get_parent();
   if (SgArrowExp *p = isSgArrowExp(parent))
@@ -21802,7 +21777,6 @@ bool SageInterface::isLambdaCapturedVariable (SgVarRefExp* varRef)
       }
     }
   }
-#endif
   return rt;
 }
 

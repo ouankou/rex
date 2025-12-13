@@ -390,26 +390,23 @@ SgIncidenceDirectedGraph::addDirectedEdge( SgDirectedGraphEdge* edge )
           int node_index_first  = edge->get_node_A()->get_index();
           int node_index_second = edge->get_node_B()->get_index();
 
-       // Note that this significantly slows down the performance of the new graph support (appears to be about a factor of 10X).
-       // Is there a better (faster) way to build the p_node_index_pair_to_edge_multimap? Yes, increase the size of the hash table (DONE).
-#if 1
+          // Note that this significantly slows down the performance of the new
+          // graph support (appears to be about a factor of 10X). Is there a
+          // better (faster) way to build the
+          // p_node_index_pair_to_edge_multimap? Yes, increase the size of the
+          // hash table (DONE).
+          p_node_index_pair_to_edge_multimap.insert(
+              std::pair<std::pair<int, int>, SgGraphEdge *>(
+                  std::pair<int, int>(node_index_first, node_index_second),
+                  edge));
 
-// CH (4/9/2010): Use boost::unordered instead 
-//#ifndef _MSCx_VER
-#if 1
-                  p_node_index_pair_to_edge_multimap.insert(std::pair<std::pair<int,int>,SgGraphEdge*>(std::pair<int,int>(node_index_first,node_index_second),edge));
-#else
-// tps (12/09/09) Does not work under Windows right now.
-//#pragma message ("rose_graph_support.C: multimap does currently not work.")
-#endif
-                  //     p_node_index_pair_to_edge_multimap.insert(std::pair<std::pair<int,int>,SgGraphEdge*>(std::pair<int,int>(node_index_second,node_index_first),redge));
-#endif
-                  
-       // Initialize the node index --> SgGraphEdge* multimap.
-       // printf ("In SgGraph::addEdge(): Insert edge %p = (%d,%d) on node %d (p_node_index_to_edge_multimap size = %" PRIuPTR ") \n",edge,node_index_first,node_index_second,node_index_first,p_node_index_to_edge_multimap.size());
+          // Initialize the node index --> SgGraphEdge* multimap.
+          // printf ("In SgGraph::addEdge(): Insert edge %p = (%d,%d) on node %d
+          // (p_node_index_to_edge_multimap size = %" PRIuPTR ")
+          // \n",edge,node_index_first,node_index_second,node_index_first,p_node_index_to_edge_multimap.size());
 
-       // p_node_index_to_edge_multimap.insert(std::pair<int,SgGraphEdge*>(node_index_first,edge));
-       //   p_node_index_to_edge_multimap.insert(rose_graph_integer_edge_hash_multimap::value_type(node_index_first,edge));
+          // p_node_index_to_edge_multimap.insert(std::pair<int,SgGraphEdge*>(node_index_first,edge));
+          //   p_node_index_to_edge_multimap.insert(rose_graph_integer_edge_hash_multimap::value_type(node_index_first,edge));
           get_node_index_to_edge_multimap_edgesOut().insert(pair<int,SgDirectedGraphEdge*>(node_index_first,edge));
           get_node_index_to_edge_multimap_edgesIn().insert(pair<int,SgDirectedGraphEdge*>(node_index_second,edge));
 
@@ -586,15 +583,6 @@ SgGraph::resize_hash_maps( size_t numberOfNodes, size_t numberOfEdges )
   // Note that the next larger prime number will be used by the 
   // hash_map and hash_multimap for the internal table size.
 
-// CH (4/9/2010): Use boost::unordered instead 
-//#ifdef _MSCx_VER
-#if 0
-//#pragma message ("WARNING: std::hash_map::resize() function not available in MSVC.")
-         printf ("std::hash_map::resize() function not available in MSVC. \n");
-         ROSE_ABORT();
-#else
-     // CH (4/9/2010): boost::unordered_map uses 'rehash' instead of 'resize'  
-#if 1    
      p_node_index_to_node_map.rehash(numberOfNodes);
      p_edge_index_to_edge_map.rehash(numberOfEdges);
 
@@ -603,20 +591,7 @@ SgGraph::resize_hash_maps( size_t numberOfNodes, size_t numberOfEdges )
 
      p_string_to_node_index_multimap.rehash(numberOfNodes);
      p_string_to_edge_index_multimap.rehash(numberOfEdges);
-
-#else
-     p_node_index_to_node_map.resize(numberOfNodes);
-     p_edge_index_to_edge_map.resize(numberOfEdges);
-
-     p_node_index_to_edge_multimap.resize(numberOfEdges);
-     p_node_index_pair_to_edge_multimap.resize(numberOfEdges);
-
-     p_string_to_node_index_multimap.resize(numberOfNodes);
-     p_string_to_edge_index_multimap.resize(numberOfEdges);
-#endif
-
-#endif
-// #endif
+     // #endif
    }
 
 size_t
@@ -753,5 +728,4 @@ SgIncidenceDirectedGraph::computeEdgeSetOut( int node_index )
         }
 
      return returnSet;
-   }
-
+}

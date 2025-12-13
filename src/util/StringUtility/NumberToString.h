@@ -28,10 +28,10 @@ ROSE_UTIL_API std::string numberToString(unsigned long);
 ROSE_UTIL_API std::string numberToString(int);
 ROSE_UTIL_API std::string numberToString(unsigned int);
 
-#if !defined(_MSC_VER) &&                                                                                                      \
-    defined(BACKEND_CXX_IS_GNU_COMPILER) &&                                                                                    \
-    ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 && BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER > 6) ||                      \
-     BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4) &&                                                                         \
+#if defined(BACKEND_CXX_IS_GNU_COMPILER) &&                                    \
+    ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 &&                        \
+      BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER > 6) ||                        \
+     BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4) &&                         \
     __WORDSIZE == 64
 ROSE_UTIL_API std::string numberToString(__int128 x);
 ROSE_UTIL_API std::string numberToString(unsigned __int128 x);

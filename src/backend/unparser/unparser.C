@@ -17,12 +17,8 @@
 // Interestingly it must be at the top of the list of include files.
 #include "rose_config.h"
 
-#include <string.h>
 #include <filesystem>
-#if _MSC_VER
-#include <direct.h>
-#include <process.h>
-#endif
+#include <string.h>
 
 // DQ (8/1/2018): This is the suppport for unparsing of header files.
 #include "IncludedFilesUnparser.h"
@@ -1420,13 +1416,6 @@ Unparser::unparseFileUsingTokenStream ( SgSourceFile* file )
           std::string s   = (*i)->p_tok_elem->token_lexeme;
           int lines       = getNumberOfLines(s);
           int line_length = getColumnNumberOfEndOfString(s);
-#if 0
-       // DQ (12/26/2018): Added detection for windows line endings.
-          if (s.length() == 2 && s[0] == '\r' && s[1] == '\n')
-             {
-               printf ("   --- Found a Windows CR LF pair \n");
-             }
-#endif
 #if 0
           printf ("   --- lines = %d \n",lines);
           printf ("   --- line_length = %d \n",line_length);
@@ -2970,10 +2959,8 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
             std::filesystem::create_directories(outFolder);
             ROSE_ASSERT(std::filesystem::exists(outFolder));
             outputFilename = outFolder + file -> get_sourceFileNameWithoutPath();
-            // Convert Windows-style paths to POSIX-style.
-            #ifdef _MSC_VER
+            // Normalize path separators to POSIX-style.
             boost::replace_all(outputFilename, "\\", "/");
-            #endif
 #if 0
             printf ("In unparseFile(): generated Java outputFilename = %s \n",outputFilename.c_str());
 #endif
@@ -3299,20 +3286,18 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
                  // Pei-Hung (8/6/2014) appending PID as alternative name to avoid collision
                       else
                        {
-                         if (project->get_appendPID() == true)
-                            {
-                              ostringstream os;
-                              #ifdef _MSC_VER
-                              os << _getpid();
-                              #else
-                              os << getpid();
-                              #endif
-                              unsigned dot = outputFilename.find_last_of(".");
-                              outputFilename = outputFilename.substr(0,dot) + "_" + os.str() + outputFilename.substr(dot);
-                              if ( SgProject::get_verbose() > 0 )
-                                   printf ("Generate test output name with PID = %s \n",outputFilename.c_str());
-
-                            }
+                         if (project->get_appendPID() == true) {
+                           ostringstream os;
+                           os << getpid();
+                           unsigned dot = outputFilename.find_last_of(".");
+                           outputFilename = outputFilename.substr(0, dot) +
+                                            "_" + os.str() +
+                                            outputFilename.substr(dot);
+                           if (SgProject::get_verbose() > 0)
+                             printf(
+                                 "Generate test output name with PID = %s \n",
+                                 outputFilename.c_str());
+                         }
                        }
                   }
 
@@ -6064,14 +6049,10 @@ void unparseFileList ( SgFileList* fileList, UnparseFormatHelp *unparseFormatHel
                printf("Unparsing file = %p = %s \n",file,file->class_name().c_str());
              }
 
-#ifndef _MSC_VER
-          if (KEEP_GOING_CAUGHT_BACKEND_UNPARSER_SIGNAL)
-             {
-               std::cout
-                   << "[WARN] "
-                   << "Configured to keep going after catching a "
-                   << "signal in Unparser::unparseFile()"
-                   << std::endl;
+             if (KEEP_GOING_CAUGHT_BACKEND_UNPARSER_SIGNAL) {
+               std::cout << "[WARN] "
+                         << "Configured to keep going after catching a "
+                         << "signal in Unparser::unparseFile()" << std::endl;
 
                if (file != NULL)
                   {
@@ -6086,16 +6067,9 @@ void unparseFileList ( SgFileList* fileList, UnparseFormatHelp *unparseFormatHel
                         << std::endl;
                     exit(1);
                   }
-             }
-#else
-          if (false)
-             {
-             }
-#endif
-            else
-             {
-               if (!isSgSourceFile(file) || isSgSourceFile(file) -> get_frontendErrorCode() == 0)
-                  {
+             } else {
+               if (!isSgSourceFile(file) ||
+                   isSgSourceFile(file)->get_frontendErrorCode() == 0) {
                  // #if 0
                  // DQ (4/9/2020): Added header file unparsing feature specific debug level.
                     if (SgProject::get_unparseHeaderFilesDebug() >= 3)
@@ -6108,18 +6082,13 @@ void unparseFileList ( SgFileList* fileList, UnparseFormatHelp *unparseFormatHel
                     ROSE_ABORT();
 #endif
                     unparseFile(file, unparseFormatHelp, unparseDelegate);
-                  }
-                 else
-                  {
-                    if (SgProject::get_verbose() > 1)
-                       {
-                         std::cout
-                             << "[WARN] "
+               } else {
+                 if (SgProject::get_verbose() > 1) {
+                   std::cout << "[WARN] "
                              << "Skipping unparsing of file "
-                             << file->getFileName()
-                             << std::endl;
-                       }
-                  }
+                             << file->getFileName() << std::endl;
+                 }
+               }
              }
        // }//file
 
@@ -6147,5 +6116,4 @@ void unparseFileList ( SgFileList* fileList, UnparseFormatHelp *unparseFormatHel
 #if 0
      printf ("Leaving unparseFileList(): fileList->get_listOfFiles().size() = %zu \n",fileList->get_listOfFiles().size());
 #endif
-   }
-
+}

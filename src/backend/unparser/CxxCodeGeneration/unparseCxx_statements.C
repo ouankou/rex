@@ -11233,8 +11233,9 @@ Unparse_ExprStmt::unparseAsmStmt(SgStatement* stmt, SgUnparse_Info& info)
         }
 #endif
 
-  // Output the "asm" keyword.
-  // DQ (8/31/2013): We have to output either "__asm__" or "asm" (for MSVisual C++ I think we might need "__asm").
+        // Output the "asm" keyword.
+        // DQ (8/31/2013): We have to output either "__asm__" or "asm" (some
+        // toolchains may require "__asm__").
 #if 0
      string backEndCompiler = BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH;
      if (backEndCompiler == "g++" || backEndCompiler == "gcc" || backEndCompiler == "mpicc" || backEndCompiler == "mpicxx")
@@ -11248,17 +11249,22 @@ Unparse_ExprStmt::unparseAsmStmt(SgStatement* stmt, SgUnparse_Info& info)
         }
 #else
 
-// DQ (2/25/2014): Note that the 4.2.4 compiler will define both BACKEND_C_COMPILER_SUPPORTS_ASM and BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM
-// So we need to use another macro BACKEND_C_COMPILER_SUPPORTS_LONG_STRING_ASM that will work uniformally on both 4.4.7 and 4.2.4 versions of 
-// the GNU compiler.  This is truely strange behavior.
-// DQ (2/25/2014): This is the new support for use of "asm" or "__asm__" (which should maybe be refactored).
-// #if (defined(BACKEND_C_COMPILER_SUPPORTS_ASM) && defined(BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM))
-//    #error "Error: BACKEND_C_COMPILER_SUPPORTS_ASM and BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM are both defined!"
+// DQ (2/25/2014): Note that the 4.2.4 compiler will define both
+// BACKEND_C_COMPILER_SUPPORTS_ASM and
+// BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM So we need to use another macro
+// BACKEND_C_COMPILER_SUPPORTS_LONG_STRING_ASM that will work uniformally on
+// both 4.4.7 and 4.2.4 versions of the GNU compiler.  This is truely strange
+// behavior. DQ (2/25/2014): This is the new support for use of "asm" or
+// "__asm__" (which should maybe be refactored). #if
+// (defined(BACKEND_C_COMPILER_SUPPORTS_ASM) &&
+// defined(BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM))
+//    #error "Error: BACKEND_C_COMPILER_SUPPORTS_ASM and
+//    BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM are both defined!"
 // #endif
-#ifndef _MSC_VER
 #if (defined(BACKEND_C_COMPILER_SUPPORTS_LONG_STRING_ASM) && defined(BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM))
-// DQ (2/26/2014): Allow the CMake tests to pass for now.
-   #warning "Warning: BACKEND_C_COMPILER_SUPPORTS_LONG_STRING_ASM and BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM are both defined!"
+  // DQ (2/26/2014): Allow the CMake tests to pass for now.
+#warning                                                                       \
+    "Warning: BACKEND_C_COMPILER_SUPPORTS_LONG_STRING_ASM and BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM are both defined!"
 #endif
 
 // #ifdef BACKEND_C_COMPILER_SUPPORTS_ASM
@@ -11274,11 +11280,6 @@ Unparse_ExprStmt::unparseAsmStmt(SgStatement* stmt, SgUnparse_Info& info)
      curprint("__asm__ ");
 #endif
 #endif
-#else
-  // DQ (2/26/2014): I assume that MSVC would use the C standard representation.
-     curprint("asm ");
-#endif
-
 #endif
 
      curprint("(");

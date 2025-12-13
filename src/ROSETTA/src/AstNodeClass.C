@@ -1065,22 +1065,22 @@ AstNodeClass::excludeSubTreeFunctionSource
           *codeString);
    }
 
-// test of work around for Insure++ (removing the const declaration to avoid generation of a copy)
-#if !ROSE_MICROSOFT_OS
+   // test of work around for Insure++ (removing the const declaration to avoid
+   // generation of a copy)
 #if INSURE_BUG
-void AstNodeClass::addElementToList ( vector<GrammarString *> & targetList, GrammarString & element )
+   void AstNodeClass::addElementToList(vector<GrammarString *> &targetList,
+                                       GrammarString &element)
 #else
-void AstNodeClass::addElementToList ( vector<GrammarString *> & targetList, const GrammarString & element )
-#endif
-#else
-void AstNodeClass::addElementToList ( vector<GrammarString *> & targetList, const GrammarString & element )
+   void AstNodeClass::addElementToList(vector<GrammarString *> &targetList,
+                                       const GrammarString &element)
 #endif
    {
-  // This function abstracts the details of adding GrammarString objects to the lists
-  // that are stored internally.  It allows us to implement tests to check for redundencies in 
-  // the list of elements (for now it allows us to test the != operator which will be used heavily later)
+     // This function abstracts the details of adding GrammarString objects to
+     // the lists that are stored internally.  It allows us to implement tests
+     // to check for redundencies in the list of elements (for now it allows us
+     // to test the != operator which will be used heavily later)
 
-  // printf ("Inside of AstNodeClass::addElementToList \n");
+     // printf ("Inside of AstNodeClass::addElementToList \n");
 
      int i = 0;
      bool duplicateEntryFound = false;
