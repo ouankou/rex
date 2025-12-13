@@ -8163,6 +8163,60 @@ SageBuilder::buildVarRefExp(const std::string& varName, SgScopeStatement* scope)
 }
 
 SgVarRefExp *
+SageBuilder::buildDanglingVarRefExp(const SgName &name,
+                                    SgScopeStatement *scope /*=NULL*/) {
+  if (scope == NULL)
+    scope = SageBuilder::topScopeStack();
+
+  SgType *unknownType = SgTypeUnknown::createType();
+
+  SgVariableDeclaration *placeholderDecl =
+      new SgVariableDeclaration(name, unknownType, NULL);
+  placeholderDecl->set_firstNondefiningDeclaration(placeholderDecl);
+  placeholderDecl->set_definingDeclaration(placeholderDecl);
+  if (scope != NULL) {
+    placeholderDecl->set_scope(scope);
+    placeholderDecl->set_parent(scope);
+  }
+  placeholderDecl->set_file_info(
+      Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode());
+  if (Sg_File_Info *fi = placeholderDecl->get_file_info()) {
+    fi->setCompilerGenerated();
+    fi->unsetOutputInCodeGeneration();
+  }
+
+  ROSE_ASSERT(!placeholderDecl->get_variables().empty());
+  SgInitializedName *placeholderVar = placeholderDecl->get_variables().front();
+  placeholderVar->set_scope(scope);
+  placeholderVar->set_parent(placeholderDecl);
+  placeholderVar->set_file_info(
+      Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode());
+  if (Sg_File_Info *fi = placeholderVar->get_file_info()) {
+    fi->setCompilerGenerated();
+    fi->unsetOutputInCodeGeneration();
+  }
+  if (SgVariableDefinition *def =
+          isSgVariableDefinition(placeholderVar->get_declptr())) {
+    def->set_parent(placeholderVar);
+    def->set_vardefn(placeholderVar);
+    if (def->get_file_info() == NULL) {
+      def->set_file_info(
+          Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode());
+    }
+    if (Sg_File_Info *fi = def->get_file_info()) {
+      fi->setCompilerGenerated();
+      fi->unsetOutputInCodeGeneration();
+    }
+  }
+
+  SgVariableSymbol *placeholderSymbol = new SgVariableSymbol(placeholderVar);
+  placeholderSymbol->set_parent(scope != NULL
+                                    ? static_cast<SgNode *>(scope)
+                                    : static_cast<SgNode *>(placeholderVar));
+  return SageBuilder::buildVarRefExp(placeholderSymbol);
+}
+
+SgVarRefExp *
 SageBuilder::buildVarRefExp(const SgName& name, SgScopeStatement* scope/*=NULL*/)
    {
 #if 0
@@ -8202,23 +8256,9 @@ SageBuilder::buildVarRefExp(const SgName& name, SgScopeStatement* scope/*=NULL*/
           printf ("What type of symbol is this: symbol = %p = %s \n",symbol,symbol->class_name().c_str());
 #endif
           varSymbol = isSgVariableSymbol(symbol);
-        }
-       else
-        {
-       // if not found: put fake init name and symbol here and
-       // waiting for a postProcessing phase to clean it up
-       // two features: no scope and unknown type for initializedName
-          SgInitializedName * name1 = buildInitializedName(name,SgTypeUnknown::createType());
-          name1->set_scope(scope);  // buildInitializedName() does not set scope for various reasons
-          name1->set_parent(scope);
-          varSymbol = new SgVariableSymbol(name1);
-          varSymbol->set_parent(scope);
-
-       // DQ (4/2/2012): Output a warning:
-#if 0
-          printf ("WARNING: In SageBuilder::buildVarRefExp(): symbol not found so we built a SgVariableSymbol = %p (but not put into symbol table) \n",varSymbol);
-#endif
-        }
+     } else {
+       return buildDanglingVarRefExp(name, scope);
+     }
 
      if (varSymbol == NULL)
         {

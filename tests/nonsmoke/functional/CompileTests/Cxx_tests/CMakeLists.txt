@@ -82,3 +82,14 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue89_alias.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_issue89_type_alias_template_args PROPERTIES LABELS Cxx_tests)
+
+add_test(
+  NAME Cxx_tests_rex_test2025_issue90_array_dim_template_param
+  COMMAND sh -c "\"$@\" && grep \"data\\[N\\]\" rose_rex_test2025_issue90_array_dim.cpp | grep -v \"//\" && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_issue90_array_dim.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue90_array_dim.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2025_issue90_array_dim_template_param PROPERTIES LABELS Cxx_tests)

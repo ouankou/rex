@@ -732,6 +732,17 @@ It is possible to build a reference to a variable with known name before the var
 */
 ROSE_DLL_API SgVarRefExp * buildVarRefExp(const SgName& name, SgScopeStatement* scope=NULL);
 
+//! Build a variable reference expression without symbol-table lookup.
+/*!
+ * This creates a compiler-generated placeholder variable declaration (not
+ * attached to any statement list and suppressed from code generation) and
+ * returns a SgVarRefExp referring to it. This is useful for
+ * template-dependent/unresolved names where binding to an existing symbol by
+ * name would be incorrect.
+ */
+ROSE_DLL_API SgVarRefExp *
+buildDanglingVarRefExp(const SgName &name, SgScopeStatement *scope = NULL);
+
 //! Build SgVarRefExp based on a variable's name. It will lookup symbol table internally starting from scope. A variable is unique so type can be inferred.
 ROSE_DLL_API SgVarRefExp * buildVarRefExp(const std::string& varName, SgScopeStatement* scope=NULL);
 

@@ -15366,7 +15366,43 @@ void SageInterface::clearUnusedVariableSymbols(SgNode* root /*= NULL */)
             std::cout << "Symbol " << symbolToDelete->get_name().str() << ' ' << symbolToDelete <<
                ' ' << symbolToDelete->get_declaration() <<  " is deleted." << std::endl;
 #endif
-            delete symbolToDelete->get_declaration();
+          SgInitializedName *initNameToDelete =
+              symbolToDelete->get_declaration();
+
+          // When the placeholder is built via
+          // SageBuilder::buildDanglingVarRefExp, it may include a
+          // compiler-generated SgVariableDeclaration and its
+          // SgVariableDefinition. Deleting only the SgInitializedName would
+          // leave behind dangling statements in the memory pool that fail AST
+          // consistency checks (e.g., SgStatement::get_scope()).
+          if (initNameToDelete != NULL) {
+            if (SgVariableDefinition *varDef =
+                    isSgVariableDefinition(initNameToDelete->get_declptr())) {
+              delete varDef;
+              initNameToDelete->set_declptr(NULL);
+            }
+
+            SgVariableDeclaration *parentVarDecl =
+                isSgVariableDeclaration(initNameToDelete->get_parent());
+            if (parentVarDecl != NULL) {
+              SgInitializedNamePtrList &vars = parentVarDecl->get_variables();
+              vars.erase(
+                  std::remove(vars.begin(), vars.end(), initNameToDelete),
+                  vars.end());
+
+              // Delete the placeholder declaration if it was created only to
+              // anchor a dangling reference.
+              if (vars.empty() && parentVarDecl->get_file_info() != NULL &&
+                  parentVarDecl->get_file_info()->isCompilerGenerated() &&
+                  parentVarDecl->get_file_info()->isOutputInCodeGeneration() ==
+                      false) {
+                delete parentVarDecl;
+              }
+            }
+
+            delete initNameToDelete;
+          }
+
             delete symbolToDelete;
         }
     }
