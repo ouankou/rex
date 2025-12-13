@@ -1227,14 +1227,7 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
     SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl);
 
     if (sg_decl != NULL) {
-      // Ensure firstNondefiningDeclaration is set before calling get_type()
-      // which internally calls createType() and asserts on this pointer
-      if (sg_decl->get_firstNondefiningDeclaration() == NULL) {
-        // For template specializations and forward declarations without
-        // separate non-defining decl use the declaration itself as the first
-        // non-defining declaration
-        sg_decl->set_firstNondefiningDeclaration(sg_decl);
-      }
+      ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
       *node = sg_decl->get_type();
     } else {
       std::string qualified_name = record_decl->getQualifiedNameAsString();

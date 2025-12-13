@@ -24,6 +24,11 @@ foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
 endforeach()
 
+# Issue 91: Declaration chains must not emit "firstNondefiningDeclaration == NULL"
+set_tests_properties(Cxx_tests_rex_test2025_issue91_decl_chain PROPERTIES
+  FAIL_REGULAR_EXPRESSION "firstNondefiningDeclaration == NULL"
+)
+
 # Verify explicit template arguments are preserved in calls
 add_test(
   NAME Cxx_tests_rex_test2025_template_call_explicit_args

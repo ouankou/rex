@@ -183,7 +183,48 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
   }
   case clang::Decl::CXXConstructor:
   case clang::Decl::CXXDestructor:
-  case clang::Decl::CXXMethod:
+  case clang::Decl::CXXMethod: {
+    // Member functions live in the scope of their parent class definition, not
+    // the current scope stack. Resolve them via the translated parent record so
+    // that we retrieve a SgMemberFunctionSymbol when available.
+    auto *method_decl = llvm::cast<clang::CXXMethodDecl>(decl);
+    clang::CXXRecordDecl *parent_decl = method_decl->getParent();
+
+    SgNode *parent_node = NULL;
+    if (parent_decl != NULL) {
+      std::map<clang::Decl *, SgNode *>::iterator it_decl =
+          p_decl_translation_map.find(parent_decl);
+      if (it_decl != p_decl_translation_map.end()) {
+        parent_node = it_decl->second;
+      } else {
+        if (p_symbol_lookup_in_progress.find(parent_decl) ==
+            p_symbol_lookup_in_progress.end()) {
+          parent_node = Traverse(parent_decl);
+        }
+      }
+    }
+
+    SgClassDeclaration *sg_class_decl = isSgClassDeclaration(parent_node);
+    if (sg_class_decl == NULL) {
+      break;
+    }
+    if (sg_class_decl->get_definingDeclaration() == NULL) {
+      break;
+    }
+
+    scope = isSgClassDeclaration(sg_class_decl->get_definingDeclaration())
+                ->get_definition();
+    if (scope == NULL) {
+      break;
+    }
+
+    SgType *tmp_type = buildTypeFromQualifiedType(method_decl->getType());
+    SgFunctionType *type = isSgFunctionType(tmp_type);
+    if (type != NULL) {
+      sym = scope->lookup_function_symbol(name, type);
+    }
+    break;
+  }
   case clang::Decl::Function: {
     SgType *tmp_type =
         buildTypeFromQualifiedType(((clang::FunctionDecl *)decl)->getType());
@@ -964,15 +1005,11 @@ SgNode *ClangToSageTranslator::Traverse(clang::Decl *decl) {
     break;
   case clang::Decl::CXXRecord:
     ret_status = VisitCXXRecordDecl((clang::CXXRecordDecl *)decl, &result);
-    if (result) {
-      SgDeclarationStatement *d = isSgDeclarationStatement(result);
-      if (d && d->get_firstNondefiningDeclaration() == NULL) {
-        fprintf(stderr,
-                "DEBUG: Traverse VisitCXXRecordDecl returned decl %p "
-                "with NULL firstNondef! name=%s. Fixing..\n",
-                d, ((clang::NamedDecl *)decl)->getNameAsString().c_str());
-        d->set_firstNondefiningDeclaration(d);
-      }
+    if (SgClassDeclaration *cd = isSgClassDeclaration(result)) {
+      SgDeclarationStatement *firstNondef =
+          cd->get_firstNondefiningDeclaration();
+      ROSE_ASSERT(firstNondef != NULL);
+      ROSE_ASSERT(firstNondef->get_firstNondefiningDeclaration() != NULL);
     }
     ROSE_ASSERT(ret_status == false || result != NULL);
     break;
@@ -1861,16 +1898,8 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
   // crash (ua test).
   SgDeclarationStatement *firstNondef =
       template_decl->get_firstNondefiningDeclaration();
-  if (firstNondef == NULL) {
-    template_decl->set_firstNondefiningDeclaration(template_decl);
-  } else {
-    if (firstNondef->get_firstNondefiningDeclaration() == NULL) {
-      // std::cerr << "DEBUG: VisitClassTemplateDecl fixing transitive
-      // firstNondef for " << template_decl->get_name().getString() <<
-      // std::endl;
-      firstNondef->set_firstNondefiningDeclaration(firstNondef);
-    }
-  }
+  ROSE_ASSERT(firstNondef != NULL);
+  firstNondef->set_firstNondefiningDeclaration(firstNondef);
 
   // Attach template parameter back-links
   SgTemplateParameterPtrList &decl_params =
@@ -2163,9 +2192,11 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
 #endif
     *node = it->second;
     if (SgClassDeclaration *cd = isSgClassDeclaration(*node)) {
-      if (cd->get_firstNondefiningDeclaration() == NULL) {
-        cd->set_firstNondefiningDeclaration(cd);
-      }
+      SgDeclarationStatement *firstNondef =
+          cd->get_firstNondefiningDeclaration();
+      ROSE_ASSERT(firstNondef != NULL);
+      ROSE_ASSERT(isSgClassDeclaration(firstNondef) != NULL);
+      ROSE_ASSERT(firstNondef->get_firstNondefiningDeclaration() != NULL);
     }
     return true; // Already processed
   }
@@ -2189,10 +2220,11 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     sg_prev_class_decl =
         isSgClassDeclaration(sg_prev_class_sym->get_declaration());
 
-    if (sg_prev_class_decl != NULL &&
-        sg_prev_class_decl->get_firstNondefiningDeclaration() == NULL) {
-      // Fix it by assuming it is its own first non-defining declaration
-      sg_prev_class_decl->set_firstNondefiningDeclaration(sg_prev_class_decl);
+    if (sg_prev_class_decl != NULL) {
+      ROSE_ASSERT(sg_prev_class_decl->get_firstNondefiningDeclaration() !=
+                  NULL);
+      ROSE_ASSERT(sg_prev_class_decl->get_firstNondefiningDeclaration()
+                      ->get_firstNondefiningDeclaration() != NULL);
     }
   }
 
@@ -2223,16 +2255,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     // first use Use the defining declaration as the first declaration
     sg_first_class_decl = isSgClassDeclaration(
         sg_def_class_decl->get_firstNondefiningDeclaration());
-    if (sg_first_class_decl == NULL) {
-      // Still NULL - this means the defining decl doesn't have firstNondefining
-      // set For template specializations, this is acceptable (they may not have
-      // separate declarations) Just use the definition as the first declaration
-      std::cerr << "Warning: Class definition without first non-defining "
-                   "declaration: "
-                << record_decl->getNameAsString()
-                << " (using definition as first declaration)" << std::endl;
-      sg_first_class_decl = sg_def_class_decl;
-    }
+    ROSE_ASSERT(sg_first_class_decl != NULL);
   }
 
   // ROSE_ASSERT(sg_first_class_decl != NULL || sg_def_class_decl == NULL);
@@ -2398,13 +2421,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     } else {
       sg_def_class_decl->set_firstNondefiningDeclaration(sg_def_class_decl);
     }
-    if (sg_def_class_decl->get_firstNondefiningDeclaration() == NULL) {
-      fprintf(stderr,
-              "DEBUG: VisitRecordDecl ERROR: firstNondef is NULL after set "
-              "for %p %s! Fixing...\n",
-              sg_def_class_decl, name.getString().c_str());
-      sg_def_class_decl->set_firstNondefiningDeclaration(sg_def_class_decl);
-    }
+    ROSE_ASSERT(sg_def_class_decl->get_firstNondefiningDeclaration() != NULL);
     sg_def_class_decl->set_definingDeclaration(sg_def_class_decl);
 
     // CLANG FRONTEND FIX: Only set definingDeclaration if variant types match
@@ -3133,12 +3150,10 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       isSgTemplateInstantiationDecl(*node);
   ROSE_ASSERT(instantiationDeclChecked != NULL);
 
-  // REX FIX: Ensure firstNondefiningDeclaration is set to avoid unparser
-  // crash (ua test).
-  if (instantiationDeclChecked->get_firstNondefiningDeclaration() == NULL) {
-    instantiationDeclChecked->set_firstNondefiningDeclaration(
-        instantiationDeclChecked);
-  }
+  ROSE_ASSERT(instantiationDeclChecked->get_firstNondefiningDeclaration() !=
+              NULL);
+  ROSE_ASSERT(instantiationDeclChecked->get_firstNondefiningDeclaration()
+                  ->get_firstNondefiningDeclaration() != NULL);
 
   // ROOT CAUSE FIX: Ensure definition is created and linked for explicit
   // specializations/instantiations
@@ -3866,13 +3881,7 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
       sg_typedef_decl->set_declaration(classDefDecl);
       sg_typedef_decl->set_typedefBaseTypeContainsDefiningDeclaration(true);
 
-      if (classDefDecl->get_firstNondefiningDeclaration() == NULL) {
-        fprintf(stderr,
-                "DEBUG: VisitTypedefDecl detected NULL firstNondef for %p. "
-                "Fixing.\n",
-                classDefDecl);
-        classDefDecl->set_firstNondefiningDeclaration(classDefDecl);
-      }
+      ROSE_ASSERT(classDefDecl->get_firstNondefiningDeclaration() != NULL);
     }
 
     std::map<SgClassType *, bool>::iterator bool_it =
@@ -5515,6 +5524,16 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
+  // CLANG FRONTEND FIX: Mark overloaded operator declarations so the unparser
+  // can correctly suppress call parentheses (e.g., "++x" vs "++x()").
+  if (function_decl->isOverloadedOperator()) {
+    sg_function_decl->get_specialFunctionModifier().setOperator();
+    if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+            sg_function_decl->get_firstNondefiningDeclaration())) {
+      first_nondef->get_specialFunctionModifier().setOperator();
+    }
+  }
+
   // REX FIX: Always require global qualification for template instantiations
   // This ensures that the unparser prints "::" (e.g. "::std::sort")
   // which prevents ambiguity when global templates are shadowed.
@@ -5981,8 +6000,15 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
                 << std::endl;
       res = false;
     } else if (expr != NULL) {
-      applySourceRange(expr, param_var_decl->getDefaultArgRange());
-      init = SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
+      // The same Clang default-argument subtree can be referenced by multiple
+      // redeclarations. Reusing a single SgExpression would create multiple
+      // parents and break CFG invariants. Always deep-copy the expression
+      // before attaching it to a parameter initializer.
+      SgExpression *expr_copy = SageInterface::deepCopy(expr);
+      ROSE_ASSERT(expr_copy != NULL);
+      applySourceRange(expr_copy, param_var_decl->getDefaultArgRange());
+      init = SageBuilder::buildAssignInitializer_nfi(expr_copy,
+                                                     expr_copy->get_type());
       applySourceRange(init, param_var_decl->getDefaultArgRange());
     }
   }
