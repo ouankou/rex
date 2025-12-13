@@ -17199,7 +17199,7 @@ NameQualificationTraversal::setNameQualificationSupport(SgScopeStatement* scope,
             // template_name += "> ";
                if (isEmptyTemplateArgumentList == false)
                   {
-                    template_name += "> ";
+                 template_name += ">";
                   }
 
                scope_name = template_name;

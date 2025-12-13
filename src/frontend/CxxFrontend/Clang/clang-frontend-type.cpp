@@ -25,6 +25,45 @@ namespace {
         return result;
     }
 
+    std::string trimWhitespace(std::string s) {
+      size_t first = 0;
+      while (first < s.size() &&
+             std::isspace(static_cast<unsigned char>(s[first]))) {
+        ++first;
+      }
+      s.erase(0, first);
+
+      while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
+        s.pop_back();
+      }
+      return s;
+    }
+
+    std::string buildTemplateInstantiationName(
+        const std::string &base_name,
+        llvm::ArrayRef<clang::TemplateArgument> args) {
+      if (args.empty())
+        return base_name;
+
+      std::string result = base_name;
+      result += "<";
+      bool first = true;
+      for (const clang::TemplateArgument &arg : args) {
+        if (!first)
+          result += " , ";
+        first = false;
+
+        std::string arg_str;
+        llvm::raw_string_ostream arg_stream(arg_str);
+        arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
+                  true);
+        arg_stream.flush();
+        result += trimWhitespace(arg_str);
+      }
+      result += ">";
+      return result;
+    }
+
     } // namespace
 
     // Generate unique name for template instantiation
@@ -1458,11 +1497,25 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // Example: "std::array<int>" and "my_ns::array<int>" must have different cache keys
     // Otherwise they would both mangle to "array_int" and collide
     std::string inst_name_full = mangleTemplateInstantiation(template_qualified_name, clang_type);
+    std::string inst_display_name = buildTemplateInstantiationName(
+        template_base_name, clang_type->template_arguments());
 
     // Check cache
     auto it = p_template_inst_cache.find(inst_name_full);
     if (it != p_template_inst_cache.end()) {
-        return it->second;
+      SgTemplateInstantiationDecl *inst_decl = it->second;
+      if (inst_decl != nullptr) {
+        if (inst_decl->get_templateArguments().empty()) {
+          inst_decl->get_templateArguments() =
+              buildTemplateArguments(clang_type);
+        }
+        for (SgTemplateArgument *arg : inst_decl->get_templateArguments()) {
+          if (arg != nullptr) {
+            arg->set_parent(inst_decl);
+          }
+        }
+      }
+      return inst_decl;
     }
 
     // Build template arguments
@@ -1474,15 +1527,18 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     // Create template instantiation declaration with all parameters
     // ROOT CAUSE FIX: Use qualified name (e.g., "std::array") not just base name ("array")
     // This ensures the unparser outputs the correct namespace qualification
-    SgTemplateInstantiationDecl* inst_decl =
-        new SgTemplateInstantiationDecl(
-            SgName(inst_name_full),  // Use full mangled name for uniqueness
-            SgClassDeclaration::e_class,
-            class_type,   // type (initially nullptr, will be set)
-            nullptr,      // definition
-            template_decl,
-            args
-        );
+    SgTemplateInstantiationDecl *inst_decl = new SgTemplateInstantiationDecl(
+        SgName(inst_display_name), SgClassDeclaration::e_class,
+        class_type, // type (initially nullptr, will be set)
+        nullptr,    // definition
+        template_decl, args);
+
+    inst_decl->get_templateArguments() = args;
+    for (SgTemplateArgument *arg : inst_decl->get_templateArguments()) {
+      if (arg != nullptr) {
+        arg->set_parent(inst_decl);
+      }
+    }
 
     // Set file info and mark as compiler generated
     // Create synthetic file info since this is a compiler-generated node
@@ -1663,21 +1719,6 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(clang::TemplateSpeci
     // Return the class type
     *node = inst_decl->get_type();
     ROSE_ASSERT(*node != nullptr);
-
-    // Preserve explicit template arguments in the generated type name for
-    // unparsing
-    clang::PrintingPolicy policy =
-        p_compiler_instance->getASTContext().getPrintingPolicy();
-    policy.FullyQualifiedName = true;
-    policy.SuppressScope = false;
-    std::string type_name =
-        clang::QualType(template_specialization_type, 0).getAsString(policy);
-    if (type_name.compare(0, 2, "::") == 0) {
-      type_name.erase(0, 2);
-    }
-    if (!type_name.empty()) {
-      SgNode::get_globalTypeNameMap()[*node] = type_name;
-    }
 
     return VisitType(template_specialization_type, node);
 }
@@ -1922,29 +1963,6 @@ bool ClangToSageTranslator::VisitElaboratedType(clang::ElaboratedType * elaborat
 #endif
 
     SgType * type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
-
-    // Preserve fully qualified spelling for template elaborated types (e.g.,
-    // Container<int>::value_type). Avoid touching non-template classes that
-    // may carry in-place definitions (e.g., "class X { ... } var;").
-    if (llvm::isa<clang::TemplateSpecializationType>(
-            elaborated_type->getNamedType().getTypePtr())) {
-      clang::PrintingPolicy policy =
-          p_compiler_instance->getASTContext().getPrintingPolicy();
-      policy.FullyQualifiedName = true;
-      policy.SuppressScope = false;
-      std::string qualified_name =
-          elaborated_type->getNamedType().getAsString(policy);
-      if (qualified_name.compare(0, 2, "::") == 0) {
-        qualified_name.erase(0, 2);
-      }
-
-      if (!qualified_name.empty()) {
-        auto &type_name_map = SgNode::get_globalTypeNameMap();
-        if (type_name_map.find(type) == type_name_map.end()) {
-          type_name_map[type] = qualified_name;
-        }
-      }
-    }
 
     // CLANG FRONTEND NOTE: ElaboratedType contains namespace qualifiers (e.g., "std::" in "std::string")
     // and struct/class/enum keywords that provide "sugar" for the type reference.
