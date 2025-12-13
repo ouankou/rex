@@ -13,6 +13,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_variadic_template_params.cpp
   rex_test2025_issue88.cpp
   rex_test2025_issue89_alias.cpp
+  rex_test2025_issue90_array_dim.cpp
   rex_test2025_issue107_chrono.cpp
   rex_test2025_issue107_redundant.cpp
   rex_test2025_issue107_enable_if.cpp

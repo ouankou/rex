@@ -45,6 +45,10 @@ if [[ ! -f "$build_dir/CTestTestfile.cmake" ]]; then
 fi
 
 cd "$build_dir"
+cmake --build . -- -j"$(nproc)" || {
+  echo "Build failed; aborting push." >&2
+  exit 1
+}
 
 run_ctest_regex() {
   local regex=$1
