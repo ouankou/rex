@@ -5504,8 +5504,40 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
       }
     }
 
+    auto is_attached_to_parent_container = [](SgStatement *stmt) -> bool {
+      if (stmt == NULL || stmt->get_parent() == NULL) {
+        return false;
+      }
+
+      SgNode *parent = stmt->get_parent();
+      if (SgBasicBlock *bb = isSgBasicBlock(parent)) {
+        const SgStatementPtrList &stmts = bb->get_statements();
+        return std::find(stmts.begin(), stmts.end(), stmt) != stmts.end();
+      }
+
+      if (SgGlobal *global = isSgGlobal(parent)) {
+        const SgDeclarationStatementPtrList &decls = global->get_declarations();
+        return std::find(decls.begin(), decls.end(), stmt) != decls.end();
+      }
+
+      if (SgNamespaceDefinitionStatement *ns =
+              isSgNamespaceDefinitionStatement(parent)) {
+        const SgDeclarationStatementPtrList &decls = ns->get_declarations();
+        return std::find(decls.begin(), decls.end(), stmt) != decls.end();
+      }
+
+      if (SgClassDefinition *class_def = isSgClassDefinition(parent)) {
+        const SgDeclarationStatementPtrList &members = class_def->get_members();
+        return std::find(members.begin(), members.end(), stmt) != members.end();
+      }
+
+      return false;
+    };
+
     if (original_scope != NULL) {
-      SageInterface::removeStatement(decl, false);
+      if (is_attached_to_parent_container(decl)) {
+        SageInterface::removeStatement(decl, false);
+      }
       decl->set_parent(NULL);
     }
 
