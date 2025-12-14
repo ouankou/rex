@@ -759,6 +759,17 @@ void repairSymbolTableParents(SgScopeStatement* scope)
                  {
                    if (cd->get_name().getString().empty()) continue;
                    if (cd->search_for_symbol_from_symbol_table() != NULL) continue;
+                   if (SgTemplateClassDeclaration *tcd =
+                           isSgTemplateClassDeclaration(cd)) {
+                     SgTemplateClassSymbol *sym =
+                         new SgTemplateClassSymbol(tcd);
+                     if (table != NULL) {
+                       table->insert(tcd->get_name(), sym);
+                       sym->set_parent(table);
+                     }
+                     continue;
+                   }
+
                    SgClassSymbol* sym = new SgClassSymbol(cd);
                    if (table != NULL)
                       {

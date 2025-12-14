@@ -29,6 +29,11 @@ set_tests_properties(Cxx_tests_rex_test2025_issue91_decl_chain PROPERTIES
   FAIL_REGULAR_EXPRESSION "firstNondefiningDeclaration == NULL"
 )
 
+# Issue 92: Must not emit "Redundant symbol removed...from symbol table"
+set_tests_properties(Cxx_tests_rex_test2025_issue92_redundant_sym PROPERTIES
+  FAIL_REGULAR_EXPRESSION "Redundant symbol removed"
+)
+
 # Verify explicit template arguments are preserved in calls
 add_test(
   NAME Cxx_tests_rex_test2025_template_call_explicit_args
