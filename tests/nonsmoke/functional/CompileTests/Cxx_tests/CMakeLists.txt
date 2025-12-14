@@ -34,6 +34,20 @@ set_tests_properties(Cxx_tests_rex_test2025_issue92_redundant_sym PROPERTIES
   FAIL_REGULAR_EXPRESSION "Redundant symbol removed"
 )
 
+# Issue 93: Class-scope static_assert must preserve source order vs fields.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue93_static_assert_order_unparse
+  COMMAND sh -c "\"$@\" && awk '/struct Foo/ {inside=1} inside { if (!sa && $0 ~ /static_assert/) sa=NR; if (!x && $0 ~ /int x;/) x=NR } /};/ && inside {inside=0} END { exit !(sa && x && sa < x) }' rose_rex_test2025_issue93_static_assert_order.cpp && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_issue93_static_assert_order.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue93_static_assert_order.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2025_issue93_static_assert_order_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Verify explicit template arguments are preserved in calls
 add_test(
   NAME Cxx_tests_rex_test2025_template_call_explicit_args

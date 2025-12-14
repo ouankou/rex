@@ -2517,36 +2517,45 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     }
 
     if (!skip_members) {
-      // REX FIX: Track access modifier state to suppress redundant keywords
-      SgAccessModifier::access_modifier_enum current_access =
-          SgAccessModifier::e_unknown;
-      if (record_decl->isClass()) {
-        current_access = SgAccessModifier::e_private;
-      } else if (record_decl->isStruct() || record_decl->isUnion()) {
-        current_access = SgAccessModifier::e_public;
-      }
+      // Member population for non-C++ records can be done directly here.
+      //
+      // For C++ records, member population is generally handled in
+      // VisitCXXRecordDecl so we can preserve source/lexical order across
+      // fields, methods, and other declarations (e.g., class-scope
+      // static_assert).
+      //
+      // However, VisitCXXRecordDecl intentionally skips system-header classes
+      // to avoid namespace-qualification corruption. In that case we still
+      // populate data members here so system/standard types are not left with
+      // empty definitions.
+      if (llvm::isa<clang::CXXRecordDecl>(record_decl)) {
+        if (SM.isInSystemHeader(record_decl->getLocation())) {
+          for (clang::RecordDecl::field_iterator it =
+                   record_decl->field_begin();
+               it != record_decl->field_end(); ++it) {
+            SgNode *tmp_field = Traverse(*it);
+            SgDeclarationStatement *field_decl =
+                isSgDeclarationStatement(tmp_field);
+            ROSE_ASSERT(field_decl != NULL);
 
-      clang::RecordDecl::field_iterator it;
-      for (it = record_decl->field_begin(); it != record_decl->field_end();
-           it++) {
-        SgNode *tmp_field = Traverse(*it);
-        SgDeclarationStatement *field_decl =
-            isSgDeclarationStatement(tmp_field);
-        ROSE_ASSERT(field_decl != NULL);
-        sg_class_def->append_member(field_decl);
-        field_decl->set_parent(sg_class_def);
-        // Reverted Redundancy Check
-        SgAccessModifier &mod =
-            field_decl->get_declarationModifier().get_accessModifier();
-        SgAccessModifier::access_modifier_enum access = mod.get_modifier();
+            if (field_decl->get_parent() == NULL) {
+              field_decl->set_parent(sg_class_def);
+            }
+            if (field_decl->get_scope() == NULL) {
+              field_decl->set_scope(sg_class_def);
+            }
+            diagnose_null_scope(field_decl, "VisitRecordDecl(system header)");
 
-        if (access != SgAccessModifier::e_unknown) {
-          if (access == current_access) {
-            mod.set_modifier(SgAccessModifier::e_unknown);
-          } else {
-            current_access = access;
+            const SgDeclarationStatementPtrList &members =
+                sg_class_def->get_members();
+            if (std::find(members.begin(), members.end(), field_decl) ==
+                members.end()) {
+              sg_class_def->append_member(field_decl);
+            }
           }
         }
+      } else {
+        populateClassDefinition(record_decl, sg_class_def);
       }
     }
 
@@ -2595,120 +2604,7 @@ bool ClangToSageTranslator::VisitCXXRecordDecl(
           }
 
           if (!skip_members) {
-            // Check if scope stack is in correct state
-            SgScopeStatement *current_scope = SageBuilder::topScopeStack();
-
-            // Only push scope if not already at this class definition
-            bool need_scope_push = (current_scope != sg_class_def);
-            if (need_scope_push) {
-              SageBuilder::pushScopeStack(sg_class_def);
-            }
-
-            // Implement access tracking state machine
-            SgAccessModifier::access_modifier_enum current_access =
-                SgAccessModifier::e_unknown;
-            // Initialize state based on container default
-            bool is_class = cxx_record_decl->isClass(); // Default private
-            bool is_struct_or_union =
-                cxx_record_decl->isStruct() ||
-                cxx_record_decl->isUnion(); // Default public
-
-            // Default state
-            if (is_class)
-              current_access = SgAccessModifier::e_private;
-            else if (is_struct_or_union)
-              current_access = SgAccessModifier::e_public;
-
-            // Reconstruct state from existing members (added in
-            // VisitRecordDecl)
-            SgDeclarationStatementPtrList &members =
-                sg_class_def->get_members();
-            for (auto mem : members) {
-              SgAccessModifier::access_modifier_enum m =
-                  mem->get_declarationModifier()
-                      .get_accessModifier()
-                      .get_modifier();
-              if (m != SgAccessModifier::e_unknown) {
-                current_access = m;
-              }
-            }
-
-            // Process member functions (includes methods, constructors,
-            // destructors, operators)
-            clang::CXXRecordDecl::method_iterator it_method;
-            for (it_method = cxx_record_decl->method_begin();
-                 it_method != cxx_record_decl->method_end(); it_method++) {
-              clang::CXXMethodDecl *method = *it_method;
-
-              // Skip implicit methods to avoid processing compiler-generated
-              // functions
-              if (method->isImplicit()) {
-                continue;
-              }
-
-              SgNode *tmp_method = Traverse(method);
-              SgDeclarationStatement *method_decl =
-                  isSgDeclarationStatement(tmp_method);
-              if (method_decl != NULL) {
-                sg_class_def->append_member(method_decl);
-                method_decl->set_parent(sg_class_def);
-
-                // Redundancy Check - REMOVED for REX FIX
-                // The unparser requires valid access modifiers
-                // on each node to update its state. Removing
-                // them causes "isUnsetAccess()" assertions.
-                SgAccessModifier &mod =
-                    method_decl->get_declarationModifier().get_accessModifier();
-                SgAccessModifier::access_modifier_enum access =
-                    mod.get_modifier();
-                if (access != SgAccessModifier::e_unknown) {
-                  current_access = access;
-                }
-              }
-            }
-
-            // Process other declarations (typedefs, enums, templates, nested
-            // classes, etc.) Skip fields and methods as they are handled above
-            // or in VisitRecordDecl
-            for (clang::DeclContext::decl_iterator it =
-                     cxx_record_decl->decls_begin();
-                 it != cxx_record_decl->decls_end(); ++it) {
-              clang::Decl *decl = *it;
-              // std::cerr << "DEBUG: VisitCXXRecordDecl iterating decl: " <<
-              // decl->getDeclKindName() << std::endl;
-              if (llvm::isa<clang::FieldDecl>(decl) ||
-                  llvm::isa<clang::CXXMethodDecl>(decl) ||
-                  llvm::isa<clang::AccessSpecDecl>(decl) ||
-                  llvm::isa<clang::IndirectFieldDecl>(decl)) {
-                continue;
-              }
-
-              // Skip implicit declarations
-              if (decl->isImplicit())
-                continue;
-
-              SgNode *tmp_decl = Traverse(decl);
-              SgDeclarationStatement *child_decl =
-                  isSgDeclarationStatement(tmp_decl);
-              if (child_decl != NULL) {
-                sg_class_def->append_member(child_decl);
-                child_decl->set_parent(sg_class_def);
-
-                // Redundancy Check
-                SgAccessModifier &mod =
-                    child_decl->get_declarationModifier().get_accessModifier();
-                SgAccessModifier::access_modifier_enum access =
-                    mod.get_modifier();
-
-                if (access != SgAccessModifier::e_unknown) {
-                  current_access = access;
-                }
-              }
-            }
-
-            if (need_scope_push) {
-              SageBuilder::popScopeStack();
-            }
+            populateClassDefinition(cxx_record_decl, sg_class_def);
           }
 
           // Base classes and friends are TODO for future implementation
@@ -6672,6 +6568,39 @@ bool ClangToSageTranslator::VisitStaticAssertDecl(
     }
     *node =
         SageBuilder::buildStaticAssertionDeclaration(condition, message_str);
+    if (SgStaticAssertionDeclaration *sg_static_assert =
+            isSgStaticAssertionDeclaration(*node)) {
+      if (isSgClassDefinition(SageBuilder::topScopeStack())) {
+        clang::AccessSpecifier access = pragma_static_assert_decl->getAccess();
+        if (access == clang::AS_public) {
+          sg_static_assert->get_declarationModifier()
+              .get_accessModifier()
+              .setPublic();
+        } else if (access == clang::AS_private) {
+          sg_static_assert->get_declarationModifier()
+              .get_accessModifier()
+              .setPrivate();
+        } else if (access == clang::AS_protected) {
+          sg_static_assert->get_declarationModifier()
+              .get_accessModifier()
+              .setProtected();
+        } else if (access == clang::AS_none) {
+          SgClassDefinition *class_def =
+              isSgClassDefinition(SageBuilder::topScopeStack());
+          ROSE_ASSERT(class_def != NULL);
+          if (class_def->get_declaration()->get_class_type() ==
+              SgClassDeclaration::e_class) {
+            sg_static_assert->get_declarationModifier()
+                .get_accessModifier()
+                .setPrivate();
+          } else {
+            sg_static_assert->get_declarationModifier()
+                .get_accessModifier()
+                .setPublic();
+          }
+        }
+      }
+    }
   }
 
   return VisitDecl(pragma_static_assert_decl, node) && res;
