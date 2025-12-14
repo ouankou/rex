@@ -73,6 +73,23 @@ set_tests_properties(Cxx_tests_rex_test2025_issue125_fixup_child_list_warning PR
   FAIL_REGULAR_EXPRESSION "not in child list of scope"
 )
 
+# Namespace reopenings: keep declarations in their lexical namespace block.
+add_test(
+  NAME Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && awk '/namespace[[:space:]]+A/ { ++ns; if (ns==1) ns1=NR; if (ns==2) ns2=NR } { if (!f && /void[[:space:]]+f[[:space:]]*\\(/) f=NR; if (!g && /void[[:space:]]+g[[:space:]]*\\(/) g=NR } END { exit !(ns2 && f && g && ns1 < f && f < ns2 && ns2 < g) }' rose_rex_test2025_namespace_reopenings_preserve_blocks.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_namespace_reopenings_preserve_blocks.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_namespace_reopenings_preserve_blocks.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 93: Class-scope static_assert must preserve source order vs fields.
 add_test(
   NAME Cxx_tests_rex_test2025_issue93_static_assert_order_unparse

@@ -600,6 +600,41 @@ bool is_decl_attached_to_scope_child_list(SgScopeStatement *scope,
   return std::find(stmts.begin(), stmts.end(), decl) != stmts.end();
 }
 
+bool detach_decl_from_scope_child_list(SgDeclarationStatement *decl,
+                                       SgScopeStatement *scope) {
+  if (scope == NULL || decl == NULL) {
+    return false;
+  }
+
+  auto erase_all = [&](auto &list) -> bool {
+    bool removed = false;
+    for (auto it = list.begin(); it != list.end();) {
+      if (*it == decl) {
+        it = list.erase(it);
+        removed = true;
+      } else {
+        ++it;
+      }
+    }
+    return removed;
+  };
+
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return erase_all(class_def->get_members());
+  }
+
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return erase_all(ns_def->get_declarations());
+  }
+
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    return erase_all(global->get_declarations());
+  }
+
+  return false;
+}
+
 void ensure_decl_in_scope_child_list(
     SgDeclarationStatement *decl, SgScopeStatement *scope,
     const char *context = "ClangToSageTranslator") {
@@ -4964,7 +4999,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   // Namespace decls are re-entrant in ROSE; normalize to the canonical
   // namespace scope for symbol-table insertion to avoid duplicate symbols
   // across reopened namespace definitions (see normalizeNamespaceScope()).
-  proper_scope = normalizeNamespaceScope(proper_scope);
+  SgScopeStatement *lexical_scope = proper_scope;
+  SgScopeStatement *scope_for_symbol_table =
+      normalizeNamespaceScope(proper_scope);
+  if (scope_for_symbol_table == NULL) {
+    scope_for_symbol_table = proper_scope;
+  }
 
   SgFunctionDeclaration *sg_function_decl;
 
@@ -5058,14 +5098,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         sg_function_decl =
             SageBuilder::buildNondefiningMemberFunctionDeclaration(
-                name, ret_type, param_list, proper_scope,
+                name, ret_type, param_list, scope_for_symbol_table,
                 /*decoratorList=*/NULL, methodConstVolatileFlags,
                 /*buildTemplateInstantiation=*/true, &template_args);
       } else {
         sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
-            name, ret_type, param_list, proper_scope, /*decoratorList=*/NULL,
-            /*buildTemplateInstantiation=*/true, &template_args,
-            SgStorageModifier::e_default,
+            name, ret_type, param_list, scope_for_symbol_table,
+            /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
+            &template_args, SgStorageModifier::e_default,
             /*forceFreeFunctionScope=*/isFriendFreeFunction);
       }
 
@@ -5111,7 +5151,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     // Build friend free-function definitions as free functions regardless of
     // lexical class scope.
     bool builder_force_free_scope = isFriendFreeFunction;
-    SgScopeStatement *builder_scope = proper_scope;
+    SgScopeStatement *builder_scope = scope_for_symbol_table;
 
     if (templateDecl) {
       // Template definitions require a prior non-defining declaration for
@@ -5704,14 +5744,15 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (isTemplateMemberFunction) {
         sg_function_decl =
             SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
-                name, ret_type, param_list, proper_scope, NULL,
+                name, ret_type, param_list, scope_for_symbol_table, NULL,
                 functionConstVolatileFlags, templateParams);
         param_list->set_parent(sg_function_decl);
         sg_function_decl->set_parameterList(param_list);
       } else {
         sg_function_decl =
             SageBuilder::buildNondefiningTemplateFunctionDeclaration(
-                name, ret_type, param_list, proper_scope, NULL, templateParams);
+                name, ret_type, param_list, scope_for_symbol_table, NULL,
+                templateParams);
 
         // Set parameter list parent
         param_list->set_parent(sg_function_decl);
@@ -5719,7 +5760,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     } else {
       sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
-          name, ret_type, param_list, proper_scope, NULL, false, NULL,
+          name, ret_type, param_list, scope_for_symbol_table, NULL, false, NULL,
           SgStorageModifier::e_default, isFriendFreeFunction);
     }
 
@@ -6113,6 +6154,25 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       ensure_decl_in_scope_child_list(
           first_nondef, first_nondef->get_scope(),
           "translateFunctionDeclCommon:firstNondef");
+    }
+  }
+
+  // Keep declarations attached to their lexical namespace definition to
+  // preserve reopened-namespace structure and unparse order, while using the
+  // canonical namespace scope only for symbol-table insertion (see
+  // normalizeNamespaceScope()).
+  if (lexical_scope != NULL && lexical_scope != scope_for_symbol_table &&
+      isSgNamespaceDefinitionStatement(lexical_scope) != NULL) {
+    if (SgDeclarationStatement *decl =
+            isSgDeclarationStatement(sg_function_decl)) {
+      if (SgScopeStatement *current_parent =
+              isSgScopeStatement(decl->get_parent())) {
+        if (current_parent != lexical_scope) {
+          detach_decl_from_scope_child_list(decl, current_parent);
+        }
+      }
+      ensure_decl_in_scope_child_list(decl, lexical_scope,
+                                      "translateFunctionDeclCommon:lexical");
     }
   }
 
