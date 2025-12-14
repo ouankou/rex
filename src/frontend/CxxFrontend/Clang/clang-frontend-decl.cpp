@@ -2517,11 +2517,44 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     }
 
     if (!skip_members) {
-      // Member population for C++ classes is handled in VisitCXXRecordDecl so
-      // we can preserve source/lexical order across fields, methods, and other
-      // declarations (e.g., class-scope static_assert). For C records, we can
-      // populate members directly here.
-      if (!llvm::isa<clang::CXXRecordDecl>(record_decl)) {
+      // Member population for non-C++ records can be done directly here.
+      //
+      // For C++ records, member population is generally handled in
+      // VisitCXXRecordDecl so we can preserve source/lexical order across
+      // fields, methods, and other declarations (e.g., class-scope
+      // static_assert).
+      //
+      // However, VisitCXXRecordDecl intentionally skips system-header classes
+      // to avoid namespace-qualification corruption. In that case we still
+      // populate data members here so system/standard types are not left with
+      // empty definitions.
+      if (llvm::isa<clang::CXXRecordDecl>(record_decl)) {
+        if (SM.isInSystemHeader(record_decl->getLocation())) {
+          for (clang::RecordDecl::field_iterator it =
+                   record_decl->field_begin();
+               it != record_decl->field_end(); ++it) {
+            SgNode *tmp_field = Traverse(*it);
+            SgDeclarationStatement *field_decl =
+                isSgDeclarationStatement(tmp_field);
+            ROSE_ASSERT(field_decl != NULL);
+
+            if (field_decl->get_parent() == NULL) {
+              field_decl->set_parent(sg_class_def);
+            }
+            if (field_decl->get_scope() == NULL) {
+              field_decl->set_scope(sg_class_def);
+            }
+            diagnose_null_scope(field_decl, "VisitRecordDecl(system header)");
+
+            const SgDeclarationStatementPtrList &members =
+                sg_class_def->get_members();
+            if (std::find(members.begin(), members.end(), field_decl) ==
+                members.end()) {
+              sg_class_def->append_member(field_decl);
+            }
+          }
+        }
+      } else {
         populateClassDefinition(record_decl, sg_class_def);
       }
     }
