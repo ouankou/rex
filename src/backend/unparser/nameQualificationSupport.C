@@ -11098,9 +11098,70 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                     MLOG_WARN_C(MLOG_UNPARSER, "SgFunctionCallExp's function name: amountOfNameQualificationRequired = %d \n",amountOfNameQualificationRequired);
 #endif
-                 // DQ (6/9/2011): Support for test2011_78.C (we only qualify function call references where the function has been declared in
-                 // a scope where it could be expected to be defined (e.g. not using a forward declaration in a SgBasicBlock, since the function
-                 // definition could not live in the SgBasicBlock.
+                    // Name-qualification for function references is gated by
+                    // skipNameQualificationIfNotProperlyDeclaredWhereDeclarationIsDefinable(),
+                    // which consults referencedNameSet. Declarations we don't
+                    // traverse during unparsing (common for system headers)
+                    // won't be recorded there, so populate referencedNameSet
+                    // here when we see the reference (while still excluding
+                    // non-definable scopes such as SgBasicBlock).
+
+                    SgDeclarationStatement *declarationForReferencedNameSet =
+                        functionDeclaration->get_firstNondefiningDeclaration();
+                    if (declarationForReferencedNameSet == NULL) {
+                      declarationForReferencedNameSet =
+                          functionDeclaration->get_definingDeclaration();
+                      if (declarationForReferencedNameSet == NULL) {
+                        declarationForReferencedNameSet = functionDeclaration;
+                        ASSERT_not_null(declarationForReferencedNameSet);
+                      }
+                      ASSERT_not_null(declarationForReferencedNameSet);
+                    }
+                    ASSERT_not_null(declarationForReferencedNameSet);
+
+                    // Match
+                    // skipNameQualificationIfNotProperlyDeclaredWhereDeclarationIsDefinable():
+                    // for template instantiations, use the template declaration
+                    // as the representative in referencedNameSet.
+                    SgTemplateInstantiationFunctionDecl
+                        *templateInstantiationFunctionDecl =
+                            isSgTemplateInstantiationFunctionDecl(
+                                functionDeclaration);
+                    if (templateInstantiationFunctionDecl != NULL &&
+                        templateInstantiationFunctionDecl
+                                ->get_templateDeclaration() != NULL) {
+                      declarationForReferencedNameSet =
+                          templateInstantiationFunctionDecl
+                              ->get_templateDeclaration();
+                      ASSERT_not_null(declarationForReferencedNameSet);
+                    } else {
+                      SgTemplateInstantiationMemberFunctionDecl
+                          *templateInstantiationMemberFunctionDecl =
+                              isSgTemplateInstantiationMemberFunctionDecl(
+                                  functionDeclaration);
+                      if (templateInstantiationMemberFunctionDecl != NULL &&
+                          templateInstantiationMemberFunctionDecl
+                                  ->get_templateDeclaration() != NULL) {
+                        declarationForReferencedNameSet =
+                            templateInstantiationMemberFunctionDecl
+                                ->get_templateDeclaration();
+                        ASSERT_not_null(declarationForReferencedNameSet);
+                      }
+                    }
+
+                    SgScopeStatement *scopeOfDeclaration = isSgScopeStatement(
+                        declarationForReferencedNameSet->get_parent());
+                    bool acceptableDeclarationScope =
+                        (scopeOfDeclaration != NULL &&
+                         scopeOfDeclaration->variantT() != V_SgBasicBlock);
+
+                    if (acceptableDeclarationScope == true &&
+                        referencedNameSet.find(
+                            declarationForReferencedNameSet) ==
+                            referencedNameSet.end()) {
+                      referencedNameSet.insert(declarationForReferencedNameSet);
+                    }
+
                     bool skipNameQualification = skipNameQualificationIfNotProperlyDeclaredWhereDeclarationIsDefinable(functionDeclaration);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                     MLOG_WARN_C(MLOG_UNPARSER, "Test of functionRefExp: skipNameQualification = %s \n",skipNameQualification ? "true" : "false");

@@ -4889,39 +4889,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
 
         *node = SageBuilder::buildFunctionRefExp(ref_func_sym);
-
-        // ROOT CAUSE FIX: Set qualified name prefix (namespace) from Clang
-        // declaration. This preserves namespace information (e.g., std::) even
-        // when scope is global.
-        SgFunctionRefExp *func_ref = isSgFunctionRefExp(*node);
-        if (func_ref != NULL) {
-          clang::FunctionDecl *func_decl =
-              llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl());
-          if (func_decl != NULL) {
-            std::string qualified_name = func_decl->getQualifiedNameAsString();
-            std::string simple_name = func_decl->getNameAsString();
-            // Extract namespace prefix by removing simple name from qualified
-            // name
-            if (qualified_name.length() > simple_name.length() &&
-                qualified_name.substr(qualified_name.length() -
-                                      simple_name.length()) == simple_name) {
-              // Remove the simple name and the trailing ::
-              std::string namespace_prefix = qualified_name.substr(
-                  0, qualified_name.length() - simple_name.length());
-              if (namespace_prefix.length() >= 2 &&
-                  namespace_prefix.substr(namespace_prefix.length() - 2) ==
-                      "::") {
-                namespace_prefix =
-                    namespace_prefix.substr(0, namespace_prefix.length() - 2);
-              }
-              if (!namespace_prefix.empty()) {
-                // Add to global qualified name map so unparser can retrieve it
-                SgNode::get_globalQualifiedNameMapForNames()[func_ref] =
-                    namespace_prefix + "::";
-              }
-            }
-          }
-        }
       } else {
         if (enum_sym != NULL) {
           // ROOT CAUSE FIX: Get enum declaration from the type instead of
