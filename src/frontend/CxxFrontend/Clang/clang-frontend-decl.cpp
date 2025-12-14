@@ -2562,8 +2562,10 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     sg_def_class_decl->set_scope(correct_scope);
     if (isAnonymousStructOrUnion)
       sg_def_class_decl->set_isUnNamed(true);
-    sg_def_class_decl->set_parent(structural_scope != NULL ? structural_scope
-                                                           : correct_scope);
+    sg_def_class_decl->set_parent(
+        (decl_context != NULL && decl_context->isTranslationUnit())
+            ? correct_scope
+            : (structural_scope != NULL ? structural_scope : correct_scope));
 
     // OPENMP LOWERING FIX: The sg_class_decl created at line 1350 will be
     // orphaned when we reassign below, but it may still be referenced through
