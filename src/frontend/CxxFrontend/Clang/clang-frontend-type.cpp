@@ -1572,8 +1572,21 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
     clang::TemplateDecl *template_decl =
         arg.getAsTemplate().getAsTemplateDecl();
     if (template_decl != nullptr) {
+      SgNode *traverse_result = Traverse(template_decl);
       SgDeclarationStatement *sg_decl =
-          (SgDeclarationStatement *)Traverse(template_decl);
+          isSgDeclarationStatement(traverse_result);
+
+      // Traverse returns SgTemplateParameter for TemplateTemplateParmDecl via
+      // VisitTemplateTemplateParmDecl. SgTemplateParameter is NOT an
+      // SgDeclarationStatement, but it holds the SgNonrealDecl we need.
+      if (SgTemplateParameter *param = isSgTemplateParameter(traverse_result)) {
+        if (SgDeclarationStatement *inner_decl =
+                param->get_templateDeclaration()) {
+          if (isSgNonrealDecl(inner_decl)) {
+            sg_decl = inner_decl;
+          }
+        }
+      }
 
       if (sg_decl != nullptr) {
         if (SgTemplateClassDeclaration *class_tmpl =
@@ -1593,6 +1606,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
         } else {
           sg_arg = new SgTemplateArgument(
               SgTemplateArgument::template_template_argument, sg_decl);
+          sg_arg->set_templateDeclaration(sg_decl);
         }
       } else {
         std::cerr << "Warning: Failed to translate template declaration "
