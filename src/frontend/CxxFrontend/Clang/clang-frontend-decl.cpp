@@ -69,6 +69,29 @@ static std::string trimWhitespace(std::string s) {
   return s;
 }
 
+static void appendTemplateInstantiationArg(std::string &result,
+                                           bool &need_separator,
+                                           const clang::TemplateArgument &arg) {
+  if (arg.getKind() == clang::TemplateArgument::Pack) {
+    for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
+      appendTemplateInstantiationArg(result, need_separator, pack_arg);
+    }
+    return;
+  }
+
+  if (need_separator) {
+    result += " , ";
+  }
+  need_separator = true;
+
+  std::string arg_str;
+  llvm::raw_string_ostream arg_stream(arg_str);
+  arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
+            /*IncludeType*/ true);
+  arg_stream.flush();
+  result += trimWhitespace(arg_str);
+}
+
 static std::string
 buildTemplateInstantiationName(const std::string &base_name,
                                const clang::TemplateArgumentList &args) {
@@ -77,16 +100,9 @@ buildTemplateInstantiationName(const std::string &base_name,
 
   std::string result = base_name;
   result += "<";
+  bool need_separator = false;
   for (unsigned i = 0; i < args.size(); ++i) {
-    if (i > 0)
-      result += " , ";
-
-    std::string arg_str;
-    llvm::raw_string_ostream arg_stream(arg_str);
-    args.get(i).print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
-                      /*IncludeType*/ true);
-    arg_stream.flush();
-    result += trimWhitespace(arg_str);
+    appendTemplateInstantiationArg(result, need_separator, args.get(i));
   }
   result += ">";
   return result;
@@ -2826,92 +2842,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   // Helper lambda to build args (to avoid code duplication)
   auto build_args = [&](SgTemplateArgumentPtrList &target_list) {
     for (unsigned i = 0; i < args.size(); ++i) {
-      const clang::TemplateArgument &arg = args[i];
-      SgTemplateArgument *sg_arg = NULL;
-      switch (arg.getKind()) {
-      case clang::TemplateArgument::Type: {
-        SgType *arg_type = buildTypeFromQualifiedType(arg.getAsType());
-        sg_arg = new SgTemplateArgument(arg_type, false);
-        break;
-      }
-      case clang::TemplateArgument::Integral: {
-        llvm::APSInt value = arg.getAsIntegral();
-        SgType *int_type = buildTypeFromQualifiedType(arg.getIntegralType());
-        SgExpression *value_expr =
-            buildIntegralTemplateArgExpr(value, int_type);
-        sg_arg = new SgTemplateArgument(SgTemplateArgument::nontype_argument,
-                                        false /*isArrayBoundUnknownType*/,
-                                        int_type, value_expr, nullptr, false);
-        if (value_expr != nullptr) {
-          value_expr->set_parent(sg_arg);
-        }
-        break;
-      }
-      case clang::TemplateArgument::Template: {
-        clang::TemplateName template_name_arg = arg.getAsTemplate();
-        clang::TemplateDecl *template_decl_arg =
-            template_name_arg.getAsTemplateDecl();
-        if (template_decl_arg) {
-          SgNode *traverse_result = Traverse(template_decl_arg);
-          SgDeclarationStatement *sg_decl =
-              isSgDeclarationStatement(traverse_result);
-
-          // REX FIX: Traverse returns SgTemplateParameter for
-          // TemplateTemplateParmDecl via VisitTemplateTemplateParmDecl.
-          // SgTemplateParameter is NOT an SgDeclarationStatement, but it
-          // holds the SgNonrealDecl we need.
-          if (SgTemplateParameter *param =
-                  isSgTemplateParameter(traverse_result)) {
-            if (SgDeclarationStatement *inner_decl =
-                    param->get_templateDeclaration()) {
-              if (isSgNonrealDecl(inner_decl)) {
-                sg_decl = inner_decl;
-              }
-            }
-          }
-
-          if (sg_decl) {
-            if (SgTemplateClassDeclaration *class_tmpl =
-                    isSgTemplateClassDeclaration(sg_decl)) {
-              SgName qual_name = class_tmpl->get_qualified_name();
-              if (qual_name.getString().find("::") == std::string::npos &&
-                  class_tmpl->get_scope()) {
-                if (SgNamespaceDefinitionStatement *ns_def =
-                        isSgNamespaceDefinitionStatement(
-                            class_tmpl->get_scope())) {
-                  qual_name = ns_def->get_namespaceDeclaration()
-                                  ->get_name()
-                                  .getString() +
-                              "::" + class_tmpl->get_name().getString();
-                }
-              }
-              SgType *type = SageBuilder::buildTemplateType(qual_name);
-              sg_arg = new SgTemplateArgument(type, false);
-            } else {
-              sg_arg = new SgTemplateArgument(
-                  SgTemplateArgument::template_template_argument, sg_decl);
-              sg_arg->set_templateDeclaration(sg_decl);
-            }
-          }
-        }
-        break;
-      }
-      case clang::TemplateArgument::Expression: {
-        clang::Expr *clang_expr = arg.getAsExpr();
-        if (clang_expr) {
-          SgNode *node = Traverse(clang_expr);
-          SgExpression *sg_expr = isSgExpression(node);
-          if (sg_expr) {
-            sg_arg = new SgTemplateArgument(sg_expr, false);
-          }
-        }
-        break;
-      }
-      default:
-        break;
-      }
-      if (sg_arg)
-        target_list.push_back(sg_arg);
+      appendTemplateArguments(target_list, args.get(i), false);
     }
   };
 
@@ -4923,11 +4854,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         function_decl->getTemplateSpecializationArgs();
     if (clang_args != NULL) {
       SgTemplateArgumentPtrList template_args;
-      template_args.reserve(clang_args->size());
       for (const clang::TemplateArgument &arg : clang_args->asArray()) {
-        if (SgTemplateArgument *sg_arg = translateTemplateArgument(arg, true)) {
-          template_args.push_back(sg_arg);
-        }
+        appendTemplateArguments(template_args, arg, true);
       }
 
       if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {

@@ -3776,6 +3776,12 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
             class_unknown // associated_class_unknown
         );
 
+    // Preserve brace-init vs paren-init. Without this, list-initialization like
+    // `T t{};` may be unparsed as `T t;`, which can change semantics (e.g.,
+    // value-initialization vs default-initialization).
+    ctor_init->set_is_braced_initialized(
+        cxx_construct_expr->isListInitialization());
+
     *node = ctor_init;
   } else {
     // No constructor available, create a null expression
