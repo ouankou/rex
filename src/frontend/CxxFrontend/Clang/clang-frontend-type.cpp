@@ -107,7 +107,14 @@ std::string ClangToSageTranslator::getTemplateQualifiedName(
 std::string ClangToSageTranslator::mangleTemplateInstantiation(
     const std::string &template_name,
     const clang::TemplateSpecializationType *spec_type) {
-  std::string result = template_name + "_";
+  std::string safe_template_name = template_name;
+  for (char &c : safe_template_name) {
+    if (c == '<' || c == '>' || c == ',' || c == ' ' || c == ':' || c == '*' ||
+        c == '&') {
+      c = '_';
+    }
+  }
+  std::string result = safe_template_name + "_";
   auto args = spec_type->template_arguments();
   bool first = true;
   for (const clang::TemplateArgument &arg : args) {
@@ -134,7 +141,14 @@ std::string ClangToSageTranslator::mangleTemplateInstantiation(
 
 std::string ClangToSageTranslator::mangleTemplateInstantiation(
     const std::string &template_name, const clang::TemplateArgumentList &args) {
-  std::string result = template_name + "_";
+  std::string safe_template_name = template_name;
+  for (char &c : safe_template_name) {
+    if (c == '<' || c == '>' || c == ',' || c == ' ' || c == ':' || c == '*' ||
+        c == '&') {
+      c = '_';
+    }
+  }
+  std::string result = safe_template_name + "_";
   bool first = true;
   for (unsigned i = 0; i < args.size(); ++i) {
     const clang::TemplateArgument &arg = args.get(i);
