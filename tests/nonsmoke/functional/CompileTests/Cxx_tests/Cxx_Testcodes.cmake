@@ -23,6 +23,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue107_chrono.cpp
   rex_test2025_issue107_redundant.cpp
   rex_test2025_issue107_enable_if.cpp
+  rex_test2025_issue125_fixup_child_list_warning.cpp
   method-defn-in-tpldecl-0.C
   method-defn-in-tpldecl-1.C
   rose-1431-0.C
