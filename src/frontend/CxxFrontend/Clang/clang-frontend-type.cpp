@@ -40,6 +40,27 @@ std::string trimWhitespace(std::string s) {
   return s;
 }
 
+void appendTemplateInstantiationArg(std::string &result, bool &need_separator,
+                                    const clang::TemplateArgument &arg) {
+  if (arg.getKind() == clang::TemplateArgument::Pack) {
+    for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
+      appendTemplateInstantiationArg(result, need_separator, pack_arg);
+    }
+    return;
+  }
+
+  if (need_separator) {
+    result += " , ";
+  }
+  need_separator = true;
+
+  std::string arg_str;
+  llvm::raw_string_ostream arg_stream(arg_str);
+  arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream, true);
+  arg_stream.flush();
+  result += trimWhitespace(arg_str);
+}
+
 std::string
 buildTemplateInstantiationName(const std::string &base_name,
                                llvm::ArrayRef<clang::TemplateArgument> args) {
@@ -48,17 +69,9 @@ buildTemplateInstantiationName(const std::string &base_name,
 
   std::string result = base_name;
   result += "<";
-  bool first = true;
+  bool need_separator = false;
   for (const clang::TemplateArgument &arg : args) {
-    if (!first)
-      result += " , ";
-    first = false;
-
-    std::string arg_str;
-    llvm::raw_string_ostream arg_stream(arg_str);
-    arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream, true);
-    arg_stream.flush();
-    result += trimWhitespace(arg_str);
+    appendTemplateInstantiationArg(result, need_separator, arg);
   }
   result += ">";
   return result;
@@ -1609,6 +1622,22 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
   return sg_arg;
 }
 
+void ClangToSageTranslator::appendTemplateArguments(
+    SgTemplateArgumentPtrList &arg_list, const clang::TemplateArgument &arg,
+    bool explicitlySpecified) {
+  if (arg.getKind() == clang::TemplateArgument::Pack) {
+    for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
+      appendTemplateArguments(arg_list, pack_arg, explicitlySpecified);
+    }
+    return;
+  }
+
+  if (SgTemplateArgument *sg_arg =
+          translateTemplateArgument(arg, explicitlySpecified)) {
+    arg_list.push_back(sg_arg);
+  }
+}
+
 SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
     const clang::TemplateSpecializationType *clang_type) {
 
@@ -1616,9 +1645,7 @@ SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
 
   auto args = clang_type->template_arguments();
   for (const clang::TemplateArgument &arg : args) {
-    if (SgTemplateArgument *sg_arg = translateTemplateArgument(arg, false)) {
-      arg_list.push_back(sg_arg);
-    }
+    appendTemplateArguments(arg_list, arg, false);
   }
 
   return arg_list;
@@ -1629,10 +1656,8 @@ SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
   SgTemplateArgumentPtrList arg_list;
 
   for (const clang::TemplateArgumentLoc &arg_loc : arg_info.arguments()) {
-    if (SgTemplateArgument *sg_arg = translateTemplateArgument(
-            arg_loc.getArgument(), explicitlySpecified)) {
-      arg_list.push_back(sg_arg);
-    }
+    appendTemplateArguments(arg_list, arg_loc.getArgument(),
+                            explicitlySpecified);
   }
 
   return arg_list;

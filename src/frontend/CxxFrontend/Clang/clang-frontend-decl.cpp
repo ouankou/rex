@@ -69,6 +69,29 @@ static std::string trimWhitespace(std::string s) {
   return s;
 }
 
+static void appendTemplateInstantiationArg(std::string &result,
+                                           bool &need_separator,
+                                           const clang::TemplateArgument &arg) {
+  if (arg.getKind() == clang::TemplateArgument::Pack) {
+    for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
+      appendTemplateInstantiationArg(result, need_separator, pack_arg);
+    }
+    return;
+  }
+
+  if (need_separator) {
+    result += " , ";
+  }
+  need_separator = true;
+
+  std::string arg_str;
+  llvm::raw_string_ostream arg_stream(arg_str);
+  arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
+            /*IncludeType*/ true);
+  arg_stream.flush();
+  result += trimWhitespace(arg_str);
+}
+
 static std::string
 buildTemplateInstantiationName(const std::string &base_name,
                                const clang::TemplateArgumentList &args) {
@@ -77,16 +100,9 @@ buildTemplateInstantiationName(const std::string &base_name,
 
   std::string result = base_name;
   result += "<";
+  bool need_separator = false;
   for (unsigned i = 0; i < args.size(); ++i) {
-    if (i > 0)
-      result += " , ";
-
-    std::string arg_str;
-    llvm::raw_string_ostream arg_stream(arg_str);
-    args.get(i).print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
-                      /*IncludeType*/ true);
-    arg_stream.flush();
-    result += trimWhitespace(arg_str);
+    appendTemplateInstantiationArg(result, need_separator, args.get(i));
   }
   result += ">";
   return result;
@@ -4923,11 +4939,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         function_decl->getTemplateSpecializationArgs();
     if (clang_args != NULL) {
       SgTemplateArgumentPtrList template_args;
-      template_args.reserve(clang_args->size());
       for (const clang::TemplateArgument &arg : clang_args->asArray()) {
-        if (SgTemplateArgument *sg_arg = translateTemplateArgument(arg, true)) {
-          template_args.push_back(sg_arg);
-        }
+        appendTemplateArguments(template_args, arg, true);
       }
 
       if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {

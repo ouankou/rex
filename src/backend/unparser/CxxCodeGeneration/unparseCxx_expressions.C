@@ -8745,18 +8745,21 @@ Unparse_ExprStmt::unparseConInit(SgExpression* expr, SgUnparse_Info& info)
           curprint(string(" /* output the opening parenthisis: current_constructor_initializer_is_for_initialization_list_member_function = ") + (current_constructor_initializer_is_for_initialization_list_member_function ? "true" : "false") + " */ ");
 #endif
 
-       // DQ (2/10/2016): Prefer "()" instead of "{}" where possible.
-       // if (current_constructor_initializer_is_for_initialization_list_member_function == true)
-          if (use_braces_instead_of_parenthisis == true)
-             {
-               if (con_init->get_args()->get_expressions().empty() == true)
-                  {
+          // DQ (2/10/2016): Prefer "()" instead of "{}" where possible.
+          // Only do this when braces were selected implicitly (e.g., for
+          // std::initializer_list handling). If the frontend explicitly marks a
+          // constructor initializer as braced, preserve it even when empty; in
+          // variable declarations `T t();` becomes a function declaration (most
+          // vexing parse), and `T t;` can lose value-initialization semantics.
+          if (use_braces_instead_of_parenthisis == true &&
+              con_init->get_is_braced_initialized() == false) {
+            if (con_init->get_args()->get_expressions().empty() == true) {
 #if DEBUG_CONSTRUCTOR_INITIALIZER
                     printf ("RESETTING use_braces_instead_of_parenthisis to FALSE \n");
 #endif
                     use_braces_instead_of_parenthisis = false;
-                  }
-             }
+            }
+          }
 
        // DQ (2/7/2016): When using the C++11 initializer list syntax, we have to use "{" instead of "(".
        // curprint("(");
