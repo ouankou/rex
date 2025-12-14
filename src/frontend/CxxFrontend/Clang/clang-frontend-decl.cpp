@@ -1841,7 +1841,8 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
   }
 
   clang::DeclContext *decl_context = class_template_decl->getDeclContext();
-  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  SgScopeStatement *structural_scope = SageBuilder::topScopeStack();
+  SgScopeStatement *scope = structural_scope;
 
   // Check if we can get a better scope from the DeclContext
   if (decl_context && !decl_context->isTranslationUnit()) {
@@ -1880,7 +1881,7 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
   if (scope == NULL) {
     scope = getGlobalScope();
   }
-  scope = normalizeNamespaceScope(scope);
+  SgScopeStatement *symbol_scope = normalizeNamespaceScope(scope);
 
   // Build template parameters and template declaration
   SgTemplateArgumentPtrList *empty_args = new SgTemplateArgumentPtrList();
@@ -1889,7 +1890,7 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
 
   SgTemplateClassDeclaration *template_decl =
       SageBuilder::buildTemplateClassDeclaration_nfi(
-          template_name, class_kind, scope, NULL, params, empty_args);
+          template_name, class_kind, symbol_scope, NULL, params, empty_args);
 
   // REX FIX: Handle AS_none for ClassTemplateDecl
   clang::AccessSpecifier access = class_template_decl->getAccess();
@@ -1902,8 +1903,10 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
         .get_accessModifier()
         .setProtected();
   } else if (access == clang::AS_none) {
-    if (isSgClassDefinition(scope)) {
-      SgClassDefinition *class_def = isSgClassDefinition(scope);
+    SgScopeStatement *parent_scope =
+        structural_scope != NULL ? structural_scope : scope;
+    if (isSgClassDefinition(parent_scope)) {
+      SgClassDefinition *class_def = isSgClassDefinition(parent_scope);
       if (class_def->get_declaration()->get_class_type() ==
           SgClassDeclaration::e_class) {
         template_decl->get_declarationModifier()
@@ -1923,6 +1926,13 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
   if (template_decl == NULL) {
     *node = NULL;
     return false;
+  }
+
+  // Keep the template declaration in its lexical scope for unparse order and
+  // comment anchoring, while using the canonical namespace scope only for
+  // symbol-table insertion (see normalizeNamespaceScope()).
+  if (structural_scope != NULL) {
+    template_decl->set_parent(structural_scope);
   }
 
   // REX FIX: Ensure firstNondefiningDeclaration is set to avoid unparser
@@ -2874,7 +2884,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   }
 
   clang::DeclContext *decl_context = class_tpl_spec_decl->getDeclContext();
-  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  SgScopeStatement *structural_scope = SageBuilder::topScopeStack();
+  SgScopeStatement *scope = structural_scope;
 
   // Check if we can get a better scope from the DeclContext
   if (decl_context && !decl_context->isTranslationUnit()) {
@@ -2904,7 +2915,10 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   if (scope == NULL) {
     scope = getGlobalScope();
   }
-  scope = normalizeNamespaceScope(scope);
+  SgScopeStatement *symbol_scope = normalizeNamespaceScope(scope);
+  SgScopeStatement *parent_scope =
+      structural_scope != NULL ? structural_scope : symbol_scope;
+  scope = symbol_scope;
 
   // Build template arguments
   SgTemplateArgumentPtrList template_args;
@@ -3088,7 +3102,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     // setStatementSourcePosition(instantiationDecl, class_tpl_spec_decl);
     applySourceRange(instantiationDecl, class_tpl_spec_decl->getSourceRange());
     instantiationDecl->set_scope(scope);
-    instantiationDecl->set_parent(scope);
+    instantiationDecl->set_parent(parent_scope);
 
     for (SgTemplateArgument *arg : instantiationDecl->get_templateArguments()) {
       arg->set_parent(instantiationDecl);
@@ -3167,7 +3181,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     // setStatementSourcePosition(definingDecl, class_tpl_spec_decl);
     applySourceRange(definingDecl, class_tpl_spec_decl->getSourceRange());
     definingDecl->set_scope(scope);
-    definingDecl->set_parent(scope);
+    definingDecl->set_parent(parent_scope);
 
     for (SgTemplateArgument *arg : definingDecl->get_templateArguments()) {
       arg->set_parent(definingDecl);
