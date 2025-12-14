@@ -2451,7 +2451,10 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
   // lexical scope
   clang::DeclContext *decl_context = record_decl->getDeclContext();
   SgScopeStatement *structural_scope = SageBuilder::topScopeStack();
-  SgScopeStatement *correct_scope = structural_scope;
+  SgScopeStatement *correct_scope =
+      (decl_context != NULL && decl_context->isTranslationUnit())
+          ? getGlobalScope()
+          : structural_scope;
 
   // Check if we can get a better scope from the DeclContext
   if (decl_context && !decl_context->isTranslationUnit()) {
@@ -2478,11 +2481,16 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     }
   }
 
+  if (correct_scope == NULL) {
+    correct_scope = getGlobalScope();
+  }
   correct_scope = normalizeNamespaceScope(correct_scope);
 
   sg_class_decl->set_scope(correct_scope);
-  sg_class_decl->set_parent(structural_scope != NULL ? structural_scope
-                                                     : correct_scope);
+  sg_class_decl->set_parent(
+      (decl_context != NULL && decl_context->isTranslationUnit())
+          ? correct_scope
+          : (structural_scope != NULL ? structural_scope : correct_scope));
 
   // DQ (11/28/2020): Adding asertion.
   ROSE_ASSERT(sg_class_decl->get_parent() != NULL);
@@ -2836,11 +2844,10 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     return VisitCXXRecordDecl(class_tpl_spec_decl, node);
   }
 
-  // Fallback to VisitCXXRecordDecl for system headers to avoid regressions in
-  // complex standard library headers.
-  clang::SourceManager &SM = p_compiler_instance->getSourceManager();
-  if (SM.isInSystemHeader(class_tpl_spec_decl->getLocation())) {
-    return VisitCXXRecordDecl(class_tpl_spec_decl, node);
+  bool in_system_header = false;
+  if (p_compiler_instance != NULL) {
+    clang::SourceManager &SM = p_compiler_instance->getSourceManager();
+    in_system_header = SM.isInSystemHeader(class_tpl_spec_decl->getLocation());
   }
 
   bool res = true;
@@ -2883,8 +2890,10 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   }
 
   clang::DeclContext *decl_context = class_tpl_spec_decl->getDeclContext();
-  SgScopeStatement *structural_scope = SageBuilder::topScopeStack();
-  SgScopeStatement *scope = structural_scope;
+  SgScopeStatement *scope =
+      (decl_context != NULL && decl_context->isTranslationUnit())
+          ? getGlobalScope()
+          : SageBuilder::topScopeStack();
 
   // Check if we can get a better scope from the DeclContext
   if (decl_context && !decl_context->isTranslationUnit()) {
@@ -2907,6 +2916,15 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
         } else if (class_def != NULL) {
           scope = class_def;
         }
+      } else if (clang::NamespaceDecl *ns_decl =
+                     llvm::dyn_cast<clang::NamespaceDecl>(context_decl)) {
+        // Ensure the namespace scope exists even if it has not been translated
+        // yet (e.g., when we first encounter a decl in that namespace).
+        SgNamespaceDeclarationStatement *ns_stmt =
+            ensureNamespaceDeclaration(ns_decl);
+        if (ns_stmt && ns_stmt->get_definition() != NULL) {
+          scope = ns_stmt->get_definition();
+        }
       }
     }
   }
@@ -2915,8 +2933,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     scope = getGlobalScope();
   }
   SgScopeStatement *symbol_scope = normalizeNamespaceScope(scope);
-  SgScopeStatement *parent_scope =
-      structural_scope != NULL ? structural_scope : symbol_scope;
+  SgScopeStatement *parent_scope = symbol_scope;
   scope = symbol_scope;
 
   // Build template arguments
@@ -2952,9 +2969,18 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   // This connects explicit specializations to the same nodes used by implicit
   // instantiations
   std::string inst_name_full;
-  if (primary_template_decl) {
-    std::string template_qualified_name =
-        getTemplateQualifiedName(primary_template_decl);
+  {
+    std::string template_qualified_name;
+    if (primary_template_decl) {
+      template_qualified_name = getTemplateQualifiedName(primary_template_decl);
+    }
+    if (template_qualified_name.empty()) {
+      template_qualified_name = class_tpl_spec_decl->getQualifiedNameAsString();
+    }
+    if (template_qualified_name.empty()) {
+      template_qualified_name = name.getString();
+    }
+
     inst_name_full = mangleTemplateInstantiation(
         template_qualified_name, class_tpl_spec_decl->getTemplateArgs());
 
@@ -2966,7 +2992,13 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
 
   // Check for existing symbol in the scope if not found in cache
   if (firstNondefiningDeclaration == NULL) {
-    SgSymbol *existing_symbol = scope->lookup_symbol(name);
+    SgSymbol *existing_symbol = NULL;
+    if (!inst_name_full.empty()) {
+      existing_symbol = scope->lookup_symbol(SgName(inst_name_full));
+    }
+    if (existing_symbol == NULL) {
+      existing_symbol = scope->lookup_symbol(name);
+    }
     if (existing_symbol) {
       SgClassSymbol *class_symbol = isSgClassSymbol(existing_symbol);
       if (class_symbol) {
@@ -2991,7 +3023,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     instantiationDecl->get_templateArguments() = forward_args;
 
     // Register in cache immediately
-    p_template_inst_cache[inst_name_full] = instantiationDecl;
+    if (!inst_name_full.empty()) {
+      p_template_inst_cache[inst_name_full] = instantiationDecl;
+    }
 
     firstNondefiningDeclaration = instantiationDecl;
     instantiationDecl->set_firstNondefiningDeclaration(
@@ -3026,7 +3060,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     // ROOT CAUSE FIX: Use full mangled name for symbol table to avoid
     // conflicts between specializations (e.g. MyTemplate_int vs
     // MyTemplate_double)
-    SgName symbol_name = inst_name_full.empty() ? name : SgName(inst_name_full);
+    SgName symbol_name = !inst_name_full.empty() ? SgName(inst_name_full)
+                                                 : name_with_template_args;
 
     if (!scope->symbol_exists(symbol_name)) {
       SgClassSymbol *class_symbol = new SgClassSymbol(instantiationDecl);
@@ -3063,6 +3098,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     }
   }
 
+  // If the specialization is a definition, we must build a defining ROSE node
+  // so that subsequent traversal of its members (fields/methods) has a valid
+  // class definition/scope to attach to, including for system headers.
   bool isDef = class_tpl_spec_decl->isThisDeclarationADefinition();
   if (isDef) {
     SgTemplateArgumentPtrList defining_args;
@@ -3133,7 +3171,14 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       std::pair<clang::Decl *, SgNode *>(class_tpl_spec_decl, *node));
 
   // Process scope stack and children if it is a definition
-  if (isDef) {
+  //
+  // System-header class template specializations frequently contain compiler-
+  // synthesized members with non-file source locations; translating the full
+  // body can trigger invalid SourceLocation handling. Still create the defining
+  // ROSE scope above so on-demand translation of referenced members has a valid
+  // class scope to attach to, but skip eager body population for system
+  // headers.
+  if (isDef && !in_system_header) {
     SageBuilder::pushScopeStack(
         isSgScopeStatement(instantiationDecl->get_definition()));
 
