@@ -34,6 +34,11 @@ set_tests_properties(Cxx_tests_rex_test2025_issue92_redundant_sym PROPERTIES
   FAIL_REGULAR_EXPRESSION "Redundant symbol removed"
 )
 
+# Issue 125: Declarations must not be missing from their owning scope child list.
+set_tests_properties(Cxx_tests_rex_test2025_issue125_fixup_child_list_warning PROPERTIES
+  FAIL_REGULAR_EXPRESSION "not in child list of scope"
+)
+
 # Issue 93: Class-scope static_assert must preserve source order vs fields.
 add_test(
   NAME Cxx_tests_rex_test2025_issue93_static_assert_order_unparse

@@ -531,6 +531,93 @@ void ensure_parent_and_scope(SgDeclarationStatement *ds,
   diagnose_null_scope(ds, context);
 }
 
+bool is_decl_attached_to_scope_child_list(SgScopeStatement *scope,
+                                          SgDeclarationStatement *decl) {
+  if (scope == NULL || decl == NULL) {
+    return false;
+  }
+
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    const SgDeclarationStatementPtrList &members = class_def->get_members();
+    return std::find(members.begin(), members.end(), decl) != members.end();
+  }
+
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    const SgDeclarationStatementPtrList &decls = ns_def->get_declarations();
+    return std::find(decls.begin(), decls.end(), decl) != decls.end();
+  }
+
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    const SgDeclarationStatementPtrList &decls = global->get_declarations();
+    return std::find(decls.begin(), decls.end(), decl) != decls.end();
+  }
+
+  const SgStatementPtrList &stmts = scope->getStatementList();
+  return std::find(stmts.begin(), stmts.end(), decl) != stmts.end();
+}
+
+void ensure_decl_in_scope_child_list(
+    SgDeclarationStatement *decl, SgScopeStatement *scope,
+    const char *context = "ClangToSageTranslator") {
+  if (decl == NULL) {
+    return;
+  }
+
+  if (scope == NULL) {
+    scope = decl->get_scope();
+  }
+  if (scope == NULL) {
+    diagnose_null_scope(decl, context);
+    return;
+  }
+
+  if (decl->get_scope() == NULL) {
+    decl->set_scope(scope);
+  }
+
+  if (decl->get_parent() != scope) {
+    decl->set_parent(scope);
+  }
+
+  if (is_decl_attached_to_scope_child_list(scope, decl)) {
+    return;
+  }
+
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    class_def->append_member(decl);
+    return;
+  }
+
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    ns_def->append_declaration(decl);
+    return;
+  }
+
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    global->append_declaration(decl);
+    return;
+  }
+
+  scope->append_statement(decl);
+}
+
+void suppress_unparse_output(SgLocatedNode *n) {
+  if (n == NULL) {
+    return;
+  }
+  if (Sg_File_Info *fi = n->get_file_info()) {
+    fi->unsetOutputInCodeGeneration();
+  }
+  if (Sg_File_Info *fi = n->get_startOfConstruct()) {
+    fi->unsetOutputInCodeGeneration();
+  }
+  if (Sg_File_Info *fi = n->get_endOfConstruct()) {
+    fi->unsetOutputInCodeGeneration();
+  }
+}
+
 // Normalize namespace scopes to the first definition associated with the
 // namespace symbol (the first nondefining declaration).  ROSE models each
 // re-entrant namespace definition as a distinct scope node, but for symbol
@@ -5023,6 +5110,23 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           first_param_list->set_parent(first_nondef);
           if (function_decl->isVariadic())
             first_nondef->hasEllipses();
+
+          // This prototype is synthesized to satisfy SageBuilder's defining
+          // template builders. If the template is defined in a class scope
+          // (e.g. friend templates defined inline inside a class), the extra
+          // class-scope redeclaration must not be emitted by the unparser.
+          if (isSgClassDefinition(builder_scope) != NULL &&
+              function_decl->getFirstDecl() == function_decl) {
+            setCompilerGeneratedFileInfo(first_nondef);
+            suppress_unparse_output(first_nondef);
+
+            setCompilerGeneratedFileInfo(first_param_list);
+            suppress_unparse_output(first_param_list);
+            for (SgInitializedName *param : first_param_list->get_args()) {
+              setCompilerGeneratedFileInfo(param);
+              suppress_unparse_output(param);
+            }
+          }
         }
 
         first_nondef->set_firstNondefiningDeclaration(first_nondef);
@@ -5060,7 +5164,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           }
         }
 
-        if (defining_template->get_firstNondefiningDeclaration() == NULL) {
+        if (defining_template->get_firstNondefiningDeclaration() == NULL ||
+            defining_template->get_firstNondefiningDeclaration() ==
+                defining_template) {
           defining_template->set_firstNondefiningDeclaration(first_nondef);
         }
         first_nondef->set_definingDeclaration(defining_template);
@@ -5140,6 +5246,23 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           first_param_list->set_parent(first_nondef);
           if (function_decl->isVariadic())
             first_nondef->hasEllipses();
+
+          // This prototype is synthesized to satisfy SageBuilder's defining
+          // template builders. If the template is defined in a class scope
+          // (e.g. friend templates defined inline inside a class), the extra
+          // class-scope redeclaration must not be emitted by the unparser.
+          if (isSgClassDefinition(builder_scope) != NULL &&
+              function_decl->getFirstDecl() == function_decl) {
+            setCompilerGeneratedFileInfo(first_nondef);
+            suppress_unparse_output(first_nondef);
+
+            setCompilerGeneratedFileInfo(first_param_list);
+            suppress_unparse_output(first_param_list);
+            for (SgInitializedName *param : first_param_list->get_args()) {
+              setCompilerGeneratedFileInfo(param);
+              suppress_unparse_output(param);
+            }
+          }
         }
 
         first_nondef->set_firstNondefiningDeclaration(first_nondef);
@@ -5182,14 +5305,75 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           }
         }
 
-        if (defining_template->get_firstNondefiningDeclaration() == NULL) {
+        if (defining_template->get_firstNondefiningDeclaration() == NULL ||
+            defining_template->get_firstNondefiningDeclaration() ==
+                defining_template) {
           defining_template->set_firstNondefiningDeclaration(first_nondef);
         }
         first_nondef->set_definingDeclaration(defining_template);
       }
     } else {
-      sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(
-          name, ret_type, param_list, builder_scope, builder_force_free_scope);
+      SgFunctionDeclaration *first_nondef_for_builder = NULL;
+      if (function_decl->getFirstDecl() != function_decl) {
+        clang::FunctionDecl *clang_first_decl =
+            llvm::cast<clang::FunctionDecl>(function_decl->getFirstDecl());
+        SgNode *first_node = NULL;
+        auto map_it = p_decl_translation_map.find(clang_first_decl);
+        if (map_it != p_decl_translation_map.end()) {
+          first_node = map_it->second;
+        } else {
+          first_node = Traverse(clang_first_decl);
+        }
+
+        SgFunctionDeclaration *first_decl = isSgFunctionDeclaration(first_node);
+        if (first_decl == NULL) {
+          if (SgSymbol *tmp_symbol =
+                  GetSymbolFromSymbolTable(clang_first_decl)) {
+            if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(tmp_symbol)) {
+              first_decl = isSgFunctionDeclaration(func_sym->get_declaration());
+            }
+          }
+        }
+
+        if (first_decl != NULL) {
+          first_nondef_for_builder = isSgFunctionDeclaration(
+              first_decl->get_firstNondefiningDeclaration());
+          if (first_nondef_for_builder == NULL) {
+            first_nondef_for_builder = first_decl;
+          }
+        }
+
+        // Only pass a non-defining declaration to SageBuilder if it matches the
+        // expected function kind for this scope (member vs free function).
+        bool expect_member =
+            builder_force_free_scope == false &&
+            (isSgClassDefinition(builder_scope) != NULL ||
+             isSgTemplateClassDefinition(builder_scope) != NULL);
+        if (first_nondef_for_builder != NULL) {
+          if (expect_member) {
+            if (isSgMemberFunctionDeclaration(first_nondef_for_builder) ==
+                NULL) {
+              first_nondef_for_builder = NULL;
+            }
+          } else {
+            if (isSgMemberFunctionDeclaration(first_nondef_for_builder) !=
+                NULL) {
+              first_nondef_for_builder = NULL;
+            }
+          }
+        }
+      }
+
+      if (first_nondef_for_builder != NULL) {
+        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(
+            name, ret_type, param_list, builder_scope, /*decoratorList=*/NULL,
+            /*buildTemplateInstantiation=*/false, first_nondef_for_builder,
+            /*templateArgumentsList=*/NULL, builder_force_free_scope);
+      } else {
+        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(
+            name, ret_type, param_list, builder_scope,
+            builder_force_free_scope);
+      }
 
       sg_function_decl->set_definingDeclaration(sg_function_decl);
 
@@ -5704,6 +5888,68 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     // which can otherwise produce duplicated qualifiers like "::::foo".
     if (llvm::isa<clang::NamespaceDecl>(function_decl->getDeclContext())) {
       sg_function_decl->set_global_qualification_required(true);
+    }
+  }
+
+  // Many SageBuilder "defining" builders create an associated non-defining
+  // declaration even when no such declaration exists in the source (notably for
+  // in-class definitions). In C++, an in-class member function definition
+  // cannot be accompanied by a separate class-scope redeclaration, so suppress
+  // output of such synthetic non-defining declarations while keeping them in
+  // the AST for consistency checks.
+  auto suppress_synthetic_nondef_in_class = [&](SgFunctionDeclaration
+                                                    *defining) {
+    if (defining == NULL) {
+      return;
+    }
+
+    if (function_decl->getFirstDecl() != function_decl) {
+      return;
+    }
+
+    if (!function_decl->isThisDeclarationADefinition()) {
+      return;
+    }
+
+    clang::DeclContext *lexical_ctx = function_decl->getLexicalDeclContext();
+    if (lexical_ctx == NULL || !llvm::isa<clang::CXXRecordDecl>(lexical_ctx)) {
+      return;
+    }
+
+    SgFunctionDeclaration *first_nondef =
+        isSgFunctionDeclaration(defining->get_firstNondefiningDeclaration());
+    if (first_nondef == NULL || first_nondef == defining) {
+      return;
+    }
+    if (isSgClassDefinition(first_nondef->get_scope()) == NULL) {
+      return;
+    }
+
+    setCompilerGeneratedFileInfo(first_nondef);
+    suppress_unparse_output(first_nondef);
+    if (SgFunctionParameterList *params = first_nondef->get_parameterList()) {
+      setCompilerGeneratedFileInfo(params);
+      suppress_unparse_output(params);
+      for (SgInitializedName *param : params->get_args()) {
+        setCompilerGeneratedFileInfo(param);
+        suppress_unparse_output(param);
+      }
+    }
+  };
+
+  suppress_synthetic_nondef_in_class(sg_function_decl);
+
+  // Root-cause fix for Issue 125:
+  // Ensure declarations are attached to their owning scope's child/member list
+  // so AST postprocessing invariants
+  // (FixupAstDefiningAndNondefiningDeclarations) are satisfied even for
+  // on-demand translation of system-header entities.
+  if (SgDeclarationStatement *first_nondef = isSgDeclarationStatement(
+          sg_function_decl->get_firstNondefiningDeclaration())) {
+    if (isSgClassDefinition(first_nondef->get_scope()) != NULL) {
+      ensure_decl_in_scope_child_list(
+          first_nondef, first_nondef->get_scope(),
+          "translateFunctionDeclCommon:firstNondef");
     }
   }
 
