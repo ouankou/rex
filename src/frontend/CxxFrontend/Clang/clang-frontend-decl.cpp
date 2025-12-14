@@ -514,6 +514,35 @@ void ensure_parent_and_scope(SgDeclarationStatement *ds,
   }
   diagnose_null_scope(ds, context);
 }
+
+// Normalize namespace scopes to the first definition associated with the
+// namespace symbol (the first nondefining declaration).  ROSE models each
+// re-entrant namespace definition as a distinct scope node, but for symbol
+// table purposes they must be treated as a single logical scope to avoid
+// duplicate symbol insertion and subsequent fixups that emit
+// "Redundant symbol removed...from symbol table".
+SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
+  if (scope == NULL)
+    return NULL;
+
+  SgNamespaceDefinitionStatement *ns_def =
+      isSgNamespaceDefinitionStatement(scope);
+  if (ns_def == NULL)
+    return scope;
+
+  SgNamespaceDeclarationStatement *ns_decl = ns_def->get_namespaceDeclaration();
+  if (ns_decl == NULL)
+    return scope;
+
+  SgNamespaceDeclarationStatement *first_nondef =
+      isSgNamespaceDeclarationStatement(
+          ns_decl->get_firstNondefiningDeclaration());
+  if (first_nondef == NULL)
+    return scope;
+
+  SgNamespaceDefinitionStatement *first_def = first_nondef->get_definition();
+  return first_def != NULL ? first_def : scope;
+}
 } // unnamed namespace
 
 void ClangToSageTranslator::populateClassDefinition(
@@ -1341,12 +1370,9 @@ bool ClangToSageTranslator::VisitEmptyDecl(clang::EmptyDecl *empty_decl,
 #if DEBUG_VISIT_DECL
   std::cerr << "ClangToSageTranslator::VisitEmptyDecl" << std::endl;
 #endif
-  bool res = true;
-
-  // (3/29/2022) Pei-Hung it seems to be okay just skip processing EmptyDecl
-  // as SgBasicBlock allows no decl/stmt stored in it.
-
-  return VisitDecl(empty_decl, node) && res;
+  // An EmptyDecl has no Sage equivalent and can be safely ignored.
+  *node = NULL;
+  return false;
 }
 
 bool ClangToSageTranslator::VisitExportDecl(clang::ExportDecl *export_decl,
@@ -1826,10 +1852,14 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
           p_decl_translation_map.find(context_decl);
       if (it != p_decl_translation_map.end()) {
         context_node = it->second;
+        SgNamespaceDeclarationStatement *ns_decl_stmt =
+            isSgNamespaceDeclarationStatement(context_node);
         SgNamespaceDefinitionStatement *ns_def =
             isSgNamespaceDefinitionStatement(context_node);
         SgClassDefinition *class_def = isSgClassDefinition(context_node);
-        if (ns_def != NULL) {
+        if (ns_decl_stmt != NULL && ns_decl_stmt->get_definition() != NULL) {
+          scope = ns_decl_stmt->get_definition();
+        } else if (ns_def != NULL) {
           scope = ns_def;
         } else if (class_def != NULL) {
           scope = class_def;
@@ -1850,6 +1880,7 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
   if (scope == NULL) {
     scope = getGlobalScope();
   }
+  scope = normalizeNamespaceScope(scope);
 
   // Build template parameters and template declaration
   SgTemplateArgumentPtrList *empty_args = new SgTemplateArgumentPtrList();
@@ -2306,7 +2337,8 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
   // For template instantiations in namespaces, we need to use their actual
   // lexical scope
   clang::DeclContext *decl_context = record_decl->getDeclContext();
-  SgScopeStatement *correct_scope = SageBuilder::topScopeStack();
+  SgScopeStatement *structural_scope = SageBuilder::topScopeStack();
+  SgScopeStatement *correct_scope = structural_scope;
 
   // Check if we can get a better scope from the DeclContext
   if (decl_context && !decl_context->isTranslationUnit()) {
@@ -2317,10 +2349,14 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
           p_decl_translation_map.find(context_decl);
       if (it != p_decl_translation_map.end()) {
         context_node = it->second;
+        SgNamespaceDeclarationStatement *ns_decl_stmt =
+            isSgNamespaceDeclarationStatement(context_node);
         SgNamespaceDefinitionStatement *ns_def =
             isSgNamespaceDefinitionStatement(context_node);
         SgClassDefinition *class_def = isSgClassDefinition(context_node);
-        if (ns_def != NULL) {
+        if (ns_decl_stmt != NULL && ns_decl_stmt->get_definition() != NULL) {
+          correct_scope = ns_decl_stmt->get_definition();
+        } else if (ns_def != NULL) {
           correct_scope = ns_def;
         } else if (class_def != NULL) {
           correct_scope = class_def;
@@ -2329,8 +2365,11 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     }
   }
 
+  correct_scope = normalizeNamespaceScope(correct_scope);
+
   sg_class_decl->set_scope(correct_scope);
-  sg_class_decl->set_parent(correct_scope);
+  sg_class_decl->set_parent(structural_scope != NULL ? structural_scope
+                                                     : correct_scope);
 
   // DQ (11/28/2020): Adding asertion.
   ROSE_ASSERT(sg_class_decl->get_parent() != NULL);
@@ -2375,25 +2414,24 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     SgClassSymbol *class_symbol = new SgClassSymbol(sg_first_class_decl);
     correct_scope->insert_symbol(name, class_symbol);
   } else if (!isDefined) {
-    // OPENMP LOWERING FIX: Even though we're skipping this non-defining
-    // redeclaration, sg_class_decl may still be referenced (e.g., through
-    // SgClassType), so set its file info
+    // Non-defining redeclaration.
+    // IMPORTANT: Return a distinct SgClassDeclaration for each Clang redecl.
+    // Mapping multiple Clang redecls to the same SgStatement and appending it
+    // during DeclContext traversal results in duplicate statement pointers in a
+    // scope (caught by AstConsistencyTests).
     applySourceRange(sg_class_decl, record_decl->getSourceRange());
 
-    // Only apply source range to sg_first_class_decl if it's missing file info
-    // Use the real source location to preserve user-written declaration
-    // information
-    if (sg_first_class_decl != NULL &&
-        sg_first_class_decl->get_startOfConstruct() == NULL) {
-      applySourceRange(sg_first_class_decl, record_decl->getSourceRange());
+    sg_class_decl->setForward();
+
+    // Preserve the defining declaration link when the definition is already
+    // known (e.g., out-of-order traversal).
+    if (sg_def_class_decl != NULL &&
+        sg_class_decl->variantT() == sg_def_class_decl->variantT()) {
+      sg_class_decl->set_definingDeclaration(sg_def_class_decl);
     }
 
-    // CRITICAL: Set *node before returning, otherwise it contains garbage
-    // Return the first declaration since we're skipping this redeclaration
-    *node = sg_first_class_decl;
-
-    return false; // FIXME ROSE need only one non-defining declaration
-                  // (SageBuilder don't let me build another one....)
+    // NOTE: Do not insert a symbol for redeclarations; the symbol table entry
+    // is created exactly once for the first nondefining declaration above.
   }
 
   if (isDefined) {
@@ -2403,7 +2441,8 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     sg_def_class_decl->set_scope(correct_scope);
     if (isAnonymousStructOrUnion)
       sg_def_class_decl->set_isUnNamed(true);
-    sg_def_class_decl->set_parent(correct_scope);
+    sg_def_class_decl->set_parent(structural_scope != NULL ? structural_scope
+                                                           : correct_scope);
 
     // OPENMP LOWERING FIX: The sg_class_decl created at line 1350 will be
     // orphaned when we reassign below, but it may still be referenced through
@@ -2846,10 +2885,14 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
           p_decl_translation_map.find(context_decl);
       if (it != p_decl_translation_map.end()) {
         context_node = it->second;
+        SgNamespaceDeclarationStatement *ns_decl_stmt =
+            isSgNamespaceDeclarationStatement(context_node);
         SgNamespaceDefinitionStatement *ns_def =
             isSgNamespaceDefinitionStatement(context_node);
         SgClassDefinition *class_def = isSgClassDefinition(context_node);
-        if (ns_def != NULL) {
+        if (ns_decl_stmt != NULL && ns_decl_stmt->get_definition() != NULL) {
+          scope = ns_decl_stmt->get_definition();
+        } else if (ns_def != NULL) {
           scope = ns_def;
         } else if (class_def != NULL) {
           scope = class_def;
@@ -2861,6 +2904,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   if (scope == NULL) {
     scope = getGlobalScope();
   }
+  scope = normalizeNamespaceScope(scope);
 
   // Build template arguments
   SgTemplateArgumentPtrList template_args;

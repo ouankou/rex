@@ -4200,12 +4200,27 @@ bool ClangToSageTranslator::VisitCXXThisExpr(clang::CXXThisExpr *cxx_this_expr,
 
       if (class_decl != NULL && class_decl->get_scope() != NULL) {
         SgScopeStatement *decl_scope = class_decl->get_scope();
-        SgClassSymbol *class_sym =
-            decl_scope->lookup_class_symbol(class_decl->get_name());
+        SgName class_name = class_decl->get_name();
+
+        // Prefer the symbol already associated with the declaration. This
+        // preserves correct symbol kinds (e.g., SgTemplateClassSymbol for
+        // SgTemplateClassDeclaration) and avoids inserting invalid
+        // SgClassSymbol entries that trip AstConsistencyTests.
+        SgSymbol *class_sym = class_decl->get_symbol_from_symbol_table();
         if (class_sym == NULL) {
-          class_sym = new SgClassSymbol(class_decl);
-          decl_scope->insert_symbol(class_decl->get_name(), class_sym);
+          class_sym = decl_scope->lookup_symbol(class_name);
         }
+
+        if (class_sym == NULL) {
+          if (SgTemplateClassDeclaration *tmpl_decl =
+                  isSgTemplateClassDeclaration(class_decl)) {
+            class_sym = new SgTemplateClassSymbol(tmpl_decl);
+          } else {
+            class_sym = new SgClassSymbol(class_decl);
+          }
+          decl_scope->insert_symbol(class_name, class_sym);
+        }
+
         this_symbol = class_sym;
       }
     }

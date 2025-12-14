@@ -1479,11 +1479,11 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
   template_decl->get_file_info()->setCompilerGenerated();
   template_decl->get_file_info()->unsetOutputInCodeGeneration();
 
-  // Insert into scope symbol table if not already present
-  if (!scope->lookup_class_symbol(SgName(base_name))) {
-    SgClassSymbol *template_symbol = new SgClassSymbol(template_decl);
-    scope->insert_symbol(SgName(base_name), template_symbol);
-  }
+  // Do not manually insert a SgClassSymbol here.
+  // SageBuilder::buildNondefiningTemplateClassDeclaration_nfi() installs the
+  // appropriate SgTemplateClassSymbol; inserting a SgClassSymbol for a
+  // SgTemplateClassDeclaration violates AST invariants and triggers
+  // AstConsistencyTests assertions.
 
   // Cache it
   p_template_decl_cache[template_name] = template_decl;
