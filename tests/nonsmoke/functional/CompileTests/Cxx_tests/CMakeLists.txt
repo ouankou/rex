@@ -48,6 +48,18 @@ set_tests_properties(Cxx_tests_rex_test2025_issue93_static_assert_order_unparse
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 94: Template argument lists must not introduce a space before commas.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue94_template_arg_spacing_unparse
+  COMMAND sh -c "\"$@\" && grep -F \"Container<int, 10>\" rose_rex_test2025_issue94_template_arg_spacing.cpp && ! grep -E \"Container<int[[:space:]]+,\" rose_rex_test2025_issue94_template_arg_spacing.cpp && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_issue94_template_arg_spacing.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue94_template_arg_spacing.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2025_issue94_template_arg_spacing_unparse PROPERTIES LABELS Cxx_tests)
+
 # Verify explicit template arguments are preserved in calls
 add_test(
   NAME Cxx_tests_rex_test2025_template_call_explicit_args

@@ -1100,8 +1100,14 @@ Unparse_ExprStmt::unparseTemplateArgumentList(const SgTemplateArgumentPtrList & 
      ROSE_ASSERT(ninfo.isTypeFirstPart()  == false);
      ROSE_ASSERT(ninfo.isTypeSecondPart() == false);
 
-  // DQ (2/10/2019): Make a copy to support removing the start_of_pack_expansion_argument which has been complicccated to deal with in unparsing.
-  // const SgTemplateArgumentPtrList templateArgListPtr = input_templateArgListPtr;
+     // Unparse types in template argument lists without introducing trailing
+     // spaces that would lead to output like "T , U" instead of "T, U".
+     ninfo.set_inTemplateList();
+
+     // DQ (2/10/2019): Make a copy to support removing the
+     // start_of_pack_expansion_argument which has been complicccated to deal
+     // with in unparsing. const SgTemplateArgumentPtrList templateArgListPtr =
+     // input_templateArgListPtr;
      SgTemplateArgumentPtrList templateArgListPtr;
      SgTemplateArgumentPtrList::const_iterator copy_iter = input_templateArgListPtr.begin();
 
@@ -1393,7 +1399,7 @@ Unparse_ExprStmt::unparseTemplateArgumentList(const SgTemplateArgumentPtrList & 
                if (true)
                   {
                  // unp->u_exprStmt->curprint(" /* output comma: part 1 */ ");
-                    unp->u_exprStmt->curprint(" , ");
+                 unp->u_exprStmt->curprint(", ");
                   }
                  else
                   {

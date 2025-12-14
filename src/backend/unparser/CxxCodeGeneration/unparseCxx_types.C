@@ -834,7 +834,15 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
        // This is the code that was always used before the addition of type names generated from where name qualification of subtypes are required.
           switch (type->variant())
              {
-               case T_UNKNOWN:            curprint ( get_type_name(type) + " ");          break;
+          case T_UNKNOWN: {
+            curprint(get_type_name(type));
+            if (!(info.inTemplateList() == true &&
+                  info.isTypeFirstPart() == false &&
+                  info.isTypeSecondPart() == false)) {
+              curprint(" ");
+            }
+            break;
+          }
                case T_CHAR:
                case T_SIGNED_CHAR:
                case T_UNSIGNED_CHAR:
@@ -884,7 +892,12 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
                        }
                       else
                        {
-                         curprint ( get_type_name(type) + " ");
+                         curprint(get_type_name(type));
+                         if (!(info.inTemplateList() == true &&
+                               info.isTypeFirstPart() == false &&
+                               info.isTypeSecondPart() == false)) {
+                           curprint(" ");
+                         }
                        }
                     break;
                   }

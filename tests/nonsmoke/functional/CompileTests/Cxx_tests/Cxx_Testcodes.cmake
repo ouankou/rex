@@ -18,6 +18,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue91_decl_chain.cpp
   rex_test2025_issue92_redundant_sym.cpp
   rex_test2025_issue93_static_assert_order.cpp
+  rex_test2025_issue94_template_arg_spacing.cpp
   rex_test2025_issue107_chrono.cpp
   rex_test2025_issue107_redundant.cpp
   rex_test2025_issue107_enable_if.cpp
