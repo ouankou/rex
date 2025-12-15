@@ -128,7 +128,7 @@ set_tests_properties(
 )
 
 # Issue 118: EmptyDecl must translate to SgEmptyDeclaration (preserve stray ';').
-set_tests_properties(Cxx_tests_rex_test2025_empty_decl PROPERTIES
+set_tests_properties(Cxx_tests_rex_test2025_issue118_empty_decl PROPERTIES
   FAIL_REGULAR_EXPRESSION "No Sage node associated with the declaration"
 )
 

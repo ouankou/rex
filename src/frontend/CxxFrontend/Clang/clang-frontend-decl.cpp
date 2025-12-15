@@ -1541,11 +1541,6 @@ bool ClangToSageTranslator::VisitEmptyDecl(clang::EmptyDecl *empty_decl,
   empty_decl_stmt->set_definingDeclaration(empty_decl_stmt);
   empty_decl_stmt->set_firstNondefiningDeclaration(empty_decl_stmt);
 
-  if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
-    empty_decl_stmt->set_parent(scope);
-    empty_decl_stmt->set_scope(scope);
-  }
-
   *node = empty_decl_stmt;
   return VisitDecl(empty_decl, node);
 }
