@@ -13,6 +13,7 @@
 #include "sage3basic.h"
 #include "unparser.h"
 #include <algorithm>
+#include <cctype>
 #include <limits>
 
 // DQ (2/21/2019): Added to support remove_substring function.
@@ -28,63 +29,49 @@ using namespace Rose;
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
 namespace {
-// Remove a leading global qualifier (\"::\") from a template or type name. The unparser already
-// handles necessary name qualification via scope lookup, so retaining a redundant global prefix
-// results in doubled qualification (e.g., \"<::std::tuple>\").
-std::string strip_leading_global(std::string name)
-   {
-     // Trim leading whitespace
-     size_t first_non_space = 0;
-     while (first_non_space < name.size() && isspace(name[first_non_space]))
-        {
-          ++first_non_space;
-        }
-     if (first_non_space > 0)
-        {
-          name.erase(0, first_non_space);
-        }
+// Return true if decl is structurally attached to its parent scope, and thus
+// eligible to be unparsed as a statement.
+bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
+  if (decl == NULL) {
+    return false;
+  }
 
-     // Strip any leading global qualifiers
-     while (name.size() > 2 && name.compare(0,2,"::") == 0)
-        {
-          name = name.substr(2);
-        }
-     return name;
-   }
+  SgScopeStatement *scope = isSgScopeStatement(decl->get_parent());
+  if (scope == NULL) {
+    return false;
+  }
 
-   // Return true if decl is structurally attached to its parent scope, and thus
-   // eligible to be unparsed as a statement.
-   bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
-     if (decl == NULL) {
-       return false;
-     }
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    const auto &members = class_def->get_members();
+    return std::find(members.begin(), members.end(), decl) != members.end();
+  }
 
-     SgScopeStatement *scope = isSgScopeStatement(decl->get_parent());
-     if (scope == NULL) {
-       return false;
-     }
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    const auto &decls = ns_def->get_declarations();
+    return std::find(decls.begin(), decls.end(), decl) != decls.end();
+  }
 
-     if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
-       const auto &members = class_def->get_members();
-       return std::find(members.begin(), members.end(), decl) != members.end();
-     }
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    const auto &decls = global->get_declarations();
+    return std::find(decls.begin(), decls.end(), decl) != decls.end();
+  }
 
-     if (SgNamespaceDefinitionStatement *ns_def =
-             isSgNamespaceDefinitionStatement(scope)) {
-       const auto &decls = ns_def->get_declarations();
-       return std::find(decls.begin(), decls.end(), decl) != decls.end();
-     }
-
-     if (SgGlobal *global = isSgGlobal(scope)) {
-       const auto &decls = global->get_declarations();
-       return std::find(decls.begin(), decls.end(), decl) != decls.end();
-     }
-
-     const SgStatementPtrList &stmts = scope->getStatementList();
-     return std::find(stmts.begin(), stmts.end(),
-                      static_cast<SgStatement *>(decl)) != stmts.end();
-   }
+  const SgStatementPtrList &stmts = scope->getStatementList();
+  return std::find(stmts.begin(), stmts.end(),
+                   static_cast<SgStatement *>(decl)) != stmts.end();
 }
+
+void assert_valid_template_name(const std::string &name) {
+  // Template names are identifiers (or operator spellings) and must not be
+  // empty, have leading whitespace, or contain a baked-in leading global
+  // qualifier; these must be represented structurally in the IR (Issue 59
+  // cleanup).
+  ROSE_ASSERT(!name.empty());
+  ROSE_ASSERT(!std::isspace(static_cast<unsigned char>(name.front())));
+  ROSE_ASSERT(name.size() < 2 || name.compare(0, 2, "::") != 0);
+}
+} // namespace
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
@@ -710,8 +697,9 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
      unp->u_exprStmt->curprint ("/* In unparseTemplateName(): output templateInstantiationDeclaration->get_templateName() */ ");
 #endif
 
-     std::string templateName = templateInstantiationDeclaration->get_templateName().str();
-     templateName = strip_leading_global(templateName);
+     std::string templateName =
+         templateInstantiationDeclaration->get_templateName().str();
+     assert_valid_template_name(templateName);
      if (templateInstantiationDeclaration->get_global_qualification_required()) {
           unp->u_exprStmt->curprint("::");
      }
@@ -749,8 +737,9 @@ Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDec
  // DQ (6/21/2011): Generated this function from refactored call to unparseTemplateArgumentList
      ASSERT_not_null(templateInstantiationFunctionDeclaration);
 
-     std::string functionTemplateName = templateInstantiationFunctionDeclaration->get_templateName().str();
-     functionTemplateName = strip_leading_global(functionTemplateName);
+     std::string functionTemplateName =
+         templateInstantiationFunctionDeclaration->get_templateName().str();
+     assert_valid_template_name(functionTemplateName);
      if (templateInstantiationFunctionDeclaration->get_global_qualification_required()) {
           unp->u_exprStmt->curprint("::");
      }
