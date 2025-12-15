@@ -1817,13 +1817,6 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   inst_decl->set_definingDeclaration(nullptr);
   inst_decl->set_firstNondefiningDeclaration(inst_decl);
 
-  if (inst_name_full.find("__conditional") != std::string::npos ||
-      inst_name_full.find("conditional") != std::string::npos) {
-    std::cerr << "DEBUG: getOrCreateTemplateInstantiation created: "
-              << inst_name_full << " at " << inst_decl << " firstNondef: "
-              << inst_decl->get_firstNondefiningDeclaration() << std::endl;
-  }
-
   // REX FIX: Always require global qualification for template instantiations
   // This ensures that the unparser prints "::" (e.g. "::std::vector" or
   // "::tuple") which prevents ambiguity when global templates are shadowed.

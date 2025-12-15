@@ -3091,16 +3091,6 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     instantiationDecl->set_forward(true);
     instantiationDecl->set_templateName(name);
 
-    if (name.getString() == "__conditional" ||
-        name.getString() == "conditional") {
-      std::cerr << "DEBUG: VisitClassTemplateSpecializationDecl created "
-                   "NON-DEFINING: "
-                << name.getString() << " at " << instantiationDecl
-                << " firstNondef: "
-                << instantiationDecl->get_firstNondefiningDeclaration()
-                << std::endl;
-    }
-
     SgClassType *type = SgClassType::createType(instantiationDecl);
     instantiationDecl->set_type(type);
 
@@ -3172,15 +3162,6 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     definingDecl->set_firstNondefiningDeclaration(firstNondefiningDeclaration);
     firstNondefiningDeclaration->set_definingDeclaration(definingDecl);
     definingDecl->set_definingDeclaration(definingDecl);
-
-    if (name.getString() == "__conditional" ||
-        name.getString() == "conditional") {
-      std::cerr
-          << "DEBUG: VisitClassTemplateSpecializationDecl created DEFINING: "
-          << name.getString() << " at " << definingDecl
-          << " firstNondef: " << definingDecl->get_firstNondefiningDeclaration()
-          << std::endl;
-    }
 
     // This is a definition
     definingDecl->set_forward(false);
