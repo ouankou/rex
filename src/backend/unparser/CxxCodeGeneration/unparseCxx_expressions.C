@@ -13,6 +13,7 @@
 #include "sage3basic.h"
 #include "unparser.h"
 #include <algorithm>
+#include <cctype>
 #include <limits>
 
 // DQ (2/21/2019): Added to support remove_substring function.
@@ -688,6 +689,14 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
 
      std::string templateName =
          templateInstantiationDeclaration->get_templateName().str();
+     // Template names are identifiers (or operator spellings) and must not have
+     // leading whitespace or a baked-in leading global qualifier; these must be
+     // represented structurally in the IR (Issue 59 cleanup).
+     ROSE_ASSERT(
+         templateName.empty() ||
+         !std::isspace(static_cast<unsigned char>(templateName.front())));
+     ROSE_ASSERT(templateName.size() < 2 ||
+                 templateName.compare(0, 2, "::") != 0);
      if (templateInstantiationDeclaration->get_global_qualification_required()) {
           unp->u_exprStmt->curprint("::");
      }
@@ -727,6 +736,11 @@ Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDec
 
      std::string functionTemplateName =
          templateInstantiationFunctionDeclaration->get_templateName().str();
+     ROSE_ASSERT(functionTemplateName.empty() ||
+                 !std::isspace(
+                     static_cast<unsigned char>(functionTemplateName.front())));
+     ROSE_ASSERT(functionTemplateName.size() < 2 ||
+                 functionTemplateName.compare(0, 2, "::") != 0);
      if (templateInstantiationFunctionDeclaration->get_global_qualification_required()) {
           unp->u_exprStmt->curprint("::");
      }
