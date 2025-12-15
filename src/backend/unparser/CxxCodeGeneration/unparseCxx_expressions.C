@@ -64,10 +64,10 @@ bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
 
 void assert_valid_template_name(const std::string &name) {
   // Template names are identifiers (or operator spellings) and must not have
-  // leading whitespace or a baked-in leading global qualifier; these must be
+  // leading whitespace, or a baked-in leading global qualifier; these must be
   // represented structurally in the IR (Issue 59 cleanup).
-  ROSE_ASSERT(name.empty() ||
-              !std::isspace(static_cast<unsigned char>(name.front())));
+  ROSE_ASSERT(!name.empty());
+  ROSE_ASSERT(!std::isspace(static_cast<unsigned char>(name.front())));
   ROSE_ASSERT(name.size() < 2 || name.compare(0, 2, "::") != 0);
 }
 } // namespace
