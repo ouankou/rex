@@ -181,6 +181,21 @@ void diagnose_null_scope(SgDeclarationStatement *decl, const char *context) {
               "Declaration %s (%p) created with NULL scope in %s\n",
               decl->class_name().c_str(), decl, context);
 }
+
+SgType *getTypeFromTraversedRecordDecl(ClangToSageTranslator *translator,
+                                       clang::RecordDecl *record_decl) {
+  if (translator == NULL || record_decl == NULL) {
+    return NULL;
+  }
+
+  SgNode *tmp_decl = translator->Traverse(record_decl);
+  if (SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl)) {
+    ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
+    return sg_decl->get_type();
+  }
+
+  return NULL;
+}
 } // anonymous namespace
 
 SgType *ClangToSageTranslator::buildTypeFromQualifiedType(
@@ -1287,11 +1302,7 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
   // (Issue 126).
   if (llvm::isa<clang::ClassTemplateSpecializationDecl>(record_decl) ||
       llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(record_decl)) {
-    SgNode *tmp_decl = Traverse(record_decl);
-    if (SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl)) {
-      ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
-      *node = sg_decl->get_type();
-    }
+    *node = getTypeFromTraversedRecordDecl(this, record_decl);
   }
 
   if (*node == NULL) {
@@ -1301,13 +1312,8 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
     first_see_in_type = (class_sym == NULL);
 
     if (class_sym == NULL) {
-      SgNode *tmp_decl = Traverse(record_decl);
-      SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl);
-
-      if (sg_decl != NULL) {
-        ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
-        *node = sg_decl->get_type();
-      } else {
+      *node = getTypeFromTraversedRecordDecl(this, record_decl);
+      if (*node == NULL) {
         std::string qualified_name = record_decl->getQualifiedNameAsString();
         if (qualified_name.empty()) {
           qualified_name = "__anonymous_record";
