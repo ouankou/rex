@@ -61,6 +61,15 @@ bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
   return std::find(stmts.begin(), stmts.end(),
                    static_cast<SgStatement *>(decl)) != stmts.end();
 }
+
+void assert_valid_template_name(const std::string &name) {
+  // Template names are identifiers (or operator spellings) and must not have
+  // leading whitespace or a baked-in leading global qualifier; these must be
+  // represented structurally in the IR (Issue 59 cleanup).
+  ROSE_ASSERT(name.empty() ||
+              !std::isspace(static_cast<unsigned char>(name.front())));
+  ROSE_ASSERT(name.size() < 2 || name.compare(0, 2, "::") != 0);
+}
 } // namespace
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
@@ -689,14 +698,7 @@ Unparse_ExprStmt::unparseTemplateName(SgTemplateInstantiationDecl* templateInsta
 
      std::string templateName =
          templateInstantiationDeclaration->get_templateName().str();
-     // Template names are identifiers (or operator spellings) and must not have
-     // leading whitespace or a baked-in leading global qualifier; these must be
-     // represented structurally in the IR (Issue 59 cleanup).
-     ROSE_ASSERT(
-         templateName.empty() ||
-         !std::isspace(static_cast<unsigned char>(templateName.front())));
-     ROSE_ASSERT(templateName.size() < 2 ||
-                 templateName.compare(0, 2, "::") != 0);
+     assert_valid_template_name(templateName);
      if (templateInstantiationDeclaration->get_global_qualification_required()) {
           unp->u_exprStmt->curprint("::");
      }
@@ -736,11 +738,7 @@ Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDec
 
      std::string functionTemplateName =
          templateInstantiationFunctionDeclaration->get_templateName().str();
-     ROSE_ASSERT(functionTemplateName.empty() ||
-                 !std::isspace(
-                     static_cast<unsigned char>(functionTemplateName.front())));
-     ROSE_ASSERT(functionTemplateName.size() < 2 ||
-                 functionTemplateName.compare(0, 2, "::") != 0);
+     assert_valid_template_name(functionTemplateName);
      if (templateInstantiationFunctionDeclaration->get_global_qualification_required()) {
           unp->u_exprStmt->curprint("::");
      }
