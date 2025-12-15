@@ -12,6 +12,7 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 #include "unparser.h"
+#include <algorithm>
 #include <limits>
 
 // DQ (2/21/2019): Added to support remove_substring function.
@@ -64,44 +65,24 @@ std::string strip_leading_global(std::string name)
      }
 
      if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
-       const SgDeclarationStatementPtrList &members = class_def->get_members();
-       for (SgDeclarationStatement *member : members) {
-         if (member == decl) {
-           return true;
-         }
-       }
-       return false;
+       const auto &members = class_def->get_members();
+       return std::find(members.begin(), members.end(), decl) != members.end();
      }
 
      if (SgNamespaceDefinitionStatement *ns_def =
              isSgNamespaceDefinitionStatement(scope)) {
-       const SgDeclarationStatementPtrList &decls = ns_def->get_declarations();
-       for (SgDeclarationStatement *d : decls) {
-         if (d == decl) {
-           return true;
-         }
-       }
-       return false;
+       const auto &decls = ns_def->get_declarations();
+       return std::find(decls.begin(), decls.end(), decl) != decls.end();
      }
 
      if (SgGlobal *global = isSgGlobal(scope)) {
-       const SgDeclarationStatementPtrList &decls = global->get_declarations();
-       for (SgDeclarationStatement *d : decls) {
-         if (d == decl) {
-           return true;
-         }
-       }
-       return false;
+       const auto &decls = global->get_declarations();
+       return std::find(decls.begin(), decls.end(), decl) != decls.end();
      }
 
      const SgStatementPtrList &stmts = scope->getStatementList();
-     for (SgStatement *stmt : stmts) {
-       if (stmt == decl) {
-         return true;
-       }
-     }
-
-     return false;
+     return std::find(stmts.begin(), stmts.end(),
+                      static_cast<SgStatement *>(decl)) != stmts.end();
    }
 }
 

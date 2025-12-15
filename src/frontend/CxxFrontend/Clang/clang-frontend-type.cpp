@@ -224,13 +224,9 @@ SgType *ClangToSageTranslator::buildTypeFromQualifiedType(
                     record_decl) ||
                 llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(
                     record_decl)) {
-              if (SgNode *tmp_decl = Traverse(record_decl)) {
-                if (SgClassDeclaration *sg_decl =
-                        isSgClassDeclaration(tmp_decl)) {
-                  if (SgType *inst_type = sg_decl->get_type()) {
-                    type = inst_type;
-                  }
-                }
+              if (SgType *inst_type =
+                      getTypeFromTraversedRecordDecl(this, record_decl)) {
+                type = inst_type;
               }
             }
           }
@@ -1296,12 +1292,15 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
   clang::RecordDecl *record_decl = record_type->getDecl();
   bool first_see_in_type = false;
 
+  bool is_specialization =
+      llvm::isa<clang::ClassTemplateSpecializationDecl>(record_decl) ||
+      llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(record_decl);
+
   // Record types for class-template specializations (e.g. `A<>`) must resolve
   // to the specialization/instantiation declaration, not the primary template.
   // Otherwise the unparser can emit invalid type spellings such as `template A`
   // (Issue 126).
-  if (llvm::isa<clang::ClassTemplateSpecializationDecl>(record_decl) ||
-      llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(record_decl)) {
+  if (is_specialization) {
     *node = getTypeFromTraversedRecordDecl(this, record_decl);
   }
 
@@ -1312,7 +1311,9 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
     first_see_in_type = (class_sym == NULL);
 
     if (class_sym == NULL) {
-      *node = getTypeFromTraversedRecordDecl(this, record_decl);
+      if (!is_specialization) {
+        *node = getTypeFromTraversedRecordDecl(this, record_decl);
+      }
       if (*node == NULL) {
         std::string qualified_name = record_decl->getQualifiedNameAsString();
         if (qualified_name.empty()) {
