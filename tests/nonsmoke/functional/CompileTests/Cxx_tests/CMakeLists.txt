@@ -109,6 +109,24 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 64: Unparser must preserve required global qualification for template
+# instantiations when a global template is shadowed by a nested-scope template.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue64_shadow_template_global_qual_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue64_shadow_template_global_qual.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue64_shadow_template_global_qual.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue64_shadow_template_global_qual_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Namespace reopenings: keep declarations in their lexical namespace block.
 add_test(
   NAME Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
