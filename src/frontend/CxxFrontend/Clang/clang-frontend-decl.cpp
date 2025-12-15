@@ -1530,9 +1530,24 @@ bool ClangToSageTranslator::VisitEmptyDecl(clang::EmptyDecl *empty_decl,
 #if DEBUG_VISIT_DECL
   std::cerr << "ClangToSageTranslator::VisitEmptyDecl" << std::endl;
 #endif
-  // An EmptyDecl has no Sage equivalent and can be safely ignored.
-  *node = NULL;
-  return false;
+  if (empty_decl == NULL) {
+    *node = NULL;
+    return false;
+  }
+
+  SgEmptyDeclaration *empty_decl_stmt = new SgEmptyDeclaration();
+  ROSE_ASSERT(empty_decl_stmt != NULL);
+
+  empty_decl_stmt->set_definingDeclaration(empty_decl_stmt);
+  empty_decl_stmt->set_firstNondefiningDeclaration(empty_decl_stmt);
+
+  if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
+    empty_decl_stmt->set_parent(scope);
+    empty_decl_stmt->set_scope(scope);
+  }
+
+  *node = empty_decl_stmt;
+  return VisitDecl(empty_decl, node);
 }
 
 bool ClangToSageTranslator::VisitExportDecl(clang::ExportDecl *export_decl,

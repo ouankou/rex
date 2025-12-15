@@ -127,6 +127,11 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 118: EmptyDecl must translate to SgEmptyDeclaration (preserve stray ';').
+set_tests_properties(Cxx_tests_rex_test2025_empty_decl PROPERTIES
+  FAIL_REGULAR_EXPRESSION "No Sage node associated with the declaration"
+)
+
 # Namespace reopenings: keep declarations in their lexical namespace block.
 add_test(
   NAME Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
