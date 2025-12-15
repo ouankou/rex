@@ -73,6 +73,24 @@ set_tests_properties(Cxx_tests_rex_test2025_issue125_fixup_child_list_warning PR
   FAIL_REGULAR_EXPRESSION "not in child list of scope"
 )
 
+# Issue 126: Default template args must be printed from IR; A<> must not unparse
+# as "template A a;".
+add_test(
+  NAME Cxx_tests_rex_test2025_issue126_default_template_args_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -E \"template[[:space:]]*<[[:space:]]*(class|typename)[[:space:]]+T[[:space:]]*=[[:space:]]*void\" rose_rex_test2025_issue126_default_template_args.cpp && ! grep -E \"template[[:space:]]+A[[:space:]]+a;\" rose_rex_test2025_issue126_default_template_args.cpp && ! grep -E \"T[[:space:]]*=[[:space:]]*void[[:space:]]*=[[:space:]]*void\" rose_rex_test2025_issue126_default_template_args.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue126_default_template_args.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue126_default_template_args.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue126_default_template_args_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Namespace reopenings: keep declarations in their lexical namespace block.
 add_test(
   NAME Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse

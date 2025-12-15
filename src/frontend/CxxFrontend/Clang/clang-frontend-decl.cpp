@@ -876,29 +876,6 @@ SgTemplateParameter *ClangToSageTranslator::translateTemplateParameter(
             buildTypeFromQualifiedType(default_arg.getAsType());
         if (default_type != NULL) {
           sg_param->set_defaultTypeParameter(default_type);
-
-          // REX FIX: The ROSE unparser does not consistently print
-          // default template arguments for type parameters from the
-          // attribute alone in this context. To ensure "class T =
-          // void" is unparsed, we manually bake it into the template
-          // type name. This is a workaround for unparser limitations.
-          std::string type_str = default_type->unparseToString();
-          if (!type_str.empty()) {
-            // Create a new SgTemplateType just for this parameter's
-            // signature e.g. "T = void" Note: This type shouldn't be
-            // shared or used for body symbol lookup where "T" is
-            // expected, but since the primary template body doesn't
-            // use T (in the enable_if case), or T is shadowed/bound
-            // by the scope symbol, this visual hack handles the
-            // declaration requirement.
-            SgTemplateType *param_type_with_default =
-                SageBuilder::buildTemplateType(
-                    SgName(name_str + " = " + type_str));
-            if (type_param->isParameterPack()) {
-              param_type_with_default->set_packed(true);
-            }
-            sg_param->set_type(param_type_with_default);
-          }
         }
       }
     }
