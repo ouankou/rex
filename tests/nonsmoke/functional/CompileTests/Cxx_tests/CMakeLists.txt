@@ -34,6 +34,23 @@ set_tests_properties(Cxx_tests_rex_test2025_issue92_redundant_sym PROPERTIES
   FAIL_REGULAR_EXPRESSION "Redundant symbol removed"
 )
 
+# Issue 123: Function refs must not emit duplicated qualification (e.g. std::::get).
+add_test(
+  NAME Cxx_tests_rex_test2025_issue123_std_double_colon_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && ! grep -E \"::::\" rose_rex_test2025_issue123_std_double_colon.cpp && grep -E \"std::get[[:space:]]*<0>\" rose_rex_test2025_issue123_std_double_colon.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue123_std_double_colon.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue123_std_double_colon.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue123_std_double_colon_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 124: System header template specializations must preserve template args.
 add_test(
   NAME Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
@@ -54,6 +71,23 @@ set_tests_properties(
 # Issue 125: Declarations must not be missing from their owning scope child list.
 set_tests_properties(Cxx_tests_rex_test2025_issue125_fixup_child_list_warning PROPERTIES
   FAIL_REGULAR_EXPRESSION "not in child list of scope"
+)
+
+# Namespace reopenings: keep declarations in their lexical namespace block.
+add_test(
+  NAME Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && awk '/namespace[[:space:]]+A/ { ++ns; if (ns==1) ns1=NR; if (ns==2) ns2=NR } { if (!f && /void[[:space:]]+f[[:space:]]*\\(/) f=NR; if (!g && /void[[:space:]]+g[[:space:]]*\\(/) g=NR } END { exit !(ns2 && f && g && ns1 < f && f < ns2 && ns2 < g) }' rose_rex_test2025_namespace_reopenings_preserve_blocks.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_namespace_reopenings_preserve_blocks.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_namespace_reopenings_preserve_blocks.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
+  PROPERTIES LABELS Cxx_tests
 )
 
 # Issue 93: Class-scope static_assert must preserve source order vs fields.

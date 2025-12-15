@@ -23,10 +23,12 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue107_chrono.cpp
   rex_test2025_issue107_redundant.cpp
   rex_test2025_issue107_enable_if.cpp
-  rex_test2025_issue124_system_header_specialization_args.cpp
-  rex_test2025_issue125_fixup_child_list_warning.cpp
-  method-defn-in-tpldecl-0.C
-  method-defn-in-tpldecl-1.C
+	  rex_test2025_issue123_std_double_colon.cpp
+	  rex_test2025_issue124_system_header_specialization_args.cpp
+	  rex_test2025_issue125_fixup_child_list_warning.cpp
+	  rex_test2025_namespace_reopenings_preserve_blocks.cpp
+	  method-defn-in-tpldecl-0.C
+	  method-defn-in-tpldecl-1.C
   rose-1431-0.C
   rose-1540-0.C
   rose-1541-0.C

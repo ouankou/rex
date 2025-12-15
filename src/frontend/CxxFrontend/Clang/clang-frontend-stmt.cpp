@@ -1543,46 +1543,86 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: C++11 range-based for loop: for (auto x : container) { ...
-  // } Clang desugars this into a regular for loop with begin/end iterators For
-  // ROSE, we build a SgForStatement using the desugared components
+  // ROOT CAUSE FIX: C++11 range-based for loop: `for (auto x : container) { ...
+  // }`.
+  //
+  // Clang can leave `getCond()` / `getInc()` null for dependent range-for loops
+  // in templates. ROSE's `SgForStatement` requires a non-null test statement
+  // (unparser asserts on it), so we must always materialize a test statement
+  // even when Clang did not provide the desugared condition/increment.
 
-  // Get the desugared components from Clang
-  // Range init contains the range expression (e.g., the container)
-  SgNode *tmp_range_init = cxx_for_range_stmt->getRangeInit()
-                               ? Traverse(cxx_for_range_stmt->getRangeInit())
-                               : nullptr;
-  SgStatement *range_init = isSgStatement(tmp_range_init);
+  // Get the desugared components from Clang.
+  // Range stmt declares the internal `__range` variable.
+  SgStatement *range_stmt = nullptr;
+  if (cxx_for_range_stmt->getRangeStmt() != nullptr) {
+    SgNode *tmp_range_stmt = Traverse(cxx_for_range_stmt->getRangeStmt());
+    range_stmt = isSgStatement(tmp_range_stmt);
+  }
 
   // Begin/end iterator setup - must be included in init_stmts
   // The condition and increment expressions reference __begin/__end variables
   // created here
-  SgNode *tmp_begin = cxx_for_range_stmt->getBeginStmt()
+  SgNode *tmp_begin = cxx_for_range_stmt->getBeginStmt() != nullptr
                           ? Traverse(cxx_for_range_stmt->getBeginStmt())
                           : nullptr;
   SgStatement *begin_stmt = isSgStatement(tmp_begin);
 
-  SgNode *tmp_end = cxx_for_range_stmt->getEndStmt()
+  SgNode *tmp_end = cxx_for_range_stmt->getEndStmt() != nullptr
                         ? Traverse(cxx_for_range_stmt->getEndStmt())
                         : nullptr;
   SgStatement *end_stmt = isSgStatement(tmp_end);
 
   // Loop variable declaration
-  SgNode *tmp_loop_var = cxx_for_range_stmt->getLoopVariable()
-                             ? Traverse(cxx_for_range_stmt->getLoopVariable())
+  SgNode *tmp_loop_var = cxx_for_range_stmt->getLoopVarStmt() != nullptr
+                             ? Traverse(cxx_for_range_stmt->getLoopVarStmt())
                              : nullptr;
   SgStatement *loop_var_decl = isSgStatement(tmp_loop_var);
 
   // Condition, increment, and body
-  SgNode *tmp_cond = cxx_for_range_stmt->getCond()
-                         ? Traverse(cxx_for_range_stmt->getCond())
-                         : nullptr;
-  SgExpression *cond = isSgExpression(tmp_cond);
+  clang::Expr *clang_cond = cxx_for_range_stmt->getCond();
+  SgStatement *test_stmt = nullptr;
+  if (clang_cond != nullptr) {
+    SgNode *tmp_cond = Traverse(clang_cond);
+    if (SgExpression *cond_expr = isSgExpression(tmp_cond)) {
+      test_stmt = SageBuilder::buildExprStatement(cond_expr);
+      applySourceRange(test_stmt, clang_cond->getSourceRange());
+    } else if (SgStatement *cond_as_stmt = isSgStatement(tmp_cond)) {
+      test_stmt = cond_as_stmt;
+      applySourceRange(test_stmt, clang_cond->getSourceRange());
+    } else if (tmp_cond != nullptr) {
+      std::cerr
+          << "Runtime error: CXXForRangeStmt cond translated to non-statement/"
+             "non-expression node: "
+          << tmp_cond->class_name() << std::endl;
+      res = false;
+    }
+  }
+  if (test_stmt == nullptr) {
+    test_stmt = SageBuilder::buildNullStatement_nfi();
+    setCompilerGeneratedFileInfo(test_stmt, true);
+  }
 
-  SgNode *tmp_inc = cxx_for_range_stmt->getInc()
-                        ? Traverse(cxx_for_range_stmt->getInc())
-                        : nullptr;
-  SgExpression *inc = isSgExpression(tmp_inc);
+  clang::Expr *clang_inc = cxx_for_range_stmt->getInc();
+  SgExpression *inc = nullptr;
+  if (clang_inc != nullptr) {
+    SgNode *tmp_inc = Traverse(clang_inc);
+    inc = isSgExpression(tmp_inc);
+    if (tmp_inc != nullptr && inc == nullptr) {
+      if (SgExprStatement *inc_stmt = isSgExprStatement(tmp_inc)) {
+        inc = inc_stmt->get_expression();
+      }
+    }
+    if (tmp_inc != nullptr && inc == nullptr) {
+      std::cerr << "Runtime error: CXXForRangeStmt inc translated to non-"
+                   "expression node: "
+                << tmp_inc->class_name() << std::endl;
+      res = false;
+    }
+  }
+  if (inc == nullptr) {
+    inc = SageBuilder::buildNullExpression_nfi();
+    setCompilerGeneratedFileInfo(inc, true);
+  }
 
   SgNode *tmp_body = cxx_for_range_stmt->getBody()
                          ? Traverse(cxx_for_range_stmt->getBody())
@@ -1599,23 +1639,26 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
     body = wrapStatementWithOpenMPPragmas(cxx_for_range_stmt->getBody(), body);
   }
 
-  // Build initialization statement list (range init + begin/end iterators +
-  // loop variable)
+  // Build initialization statement list (range + begin/end iterators + loop
+  // variable).
   SgStatementPtrList init_stmts;
-  if (range_init)
-    init_stmts.push_back(range_init);
+  if (range_stmt != nullptr)
+    init_stmts.push_back(range_stmt);
   if (begin_stmt)
     init_stmts.push_back(begin_stmt);
   if (end_stmt)
     init_stmts.push_back(end_stmt);
   if (loop_var_decl)
     init_stmts.push_back(loop_var_decl);
+  if (init_stmts.empty()) {
+    SgNullStatement *nullStmt = SageBuilder::buildNullStatement_nfi();
+    setCompilerGeneratedFileInfo(nullStmt, true);
+    init_stmts.push_back(nullStmt);
+  }
 
   // Build the for loop with these components
   SgForInitStatement *for_init = SageBuilder::buildForInitStatement(init_stmts);
-  SgStatement *test = cond ? SageBuilder::buildExprStatement(cond) : nullptr;
-
-  *node = SageBuilder::buildForStatement(for_init, test, inc, body);
+  *node = SageBuilder::buildForStatement(for_init, test_stmt, inc, body);
 
   return VisitStmt(cxx_for_range_stmt, node) && res;
 }
@@ -4889,39 +4932,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
 
         *node = SageBuilder::buildFunctionRefExp(ref_func_sym);
-
-        // ROOT CAUSE FIX: Set qualified name prefix (namespace) from Clang
-        // declaration. This preserves namespace information (e.g., std::) even
-        // when scope is global.
-        SgFunctionRefExp *func_ref = isSgFunctionRefExp(*node);
-        if (func_ref != NULL) {
-          clang::FunctionDecl *func_decl =
-              llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl());
-          if (func_decl != NULL) {
-            std::string qualified_name = func_decl->getQualifiedNameAsString();
-            std::string simple_name = func_decl->getNameAsString();
-            // Extract namespace prefix by removing simple name from qualified
-            // name
-            if (qualified_name.length() > simple_name.length() &&
-                qualified_name.substr(qualified_name.length() -
-                                      simple_name.length()) == simple_name) {
-              // Remove the simple name and the trailing ::
-              std::string namespace_prefix = qualified_name.substr(
-                  0, qualified_name.length() - simple_name.length());
-              if (namespace_prefix.length() >= 2 &&
-                  namespace_prefix.substr(namespace_prefix.length() - 2) ==
-                      "::") {
-                namespace_prefix =
-                    namespace_prefix.substr(0, namespace_prefix.length() - 2);
-              }
-              if (!namespace_prefix.empty()) {
-                // Add to global qualified name map so unparser can retrieve it
-                SgNode::get_globalQualifiedNameMapForNames()[func_ref] =
-                    namespace_prefix + "::";
-              }
-            }
-          }
-        }
       } else {
         if (enum_sym != NULL) {
           // ROOT CAUSE FIX: Get enum declaration from the type instead of
