@@ -1290,11 +1290,12 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
 #endif
 
   clang::RecordDecl *record_decl = record_type->getDecl();
-  bool first_see_in_type = false;
 
   bool is_specialization =
       llvm::isa<clang::ClassTemplateSpecializationDecl>(record_decl) ||
       llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(record_decl);
+
+  SgClassSymbol *class_sym = NULL;
 
   // Record types for class-template specializations (e.g. `A<>`) must resolve
   // to the specialization/instantiation declaration, not the primary template.
@@ -1306,9 +1307,7 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
 
   if (*node == NULL) {
     SgSymbol *sym = GetSymbolFromSymbolTable(record_decl);
-    SgClassSymbol *class_sym = isSgClassSymbol(sym);
-
-    first_see_in_type = (class_sym == NULL);
+    class_sym = isSgClassSymbol(sym);
 
     if (class_sym == NULL) {
       if (!is_specialization) {
@@ -1337,6 +1336,13 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
     }
   }
 
+  // After translating the declaration, the symbol should now exist; refresh the
+  // lookup for the first-seen tracking (matches historical behavior).
+  if (class_sym == NULL) {
+    class_sym = isSgClassSymbol(GetSymbolFromSymbolTable(record_decl));
+  }
+
+  bool first_see_in_type = (class_sym == NULL);
   if (isSgClassType(*node) != NULL) {
     p_class_type_decl_first_see_in_type.insert(std::pair<SgClassType *, bool>(
         isSgClassType(*node), first_see_in_type));
