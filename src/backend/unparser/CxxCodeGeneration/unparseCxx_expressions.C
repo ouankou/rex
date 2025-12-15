@@ -50,6 +50,59 @@ std::string strip_leading_global(std::string name)
         }
      return name;
    }
+
+   // Return true if decl is structurally attached to its parent scope, and thus
+   // eligible to be unparsed as a statement.
+   bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
+     if (decl == NULL) {
+       return false;
+     }
+
+     SgScopeStatement *scope = isSgScopeStatement(decl->get_parent());
+     if (scope == NULL) {
+       return false;
+     }
+
+     if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+       const SgDeclarationStatementPtrList &members = class_def->get_members();
+       for (SgDeclarationStatement *member : members) {
+         if (member == decl) {
+           return true;
+         }
+       }
+       return false;
+     }
+
+     if (SgNamespaceDefinitionStatement *ns_def =
+             isSgNamespaceDefinitionStatement(scope)) {
+       const SgDeclarationStatementPtrList &decls = ns_def->get_declarations();
+       for (SgDeclarationStatement *d : decls) {
+         if (d == decl) {
+           return true;
+         }
+       }
+       return false;
+     }
+
+     if (SgGlobal *global = isSgGlobal(scope)) {
+       const SgDeclarationStatementPtrList &decls = global->get_declarations();
+       for (SgDeclarationStatement *d : decls) {
+         if (d == decl) {
+           return true;
+         }
+       }
+       return false;
+     }
+
+     const SgStatementPtrList &stmts = scope->getStatementList();
+     for (SgStatement *stmt : stmts) {
+       if (stmt == decl) {
+         return true;
+       }
+     }
+
+     return false;
+   }
 }
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
@@ -1576,18 +1629,46 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                SgType* default_type = templateParameter->get_defaultTypeParameter();
                if (default_type != NULL)
                   {
-                 // Need to add the default type.
-#if 0
-                    curprint("=");
+                 // Print default template arguments exactly once, on the
+                 // first declaration that will actually be unparsed.  ROSE
+                 // often creates a first-nondefining declaration that is
+                 // compiler-generated and/or suppressed from output; in
+                 // that case emit defaults on the defining declaration to
+                 // avoid dropping them (Issue 126).
+                 bool should_unparse_default = is_template_header;
+                 if (should_unparse_default) {
+                   if (SgDeclarationStatement *decl_stmt =
+                           info.get_declstatement_ptr()) {
+                     if (SgDeclarationStatement *first_nondef =
+                             decl_stmt->get_firstNondefiningDeclaration()) {
+                       if (first_nondef != decl_stmt) {
+                         bool first_nondef_is_user_unparsed = false;
+                         if (Sg_File_Info *fi = first_nondef->get_file_info()) {
+                           first_nondef_is_user_unparsed =
+                               fi->isOutputInCodeGeneration() &&
+                               !fi->isCompilerGenerated() &&
+                               is_decl_attached_to_parent_scope(first_nondef);
+                         }
+                         should_unparse_default =
+                             !first_nondef_is_user_unparsed;
+                       }
+                     }
+                   }
+                 }
 
-                    SgUnparse_Info ninfo(info);
-                    unp->u_type->unparseType(default_type,ninfo);
-#else
-                 // See test2014_149.C for an example of where this is mistakenly done in the defining declaration (where it is an error).
-#if 0
-                    printf ("Skipping default template parameter unparsing \n");
-#endif
-#endif
+                 if (should_unparse_default) {
+                   curprint(" = ");
+
+                   // NOTE: Avoid unparseToString() here. During file
+                   // unparsing the unparser enables a debugging mode that
+                   // aborts on any call to the default SgUnparse_Info
+                   // constructor; unparseToString() triggers that path.
+                   SgUnparse_Info default_info(info);
+                   default_info.set_SkipClassDefinition();
+                   default_info.set_SkipEnumDefinition();
+                   default_info.set_SkipClassSpecifier();
+                   unp->u_type->unparseType(default_type, default_info);
+                 }
                   }
 #if 0
                printf ("unparseTemplateParameter(): case SgTemplateParameter::type_parameter: Sorry, not implemented! \n");
@@ -3531,8 +3612,13 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
      if (decl->get_parent() == NULL)
         {
        // DQ (3/5/2017): Converted to use message logging.
-    	 MLOG_WARN_C("CxxCodeGeneration", "Note: decl->get_parent() == NULL for decl = %p = %s (name = %s::%s) (OK for index expresion in array type) \n",
-               decl,decl->class_name().c_str(),xdecl? xdecl->get_name().str() : ( nrdecl ? nrdecl->get_name().str() : "" ),mfd->get_name().str());
+       MLOG_WARN_C("CxxCodeGeneration",
+                   "Note: decl->get_parent() == NULL for decl = %p = %s (name "
+                   "= %s::%s) (OK for index expresion in array type) \n",
+                   decl, decl->class_name().c_str(),
+                   xdecl ? xdecl->get_name().str()
+                         : (nrdecl ? nrdecl->get_name().str() : ""),
+                   mfd->get_name().str());
         }
   // DQ (5/30/2016): This need not have a parent if it is an expression in index for an array type (see test2016_33.C).
   // ASSERT_not_null(decl->get_parent());

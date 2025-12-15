@@ -190,6 +190,40 @@ SgType *ClangToSageTranslator::buildTypeFromQualifiedType(
 
   ROSE_ASSERT(type != NULL);
 
+  // Issue 126: A class-template specialization type (e.g. `A<>`) must never be
+  // represented as the primary SgTemplateClassDeclaration type; that produces
+  // invalid output such as `template A a;`. If the canonical Clang type is a
+  // RecordType whose declaration is a ClassTemplateSpecializationDecl, ensure
+  // we use the translated specialization/instantiation declaration's type.
+  if (SgClassType *class_type = isSgClassType(type)) {
+    if (SgClassDeclaration *class_decl =
+            isSgClassDeclaration(class_type->get_declaration())) {
+      if (isSgTemplateClassDeclaration(class_decl) != NULL &&
+          isSgTemplateInstantiationDecl(class_decl) == NULL) {
+        clang::QualType canonical = qual_type.getCanonicalType();
+        if (!canonical.isNull()) {
+          if (const clang::RecordType *record_type =
+                  canonical->getAs<clang::RecordType>()) {
+            clang::RecordDecl *record_decl = record_type->getDecl();
+            if (llvm::isa<clang::ClassTemplateSpecializationDecl>(
+                    record_decl) ||
+                llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(
+                    record_decl)) {
+              if (SgNode *tmp_decl = Traverse(record_decl)) {
+                if (SgClassDeclaration *sg_decl =
+                        isSgClassDeclaration(tmp_decl)) {
+                  if (SgType *inst_type = sg_decl->get_type()) {
+                    type = inst_type;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   if (qual_type.hasLocalQualifiers()) {
     SgModifierType *modified_type = new SgModifierType(type);
     SgTypeModifier &sg_modifer = modified_type->get_typeModifier();
@@ -1244,55 +1278,64 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
   std::cerr << "ClangToSageTranslator::VisitRecordType" << std::endl;
 #endif
 
-  SgSymbol *sym = GetSymbolFromSymbolTable(record_type->getDecl());
+  clang::RecordDecl *record_decl = record_type->getDecl();
+  bool first_see_in_type = false;
 
-  SgClassSymbol *class_sym = isSgClassSymbol(sym);
-
-  if (class_sym == NULL) {
-    clang::RecordDecl *record_decl = record_type->getDecl();
+  // Record types for class-template specializations (e.g. `A<>`) must resolve
+  // to the specialization/instantiation declaration, not the primary template.
+  // Otherwise the unparser can emit invalid type spellings such as `template A`
+  // (Issue 126).
+  if (llvm::isa<clang::ClassTemplateSpecializationDecl>(record_decl) ||
+      llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(record_decl)) {
     SgNode *tmp_decl = Traverse(record_decl);
-    SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl);
-
-    if (sg_decl != NULL) {
+    if (SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl)) {
       ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
       *node = sg_decl->get_type();
-    } else {
-      std::string qualified_name = record_decl->getQualifiedNameAsString();
-      if (qualified_name.empty()) {
-        qualified_name = "__anonymous_record";
-      }
-      // std::isalnum expects values representable as unsigned char; cast to
-      // avoid UB for negative char.
-      for (char &ch : qualified_name) {
-        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')) {
-          ch = '_';
-        }
-      }
-      SgScopeStatement *scope = SageBuilder::topScopeStack();
-      if (scope == NULL) {
-        scope = p_global_scope;
-      }
-      *node = SageBuilder::buildOpaqueType(qualified_name, scope);
     }
-  } else {
-    *node = class_sym->get_type();
   }
 
-  // After translating the declaration, the symbol should now exist; refresh the
-  // lookup
-  if (class_sym == NULL) {
-    class_sym =
-        isSgClassSymbol(GetSymbolFromSymbolTable(record_type->getDecl()));
+  if (*node == NULL) {
+    SgSymbol *sym = GetSymbolFromSymbolTable(record_decl);
+    SgClassSymbol *class_sym = isSgClassSymbol(sym);
+
+    first_see_in_type = (class_sym == NULL);
+
+    if (class_sym == NULL) {
+      SgNode *tmp_decl = Traverse(record_decl);
+      SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl);
+
+      if (sg_decl != NULL) {
+        ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
+        *node = sg_decl->get_type();
+      } else {
+        std::string qualified_name = record_decl->getQualifiedNameAsString();
+        if (qualified_name.empty()) {
+          qualified_name = "__anonymous_record";
+        }
+        // std::isalnum expects values representable as unsigned char; cast to
+        // avoid UB for negative char.
+        for (char &ch : qualified_name) {
+          if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')) {
+            ch = '_';
+          }
+        }
+        SgScopeStatement *scope = SageBuilder::topScopeStack();
+        if (scope == NULL) {
+          scope = p_global_scope;
+        }
+        *node = SageBuilder::buildOpaqueType(qualified_name, scope);
+      }
+    } else {
+      *node = class_sym->get_type();
+    }
   }
 
   if (isSgClassType(*node) != NULL) {
-    if (class_sym == NULL) {
-      p_class_type_decl_first_see_in_type.insert(
-          std::pair<SgClassType *, bool>(isSgClassType(*node), true));
+    p_class_type_decl_first_see_in_type.insert(std::pair<SgClassType *, bool>(
+        isSgClassType(*node), first_see_in_type));
+    if (first_see_in_type) {
       isSgNamedType(*node)->set_autonomous_declaration(true);
-    } else
-      p_class_type_decl_first_see_in_type.insert(
-          std::pair<SgClassType *, bool>(isSgClassType(*node), false));
+    }
   }
 
   return VisitType(record_type, node);

@@ -12608,7 +12608,10 @@ void Unparse_ExprStmt::unparseTemplateHeader(T* decl, SgUnparse_Info& info) {
      
 
     SgTemplateParameterPtrList tlist =  decl->get_templateParameters ();
-    Unparse_ExprStmt::unparseTemplateParameterList (tlist, info, true);
+    SgUnparse_Info ninfo(info);
+    ninfo.set_declstatement_ptr(NULL);
+    ninfo.set_declstatement_ptr(decl);
+    Unparse_ExprStmt::unparseTemplateParameterList(tlist, ninfo, true);
     curprint("\n");
   }
 }
