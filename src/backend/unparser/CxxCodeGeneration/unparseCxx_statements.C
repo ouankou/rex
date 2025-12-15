@@ -11607,6 +11607,8 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
           curprint(" = ");
 
           SgUnparse_Info ninfo(info);
+          ninfo.set_declstatement_ptr(typedef_stmt);
+          ninfo.set_reference_node_for_qualification(typedef_stmt);
           bool outputTypeDefinition = typedef_stmt->get_typedefBaseTypeContainsDefiningDeclaration();
           if (outputTypeDefinition) {
               ninfo.set_SkipQualifiedNames();

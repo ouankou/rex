@@ -91,6 +91,24 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 59: Template-template arguments must preserve required global
+# qualification (no string stripping in the unparser).
+add_test(
+  NAME Cxx_tests_rex_test2025_issue59_template_template_arg_global_qual_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -E \"UsePack[[:space:]]*<[[:space:]]*::Lib::Tuple\" rose_rex_test2025_issue59_template_template_arg_global_qual.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue59_template_template_arg_global_qual.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue59_template_template_arg_global_qual.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue59_template_template_arg_global_qual_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Namespace reopenings: keep declarations in their lexical namespace block.
 add_test(
   NAME Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse

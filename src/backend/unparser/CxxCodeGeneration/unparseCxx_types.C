@@ -12,64 +12,25 @@
 // Interestingly it must be at the top of the list of include files.
 #include "rose_config.h"
 
+#include <cctype>
+
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
 namespace {
-// Strip a leading global qualifier and, if the name is qualified by the current (or owning)
-// class, strip that class qualification as well (e.g., UsesDependent::rebound -> rebound).
-static std::string strip_redundant_qualification(std::string name, const SgUnparse_Info& info, SgType* type) {
-  // Trim trailing whitespace
-  while (!name.empty() && isspace(name.back())) {
+static std::string trim_whitespace(std::string name) {
+  while (!name.empty() &&
+         std::isspace(static_cast<unsigned char>(name.back()))) {
     name.pop_back();
   }
 
-  // Trim leading whitespace
   size_t first_non_space = 0;
-  while (first_non_space < name.size() && isspace(name[first_non_space])) {
+  while (first_non_space < name.size() &&
+         std::isspace(static_cast<unsigned char>(name[first_non_space]))) {
     ++first_non_space;
   }
   if (first_non_space > 0) {
     name.erase(0, first_non_space);
-  }
-
-  // Only strip explicit global qualification when it is not required by the unparse info.
-  if (info.get_global_qualification_required() == false) {
-    // Remove any leading global qualifiers
-    while (name.size() > 2 && name.compare(0, 2, "::") == 0) {
-      name = name.substr(2);
-    }
-
-    // Drop redundant global qualifiers that appear immediately after delimiters (e.g., "<::std::tuple>")
-    auto is_identifier_char = [](char c) {
-      return isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '>';
-    };
-    for (size_t i = 0; i + 1 < name.size(); /* increment inside */) {
-      if (name[i] == ':' && name[i+1] == ':') {
-        bool preceded_by_identifier = (i > 0) && is_identifier_char(name[i-1]);
-        if (!preceded_by_identifier) {
-          name.erase(i, 2);
-          continue;
-        }
-      }
-      ++i;
-    }
-  }
-
-  // Determine enclosing class from current scope.
-  SgScopeStatement* cur_scope = info.get_current_scope();
-  SgClassDefinition* cur_class = SageInterface::getEnclosingClassDefinition(cur_scope);
-  SgClassDeclaration* cur_decl = NULL;
-
-  if (cur_class != NULL) {
-    cur_decl = cur_class->get_declaration();
-  }
-
-  if (cur_decl != NULL) {
-    std::string prefix = cur_decl->get_name().getString() + "::";
-    if (name.size() > prefix.size() && name.compare(0, prefix.size(), prefix) == 0) {
-      name = name.substr(prefix.size());
-    }
   }
 
   return name;
@@ -795,15 +756,11 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #if 0
                printf ("Ouput typeNameString = %s \n",typeNameString.c_str());
 #endif
-               if (info.SkipBaseType() == false)
-                  {
-                     std::string finalName = strip_redundant_qualification(typeNameString, info, type);
-                     curprint(finalName);
-                     curprint(" "); // Restore space stripped by trim
-                   }
-             }
-            else
-             {
+            if (info.SkipBaseType() == false) {
+              curprint(trim_whitespace(typeNameString));
+              curprint(" ");
+            }
+          } else {
             // Sometimes neither is set and this is the trivial case where we want to output the generated type name (see test2011_74.C).
             // if (isSgPointerType(type) != NULL)
                if (info.isTypeFirstPart() == false && info.isTypeSecondPart() == false)
@@ -813,13 +770,11 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 #endif
                  // DQ (6/18/2013): Added support to skip output of typenames when handling multiple variable declarations in
                  // SgForInitStmt IR nodes and multiple SgInitializedName IR nodes in a single SgVariableDeclaration IR node.
-                     if (info.SkipBaseType() == false)
-                        {
-                          std::string finalName = strip_redundant_qualification(typeNameString, info, type);
-                          curprint(finalName);
-                        }
-                   }
-             }
+                 if (info.SkipBaseType() == false) {
+                   curprint(trim_whitespace(typeNameString));
+                 }
+               }
+          }
         }
        else
         {
@@ -2834,13 +2789,10 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
 #endif
                       // DQ (3/29/2019): In reviewing where we are using the get_qualified_name() function, this
                       // might be OK since it is likely only associated with the unparseToString() function.
-                         SgName nameQualifierAndType = class_type->get_qualified_name();
-                      // Strip redundant/global qualification from the generated name (e.g., leading "::std::")
-                         std::string finalName = strip_redundant_qualification(nameQualifierAndType.str(), info, type);
-                         curprint(finalName);
-                       }
-                      else
-                       {
+                         SgName nameQualifierAndType =
+                             class_type->get_qualified_name();
+                         curprint(nameQualifierAndType.str());
+                    } else {
                       // DQ (6/2/2011): Newest support for name qualification...
 #if DEBUG_UNPARSE_CLASS_TYPE
                          printf ("info.get_reference_node_for_qualification() = %p = %s \n",info.get_reference_node_for_qualification(),info.get_reference_node_for_qualification()->class_name().c_str());
@@ -2858,38 +2810,7 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
 #if DEBUG_UNPARSE_CLASS_TYPE && 0
                          curprint ( string("\n/* In unparseClassType: nameQualifier (from unp->u_name->generateNameQualifier function) = ") + nameQualifier + " */ \n ");
 #endif
-                         // REX FIX: Strip redundant qualification in unparseClassType
-                         std::string qualStr = nameQualifier.str();
-                         SgName nm = decl->get_name();
-                         
-                         // Debug ALL class names
-                         // printf("DEBUG: unparseClassType nm='%s' qualStr='%s'\n", nm.str(), qualStr.c_str());
-                         
-                         if (nm == "vector") {
-                             SgScopeStatement* scope = decl->get_scope();
-                             std::string scopeName = "unknown";
-                             if (scope) {
-                                 if (isSgGlobal(scope)) scopeName = "Global";
-                                 else if (isSgNamespaceDefinitionStatement(scope)) {
-                                     SgNamespaceDeclarationStatement* nsDecl = isSgNamespaceDefinitionStatement(scope)->get_namespaceDeclaration();
-                                     scopeName = std::string("Namespace: ") + nsDecl->get_name().str();
-                                 } else if (isSgClassDefinition(scope)) {
-                                     scopeName = std::string("Class: ") + isSgClassDefinition(scope)->get_declaration()->get_name().str();
-                                 }
-                             }
-                         // printf("DEBUG: unparseClassType for 'vector'. qualStr='%s'. Scope='%s'\n", qualStr.c_str(), scopeName.c_str());
-                        }
-
-                        // Preserve explicit global qualification when required; otherwise trim redundancies.
-                        if (info.get_global_qualification_required() == false) {
-                          while (qualStr.size() > 2 && qualStr.compare(0,2,"::") == 0) {
-                            qualStr = qualStr.substr(2);
-                          }
-                          if (qualStr == "::") {
-                            qualStr = "";
-                          }
-                        }
-                        curprint(qualStr);
+                         curprint(nameQualifier.str());
 
                          SgTemplateInstantiationDecl* templateInstantiationDeclaration = isSgTemplateInstantiationDecl(decl);
 
@@ -2965,7 +2886,7 @@ Unparse_Type::unparseClassType(SgType* type, SgUnparse_Info& info)
                               printf ("test 1: class type name: nm = %s \n",nm.str());
 #endif
                             }
-                       }
+                    }
                   }
              }
             else
@@ -3758,42 +3679,43 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                if (info.get_reference_node_for_qualification() == NULL)
                   {
                  // printf ("WARNING: In unparseTypedefType(): info.get_reference_node_for_qualification() == NULL (assuming this is for unparseToString() \n");
-                    SgName nameQualifierAndType = typedef_type->get_qualified_name();
+                 SgName nameQualifierAndType =
+                     typedef_type->get_qualified_name();
 #if 0
                     printf ("In unparseTypedefType(): Output name nameQualifierAndType = %s \n",nameQualifierAndType.str());
 #endif
                 // DQ (3/29/2019): In reviewing where we are using the get_qualified_name() function, this
                 // might be OK since it is likely only associated with the unparseToString() function.
-                    std::string finalName = strip_redundant_qualification(nameQualifierAndType.str(), info, type);
-                    curprint(finalName);
-                  }
-                 else
-                  {
-                    SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(info.get_reference_node_for_qualification());
+                 curprint(nameQualifierAndType.str());
+               } else {
+                 SgName nameQualifier =
+                     unp->u_name->lookup_generated_qualified_name(
+                         info.get_reference_node_for_qualification());
 
-                    // ROOT CAUSE FIX: If lookup_generated_qualified_name() returns empty (e.g., for system
-                    // header typedefs not in our AST), fall back to get_qualified_name() which is already
-                    // computed and stored on the type. This handles std::string and other system types.
-                    if (nameQualifier.getString().empty()) {
-                        SgName fullName = typedef_type->get_qualified_name();
-                        if (!fullName.getString().empty()) {
-                            curprint(fullName.getString() + " ");
-                            // Skip the normal name output below since we used the full qualified name
-                            return;
-                        }
-                    }
+                 // ROOT CAUSE FIX: If lookup_generated_qualified_name() returns
+                 // empty (e.g., for system header typedefs not in our AST),
+                 // fall back to get_qualified_name() which is already computed
+                 // and stored on the type. This handles std::string and other
+                 // system types.
+                 if (nameQualifier.getString().empty()) {
+                   SgName fullName = typedef_type->get_qualified_name();
+                   if (!fullName.getString().empty()) {
+                     curprint(fullName.getString() + " ");
+                     // Skip the normal name output below since we used the full
+                     // qualified name
+                     return;
+                   }
+                 }
 
-                    std::string qualStr = strip_redundant_qualification(nameQualifier.str(), info, type);
-                    // REX FIX: Prepend empty comment to ensure qualification is not stripped by unparser
-                    if (!qualStr.empty()) curprint("/* */" + qualStr);
+                 curprint(nameQualifier.str());
 
                  // DQ (4/14/2018): This is not the correct way to handle the output of template instantations since this uses the internal name (with unqualified template arguments).
 
 #if 0
                  // DQ (4/15/2018): Original code (which unparsed using the name which would embedd template arguments, but without name qualification).
-                    SgName nm = typedef_type->get_name();
-                    if (nm.getString() != "")
-                       {
+	                         SgName nm = typedef_type->get_name();
+	                        if (nm.getString() != "")
+	                           {
 #if 0
                          printf ("In unparseTypedefType(): Output qualifier of current types to the name = %s \n",nm.str());
 #endif
@@ -3828,12 +3750,11 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
 #if 0
                               printf ("In unparseTypedefType(): Output qualifier of current types to the name = %s \n",nm.str());
 #endif
-                              std::string nmStr = strip_redundant_qualification(nm.getString(), info, type);
-                              curprint ( nmStr + " ");
-                            }
+                          curprint(nm.getString() + " ");
+                        }
                        }
 #endif
-                  }
+               }
 #endif
 #endif
              }

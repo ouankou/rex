@@ -27,6 +27,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue124_system_header_specialization_args.cpp
   rex_test2025_issue125_fixup_child_list_warning.cpp
   rex_test2025_issue126_default_template_args.cpp
+  rex_test2025_issue59_template_template_arg_global_qual.cpp
   rex_test2025_namespace_reopenings_preserve_blocks.cpp
   method-defn-in-tpldecl-0.C
   method-defn-in-tpldecl-1.C
