@@ -1432,6 +1432,7 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
   std::cerr << "ClangToSageTranslator::VisitDecl" << std::endl;
 #endif
   if (*node == NULL) {
+#if DEBUG_VISIT_DECL
     const char *kind_name = decl ? decl->getDeclKindName() : "Unknown";
     std::string loc_string;
     if (decl) {
@@ -1458,6 +1459,7 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
       std::cerr << "Runtime error declaration name: " << nd->getNameAsString()
                 << std::endl;
     }
+#endif
     return false;
   }
 
@@ -3428,26 +3430,13 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
         }
 
         if (sg_decl) {
-          if (SgTemplateClassDeclaration *class_tmpl =
-                  isSgTemplateClassDeclaration(sg_decl)) {
-            SgName qual_name = class_tmpl->get_qualified_name();
-            if (qual_name.getString().find("::") == std::string::npos &&
-                class_tmpl->get_scope()) {
-              if (SgNamespaceDefinitionStatement *ns_def =
-                      isSgNamespaceDefinitionStatement(
-                          class_tmpl->get_scope())) {
-                qual_name =
-                    ns_def->get_namespaceDeclaration()->get_name().getString() +
-                    "::" + class_tmpl->get_name().getString();
-              }
-            }
-            SgType *type = SageBuilder::buildTemplateType(qual_name);
-            sg_arg = new SgTemplateArgument(type, false);
-          } else {
-            sg_arg = new SgTemplateArgument(
-                SgTemplateArgument::template_template_argument, sg_decl);
-            sg_arg->set_templateDeclaration(sg_decl);
-          }
+          sg_arg = new SgTemplateArgument(
+              SgTemplateArgument::template_template_argument,
+              /*isArrayBoundUnknownType=*/false,
+              /*type=*/NULL,
+              /*expression=*/NULL,
+              /*templateDeclaration=*/sg_decl,
+              /*explicitlySpecified=*/false);
         }
       }
       break;
@@ -3531,8 +3520,12 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
               sg_arg = new SgTemplateArgument(type, false);
             } else {
               sg_arg = new SgTemplateArgument(
-                  SgTemplateArgument::template_template_argument, sg_decl);
-              sg_arg->set_templateDeclaration(sg_decl);
+                  SgTemplateArgument::template_template_argument,
+                  /*isArrayBoundUnknownType=*/false,
+                  /*type=*/NULL,
+                  /*expression=*/NULL,
+                  /*templateDeclaration=*/sg_decl,
+                  /*explicitlySpecified=*/false);
             }
           }
         }
@@ -3603,28 +3596,13 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
           }
 
           if (sg_decl) {
-            if (SgTemplateClassDeclaration *class_tmpl =
-                    isSgTemplateClassDeclaration(sg_decl)) {
-              // Reuse logic for name qualification
-              SgName qual_name = class_tmpl->get_qualified_name();
-              if (qual_name.getString().find("::") == std::string::npos &&
-                  class_tmpl->get_scope()) {
-                if (SgNamespaceDefinitionStatement *ns_def =
-                        isSgNamespaceDefinitionStatement(
-                            class_tmpl->get_scope())) {
-                  qual_name = ns_def->get_namespaceDeclaration()
-                                  ->get_name()
-                                  .getString() +
-                              "::" + class_tmpl->get_name().getString();
-                }
-              }
-              SgType *type = SageBuilder::buildTemplateType(qual_name);
-              sg_arg = new SgTemplateArgument(type, false);
-            } else {
-              sg_arg = new SgTemplateArgument(
-                  SgTemplateArgument::template_template_argument, sg_decl);
-              sg_arg->set_templateDeclaration(sg_decl);
-            }
+            sg_arg = new SgTemplateArgument(
+                SgTemplateArgument::template_template_argument,
+                /*isArrayBoundUnknownType=*/false,
+                /*type=*/NULL,
+                /*expression=*/NULL,
+                /*templateDeclaration=*/sg_decl,
+                /*explicitlySpecified=*/false);
           }
         }
         break;

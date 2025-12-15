@@ -1659,25 +1659,13 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
       }
 
       if (sg_decl != nullptr) {
-        if (SgTemplateClassDeclaration *class_tmpl =
-                isSgTemplateClassDeclaration(sg_decl)) {
-          SgName qual_name = class_tmpl->get_qualified_name();
-          if (qual_name.getString().find("::") == std::string::npos &&
-              class_tmpl->get_scope()) {
-            if (SgNamespaceDefinitionStatement *ns_def =
-                    isSgNamespaceDefinitionStatement(class_tmpl->get_scope())) {
-              qual_name =
-                  ns_def->get_namespaceDeclaration()->get_name().getString() +
-                  "::" + class_tmpl->get_name().getString();
-            }
-          }
-          SgType *type = SageBuilder::buildTemplateType(qual_name);
-          sg_arg = new SgTemplateArgument(type, explicitlySpecified);
-        } else {
-          sg_arg = new SgTemplateArgument(
-              SgTemplateArgument::template_template_argument, sg_decl);
-          sg_arg->set_templateDeclaration(sg_decl);
-        }
+        sg_arg = new SgTemplateArgument(
+            SgTemplateArgument::template_template_argument,
+            /*isArrayBoundUnknownType=*/false,
+            /*type=*/nullptr,
+            /*expression=*/nullptr,
+            /*templateDeclaration=*/sg_decl,
+            /*explicitlySpecified=*/explicitlySpecified);
       } else {
         std::cerr << "Warning: Failed to translate template declaration "
                      "for template argument\n";
@@ -1817,11 +1805,6 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   inst_decl->set_definingDeclaration(nullptr);
   inst_decl->set_firstNondefiningDeclaration(inst_decl);
 
-  // REX FIX: Always require global qualification for template instantiations
-  // This ensures that the unparser prints "::" (e.g. "::std::vector" or
-  // "::tuple") which prevents ambiguity when global templates are shadowed.
-  inst_decl->set_global_qualification_required(true);
-
   if (inst_decl->get_templateDeclaration() == NULL) {
     std::cerr << "CRITICAL ERROR: inst_decl->get_templateDeclaration() is NULL "
                  "immediately after creation! Setting it explicitly."
@@ -1947,12 +1930,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     std::string type_name =
         clang::QualType(template_specialization_type, 0).getAsString(policy);
 
-    // Strip leading "::" if present to avoid double qualification by unparser
-    if (type_name.size() >= 2 && type_name.substr(0, 2) == "::") {
-      type_name = type_name.substr(2);
-    }
-
-    *node = SageBuilder::buildOpaqueType(type_name, getGlobalScope());
+    *node = SageBuilder::buildTemplateType(SgName(type_name));
     return VisitType(template_specialization_type, node);
   }
 
@@ -2167,7 +2145,7 @@ bool ClangToSageTranslator::VisitDependentNameType(
     type_name = "typename " + type_name;
   }
 
-  *node = SageBuilder::buildOpaqueType(type_name, getGlobalScope());
+  *node = SageBuilder::buildTemplateType(SgName(type_name));
 
   return VisitTypeWithKeyword(dependent_name_type, node) && res;
 }
