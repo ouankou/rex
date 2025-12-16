@@ -4011,7 +4011,20 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
 
   *node = sg_typedef_decl;
 
-  return VisitTypedefNameDecl(typedef_decl, node) && res;
+  bool result = VisitTypedefNameDecl(typedef_decl, node) && res;
+
+  // Clang provides a number of implicit/builtin typedefs (e.g. `__int128_t`,
+  // `__builtin_va_list`) with no meaningful source location. When ROSE outputs
+  // a transformed file via AST-unparsing, re-emitting these typedefs can
+  // produce invalid C++ (and may conflict with the backend compiler's own
+  // builtins). Keep them in the symbol table for analysis, but suppress their
+  // emission in generated source.
+  if (result && typedef_decl->isImplicit()) {
+    setCompilerGeneratedFileInfo(sg_typedef_decl);
+    suppress_unparse_output(sg_typedef_decl);
+  }
+
+  return result;
 }
 
 bool ClangToSageTranslator::VisitTypeAliasDecl(
@@ -6951,6 +6964,22 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
         clang::TagDecl *tagDecl = (clang::TagDecl *)decl;
         if (tagDecl->isEmbeddedInDeclarator())
           continue;
+      }
+
+      // Keep Clang implicit/builtin declarations out of the TU's global
+      // declaration list. These decls (e.g., `__builtin_va_list`, `__int128_t`)
+      // are frontend-provided and not part of the user's source; attaching them
+      // structurally makes translator tests that move global declarations
+      // inadvertently move/unparse builtins into user files.
+      if (decl->isImplicit() && decl->getLocation().isInvalid()) {
+        continue;
+      }
+
+      // Likewise, frontend-support headers should not become part of the user's
+      // global declaration sequence.
+      if (decl_stmt->get_file_info() != NULL &&
+          decl_stmt->get_file_info()->isFrontendSpecific()) {
+        continue;
       }
 
       p_global_scope->append_declaration(decl_stmt);

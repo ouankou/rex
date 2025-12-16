@@ -15295,6 +15295,24 @@ Sg_File_Info::setTransformation()
    {
      assert(this != NULL);
      p_classificationBitField |= e_transformation;
+
+     // Enforce SgLocatedNode invariants: if this file-info is attached to a
+     // located node, then all of that node's file-info objects must agree on
+     // the transformation flag (start/end/operatorPosition). This preserves
+     // backward compatibility for code that historically set transformation
+     // state via locatedNode->get_file_info()->setTransformation().
+     SgLocatedNode* locatedNode = isSgLocatedNode(get_parent());
+     if (locatedNode != NULL)
+        {
+          if (locatedNode->get_startOfConstruct() != NULL)
+               locatedNode->get_startOfConstruct()->p_classificationBitField |= e_transformation;
+          if (locatedNode->get_endOfConstruct() != NULL)
+               locatedNode->get_endOfConstruct()->p_classificationBitField |= e_transformation;
+
+          SgExpression* expression = isSgExpression(locatedNode);
+          if (expression != NULL && expression->get_operatorPosition() != NULL)
+               expression->get_operatorPosition()->p_classificationBitField |= e_transformation;
+        }
    }
 
 void
@@ -15302,6 +15320,21 @@ Sg_File_Info::unsetTransformation()
    {
      assert(this != NULL);
      p_classificationBitField &= ~e_transformation;
+
+     // Keep all associated file-info objects consistent (see
+     // setTransformation()).
+     SgLocatedNode* locatedNode = isSgLocatedNode(get_parent());
+     if (locatedNode != NULL)
+        {
+          if (locatedNode->get_startOfConstruct() != NULL)
+               locatedNode->get_startOfConstruct()->p_classificationBitField &= ~e_transformation;
+          if (locatedNode->get_endOfConstruct() != NULL)
+               locatedNode->get_endOfConstruct()->p_classificationBitField &= ~e_transformation;
+
+          SgExpression* expression = isSgExpression(locatedNode);
+          if (expression != NULL && expression->get_operatorPosition() != NULL)
+               expression->get_operatorPosition()->p_classificationBitField &= ~e_transformation;
+        }
    }
 
 bool
@@ -15402,6 +15435,24 @@ Sg_File_Info::setOutputInCodeGeneration()
   // ROSE_ASSERT(isSgNamespaceDefinitionStatement(this->get_parent()) == NULL);
 
      p_classificationBitField |= e_output_in_code_generation;
+
+     // Enforce SgLocatedNode invariants: if this file-info is attached to a
+     // located node, then all of that node's file-info objects must agree on
+     // the output-in-code-generation flag (start/end/operatorPosition). This
+     // preserves backward compatibility for code that historically set output
+     // state via locatedNode->get_file_info()->setOutputInCodeGeneration().
+     SgLocatedNode* locatedNode = isSgLocatedNode(get_parent());
+     if (locatedNode != NULL)
+        {
+          if (locatedNode->get_startOfConstruct() != NULL)
+               locatedNode->get_startOfConstruct()->p_classificationBitField |= e_output_in_code_generation;
+          if (locatedNode->get_endOfConstruct() != NULL)
+               locatedNode->get_endOfConstruct()->p_classificationBitField |= e_output_in_code_generation;
+
+          SgExpression* expression = isSgExpression(locatedNode);
+          if (expression != NULL && expression->get_operatorPosition() != NULL)
+               expression->get_operatorPosition()->p_classificationBitField |= e_output_in_code_generation;
+        }
    }
 
 void
@@ -15409,6 +15460,21 @@ Sg_File_Info::unsetOutputInCodeGeneration()
    {
      assert(this != NULL);
      p_classificationBitField &= ~e_output_in_code_generation;
+
+     // Keep all associated file-info objects consistent (see
+     // setOutputInCodeGeneration()).
+     SgLocatedNode* locatedNode = isSgLocatedNode(get_parent());
+     if (locatedNode != NULL)
+        {
+          if (locatedNode->get_startOfConstruct() != NULL)
+               locatedNode->get_startOfConstruct()->p_classificationBitField &= ~e_output_in_code_generation;
+          if (locatedNode->get_endOfConstruct() != NULL)
+               locatedNode->get_endOfConstruct()->p_classificationBitField &= ~e_output_in_code_generation;
+
+          SgExpression* expression = isSgExpression(locatedNode);
+          if (expression != NULL && expression->get_operatorPosition() != NULL)
+               expression->get_operatorPosition()->p_classificationBitField &= ~e_output_in_code_generation;
+        }
    }
 
 bool

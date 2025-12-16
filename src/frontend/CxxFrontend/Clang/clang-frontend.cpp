@@ -886,6 +886,8 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
         {
           located_node->set_startOfConstruct(start_fi);
           located_node->set_endOfConstruct(end_fi);
+          start_fi->set_parent(located_node);
+          end_fi->set_parent(located_node);
 
           // CFE FIX: If operatorPosition was already created by setSourcePositionToDefault,
           // we need to update it to match the real source location (like EDG does)
@@ -899,15 +901,14 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
                expr->set_operatorPosition(op_fi);
                op_fi->set_parent(expr);
              }
-        }
-       else
-        {
-          if (init_name != NULL)
-             {
-               init_name->set_startOfConstruct(start_fi);
-               init_name->set_endOfConstruct(end_fi);
-             }
-        }
+     } else {
+       if (init_name != NULL) {
+         init_name->set_startOfConstruct(start_fi);
+         init_name->set_endOfConstruct(end_fi);
+         start_fi->set_parent(init_name);
+         end_fi->set_parent(init_name);
+       }
+     }
    }
 
 void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode * node, bool to_be_unparse) {
@@ -943,6 +944,8 @@ void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode * node, bool to_
 
         located_node->set_startOfConstruct(start_fi);
         located_node->set_endOfConstruct(end_fi);
+        start_fi->set_parent(located_node);
+        end_fi->set_parent(located_node);
 
         // CFE FIX: If operatorPosition exists, update it to match compiler-generated flags
         SgExpression* expr = isSgExpression(located_node);
@@ -966,6 +969,8 @@ void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode * node, bool to_
 
         init_name->set_startOfConstruct(start_fi);
         init_name->set_endOfConstruct(end_fi);
+        start_fi->set_parent(init_name);
+        end_fi->set_parent(init_name);
     }
 }
 

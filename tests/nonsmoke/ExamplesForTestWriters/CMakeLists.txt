@@ -17,9 +17,9 @@ add_test(
   NAME nonsmoke_examples_noInputs
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    TITLE="run something basic [noInputs.passed]"
+    "TITLE=run something basic [noInputs.passed]"
     USE_SUBDIR=yes
-    CMD="$<TARGET_FILE:noInputs>"
+    "CMD=$<TARGET_FILE:noInputs>"
     ${_exit_status}
     noInputs.passed)
 set_tests_properties(nonsmoke_examples_noInputs PROPERTIES LABELS "nonsmoke;examples")
@@ -66,9 +66,9 @@ if(_parser_found_inputs)
       NAME nonsmoke_examples_parser_${spec}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        TITLE="parsing is accurate for ${spec} [parser_${spec}.passed]"
+        "TITLE=parsing is accurate for ${spec} [parser_${spec}.passed]"
         USE_SUBDIR=yes
-        CMD="$<TARGET_FILE:parser> ${NONSMOKE_BINARY_SPECIMENS_ROOT}/${spec}"
+        "CMD=$<TARGET_FILE:parser> ${NONSMOKE_BINARY_SPECIMENS_ROOT}/${spec}"
         ANS=${CMAKE_CURRENT_SOURCE_DIR}/parser_${spec}.ans
         ${_with_answer}
         parser_${spec}.passed)
@@ -96,9 +96,9 @@ if(_parser2_specimens)
       NAME nonsmoke_examples_parser2_${spec}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        TITLE="parsing passes (no answer) for ${spec} [parser2_${spec}.passed]"
+        "TITLE=parsing passes (no answer) for ${spec} [parser2_${spec}.passed]"
         USE_SUBDIR=yes
-        CMD="$<TARGET_FILE:parser> ${NONSMOKE_BINARY_SPECIMENS_ROOT}/${spec}"
+        "CMD=$<TARGET_FILE:parser> ${NONSMOKE_BINARY_SPECIMENS_ROOT}/${spec}"
         ${_exit_status}
         parser2_${spec}.passed)
     set_tests_properties(nonsmoke_examples_parser2_${spec} PROPERTIES LABELS "nonsmoke;examples")
@@ -116,9 +116,9 @@ if(TARGET runAlgorithm AND _binary_amd64)
       NAME nonsmoke_examples_runAlgorithm_${spec}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        TITLE="algorithm foo on ${spec} [runAlgorithm_${spec}.passed]"
+        "TITLE=algorithm foo on ${spec} [runAlgorithm_${spec}.passed]"
         USE_SUBDIR=yes
-        CMD="$<TARGET_FILE:runAlgorithm> --algorithm=foo ${spec}"
+        "CMD=$<TARGET_FILE:runAlgorithm> --algorithm=foo ${spec}"
         ${_exit_status}
         runAlgorithm_${spec}.passed)
     set_tests_properties(nonsmoke_examples_runAlgorithm_${spec} PROPERTIES LABELS "nonsmoke;examples")

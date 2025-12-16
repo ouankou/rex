@@ -124,7 +124,4 @@ if(enable-c)
     NAME Translator_testTranslator2018_02
     COMMAND testTranslator2018_02 -rose:verbose 0 -c ${_translator_input_dir}/input_testTranslator2018_02.C)
 
-  # Known to fail with Clang frontend; keep listed for parity with autotools but disable for now.
-  set_tests_properties(Translator_testTraversalOfTemplateInstantiations PROPERTIES DISABLED TRUE)
-  set_tests_properties(Translator_testTranslator2012_01 PROPERTIES DISABLED TRUE)
 endif()
