@@ -15295,23 +15295,30 @@ Sg_File_Info::isTransformation() const
 // classification bits that participate in IR invariants (start/end/operatorPosition).
 #define ROSE_FILE_INFO_PROPAGATE_CLASSIFICATION_BIT(mask, set_bit)             \
   do {                                                                         \
-    SgLocatedNode* locatedNode = isSgLocatedNode(get_parent());                \
-    if (locatedNode != NULL) {                                                 \
-      auto apply = [&](Sg_File_Info* fi) {                                     \
-        if (fi != NULL) {                                                      \
-          if (set_bit)                                                         \
-            fi->p_classificationBitField |= (mask);                            \
-          else                                                                 \
-            fi->p_classificationBitField &= ~(mask);                           \
-        }                                                                      \
-      };                                                                       \
+    SgNode* parent = get_parent();                                             \
+    auto apply = [&](Sg_File_Info* fi) {                                       \
+      if (fi != NULL) {                                                        \
+        if (set_bit)                                                           \
+          fi->p_classificationBitField |= (mask);                              \
+        else                                                                   \
+          fi->p_classificationBitField &= ~(mask);                             \
+      }                                                                        \
+    };                                                                         \
                                                                                \
+    SgLocatedNode* locatedNode = isSgLocatedNode(parent);                      \
+    if (locatedNode != NULL) {                                                 \
       apply(locatedNode->get_startOfConstruct());                              \
       apply(locatedNode->get_endOfConstruct());                                \
                                                                                \
       SgExpression* expression = isSgExpression(locatedNode);                  \
       if (expression != NULL)                                                  \
         apply(expression->get_operatorPosition());                             \
+    } else {                                                                   \
+      SgInitializedName* initName = isSgInitializedName(parent);               \
+      if (initName != NULL) {                                                  \
+        apply(initName->get_startOfConstruct());                               \
+        apply(initName->get_endOfConstruct());                                 \
+      }                                                                        \
     }                                                                          \
   } while (false)
 
