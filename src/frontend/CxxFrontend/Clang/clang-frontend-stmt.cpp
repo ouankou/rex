@@ -40,7 +40,7 @@ extendSourceRangeWithTrailingSemicolon(clang::SourceRange range,
   clang::SourceLocation after_end =
       clang::Lexer::getLocForEndOfToken(end, 0, sm, lang_opts);
   if (!after_end.isValid()) {
-    after_end = end;
+    return range;
   }
 
   clang::Token tok;
