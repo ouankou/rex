@@ -2312,7 +2312,9 @@ UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(SgSourceFi
                   // we handle this as a special case.
                   SgGlobal *globalScope = isSgGlobal(stmt);
                   if (scope == NULL && globalScope == NULL) {
-                    printf ("Error: parent of stmt = %p = %s is not a scope \n",stmt,stmt->class_name().c_str());
+                    fprintf(stderr,
+                            "Error: parent of stmt = %p = %s is not a scope \n",
+                            stmt, stmt->class_name().c_str());
                   }
 
             // DQ (6/10/2015): This is overly conservative and does not permit stmt to be a SgFunctionDefinition (see C++ test2015_26.C).
