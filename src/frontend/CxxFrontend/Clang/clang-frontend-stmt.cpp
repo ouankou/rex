@@ -4165,8 +4165,6 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
   if (clang::TypeSourceInfo *type_info =
           cxx_pseudo_destructor_expr->getDestroyedTypeInfo()) {
     name_end_loc = type_info->getTypeLoc().getEndLoc();
-  } else {
-    name_end_loc = cxx_pseudo_destructor_expr->getDestroyedTypeLoc();
   }
   if (tilde_loc.isValid() && name_end_loc.isValid()) {
     applySourceRange(pseudo_dtor, clang::SourceRange(tilde_loc, name_end_loc));
