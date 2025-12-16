@@ -775,6 +775,17 @@ void ClangToSageTranslator::populateClassDefinition(
       continue;
     }
 
+    // Clang models records/enums declared as part of a declarator
+    // (e.g., `struct Y { ... } field;` or `struct { ... } field;`) as TagDecls
+    // that are "embedded in declarator". These must not be appended as
+    // standalone members; the owning declarator/field will already emit the
+    // embedded definition inline during unparsing.
+    if (clang::TagDecl *tag_decl = llvm::dyn_cast<clang::TagDecl>(inner_decl)) {
+      if (tag_decl->isEmbeddedInDeclarator()) {
+        continue;
+      }
+    }
+
     if (inner_decl->isImplicit()) {
       continue;
     }

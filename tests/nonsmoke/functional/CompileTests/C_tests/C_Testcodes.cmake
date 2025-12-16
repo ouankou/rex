@@ -6,6 +6,7 @@ set(TESTCODES_REQUIRED_TO_PASS
   constants.c
   gconv_info.c
   math.c
+  rex_test2025_embedded_record_decl.c
   rose-1391-a.c
   rose-1391-b.c
   stdio.c
