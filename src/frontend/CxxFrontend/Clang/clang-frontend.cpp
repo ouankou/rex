@@ -8,6 +8,8 @@
 
 #include "rose_config.h"
 
+#include "clang/Lex/Lexer.h"
+
 #include "clang-to-dot.hpp"
 #include "ompAstConstruction.h"
 
@@ -830,15 +832,48 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
                bool inv_end_line;
                bool inv_end_col;
 
-               unsigned ls = p_compiler_instance->getSourceManager().getSpellingLineNumber(begin, &inv_begin_line);
-               unsigned cs = p_compiler_instance->getSourceManager().getSpellingColumnNumber(begin, &inv_begin_col);
-               unsigned le = p_compiler_instance->getSourceManager().getSpellingLineNumber(end, &inv_end_line);
-               unsigned ce = p_compiler_instance->getSourceManager().getSpellingColumnNumber(end, &inv_end_col);
+               unsigned ls = p_compiler_instance->getSourceManager()
+                                 .getSpellingLineNumber(begin, &inv_begin_line);
+               unsigned cs =
+                   p_compiler_instance->getSourceManager()
+                       .getSpellingColumnNumber(begin, &inv_begin_col);
 
-               if (file_begin.isInvalid() || file_end.isInvalid() || inv_begin_line || inv_begin_col || inv_end_line || inv_end_col)
-                  {
-                    ROSE_ASSERT(!"Should not happen as everything have been check before...");
-                  }
+               // Token-stream mapping expects end-of-construct to be
+               // token-accurate. Clang SourceRange ends are often at the
+               // *start* of the last token; convert to the last character of
+               // that token.
+               clang::SourceLocation end_for_fi = end;
+               {
+                 clang::SourceManager &sm =
+                     p_compiler_instance->getSourceManager();
+                 const clang::LangOptions &lang_opts =
+                     p_compiler_instance->getLangOpts();
+                 clang::SourceLocation after_token =
+                     clang::Lexer::getLocForEndOfToken(end_for_fi, 0, sm,
+                                                       lang_opts);
+                 if (after_token.isValid() && after_token.getRawEncoding() !=
+                                                  end_for_fi.getRawEncoding()) {
+                   clang::SourceLocation last_char =
+                       after_token.getLocWithOffset(-1);
+                   if (last_char.isValid()) {
+                     end_for_fi = last_char;
+                   }
+                 }
+               }
+
+               unsigned le =
+                   p_compiler_instance->getSourceManager()
+                       .getSpellingLineNumber(end_for_fi, &inv_end_line);
+               unsigned ce =
+                   p_compiler_instance->getSourceManager()
+                       .getSpellingColumnNumber(end_for_fi, &inv_end_col);
+
+               if (file_begin.isInvalid() || file_end.isInvalid() ||
+                   inv_begin_line || inv_begin_col || inv_end_line ||
+                   inv_end_col) {
+                 ROSE_ASSERT(!"Should not happen as everything have been check "
+                              "before...");
+               }
 
                // In LLVM 20, getFileEntryForID still returns const FileEntry*
                const clang::FileEntry* fileEntry = p_compiler_instance->getSourceManager().getFileEntryForID(file_begin);
