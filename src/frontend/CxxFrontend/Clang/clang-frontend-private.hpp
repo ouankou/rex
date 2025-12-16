@@ -339,8 +339,16 @@ class ClangToSageTranslator : public clang::ASTConsumer {
          *  \param to_be_unparse should this compiler generated node be unparse?
          */
         void setCompilerGeneratedFileInfo(SgNode * node, bool to_be_unparse = false);
+        /*! \brief Apply a source range to a ROSE node, extending the range to
+         * include a trailing semicolon when present. This is used when Clang
+         * provides an expression in statement position and ROSE must build a
+         * wrapper SgExprStatement.
+         */
+        void
+        applySourceRangeWithTrailingSemicolon(SgNode *rose_node,
+                                              const clang::Stmt *clang_stmt);
 
-    protected:
+      protected:
         std::map<clang::Decl *, SgNode *> p_decl_translation_map;
         std::map<clang::Stmt *, SgNode *> p_stmt_translation_map;
         std::map<const clang::Type *, SgNode *> p_type_translation_map;

@@ -195,6 +195,20 @@ std::string extractOpenMPDirective(const std::string &pragma_text) {
 
 } // namespace
 
+void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
+    SgNode *rose_node, const clang::Stmt *clang_stmt) {
+  if (rose_node == nullptr || clang_stmt == nullptr ||
+      p_compiler_instance == nullptr) {
+    return;
+  }
+
+  clang::SourceRange range = clang_stmt->getSourceRange();
+  range = extendSourceRangeWithTrailingSemicolon(
+      range, p_compiler_instance->getSourceManager(),
+      p_compiler_instance->getLangOpts());
+  applySourceRange(rose_node, range);
+}
+
 SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   if (stmt == NULL)
     return NULL;
@@ -1542,13 +1556,7 @@ bool ClangToSageTranslator::VisitCompoundStmt(
       block->append_statement(stmt);
     } else if (expr != NULL) {
       SgExprStatement *expr_stmt = SageBuilder::buildExprStatement(expr);
-      if (p_compiler_instance != nullptr) {
-        clang::SourceRange range = child_stmt->getSourceRange();
-        range = extendSourceRangeWithTrailingSemicolon(
-            range, p_compiler_instance->getSourceManager(),
-            p_compiler_instance->getLangOpts());
-        applySourceRange(expr_stmt, range);
-      }
+      applySourceRangeWithTrailingSemicolon(expr_stmt, child_stmt);
       block->append_statement(expr_stmt);
     }
   }
@@ -1851,13 +1859,7 @@ bool ClangToSageTranslator::VisitDoStmt(clang::DoStmt *do_stmt, SgNode **node) {
   SgExpression *expr = isSgExpression(tmp_body);
   if (expr != NULL) {
     body = SageBuilder::buildExprStatement(expr);
-    if (p_compiler_instance != nullptr && do_stmt->getBody() != nullptr) {
-      clang::SourceRange range = do_stmt->getBody()->getSourceRange();
-      range = extendSourceRangeWithTrailingSemicolon(
-          range, p_compiler_instance->getSourceManager(),
-          p_compiler_instance->getLangOpts());
-      applySourceRange(body, range);
-    }
+    applySourceRangeWithTrailingSemicolon(body, do_stmt->getBody());
   }
   ROSE_ASSERT(body != NULL);
   body = wrapStatementWithOpenMPPragmas(do_stmt->getBody(), body);
@@ -2683,13 +2685,7 @@ bool ClangToSageTranslator::VisitCaseStmt(clang::CaseStmt *case_stmt,
   SgExpression *expr = isSgExpression(tmp_stmt);
   if (expr != NULL) {
     stmt = SageBuilder::buildExprStatement(expr);
-    if (p_compiler_instance != nullptr && case_stmt->getSubStmt() != nullptr) {
-      clang::SourceRange range = case_stmt->getSubStmt()->getSourceRange();
-      range = extendSourceRangeWithTrailingSemicolon(
-          range, p_compiler_instance->getSourceManager(),
-          p_compiler_instance->getLangOpts());
-      applySourceRange(stmt, range);
-    }
+    applySourceRangeWithTrailingSemicolon(stmt, case_stmt->getSubStmt());
   }
   ROSE_ASSERT(stmt != NULL);
   stmt = wrapStatementWithOpenMPPragmas(case_stmt->getSubStmt(), stmt);
@@ -2721,14 +2717,7 @@ bool ClangToSageTranslator::VisitDefaultStmt(clang::DefaultStmt *default_stmt,
   SgExpression *expr = isSgExpression(tmp_stmt);
   if (expr != NULL) {
     stmt = SageBuilder::buildExprStatement(expr);
-    if (p_compiler_instance != nullptr &&
-        default_stmt->getSubStmt() != nullptr) {
-      clang::SourceRange range = default_stmt->getSubStmt()->getSourceRange();
-      range = extendSourceRangeWithTrailingSemicolon(
-          range, p_compiler_instance->getSourceManager(),
-          p_compiler_instance->getLangOpts());
-      applySourceRange(stmt, range);
-    }
+    applySourceRangeWithTrailingSemicolon(stmt, default_stmt->getSubStmt());
   }
   ROSE_ASSERT(stmt != NULL);
   stmt = wrapStatementWithOpenMPPragmas(default_stmt->getSubStmt(), stmt);
@@ -7012,13 +7001,8 @@ bool ClangToSageTranslator::VisitLabelStmt(clang::LabelStmt *label_stmt,
     SgExpression *sg_sub_expr = isSgExpression(tmp_sub_stmt);
     ROSE_ASSERT(sg_sub_expr != NULL);
     sg_sub_stmt = SageBuilder::buildExprStatement(sg_sub_expr);
-    if (p_compiler_instance != nullptr && label_stmt->getSubStmt() != nullptr) {
-      clang::SourceRange range = label_stmt->getSubStmt()->getSourceRange();
-      range = extendSourceRangeWithTrailingSemicolon(
-          range, p_compiler_instance->getSourceManager(),
-          p_compiler_instance->getLangOpts());
-      applySourceRange(sg_sub_stmt, range);
-    }
+    applySourceRangeWithTrailingSemicolon(sg_sub_stmt,
+                                          label_stmt->getSubStmt());
   }
 
   ROSE_ASSERT(sg_sub_stmt != NULL);
@@ -7058,13 +7042,7 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt *while_stmt,
   SgExpression *expr = isSgExpression(tmp_body);
   if (expr != NULL) {
     body = SageBuilder::buildExprStatement(expr);
-    if (p_compiler_instance != nullptr && while_stmt->getBody() != nullptr) {
-      clang::SourceRange range = while_stmt->getBody()->getSourceRange();
-      range = extendSourceRangeWithTrailingSemicolon(
-          range, p_compiler_instance->getSourceManager(),
-          p_compiler_instance->getLangOpts());
-      applySourceRange(body, range);
-    }
+    applySourceRangeWithTrailingSemicolon(body, while_stmt->getBody());
   }
   ROSE_ASSERT(body != NULL);
   body = wrapStatementWithOpenMPPragmas(while_stmt->getBody(), body);
