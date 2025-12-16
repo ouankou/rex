@@ -8031,6 +8031,15 @@ SageInterface::getScope( const SgNode* astNode )
         return qualifiedName->get_scope();
     else if (const SgSourceFile* sourceFile = isSgSourceFile(astNode))
       return sourceFile->get_globalScope();
+    else if (const SgDeclarationStatement *declStmt =
+                 isSgDeclarationStatement(astNode)) {
+      // A declaration's semantic scope is carried explicitly on the node and
+      // can differ from its lexical parent (e.g., friend free functions are
+      // lexically inside a class but semantically declared in the enclosing
+      // namespace/global scope).
+      if (declStmt->get_scope() != NULL)
+        return declStmt->get_scope();
+    }
 
     // DQ (6/9/2007): This function traverses through the parents to the first scope (used for name qualification support of template arguments)
     const SgNode* parentNode = astNode;
