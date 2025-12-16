@@ -8030,12 +8030,7 @@ SageInterface::getScope( const SgNode* astNode )
     else if (const SgQualifiedName* qualifiedName = isSgQualifiedName(astNode))
         return qualifiedName->get_scope();
     else if (const SgSourceFile* sourceFile = isSgSourceFile(astNode))
-        return sourceFile->get_globalScope();
-    else if (const SgDeclarationStatement* declStmt = isSgDeclarationStatement(astNode))
-       {
-         if (declStmt->get_scope() != NULL)
-              return declStmt->get_scope();
-       }
+      return sourceFile->get_globalScope();
 
     // DQ (6/9/2007): This function traverses through the parents to the first scope (used for name qualification support of template arguments)
     const SgNode* parentNode = astNode;
@@ -19132,20 +19127,6 @@ SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(const vector<SgDecla
       vector<SgDeclarationStatement*>::const_iterator j = find (sortedNode.begin(), sortedNode.end(), *i);
       if (j == sortedNode.end())
         sortedNode.push_back(*i);
-    }
-  }
-
-  // FIX (Clang frontend): Handle compiler-generated nodes that don't appear in AST traversal
-  // Some nodes (e.g., compiler-generated functions) may not have valid source positions
-  // and won't be found by NodeQuery. Append these to the end of the sorted list.
-  for (vector<SgDeclarationStatement*>::const_iterator iter = nodevec.begin(); iter != nodevec.end(); iter++)
-  {
-    vector<SgDeclarationStatement*>::const_iterator j = find(sortedNode.begin(), sortedNode.end(), *iter);
-    if (j == sortedNode.end())
-    {
-      // This node wasn't found in the AST traversal (likely compiler-generated)
-      // Append it to the end
-      sortedNode.push_back(*iter);
     }
   }
 
