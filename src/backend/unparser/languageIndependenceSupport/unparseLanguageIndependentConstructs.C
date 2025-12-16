@@ -2284,17 +2284,37 @@ UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(SgSourceFi
             // DQ (12/1/2013): I am not clear if there are cases where we need to output the associated trailing tokens.
             // None of these cases appear to be an issue in the C regression tests.
 
-               bool isLastStatementOfScope = false;
+                  bool isLastStatementOfScope = false;
 
-            // DQ (1/7/2015): We want the parent instead of the scope, because this is a structural issue.
-            // SgScopeStatement* scope = stmt->get_scope();
-               SgScopeStatement* scope = isSgScopeStatement(stmt->get_parent());
+                  // DQ (1/7/2015): We want the parent instead of the scope,
+                  // because this is a structural issue. SgScopeStatement* scope
+                  // = stmt->get_scope();
+                  SgScopeStatement *scope =
+                      isSgScopeStatement(stmt->get_parent());
+                  if (scope == NULL) {
+                    // SgFunctionDefinition nodes are owned by their
+                    // SgFunctionDeclaration, not directly by the enclosing
+                    // scope statement.  For token-stream unparsing we still
+                    // need the enclosing scope so we can correctly handle
+                    // trailing tokens/whitespace between sibling statements in
+                    // that scope.
+                    if (SgFunctionDefinition *functionDefinition =
+                            isSgFunctionDefinition(stmt)) {
+                      if (SgFunctionDeclaration *functionDeclaration =
+                              functionDefinition->get_declaration()) {
+                        scope = isSgScopeStatement(
+                            functionDeclaration->get_parent());
+                      }
+                    }
+                  }
 
-            // Note that the parent of the global scope is not a scope, so we handle this as a special case.
-               SgGlobal* globalScope = isSgGlobal(stmt);
-               if (scope == NULL && globalScope == NULL)
-                  {
-                    printf ("Error: parent of stmt = %p = %s is not a scope \n",stmt,stmt->class_name().c_str());
+                  // Note that the parent of the global scope is not a scope, so
+                  // we handle this as a special case.
+                  SgGlobal *globalScope = isSgGlobal(stmt);
+                  if (scope == NULL && globalScope == NULL) {
+                    fprintf(stderr,
+                            "Error: parent of stmt = %p = %s is not a scope \n",
+                            stmt, stmt->class_name().c_str());
                   }
 
             // DQ (6/10/2015): This is overly conservative and does not permit stmt to be a SgFunctionDefinition (see C++ test2015_26.C).
