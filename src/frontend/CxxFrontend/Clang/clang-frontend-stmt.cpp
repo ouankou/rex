@@ -4159,7 +4159,20 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
       new SgPseudoDestructorRefExp(file_info, destroyed_type);
   ROSE_ASSERT(pseudo_dtor != NULL);
   pseudo_dtor->post_construction_initialization();
-  applySourceRange(pseudo_dtor, cxx_pseudo_destructor_expr->getSourceRange());
+
+  clang::SourceLocation tilde_loc = cxx_pseudo_destructor_expr->getTildeLoc();
+  clang::SourceLocation name_end_loc;
+  if (clang::TypeSourceInfo *type_info =
+          cxx_pseudo_destructor_expr->getDestroyedTypeInfo()) {
+    name_end_loc = type_info->getTypeLoc().getEndLoc();
+  } else {
+    name_end_loc = cxx_pseudo_destructor_expr->getDestroyedTypeLoc();
+  }
+  if (tilde_loc.isValid() && name_end_loc.isValid()) {
+    applySourceRange(pseudo_dtor, clang::SourceRange(tilde_loc, name_end_loc));
+  } else {
+    applySourceRange(pseudo_dtor, cxx_pseudo_destructor_expr->getSourceRange());
+  }
 
   SgExpression *callee = NULL;
   if (cxx_pseudo_destructor_expr->isArrow()) {
