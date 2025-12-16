@@ -4126,29 +4126,53 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: CXXPseudoDestructorExpr represents a call to a destructor
-  // on a non-class type Example: ptr->~T() where T is a primitive type (used in
-  // templates) Get the destroyed type
-  clang::QualType destroyed_type =
-      cxx_pseudo_destructor_expr->getDestroyedType();
-  SgType *sg_type = buildTypeFromQualifiedType(destroyed_type);
-  ROSE_ASSERT(sg_type != NULL);
+  // Clang models pseudo-destructor calls as
+  // CallExpr(callee=CXXPseudoDestructorExpr). Build the callee structurally so
+  // the enclosing SgFunctionCallExp can emit the call parentheses without
+  // duplication.
 
-  // Create source location info
+  SgNode *tmp_base = Traverse(cxx_pseudo_destructor_expr->getBase());
+  SgExpression *base = isSgExpression(tmp_base);
+  ROSE_ASSERT(base != NULL);
+
+  SgType *destroyed_type = NULL;
+  if (clang::TypeSourceInfo *type_info =
+          cxx_pseudo_destructor_expr->getDestroyedTypeInfo()) {
+    destroyed_type = buildTypeFromQualifiedType(type_info->getType());
+  } else {
+    clang::QualType qual_type = cxx_pseudo_destructor_expr->getDestroyedType();
+    if (!qual_type.isNull()) {
+      destroyed_type = buildTypeFromQualifiedType(qual_type);
+    } else if (const clang::IdentifierInfo *id =
+                   cxx_pseudo_destructor_expr->getDestroyedTypeIdentifier()) {
+      destroyed_type =
+          SageBuilder::buildTemplateType(SgName(id->getName().str()));
+    }
+  }
+  ROSE_ASSERT(destroyed_type != NULL);
+
   Sg_File_Info *file_info =
-      Sg_File_Info::generateDefaultFileInfoForTransformationNode();
+      Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
   ROSE_ASSERT(file_info != NULL);
 
-  // Create the pseudo destructor reference expression
   SgPseudoDestructorRefExp *pseudo_dtor =
-      new SgPseudoDestructorRefExp(file_info, sg_type);
+      new SgPseudoDestructorRefExp(file_info, destroyed_type);
   ROSE_ASSERT(pseudo_dtor != NULL);
-
-  // Call post_construction_initialization which sets up the member function
-  // type
   pseudo_dtor->post_construction_initialization();
+  applySourceRange(pseudo_dtor, cxx_pseudo_destructor_expr->getSourceRange());
 
-  *node = pseudo_dtor;
+  SgExpression *callee = NULL;
+  if (cxx_pseudo_destructor_expr->isArrow()) {
+    callee =
+        SageBuilder::buildBinaryExpression_nfi<SgArrowExp>(base, pseudo_dtor);
+  } else {
+    callee =
+        SageBuilder::buildBinaryExpression_nfi<SgDotExp>(base, pseudo_dtor);
+  }
+  ROSE_ASSERT(callee != NULL);
+  applySourceRange(callee, cxx_pseudo_destructor_expr->getSourceRange());
+
+  *node = callee;
 
   return VisitExpr(cxx_pseudo_destructor_expr, node) && res;
 }
