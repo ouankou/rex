@@ -18,8 +18,8 @@ add_test(
   NAME smoke_attributeTests
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    TITLE="AstAttributeMechanism [attributeTests.passed]"
-    CMD="$<TARGET_FILE:attributeTests>"
+    "TITLE=AstAttributeMechanism [attributeTests.passed]"
+    "CMD=$<TARGET_FILE:attributeTests>"
     ${_exit_status}
     attributeTests.passed)
 
@@ -27,8 +27,8 @@ add_test(
   NAME smoke_testMLog
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    TITLE="test mlogging facility (src/util/mlog.h/C) [testMLog.passed]"
-    CMD="$<TARGET_FILE:testMLog>"
+    "TITLE=test mlogging facility (src/util/mlog.h/C) [testMLog.passed]"
+    "CMD=$<TARGET_FILE:testMLog>"
     ${_exit_status}
     testMLog.passed)
 
@@ -36,8 +36,8 @@ add_test(
   NAME smoke_testStringUtility
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    TITLE="string utilities [testStringUtility.passed]"
-    CMD="$<TARGET_FILE:testStringUtility>"
+    "TITLE=string utilities [testStringUtility.passed]"
+    "CMD=$<TARGET_FILE:testStringUtility>"
     ${_exit_status}
     testStringUtility.passed)
 
@@ -45,8 +45,8 @@ add_test(
   NAME smoke_testSourceLocation
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    TITLE="test SourceLocation [testSourceLocation.passed]"
-    CMD="$<TARGET_FILE:testSourceLocation>"
+    "TITLE=test SourceLocation [testSourceLocation.passed]"
+    "CMD=$<TARGET_FILE:testSourceLocation>"
     ${_exit_status}
     testSourceLocation.passed)
 

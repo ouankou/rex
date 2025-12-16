@@ -15290,11 +15290,48 @@ Sg_File_Info::isTransformation() const
      return (p_classificationBitField & e_transformation);
    }
 
+// Keep SgLocatedNode file-info objects consistent: if a Sg_File_Info is attached
+// to a located node, then all of that node's file-info objects must agree on
+// classification bits that participate in IR invariants (start/end/operatorPosition).
+#define ROSE_FILE_INFO_PROPAGATE_CLASSIFICATION_BIT(mask, set_bit)             \
+  do {                                                                         \
+    SgNode* parent = get_parent();                                             \
+    auto apply = [&](Sg_File_Info* fi) {                                       \
+      if (fi != NULL) {                                                        \
+        if (set_bit)                                                           \
+          fi->p_classificationBitField |= (mask);                              \
+        else                                                                   \
+          fi->p_classificationBitField &= ~(mask);                             \
+      }                                                                        \
+    };                                                                         \
+                                                                               \
+    SgLocatedNode* locatedNode = isSgLocatedNode(parent);                      \
+    if (locatedNode != NULL) {                                                 \
+      apply(locatedNode->get_startOfConstruct());                              \
+      apply(locatedNode->get_endOfConstruct());                                \
+                                                                               \
+      SgExpression* expression = isSgExpression(locatedNode);                  \
+      if (expression != NULL)                                                  \
+        apply(expression->get_operatorPosition());                             \
+    } else {                                                                   \
+      SgInitializedName* initName = isSgInitializedName(parent);               \
+      if (initName != NULL) {                                                  \
+        apply(initName->get_startOfConstruct());                               \
+        apply(initName->get_endOfConstruct());                                 \
+      }                                                                        \
+    }                                                                          \
+  } while (false)
+
 void
 Sg_File_Info::setTransformation()
    {
      assert(this != NULL);
      p_classificationBitField |= e_transformation;
+
+     // Preserve backwards compatibility for code that historically set
+     // transformation state via locatedNode->get_file_info()->setTransformation()
+     // while enforcing SgLocatedNode invariants.
+     ROSE_FILE_INFO_PROPAGATE_CLASSIFICATION_BIT(e_transformation, true);
    }
 
 void
@@ -15302,6 +15339,8 @@ Sg_File_Info::unsetTransformation()
    {
      assert(this != NULL);
      p_classificationBitField &= ~e_transformation;
+
+     ROSE_FILE_INFO_PROPAGATE_CLASSIFICATION_BIT(e_transformation, false);
    }
 
 bool
@@ -15402,6 +15441,11 @@ Sg_File_Info::setOutputInCodeGeneration()
   // ROSE_ASSERT(isSgNamespaceDefinitionStatement(this->get_parent()) == NULL);
 
      p_classificationBitField |= e_output_in_code_generation;
+
+     // Preserve backwards compatibility for code that historically set output
+     // state via locatedNode->get_file_info()->setOutputInCodeGeneration() while
+     // enforcing SgLocatedNode invariants.
+     ROSE_FILE_INFO_PROPAGATE_CLASSIFICATION_BIT(e_output_in_code_generation, true);
    }
 
 void
@@ -15409,7 +15453,11 @@ Sg_File_Info::unsetOutputInCodeGeneration()
    {
      assert(this != NULL);
      p_classificationBitField &= ~e_output_in_code_generation;
+
+     ROSE_FILE_INFO_PROPAGATE_CLASSIFICATION_BIT(e_output_in_code_generation, false);
    }
+
+#undef ROSE_FILE_INFO_PROPAGATE_CLASSIFICATION_BIT
 
 bool
 Sg_File_Info::isShared() const
