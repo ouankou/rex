@@ -12773,12 +12773,16 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
        } else if (templateFunctionDeclaration != NULL || templateMemberFunctionDeclaration != NULL) {
          SgFunctionDeclaration * functionDeclaration = (SgFunctionDeclaration *)stmt;
 
-         SgType * rtype = functionDeclaration->get_type()->get_return_type();
-         unparseReturnType (functionDeclaration,rtype,ninfo);
-
+         SgType *rtype = functionDeclaration->get_type()->get_return_type();
          ninfo.unset_SkipSemiColon();
          ninfo.set_declstatement_ptr(NULL);
          ninfo.set_declstatement_ptr(functionDeclaration);
+
+         // Access labels (public:/private:/protected:) are handled by
+         // printSpecifier1(template_stmt, info) above; only output the function
+         // specifiers here (friend/inline/constexpr/etc).
+         unp->u_sage->printSpecifier2(functionDeclaration, ninfo);
+         unparseReturnType(functionDeclaration, rtype, ninfo);
 
          unparse_helper(functionDeclaration, ninfo);
 

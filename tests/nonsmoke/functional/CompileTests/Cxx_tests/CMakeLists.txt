@@ -109,6 +109,25 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 60: Friend free functions declared/defined inside a class must keep
+# their lexical placement (inside the class) without emitting extra namespace
+# declarations/definitions.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue60_friend_function_symbol_scope_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -E \"friend[[:space:]]+int[[:space:]]+f[[:space:]]*\\(\" rose_rex_test2025_issue60_friend_function_symbol_scope.cpp && grep -E \"friend[[:space:]]+int[[:space:]]+g[[:space:]]*\\(\" rose_rex_test2025_issue60_friend_function_symbol_scope.cpp && ! grep -E \"^[[:space:]]*int[[:space:]]+f[[:space:]]*\\(\" rose_rex_test2025_issue60_friend_function_symbol_scope.cpp && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_issue60_friend_function_symbol_scope.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue60_friend_function_symbol_scope.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue60_friend_function_symbol_scope_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 64: Unparser must preserve required global qualification for template
 # instantiations when a global template is shadowed by a nested-scope template.
 add_test(

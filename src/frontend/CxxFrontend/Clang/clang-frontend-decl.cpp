@@ -1661,14 +1661,17 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   ensure_scope_and_parent(sg_decl->get_definingDeclaration(), current_scope);
   diagnose_null_scope(sg_decl, "FriendDecl");
 
-  // REX FIX: Issue 99
-  // Ensure that the body of the friend function definition points back to the
-  // definition. This is required for VirtualCFG and other analyses.
-
-  if (sg_decl->get_firstNondefiningDeclaration() == NULL)
+  // Ensure friend definitions are wired consistently for analysis passes such
+  // as VirtualCFG. Do not mark friend prototypes as defining declarations.
+  if (sg_decl->get_firstNondefiningDeclaration() == NULL) {
     sg_decl->set_firstNondefiningDeclaration(sg_decl);
-  if (sg_decl->get_definingDeclaration() == NULL)
-    sg_decl->set_definingDeclaration(sg_decl);
+  }
+  if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(sg_decl)) {
+    if (func_decl->get_definition() != NULL &&
+        func_decl->get_definingDeclaration() == NULL) {
+      func_decl->set_definingDeclaration(func_decl);
+    }
+  }
 
   *node = sg_decl;
   return VisitDecl(friend_decl, node) && res;
@@ -1720,10 +1723,15 @@ bool ClangToSageTranslator::VisitFriendTemplateDecl(
                           current_scope);
   ensure_scope_and_parent(sg_decl->get_definingDeclaration(), current_scope);
 
-  if (sg_decl->get_firstNondefiningDeclaration() == NULL)
+  if (sg_decl->get_firstNondefiningDeclaration() == NULL) {
     sg_decl->set_firstNondefiningDeclaration(sg_decl);
-  if (sg_decl->get_definingDeclaration() == NULL)
-    sg_decl->set_definingDeclaration(sg_decl);
+  }
+  if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(sg_decl)) {
+    if (func_decl->get_definition() != NULL &&
+        func_decl->get_definingDeclaration() == NULL) {
+      func_decl->set_definingDeclaration(func_decl);
+    }
+  }
 
   // REX FIX: Issue 99
   // Ensure that the body of the friend function definition points back to the
@@ -4764,11 +4772,19 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   bool isDefinition = function_decl->isThisDeclarationADefinition();
 
-  // Check if this is a friend function - friends are free functions, not
-  // members
-  bool isFriendFunction =
-      (function_decl->getFriendObjectKind() != clang::Decl::FOK_None);
+  // Check if this is a friend function.  Clang represents friend free
+  // functions as FunctionDecls inside a record DeclContext (but *not* as
+  // CXXMethodDecls).  Some friend templates are not marked via
+  // getFriendObjectKind(), so also infer friend-ness from the DeclContext.
   bool isFriendMethod = llvm::isa<clang::CXXMethodDecl>(function_decl);
+  bool decl_context_is_record =
+      decl_context != NULL && llvm::isa<clang::CXXRecordDecl>(decl_context);
+  bool looks_like_friend_free_function =
+      decl_context_is_record && !isFriendMethod;
+
+  bool isFriendFunction =
+      (function_decl->getFriendObjectKind() != clang::Decl::FOK_None) ||
+      looks_like_friend_free_function;
   bool isFriendFreeFunction = (isFriendFunction && !isFriendMethod);
 
   // Lexical class enclosing scope needed so friend free functions stay visible
@@ -4950,6 +4966,19 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       normalizeNamespaceScope(proper_scope);
   if (scope_for_symbol_table == NULL) {
     scope_for_symbol_table = proper_scope;
+  }
+
+  // Friend free functions declared/defined inside a class are semantically
+  // declared in the enclosing namespace/global scope.  Use that scope for
+  // symbol-table insertion and SageBuilder lookup, while preserving the lexical
+  // class scope for AST attachment/unparse order.
+  if (isFriendFreeFunction && friend_lexically_inside_class &&
+      lexical_friend_enclosing_scope != NULL) {
+    scope_for_symbol_table =
+        normalizeNamespaceScope(lexical_friend_enclosing_scope);
+    if (scope_for_symbol_table == NULL) {
+      scope_for_symbol_table = getGlobalScope();
+    }
   }
 
   SgFunctionDeclaration *sg_function_decl;
@@ -5591,46 +5620,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
       sg_function_decl->set_definition(function_definition);
       function_definition->set_parent(sg_function_decl);
-
-      // P1 Badge Fix: Ensure consistency of the function symbol after
-      // potential re-translation. If the symbol was created but lost its
-      // declaration link (or points to NULL), fix it. Also, if the symbol
-      // is MISSING (e.g. friend function not added to scope correctly),
-      // create it. This prevents assertions in backend unparsing
-      // (nameQualificationSupport).
-      if (sg_function_decl) {
-        SgSymbol *symbol = sg_function_decl->get_symbol_from_symbol_table();
-        if (symbol == NULL) {
-          // Only synthesize symbols for non-template functions. Template
-          // declarations use dedicated template symbols (not SgFunctionSymbol),
-          // and forcing a function symbol breaks later lookup/instantiation.
-          if (isSgTemplateFunctionDeclaration(sg_function_decl) == NULL &&
-              isSgTemplateMemberFunctionDeclaration(sg_function_decl) == NULL) {
-            if (SgScopeStatement *scope = sg_function_decl->get_scope()) {
-              SgFunctionSymbol *new_sym = NULL;
-              if (SgMemberFunctionDeclaration *member_decl =
-                      isSgMemberFunctionDeclaration(sg_function_decl)) {
-                new_sym = new SgMemberFunctionSymbol(member_decl);
-              } else {
-                new_sym = new SgFunctionSymbol(sg_function_decl);
-              }
-              scope->insert_symbol(sg_function_decl->get_name(), new_sym);
-              symbol = new_sym;
-            }
-          }
-        }
-
-        if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(symbol)) {
-          if (func_sym->get_declaration() == NULL) {
-            if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
-                    sg_function_decl->get_firstNondefiningDeclaration())) {
-              func_sym->set_declaration(first_nondef);
-            } else {
-              func_sym->set_declaration(sg_function_decl);
-            }
-          }
-        }
-      }
     } else {
       // Function declaration without body (e.g., template function in header,
       // forward declaration) This is normal for template functions and should
@@ -5802,9 +5791,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   // REX FIX: Handle AS_none for FunctionDecl to avoid unparser assertion
   clang::AccessSpecifier access = function_decl->getAccess();
 
-  if (name.getString() == "foo") {
-  }
-
   SgDeclarationStatement *target_decl = sg_function_decl;
   if (access == clang::AS_public) {
     target_decl->get_declarationModifier().get_accessModifier().setPublic();
@@ -5856,133 +5842,10 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     sg_function_decl->get_declarationModifier().setFriend();
   }
 
-  // Friend declarations written inside a class are still free functions. Keep
-  // them in the lexical class for syntactic correctness but ensure they remain
-  // visible from the enclosing namespace/global scope.
-  if (isFriendFreeFunction && lexical_friend_enclosing_scope != NULL) {
-    SgFunctionDeclaration *lexical_decl = isSgFunctionDeclaration(
-        sg_function_decl->get_firstNondefiningDeclaration());
-    if (lexical_decl == NULL) {
-      lexical_decl = sg_function_decl;
-    }
-
-    // Friend free functions are semantically declared in the enclosing
-    // namespace/global scope, but are lexically written inside the class.
-    // SageBuilder requires the first nondefining declaration to carry a symbol
-    // in its own scope. If we use the lexical class-scope friend declaration as
-    // the symbol basis, later namespace-scope redeclarations will see a first
-    // nondefining declaration without a symbol and trip SageBuilder invariants.
-    //
-    // Fix: Ensure there is a (possibly compiler-generated) namespace/global
-    // nondefining declaration that owns the symbol, and link the lexical friend
-    // declaration to it via firstNondefiningDeclaration.
-    SgScopeStatement *semantic_scope =
-        normalizeNamespaceScope(lexical_friend_enclosing_scope);
-    if (semantic_scope == NULL) {
-      semantic_scope = getGlobalScope();
-    }
-
-    SgFunctionDeclaration *semantic_first_nondef = NULL;
-    if (lexical_decl != NULL) {
-      if (SgType *symbol_type = lexical_decl->get_type()) {
-        if (SgFunctionSymbol *existing_sym =
-                semantic_scope->lookup_function_symbol(lexical_decl->get_name(),
-                                                       symbol_type)) {
-          if (SgFunctionDeclaration *sym_decl =
-                  isSgFunctionDeclaration(existing_sym->get_declaration())) {
-            semantic_first_nondef = isSgFunctionDeclaration(
-                sym_decl->get_firstNondefiningDeclaration());
-            if (semantic_first_nondef == NULL) {
-              semantic_first_nondef = sym_decl;
-            }
-          }
-        }
-      }
-    }
-
-    if (semantic_first_nondef == NULL && lexical_decl != NULL) {
-      auto clone_param_list =
-          [&](SgFunctionParameterList *src) -> SgFunctionParameterList * {
-        SgFunctionParameterList *dst =
-            SageBuilder::buildFunctionParameterList_nfi();
-        if (src == NULL) {
-          return dst;
-        }
-
-        for (SgInitializedName *param : src->get_args()) {
-          if (param == NULL) {
-            continue;
-          }
-
-          SgInitializer *cloned_init = NULL;
-          if (SgInitializer *init = param->get_initializer()) {
-            cloned_init = isSgInitializer(SageInterface::deepCopy(init));
-          }
-
-          SgInitializedName *cloned_param =
-              SageBuilder::buildInitializedName_nfi(
-                  param->get_name(), param->get_type(), cloned_init);
-          cloned_param->set_scope(semantic_scope);
-          cloned_param->set_parent(dst);
-          if (cloned_init != NULL) {
-            cloned_init->set_parent(cloned_param);
-          }
-          dst->append_arg(cloned_param);
-        }
-        return dst;
-      };
-
-      SgFunctionParameterList *semantic_params =
-          clone_param_list(lexical_decl->get_parameterList());
-
-      semantic_first_nondef = SageBuilder::buildNondefiningFunctionDeclaration(
-          lexical_decl->get_name(), ret_type, semantic_params, semantic_scope,
-          /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/false,
-          /*templateArgumentsList=*/NULL, SgStorageModifier::e_default,
-          /*forceFreeFunctionScope=*/false);
-
-      auto mark_compgen = [this](SgLocatedNode *n) {
-        if (n != NULL) {
-          setCompilerGeneratedFileInfo(n);
-          suppress_unparse_output(n);
-          n->set_isModified(false);
-        }
-      };
-
-      mark_compgen(semantic_first_nondef);
-      mark_compgen(semantic_params);
-      for (SgInitializedName *param : semantic_params->get_args()) {
-        mark_compgen(param);
-      }
-    }
-
-    if (semantic_first_nondef != NULL && lexical_decl != NULL &&
-        semantic_first_nondef->variantT() == lexical_decl->variantT()) {
-      if (SgSymbol *class_symbol =
-              lexical_decl->get_symbol_from_symbol_table()) {
-        if (SgScopeStatement *class_scope = lexical_decl->get_scope()) {
-          class_scope->remove_symbol(class_symbol);
-        }
-      }
-
-      lexical_decl->set_firstNondefiningDeclaration(semantic_first_nondef);
-      lexical_decl->set_definingDeclaration(
-          semantic_first_nondef->get_definingDeclaration());
-
-      if (sg_function_decl != lexical_decl) {
-        sg_function_decl->set_firstNondefiningDeclaration(
-            semantic_first_nondef);
-
-        if (sg_function_decl->get_definition() != NULL) {
-          semantic_first_nondef->set_definingDeclaration(sg_function_decl);
-          sg_function_decl->set_definingDeclaration(sg_function_decl);
-        } else {
-          sg_function_decl->set_definingDeclaration(
-              semantic_first_nondef->get_definingDeclaration());
-        }
-      }
-    }
-  }
+  // Friend declarations written inside a class are still free functions. We
+  // build them using the enclosing namespace/global scope for symbol-table
+  // correctness and reattach them to the lexical class scope later in this
+  // function.
 
   // ROOT CAUSE FIX: Set access modifiers for member functions from Clang AST
   if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
@@ -6053,10 +5916,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       return;
     }
 
-    if (function_decl->getFirstDecl() != function_decl) {
-      return;
-    }
-
     if (!function_decl->isThisDeclarationADefinition()) {
       return;
     }
@@ -6071,7 +5930,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     if (first_nondef == NULL || first_nondef == defining) {
       return;
     }
-    if (isSgClassDefinition(first_nondef->get_scope()) == NULL) {
+
+    // Only suppress the extra non-defining declaration when it is synthetic.
+    // If Clang has a prior declaration in the redecl chain, that declaration
+    // must remain visible (e.g., a user-written forward declaration of a friend
+    // function template at namespace scope).
+    if (function_decl->getFirstDecl() != function_decl) {
       return;
     }
 
@@ -6121,6 +5985,37 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                                       "translateFunctionDeclCommon:lexical");
     }
   }
+
+  // Friend free functions declared/defined inside a class must remain attached
+  // to the lexical class definition for correct unparse structure, but their
+  // symbols must live in the enclosing namespace/global scope.  We build them
+  // using the enclosing scope (scope_for_symbol_table), then reattach them
+  // lexically here.
+  if (isFriendFreeFunction && lexical_scope != NULL &&
+      lexical_scope != scope_for_symbol_table &&
+      isSgClassDefinition(lexical_scope) != NULL) {
+    auto reattach_to_lexical_class = [&](SgDeclarationStatement *decl,
+                                         const char *ctx) {
+      if (decl == NULL) {
+        return;
+      }
+      if (SgScopeStatement *current_parent =
+              isSgScopeStatement(decl->get_parent())) {
+        if (current_parent != lexical_scope) {
+          detach_decl_from_scope_child_list(decl, current_parent);
+        }
+      }
+      ensure_decl_in_scope_child_list(decl, lexical_scope, ctx);
+    };
+
+    reattach_to_lexical_class(isSgDeclarationStatement(sg_function_decl),
+                              "translateFunctionDeclCommon:friend:decl");
+  }
+
+  // Re-evaluate suppression after any lexical reattachment, since friend
+  // declarations are built in the enclosing namespace/global scope and may only
+  // later be moved into the class scope.
+  suppress_synthetic_nondef_in_class(sg_function_decl);
 
   *node = sg_function_decl;
 

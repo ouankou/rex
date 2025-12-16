@@ -5594,40 +5594,6 @@ SageBuilder::buildDefiningFunctionDeclaration_T(const SgName & XXX_name, SgType*
         }
 #endif
 
-  // DQ (1/26/2013): This fails for ROSE compiling ROSE.
-     if (func_symbol == NULL)
-        {
-       // If the symbol has not been created yet (common for inline friends), synthesize one.
-          SgSymbol* synthesized_symbol = NULL;
-
-          if (buildTemplateDeclaration || buildTemplateInstantiation)
-             {
-               if (SgTemplateDeclaration* tmplDecl = isSgTemplateDeclaration(first_nondefining_declaration))
-                  {
-                    synthesized_symbol = new SgTemplateSymbol(tmplDecl);
-                  }
-             }
-
-          if (synthesized_symbol == NULL)
-             {
-               if (isMemberFunction)
-                  {
-                    if (SgMemberFunctionDeclaration* mdecl = isSgMemberFunctionDeclaration(first_nondefining_declaration))
-                         synthesized_symbol = new SgMemberFunctionSymbol(mdecl);
-                  }
-                 else
-                  {
-                    if (SgFunctionDeclaration* fdecl = isSgFunctionDeclaration(first_nondefining_declaration))
-                         synthesized_symbol = new SgFunctionSymbol(fdecl);
-                  }
-             }
-
-          if (synthesized_symbol != NULL)
-             {
-               func_symbol = synthesized_symbol;
-               scope->insert_symbol(nameWithTemplateArguments, func_symbol);
-             }
-        }
 #endif
 
 #if 0
