@@ -6526,28 +6526,55 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
      ASSERT_not_null(mfuncdecl_stmt);
 
      // REX FIX: Unparse template headers for member functions defined outside
-     // their classes when any enclosing class scope is templated.
+     // their classes when any enclosing templated scope is templated.
      // Example:
      //   template <class T>
      //   int Outer<T>::Inner::f() { ... }
      if (mfuncdecl_stmt->get_definition() != NULL) {
        SgNode *parent = mfuncdecl_stmt->get_parent();
        if (!isSgClassDefinition(parent) && !isSgTemplateDeclaration(parent) &&
-           !info.SkipFunctionDefinition()) {
-         std::vector<SgTemplateClassDeclaration *> template_class_decls;
+           !isSgBasicBlock(parent) && !info.SkipFunctionDefinition()) {
+         std::vector<SgDeclarationStatement *> template_decls;
 
          for (SgScopeStatement *scope = mfuncdecl_stmt->get_scope();
               scope != NULL && !isSgGlobal(scope); scope = scope->get_scope()) {
            if (SgTemplateClassDefinition *template_class_defn =
                    isSgTemplateClassDefinition(scope)) {
-             template_class_decls.push_back(
-                 template_class_defn->get_declaration());
+             template_decls.push_back(template_class_defn->get_declaration());
+             continue;
+           }
+           if (SgFunctionDefinition *function_defn =
+                   isSgFunctionDefinition(scope)) {
+             SgFunctionDeclaration *function_decl =
+                 function_defn->get_declaration();
+             if (SgTemplateFunctionDeclaration *template_function_decl =
+                     isSgTemplateFunctionDeclaration(function_decl)) {
+               template_decls.push_back(template_function_decl);
+             } else if (SgTemplateMemberFunctionDeclaration
+                            *template_member_function_decl =
+                                isSgTemplateMemberFunctionDeclaration(
+                                    function_decl)) {
+               template_decls.push_back(template_member_function_decl);
+             }
            }
          }
 
-         for (auto it = template_class_decls.rbegin();
-              it != template_class_decls.rend(); ++it) {
-           unparseTemplateHeader(*it, info);
+         for (auto it = template_decls.rbegin(); it != template_decls.rend();
+              ++it) {
+           if (SgTemplateClassDeclaration *template_class_decl =
+                   isSgTemplateClassDeclaration(*it)) {
+             unparseTemplateHeader(template_class_decl, info);
+           } else if (SgTemplateFunctionDeclaration *template_function_decl =
+                          isSgTemplateFunctionDeclaration(*it)) {
+             unparseTemplateHeader(template_function_decl, info);
+           } else if (SgTemplateMemberFunctionDeclaration
+                          *template_member_function_decl =
+                              isSgTemplateMemberFunctionDeclaration(*it)) {
+             unparseTemplateHeader(template_member_function_decl, info);
+           } else if (SgTemplateDeclaration *template_decl =
+                          isSgTemplateDeclaration(*it)) {
+             unparseTemplateHeader(template_decl, info);
+           }
          }
        }
      }
