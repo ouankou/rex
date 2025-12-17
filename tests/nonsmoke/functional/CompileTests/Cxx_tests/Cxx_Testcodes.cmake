@@ -31,6 +31,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue59_template_template_arg_global_qual.cpp
   rex_test2025_issue60_friend_function_symbol_scope.cpp
   rex_test2025_issue61_function_decl_chain.cpp
+  rex_test2025_mangle_qualifiers_no_template_syntax.cpp
   rex_test2025_issue63_pseudo_dtor_typedef_ptr.cpp
   rex_test2025_issue64_shadow_template_global_qual.cpp
   rex_test2025_issue69_member_class_out_of_line.cpp
