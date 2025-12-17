@@ -7959,24 +7959,24 @@ bool
 	   }
 
 
-		std::string
-		SgDeclarationStatement::buildTemplateNameWithArguments(
-		        const std::string& templateName,
-		        const SgTemplateArgumentPtrList& templateArgumentsList,
-		        SgScopeStatement* nameQualificationScope,
-		        bool outputOnlyExplicitlySpecified)
-		   {
-		     ROSE_ASSERT(!templateName.empty());
+			std::string
+			SgDeclarationStatement::buildTemplateNameWithArguments(
+			        const std::string& templateName,
+			        const SgTemplateArgumentPtrList& templateArgumentsList,
+			        SgScopeStatement* nameQualificationScope,
+			        bool outputOnlyExplicitlySpecified)
+			   {
+			     ROSE_ASSERT(!templateName.empty());
 
-		     SgUnparse_Info unparseInfo;
-		     unparseInfo.set_language(SgFile::e_Cxx_language);
-		     unparseInfo.set_SkipDefinition();
-	     unparseInfo.set_SkipComments();
-	     unparseInfo.set_SkipWhitespaces();
-		     unparseInfo.set_SkipCPPDirectives();
-		     unparseInfo.set_SkipClassDefinition();
-		     unparseInfo.set_SkipEnumDefinition();
-		     unparseInfo.set_use_generated_name_for_template_arguments(true);
+			     SgUnparse_Info unparseInfo;
+			     unparseInfo.set_language(SgFile::e_Cxx_language);
+			     unparseInfo.set_SkipDefinition();
+			     unparseInfo.set_SkipComments();
+			     unparseInfo.set_SkipWhitespaces();
+			     unparseInfo.set_SkipCPPDirectives();
+			     unparseInfo.set_SkipClassDefinition();
+			     unparseInfo.set_SkipEnumDefinition();
+			     unparseInfo.set_use_generated_name_for_template_arguments(true);
 		     if (nameQualificationScope != NULL) {
 		       unparseInfo.set_current_scope(nameQualificationScope);
 		     } else {
@@ -7985,14 +7985,16 @@ bool
 
 		     bool need_separator = false;
 		     std::string argumentsString;
-		     for (SgTemplateArgumentPtrList::const_iterator i = templateArgumentsList.begin();
-		          i != templateArgumentsList.end(); ++i) {
-		       SgTemplateArgument* argument = *i;
-		       ROSE_ASSERT(argument != NULL);
-	       if (argument->get_argumentType() ==
-	           SgTemplateArgument::start_of_pack_expansion_argument) {
-	         continue;
-	       }
+			     for (SgTemplateArgumentPtrList::const_iterator i = templateArgumentsList.begin();
+			          i != templateArgumentsList.end(); ++i) {
+			       SgTemplateArgument* argument = *i;
+			       ROSE_ASSERT(argument != NULL);
+			       ROSE_ASSERT(argument->get_argumentType() !=
+			                   SgTemplateArgument::argument_undefined);
+			       if (argument->get_argumentType() ==
+			           SgTemplateArgument::start_of_pack_expansion_argument) {
+			         continue;
+			       }
 		       if (outputOnlyExplicitlySpecified == true &&
 		           argument->get_explicitlySpecified() == false) {
 		         continue;
@@ -8376,38 +8378,53 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
        // DQ (2/17/2005): We want to avoid "<>" appearing where template arguments are meant to be used (e.g. in function names)
        // if (templateArgListPtr != NULL)
        // if ( (appendTemplateArguments == true) && (templateArgListPtr->size() > 0) )
-          if ( ( (appendTemplateArguments == true) && (templateArgListPtr->size() > 0) ) && (skipEmptyTemplateArgumentList == false) )
-             {
-#if 0
-               printf ("In $CLASSNAME::resetTemplateName(): templateArgListPtr->size() = %" PRIuPTR " \n",templateArgListPtr->size());
-#endif
+	          if ( ( (appendTemplateArguments == true) && (templateArgListPtr->size() > 0) ) && (skipEmptyTemplateArgumentList == false) )
+	             {
+	#if 0
+	               printf ("In $CLASSNAME::resetTemplateName(): templateArgListPtr->size() = %" PRIuPTR " \n",templateArgListPtr->size());
+	#endif
 
-               for (SgTemplateArgumentPtrList::const_iterator i =
-                        templateArgListPtr->begin();
-                    i != templateArgListPtr->end(); ++i) {
-                 if ((*i)->get_argumentType() ==
-                     SgTemplateArgument::start_of_pack_expansion_argument) {
-                   continue;
-                 }
+	               SgUnparse_Info unparseInfo;
+	               unparseInfo.set_language(SgFile::e_Cxx_language);
+	               unparseInfo.set_SkipDefinition();
+	               unparseInfo.set_SkipComments();
+	               unparseInfo.set_SkipWhitespaces();
+	               unparseInfo.set_SkipCPPDirectives();
+	               unparseInfo.set_SkipClassDefinition();
+	               unparseInfo.set_SkipEnumDefinition();
+	               unparseInfo.set_use_generated_name_for_template_arguments(true);
+	               ROSE_ASSERT(parentScope != NULL);
+	               unparseInfo.set_current_scope(parentScope);
 
-                 // DQ (2/27/2005): Added support for output of only template arguments
-                 // that were explicit in the source code.  Only meaningful for function
-                 // and member function template arguments.
-                 bool templateArgumentWasExplicitlySpecified =
-                     (*i)->get_explicitlySpecified();
-                 bool outputTemplateArgument =
-                     (functionTemplateArguments == false) ||
-                     (templateArgumentWasExplicitlySpecified == true);
+	               bool need_separator = false;
+	               std::string argumentsString;
 
-                 if (outputTemplateArgument == true) {
-                   ROSE_ASSERT(*i != NULL);
-                   switch ((*i)->get_argumentType()) {
-                              case SgTemplateArgument::argument_undefined:
-                                 {
-                                   printf ("Error: SgTemplateArgument::argument_undefined not allowed \n");
-                                   ROSE_ASSERT(false);
-                                   break;
-                                 }
+		               for (SgTemplateArgumentPtrList::const_iterator i =
+		                        templateArgListPtr->begin();
+		                    i != templateArgListPtr->end(); ++i) {
+	                 if ((*i)->get_argumentType() ==
+	                     SgTemplateArgument::start_of_pack_expansion_argument) {
+	                   continue;
+	                 }
+
+	                 // DQ (2/27/2005): Added support for output of only template arguments
+	                 // that were explicit in the source code.  Only meaningful for function
+	                 // and member function template arguments.
+	                 bool templateArgumentWasExplicitlySpecified =
+	                     (*i)->get_explicitlySpecified();
+	                 bool outputTemplateArgument =
+	                     (functionTemplateArguments == false) ||
+	                     (templateArgumentWasExplicitlySpecified == true);
+
+	                 if (outputTemplateArgument == true) {
+	                   ROSE_ASSERT(*i != NULL);
+		                   switch ((*i)->get_argumentType()) {
+	                              case SgTemplateArgument::argument_undefined:
+	                                 {
+	                                   printf ("Error: SgTemplateArgument::argument_undefined not allowed \n");
+	                                   ROSE_ASSERT(false);
+	                                   break;
+	                                 }
 
                               case SgTemplateArgument::type_argument:
                                  {
@@ -8802,20 +8819,27 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
 
                               default:
                                  {
-                                   printf ("Default reached in switch over (*i)->get_argumentType() = %d \n",(*i)->get_argumentType());
-                                   ROSE_ASSERT(false);
-                                 }
-                   }
-                 }
-               }
+		                                   printf ("Default reached in switch over (*i)->get_argumentType() = %d \n",(*i)->get_argumentType());
+		                                   ROSE_ASSERT(false);
+		                                 }
+		                   }
 
-               returnName = buildTemplateNameWithArguments(
-                       returnName, *templateArgListPtr, parentScope, functionTemplateArguments);
+		                   if (need_separator) {
+		                     argumentsString += " , ";
+		                   }
+		                   argumentsString += (*i)->unparseToString(&unparseInfo);
+		                   need_separator = true;
+		                 }
+		               }
 
-#if 0
-            // DQ (2/20/2005): Error checking on existence of substrings that can be common
-            // in building template name and which are a source of errors in generated code.
-               if ( (returnName.find("<<") != string::npos) || (returnName.find(">>") != string::npos) )
+	               if (need_separator) {
+	                 returnName = returnName + " < " + argumentsString + " >";
+	               }
+
+	#if 0
+	            // DQ (2/20/2005): Error checking on existence of substrings that can be common
+	            // in building template name and which are a source of errors in generated code.
+	               if ( (returnName.find("<<") != string::npos) || (returnName.find(">>") != string::npos) )
                   {
                     printf ("returnName = %s \n",returnName.c_str());
                   }
