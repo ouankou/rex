@@ -889,6 +889,18 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
                     std::string filenameWithoutPath = Rose::StringUtility::stripPathFromFileName(rawFileName);
                     printf ("filenameWithoutPath = %s file = %s \n",filenameWithoutPath.c_str(),file.c_str());
 #endif
+                    // Mark nodes for code generation only when they originate
+                    // from the main file being compiled. This preserves ROSE's
+                    // default behavior of not inlining declarations from
+                    // included headers into the generated output file (e.g.
+                    // copyAST_copytest2007_40), while still allowing template
+                    // default-argument logic to reason about which declarations
+                    // will be unparsed in the main file (Issue 69).
+                    clang::SourceManager &sm =
+                        p_compiler_instance->getSourceManager();
+                    const bool in_main_file =
+                        sm.getFileID(begin) == sm.getMainFileID();
+
                     if (file.find("clang-builtin-c.h") != std::string::npos) 
                        {
 #if 0
@@ -904,11 +916,19 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
                       // end_fi   = Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
                          start_fi->set_classificationBitField(Sg_File_Info::e_frontend_specific);
                          end_fi  ->set_classificationBitField(Sg_File_Info::e_frontend_specific);
+                         if (in_main_file) {
+                           start_fi->setOutputInCodeGeneration();
+                           end_fi->setOutputInCodeGeneration();
+                         }
                        }
                       else
                        {
                          start_fi = new Sg_File_Info(file, ls, cs);
                          end_fi   = new Sg_File_Info(file, le, ce);
+                         if (in_main_file) {
+                           start_fi->setOutputInCodeGeneration();
+                           end_fi->setOutputInCodeGeneration();
+                         }
                        }
 
 #if DEBUG_SOURCE_LOCATION

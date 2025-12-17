@@ -1612,15 +1612,13 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                      if (SgDeclarationStatement *first_nondef =
                              decl_stmt->get_firstNondefiningDeclaration()) {
                        if (first_nondef != decl_stmt) {
-                         bool first_nondef_is_user_unparsed = false;
+                         bool first_nondef_is_unparsed = false;
                          if (Sg_File_Info *fi = first_nondef->get_file_info()) {
-                           first_nondef_is_user_unparsed =
+                           first_nondef_is_unparsed =
                                fi->isOutputInCodeGeneration() &&
-                               !fi->isCompilerGenerated() &&
                                is_decl_attached_to_parent_scope(first_nondef);
                          }
-                         should_unparse_default =
-                             !first_nondef_is_user_unparsed;
+                         should_unparse_default = !first_nondef_is_unparsed;
                        }
                      }
                    }

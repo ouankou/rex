@@ -387,6 +387,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         SgSymbol * GetSymbolFromSymbolTable(clang::NamedDecl * decl);
 
+        SgScopeStatement *
+        resolveScopeFromDeclContext(clang::DeclContext *context,
+                                    SgScopeStatement *fallback);
+
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
 
         // Template helper methods

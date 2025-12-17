@@ -32,6 +32,7 @@
 
 
 class Unparser_Nameq;
+class Unparse_MOD_SAGE;
 
 // Macro used for debugging.  If true it fixes the anonymous typedef and anonymous declaration
 // bugs, but causes several other problems.  If false, everything works except the anonymous

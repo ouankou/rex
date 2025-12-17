@@ -9096,6 +9096,41 @@ Unparse_ExprStmt::unparseClassDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 #endif
           if (!info.inEmbeddedDecl())
              {
+            // Out-of-line nested class definitions of class templates must
+            // repeat the enclosing template parameter list (e.g.,
+            // `template<class T> class A<T>::B {}`).
+            //
+            // The ROSE IR represents this structurally: the nested class
+            // declaration has a semantic scope of the enclosing class
+            // definition, but a lexical parent in the surrounding
+            // namespace/global scope. Use that to emit the template header
+            // from the enclosing template class declaration (Issue 69).
+            if (classdecl_stmt->get_parent() != classdecl_stmt->get_scope()) {
+              SgClassDefinition *enclosing_class_def =
+                  isSgClassDefinition(classdecl_stmt->get_scope());
+              if (enclosing_class_def != NULL) {
+                SgTemplateClassDeclaration *assoc_tpl_class_decl =
+                    isSgTemplateClassDeclaration(
+                        enclosing_class_def->get_parent());
+
+                // Support multi-level nested template classes by emitting
+                // headers from outermost to innermost.
+                std::vector<SgTemplateClassDeclaration *> template_headers;
+                for (SgTemplateClassDeclaration *cur = assoc_tpl_class_decl;
+                     cur != NULL;) {
+                  template_headers.push_back(cur);
+                  SgScopeStatement *cur_scope = cur->get_scope();
+                  cur = (cur_scope != NULL) ? isSgTemplateClassDeclaration(
+                                                  cur_scope->get_parent())
+                                            : NULL;
+                }
+                for (auto it = template_headers.rbegin();
+                     it != template_headers.rend(); ++it) {
+                  unparseTemplateHeader(*it, info);
+                }
+              }
+            }
+
                SgUnparse_Info ninfo(class_info);
                if (classdecl_stmt->get_parent() == NULL)
                   {

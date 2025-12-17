@@ -7,8 +7,9 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-#include "unparser.h"
 #include "modified_sage.h"
+#include "unparser.h"
+#include <algorithm>
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
@@ -20,6 +21,41 @@ using namespace std;
 using namespace Rose;
 
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
+
+namespace {
+// Return true if decl is structurally attached to its parent scope, and thus
+// eligible to be unparsed as a statement.
+bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
+  if (decl == NULL) {
+    return false;
+  }
+
+  SgScopeStatement *scope = isSgScopeStatement(decl->get_parent());
+  if (scope == NULL) {
+    return false;
+  }
+
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    const auto &members = class_def->get_members();
+    return std::find(members.begin(), members.end(), decl) != members.end();
+  }
+
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    const auto &decls = ns_def->get_declarations();
+    return std::find(decls.begin(), decls.end(), decl) != decls.end();
+  }
+
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    const auto &decls = global->get_declarations();
+    return std::find(decls.begin(), decls.end(), decl) != decls.end();
+  }
+
+  const SgStatementPtrList &stmts = scope->getStatementList();
+  return std::find(stmts.begin(), stmts.end(),
+                   static_cast<SgStatement *>(decl)) != stmts.end();
+}
+} // namespace
 
 // MS: temporary flag for experiments with uparsing of template instantiations
 bool Unparse_MOD_SAGE::experimentalMode=false;
@@ -1787,16 +1823,37 @@ Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier ( SgDeclarationStatement
                               bool isOutput = false;
 
                               SgTemplateInstantiationDefn* nondefiningTemplateClassInstatiationDefn = isSgTemplateInstantiationDefn(nondefiningTemplateInstantiationMemberFunctionDecl->get_parent());
-                              if (nondefiningTemplateClassInstatiationDefn != NULL) {
-                                SgTemplateInstantiationDecl* templateClassInstantiation = isSgTemplateInstantiationDecl(nondefiningTemplateClassInstatiationDefn->get_parent());
+                              if (nondefiningTemplateClassInstatiationDefn !=
+                                  NULL) {
+                                SgTemplateInstantiationDecl
+                                    *templateClassInstantiation =
+                                        isSgTemplateInstantiationDecl(
+                                            nondefiningTemplateClassInstatiationDefn
+                                                ->get_parent());
                                 ASSERT_not_null(templateClassInstantiation);
 #if DEBUG_TEMPLATE_SPECIALIZATION
                                 printf ("templateClassInstantiation->get_file_info()->isCompilerGenerated()      = %s \n",templateClassInstantiation->get_file_info()->isCompilerGenerated() ? "true" : "false");
                                 printf ("templateClassInstantiation->get_file_info()->isOutputInCodeGeneration() = %s \n",templateClassInstantiation->get_file_info()->isOutputInCodeGeneration() ? "true" : "false");
 #endif
-                             // isOutput = (templateClassInstantiation->get_file_info()->isCompilerGenerated() && templateClassInstantiation->get_file_info()->isOutputInCodeGeneration());
-                             // TV (3/14/18): This need to be true whether or not it is compiler generated (template<> not used when defining a member of a class specialization)
-                                isOutput = templateClassInstantiation->get_file_info()->isOutputInCodeGeneration();
+                                // isOutput =
+                                // (templateClassInstantiation->get_file_info()->isCompilerGenerated()
+                                // &&
+                                // templateClassInstantiation->get_file_info()->isOutputInCodeGeneration());
+                                // TV (3/14/18): This need to be true whether or
+                                // not it is compiler generated (template<> not
+                                // used when defining a member of a class
+                                // specialization) REX FIX: Only treat the class
+                                // instantiation as being "output" when it will
+                                // actually be unparsed structurally; a template
+                                // instantiation can be marked for output but
+                                // remain detached from the parent scope, in
+                                // which case out-of-class explicit
+                                // specializations still require `template<>`.
+                                isOutput =
+                                    templateClassInstantiation->get_file_info()
+                                        ->isOutputInCodeGeneration() &&
+                                    is_decl_attached_to_parent_scope(
+                                        templateClassInstantiation);
                               }
                               if (isOutput == true)
                                  {
