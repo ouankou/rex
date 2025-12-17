@@ -6113,8 +6113,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             .setStatic();
       }
       SgNode *parent = sg_function_decl->get_parent();
-      if (isSgClassDefinition(parent) != NULL ||
-          isSgTemplateClassDefinition(parent) != NULL) {
+      if (isSgClassDefinition(parent) != NULL) {
         sg_function_decl->get_declarationModifier()
             .get_storageModifier()
             .setStatic();

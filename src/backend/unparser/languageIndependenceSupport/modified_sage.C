@@ -2286,8 +2286,7 @@ Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement* decl_stmt, SgUnparse_I
        if (SgMemberFunctionDeclaration *memberFunctionDeclaration =
                isSgMemberFunctionDeclaration(decl_stmt)) {
          SgNode *parent = memberFunctionDeclaration->get_parent();
-         if (isSgClassDefinition(parent) == NULL &&
-             isSgTemplateClassDefinition(parent) == NULL) {
+         if (isSgClassDefinition(parent) == NULL) {
            suppress_static_keyword = true;
          }
        }
