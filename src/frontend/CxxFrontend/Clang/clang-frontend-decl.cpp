@@ -2274,9 +2274,6 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
     }
   }
 
-  delete params;
-  delete empty_args;
-
   if (result_decl == NULL) {
     *node = NULL;
     return false;
@@ -3658,7 +3655,7 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
     // non-defining declaration has already claimed ownership (parent pointers
     // set). Reusing them would detach them from the non-defining declaration,
     // violating AST invariants.
-    SgTemplateArgumentPtrList specialization_args_for_def;
+    auto *specialization_args_for_def = new SgTemplateArgumentPtrList();
 
     // Re-iterate over Clang arguments to build new ROSE arguments
     const clang::TemplateArgumentList &args_for_def =
@@ -3792,14 +3789,14 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
         break;
       }
       if (sg_arg)
-        specialization_args_for_def.push_back(sg_arg);
+        specialization_args_for_def->push_back(sg_arg);
     }
 
     // Create proper defining declaration
     SgTemplateClassDeclaration *definingDecl =
         SageBuilder::buildTemplateClassDeclaration_nfi(
             name, class_kind, scope, nonDefiningDecl, template_params,
-            &specialization_args_for_def);
+            specialization_args_for_def);
 
     *node = definingDecl;
     p_decl_translation_map[class_tpl_part_spec_decl] = definingDecl;
@@ -5217,9 +5214,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     const clang::TemplateArgumentList *clang_args =
         function_decl->getTemplateSpecializationArgs();
     if (clang_args != NULL) {
-      SgTemplateArgumentPtrList template_args;
+      auto *template_args = new SgTemplateArgumentPtrList();
       for (const clang::TemplateArgument &arg : clang_args->asArray()) {
-        appendTemplateArguments(template_args, arg, true);
+        appendTemplateArguments(*template_args, arg, true);
       }
 
       if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
@@ -5252,12 +5249,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             SageBuilder::buildNondefiningMemberFunctionDeclaration(
                 name, ret_type, param_list, scope_for_symbol_table,
                 /*decoratorList=*/NULL, methodConstVolatileFlags,
-                /*buildTemplateInstantiation=*/true, &template_args);
+                /*buildTemplateInstantiation=*/true, template_args);
       } else {
         sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
             name, ret_type, param_list, scope_for_symbol_table,
             /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
-            &template_args, SgStorageModifier::e_default,
+            template_args, SgStorageModifier::e_default,
             /*forceFreeFunctionScope=*/isFriendFreeFunction);
       }
 
@@ -5269,7 +5266,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         if (SgTemplateInstantiationFunctionDecl *inst_func =
                 isSgTemplateInstantiationFunctionDecl(sg_function_decl)) {
           inst_func->set_template_argument_list_is_explicit(true);
-          inst_func->get_templateArguments() = template_args;
+          inst_func->get_templateArguments() = *template_args;
           if (SgNode *tmpl_node =
                   Traverse(function_decl->getPrimaryTemplate())) {
             if (SgTemplateFunctionDeclaration *tmpl_decl =
@@ -5282,7 +5279,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                        isSgTemplateInstantiationMemberFunctionDecl(
                            sg_function_decl)) {
           inst_member->set_template_argument_list_is_explicit(true);
-          inst_member->get_templateArguments() = template_args;
+          inst_member->get_templateArguments() = *template_args;
           if (SgNode *tmpl_node =
                   Traverse(function_decl->getPrimaryTemplate())) {
             if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
@@ -5310,11 +5307,10 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       // SageBuilder. Reuse an existing one when a forward declaration was
       // already seen to keep declaration/definition chains consistent.
       if (isTemplateLikeMemberFunction) {
-        SgTemplateParameterPtrList empty_template_params;
         SgTemplateParameterPtrList *effective_template_params = templateParams;
         if (effective_template_params == NULL) {
           ROSE_ASSERT(isClassTemplateMemberFunction);
-          effective_template_params = &empty_template_params;
+          effective_template_params = new SgTemplateParameterPtrList();
         }
 
         SgTemplateMemberFunctionDeclaration *first_nondef = NULL;
@@ -5895,7 +5891,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                     name, ret_type, param_list, scope_for_symbol_table,
                     /*decoratorList=*/NULL, functionConstVolatileFlags,
                     empty_template_params);
-            delete empty_template_params;
 
             param_list->set_parent(sg_function_decl);
             sg_function_decl->set_parameterList(param_list);
@@ -5907,25 +5902,25 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (!built_template_member_pattern &&
           function_decl->getTemplateSpecializationKind() ==
               clang::TSK_ExplicitSpecialization) {
-        SgTemplateArgumentPtrList empty_template_args;
+        auto *empty_template_args = new SgTemplateArgumentPtrList();
         if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
           sg_function_decl =
               SageBuilder::buildNondefiningMemberFunctionDeclaration(
                   name, ret_type, param_list, scope_for_symbol_table,
                   /*decoratorList=*/NULL, functionConstVolatileFlags,
-                  /*buildTemplateInstantiation=*/true, &empty_template_args);
+                  /*buildTemplateInstantiation=*/true, empty_template_args);
         } else {
           sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
               name, ret_type, param_list, scope_for_symbol_table,
               /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
-              &empty_template_args, SgStorageModifier::e_default,
+              empty_template_args, SgStorageModifier::e_default,
               isFriendFreeFunction);
         }
 
         if (SgTemplateInstantiationFunctionDecl *inst_func =
                 isSgTemplateInstantiationFunctionDecl(sg_function_decl)) {
           inst_func->set_template_argument_list_is_explicit(true);
-          inst_func->get_templateArguments() = empty_template_args;
+          inst_func->get_templateArguments() = *empty_template_args;
           if (function_decl->getPrimaryTemplate() != NULL) {
             if (SgNode *tmpl_node =
                     Traverse(function_decl->getPrimaryTemplate())) {
@@ -5940,7 +5935,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                        isSgTemplateInstantiationMemberFunctionDecl(
                            sg_function_decl)) {
           inst_member->set_template_argument_list_is_explicit(true);
-          inst_member->get_templateArguments() = empty_template_args;
+          inst_member->get_templateArguments() = *empty_template_args;
           if (function_decl->getPrimaryTemplate() != NULL) {
             if (SgNode *tmpl_node =
                     Traverse(function_decl->getPrimaryTemplate())) {
