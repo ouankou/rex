@@ -6571,9 +6571,6 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                           *template_member_function_decl =
                               isSgTemplateMemberFunctionDeclaration(*it)) {
              unparseTemplateHeader(template_member_function_decl, info);
-           } else if (SgTemplateDeclaration *template_decl =
-                          isSgTemplateDeclaration(*it)) {
-             unparseTemplateHeader(template_decl, info);
            }
          }
        }
