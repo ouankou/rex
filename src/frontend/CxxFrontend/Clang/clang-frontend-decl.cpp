@@ -566,6 +566,77 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
   return sym;
 }
 
+SgScopeStatement *
+ClangToSageTranslator::resolveScopeFromDeclContext(clang::DeclContext *context,
+                                                   SgScopeStatement *fallback) {
+  if (context == NULL) {
+    return fallback;
+  }
+
+  if (context->isTranslationUnit()) {
+    return getGlobalScope();
+  }
+
+  clang::Decl *context_decl = llvm::dyn_cast<clang::Decl>(context);
+  if (context_decl != NULL) {
+    auto it = p_decl_translation_map.find(context_decl);
+    if (it != p_decl_translation_map.end()) {
+      SgNode *context_node = it->second;
+      if (SgNamespaceDeclarationStatement *ns_decl_stmt =
+              isSgNamespaceDeclarationStatement(context_node)) {
+        if (ns_decl_stmt->get_definition() != NULL) {
+          return ns_decl_stmt->get_definition();
+        }
+      } else if (SgNamespaceDefinitionStatement *ns_def =
+                     isSgNamespaceDefinitionStatement(context_node)) {
+        return ns_def;
+      } else if (SgClassDeclaration *class_decl =
+                     isSgClassDeclaration(context_node)) {
+        if (class_decl->get_definition() != NULL) {
+          return class_decl->get_definition();
+        }
+      } else if (SgClassDefinition *class_def =
+                     isSgClassDefinition(context_node)) {
+        return class_def;
+      }
+    }
+
+    if (clang::NamespaceDecl *ns_decl =
+            llvm::dyn_cast<clang::NamespaceDecl>(context_decl)) {
+      // Prefer an already-active namespace scope on the scope stack to avoid
+      // creating stub reopenings during on-demand translation.
+      for (auto rit = SageBuilder::ScopeStack.rbegin();
+           rit != SageBuilder::ScopeStack.rend(); ++rit) {
+        if (SgNamespaceDefinitionStatement *ns_def =
+                isSgNamespaceDefinitionStatement(*rit)) {
+          SgNamespaceDeclarationStatement *ns_stmt =
+              ns_def->get_namespaceDeclaration();
+          if (ns_stmt != NULL) {
+            bool match = false;
+            if (ns_decl->isAnonymousNamespace()) {
+              match = ns_stmt->get_isUnnamedNamespace();
+            } else {
+              match =
+                  ns_stmt->get_name().getString() == ns_decl->getNameAsString();
+            }
+            if (match) {
+              return ns_def;
+            }
+          }
+        }
+      }
+
+      SgNamespaceDeclarationStatement *ns_stmt =
+          ensureNamespaceDeclaration(ns_decl);
+      if (ns_stmt != NULL && ns_stmt->get_definition() != NULL) {
+        return ns_stmt->get_definition();
+      }
+    }
+  }
+
+  return fallback;
+}
+
 SgTemplateParameterPtrList *
 ClangToSageTranslator::translateTemplateParameterList(
     clang::TemplateParameterList *param_list,
@@ -2094,77 +2165,8 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
 
   SgScopeStatement *structural_scope = SageBuilder::topScopeStack();
 
-  auto resolve_scope_from_decl_context =
-      [&](clang::DeclContext *context,
-          SgScopeStatement *fallback) -> SgScopeStatement * {
-    if (context == NULL) {
-      return fallback;
-    }
-
-    if (context->isTranslationUnit()) {
-      return getGlobalScope();
-    }
-
-    clang::Decl *context_decl = llvm::dyn_cast<clang::Decl>(context);
-    if (context_decl != NULL) {
-      auto it = p_decl_translation_map.find(context_decl);
-      if (it != p_decl_translation_map.end()) {
-        SgNode *context_node = it->second;
-        if (SgNamespaceDeclarationStatement *ns_decl_stmt =
-                isSgNamespaceDeclarationStatement(context_node)) {
-          if (ns_decl_stmt->get_definition() != NULL) {
-            return ns_decl_stmt->get_definition();
-          }
-        } else if (SgNamespaceDefinitionStatement *ns_def =
-                       isSgNamespaceDefinitionStatement(context_node)) {
-          return ns_def;
-        } else if (SgClassDeclaration *class_decl =
-                       isSgClassDeclaration(context_node)) {
-          if (class_decl->get_definition() != NULL) {
-            return class_decl->get_definition();
-          }
-        } else if (SgClassDefinition *class_def =
-                       isSgClassDefinition(context_node)) {
-          return class_def;
-        }
-      }
-
-      if (clang::NamespaceDecl *ns_decl =
-              llvm::dyn_cast<clang::NamespaceDecl>(context_decl)) {
-        for (auto rit = SageBuilder::ScopeStack.rbegin();
-             rit != SageBuilder::ScopeStack.rend(); ++rit) {
-          if (SgNamespaceDefinitionStatement *ns_def =
-                  isSgNamespaceDefinitionStatement(*rit)) {
-            SgNamespaceDeclarationStatement *ns_stmt =
-                ns_def->get_namespaceDeclaration();
-            if (ns_stmt != NULL) {
-              bool match = false;
-              if (ns_decl->isAnonymousNamespace()) {
-                match = ns_stmt->get_isUnnamedNamespace();
-              } else {
-                match = ns_stmt->get_name().getString() ==
-                        ns_decl->getNameAsString();
-              }
-              if (match) {
-                return ns_def;
-              }
-            }
-          }
-        }
-
-        SgNamespaceDeclarationStatement *ns_stmt =
-            ensureNamespaceDeclaration(ns_decl);
-        if (ns_stmt != NULL && ns_stmt->get_definition() != NULL) {
-          return ns_stmt->get_definition();
-        }
-      }
-    }
-
-    return fallback;
-  };
-
   SgScopeStatement *semantic_scope =
-      resolve_scope_from_decl_context(semantic_context, structural_scope);
+      resolveScopeFromDeclContext(semantic_context, structural_scope);
   if (semantic_scope == NULL) {
     semantic_scope = getGlobalScope();
   }
@@ -2174,7 +2176,7 @@ bool ClangToSageTranslator::VisitClassTemplateDecl(
   }
 
   SgScopeStatement *lexical_parent =
-      resolve_scope_from_decl_context(lexical_context, structural_scope);
+      resolveScopeFromDeclContext(lexical_context, structural_scope);
   if (lexical_parent == NULL) {
     lexical_parent =
         structural_scope != NULL ? structural_scope : semantic_scope;
@@ -2705,79 +2707,8 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
 
   SgScopeStatement *structural_scope = SageBuilder::topScopeStack();
 
-  auto resolve_scope_from_decl_context =
-      [&](clang::DeclContext *context,
-          SgScopeStatement *fallback) -> SgScopeStatement * {
-    if (context == NULL) {
-      return fallback;
-    }
-
-    if (context->isTranslationUnit()) {
-      return getGlobalScope();
-    }
-
-    clang::Decl *context_decl = llvm::dyn_cast<clang::Decl>(context);
-    if (context_decl != NULL) {
-      auto it = p_decl_translation_map.find(context_decl);
-      if (it != p_decl_translation_map.end()) {
-        SgNode *context_node = it->second;
-        if (SgNamespaceDeclarationStatement *ns_decl_stmt =
-                isSgNamespaceDeclarationStatement(context_node)) {
-          if (ns_decl_stmt->get_definition() != NULL) {
-            return ns_decl_stmt->get_definition();
-          }
-        } else if (SgNamespaceDefinitionStatement *ns_def =
-                       isSgNamespaceDefinitionStatement(context_node)) {
-          return ns_def;
-        } else if (SgClassDeclaration *class_decl =
-                       isSgClassDeclaration(context_node)) {
-          if (class_decl->get_definition() != NULL) {
-            return class_decl->get_definition();
-          }
-        } else if (SgClassDefinition *class_def =
-                       isSgClassDefinition(context_node)) {
-          return class_def;
-        }
-      }
-
-      if (clang::NamespaceDecl *ns_decl =
-              llvm::dyn_cast<clang::NamespaceDecl>(context_decl)) {
-        // Prefer an already-active namespace scope on the scope stack to avoid
-        // creating stub reopenings during on-demand translation.
-        for (auto rit = SageBuilder::ScopeStack.rbegin();
-             rit != SageBuilder::ScopeStack.rend(); ++rit) {
-          if (SgNamespaceDefinitionStatement *ns_def =
-                  isSgNamespaceDefinitionStatement(*rit)) {
-            SgNamespaceDeclarationStatement *ns_stmt =
-                ns_def->get_namespaceDeclaration();
-            if (ns_stmt != NULL) {
-              bool match = false;
-              if (ns_decl->isAnonymousNamespace()) {
-                match = ns_stmt->get_isUnnamedNamespace();
-              } else {
-                match = ns_stmt->get_name().getString() ==
-                        ns_decl->getNameAsString();
-              }
-              if (match) {
-                return ns_def;
-              }
-            }
-          }
-        }
-
-        SgNamespaceDeclarationStatement *ns_stmt =
-            ensureNamespaceDeclaration(ns_decl);
-        if (ns_stmt != NULL && ns_stmt->get_definition() != NULL) {
-          return ns_stmt->get_definition();
-        }
-      }
-    }
-
-    return fallback;
-  };
-
   SgScopeStatement *semantic_scope =
-      resolve_scope_from_decl_context(semantic_context, structural_scope);
+      resolveScopeFromDeclContext(semantic_context, structural_scope);
   if (semantic_scope == NULL) {
     semantic_scope = getGlobalScope();
   }
@@ -2787,7 +2718,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
   }
 
   SgScopeStatement *lexical_parent =
-      resolve_scope_from_decl_context(lexical_context, structural_scope);
+      resolveScopeFromDeclContext(lexical_context, structural_scope);
   if (lexical_parent == NULL) {
     lexical_parent =
         structural_scope != NULL ? structural_scope : correct_scope;
