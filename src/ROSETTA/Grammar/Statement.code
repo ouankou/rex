@@ -7968,29 +7968,9 @@ bool
 		   {
 		     ROSE_ASSERT(!templateName.empty());
 
-	     bool have_output_argument = false;
-	     for (SgTemplateArgumentPtrList::const_iterator i = templateArgumentsList.begin();
-	          i != templateArgumentsList.end(); ++i) {
-	       ROSE_ASSERT(*i != NULL);
-	       if ((*i)->get_argumentType() ==
-	           SgTemplateArgument::start_of_pack_expansion_argument) {
-	         continue;
-	       }
-	       if (outputOnlyExplicitlySpecified == true &&
-	           (*i)->get_explicitlySpecified() == false) {
-	         continue;
-	       }
-	       have_output_argument = true;
-	       break;
-	     }
-
-	     if (have_output_argument == false) {
-	       return templateName;
-	     }
-
-	     SgUnparse_Info unparseInfo;
-	     unparseInfo.set_language(SgFile::e_Cxx_language);
-	     unparseInfo.set_SkipDefinition();
+		     SgUnparse_Info unparseInfo;
+		     unparseInfo.set_language(SgFile::e_Cxx_language);
+		     unparseInfo.set_SkipDefinition();
 	     unparseInfo.set_SkipComments();
 	     unparseInfo.set_SkipWhitespaces();
 		     unparseInfo.set_SkipCPPDirectives();
@@ -8003,34 +7983,35 @@ bool
 		       unparseInfo.set_requiresGlobalNameQualification();
 		     }
 
-	     std::string returnName = templateName;
-	     returnName += " < ";
-
-	     bool need_separator = false;
-	     for (SgTemplateArgumentPtrList::const_iterator i = templateArgumentsList.begin();
-	          i != templateArgumentsList.end(); ++i) {
-	       SgTemplateArgument* argument = *i;
-	       ROSE_ASSERT(argument != NULL);
+		     bool need_separator = false;
+		     std::string argumentsString;
+		     for (SgTemplateArgumentPtrList::const_iterator i = templateArgumentsList.begin();
+		          i != templateArgumentsList.end(); ++i) {
+		       SgTemplateArgument* argument = *i;
+		       ROSE_ASSERT(argument != NULL);
 	       if (argument->get_argumentType() ==
 	           SgTemplateArgument::start_of_pack_expansion_argument) {
 	         continue;
 	       }
-	       if (outputOnlyExplicitlySpecified == true &&
-	           argument->get_explicitlySpecified() == false) {
-	         continue;
-	       }
-
-		       if (need_separator) {
-		         returnName += " , ";
+		       if (outputOnlyExplicitlySpecified == true &&
+		           argument->get_explicitlySpecified() == false) {
+		         continue;
 		       }
 
-		       returnName += argument->unparseToString(&unparseInfo);
+		       if (need_separator) {
+		         argumentsString += " , ";
+		       }
+
+		       argumentsString += argument->unparseToString(&unparseInfo);
 		       need_separator = true;
 		     }
 
-	     returnName += " >";
-	     return returnName;
-	   }
+		     if (need_separator == false) {
+		       return templateName;
+		     }
+
+		     return templateName + " < " + argumentsString + " >";
+		   }
 
 
 void
