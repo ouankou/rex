@@ -11,6 +11,7 @@ template <typename T> struct Container {
 };
 
 namespace use_site {
+using ns::Inner;
 using InnerContainer = Container<ns::Inner>;
 InnerContainer::value_type x{};
 } // namespace use_site

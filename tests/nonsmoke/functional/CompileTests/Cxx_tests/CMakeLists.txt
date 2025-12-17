@@ -34,6 +34,24 @@ set_tests_properties(Cxx_tests_rex_test2025_issue92_redundant_sym PROPERTIES
   FAIL_REGULAR_EXPRESSION "Redundant symbol removed"
 )
 
+# Issue 113: Template argument spelling must not depend on using directives in
+# the instantiation scope; keep namespace qualifiers in the generated name.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue113_instantiation_spelling_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -E \"Container[[:space:]]*<[[:space:]]*(class|struct|union)?[[:space:]]*(::)?ns::Inner\" rose_rex_test2025_issue113_instantiation_spelling.cpp && ! grep -E \"Container[[:space:]]*<[[:space:]]*(class|struct|union)?[[:space:]]*Inner\" rose_rex_test2025_issue113_instantiation_spelling.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue113_instantiation_spelling.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue113_instantiation_spelling.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue113_instantiation_spelling_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 123: Function refs must not emit duplicated qualification (e.g. std::::get).
 add_test(
   NAME Cxx_tests_rex_test2025_issue123_std_double_colon_unparse

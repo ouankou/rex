@@ -645,8 +645,10 @@ void SageBuilder::setCaseFromScope(SgScopeStatement* scope)
 SgName
 SageBuilder::appendTemplateArgumentsToName( const SgName & name, const SgTemplateArgumentPtrList & templateArgumentsList)
    {
+  // Template argument spellings are used as part of symbol keys; they must be
+  // stable and not depend on the current scope's using directives.
   return SgName(SgDeclarationStatement::buildTemplateNameWithArguments(
-      name.str(), templateArgumentsList, SageBuilder::topScopeStack()));
+      name.str(), templateArgumentsList, NULL));
    }
 
 
