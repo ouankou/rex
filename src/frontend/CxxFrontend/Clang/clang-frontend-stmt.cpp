@@ -1618,6 +1618,16 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 #endif
   bool res = true;
 
+  // Build the scope first so that any declarations created while lowering the
+  // range-for (e.g., `__range`, `__begin`, `__end`, and the loop variable) are
+  // inserted into the correct symbol table (see VisitForStmt()).
+  SgForStatement *sg_for_stmt = new SgForStatement(
+      (SgStatement *)NULL, (SgExpression *)NULL, (SgStatement *)NULL);
+
+  sg_for_stmt->set_parent(SageBuilder::topScopeStack());
+  ROSE_ASSERT(sg_for_stmt->get_parent() != NULL);
+  SageBuilder::pushScopeStack(sg_for_stmt);
+
   // ROOT CAUSE FIX: C++11 range-based for loop: `for (auto x : container) { ...
   // }`.
   //
@@ -1731,9 +1741,36 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
     init_stmts.push_back(nullStmt);
   }
 
-  // Build the for loop with these components
-  SgForInitStatement *for_init = SageBuilder::buildForInitStatement(init_stmts);
-  *node = SageBuilder::buildForStatement(for_init, test_stmt, inc, body);
+  SgForInitStatement *for_init =
+      SageBuilder::buildForInitStatement_nfi(init_stmts);
+
+  SageBuilder::popScopeStack();
+
+  for_init->set_parent(sg_for_stmt);
+  if (sg_for_stmt->get_for_init_stmt() != NULL)
+    SageInterface::deleteAST(sg_for_stmt->get_for_init_stmt());
+  sg_for_stmt->set_for_init_stmt(for_init);
+
+  if (test_stmt != nullptr) {
+    test_stmt->set_parent(sg_for_stmt);
+    sg_for_stmt->set_test(test_stmt);
+  }
+
+  if (inc != nullptr) {
+    inc->set_parent(sg_for_stmt);
+    sg_for_stmt->set_increment(inc);
+  }
+
+  if (body != nullptr) {
+    body->set_parent(sg_for_stmt);
+    sg_for_stmt->set_loop_body(body);
+  }
+
+  SageBuilder::buildForStatement_nfi(sg_for_stmt, for_init, test_stmt, inc,
+                                     body);
+  ROSE_ASSERT(sg_for_stmt->get_parent() != NULL);
+
+  *node = sg_for_stmt;
 
   return VisitStmt(cxx_for_range_stmt, node) && res;
 }

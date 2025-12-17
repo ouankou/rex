@@ -1295,6 +1295,25 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
       llvm::isa<clang::ClassTemplateSpecializationDecl>(record_decl) ||
       llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(record_decl);
 
+  // Prefer the canonical declaration for symbol lookup and type association.
+  //
+  // Clang's RecordType can point at a later redeclaration/definition (including
+  // out-of-line member definitions). Using that as the identity for record
+  // types can force on-demand translation of the definition while we're still
+  // inside a different lexical context, which destabilizes ROSE's
+  // defining/nondefining declaration chains and name-qualification (Issue 69).
+  //
+  // For class-template (partial) specializations we must keep the
+  // specialization decl as the identity (Issue 126).
+  clang::RecordDecl *lookup_decl = record_decl;
+  if (!is_specialization && record_decl != NULL) {
+    clang::TagDecl *canonical = record_decl->getCanonicalDecl();
+    if (clang::RecordDecl *canonical_record =
+            llvm::dyn_cast_or_null<clang::RecordDecl>(canonical)) {
+      lookup_decl = canonical_record;
+    }
+  }
+
   SgClassSymbol *class_sym = NULL;
 
   // Record types for class-template specializations (e.g. `A<>`) must resolve
@@ -1306,15 +1325,15 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
   }
 
   if (*node == NULL) {
-    SgSymbol *sym = GetSymbolFromSymbolTable(record_decl);
+    SgSymbol *sym = GetSymbolFromSymbolTable(lookup_decl);
     class_sym = isSgClassSymbol(sym);
 
     if (class_sym == NULL) {
       if (!is_specialization) {
-        *node = getTypeFromTraversedRecordDecl(this, record_decl);
+        *node = getTypeFromTraversedRecordDecl(this, lookup_decl);
       }
       if (*node == NULL) {
-        std::string qualified_name = record_decl->getQualifiedNameAsString();
+        std::string qualified_name = lookup_decl->getQualifiedNameAsString();
         if (qualified_name.empty()) {
           qualified_name = "__anonymous_record";
         }
@@ -1339,7 +1358,7 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
   // After translating the declaration, the symbol should now exist; refresh the
   // lookup for the first-seen tracking (matches historical behavior).
   if (class_sym == NULL) {
-    class_sym = isSgClassSymbol(GetSymbolFromSymbolTable(record_decl));
+    class_sym = isSgClassSymbol(GetSymbolFromSymbolTable(lookup_decl));
   }
 
   bool first_see_in_type = (class_sym == NULL);

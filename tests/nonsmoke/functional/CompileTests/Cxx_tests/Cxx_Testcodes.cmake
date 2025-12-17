@@ -32,6 +32,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue61_function_decl_chain.cpp
   rex_test2025_issue63_pseudo_dtor_typedef_ptr.cpp
   rex_test2025_issue64_shadow_template_global_qual.cpp
+  rex_test2025_issue69_member_class_out_of_line.cpp
   rex_test2025_issue73_token_stream_mapping.cpp
   rex_test2025_issue118_empty_decl.cpp
   rex_test2025_namespace_reopenings_preserve_blocks.cpp

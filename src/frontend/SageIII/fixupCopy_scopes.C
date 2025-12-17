@@ -160,74 +160,86 @@ SgInitializedName::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
         {
           FixupCopyDataMemberMacro(initializedName_copy,SgScopeStatement,get_scope,set_scope)
           // fprintf(stderr, "After: copy's scope is %p, my scope is %p\n", initializedName_copy->get_scope(), this->get_scope());
-
-          SgNode* parent = initializedName_copy->get_parent();
-
-       // printf ("In SgInitializedName::fixupCopy_scopes(): parent = %p \n",parent);
-
-       // Since the parent might not have been set yet we have to allow for this case. In the case of a
-       // SgInitializedName in a SgVariableDeclaration the SgInitializedName objects have their parents
-       // set after the SgInitializedName is copied and in the copy function for the parent (SgVariableDeclaration).
-          // fprintf (stderr, "In SgInitializedName::fixupCopy_scopes(): parent = %p = %s \n",parent,parent->class_name().c_str());
-          if (parent != NULL)
-             {
-               ROSE_ASSERT(parent != NULL);
-            // printf ("In SgInitializedName::fixupCopy_scopes(): parent = %p = %s \n",parent,parent->class_name().c_str());
-
-               switch(parent->variantT())
-                  {
-                 // DQ (12/28/2012): Adding support for templates.
-                    case V_SgTemplateVariableDeclaration:
-
-                    case V_SgVariableDeclaration:
-                       {
-                         resetVariableDefinitionSupport(this,initializedName_copy,NULL);
-                         break;
-                       }
-
-                    case V_SgEnumDeclaration:
-                       {
-                         SgEnumDeclaration* enumDeclaration = isSgEnumDeclaration(parent);
-                         ROSE_ASSERT(enumDeclaration != NULL);
-                         resetVariableDefinitionSupport(this,initializedName_copy,enumDeclaration);
-                         break;
-                       }
-
-                    case V_SgFunctionParameterList:
-                       {
-                         SgNode* parentFunction = parent->get_parent();
-                         SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(parentFunction);
-
-                      // The parent of the SgFunctionParameterList might not have been set yet, so allow for this!
-                         if (functionDeclaration != NULL)
-                            {
-                           // DQ (5/14/2012): Added simple test.
-                              ROSE_ASSERT(initializedName_copy != NULL);
-
-                           // DQ (5/14/2012): Added simple test, required in resetVariableDefinitionSupport().
-                              ROSE_ASSERT(initializedName_copy->get_declptr() != NULL);
-
-                              resetVariableDefinitionSupport(this,initializedName_copy,functionDeclaration);
-                            }
-                         break;
-                       }
-
-                    default:
-                       {
-                         printf ("default reached in SgInitializedName::fixupCopy_scopes() parent = %p = %s \n",parent,parent->class_name().c_str());
-                         ROSE_ABORT();
-                       }
-                  }
-             }
-        }
-       else
-        {
+     } else {
 #if DEBUG_FIXUP_COPY
-       // fprintf (stderr, "Skipping resetting the scope for initializedName_copy = %p = %s \n",initializedName_copy,initializedName_copy->get_name().str());
-          printf ("Skipping resetting the scope for initializedName_copy = %p = %s \n",initializedName_copy,initializedName_copy->get_name().str());
+       // fprintf (stderr, "Skipping resetting the scope for
+       // initializedName_copy = %p = %s
+       // \n",initializedName_copy,initializedName_copy->get_name().str());
+       printf(
+           "Skipping resetting the scope for initializedName_copy = %p = %s \n",
+           initializedName_copy, initializedName_copy->get_name().str());
 #endif
-        }
+     }
 
+     // Fix up the associated declaration/definition regardless of whether the
+     // scope pointer needed updating.  Some node kinds (notably enum
+     // enumerators) can have their scope copied correctly while still holding a
+     // declptr that points back into the original AST, which breaks
+     // symbol-table rebuilding in the copied tree (copyAST_copytest2007_50 /
+     // Issue 69).
+     SgNode *parent = initializedName_copy->get_parent();
+
+     // printf ("In SgInitializedName::fixupCopy_scopes(): parent = %p
+     // \n",parent);
+
+     // Since the parent might not have been set yet we have to allow for this
+     // case. In the case of a SgInitializedName in a SgVariableDeclaration the
+     // SgInitializedName objects have their parents set after the
+     // SgInitializedName is copied and in the copy function for the parent
+     // (SgVariableDeclaration). fprintf (stderr, "In
+     // SgInitializedName::fixupCopy_scopes(): parent = %p = %s
+     // \n",parent,parent->class_name().c_str());
+     if (parent != NULL) {
+       ROSE_ASSERT(parent != NULL);
+       // printf ("In SgInitializedName::fixupCopy_scopes(): parent = %p = %s
+       // \n",parent,parent->class_name().c_str());
+
+       switch (parent->variantT()) {
+         // DQ (12/28/2012): Adding support for templates.
+       case V_SgTemplateVariableDeclaration:
+
+       case V_SgVariableDeclaration: {
+         resetVariableDefinitionSupport(this, initializedName_copy, NULL);
+         break;
+       }
+
+       case V_SgEnumDeclaration: {
+         SgEnumDeclaration *enumDeclaration = isSgEnumDeclaration(parent);
+         ROSE_ASSERT(enumDeclaration != NULL);
+         resetVariableDefinitionSupport(this, initializedName_copy,
+                                        enumDeclaration);
+         break;
+       }
+
+       case V_SgFunctionParameterList: {
+         SgNode *parentFunction = parent->get_parent();
+         SgFunctionDeclaration *functionDeclaration =
+             isSgFunctionDeclaration(parentFunction);
+
+         // The parent of the SgFunctionParameterList might not have been set
+         // yet, so allow for this!
+         if (functionDeclaration != NULL) {
+           // DQ (5/14/2012): Added simple test.
+           ROSE_ASSERT(initializedName_copy != NULL);
+
+           // DQ (5/14/2012): Added simple test, required in
+           // resetVariableDefinitionSupport().
+           ROSE_ASSERT(initializedName_copy->get_declptr() != NULL);
+
+           resetVariableDefinitionSupport(this, initializedName_copy,
+                                          functionDeclaration);
+         }
+         break;
+       }
+
+       default: {
+         printf("default reached in SgInitializedName::fixupCopy_scopes() "
+                "parent = %p = %s \n",
+                parent, parent->class_name().c_str());
+         ROSE_ABORT();
+       }
+       }
+     }
 
      if (this->get_prev_decl_item() != NULL)
         {
@@ -1876,7 +1888,63 @@ SgNamespaceDefinitionStatement::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help
      SgNamespaceDefinitionStatement* namespaceDefinition_copy = isSgNamespaceDefinitionStatement(copy);
      ROSE_ASSERT(namespaceDefinition_copy != NULL);
 
-     FixupCopyDataMemberMacro(namespaceDefinition_copy,SgNamespaceDeclarationStatement,get_namespaceDeclaration,set_namespaceDeclaration)
+     FixupCopyDataMemberMacro(
+         namespaceDefinition_copy, SgNamespaceDeclarationStatement,
+         get_namespaceDeclaration, set_namespaceDeclaration)
+
+         // Namespace definitions are re-entrant and use a shared "global
+         // definition" scope to accumulate symbols across reopenings.  The
+         // ROSETTA-generated copy preserves the original pointer; repair it to
+         // point into the copied tree so that symbol-table insertion and lookup
+         // stay within the copy (Issue 69). NOTE: FixupCopyDataMemberMacro
+         // assumes non-null pointers. The namespace linkage pointers can
+         // legitimately be NULL at the ends of the reentrant chain, so we
+         // repair them carefully.
+         if (namespaceDefinition_copy->get_global_definition() ==
+                 this->get_global_definition() &&
+             this->get_global_definition() != NULL) {
+       SgCopyHelp::copiedNodeMapTypeIterator iter =
+           help.get_copiedNodeMap().find(this->get_global_definition());
+       if (iter != help.get_copiedNodeMap().end()) {
+         SgNode *associated_node_copy = iter->second;
+         ROSE_ASSERT(associated_node_copy != NULL);
+         SgNamespaceDefinitionStatement *global_copy =
+             isSgNamespaceDefinitionStatement(associated_node_copy);
+         ROSE_ASSERT(global_copy != NULL);
+         namespaceDefinition_copy->set_global_definition(global_copy);
+       }
+     }
+
+     if (namespaceDefinition_copy->get_previousNamespaceDefinition() ==
+             this->get_previousNamespaceDefinition() &&
+         this->get_previousNamespaceDefinition() != NULL) {
+       SgCopyHelp::copiedNodeMapTypeIterator iter =
+           help.get_copiedNodeMap().find(
+               this->get_previousNamespaceDefinition());
+       if (iter != help.get_copiedNodeMap().end()) {
+         SgNode *associated_node_copy = iter->second;
+         ROSE_ASSERT(associated_node_copy != NULL);
+         SgNamespaceDefinitionStatement *prev_copy =
+             isSgNamespaceDefinitionStatement(associated_node_copy);
+         ROSE_ASSERT(prev_copy != NULL);
+         namespaceDefinition_copy->set_previousNamespaceDefinition(prev_copy);
+       }
+     }
+
+     if (namespaceDefinition_copy->get_nextNamespaceDefinition() ==
+             this->get_nextNamespaceDefinition() &&
+         this->get_nextNamespaceDefinition() != NULL) {
+       SgCopyHelp::copiedNodeMapTypeIterator iter =
+           help.get_copiedNodeMap().find(this->get_nextNamespaceDefinition());
+       if (iter != help.get_copiedNodeMap().end()) {
+         SgNode *associated_node_copy = iter->second;
+         ROSE_ASSERT(associated_node_copy != NULL);
+         SgNamespaceDefinitionStatement *next_copy =
+             isSgNamespaceDefinitionStatement(associated_node_copy);
+         ROSE_ASSERT(next_copy != NULL);
+         namespaceDefinition_copy->set_nextNamespaceDefinition(next_copy);
+       }
+     }
 
      const SgDeclarationStatementPtrList & statementList_original = this->getDeclarationList();
      const SgDeclarationStatementPtrList & statementList_copy     = namespaceDefinition_copy->getDeclarationList();
@@ -2344,6 +2412,4 @@ SgTemplateArgument::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
 #if DEBUG_FIXUP_COPY
      printf ("\nIn SgTemplateArgument::fixupCopy_scopes(): this = %p = %s copy = %p \n",this,this->class_name().c_str(),copy);
 #endif
-   }
-
-
+}

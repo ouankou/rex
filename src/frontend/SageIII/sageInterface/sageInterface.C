@@ -4568,8 +4568,26 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
                          SgName name = derivedDeclaration->get_name();
                          symbolTable->insert(name,symbol);
 
-                      // DQ (10/18/2007): Fixed construction of symbol tabel to include enum fields.
-                         SgInitializedNamePtrList & enumFieldList = derivedDeclaration->get_enumerators();
+                         // DQ (10/18/2007): Fixed construction of symbol tabel
+                         // to include enum fields. Enum field symbols must be
+                         // based on the defining declaration's enumerators.  In
+                         // a copied AST the defining and first-nondefining enum
+                         // declarations can be distinct nodes; inserting
+                         // symbols from a non-defining enumerator list makes
+                         // the defining enumerators unable to find their
+                         // symbols (Issue 69 / copyAST_copytest2007_50).
+                         SgEnumDeclaration *enumForFields = derivedDeclaration;
+                         if (SgEnumDeclaration *definingEnum =
+                                 isSgEnumDeclaration(
+                                     derivedDeclaration
+                                         ->get_definingDeclaration())) {
+                           if (!definingEnum->get_enumerators().empty()) {
+                             enumForFields = definingEnum;
+                           }
+                         }
+
+                         SgInitializedNamePtrList &enumFieldList =
+                             enumForFields->get_enumerators();
                          SgInitializedNamePtrList::iterator i     = enumFieldList.begin();
 
                       // Iterate over enum fields and add each one to the symbol table.
