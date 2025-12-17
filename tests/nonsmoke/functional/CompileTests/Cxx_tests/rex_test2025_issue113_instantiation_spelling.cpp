@@ -1,15 +1,18 @@
 // REX Issue #113: Template instantiation spelling must preserve template
-// arguments when generating type/qualified-name strings.
+// arguments (including namespace qualifiers) when generating
+// type/qualified-name strings.
 
 namespace ns {
+struct Inner {};
+} // namespace ns
+
 template <typename T> struct Container {
   using value_type = T;
 };
-} // namespace ns
 
-using IntContainer = ns::Container<int>;
+namespace use_site {
+using InnerContainer = Container<ns::Inner>;
+InnerContainer::value_type x{};
+} // namespace use_site
 
-int main() {
-  IntContainer::value_type x = 0;
-  return x;
-}
+int main() { return 0; }

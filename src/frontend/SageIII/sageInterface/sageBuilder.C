@@ -646,7 +646,7 @@ SgName
 SageBuilder::appendTemplateArgumentsToName( const SgName & name, const SgTemplateArgumentPtrList & templateArgumentsList)
    {
   return SgName(SgDeclarationStatement::buildTemplateNameWithArguments(
-      name.str(), templateArgumentsList));
+      name.str(), templateArgumentsList, SageBuilder::topScopeStack()));
    }
 
 

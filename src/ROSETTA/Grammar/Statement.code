@@ -844,13 +844,14 @@ HEADER_DECLARATION_STATEMENT_START
 	          void resetTemplateNameSupport ( bool & nameResetFromMangledForm, SgName & name );
 
 	     public:
-	       // Canonical helper to build a spelled template instantiation name from a
-	       // base template name and structured template arguments. This is used to
-	       // keep all template-name generators consistent (Issue 113, Option A).
-	          static std::string buildTemplateNameWithArguments(
-	                  const std::string& templateName,
-	                  const SgTemplateArgumentPtrList& templateArgumentsList,
-	                  bool outputOnlyExplicitlySpecified = false);
+		       // Canonical helper to build a spelled template instantiation name from a
+		       // base template name and structured template arguments. This is used to
+		       // keep all template-name generators consistent (Issue 113, Option A).
+		          static std::string buildTemplateNameWithArguments(
+		                  const std::string& templateName,
+		                  const SgTemplateArgumentPtrList& templateArgumentsList,
+		                  SgScopeStatement* nameQualificationScope = NULL,
+		                  bool outputOnlyExplicitlySpecified = false);
 
 	     protected:
 
@@ -7958,13 +7959,14 @@ bool
 	   }
 
 
-	std::string
-	SgDeclarationStatement::buildTemplateNameWithArguments(
-	        const std::string& templateName,
-	        const SgTemplateArgumentPtrList& templateArgumentsList,
-	        bool outputOnlyExplicitlySpecified)
-	   {
-	     ROSE_ASSERT(!templateName.empty());
+		std::string
+		SgDeclarationStatement::buildTemplateNameWithArguments(
+		        const std::string& templateName,
+		        const SgTemplateArgumentPtrList& templateArgumentsList,
+		        SgScopeStatement* nameQualificationScope,
+		        bool outputOnlyExplicitlySpecified)
+		   {
+		     ROSE_ASSERT(!templateName.empty());
 
 	     bool have_output_argument = false;
 	     for (SgTemplateArgumentPtrList::const_iterator i = templateArgumentsList.begin();
@@ -7991,10 +7993,15 @@ bool
 	     unparseInfo.set_SkipDefinition();
 	     unparseInfo.set_SkipComments();
 	     unparseInfo.set_SkipWhitespaces();
-	     unparseInfo.set_SkipCPPDirectives();
-	     unparseInfo.set_SkipClassDefinition();
-	     unparseInfo.set_SkipEnumDefinition();
-	     unparseInfo.set_use_generated_name_for_template_arguments(true);
+		     unparseInfo.set_SkipCPPDirectives();
+		     unparseInfo.set_SkipClassDefinition();
+		     unparseInfo.set_SkipEnumDefinition();
+		     unparseInfo.set_use_generated_name_for_template_arguments(true);
+		     if (nameQualificationScope != NULL) {
+		       unparseInfo.set_current_scope(nameQualificationScope);
+		     } else {
+		       unparseInfo.set_requiresGlobalNameQualification();
+		     }
 
 	     std::string returnName = templateName;
 	     returnName += " < ";
@@ -8013,23 +8020,13 @@ bool
 	         continue;
 	       }
 
-	       if (need_separator) {
-	         returnName += " , ";
-	       }
+		       if (need_separator) {
+		         returnName += " , ";
+		       }
 
-	       SgScopeStatement* scope = NULL;
-	       {
-	         const SgNode* parentNode = argument;
-	         while (parentNode != NULL && isSgScopeStatement(parentNode) == NULL &&
-	                parentNode->get_parent() != NULL) {
-	           parentNode = parentNode->get_parent();
-	         }
-	         scope = const_cast<SgScopeStatement*>(isSgScopeStatement(parentNode));
-	       }
-	       unparseInfo.set_current_scope(scope);
-	       returnName += argument->unparseToString(&unparseInfo);
-	       need_separator = true;
-	     }
+		       returnName += argument->unparseToString(&unparseInfo);
+		       need_separator = true;
+		     }
 
 	     returnName += " >";
 	     return returnName;
@@ -8832,7 +8829,7 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
                }
 
                returnName = buildTemplateNameWithArguments(
-                       returnName, *templateArgListPtr, functionTemplateArguments);
+                       returnName, *templateArgListPtr, parentScope, functionTemplateArguments);
 
 #if 0
             // DQ (2/20/2005): Error checking on existence of substrings that can be common
@@ -9753,11 +9750,11 @@ std::string
              }
         }
 
-	     if (templateArgumentsList != NULL && returnName.empty() == false)
-	        {
-	          returnName =
-	                  buildTemplateNameWithArguments(returnName,*templateArgumentsList);
-	        }
+		     if (templateArgumentsList != NULL && returnName.empty() == false)
+		        {
+		          returnName =
+		                  buildTemplateNameWithArguments(returnName,*templateArgumentsList,get_scope());
+		        }
 
 	     return returnName;
 	   }
