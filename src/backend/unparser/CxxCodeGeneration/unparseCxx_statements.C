@@ -6541,10 +6541,8 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
            if (SgTemplateClassDefinition *template_class_defn =
                    isSgTemplateClassDefinition(scope)) {
              template_decls.push_back(template_class_defn->get_declaration());
-             continue;
-           }
-           if (SgFunctionDefinition *function_defn =
-                   isSgFunctionDefinition(scope)) {
+           } else if (SgFunctionDefinition *function_defn =
+                          isSgFunctionDefinition(scope)) {
              SgFunctionDeclaration *function_decl =
                  function_defn->get_declaration();
              if (SgTemplateFunctionDeclaration *template_function_decl =
@@ -6559,19 +6557,25 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
            }
          }
 
-         for (auto it = template_decls.rbegin(); it != template_decls.rend();
-              ++it) {
+         auto unparse_template_header = [&](SgDeclarationStatement *decl) {
            if (SgTemplateClassDeclaration *template_class_decl =
-                   isSgTemplateClassDeclaration(*it)) {
+                   isSgTemplateClassDeclaration(decl)) {
              unparseTemplateHeader(template_class_decl, info);
            } else if (SgTemplateFunctionDeclaration *template_function_decl =
-                          isSgTemplateFunctionDeclaration(*it)) {
+                          isSgTemplateFunctionDeclaration(decl)) {
              unparseTemplateHeader(template_function_decl, info);
            } else if (SgTemplateMemberFunctionDeclaration
                           *template_member_function_decl =
-                              isSgTemplateMemberFunctionDeclaration(*it)) {
+                              isSgTemplateMemberFunctionDeclaration(decl)) {
              unparseTemplateHeader(template_member_function_decl, info);
+           } else {
+             ROSE_ASSERT(false);
            }
+         };
+
+         for (auto it = template_decls.rbegin(); it != template_decls.rend();
+              ++it) {
+           unparse_template_header(*it);
          }
        }
      }
