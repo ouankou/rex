@@ -2278,7 +2278,23 @@ Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement* decl_stmt, SgUnparse_I
 #if 0
           printf ("In Unparse_MOD_SAGE::printSpecifier2(): Output the static keyword \n");
 #endif
-          curprint("static ");
+       bool suppress_static_keyword = false;
+
+       // C++ static member functions must not repeat the "static" keyword in
+       // out-of-class declarations/definitions (e.g., "int A::f()", not
+       // "static int A::f()").
+       if (SgMemberFunctionDeclaration *memberFunctionDeclaration =
+               isSgMemberFunctionDeclaration(decl_stmt)) {
+         SgNode *parent = memberFunctionDeclaration->get_parent();
+         if (isSgClassDefinition(parent) == NULL &&
+             isSgTemplateClassDefinition(parent) == NULL) {
+           suppress_static_keyword = true;
+         }
+       }
+
+       if (suppress_static_keyword == false) {
+         curprint("static ");
+       }
         }
 
   // if (unp->opt.get_extern_opt())

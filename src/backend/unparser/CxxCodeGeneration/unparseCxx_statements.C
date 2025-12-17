@@ -6525,17 +6525,31 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
      SgMemberFunctionDeclaration* mfuncdecl_stmt = isSgMemberFunctionDeclaration(stmt);
      ASSERT_not_null(mfuncdecl_stmt);
 
-     // REX FIX: Unparse template header for member functions of template classes defined outside the class
+     // REX FIX: Unparse template headers for member functions defined outside
+     // their classes when any enclosing class scope is templated.
+     // Example:
+     //   template <class T>
+     //   int Outer<T>::Inner::f() { ... }
      if (mfuncdecl_stmt->get_definition() != NULL) {
-         SgClassDefinition *parent_class_defn = isSgClassDefinition(mfuncdecl_stmt->get_scope());
-         SgTemplateClassDefinition *template_class_defn = isSgTemplateClassDefinition(parent_class_defn);
-         if (template_class_defn) {
-             SgNode* parent = mfuncdecl_stmt->get_parent();
-             if (!isSgClassDefinition(parent) && !isSgTemplateDeclaration(parent) && !info.SkipFunctionDefinition()) {
-                 SgTemplateClassDeclaration *template_class_decl = template_class_defn->get_declaration();
-                 unparseTemplateHeader(template_class_decl, info);
-             }
+       SgNode *parent = mfuncdecl_stmt->get_parent();
+       if (!isSgClassDefinition(parent) && !isSgTemplateDeclaration(parent) &&
+           !info.SkipFunctionDefinition()) {
+         std::vector<SgTemplateClassDeclaration *> template_class_decls;
+
+         for (SgScopeStatement *scope = mfuncdecl_stmt->get_scope();
+              scope != NULL && !isSgGlobal(scope); scope = scope->get_scope()) {
+           if (SgTemplateClassDefinition *template_class_defn =
+                   isSgTemplateClassDefinition(scope)) {
+             template_class_decls.push_back(
+                 template_class_defn->get_declaration());
+           }
          }
+
+         for (auto it = template_class_decls.rbegin();
+              it != template_class_decls.rend(); ++it) {
+           unparseTemplateHeader(*it, info);
+         }
+       }
      }
 
 #if 0

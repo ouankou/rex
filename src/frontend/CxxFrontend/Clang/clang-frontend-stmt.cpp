@@ -4974,8 +4974,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
         }
 
-        *node = SageBuilder::buildMemberFunctionRefExp_nfi(ref_member_sym,
-                                                           false, false);
+        const bool need_qualifier = decl_ref_expr->hasQualifier();
+        *node = SageBuilder::buildMemberFunctionRefExp_nfi(
+            ref_member_sym, false, need_qualifier);
       } else if (func_sym != NULL) {
         SgFunctionSymbol *ref_func_sym = func_sym;
 

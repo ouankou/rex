@@ -34,6 +34,11 @@ set_tests_properties(Cxx_tests_rex_test2025_issue92_redundant_sym PROPERTIES
   FAIL_REGULAR_EXPRESSION "Redundant symbol removed"
 )
 
+# Issue 62: Mangled qualifiers must never contain template syntax.
+set_tests_properties(Cxx_tests_rex_test2025_mangle_qualifiers_no_template_syntax PROPERTIES
+  FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"
+)
+
 # Issue 113: Template argument spelling must not depend on using directives in
 # the instantiation scope; keep namespace qualifiers in the generated name.
 add_test(

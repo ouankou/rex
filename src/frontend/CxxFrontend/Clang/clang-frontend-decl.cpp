@@ -6099,6 +6099,27 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         .setExtern();
   }
 
+  // CLANG FRONTEND FIX: Preserve C++ static member function declarations.
+  // Clang models these as CXXMethodDecl::isStatic(), but ROSE expects the
+  // storage modifier to be written only for in-class declarations/definitions.
+  // Out-of-class declarations/definitions must not re-specify "static".
+  if (clang::CXXMethodDecl *method_decl =
+          llvm::dyn_cast<clang::CXXMethodDecl>(function_decl)) {
+    if (method_decl->isStatic()) {
+      if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+              sg_function_decl->get_firstNondefiningDeclaration())) {
+        first_nondef->get_declarationModifier()
+            .get_storageModifier()
+            .setStatic();
+      }
+      if (isSgClassDefinition(sg_function_decl->get_parent()) != NULL) {
+        sg_function_decl->get_declarationModifier()
+            .get_storageModifier()
+            .setStatic();
+      }
+    }
+  }
+
   // CLANG FRONTEND FIX: Set friend modifier for friend functions
   // Friend functions are free functions (not members) with special access
   // rights
