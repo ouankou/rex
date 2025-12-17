@@ -8783,31 +8783,20 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
                                    break;
                                  }
 
-                              case SgTemplateArgument::template_template_argument:
-                                 {
-                                // DQ (8/24/2006): This is not a name that needs to be reset, so I think there is nothing to do here!
-                                   ROSE_ASSERT((*i)->get_templateDeclaration() != NULL);
+	                              case SgTemplateArgument::template_template_argument:
+	                                 {
+	                                // DQ (8/24/2006): This is not a name that needs to be reset, so I think there is nothing to do here!
+	                                   ROSE_ASSERT((*i)->get_templateDeclaration() != NULL);
 
-                                // printf ("Warning: SgTemplateArgument::template_template_argument not implemented \n");
-                                // ROSE_ASSERT(false);
-                                   break;
-                                 }
+	                                // printf ("Warning: SgTemplateArgument::template_template_argument not implemented \n");
+	                                // ROSE_ASSERT(false);
+	                                   break;
+	                                 }
 
-                              case SgTemplateArgument::start_of_pack_expansion_argument:
-                                 {
-                                // DQ (5/19/2014): This is not a name that needs to be reset, so I think there is nothing to do here!
-                                // ROSE_ASSERT((*i)->get_templateDeclaration() != NULL);
-#if 0
-                                   printf ("Warning: In SgDeclarationStatement::resetTemplateNameSupport(): SgTemplateArgument::start_of_pack_expansion_argument (no reset of name required) \n");
-                                // ROSE_ASSERT(false);
-#endif
-                                   break;
-                                 }
-
-		                              default:
-		                                 {
-			                                   printf ("Default reached in switch over (*i)->get_argumentType() = %d \n",(*i)->get_argumentType());
-			                                   ROSE_ASSERT(false);
+			                              default:
+			                                 {
+				                                   printf ("Default reached in switch over (*i)->get_argumentType() = %d \n",(*i)->get_argumentType());
+				                                   ROSE_ASSERT(false);
 			                                 }
 			                   }
 		                 }
