@@ -2283,6 +2283,11 @@ Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement* decl_stmt, SgUnparse_I
        // C++ static member functions must not repeat the "static" keyword in
        // out-of-class declarations/definitions (e.g., "int A::f()", not
        // "static int A::f()").
+       // NOTE: The Clang frontend preserves `static` only on the in-class
+       // declaration (and first nondefining declaration). Other frontends
+       // and/or transformations may propagate `static` onto out-of-class
+       // member function declarations/definitions; suppressing it here keeps
+       // the unparsed C++ correct regardless.
        if (SgMemberFunctionDeclaration *memberFunctionDeclaration =
                isSgMemberFunctionDeclaration(decl_stmt)) {
          SgNode *parent = memberFunctionDeclaration->get_parent();
