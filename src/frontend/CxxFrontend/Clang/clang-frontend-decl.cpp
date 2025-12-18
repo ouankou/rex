@@ -5477,13 +5477,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           return cloned;
         }
 
-        SgScopeStatement *parent_scope = SageBuilder::topScopeStack();
-        ROSE_ASSERT(parent_scope != NULL);
-
-        SgDeclarationScope *decl_scope = SageBuilder::buildDeclarationScope();
-        decl_scope->set_parent(parent_scope);
-        SageBuilder::pushScopeStack(decl_scope);
-
         for (SgInitializedName *init_name : source->get_args()) {
           if (init_name == NULL) {
             continue;
@@ -5497,12 +5490,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           SgInitializedName *cloned_param =
               SageBuilder::buildInitializedName_nfi(
                   init_name->get_name(), init_name->get_type(), cloned_init);
-          cloned_param->set_scope(SageBuilder::topScopeStack());
           cloned_param->set_parent(cloned);
           cloned->append_arg(cloned_param);
         }
-
-        SageBuilder::popScopeStack();
         return cloned;
       };
 
