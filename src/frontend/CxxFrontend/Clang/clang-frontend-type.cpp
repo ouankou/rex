@@ -24,6 +24,7 @@ public:
 };
 
 const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
+const char kRexNonrealGlobalQualifierAttr[] = "rex_nonreal_global_qualifier";
 
 std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
   const char *spelling = clang::getOperatorSpelling(op);
@@ -36,6 +37,16 @@ std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
   }
   result += spelling;
   return result;
+}
+
+bool nestedNameSpecifierHasGlobal(const clang::NestedNameSpecifier *qualifier) {
+  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
+       nns = nns->getPrefix()) {
+    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
+      return true;
+    }
+  }
+  return false;
 }
 
 struct DependentTemplateSpecializationNameInfo {
@@ -2004,6 +2015,10 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
   if (effective_scope == nullptr) {
     effective_scope = SageBuilder::topScopeStack();
   }
+  bool has_global_qualifier = nestedNameSpecifierHasGlobal(qualifier);
+  if (has_global_qualifier) {
+    effective_scope = getGlobalScope();
+  }
   ROSE_ASSERT(effective_scope != nullptr);
 
   std::function<SgScopeStatement *(clang::NestedNameSpecifier *,
@@ -2085,8 +2100,19 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
   SgScopeStatement *chain_scope = build_chain(qualifier, effective_scope);
   ROSE_ASSERT(chain_scope != nullptr);
 
-  return SageBuilder::buildNonrealType(terminalName, chain_scope,
-                                       terminalTemplateArgs);
+  SgNonrealType *nrtype = SageBuilder::buildNonrealType(
+      terminalName, chain_scope, terminalTemplateArgs);
+  ROSE_ASSERT(nrtype != nullptr);
+  if (has_global_qualifier) {
+    SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
+    ROSE_ASSERT(nrdecl != nullptr);
+    if (nrdecl->getAttribute(kRexNonrealGlobalQualifierAttr) == NULL) {
+      nrdecl->setAttribute(kRexNonrealGlobalQualifierAttr,
+                           new RexNonrealFlagAttribute());
+    }
+  }
+
+  return nrtype;
 }
 
 SgTemplateInstantiationDecl *

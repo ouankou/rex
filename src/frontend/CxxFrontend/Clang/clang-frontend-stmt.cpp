@@ -212,17 +212,6 @@ public:
 };
 
 const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
-const char kRexNonrealGlobalQualifierAttr[] = "rex_nonreal_global_qualifier";
-
-bool nestedNameSpecifierHasGlobal(const clang::NestedNameSpecifier *qualifier) {
-  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
-       nns = nns->getPrefix()) {
-    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
-      return true;
-    }
-  }
-  return false;
-}
 } // namespace
 
 void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
@@ -250,11 +239,6 @@ ClangToSageTranslator::buildNonrealRefExpFromNestedNameSpecifier(
 
   SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
   ROSE_ASSERT(nrdecl != nullptr);
-
-  if (nestedNameSpecifierHasGlobal(qualifier)) {
-    nrdecl->setAttribute(kRexNonrealGlobalQualifierAttr,
-                         new RexNonrealFlagAttribute());
-  }
 
   if (terminalHasTemplateKeyword) {
     nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,

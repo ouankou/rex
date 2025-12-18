@@ -4929,6 +4929,14 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
      SgNonrealDecl * nrdecl = isSgNonrealDecl(nrtype->get_declaration());
      ASSERT_not_null(nrdecl);
 
+     static const char kRexNonrealTemplateKeywordAttr[] =
+         "rex_nonreal_template_keyword";
+     static const char kRexNonrealGlobalQualifierAttr[] =
+         "rex_nonreal_global_qualifier";
+     bool has_global_qualifier =
+         is_first_in_nonreal_chain &&
+         nrdecl->getAttribute(kRexNonrealGlobalQualifierAttr) != NULL;
+
      bool has_nonreal_parent = false;
      if (nrdecl->get_templateDeclaration() == NULL) {
        SgNode * parent = nrdecl->get_parent();
@@ -4946,9 +4954,16 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 #endif
        has_nonreal_parent = (nrparent_nrscope != NULL);
        if (nrparent_nrscope != NULL) {
-         if (is_first_in_nonreal_chain) curprint("typename ");
+         if (is_first_in_nonreal_chain) {
+           curprint("typename ");
+           if (has_global_qualifier)
+             curprint("::");
+         }
          unparseNonrealType(nrparent_nrscope->get_type(), info, false);
          curprint("::");
+       } else {
+         if (has_global_qualifier)
+           curprint("::");
        }
 
      } else if (info.get_reference_node_for_qualification()) {
@@ -4961,8 +4976,6 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 
      SgTemplateArgumentPtrList & tpl_args = nrdecl->get_tpl_args();
 
-     static const char kRexNonrealTemplateKeywordAttr[] =
-         "rex_nonreal_template_keyword";
      if (has_nonreal_parent &&
          nrdecl->getAttribute(kRexNonrealTemplateKeywordAttr) != NULL)
        curprint("template ");
