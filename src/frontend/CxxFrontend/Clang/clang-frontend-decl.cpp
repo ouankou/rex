@@ -2136,12 +2136,26 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       return;
     }
 
-    if (SgScopeStatement *old_parent =
-            isSgScopeStatement(decl_stmt->get_parent())) {
-      if (old_parent != current_scope &&
-          is_decl_attached_to_scope_child_list(old_parent, decl_stmt)) {
-        SageInterface::removeStatement(decl_stmt, false);
-        decl_stmt->set_parent(nullptr);
+    if (SgStatement *old_parent_stmt = isSgStatement(decl_stmt->get_parent())) {
+      if (old_parent_stmt != current_scope) {
+        bool attached_to_old_parent = false;
+        if (SgScopeStatement *old_parent_scope =
+                isSgScopeStatement(old_parent_stmt)) {
+          attached_to_old_parent =
+              is_decl_attached_to_scope_child_list(old_parent_scope, decl_stmt);
+        } else {
+          std::vector<SgNode *> successors =
+              old_parent_stmt->get_traversalSuccessorContainer();
+          attached_to_old_parent =
+              std::find(successors.begin(), successors.end(), decl_stmt) !=
+              successors.end();
+        }
+
+        if (attached_to_old_parent &&
+            SageInterface::isRemovableStatement(decl_stmt)) {
+          SageInterface::removeStatement(decl_stmt, false);
+          decl_stmt->set_parent(nullptr);
+        }
       }
     }
 
