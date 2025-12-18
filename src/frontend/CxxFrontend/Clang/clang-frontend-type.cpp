@@ -2,8 +2,10 @@
 #include "sage3basic.h"
 #include "sageInterface.h"
 
+#include "clang/Basic/OperatorKinds.h"
 #include "llvm/ADT/SmallString.h"
 #include <cctype>
+#include <functional>
 
 namespace {
 // Generate unique name for template declaration with full namespace
@@ -24,6 +26,91 @@ std::string mangleTemplateName(const clang::TemplateName &tname) {
   tname.print(stream, policy);
   stream.flush();
   return result;
+}
+
+std::string getTemplateNameBase(const clang::TemplateName &tname) {
+  if (clang::TemplateDecl *template_decl = tname.getAsTemplateDecl()) {
+    std::string name = template_decl->getNameAsString();
+    if (!name.empty()) {
+      return name;
+    }
+
+    if (clang::TemplateTemplateParmDecl *parm =
+            llvm::dyn_cast<clang::TemplateTemplateParmDecl>(template_decl)) {
+      return "__template_template_param_" + std::to_string(parm->getIndex());
+    }
+
+    return name;
+  }
+
+  if (const clang::QualifiedTemplateName *qtn =
+          tname.getAsQualifiedTemplateName()) {
+    return getTemplateNameBase(qtn->getUnderlyingTemplate());
+  }
+
+  if (const clang::DependentTemplateName *dtn =
+          tname.getAsDependentTemplateName()) {
+    if (dtn->isIdentifier()) {
+      return dtn->getIdentifier()->getName().str();
+    }
+    std::string name = "operator";
+    name += clang::getOperatorSpelling(dtn->getOperator());
+    return name;
+  }
+
+  if (const clang::SubstTemplateTemplateParmStorage *subst =
+          tname.getAsSubstTemplateTemplateParm()) {
+    return getTemplateNameBase(subst->getReplacement());
+  }
+
+  if (clang::UsingShadowDecl *using_shadow = tname.getAsUsingShadowDecl()) {
+    return using_shadow->getNameAsString();
+  }
+
+  if (clang::AssumedTemplateStorage *assumed =
+          tname.getAsAssumedTemplateName()) {
+    clang::DeclarationName decl_name = assumed->getDeclName();
+    if (decl_name.isIdentifier()) {
+      return decl_name.getAsIdentifierInfo()->getName().str();
+    }
+    if (clang::OverloadedOperatorKind op = decl_name.getCXXOverloadedOperator();
+        op != clang::OO_None) {
+      std::string name = "operator";
+      name += clang::getOperatorSpelling(op);
+      return name;
+    }
+    return decl_name.getAsString();
+  }
+
+  if (clang::OverloadedTemplateStorage *overloaded =
+          tname.getAsOverloadedTemplate()) {
+    for (clang::NamedDecl *decl : overloaded->decls()) {
+      if (decl != nullptr) {
+        std::string name = decl->getNameAsString();
+        if (!name.empty()) {
+          return name;
+        }
+      }
+    }
+  }
+
+  if (const clang::SubstTemplateTemplateParmPackStorage *pack =
+          tname.getAsSubstTemplateTemplateParmPack()) {
+    if (clang::TemplateTemplateParmDecl *parm = pack->getParameterPack()) {
+      std::string name = parm->getNameAsString();
+      if (!name.empty()) {
+        return name;
+      }
+      return "__template_template_param_" + std::to_string(parm->getIndex());
+    }
+  }
+
+  if (const clang::DeducedTemplateStorage *deduced =
+          tname.getAsDeducedTemplateName()) {
+    return getTemplateNameBase(deduced->getUnderlying());
+  }
+
+  return "";
 }
 
 std::string trimWhitespace(std::string s) {
@@ -1754,6 +1841,186 @@ SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
   return arg_list;
 }
 
+SgNonrealType *
+ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
+    const clang::Type *clang_type, SgScopeStatement *scope) {
+  if (clang_type == nullptr) {
+    return nullptr;
+  }
+
+  if (const clang::ElaboratedType *elab =
+          llvm::dyn_cast<clang::ElaboratedType>(clang_type)) {
+    return buildNonrealTypeForNestedNameSpecifierType(
+        elab->getNamedType().getTypePtrOrNull(), scope);
+  }
+
+  if (const clang::DependentNameType *dnt =
+          llvm::dyn_cast<clang::DependentNameType>(clang_type)) {
+    const clang::IdentifierInfo *id = dnt->getIdentifier();
+    ROSE_ASSERT(id != nullptr);
+    return SageBuilder::buildNonrealType(SgName(id->getName().str()), scope,
+                                         nullptr);
+  }
+
+  if (const clang::DependentTemplateSpecializationType *dts =
+          llvm::dyn_cast<clang::DependentTemplateSpecializationType>(
+              clang_type)) {
+    const clang::IdentifierInfo *id = dts->getIdentifier();
+    ROSE_ASSERT(id != nullptr);
+
+    SgTemplateArgumentPtrList tpl_args;
+    for (const clang::TemplateArgument &arg : dts->template_arguments()) {
+      appendTemplateArguments(tpl_args, arg, false);
+    }
+
+    return SageBuilder::buildNonrealType(SgName(id->getName().str()), scope,
+                                         &tpl_args);
+  }
+
+  if (const clang::TemplateSpecializationType *tst =
+          llvm::dyn_cast<clang::TemplateSpecializationType>(clang_type)) {
+    clang::TemplateName tname = tst->getTemplateName();
+    std::string base_name = getTemplateNameBase(tname);
+    ROSE_ASSERT(!base_name.empty());
+
+    SgTemplateArgumentPtrList tpl_args = buildTemplateArguments(tst);
+    return SageBuilder::buildNonrealType(SgName(base_name), scope, &tpl_args);
+  }
+
+  if (const clang::TemplateTypeParmType *ttp =
+          llvm::dyn_cast<clang::TemplateTypeParmType>(clang_type)) {
+    std::string name_str;
+    if (const clang::TemplateTypeParmDecl *decl = ttp->getDecl()) {
+      name_str = decl->getNameAsString();
+    }
+    ROSE_ASSERT(!name_str.empty());
+
+    SgNonrealType *nrtype =
+        SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+    if (SgNonrealDecl *nrdecl =
+            isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
+      nrdecl->set_is_template_param(true);
+    }
+    return nrtype;
+  }
+
+  if (const clang::TypedefType *tdef =
+          llvm::dyn_cast<clang::TypedefType>(clang_type)) {
+    std::string name_str = tdef->getDecl()->getNameAsString();
+    ROSE_ASSERT(!name_str.empty());
+    return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+  }
+
+  if (const clang::TagType *tag = llvm::dyn_cast<clang::TagType>(clang_type)) {
+    std::string name_str = tag->getDecl()->getNameAsString();
+    ROSE_ASSERT(!name_str.empty());
+    return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+  }
+
+  if (const clang::InjectedClassNameType *inj =
+          llvm::dyn_cast<clang::InjectedClassNameType>(clang_type)) {
+    std::string name_str = inj->getDecl()->getNameAsString();
+    ROSE_ASSERT(!name_str.empty());
+    return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+  }
+
+  std::string name_str;
+  if (const clang::TypeDecl *decl = clang_type->getAsTagDecl()) {
+    name_str = decl->getNameAsString();
+  }
+  ROSE_ASSERT(!name_str.empty());
+  return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+}
+
+SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
+    clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+    const SgName &terminalName,
+    const SgTemplateArgumentPtrList *terminalTemplateArgs) {
+  SgScopeStatement *effective_scope = scope;
+  if (effective_scope == nullptr) {
+    effective_scope = SageBuilder::topScopeStack();
+  }
+  ROSE_ASSERT(effective_scope != nullptr);
+
+  std::function<SgScopeStatement *(clang::NestedNameSpecifier *,
+                                   SgScopeStatement *)>
+      build_chain;
+  build_chain = [&](clang::NestedNameSpecifier *nns,
+                    SgScopeStatement *current_scope) -> SgScopeStatement * {
+    if (nns == nullptr) {
+      return current_scope;
+    }
+
+    current_scope = build_chain(nns->getPrefix(), current_scope);
+
+    SgNonrealType *segment_type = nullptr;
+    switch (nns->getKind()) {
+    case clang::NestedNameSpecifier::Identifier: {
+      const clang::IdentifierInfo *id = nns->getAsIdentifier();
+      std::string name_str = id ? id->getName().str() : "";
+      ROSE_ASSERT(!name_str.empty());
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+
+    case clang::NestedNameSpecifier::Namespace: {
+      clang::NamespaceDecl *ns = nns->getAsNamespace();
+      std::string name_str = ns ? ns->getNameAsString() : "";
+      ROSE_ASSERT(!name_str.empty());
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+
+    case clang::NestedNameSpecifier::NamespaceAlias: {
+      clang::NamespaceAliasDecl *ns = nns->getAsNamespaceAlias();
+      std::string name_str = ns ? ns->getNameAsString() : "";
+      ROSE_ASSERT(!name_str.empty());
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+
+    case clang::NestedNameSpecifier::TypeSpec:
+    case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+      segment_type = buildNonrealTypeForNestedNameSpecifierType(
+          nns->getAsType(), current_scope);
+      break;
+    }
+
+    case clang::NestedNameSpecifier::Global:
+      break;
+
+    case clang::NestedNameSpecifier::Super: {
+      clang::CXXRecordDecl *record = nns->getAsRecordDecl();
+      std::string name_str = record ? record->getNameAsString() : "";
+      if (name_str.empty()) {
+        name_str = "__super";
+      }
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+    }
+
+    if (segment_type != nullptr) {
+      SgNonrealDecl *segment_decl =
+          isSgNonrealDecl(segment_type->get_declaration());
+      ROSE_ASSERT(segment_decl != nullptr);
+      current_scope = segment_decl->get_nonreal_decl_scope();
+    }
+
+    return current_scope;
+  };
+
+  SgScopeStatement *chain_scope = build_chain(qualifier, effective_scope);
+  ROSE_ASSERT(chain_scope != nullptr);
+
+  return SageBuilder::buildNonrealType(terminalName, chain_scope,
+                                       terminalTemplateArgs);
+}
+
 SgTemplateInstantiationDecl *
 ClangToSageTranslator::getOrCreateTemplateInstantiation(
     SgTemplateClassDeclaration *template_decl,
@@ -1923,33 +2190,67 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
   // We want to create proper SgTemplateInstantiationDecl nodes with template
   // arguments Desugaring would lose the template argument information
 
-  // REX FIX: Handle dependent template specializations as opaque types
-  // This avoids creating broken SgTemplateInstantiationDecl nodes for types
-  // like T::rebind<int> which cause unparsing issues (e.g., "T__rebind_int_")
   if (template_specialization_type->isDependentType()) {
-    clang::PrintingPolicy policy =
-        p_compiler_instance->getASTContext().getPrintingPolicy();
-
-    // Check if the template is a template parameter (e.g. C in UsePack<C,
-    // Args...>) If so, do NOT use fully qualified name, as it would produce
-    // UsePack::C
-    bool is_template_param = false;
     clang::TemplateName tname = template_specialization_type->getTemplateName();
+    std::string base_name = getTemplateNameBase(tname);
+    ROSE_ASSERT(!base_name.empty());
+
+    SgTemplateArgumentPtrList tpl_args =
+        buildTemplateArguments(template_specialization_type);
+
+    SgScopeStatement *base_scope = SageBuilder::topScopeStack();
+    ROSE_ASSERT(base_scope != nullptr);
+
+    clang::NestedNameSpecifier *qualifier = nullptr;
+    if (const clang::QualifiedTemplateName *qtn =
+            tname.getAsQualifiedTemplateName()) {
+      qualifier = qtn->getQualifier();
+    } else if (const clang::DependentTemplateName *dtn =
+                   tname.getAsDependentTemplateName()) {
+      qualifier = dtn->getQualifier();
+    }
+
+    if (qualifier != nullptr) {
+      *node = buildNonrealTypeFromNestedNameSpecifier(
+          qualifier, base_scope, SgName(base_name), &tpl_args);
+      return VisitType(template_specialization_type, node);
+    }
+
+    SgScopeStatement *chain_scope = base_scope;
     if (clang::TemplateDecl *decl = tname.getAsTemplateDecl()) {
-      if (clang::isa<clang::TemplateTemplateParmDecl>(decl)) {
-        is_template_param = true;
+      const bool is_template_param =
+          llvm::isa<clang::TemplateTemplateParmDecl>(decl);
+
+      if (!is_template_param) {
+        std::vector<std::string> qualifiers;
+        clang::DeclContext *ctx = decl->getDeclContext();
+        while (ctx != nullptr && !ctx->isTranslationUnit()) {
+          if (const clang::NamespaceDecl *ns =
+                  llvm::dyn_cast<clang::NamespaceDecl>(ctx)) {
+            if (!ns->getName().empty()) {
+              qualifiers.push_back(ns->getNameAsString());
+            }
+          } else if (const clang::RecordDecl *record =
+                         llvm::dyn_cast<clang::RecordDecl>(ctx)) {
+            if (!record->getName().empty()) {
+              qualifiers.push_back(record->getNameAsString());
+            }
+          }
+          ctx = ctx->getParent();
+        }
+
+        for (auto it = qualifiers.rbegin(); it != qualifiers.rend(); ++it) {
+          SgNonrealType *qtype =
+              SageBuilder::buildNonrealType(SgName(*it), chain_scope, nullptr);
+          SgNonrealDecl *qdecl = isSgNonrealDecl(qtype->get_declaration());
+          ROSE_ASSERT(qdecl != nullptr);
+          chain_scope = qdecl->get_nonreal_decl_scope();
+        }
       }
     }
 
-    if (!is_template_param) {
-      policy.FullyQualifiedName = true;
-    }
-    policy.SuppressScope = false;
-
-    std::string type_name =
-        clang::QualType(template_specialization_type, 0).getAsString(policy);
-
-    *node = SageBuilder::buildTemplateType(SgName(type_name));
+    *node = SageBuilder::buildNonrealType(SgName(base_name), chain_scope,
+                                          &tpl_args);
     return VisitType(template_specialization_type, node);
   }
 
@@ -2141,30 +2442,14 @@ bool ClangToSageTranslator::VisitDependentNameType(
     clang::DependentNameType *dependent_name_type, SgNode **node) {
   bool res = true;
 
-  // REX FIX: Construct the full name of the dependent type (e.g., "typename
-  // T::type") instead of using a generic "dependent_name" placeholder.
-  std::string type_name;
-  llvm::raw_string_ostream stream(type_name);
-
-  // Print the qualifier (e.g. "enable_if<true, T>::")
-  if (dependent_name_type->getQualifier()) {
-    dependent_name_type->getQualifier()->print(
-        stream, p_compiler_instance->getASTContext().getPrintingPolicy());
-  }
-
-  // Print the identifier (e.g. "type")
   const clang::IdentifierInfo *id = dependent_name_type->getIdentifier();
-  if (id) {
-    stream << id->getName();
-  }
-  stream.flush();
+  ROSE_ASSERT(id != nullptr);
 
-  // Dependent names are almost always "typename ..." in this context
-  if (type_name.find("typename ") != 0) {
-    type_name = "typename " + type_name;
-  }
-
-  *node = SageBuilder::buildTemplateType(SgName(type_name));
+  SgScopeStatement *base_scope = SageBuilder::topScopeStack();
+  ROSE_ASSERT(base_scope != nullptr);
+  *node = buildNonrealTypeFromNestedNameSpecifier(
+      dependent_name_type->getQualifier(), base_scope,
+      SgName(id->getName().str()), nullptr);
 
   return VisitTypeWithKeyword(dependent_name_type, node) && res;
 }
@@ -2179,85 +2464,21 @@ bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(
 #endif
   bool res = true;
 
-  // REX: Build a meaningful name for dependent template specializations
-  // Extract the template name and arguments even though they're dependent
-  std::string type_name;
+  const clang::IdentifierInfo *id =
+      dependent_template_specialization_type->getIdentifier();
+  ROSE_ASSERT(id != nullptr);
 
-  // Get the qualifier (e.g., "std" in "std::array")
-  if (dependent_template_specialization_type->getQualifier() != NULL) {
-    llvm::raw_string_ostream qualifier_stream(type_name);
-    dependent_template_specialization_type->getQualifier()->print(
-        qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-    qualifier_stream.flush();
+  SgTemplateArgumentPtrList tpl_args;
+  for (const clang::TemplateArgument &arg :
+       dependent_template_specialization_type->template_arguments()) {
+    appendTemplateArguments(tpl_args, arg, false);
   }
 
-  // Get the template name (e.g., "array")
-  // Note: getIdentifier() returns nullptr for operator/literal templates like
-  // T::template operator+<U> In those cases, fall back to a generic name
-  if (dependent_template_specialization_type->getIdentifier() != NULL) {
-    type_name += dependent_template_specialization_type->getIdentifier()
-                     ->getName()
-                     .str();
-  } else {
-    // Handle operator or literal template names
-    type_name += "dependent_template_specialization";
-  }
-
-  // Build template arguments string
-  // In LLVM 20, use template_arguments() iterator instead of
-  // getNumArgs()/getArg()
-  auto template_args =
-      dependent_template_specialization_type->template_arguments();
-  if (!template_args.empty()) {
-    type_name += "<";
-    bool first = true;
-    for (const clang::TemplateArgument &arg : template_args) {
-      if (!first)
-        type_name += ", ";
-      first = false;
-      std::string arg_str;
-      llvm::raw_string_ostream arg_stream(arg_str);
-      arg.print(clang::PrintingPolicy(clang::LangOptions()), arg_stream,
-                /*IncludeType=*/true);
-      arg_stream.flush();
-      type_name += arg_str;
-    }
-    type_name += ">";
-  }
-
-  // Sanitize the type name for use as a C++ identifier
-  // Replace invalid characters (::, <, >, comma, space, *, &) with underscores
-  // This produces a valid typedef name instead of using raw template syntax
-  // REX FIX: Do NOT sanitize! We want the raw template syntax for unparsing.
-  std::string sanitized_name = type_name;
-  /*
-  for (size_t i = 0; i < sanitized_name.length(); ++i) {
-      char c = sanitized_name[i];
-      if (c == ':' || c == '<' || c == '>' || c == ',' || c == ' ' ||
-          c == '*' || c == '&' || c == '(' || c == ')') {
-          sanitized_name[i] = '_';
-      }
-  }
-  */
-
-  // Create a proper template type with the raw name
-  // Note: buildOpaqueType creates SgClassType in global scope, which unparser
-  // qualifies with :: SgTemplateType unparses as just the name, avoiding
-  // unwanted qualification. REX FIX: Prepend "typename " and insert "template "
-  // for dependent types
-  std::string final_name = sanitized_name;
-
-  // Insert "template " after the last "::" if it exists
-  size_t last_colon = final_name.find_last_of(':');
-  if (last_colon != std::string::npos && last_colon + 1 < final_name.length()) {
-    // Check if it's already there (unlikely)
-    if (final_name.find("template ", last_colon + 1) != last_colon + 1) {
-      final_name.insert(last_colon + 1, "template ");
-    }
-  }
-
-  final_name = "typename " + final_name;
-  *node = SageBuilder::buildTemplateType(SgName(final_name));
+  SgScopeStatement *base_scope = SageBuilder::topScopeStack();
+  ROSE_ASSERT(base_scope != nullptr);
+  *node = buildNonrealTypeFromNestedNameSpecifier(
+      dependent_template_specialization_type->getQualifier(), base_scope,
+      SgName(id->getName().str()), &tpl_args);
 
   return VisitTypeWithKeyword(dependent_template_specialization_type, node) &&
          res;

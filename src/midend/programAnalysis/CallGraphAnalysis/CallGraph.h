@@ -5,6 +5,7 @@
 #include <AstInterface.h>
 #include <GraphDotOutput.h>
 #include <VirtualGraphCreate.h>
+#include <nodeQuery.h>
 
 #include "AstDiagnostics.h"
 
@@ -267,4 +268,3 @@ CallGraphBuilder::buildCallGraph(Predicate pred)
 
 // endif for CALL_GRAPH_H
 #endif
-

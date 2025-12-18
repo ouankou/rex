@@ -3692,12 +3692,16 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
                      unp->u_name->lookup_generated_qualified_name(
                          info.get_reference_node_for_qualification());
 
-                 // ROOT CAUSE FIX: If lookup_generated_qualified_name() returns
-                 // empty (e.g., for system header typedefs not in our AST),
-                 // fall back to get_qualified_name() which is already computed
-                 // and stored on the type. This handles std::string and other
-                 // system types.
-                 if (nameQualifier.getString().empty()) {
+                 SgNode *reference_node =
+                     info.get_reference_node_for_qualification();
+                 bool has_type_qualification_entry =
+                     (reference_node != NULL) &&
+                     (SgNode::get_globalQualifiedNameMapForTypes().find(
+                          reference_node) !=
+                      SgNode::get_globalQualifiedNameMapForTypes().end());
+
+                 if (!has_type_qualification_entry &&
+                     nameQualifier.getString().empty()) {
                    SgName fullName = typedef_type->get_qualified_name();
                    if (!fullName.getString().empty()) {
                      curprint(fullName.getString() + " ");
@@ -4925,6 +4929,7 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
      SgNonrealDecl * nrdecl = isSgNonrealDecl(nrtype->get_declaration());
      ASSERT_not_null(nrdecl);
 
+     bool has_nonreal_parent = false;
      if (nrdecl->get_templateDeclaration() == NULL) {
        SgNode * parent = nrdecl->get_parent();
        ASSERT_not_null(parent);
@@ -4939,6 +4944,7 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 #if DEBUG_UNPARSE_NONREAL_TYPE
        printf(" --- nrparent_nrscope = %p (%s)\n", nrparent_nrscope, nrparent_nrscope != NULL ? nrparent_nrscope->class_name().c_str() : NULL);
 #endif
+       has_nonreal_parent = (nrparent_nrscope != NULL);
        if (nrparent_nrscope != NULL) {
          if (is_first_in_nonreal_chain) curprint("typename ");
          unparseNonrealType(nrparent_nrscope->get_type(), info, false);
@@ -4955,8 +4961,8 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 
      SgTemplateArgumentPtrList & tpl_args = nrdecl->get_tpl_args();
 
-     // if template argument are provided then the "template" keyword has to be added
-  // if (tpl_args.size() > 0) curprint("template ");
+     if (has_nonreal_parent && !tpl_args.empty())
+       curprint("template ");
 
      // output the name of the non-real type
      curprint(nrtype->get_name());

@@ -808,6 +808,28 @@ void suppress_unparse_output(SgLocatedNode *n) {
   }
 }
 
+void mark_compiler_generated_and_suppress_unparse(SgLocatedNode *n) {
+  if (n == NULL) {
+    return;
+  }
+
+  auto mark = [](Sg_File_Info *fi) {
+    if (fi == NULL) {
+      return;
+    }
+    fi->setCompilerGenerated();
+    fi->unsetOutputInCodeGeneration();
+  };
+
+  mark(n->get_file_info());
+  mark(n->get_startOfConstruct());
+  mark(n->get_endOfConstruct());
+
+  if (SgExpression *expr = isSgExpression(n)) {
+    mark(expr->get_operatorPosition());
+  }
+}
+
 // Normalize namespace scopes to the first definition associated with the
 // namespace symbol (the first nondefining declaration).  ROSE models each
 // re-entrant namespace definition as a distinct scope node, but for symbol
@@ -2362,6 +2384,50 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(
 
   if (res && *node != NULL) {
     p_decl_translation_map.insert(std::make_pair(templated_decl, *node));
+  }
+
+  // Phase C (Issue 115): Queue implicit template instantiations so instantiated
+  // bodies can be translated with resolved reference nodes. Translation is
+  // deferred until the TU is otherwise complete to ensure template argument
+  // declarations (e.g., record types) are already available.
+  if (p_compiler_instance != nullptr) {
+    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+    clang::SourceLocation loc = function_template_decl->getLocation();
+    if (loc.isValid() && sm.isInSystemHeader(loc)) {
+      return res;
+    }
+  }
+
+  for (auto it = function_template_decl->spec_begin();
+       it != function_template_decl->spec_end(); ++it) {
+    clang::FunctionDecl *spec = *it;
+    if (spec == nullptr) {
+      continue;
+    }
+
+    clang::TemplateSpecializationKind kind =
+        spec->getTemplateSpecializationKind();
+    if (kind != clang::TSK_ImplicitInstantiation &&
+        kind != clang::TSK_ExplicitInstantiationDefinition) {
+      continue;
+    }
+
+    if (!spec->hasBody()) {
+      continue;
+    }
+
+    if (p_compiler_instance != nullptr) {
+      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+      clang::SourceLocation loc = spec->getLocation();
+      if (!loc.isValid() || sm.isInSystemHeader(loc) ||
+          sm.isWrittenInBuiltinFile(loc)) {
+        continue;
+      }
+    }
+
+    if (p_pending_implicit_function_instantiations_set.insert(spec).second) {
+      p_pending_implicit_function_instantiations.push_back(spec);
+    }
   }
 
   return res;
@@ -4192,14 +4258,16 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
   }
   if (const clang::TemplateSpecializationType *spec =
           llvm::dyn_cast<clang::TemplateSpecializationType>(named)) {
-    clang::TemplateName tname = spec->getTemplateName();
-    if (clang::TemplateDecl *clang_tpl = tname.getAsTemplateDecl()) {
-      if (SgNode *tpl_node = Traverse(clang_tpl)) {
-        if (SgTemplateClassDeclaration *tpl_decl =
-                isSgTemplateClassDeclaration(tpl_node)) {
-          SgTemplateInstantiationDecl *inst =
-              getOrCreateTemplateInstantiation(tpl_decl, spec);
-          type = inst->get_type();
+    if (!spec->isDependentType()) {
+      clang::TemplateName tname = spec->getTemplateName();
+      if (clang::TemplateDecl *clang_tpl = tname.getAsTemplateDecl()) {
+        if (SgNode *tpl_node = Traverse(clang_tpl)) {
+          if (SgTemplateClassDeclaration *tpl_decl =
+                  isSgTemplateClassDeclaration(tpl_node)) {
+            SgTemplateInstantiationDecl *inst =
+                getOrCreateTemplateInstantiation(tpl_decl, spec);
+            type = inst->get_type();
+          }
         }
       }
     }
@@ -4771,6 +4839,16 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 #endif
   bool res = true;
 
+  struct TranslationGuard {
+    std::set<clang::Decl *> &in_progress;
+    clang::Decl *decl;
+    TranslationGuard(std::set<clang::Decl *> &set, clang::Decl *d)
+        : in_progress(set), decl(d) {
+      in_progress.insert(decl);
+    }
+    ~TranslationGuard() { in_progress.erase(decl); }
+  } translation_guard(p_decl_translation_in_progress, function_decl);
+
   // FIXME: There is something weird here when try to Traverse a function
   // reference in a recursive function (when first Traverse is not complete)
   //        It seems that it tries to instantiate the decl inside the
@@ -5200,6 +5278,123 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
+  auto translate_function_body = [&](SgFunctionDeclaration *defining_decl) {
+    bool body_res = true;
+    if (defining_decl == NULL) {
+      return false;
+    }
+
+    // Only process the function body if it exists. Template functions and
+    // forward declarations may be marked as definitions but have no body.
+    if (function_decl->hasBody()) {
+      SgFunctionDefinition *function_definition =
+          defining_decl->get_definition();
+      ROSE_ASSERT(function_definition != NULL);
+
+      // P1 Badge Fix: Recursive Cache Invalidation.
+      // We must invalidate the cache for the body statements and
+      // declarations BEFORE potentially deleting the existing body AST.
+      // This prevents Use-After-Free (accessing deleted nodes parents)
+      // and ensures we don't reuse "stolen" nodes from templates. We
+      // erase unconditionally because we are about to rebuild the body
+      // for this definition.
+      clang::Stmt *body_stmt = function_decl->getBody();
+      if (body_stmt) {
+        std::function<void(clang::Decl *)> recursive_invalidate_decl;
+        std::function<void(clang::Stmt *)> recursive_invalidate_stmt;
+
+        recursive_invalidate_decl = [&](clang::Decl *d) {
+          if (!d)
+            return;
+          auto it = p_decl_translation_map.find(d);
+          if (it != p_decl_translation_map.end()) {
+            p_decl_translation_map.erase(it);
+          }
+
+          // Recurse into DeclContext (e.g. structs)
+          if (auto *ctx = llvm::dyn_cast<clang::DeclContext>(d)) {
+            for (auto *child : ctx->decls()) {
+              recursive_invalidate_decl(child);
+            }
+          }
+
+          // Handle FunctionDecl body
+          if (auto *fd = llvm::dyn_cast<clang::FunctionDecl>(d)) {
+            if (fd->hasBody())
+              recursive_invalidate_stmt(fd->getBody());
+          }
+          // Handle VarDecl init
+          if (auto *vd = llvm::dyn_cast<clang::VarDecl>(d)) {
+            if (vd->getInit())
+              recursive_invalidate_stmt(vd->getInit());
+          }
+        };
+
+        recursive_invalidate_stmt = [&](clang::Stmt *s) {
+          if (!s)
+            return;
+          auto it = p_stmt_translation_map.find(s);
+          if (it != p_stmt_translation_map.end()) {
+            p_stmt_translation_map.erase(it);
+          }
+
+          // Handle DeclStmt specifically to descend into Decls
+          if (auto *ds = llvm::dyn_cast<clang::DeclStmt>(s)) {
+            for (auto *d : ds->decls()) {
+              recursive_invalidate_decl(d);
+            }
+          }
+
+          // Handle Stmt children
+          for (auto *child : s->children()) {
+            recursive_invalidate_stmt(child);
+          }
+        };
+
+        recursive_invalidate_stmt(body_stmt);
+      }
+
+      if (function_definition->get_body() != NULL)
+        SageInterface::deleteAST(function_definition->get_body());
+
+      SageBuilder::pushScopeStack(function_definition);
+
+      SgNode *tmp_body = Traverse(function_decl->getBody());
+      SgBasicBlock *body = isSgBasicBlock(tmp_body);
+
+      SageBuilder::popScopeStack();
+
+      if (body == NULL && tmp_body != NULL) {
+        std::cerr << "Traverse(function_decl->getBody()) returned a "
+                     "non-SgBasicBlock node: "
+                  << tmp_body->class_name() << std::endl;
+        body_res = false;
+      }
+      if (body != NULL) {
+        // DQ (11/24/2020): This fails for test2020_00.C (in C_tests).
+        // It seems that even though function_definition was used to set
+        // the scope in the connection to the body, that the body's parent
+        // is set to NULL. ROSE_ASSERT(body->get_parent() ==
+        // function_definition);
+        if (body->get_parent() != function_definition) {
+          body->set_parent(function_definition);
+        }
+        ROSE_ASSERT(body->get_parent() == function_definition);
+      }
+
+      function_definition->set_body(body);
+      if (body) {
+        body->set_parent(function_definition);
+      }
+      applySourceRange(function_definition, function_decl->getSourceRange());
+
+      defining_decl->set_definition(function_definition);
+      function_definition->set_parent(defining_decl);
+    }
+
+    return body_res;
+  };
+
   // Template member/function instantiations synthesized by Clang are often
   // marked as definitions (they can carry the template body), but translating
   // them as ordinary functions causes collisions: multiple instantiations share
@@ -5207,64 +5402,107 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   // as template instantiations with explicit template arguments so each
   // instantiation has a unique name in the class scope.
   bool handled_template_instantiation = false;
-  if (templateDecl == NULL &&
+  if (function_decl->getTemplateSpecializationKind() ==
+          clang::TSK_ImplicitInstantiation ||
       function_decl->getTemplateSpecializationKind() ==
-          clang::TSK_ImplicitInstantiation &&
-      function_decl->getPrimaryTemplate() != NULL) {
+          clang::TSK_ExplicitInstantiationDefinition) {
     const clang::TemplateArgumentList *clang_args =
         function_decl->getTemplateSpecializationArgs();
     if (clang_args != NULL) {
+      // Ensure template argument declarations are translated before SageBuilder
+      // needs to unparse them (e.g., for nameWithTemplateArguments). This
+      // avoids dereferencing incomplete scope chains when instantiations are
+      // encountered before their argument declarations in the TU order.
+      for (const clang::TemplateArgument &arg : clang_args->asArray()) {
+        if (arg.getKind() == clang::TemplateArgument::Type) {
+          clang::QualType qt = arg.getAsType();
+          if (const clang::TagType *tag = qt->getAs<clang::TagType>()) {
+            Traverse(tag->getDecl());
+          }
+        }
+      }
+
       auto *template_args = new SgTemplateArgumentPtrList();
       for (const clang::TemplateArgument &arg : clang_args->asArray()) {
         appendTemplateArguments(*template_args, arg, true);
       }
 
-      if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
-        unsigned int methodConstVolatileFlags = 0;
-        auto *method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
-        if (method_decl->isConst()) {
-          methodConstVolatileFlags |= SgMemberFunctionType::e_const;
-        }
-        if (method_decl->isVolatile()) {
-          methodConstVolatileFlags |= SgMemberFunctionType::e_volatile;
-        }
-        clang::Qualifiers qualifiers = method_decl->getMethodQualifiers();
-        if (qualifiers.hasRestrict()) {
-          methodConstVolatileFlags |= SgMemberFunctionType::e_restrict;
-        }
-        switch (method_decl->getRefQualifier()) {
-        case clang::RQ_LValue:
-          methodConstVolatileFlags |=
-              SgMemberFunctionType::e_ref_qualifier_lvalue;
-          break;
-        case clang::RQ_RValue:
-          methodConstVolatileFlags |=
-              SgMemberFunctionType::e_ref_qualifier_rvalue;
-          break;
-        case clang::RQ_None:
-          break;
+      const bool needs_defining_instantiation =
+          function_decl->isThisDeclarationADefinition() &&
+          function_decl->hasBody();
+      auto clone_param_list =
+          [&](SgFunctionParameterList *source) -> SgFunctionParameterList * {
+        SgFunctionParameterList *cloned =
+            SageBuilder::buildFunctionParameterList_nfi();
+        applySourceRange(cloned, function_decl->getSourceRange());
+        if (source == NULL) {
+          return cloned;
         }
 
-        sg_function_decl =
+        for (SgInitializedName *init_name : source->get_args()) {
+          if (init_name == NULL) {
+            continue;
+          }
+
+          SgInitializer *cloned_init = NULL;
+          if (SgInitializer *init = init_name->get_initializer()) {
+            if (SgExpression *expr_init = isSgExpression(init)) {
+              cloned_init = SageBuilder::buildAssignInitializer_nfi(
+                  SageInterface::copyExpression(expr_init),
+                  expr_init->get_type());
+            }
+          }
+
+          SgInitializedName *cloned_param =
+              SageBuilder::buildInitializedName_nfi(
+                  init_name->get_name(), init_name->get_type(), cloned_init);
+          cloned_param->set_scope(SageBuilder::topScopeStack());
+          cloned_param->set_parent(cloned);
+          cloned->append_arg(cloned_param);
+        }
+        return cloned;
+      };
+
+      SgFunctionParameterList *inst_nondef_param_list =
+          needs_defining_instantiation ? clone_param_list(param_list)
+                                       : param_list;
+
+      SgFunctionDeclaration *inst_nondef_decl = NULL;
+      unsigned int inst_method_cv_flags = 0;
+      if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+        inst_method_cv_flags = functionConstVolatileFlags;
+
+        inst_nondef_decl =
             SageBuilder::buildNondefiningMemberFunctionDeclaration(
-                name, ret_type, param_list, scope_for_symbol_table,
-                /*decoratorList=*/NULL, methodConstVolatileFlags,
+                name, ret_type, inst_nondef_param_list, scope_for_symbol_table,
+                /*decoratorList=*/NULL, inst_method_cv_flags,
                 /*buildTemplateInstantiation=*/true, template_args);
       } else {
-        sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
-            name, ret_type, param_list, scope_for_symbol_table,
+        inst_nondef_decl = SageBuilder::buildNondefiningFunctionDeclaration(
+            name, ret_type, inst_nondef_param_list, scope_for_symbol_table,
             /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
             template_args, SgStorageModifier::e_default,
             /*forceFreeFunctionScope=*/isFriendFreeFunction);
       }
 
-      if (sg_function_decl != NULL) {
-        sg_function_decl->set_firstNondefiningDeclaration(sg_function_decl);
+      if (inst_nondef_decl != NULL) {
+        // SageBuilder may return a redundant nondefining declaration when an
+        // instantiation already exists in the scope's symbol table (e.g., when
+        // it was created earlier while handling an explicit template call
+        // expression). In that case, the returned decl has no symbol and its
+        // firstNondefiningDeclaration points at the canonical declaration that
+        // *does* own the symbol. Preserve this chain to keep symbol-table
+        // associations consistent.
+        SgFunctionDeclaration *inst_symbol_decl = isSgFunctionDeclaration(
+            inst_nondef_decl->get_firstNondefiningDeclaration());
+        if (inst_symbol_decl == NULL) {
+          inst_symbol_decl = inst_nondef_decl;
+        }
 
         // Mark explicit argument list on the instantiation decl and connect to
         // the primary template declaration when available.
         if (SgTemplateInstantiationFunctionDecl *inst_func =
-                isSgTemplateInstantiationFunctionDecl(sg_function_decl)) {
+                isSgTemplateInstantiationFunctionDecl(inst_symbol_decl)) {
           inst_func->set_template_argument_list_is_explicit(true);
           inst_func->get_templateArguments() = *template_args;
           if (SgNode *tmpl_node =
@@ -5277,7 +5515,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           }
         } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
                        isSgTemplateInstantiationMemberFunctionDecl(
-                           sg_function_decl)) {
+                           inst_symbol_decl)) {
           inst_member->set_template_argument_list_is_explicit(true);
           inst_member->get_templateArguments() = *template_args;
           if (SgNode *tmpl_node =
@@ -5286,6 +5524,115 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                     isSgTemplateMemberFunctionDeclaration(tmpl_node)) {
               inst_member->set_templateDeclaration(tmpl_decl);
               inst_member->set_templateName(tmpl_decl->get_name());
+            }
+          }
+        }
+
+        if (function_decl->isVariadic()) {
+          inst_nondef_decl->hasEllipses();
+        }
+
+        if (SgFunctionParameterList *params =
+                inst_nondef_decl->get_parameterList()) {
+          for (SgInitializedName *param : params->get_args()) {
+            if (param != NULL) {
+              param->set_declptr(inst_nondef_decl);
+            }
+          }
+        }
+
+        if (needs_defining_instantiation) {
+          SgFunctionDeclaration *defining_inst = NULL;
+          if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
+            SgMemberFunctionDeclaration *inst_nondef_member =
+                isSgMemberFunctionDeclaration(inst_symbol_decl);
+            ROSE_ASSERT(inst_nondef_member != NULL);
+            defining_inst = SageBuilder::buildDefiningMemberFunctionDeclaration(
+                name, ret_type, param_list, scope_for_symbol_table,
+                /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
+                inst_method_cv_flags, inst_nondef_member, template_args);
+          } else {
+            defining_inst = SageBuilder::buildDefiningFunctionDeclaration(
+                name, ret_type, param_list, scope_for_symbol_table,
+                /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
+                inst_symbol_decl, template_args,
+                /*forceFreeFunctionScope=*/isFriendFreeFunction);
+          }
+
+          ROSE_ASSERT(defining_inst != NULL);
+          sg_function_decl = defining_inst;
+          sg_function_decl->set_definingDeclaration(sg_function_decl);
+          sg_function_decl->set_firstNondefiningDeclaration(inst_symbol_decl);
+          inst_symbol_decl->set_definingDeclaration(sg_function_decl);
+
+          if (function_decl->isVariadic()) {
+            sg_function_decl->hasEllipses();
+          }
+
+          for (SgInitializedName *param : param_list->get_args()) {
+            if (param != NULL) {
+              param->set_declptr(sg_function_decl);
+            }
+          }
+
+          if (SgTemplateInstantiationFunctionDecl *inst_func =
+                  isSgTemplateInstantiationFunctionDecl(sg_function_decl)) {
+            inst_func->set_template_argument_list_is_explicit(true);
+            inst_func->get_templateArguments() = *template_args;
+            if (SgNode *tmpl_node =
+                    Traverse(function_decl->getPrimaryTemplate())) {
+              if (SgTemplateFunctionDeclaration *tmpl_decl =
+                      isSgTemplateFunctionDeclaration(tmpl_node)) {
+                inst_func->set_templateDeclaration(tmpl_decl);
+                inst_func->set_templateName(tmpl_decl->get_name());
+              }
+            }
+          } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+                         isSgTemplateInstantiationMemberFunctionDecl(
+                             sg_function_decl)) {
+            inst_member->set_template_argument_list_is_explicit(true);
+            inst_member->get_templateArguments() = *template_args;
+            if (SgNode *tmpl_node =
+                    Traverse(function_decl->getPrimaryTemplate())) {
+              if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                      isSgTemplateMemberFunctionDeclaration(tmpl_node)) {
+                inst_member->set_templateDeclaration(tmpl_decl);
+                inst_member->set_templateName(tmpl_decl->get_name());
+              }
+            }
+          }
+
+          res = translate_function_body(sg_function_decl) && res;
+
+          setCompilerGeneratedFileInfo(inst_symbol_decl);
+          suppress_unparse_output(inst_symbol_decl);
+          if (SgFunctionParameterList *params =
+                  inst_symbol_decl->get_parameterList()) {
+            setCompilerGeneratedFileInfo(params);
+            suppress_unparse_output(params);
+            for (SgInitializedName *param : params->get_args()) {
+              if (param != NULL) {
+                setCompilerGeneratedFileInfo(param);
+                suppress_unparse_output(param);
+              }
+            }
+          }
+
+          setCompilerGeneratedFileInfo(sg_function_decl);
+          suppress_unparse_output(sg_function_decl);
+        } else {
+          sg_function_decl = inst_symbol_decl;
+          setCompilerGeneratedFileInfo(sg_function_decl);
+          suppress_unparse_output(sg_function_decl);
+          if (SgFunctionParameterList *params =
+                  sg_function_decl->get_parameterList()) {
+            setCompilerGeneratedFileInfo(params);
+            suppress_unparse_output(params);
+            for (SgInitializedName *param : params->get_args()) {
+              if (param != NULL) {
+                setCompilerGeneratedFileInfo(param);
+                suppress_unparse_output(param);
+              }
             }
           }
         }
@@ -5671,141 +6018,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     }
 
-    // Only process the function body if it exists
-    // Template functions and forward declarations may be marked as definitions
-    // but have no body
-    if (function_decl->hasBody()) {
-      /*
-                  if (sg_function_decl->get_definition() != NULL)
-         SageInterface::deleteAST(sg_function_decl->get_definition());
-
-                  SgFunctionDefinition * function_definition = new
-         SgFunctionDefinition(sg_function_decl, NULL);
-
-                  SgInitializedNamePtrList & init_names =
-         param_list->get_args(); SgInitializedNamePtrList::iterator it; for (it
-         = init_names.begin(); it != init_names.end(); it++) {
-                      (*it)->set_scope(function_definition);
-                      SgSymbolTable * st =
-         function_definition->get_symbol_table(); ROSE_ASSERT(st != NULL);
-                      SgVariableSymbol * tmp_sym  = new SgVariableSymbol(*it);
-                      st->insert((*it)->get_name(), tmp_sym);
-                  }
-      */
-      SgFunctionDefinition *function_definition =
-          sg_function_decl->get_definition();
-
-      // P1 Badge Fix: Recursive Cache Invalidation.
-      // We must invalidate the cache for the body statements and
-      // declarations BEFORE potentially deleting the existing body AST.
-      // This prevents Use-After-Free (accessing deleted nodes parents)
-      // and ensures we don't reuse "stolen" nodes from templates. We
-      // erase unconditionally because we are about to rebuild the body
-      // for this definition.
-
-      clang::Stmt *body_stmt = function_decl->getBody();
-      if (body_stmt) {
-        std::function<void(clang::Decl *)> recursive_invalidate_decl;
-        std::function<void(clang::Stmt *)> recursive_invalidate_stmt;
-
-        recursive_invalidate_decl = [&](clang::Decl *d) {
-          if (!d)
-            return;
-          auto it = p_decl_translation_map.find(d);
-          if (it != p_decl_translation_map.end()) {
-            p_decl_translation_map.erase(it);
-          }
-
-          // Recurse into DeclContext (e.g. structs)
-          if (auto *ctx = llvm::dyn_cast<clang::DeclContext>(d)) {
-            for (auto *child : ctx->decls()) {
-              recursive_invalidate_decl(child);
-            }
-          }
-
-          // Handle FunctionDecl body
-          if (auto *fd = llvm::dyn_cast<clang::FunctionDecl>(d)) {
-            if (fd->hasBody())
-              recursive_invalidate_stmt(fd->getBody());
-          }
-          // Handle VarDecl init
-          if (auto *vd = llvm::dyn_cast<clang::VarDecl>(d)) {
-            if (vd->getInit())
-              recursive_invalidate_stmt(vd->getInit());
-          }
-        };
-
-        recursive_invalidate_stmt = [&](clang::Stmt *s) {
-          if (!s)
-            return;
-          auto it = p_stmt_translation_map.find(s);
-          if (it != p_stmt_translation_map.end()) {
-            p_stmt_translation_map.erase(it);
-          }
-
-          // Handle DeclStmt specifically to descend into Decls
-          if (auto *ds = llvm::dyn_cast<clang::DeclStmt>(s)) {
-            for (auto *d : ds->decls()) {
-              recursive_invalidate_decl(d);
-            }
-          }
-
-          // Handle Stmt children
-          for (auto *child : s->children()) {
-            recursive_invalidate_stmt(child);
-          }
-        };
-
-        recursive_invalidate_stmt(body_stmt);
-      }
-
-      if (sg_function_decl->get_definition()->get_body() != NULL)
-        SageInterface::deleteAST(
-            sg_function_decl->get_definition()->get_body());
-
-      SageBuilder::pushScopeStack(function_definition);
-
-      SgNode *tmp_body = Traverse(function_decl->getBody());
-      SgBasicBlock *body = isSgBasicBlock(tmp_body);
-
-      SageBuilder::popScopeStack();
-
-      if (body == NULL && tmp_body != NULL) {
-        std::cerr << "Traverse(function_decl->getBody()) returned a "
-                     "non-SgBasicBlock node: "
-                  << tmp_body->class_name() << std::endl;
-        res = false;
-      }
-      if (body != NULL) {
-        // DQ (11/24/2020): This fails for test2020_00.C (in C_tests).
-        // It seems that even though function_definition was used to set
-        // the scope in the connection to the body, that the body's parent
-        // is set to NULL. ROSE_ASSERT(body->get_parent() ==
-        // function_definition);
-        if (body->get_parent() != function_definition) {
-#if 0
-                      printf ("In visitFunctionDecl(): resetting the body parent to function_definition = %p = %s \n",
-                           function_definition,function_definition->class_name().c_str());
-#endif
-          body->set_parent(function_definition);
-        }
-        ROSE_ASSERT(body->get_parent() == function_definition);
-      }
-
-      function_definition->set_body(body);
-      if (body) {
-        body->set_parent(function_definition);
-      }
-      applySourceRange(function_definition, function_decl->getSourceRange());
-
-      sg_function_decl->set_definition(function_definition);
-      function_definition->set_parent(sg_function_decl);
-    } else {
-      // Function declaration without body (e.g., template function in header,
-      // forward declaration) This is normal for template functions and should
-      // not cause an error The get_definition() will return NULL, which is
-      // expected
-    }
+    res = translate_function_body(sg_function_decl) && res;
     /*
             SgFunctionDeclaration * first_decl;
             if (function_decl->isFirstDecl()) {
@@ -6305,7 +6518,45 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   *node = sg_function_decl;
 
-  return VisitDeclaratorDecl(function_decl, node) && res;
+  bool visit_res = VisitDeclaratorDecl(function_decl, node) && res;
+
+  // translateFunctionDeclCommon returns via VisitDeclaratorDecl->VisitDecl,
+  // which applies source ranges and may mark declarations for output in the
+  // main file. For compiler-synthesized implicit instantiations we must
+  // preserve their "compiler-generated and not-for-unparse" classification;
+  // otherwise they can be emitted as explicit specializations after use sites
+  // and break downstream compilation (Issue 115 Phase C regression).
+  if (handled_template_instantiation &&
+      function_decl->getTemplateSpecializationKind() ==
+          clang::TSK_ImplicitInstantiation) {
+    if (SgFunctionDeclaration *func_decl =
+            isSgFunctionDeclaration(sg_function_decl)) {
+      mark_compiler_generated_and_suppress_unparse(func_decl);
+
+      if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+              func_decl->get_firstNondefiningDeclaration())) {
+        mark_compiler_generated_and_suppress_unparse(first_nondef);
+      }
+
+      if (SgFunctionParameterList *params = func_decl->get_parameterList()) {
+        mark_compiler_generated_and_suppress_unparse(params);
+        for (SgInitializedName *param : params->get_args()) {
+          if (param != NULL) {
+            mark_compiler_generated_and_suppress_unparse(param);
+          }
+        }
+      }
+
+      if (SgFunctionDefinition *defn = func_decl->get_definition()) {
+        mark_compiler_generated_and_suppress_unparse(defn);
+        if (SgBasicBlock *body = defn->get_body()) {
+          mark_compiler_generated_and_suppress_unparse(body);
+        }
+      }
+    }
+  }
+
+  return visit_res;
 }
 
 bool ClangToSageTranslator::VisitFunctionDecl(
@@ -7264,6 +7515,73 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
       if (std::find(existing.begin(), existing.end(), decl_stmt) ==
           existing.end()) {
         p_global_scope->append_declaration(decl_stmt);
+      }
+    }
+  }
+
+  // Phase C (Issue 115): Translate queued implicit function template
+  // instantiations after the TU decl pass so template argument declarations are
+  // already translated and symbol tables are populated.
+  while (!p_pending_implicit_function_instantiations.empty()) {
+    clang::FunctionDecl *pending =
+        p_pending_implicit_function_instantiations.back();
+    p_pending_implicit_function_instantiations.pop_back();
+    p_pending_implicit_function_instantiations_set.erase(pending);
+
+    if (pending == nullptr) {
+      continue;
+    }
+
+    SgNode *inst_node = NULL;
+    auto existing = p_decl_translation_map.find(pending);
+    if (existing != p_decl_translation_map.end()) {
+      inst_node = existing->second;
+    } else {
+      inst_node = Traverse(pending);
+    }
+    if (SgDeclarationStatement *inst_decl =
+            isSgDeclarationStatement(inst_node)) {
+      ensure_decl_in_scope_child_list(inst_decl, inst_decl->get_scope(),
+                                      "Issue115 Phase C");
+
+      // Ensure the corresponding first nondefining declaration is also
+      // attached. ROSE function symbols are typically associated with the first
+      // nondefining declaration; leaving it unattached can cause symbol-table
+      // cleanup to drop the symbol and later trip name-qualification
+      // assertions.
+      if (SgFunctionDeclaration *func_decl =
+              isSgFunctionDeclaration(inst_decl)) {
+        if (SgDeclarationStatement *first_nondef =
+                func_decl->get_firstNondefiningDeclaration()) {
+          if (first_nondef != func_decl) {
+            ensure_decl_in_scope_child_list(
+                first_nondef, func_decl->get_scope(), "Issue115 Phase C");
+          }
+        }
+
+        // The instantiation decls are compiler-generated artifacts and should
+        // not be emitted during unparsing (they can appear as explicit
+        // specializations after use sites and break downstream compilation
+        // tests).
+        mark_compiler_generated_and_suppress_unparse(func_decl);
+        if (SgFunctionDeclaration *first_func = isSgFunctionDeclaration(
+                func_decl->get_firstNondefiningDeclaration())) {
+          mark_compiler_generated_and_suppress_unparse(first_func);
+        }
+        if (SgFunctionParameterList *params = func_decl->get_parameterList()) {
+          mark_compiler_generated_and_suppress_unparse(params);
+          for (SgInitializedName *param : params->get_args()) {
+            if (param != NULL) {
+              mark_compiler_generated_and_suppress_unparse(param);
+            }
+          }
+        }
+        if (SgFunctionDefinition *defn = func_decl->get_definition()) {
+          mark_compiler_generated_and_suppress_unparse(defn);
+          if (SgBasicBlock *body = defn->get_body()) {
+            mark_compiler_generated_and_suppress_unparse(body);
+          }
+        }
       }
     }
   }

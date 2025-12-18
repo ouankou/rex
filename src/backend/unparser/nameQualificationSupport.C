@@ -11003,11 +11003,18 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
            declstmt = nrdecl->get_templateDeclaration();
          }
 
-         int amountOfNameQualificationRequired = nameQualificationDepth(declstmt, currentScope, currentStatement);
+         if (SgNode::get_globalQualifiedNameMapForNames().find(nrRefExp) ==
+             SgNode::get_globalQualifiedNameMapForNames().end()) {
+           int amountOfNameQualificationRequired =
+               nameQualificationDepth(declstmt, currentScope, currentStatement);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-         MLOG_WARN_C(MLOG_UNPARSER, " --- amountOfNameQualificationRequired = %d\n", amountOfNameQualificationRequired);
+           MLOG_WARN_C(MLOG_UNPARSER,
+                       " --- amountOfNameQualificationRequired = %d\n",
+                       amountOfNameQualificationRequired);
 #endif
-         setNameQualification(nrRefExp, declstmt, amountOfNameQualificationRequired);
+           setNameQualification(nrRefExp, declstmt,
+                                amountOfNameQualificationRequired);
+         }
        }
      } else {
 #if WARNING_FOR_NONREAL_DEVEL
@@ -14357,11 +14364,6 @@ SgScopeStatement * traverseNonrealDeclForCorrectScope(SgDeclarationStatement * d
       MLOG_WARN_C(MLOG_UNPARSER, " --- decl_scope_parent = %p (%s)\n", decl_scope_parent, decl_scope_parent->class_name().c_str());
 #endif
 
-      SgTemplateClassDeclaration * tcdecl_parent = isSgTemplateClassDeclaration(decl_scope_parent);
-      SgTemplateFunctionDeclaration * tfdecl_parent = isSgTemplateFunctionDeclaration(decl_scope_parent);
-      SgTemplateMemberFunctionDeclaration * tmfdecl_parent = isSgTemplateMemberFunctionDeclaration(decl_scope_parent);
-      SgTemplateTypedefDeclaration * ttddecl_parent = isSgTemplateTypedefDeclaration(decl_scope_parent);
-      SgTemplateVariableDeclaration * tvdecl_parent = isSgTemplateVariableDeclaration(decl_scope_parent);
       SgNonrealDecl * nr_parent = isSgNonrealDecl(decl_scope_parent);
       if (nr_parent != NULL) {
         ROSE_ASSERT(nr_parent != nrdecl); // LOOP in the nonreal declaration: forbidden
@@ -14370,7 +14372,12 @@ SgScopeStatement * traverseNonrealDeclForCorrectScope(SgDeclarationStatement * d
         MLOG_WARN_C(MLOG_UNPARSER, " --- nrdecl = %p (%s)\n", nrdecl, nrdecl->class_name().c_str());
 #endif
       } else {
-        ROSE_ASSERT(tcdecl_parent || tfdecl_parent || tmfdecl_parent || ttddecl_parent || tvdecl_parent);
+        SgScopeStatement *parent_scope = isSgScopeStatement(decl_scope_parent);
+        if (parent_scope == NULL) {
+          parent_scope = SageInterface::getEnclosingScope(decl_scope_parent);
+        }
+        ASSERT_not_null(parent_scope);
+        scope = parent_scope;
         break;
       }
     } else {
@@ -15970,6 +15977,48 @@ NameQualificationTraversal::setNameQualificationOnType(SgInitializedName* initia
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(declaration);
      string qualifier = setNameQualificationSupport(scope,amountOfNameQualificationRequired, outputNameQualificationLength, outputGlobalQualification, outputTypeEvaluation);
+
+     SgClassDefinition *enclosing_class_definition =
+         SageInterface::getEnclosingClassDefinition(initializedName);
+     if (enclosing_class_definition != NULL) {
+       SgClassDeclaration *enclosing_class_decl =
+           enclosing_class_definition->get_declaration();
+       if (enclosing_class_decl != NULL) {
+         const std::string class_name =
+             enclosing_class_decl->get_name().getString();
+         const std::string qualified_name =
+             enclosing_class_decl->get_qualified_name().getString();
+
+         if (!class_name.empty()) {
+           std::vector<std::string> prefixes;
+
+           if (!qualified_name.empty()) {
+             prefixes.push_back(qualified_name + "::");
+
+             std::string with_global = qualified_name;
+             if (with_global.rfind("::", 0) != 0) {
+               with_global = "::" + with_global;
+             }
+             prefixes.push_back(with_global + "::");
+           }
+
+           prefixes.push_back(class_name + "::");
+           prefixes.push_back("::" + class_name + "::");
+
+           for (const std::string &prefix : prefixes) {
+             if (qualifier.rfind(prefix, 0) != 0) {
+               continue;
+             }
+
+             qualifier = class_name + "::" + qualifier.substr(prefix.size());
+             if (prefix.rfind("::", 0) == 0) {
+               outputGlobalQualification = false;
+             }
+             break;
+           }
+         }
+       }
+     }
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
      MLOG_WARN_C(MLOG_UNPARSER, "In setNameQualificationOnType(SgInitializedName*): qualifier = %s \n",qualifier.c_str());

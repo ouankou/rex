@@ -1,4 +1,5 @@
 #include "customFilteredCFG.h"
+#include "sage3basic.h"
 
 namespace StaticCFG
 {
@@ -32,6 +33,22 @@ namespace StaticCFG
         typedef std::pair<VirtualCFG::FilteredCFGNode<_filter>, SgGraphNode*> pair_t;
         for (const pair_t& p: all_nodes)
             all_nodes_[VirtualCFG::CFGNode(p.first.getNode(), 0)] = p.second; 
+    }
+
+    template <typename _filter>
+    void ROSE_DLL_API CustomFilteredCFG<_filter>::printEdge(
+        std::ostream &o, SgDirectedGraphEdge *edge, bool isInEdge) {
+      AstAttribute *attr = edge->getAttribute("info");
+
+      if (auto *edge_attr = dynamic_cast<
+              CFGEdgeAttribute<VirtualCFG::FilteredCFGEdge<_filter>> *>(attr)) {
+        VirtualCFG::FilteredCFGEdge<_filter> e = edge_attr->getEdge();
+        o << e.source().id() << " -> " << e.target().id() << " [label=\""
+          << escapeString(e.toString()) << "\", style=\""
+          << (isInEdge ? "dotted" : "solid") << "\"];\n";
+      } else {
+        ROSE_ABORT();
+      }
     }
 
 template<typename _filter>    

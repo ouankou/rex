@@ -8189,6 +8189,49 @@ SageBuilder::buildVarRefExp_nfi(SgVariableSymbol* sym)
      return varRef;
    }
 
+   SgNonrealRefExp *
+   SageBuilder::buildNonrealRefExp(const SgName &name, SgScopeStatement *scope,
+                                   const SgName &qualifiedPrefix,
+                                   const SgTemplateArgumentPtrList *tplArgs) {
+     SgScopeStatement *effective_scope = scope;
+     if (effective_scope == NULL) {
+       effective_scope = SageBuilder::topScopeStack();
+     }
+     ROSE_ASSERT(effective_scope != NULL);
+
+     SgDeclarationScope *decl_scope = isSgDeclarationScope(effective_scope);
+     if (decl_scope == NULL) {
+       decl_scope = SageBuilder::buildDeclarationScope();
+       decl_scope->set_parent(effective_scope);
+     }
+
+     SgNonrealDecl *nrdecl = SageBuilder::buildNonrealDecl(name, decl_scope);
+     ROSE_ASSERT(nrdecl != NULL);
+
+     if (tplArgs != NULL && !tplArgs->empty()) {
+       nrdecl->get_tpl_args() = *tplArgs;
+       for (SgTemplateArgument *arg : nrdecl->get_tpl_args()) {
+         if (arg != NULL) {
+           arg->set_parent(nrdecl);
+         }
+       }
+     }
+
+     SgNonrealSymbol *sym =
+         isSgNonrealSymbol(nrdecl->get_symbol_from_symbol_table());
+     ROSE_ASSERT(sym != NULL);
+
+     SgNonrealRefExp *refexp = SageBuilder::buildNonrealRefExp_nfi(sym);
+     ROSE_ASSERT(refexp != NULL);
+
+     if (qualifiedPrefix.is_null() == false) {
+       SgNode::get_globalQualifiedNameMapForNames()[refexp] =
+           qualifiedPrefix.getString();
+     }
+
+     return refexp;
+   }
+
 SgNonrealRefExp *
 SageBuilder::buildNonrealRefExp_nfi(SgNonrealSymbol * sym)
    {
@@ -11565,6 +11608,37 @@ SgNonrealType * SageBuilder::buildNonrealType(const SgName & name, SgDeclaration
   SgNonrealDecl * nrdecl = buildNonrealDecl(name, scope);
   nrdecl->set_parent(scope);
   nrdecl->set_is_template_param (true);
+  return nrdecl->get_type();
+}
+
+SgNonrealType *
+SageBuilder::buildNonrealType(const SgName &name, SgScopeStatement *scope,
+                              const SgTemplateArgumentPtrList *tplArgs) {
+  SgScopeStatement *effective_scope = scope;
+  if (effective_scope == NULL) {
+    effective_scope = SageBuilder::topScopeStack();
+  }
+  ROSE_ASSERT(effective_scope != NULL);
+
+  SgDeclarationScope *decl_scope = isSgDeclarationScope(effective_scope);
+  if (decl_scope == NULL) {
+    decl_scope = SageBuilder::buildDeclarationScope();
+    decl_scope->set_parent(effective_scope);
+  }
+
+  SgNonrealDecl *nrdecl = buildNonrealDecl(name, decl_scope);
+  ROSE_ASSERT(nrdecl != NULL);
+
+  if (tplArgs != NULL && !tplArgs->empty()) {
+    nrdecl->set_is_nonreal_template(true);
+    nrdecl->get_tpl_args() = *tplArgs;
+    for (SgTemplateArgument *arg : nrdecl->get_tpl_args()) {
+      if (arg != NULL) {
+        arg->set_parent(nrdecl);
+      }
+    }
+  }
+
   return nrdecl->get_type();
 }
 

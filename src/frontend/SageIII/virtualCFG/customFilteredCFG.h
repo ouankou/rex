@@ -8,6 +8,7 @@
 #ifndef CUSTOMFILTEREDCFG_H
 #define CUSTOMFILTEREDCFG_H
 
+#include "filteredCFG.h"
 #include "staticCFG.h"
 
 namespace StaticCFG 
@@ -26,19 +27,9 @@ public:
         
 protected:        
         //! Virtual function Overloaded to print the Custom Filtered CFG Edges
-        virtual void printEdge(std::ostream & o, SgDirectedGraphEdge* edge, bool isInEdge) {
-        
-                AstAttribute* attr = edge->getAttribute("info");
-            
-                if (CFGEdgeAttribute<VirtualCFG::FilteredCFGEdge<_Filter> >* edge_attr = dynamic_cast<CFGEdgeAttribute<VirtualCFG::FilteredCFGEdge<_Filter> >*>(attr))  {
-                        VirtualCFG::FilteredCFGEdge<_Filter>  e = edge_attr->getEdge();
-                        o << e.source().id() << " -> " << e.target().id() << " [label=\"" << escapeString(e.toString()) <<
-                        "\", style=\"" << (isInEdge ? "dotted" : "solid") << "\"];\n";
-                }
-                else
-                        ROSE_ABORT();
+  void printEdge(std::ostream &o, SgDirectedGraphEdge *edge,
+                 bool isInEdge) override;
 
-        }
 private:        
         template <class NodeT, class EdgeT>
         void buildTemplatedCFG(NodeT n, std::map<NodeT, SgGraphNode*>& all_nodes, std::set<NodeT>& explored);
@@ -46,5 +37,4 @@ private:
     };
 
 }
-#endif  /* CUSTOMFILTEREDCFG_H */
-
+#endif /* CUSTOMFILTEREDCFG_H */

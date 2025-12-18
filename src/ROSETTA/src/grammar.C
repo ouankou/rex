@@ -2477,6 +2477,12 @@ Grammar::buildForwardDeclarations ()
      returnString.push_back(StringUtility::StringWithLineNumber("// GNU g++ 4.1.0 requires these be declared outside of the class (because the friend declaration in the class is not enough).\n\n", "" /* "<unknown>" */, 2));
 
      returnString.push_back(StringUtility::StringWithLineNumber("\n\n#include \"rosedll.h\"\n", "" /* "<unknown>" */, 1));
+     returnString.push_back(StringUtility::StringWithLineNumber(
+         "#include \"mlog.h\"\n", "" /* "<unknown>" */, 1));
+     returnString.push_back(StringUtility::StringWithLineNumber(
+         "#include \"rosedefs.h\"\n", "" /* "<unknown>" */, 1));
+     returnString.push_back(StringUtility::StringWithLineNumber(
+         "#include \"rose_attributes_list.h\"\n", "" /* "<unknown>" */, 1));
      // Milind Chabbi (8/28/2013): Performance refactoring: make rose_ClassHierarchyCastTable accessible for IS_SgXXX_FAST_MACRO()s
      size_t maxRows= getRowsInClassHierarchyCastTable();
      size_t maxCols = getColumnsInClassHierarchyCastTable();

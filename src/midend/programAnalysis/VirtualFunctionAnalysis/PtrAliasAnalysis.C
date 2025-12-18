@@ -1,6 +1,7 @@
+#include "AstDOTGeneration.h"
+#include "PtrAliasAnalysis.h"
 #include "sage3basic.h"
 #include <CallGraph.h>
-#include "PtrAliasAnalysis.h"
 
 struct FunctionFilter
 {
@@ -248,5 +249,4 @@ void PtrAliasAnalysis::run()  {
 #if 0
      printf ("Leaving PtrAliasAnalysis::run(): TOP \n");
 #endif
- }
-
+}

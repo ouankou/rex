@@ -12,6 +12,28 @@
 #include <map>
 #include <sstream>
 
+// DQ (10/21/2004): See comments in sage3basic.h; this must be consistent
+// anywhere Cxx_Grammar.h is included.
+#ifndef ALT_FIXUP_COPY
+#define ALT_FIXUP_COPY 1
+#endif
+
+// DQ (9/24/2004): See comments in sage3basic.h; this must be consistent
+// anywhere Cxx_Grammar.h is included.
+#ifndef REMOVE_SET_PARENT_FUNCTION
+#define REMOVE_SET_PARENT_FUNCTION
+#endif
+
+// Cxx_Grammar.h uses these macros in declarations (see sage3basic.h for the
+// full policy).
+#ifndef ROSE_DEPRECATED_FUNCTION
+#define ROSE_DEPRECATED_FUNCTION /*deprecated*/
+#endif
+
+#ifndef ROSE_DEPRECATED_VARIABLE
+#define ROSE_DEPRECATED_VARIABLE /*deprecated*/
+#endif
+
 // DQ (9/25/2007): Need to move this to here so that all of ROSE will see it.
 #define Rose_STL_Container std::vector
 
@@ -34,11 +56,11 @@ typedef uint64_t rose_addr_t; /* address and size (file and memory) */
 // #include "rose_config.h"
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-#include "virtualCFG.h" 
+#include "virtualCFG.h"
 
-// DQ (10/29/2010): This must be included as a header file since the function 
-// declarations in SgAsmStatement require it in the generated Cxx_Grammar.h file.
-
+// DQ (10/29/2010): This must be included as a header file since the function
+// declarations in SgAsmStatement require it in the generated Cxx_Grammar.h
+// file.
 #include "staticCFG.h"
 #else
 

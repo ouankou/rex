@@ -2,10 +2,11 @@
 #define ROSE_AstAttributeMechanism_H
 
 #include "rosedll.h"
-#include <string>
 #include <list>
-#include <set>
 #include <map>
+#include <set>
+#include <string>
+#include <vector>
 
 class SgNode;
 class SgNamedType;
