@@ -2109,6 +2109,9 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
   case clang::LinkageSpecLanguageIDs::CXX:
     linkage = "C++";
     break;
+  default:
+    ROSE_ASSERT(!"Unhandled clang::LinkageSpecLanguageIDs");
+    break;
   }
   ROSE_ASSERT(!linkage.empty());
 
