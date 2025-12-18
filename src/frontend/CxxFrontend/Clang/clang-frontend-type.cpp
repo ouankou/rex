@@ -25,6 +25,53 @@ public:
 
 const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
 
+std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
+  const char *spelling = clang::getOperatorSpelling(op);
+  ROSE_ASSERT(spelling != nullptr);
+
+  std::string result = "operator";
+  if (std::isalpha(static_cast<unsigned char>(spelling[0])) ||
+      spelling[0] == '_') {
+    result += ' ';
+  }
+  result += spelling;
+  return result;
+}
+
+struct DependentTemplateSpecializationNameInfo {
+  clang::NestedNameSpecifier *qualifier = nullptr;
+  std::string base_name;
+  bool has_template_keyword = true;
+};
+
+DependentTemplateSpecializationNameInfo getDependentTemplateSpecializationName(
+    const clang::DependentTemplateSpecializationType *dts) {
+  DependentTemplateSpecializationNameInfo info;
+  ROSE_ASSERT(dts != nullptr);
+
+#if LLVM_VERSION_MAJOR >= 21
+  const clang::DependentTemplateStorage &name = dts->getDependentTemplateName();
+  info.qualifier = name.getQualifier();
+  info.has_template_keyword = name.hasTemplateKeyword();
+
+  clang::IdentifierOrOverloadedOperator base = name.getName();
+  if (const clang::IdentifierInfo *id = base.getIdentifier()) {
+    info.base_name = id->getName().str();
+  } else {
+    info.base_name = buildOverloadedOperatorName(base.getOperator());
+  }
+#else
+  info.qualifier = dts->getQualifier();
+  const clang::IdentifierInfo *id = dts->getIdentifier();
+  ROSE_ASSERT(id != nullptr);
+  info.base_name = id->getName().str();
+  info.has_template_keyword = true;
+#endif
+
+  ROSE_ASSERT(!info.base_name.empty());
+  return info;
+}
+
 // Generate unique name for template declaration with full namespace
 // qualification
 std::string mangleTemplateName(const clang::TemplateName &tname) {
@@ -71,9 +118,7 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
     if (dtn->isIdentifier()) {
       return dtn->getIdentifier()->getName().str();
     }
-    std::string name = "operator";
-    name += clang::getOperatorSpelling(dtn->getOperator());
-    return name;
+    return buildOverloadedOperatorName(dtn->getOperator());
   }
 
   if (const clang::SubstTemplateTemplateParmStorage *subst =
@@ -1884,15 +1929,15 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
   if (const clang::DependentTemplateSpecializationType *dts =
           llvm::dyn_cast<clang::DependentTemplateSpecializationType>(
               clang_type)) {
-    const clang::IdentifierInfo *id = dts->getIdentifier();
-    ROSE_ASSERT(id != nullptr);
+    DependentTemplateSpecializationNameInfo name_info =
+        getDependentTemplateSpecializationName(dts);
 
     SgTemplateArgumentPtrList tpl_args;
     for (const clang::TemplateArgument &arg : dts->template_arguments()) {
       appendTemplateArguments(tpl_args, arg, false);
     }
 
-    return SageBuilder::buildNonrealType(SgName(id->getName().str()), scope,
+    return SageBuilder::buildNonrealType(SgName(name_info.base_name), scope,
                                          &tpl_args);
   }
 
@@ -2487,9 +2532,9 @@ bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(
 #endif
   bool res = true;
 
-  const clang::IdentifierInfo *id =
-      dependent_template_specialization_type->getIdentifier();
-  ROSE_ASSERT(id != nullptr);
+  DependentTemplateSpecializationNameInfo name_info =
+      getDependentTemplateSpecializationName(
+          dependent_template_specialization_type);
 
   SgTemplateArgumentPtrList tpl_args;
   for (const clang::TemplateArgument &arg :
@@ -2500,12 +2545,13 @@ bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(
   SgScopeStatement *base_scope = SageBuilder::topScopeStack();
   ROSE_ASSERT(base_scope != nullptr);
   *node = buildNonrealTypeFromNestedNameSpecifier(
-      dependent_template_specialization_type->getQualifier(), base_scope,
-      SgName(id->getName().str()), &tpl_args);
+      name_info.qualifier, base_scope, SgName(name_info.base_name), &tpl_args);
   if (SgNonrealType *nrtype = isSgNonrealType(*node)) {
     if (SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration())) {
-      nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,
-                           new RexNonrealFlagAttribute());
+      if (name_info.has_template_keyword) {
+        nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,
+                             new RexNonrealFlagAttribute());
+      }
     }
   }
 
