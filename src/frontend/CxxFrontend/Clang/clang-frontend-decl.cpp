@@ -5446,11 +5446,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
           SgInitializer *cloned_init = NULL;
           if (SgInitializer *init = init_name->get_initializer()) {
-            if (SgExpression *expr_init = isSgExpression(init)) {
-              cloned_init = SageBuilder::buildAssignInitializer_nfi(
-                  SageInterface::copyExpression(expr_init),
-                  expr_init->get_type());
-            }
+            cloned_init = SageInterface::deepCopy(init);
           }
 
           SgInitializedName *cloned_param =
@@ -5701,11 +5697,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
             SgInitializer *cloned_init = NULL;
             if (SgInitializer *init = init_name->get_initializer()) {
-              if (SgExpression *expr_init = isSgExpression(init)) {
-                cloned_init = SageBuilder::buildAssignInitializer_nfi(
-                    SageInterface::copyExpression(expr_init),
-                    expr_init->get_type());
-              }
+              cloned_init = SageInterface::deepCopy(init);
             }
 
             SgInitializedName *cloned_param =
@@ -5837,11 +5829,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
             SgInitializer *cloned_init = NULL;
             if (SgInitializer *init = init_name->get_initializer()) {
-              if (SgExpression *expr_init = isSgExpression(init)) {
-                cloned_init = SageBuilder::buildAssignInitializer_nfi(
-                    SageInterface::copyExpression(expr_init),
-                    expr_init->get_type());
-              }
+              cloned_init = SageInterface::deepCopy(init);
             }
 
             SgInitializedName *cloned_param =
