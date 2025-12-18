@@ -30,16 +30,17 @@ std::string mangleTemplateName(const clang::TemplateName &tname) {
 
 std::string getTemplateNameBase(const clang::TemplateName &tname) {
   if (clang::TemplateDecl *template_decl = tname.getAsTemplateDecl()) {
-    std::string name = template_decl->getNameAsString();
-    if (!name.empty()) {
-      return name;
-    }
-
     if (clang::TemplateTemplateParmDecl *parm =
             llvm::dyn_cast<clang::TemplateTemplateParmDecl>(template_decl)) {
+      std::string name = parm->getNameAsString();
+      if (!name.empty()) {
+        return name;
+      }
       return "__template_template_param_" + std::to_string(parm->getIndex());
     }
 
+    std::string name = template_decl->getNameAsString();
+    ROSE_ASSERT(!name.empty());
     return name;
   }
 
