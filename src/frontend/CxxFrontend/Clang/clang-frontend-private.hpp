@@ -489,6 +489,11 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             const SgName &terminalName,
             const SgTemplateArgumentPtrList *terminalTemplateArgs);
 
+        SgNonrealRefExp *buildNonrealRefExpFromNestedNameSpecifier(
+            clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+            const SgName &terminalName, bool terminalHasTemplateKeyword,
+            const SgTemplateArgumentPtrList *terminalTemplateArgs);
+
         // Helper: Translate a Clang type used in a nested-name-specifier
         // (TypeSpec / TypeSpecWithTemplate) into a SgNonrealType, created in
         // the provided scope.

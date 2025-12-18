@@ -8,6 +8,23 @@
 #include <functional>
 
 namespace {
+class RexNonrealFlagAttribute : public AstAttribute {
+public:
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
+
+  std::string attribute_class_name() const override {
+    return "RexNonrealFlagAttribute";
+  }
+
+  std::string toString() override { return ""; }
+};
+
+const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
+
 // Generate unique name for template declaration with full namespace
 // qualification
 std::string mangleTemplateName(const clang::TemplateName &tname) {
@@ -2010,6 +2027,10 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
       SgNonrealDecl *segment_decl =
           isSgNonrealDecl(segment_type->get_declaration());
       ROSE_ASSERT(segment_decl != nullptr);
+      if (nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+        segment_decl->setAttribute(kRexNonrealTemplateKeywordAttr,
+                                   new RexNonrealFlagAttribute());
+      }
       current_scope = segment_decl->get_nonreal_decl_scope();
     }
 
@@ -2481,6 +2502,12 @@ bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(
   *node = buildNonrealTypeFromNestedNameSpecifier(
       dependent_template_specialization_type->getQualifier(), base_scope,
       SgName(id->getName().str()), &tpl_args);
+  if (SgNonrealType *nrtype = isSgNonrealType(*node)) {
+    if (SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration())) {
+      nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,
+                           new RexNonrealFlagAttribute());
+    }
+  }
 
   return VisitTypeWithKeyword(dependent_template_specialization_type, node) &&
          res;

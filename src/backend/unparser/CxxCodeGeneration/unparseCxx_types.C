@@ -4961,7 +4961,10 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 
      SgTemplateArgumentPtrList & tpl_args = nrdecl->get_tpl_args();
 
-     if (has_nonreal_parent && !tpl_args.empty())
+     static const char kRexNonrealTemplateKeywordAttr[] =
+         "rex_nonreal_template_keyword";
+     if (has_nonreal_parent &&
+         nrdecl->getAttribute(kRexNonrealTemplateKeywordAttr) != NULL)
        curprint("template ");
 
      // output the name of the non-real type

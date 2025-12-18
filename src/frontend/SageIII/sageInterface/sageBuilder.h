@@ -528,12 +528,6 @@ ROSE_DLL_API SgTemplateParameter *buildTemplateParameter(
 //! Build a declaration of a non-real class or class-member representing template parameters and their members
 ROSE_DLL_API SgNonrealDecl * buildNonrealDecl(const SgName & name, SgDeclarationScope * scope, SgDeclarationScope * child_scope = NULL);
 
-//! Build a reference to a non-real entity (dependent/unresolved name).
-ROSE_DLL_API SgNonrealRefExp *
-buildNonrealRefExp(const SgName &name, SgScopeStatement *scope,
-                   const SgName &qualifiedPrefix,
-                   const SgTemplateArgumentPtrList *tplArgs);
-
 //! Build a reference to the non-real declaration of a member of a non-real class
 ROSE_DLL_API SgNonrealRefExp * buildNonrealRefExp_nfi(SgNonrealSymbol * sym);
 

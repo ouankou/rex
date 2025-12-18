@@ -195,6 +195,36 @@ std::string extractOpenMPDirective(const std::string &pragma_text) {
 
 } // namespace
 
+namespace {
+class RexNonrealFlagAttribute : public AstAttribute {
+public:
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
+
+  std::string attribute_class_name() const override {
+    return "RexNonrealFlagAttribute";
+  }
+
+  std::string toString() override { return ""; }
+};
+
+const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
+const char kRexNonrealGlobalQualifierAttr[] = "rex_nonreal_global_qualifier";
+
+bool nestedNameSpecifierHasGlobal(const clang::NestedNameSpecifier *qualifier) {
+  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
+       nns = nns->getPrefix()) {
+    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace
+
 void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
     SgNode *rose_node, const clang::Stmt *clang_stmt) {
   if (rose_node == nullptr || clang_stmt == nullptr ||
@@ -207,6 +237,35 @@ void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
       range, p_compiler_instance->getSourceManager(),
       p_compiler_instance->getLangOpts());
   applySourceRange(rose_node, range);
+}
+
+SgNonrealRefExp *
+ClangToSageTranslator::buildNonrealRefExpFromNestedNameSpecifier(
+    clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+    const SgName &terminalName, bool terminalHasTemplateKeyword,
+    const SgTemplateArgumentPtrList *terminalTemplateArgs) {
+  SgNonrealType *nrtype = buildNonrealTypeFromNestedNameSpecifier(
+      qualifier, scope, terminalName, terminalTemplateArgs);
+  ROSE_ASSERT(nrtype != nullptr);
+
+  SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
+  ROSE_ASSERT(nrdecl != nullptr);
+
+  if (nestedNameSpecifierHasGlobal(qualifier)) {
+    nrdecl->setAttribute(kRexNonrealGlobalQualifierAttr,
+                         new RexNonrealFlagAttribute());
+  }
+
+  if (terminalHasTemplateKeyword) {
+    nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,
+                         new RexNonrealFlagAttribute());
+  }
+
+  SgNonrealSymbol *sym =
+      isSgNonrealSymbol(nrdecl->get_symbol_from_symbol_table());
+  ROSE_ASSERT(sym != nullptr);
+
+  return SageBuilder::buildNonrealRefExp_nfi(sym);
 }
 
 SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
@@ -4095,16 +4154,6 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
     ROSE_ASSERT(base_expr != NULL);
   }
 
-  std::string qualified_prefix;
-  if (cxx_dependent_scope_member_expr->getQualifier() != NULL) {
-    llvm::raw_string_ostream qualifier_stream(qualified_prefix);
-    cxx_dependent_scope_member_expr->getQualifier()->print(
-        qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-  }
-  if (cxx_dependent_scope_member_expr->hasTemplateKeyword()) {
-    qualified_prefix += "template ";
-  }
-
   SgTemplateArgumentPtrList template_args;
   const SgTemplateArgumentPtrList *template_args_ptr = NULL;
   if (cxx_dependent_scope_member_expr->hasExplicitTemplateArgs()) {
@@ -4114,9 +4163,10 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
     template_args_ptr = &template_args;
   }
 
-  SgNonrealRefExp *member_ref = SageBuilder::buildNonrealRefExp(
-      SgName(member_name), current_scope, SgName(qualified_prefix),
-      template_args_ptr);
+  SgNonrealRefExp *member_ref = buildNonrealRefExpFromNestedNameSpecifier(
+      cxx_dependent_scope_member_expr->getQualifier(), current_scope,
+      SgName(member_name),
+      cxx_dependent_scope_member_expr->hasTemplateKeyword(), template_args_ptr);
   ROSE_ASSERT(member_ref != NULL);
 
   if (base_expr != NULL) {
@@ -5215,16 +5265,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
     ROSE_ASSERT(current_scope != NULL);
 
-    std::string qualified_prefix;
-    if (decl_ref_expr->getQualifier() != NULL) {
-      llvm::raw_string_ostream qualifier_stream(qualified_prefix);
-      decl_ref_expr->getQualifier()->print(
-          qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-    }
-    if (decl_ref_expr->hasTemplateKeyword()) {
-      qualified_prefix += "template ";
-    }
-
     SgTemplateArgumentPtrList template_args;
     const SgTemplateArgumentPtrList *template_args_ptr = NULL;
     if (decl_ref_expr->hasExplicitTemplateArgs()) {
@@ -5234,9 +5274,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       template_args_ptr = &template_args;
     }
 
-    *node = SageBuilder::buildNonrealRefExp(SgName(decl_name), current_scope,
-                                            SgName(qualified_prefix),
-                                            template_args_ptr);
+    *node = buildNonrealRefExpFromNestedNameSpecifier(
+        decl_ref_expr->getQualifier(), current_scope, SgName(decl_name),
+        decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
   }
 
   return VisitExpr(decl_ref_expr, node) && res;
@@ -5276,16 +5316,6 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
   }
   ROSE_ASSERT(current_scope != NULL);
 
-  std::string qualified_prefix;
-  if (dependent_scope_decl_ref_expr->getQualifier() != NULL) {
-    llvm::raw_string_ostream qualifier_stream(qualified_prefix);
-    dependent_scope_decl_ref_expr->getQualifier()->print(
-        qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-  }
-  if (dependent_scope_decl_ref_expr->hasTemplateKeyword()) {
-    qualified_prefix += "template ";
-  }
-
   SgTemplateArgumentPtrList template_args;
   const SgTemplateArgumentPtrList *template_args_ptr = NULL;
   if (dependent_scope_decl_ref_expr->hasExplicitTemplateArgs()) {
@@ -5295,9 +5325,10 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
     template_args_ptr = &template_args;
   }
 
-  *node = SageBuilder::buildNonrealRefExp(SgName(decl_name), current_scope,
-                                          SgName(qualified_prefix),
-                                          template_args_ptr);
+  *node = buildNonrealRefExpFromNestedNameSpecifier(
+      dependent_scope_decl_ref_expr->getQualifier(), current_scope,
+      SgName(decl_name), dependent_scope_decl_ref_expr->hasTemplateKeyword(),
+      template_args_ptr);
 
   // Set source position
   SgExpression *expr = isSgExpression(*node);
@@ -6395,16 +6426,6 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   }
   ROSE_ASSERT(current_scope != NULL);
 
-  std::string qualified_prefix;
-  if (unresolved_lookup_expr->getQualifier() != NULL) {
-    llvm::raw_string_ostream qualifier_stream(qualified_prefix);
-    unresolved_lookup_expr->getQualifier()->print(
-        qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-  }
-  if (unresolved_lookup_expr->hasTemplateKeyword()) {
-    qualified_prefix += "template ";
-  }
-
   SgTemplateArgumentPtrList template_args;
   const SgTemplateArgumentPtrList *template_args_ptr = NULL;
   if (unresolved_lookup_expr->hasExplicitTemplateArgs()) {
@@ -6414,9 +6435,10 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
     template_args_ptr = &template_args;
   }
 
-  *node = SageBuilder::buildNonrealRefExp(SgName(function_name), current_scope,
-                                          SgName(qualified_prefix),
-                                          template_args_ptr);
+  *node = buildNonrealRefExpFromNestedNameSpecifier(
+      unresolved_lookup_expr->getQualifier(), current_scope,
+      SgName(function_name), unresolved_lookup_expr->hasTemplateKeyword(),
+      template_args_ptr);
 
   // Set source position
   SgExpression *expr = isSgExpression(*node);
@@ -6457,16 +6479,6 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
     ROSE_ASSERT(base_expr != NULL);
   }
 
-  std::string qualified_prefix;
-  if (unresolved_member_expr->getQualifier() != NULL) {
-    llvm::raw_string_ostream qualifier_stream(qualified_prefix);
-    unresolved_member_expr->getQualifier()->print(
-        qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-  }
-  if (unresolved_member_expr->hasTemplateKeyword()) {
-    qualified_prefix += "template ";
-  }
-
   SgTemplateArgumentPtrList template_args;
   const SgTemplateArgumentPtrList *template_args_ptr = NULL;
   if (unresolved_member_expr->hasExplicitTemplateArgs()) {
@@ -6476,8 +6488,9 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
     template_args_ptr = &template_args;
   }
 
-  SgNonrealRefExp *member_ref = SageBuilder::buildNonrealRefExp(
-      SgName(member_name), current_scope, SgName(qualified_prefix),
+  SgNonrealRefExp *member_ref = buildNonrealRefExpFromNestedNameSpecifier(
+      unresolved_member_expr->getQualifier(), current_scope,
+      SgName(member_name), unresolved_member_expr->hasTemplateKeyword(),
       template_args_ptr);
   ROSE_ASSERT(member_ref != NULL);
 
