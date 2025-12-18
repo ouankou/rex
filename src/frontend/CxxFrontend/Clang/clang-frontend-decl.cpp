@@ -830,6 +830,36 @@ void mark_compiler_generated_and_suppress_unparse(SgLocatedNode *n) {
   }
 }
 
+void mark_implicit_instantiation_for_suppression(
+    SgFunctionDeclaration *func_decl) {
+  if (func_decl == NULL) {
+    return;
+  }
+
+  mark_compiler_generated_and_suppress_unparse(func_decl);
+
+  if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+          func_decl->get_firstNondefiningDeclaration())) {
+    mark_compiler_generated_and_suppress_unparse(first_nondef);
+  }
+
+  if (SgFunctionParameterList *params = func_decl->get_parameterList()) {
+    mark_compiler_generated_and_suppress_unparse(params);
+    for (SgInitializedName *param : params->get_args()) {
+      if (param != NULL) {
+        mark_compiler_generated_and_suppress_unparse(param);
+      }
+    }
+  }
+
+  if (SgFunctionDefinition *defn = func_decl->get_definition()) {
+    mark_compiler_generated_and_suppress_unparse(defn);
+    if (SgBasicBlock *body = defn->get_body()) {
+      mark_compiler_generated_and_suppress_unparse(body);
+    }
+  }
+}
+
 // Normalize namespace scopes to the first definition associated with the
 // namespace symbol (the first nondefining declaration).  ROSE models each
 // re-entrant namespace definition as a distinct scope node, but for symbol
@@ -6519,28 +6549,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           clang::TSK_ImplicitInstantiation) {
     if (SgFunctionDeclaration *func_decl =
             isSgFunctionDeclaration(sg_function_decl)) {
-      mark_compiler_generated_and_suppress_unparse(func_decl);
-
-      if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
-              func_decl->get_firstNondefiningDeclaration())) {
-        mark_compiler_generated_and_suppress_unparse(first_nondef);
-      }
-
-      if (SgFunctionParameterList *params = func_decl->get_parameterList()) {
-        mark_compiler_generated_and_suppress_unparse(params);
-        for (SgInitializedName *param : params->get_args()) {
-          if (param != NULL) {
-            mark_compiler_generated_and_suppress_unparse(param);
-          }
-        }
-      }
-
-      if (SgFunctionDefinition *defn = func_decl->get_definition()) {
-        mark_compiler_generated_and_suppress_unparse(defn);
-        if (SgBasicBlock *body = defn->get_body()) {
-          mark_compiler_generated_and_suppress_unparse(body);
-        }
-      }
+      mark_implicit_instantiation_for_suppression(func_decl);
     }
   }
 
@@ -7551,25 +7560,7 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
         // not be emitted during unparsing (they can appear as explicit
         // specializations after use sites and break downstream compilation
         // tests).
-        mark_compiler_generated_and_suppress_unparse(func_decl);
-        if (SgFunctionDeclaration *first_func = isSgFunctionDeclaration(
-                func_decl->get_firstNondefiningDeclaration())) {
-          mark_compiler_generated_and_suppress_unparse(first_func);
-        }
-        if (SgFunctionParameterList *params = func_decl->get_parameterList()) {
-          mark_compiler_generated_and_suppress_unparse(params);
-          for (SgInitializedName *param : params->get_args()) {
-            if (param != NULL) {
-              mark_compiler_generated_and_suppress_unparse(param);
-            }
-          }
-        }
-        if (SgFunctionDefinition *defn = func_decl->get_definition()) {
-          mark_compiler_generated_and_suppress_unparse(defn);
-          if (SgBasicBlock *body = defn->get_body()) {
-            mark_compiler_generated_and_suppress_unparse(body);
-          }
-        }
+        mark_implicit_instantiation_for_suppression(func_decl);
       }
     }
   }
