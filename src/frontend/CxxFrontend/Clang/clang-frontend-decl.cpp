@@ -836,28 +836,36 @@ void mark_implicit_instantiation_for_suppression(
     return;
   }
 
-  mark_compiler_generated_and_suppress_unparse(func_decl);
+  std::set<SgNode *> visited;
+  std::function<void(SgFunctionDeclaration *)> visit =
+      [&](SgFunctionDeclaration *decl) {
+        if (decl == NULL || !visited.insert(decl).second) {
+          return;
+        }
 
-  if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
-          func_decl->get_firstNondefiningDeclaration())) {
-    mark_compiler_generated_and_suppress_unparse(first_nondef);
-  }
+        mark_compiler_generated_and_suppress_unparse(decl);
 
-  if (SgFunctionParameterList *params = func_decl->get_parameterList()) {
-    mark_compiler_generated_and_suppress_unparse(params);
-    for (SgInitializedName *param : params->get_args()) {
-      if (param != NULL) {
-        mark_compiler_generated_and_suppress_unparse(param);
-      }
-    }
-  }
+        if (SgFunctionParameterList *params = decl->get_parameterList()) {
+          mark_compiler_generated_and_suppress_unparse(params);
+          for (SgInitializedName *param : params->get_args()) {
+            if (param != NULL) {
+              mark_compiler_generated_and_suppress_unparse(param);
+            }
+          }
+        }
 
-  if (SgFunctionDefinition *defn = func_decl->get_definition()) {
-    mark_compiler_generated_and_suppress_unparse(defn);
-    if (SgBasicBlock *body = defn->get_body()) {
-      mark_compiler_generated_and_suppress_unparse(body);
-    }
-  }
+        if (SgFunctionDefinition *defn = decl->get_definition()) {
+          mark_compiler_generated_and_suppress_unparse(defn);
+          if (SgBasicBlock *body = defn->get_body()) {
+            mark_compiler_generated_and_suppress_unparse(body);
+          }
+        }
+
+        visit(isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration()));
+        visit(isSgFunctionDeclaration(decl->get_definingDeclaration()));
+      };
+
+  visit(func_decl);
 }
 
 // Normalize namespace scopes to the first definition associated with the
