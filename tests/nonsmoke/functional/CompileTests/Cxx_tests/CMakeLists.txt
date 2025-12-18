@@ -57,6 +57,94 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 115: Dependent/unresolved name refs must use SgNonrealRefExp.
+add_executable(
+  rex_test2025_issue115_nonreal_refexp_translator
+  rex_test2025_issue115_nonreal_refexp_translator.cpp
+)
+target_link_libraries(
+  rex_test2025_issue115_nonreal_refexp_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+foreach(
+  file_to_test
+  rex_test2025_issue115_unresolved_lookup.cpp
+  rex_test2025_issue115_dependent_member.cpp
+  rex_test2025_issue115_qualified_unresolved_lookup.cpp
+)
+  get_filename_component(test_name ${file_to_test} NAME_WE)
+  add_test(
+    NAME Cxx_tests_${test_name}_nonreal_refexp
+    COMMAND
+      $<TARGET_FILE:rex_test2025_issue115_nonreal_refexp_translator>
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+      -I${CMAKE_CURRENT_SOURCE_DIR}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
+  )
+  set_tests_properties(
+    Cxx_tests_${test_name}_nonreal_refexp
+    PROPERTIES LABELS Cxx_tests
+  )
+endforeach()
+
+# Issue 115 Phase C: Instantiated bodies must use resolved refs.
+add_executable(
+  rex_test2025_issue115_phaseC_resolution_translator
+  rex_test2025_issue115_phaseC_resolution_translator.cpp
+)
+target_link_libraries(
+  rex_test2025_issue115_phaseC_resolution_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+foreach(
+  file_to_test
+  rex_test2025_issue115_unresolved_lookup.cpp
+  rex_test2025_issue115_dependent_member.cpp
+  rex_test2025_issue115_qualified_unresolved_lookup.cpp
+)
+  get_filename_component(test_name ${file_to_test} NAME_WE)
+  add_test(
+    NAME Cxx_tests_${test_name}_phaseC_resolution
+    COMMAND
+      $<TARGET_FILE:rex_test2025_issue115_phaseC_resolution_translator>
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+      -I${CMAKE_CURRENT_SOURCE_DIR}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
+  )
+  set_tests_properties(
+    Cxx_tests_${test_name}_phaseC_resolution
+    PROPERTIES LABELS Cxx_tests
+  )
+endforeach()
+
+# Issue 147: Dependent template types must use SgNonrealType.
+add_executable(
+  rex_test2025_dependent_template_specialization_type_translator
+  rex_test2025_dependent_template_specialization_type_translator.cpp
+)
+target_link_libraries(
+  rex_test2025_dependent_template_specialization_type_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME Cxx_tests_rex_test2025_dependent_template_specialization_type_nonreal_type
+  COMMAND
+    $<TARGET_FILE:rex_test2025_dependent_template_specialization_type_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_dependent_template_specialization_type.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_dependent_template_specialization_type_nonreal_type
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 123: Function refs must not emit duplicated qualification (e.g. std::::get).
 add_test(
   NAME Cxx_tests_rex_test2025_issue123_std_double_colon_unparse

@@ -330,14 +330,56 @@ Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression* expr, SgUnparse_Info
   SgNonrealRefExp * nr_refexp = isSgNonrealRefExp(expr);
   ASSERT_not_null(nr_refexp);
 
-  SgName nameQualifier = nr_refexp->get_qualified_name_prefix();
-  curprint(nameQualifier.str());
-
   SgNonrealSymbol * nrsym = nr_refexp->get_symbol();
   ASSERT_not_null(nrsym);
 
   SgNonrealDecl * nrdecl = nrsym->get_declaration();
   ASSERT_not_null(nrdecl);
+
+  static const char kRexNonrealTemplateKeywordAttr[] =
+      "rex_nonreal_template_keyword";
+  static const char kRexNonrealGlobalQualifierAttr[] =
+      "rex_nonreal_global_qualifier";
+
+  auto get_parent_nonreal_decl = [](SgNonrealDecl *decl) -> SgNonrealDecl * {
+    if (decl == NULL) {
+      return NULL;
+    }
+    SgDeclarationScope *nrscope = isSgDeclarationScope(decl->get_parent());
+    if (nrscope == NULL) {
+      return NULL;
+    }
+    return isSgNonrealDecl(nrscope->get_parent());
+  };
+
+  if (nrdecl->getAttribute(kRexNonrealGlobalQualifierAttr) != NULL) {
+    curprint("::");
+  }
+
+  if (get_parent_nonreal_decl(nrdecl) != NULL) {
+    auto unparse_qualifier_chain = [&](auto &&self,
+                                       SgNonrealDecl *decl) -> void {
+      SgNonrealDecl *parent_decl = get_parent_nonreal_decl(decl);
+      if (parent_decl == NULL) {
+        return;
+      }
+      self(self, parent_decl);
+      if (parent_decl->getAttribute(kRexNonrealTemplateKeywordAttr) != NULL) {
+        curprint("template ");
+      }
+      curprint(parent_decl->get_name().str());
+      unparseTemplateArgumentList(parent_decl->get_tpl_args(), info);
+      curprint("::");
+    };
+    unparse_qualifier_chain(unparse_qualifier_chain, nrdecl);
+  } else {
+    SgName nameQualifier = nr_refexp->get_qualified_name_prefix();
+    curprint(nameQualifier.str());
+  }
+
+  if (nrdecl->getAttribute(kRexNonrealTemplateKeywordAttr) != NULL) {
+    curprint("template ");
+  }
 
   curprint(nrsym->get_name().str());
 

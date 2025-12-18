@@ -1,7 +1,6 @@
-#ifndef STATIC_CFG_H 
-#define STATIC_CFG_H 
+#ifndef STATIC_CFG_H
+#define STATIC_CFG_H
 
-#include <sage3basic.h>
 #include "AstAttributeMechanism.h"
 #include "virtualCFG.h"
 #include <map>

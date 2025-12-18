@@ -36,29 +36,27 @@ struct AliasCfgFilter
          * @param cfgn The node in question.
          * @return Whether it should be traversed.
          */
-        bool operator() (CFGNode cfgn) const
-        {
-                SgNode *node = cfgn.getNode();
-                switch (node->variantT())
-                {
-                    case V_SgBasicBlock:
-                        return cfgn == node->cfgForBeginning()  || cfgn == node->cfgForBeginning();
-                    case V_SgAssignStatement:
-                    case V_SgAssignOp:
-                    case V_SgAssignInitializer:
-                        //return (cfgn == node->cfgForBeginning());
-                        return (cfgn == node->cfgForEnd());
-                    case V_SgConditionalExp:
-                                return (cfgn.getIndex() == 1);
-                    case V_SgConstructorInitializer:
-                    case V_SgFunctionCallExp:
-                    case V_SgReturnStmt:
-                                return (cfgn == node->cfgForBeginning());
-                                //return (cfgn == node->cfgForEnd());
-                     default:
-                        return false;
-                        
-                }
+        bool operator()(VirtualCFG::CFGNode cfgn) const {
+          SgNode *node = cfgn.getNode();
+          switch (node->variantT()) {
+          case V_SgBasicBlock:
+            return cfgn == node->cfgForBeginning() ||
+                   cfgn == node->cfgForBeginning();
+          case V_SgAssignStatement:
+          case V_SgAssignOp:
+          case V_SgAssignInitializer:
+            // return (cfgn == node->cfgForBeginning());
+            return (cfgn == node->cfgForEnd());
+          case V_SgConditionalExp:
+            return (cfgn.getIndex() == 1);
+          case V_SgConstructorInitializer:
+          case V_SgFunctionCallExp:
+          case V_SgReturnStmt:
+            return (cfgn == node->cfgForBeginning());
+            // return (cfgn == node->cfgForEnd());
+          default:
+            return false;
+          }
         }
 };
 // Base class for CompactRepresentation

@@ -379,6 +379,19 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // when resolving symbols that reference each other (e.g., template members)
         std::set<clang::NamedDecl*> p_symbol_lookup_in_progress;
 
+        // Recursion guard for decl translation to avoid re-entrant Traverse()
+        // calls (e.g., when forcing translation of direct callees).
+        std::set<clang::Decl *> p_decl_translation_in_progress;
+
+        // Deferred translation queue for implicit function template
+        // instantiations. These instantiations are discovered while traversing
+        // user code (e.g., at call sites) but are translated only after the
+        // translation unit is otherwise complete to avoid ordering issues.
+        std::vector<clang::FunctionDecl *>
+            p_pending_implicit_function_instantiations;
+        std::set<clang::FunctionDecl *>
+            p_pending_implicit_function_instantiations_set;
+
         clang::CompilerInstance  * p_compiler_instance;
         SagePreprocessorRecord   * p_sage_preprocessor_recorder;
         SgSourceFile             * p_sage_source_file; // Parent file for connecting global scope
@@ -468,6 +481,24 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // needed, recursively)
         SgNamespaceDeclarationStatement *
         ensureNamespaceDeclaration(clang::NamespaceDecl *ns_decl);
+
+        // Helper: Build a non-real qualified type from a Clang nested-name
+        // specifier plus a terminal name (optionally with template arguments).
+        SgNonrealType *buildNonrealTypeFromNestedNameSpecifier(
+            clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+            const SgName &terminalName,
+            const SgTemplateArgumentPtrList *terminalTemplateArgs);
+
+        SgNonrealRefExp *buildNonrealRefExpFromNestedNameSpecifier(
+            clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+            const SgName &terminalName, bool terminalHasTemplateKeyword,
+            const SgTemplateArgumentPtrList *terminalTemplateArgs);
+
+        // Helper: Translate a Clang type used in a nested-name-specifier
+        // (TypeSpec / TypeSpecWithTemplate) into a SgNonrealType, created in
+        // the provided scope.
+        SgNonrealType *buildNonrealTypeForNestedNameSpecifierType(
+            const clang::Type *clang_type, SgScopeStatement *scope);
 
       public:
         ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file);

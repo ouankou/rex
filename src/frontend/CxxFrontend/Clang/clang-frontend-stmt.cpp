@@ -195,6 +195,25 @@ std::string extractOpenMPDirective(const std::string &pragma_text) {
 
 } // namespace
 
+namespace {
+class RexNonrealFlagAttribute : public AstAttribute {
+public:
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
+
+  std::string attribute_class_name() const override {
+    return "RexNonrealFlagAttribute";
+  }
+
+  std::string toString() override { return ""; }
+};
+
+const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
+} // namespace
+
 void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
     SgNode *rose_node, const clang::Stmt *clang_stmt) {
   if (rose_node == nullptr || clang_stmt == nullptr ||
@@ -207,6 +226,30 @@ void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
       range, p_compiler_instance->getSourceManager(),
       p_compiler_instance->getLangOpts());
   applySourceRange(rose_node, range);
+}
+
+SgNonrealRefExp *
+ClangToSageTranslator::buildNonrealRefExpFromNestedNameSpecifier(
+    clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+    const SgName &terminalName, bool terminalHasTemplateKeyword,
+    const SgTemplateArgumentPtrList *terminalTemplateArgs) {
+  SgNonrealType *nrtype = buildNonrealTypeFromNestedNameSpecifier(
+      qualifier, scope, terminalName, terminalTemplateArgs);
+  ROSE_ASSERT(nrtype != nullptr);
+
+  SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
+  ROSE_ASSERT(nrdecl != nullptr);
+
+  if (terminalHasTemplateKeyword) {
+    nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,
+                         new RexNonrealFlagAttribute());
+  }
+
+  SgNonrealSymbol *sym =
+      isSgNonrealSymbol(nrdecl->get_symbol_from_symbol_table());
+  ROSE_ASSERT(sym != nullptr);
+
+  return SageBuilder::buildNonrealRefExp_nfi(sym);
 }
 
 SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
@@ -3226,6 +3269,33 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
 
   bool res = true;
 
+  // Phase C (Issue 115): Queue implicit template instantiations that are
+  // referenced from user code. They will be translated after the TU decl pass
+  // completes so their bodies can be materialized with resolved references.
+  if (clang::FunctionDecl *direct_callee = call_expr->getDirectCallee()) {
+    clang::TemplateSpecializationKind kind =
+        direct_callee->getTemplateSpecializationKind();
+    if ((kind == clang::TSK_ImplicitInstantiation ||
+         kind == clang::TSK_ExplicitInstantiationDefinition) &&
+        direct_callee->hasBody()) {
+      bool eligible = true;
+      if (p_compiler_instance != nullptr) {
+        clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+        clang::SourceLocation loc = direct_callee->getLocation();
+        if (!loc.isValid() || sm.isInSystemHeader(loc) ||
+            sm.isWrittenInBuiltinFile(loc)) {
+          eligible = false;
+        }
+      }
+
+      if (eligible &&
+          p_pending_implicit_function_instantiations_set.insert(direct_callee)
+              .second) {
+        p_pending_implicit_function_instantiations.push_back(direct_callee);
+      }
+    }
+  }
+
   SgNode *tmp_expr = Traverse(call_expr->getCallee());
   SgExpression *expr = isSgExpression(tmp_expr);
   if (tmp_expr != NULL && expr == NULL) {
@@ -4049,42 +4119,48 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
   bool res = true;
 
   // CXXDependentScopeMemberExpr represents member access on a
-  // template-dependent type (e.g., obj.begin(), obj->data()) Extract the base
-  // expression and member name to create proper member access
-
-  SgExpression *base_expr = NULL;
-  if (cxx_dependent_scope_member_expr->getBase() != NULL) {
-    // Traverse the base expression
-    clang::Expr *base =
-        const_cast<clang::Expr *>(cxx_dependent_scope_member_expr->getBase());
-    // std::cerr << "DEBUG: Base Stmt Class: " << base->getStmtClassName() <<
-    // std::endl;
-    SgNode *tmp_base = Traverse(base);
-    base_expr = isSgExpression(tmp_base);
-    // if (base_expr) std::cerr << "DEBUG: VisitCXXDependentScopeMemberExpr base
-    // node type: " << base_expr->class_name() << std::endl; else std::cerr <<
-    // "DEBUG: VisitCXXDependentScopeMemberExpr base node is NULL" << std::endl;
-  }
+  // template-dependent type (e.g., obj.begin(), obj->data()).
 
   // Get the member name
   std::string member_name =
       cxx_dependent_scope_member_expr->getMember().getAsString();
 
+  SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+  if (current_scope == NULL) {
+    current_scope = getGlobalScope();
+  }
+  ROSE_ASSERT(current_scope != NULL);
+
+  SgExpression *base_expr = NULL;
+  if (!cxx_dependent_scope_member_expr->isImplicitAccess()) {
+    SgNode *tmp_base = Traverse(cxx_dependent_scope_member_expr->getBase());
+    base_expr = isSgExpression(tmp_base);
+    ROSE_ASSERT(base_expr != NULL);
+  }
+
+  SgTemplateArgumentPtrList template_args;
+  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+  if (cxx_dependent_scope_member_expr->hasExplicitTemplateArgs()) {
+    clang::TemplateArgumentListInfo arg_info;
+    cxx_dependent_scope_member_expr->copyTemplateArgumentsInto(arg_info);
+    template_args = buildTemplateArguments(arg_info, true);
+    template_args_ptr = &template_args;
+  }
+
+  SgNonrealRefExp *member_ref = buildNonrealRefExpFromNestedNameSpecifier(
+      cxx_dependent_scope_member_expr->getQualifier(), current_scope,
+      SgName(member_name),
+      cxx_dependent_scope_member_expr->hasTemplateKeyword(), template_args_ptr);
+  ROSE_ASSERT(member_ref != NULL);
+
   if (base_expr != NULL) {
-    SgVarRefExp *member_ref = SageBuilder::buildDanglingVarRefExp(
-        SgName(member_name), SageBuilder::topScopeStack());
-    // Create an arrow or dot expression depending on the operator used
     if (cxx_dependent_scope_member_expr->isArrow()) {
-      // Use arrow expression (obj->member)
       *node = SageBuilder::buildArrowExp(base_expr, member_ref);
     } else {
-      // Use dot expression (obj.member)
       *node = SageBuilder::buildDotExp(base_expr, member_ref);
     }
   } else {
-    // If we can't get the base expression, use a simple variable reference
-    *node = SageBuilder::buildDanglingVarRefExp(SgName(member_name),
-                                                SageBuilder::topScopeStack());
+    *node = member_ref;
   }
 
   // Set source position
@@ -4574,6 +4650,34 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   }
 
   bool res = true;
+
+  // Phase C (Issue 115): Queue implicit template instantiations that are
+  // referenced from user code. Translation is deferred until the TU pass
+  // completes to avoid ordering issues.
+  if (clang::FunctionDecl *func_decl =
+          llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+    clang::TemplateSpecializationKind kind =
+        func_decl->getTemplateSpecializationKind();
+    if ((kind == clang::TSK_ImplicitInstantiation ||
+         kind == clang::TSK_ExplicitInstantiationDefinition) &&
+        func_decl->hasBody()) {
+      bool eligible = true;
+      if (p_compiler_instance != nullptr) {
+        clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+        clang::SourceLocation loc = func_decl->getLocation();
+        if (!loc.isValid() || sm.isInSystemHeader(loc) ||
+            sm.isWrittenInBuiltinFile(loc)) {
+          eligible = false;
+        }
+      }
+
+      if (eligible &&
+          p_pending_implicit_function_instantiations_set.insert(func_decl)
+              .second) {
+        p_pending_implicit_function_instantiations.push_back(func_decl);
+      }
+    }
+  }
 
   // SgNode * tmp_node = Traverse(decl_ref_expr->getDecl());
   // DONE: Do not use Traverse(...) as the declaration can not be complete
@@ -5139,8 +5243,24 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 << std::endl;
     }
 
-    *node = SageBuilder::buildDanglingVarRefExp(SgName(decl_name),
-                                                SageBuilder::topScopeStack());
+    SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+    if (current_scope == NULL) {
+      current_scope = getGlobalScope();
+    }
+    ROSE_ASSERT(current_scope != NULL);
+
+    SgTemplateArgumentPtrList template_args;
+    const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+    if (decl_ref_expr->hasExplicitTemplateArgs()) {
+      clang::TemplateArgumentListInfo arg_info;
+      decl_ref_expr->copyTemplateArgumentsInto(arg_info);
+      template_args = buildTemplateArguments(arg_info, true);
+      template_args_ptr = &template_args;
+    }
+
+    *node = buildNonrealRefExpFromNestedNameSpecifier(
+        decl_ref_expr->getQualifier(), current_scope, SgName(decl_name),
+        decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
   }
 
   return VisitExpr(decl_ref_expr, node) && res;
@@ -5169,29 +5289,30 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
 
   // DependentScopeDeclRefExpr represents a reference to a declaration that
   // depends on template parameters (e.g., variable references like 'x' or 'y'
-  // in template-dependent contexts) Extract the name and create a variable
-  // reference expression
+  // in template-dependent contexts).
 
   std::string decl_name =
       dependent_scope_decl_ref_expr->getDeclName().getAsString();
 
-  // Check for qualified names (e.g., namespace::var)
-  if (dependent_scope_decl_ref_expr->getQualifier() != NULL) {
-    std::string qualifier_str;
-    llvm::raw_string_ostream qualifier_stream(qualifier_str);
-    dependent_scope_decl_ref_expr->getQualifier()->print(
-        qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-    decl_name = qualifier_stream.str() + decl_name;
+  SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+  if (current_scope == NULL) {
+    current_scope = getGlobalScope();
+  }
+  ROSE_ASSERT(current_scope != NULL);
+
+  SgTemplateArgumentPtrList template_args;
+  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+  if (dependent_scope_decl_ref_expr->hasExplicitTemplateArgs()) {
+    clang::TemplateArgumentListInfo arg_info;
+    dependent_scope_decl_ref_expr->copyTemplateArgumentsInto(arg_info);
+    template_args = buildTemplateArguments(arg_info, true);
+    template_args_ptr = &template_args;
   }
 
-  // Create a variable reference expression
-  // NOTE: Using topScopeStack() may not correctly resolve variables in nested
-  // scopes since dependent scope information isn't always available at this
-  // stage. Ideally, the variable lookup should search upward through parent
-  // scopes, but for template-dependent contexts, complete scope information may
-  // not be available until instantiation time.
-  SgName sg_name(decl_name);
-  *node = SageBuilder::buildVarRefExp(sg_name, SageBuilder::topScopeStack());
+  *node = buildNonrealRefExpFromNestedNameSpecifier(
+      dependent_scope_decl_ref_expr->getQualifier(), current_scope,
+      SgName(decl_name), dependent_scope_decl_ref_expr->hasTemplateKeyword(),
+      template_args_ptr);
 
   // Set source position
   SgExpression *expr = isSgExpression(*node);
@@ -6279,32 +6400,29 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
 
   // UnresolvedLookupExpr represents a reference to a name that couldn't be
   // resolved during parsing (e.g., template-dependent function names like
-  // std::iota) Extract the name and create a variable reference expression as
-  // an approximation
+  // `foo(t)` that will be resolved during instantiation/ADL).
 
-  std::string function_name;
+  std::string function_name = unresolved_lookup_expr->getName().getAsString();
+
+  SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+  if (current_scope == NULL) {
+    current_scope = getGlobalScope();
+  }
+  ROSE_ASSERT(current_scope != NULL);
+
+  SgTemplateArgumentPtrList template_args;
+  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
   if (unresolved_lookup_expr->hasExplicitTemplateArgs()) {
-    // Template function with explicit template arguments
-    function_name = unresolved_lookup_expr->getName().getAsString();
-  } else {
-    // Regular function name
-    function_name = unresolved_lookup_expr->getName().getAsString();
+    clang::TemplateArgumentListInfo arg_info;
+    unresolved_lookup_expr->copyTemplateArgumentsInto(arg_info);
+    template_args = buildTemplateArguments(arg_info, true);
+    template_args_ptr = &template_args;
   }
 
-  // Check for qualified names (e.g., std::iota)
-  if (unresolved_lookup_expr->getQualifier() != NULL) {
-    std::string qualifier_str;
-    llvm::raw_string_ostream qualifier_stream(qualifier_str);
-    unresolved_lookup_expr->getQualifier()->print(
-        qualifier_stream, clang::PrintingPolicy(clang::LangOptions()));
-    function_name = qualifier_stream.str() + function_name;
-  }
-
-  // Create a variable reference expression with the function name
-  // This will unparse as the function name, which is what we want
-  SgName sg_name(function_name);
-  *node = SageBuilder::buildDanglingVarRefExp(sg_name,
-                                              SageBuilder::topScopeStack());
+  *node = buildNonrealRefExpFromNestedNameSpecifier(
+      unresolved_lookup_expr->getQualifier(), current_scope,
+      SgName(function_name), unresolved_lookup_expr->hasTemplateKeyword(),
+      template_args_ptr);
 
   // Set source position
   SgExpression *expr = isSgExpression(*node);
@@ -6331,43 +6449,43 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
   std::string member_name =
       unresolved_member_expr->getMemberName().getAsString();
 
-  // Determine a scope we can safely use for placeholder expressions
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
   if (current_scope == NULL) {
     current_scope = getGlobalScope();
   }
+  ROSE_ASSERT(current_scope != NULL);
 
   // Handle the base expression (the object/pointer being accessed)
   SgExpression *base_expr = NULL;
   if (!unresolved_member_expr->isImplicitAccess()) {
-    if (clang::Expr *base = unresolved_member_expr->getBase()) {
-      SgNode *tmp_base = Traverse(base);
-      base_expr = isSgExpression(tmp_base);
+    SgNode *tmp_base = Traverse(unresolved_member_expr->getBase());
+    base_expr = isSgExpression(tmp_base);
+    ROSE_ASSERT(base_expr != NULL);
+  }
+
+  SgTemplateArgumentPtrList template_args;
+  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+  if (unresolved_member_expr->hasExplicitTemplateArgs()) {
+    clang::TemplateArgumentListInfo arg_info;
+    unresolved_member_expr->copyTemplateArgumentsInto(arg_info);
+    template_args = buildTemplateArguments(arg_info, true);
+    template_args_ptr = &template_args;
+  }
+
+  SgNonrealRefExp *member_ref = buildNonrealRefExpFromNestedNameSpecifier(
+      unresolved_member_expr->getQualifier(), current_scope,
+      SgName(member_name), unresolved_member_expr->hasTemplateKeyword(),
+      template_args_ptr);
+  ROSE_ASSERT(member_ref != NULL);
+
+  if (base_expr != NULL) {
+    if (unresolved_member_expr->isArrow()) {
+      *node = SageBuilder::buildArrowExp(base_expr, member_ref);
+    } else {
+      *node = SageBuilder::buildDotExp(base_expr, member_ref);
     }
-  }
-
-  // If no base (implicit 'this' access or translation failure), build a
-  // placeholder
-  if (base_expr == NULL) {
-    base_expr = SageBuilder::buildOpaqueVarRefExp("this", current_scope);
-    if (SgLocatedNode *located_base = isSgLocatedNode(base_expr)) {
-      located_base->get_file_info()->setCompilerGenerated();
-    }
-  }
-
-  // Create a placeholder expression for the member name without requiring a
-  // resolved symbol
-  SgVarRefExp *member_ref =
-      SageBuilder::buildOpaqueVarRefExp(member_name, current_scope);
-  if (member_ref != NULL) {
-    member_ref->get_file_info()->setCompilerGenerated();
-  }
-
-  // Determine if it's arrow (->) or dot (.) access
-  if (unresolved_member_expr->isArrow()) {
-    *node = SageBuilder::buildArrowExp(base_expr, member_ref);
   } else {
-    *node = SageBuilder::buildDotExp(base_expr, member_ref);
+    *node = member_ref;
   }
 
   if (SgExpression *expr = isSgExpression(*node)) {

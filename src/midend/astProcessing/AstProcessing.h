@@ -7,12 +7,18 @@
 #define ROSE_SYNTHESIZED 1
 #define ROSE_BOTH 2
 
-#include "staticCFG.h"
+#include "featureTests.h"
+#include "mlog.h"
 
-#include <vector>
 #include <algorithm>
-#include <utility>
 #include <iostream>
+
+#include "Cxx_Grammar.h"
+#include "rose_attributes_list.h"
+#include "rosedefs.h"
+
+#include <utility>
+#include <vector>
 
 //using namespace boost;
 

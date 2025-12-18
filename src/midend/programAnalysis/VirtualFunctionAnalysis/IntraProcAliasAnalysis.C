@@ -464,7 +464,7 @@ bool IntraProcAliasAnalysis::runCheck() {
         //    EntryS = InC U EntryS
         // Also add the parameter aliases  
         vector<SgFunctionCallExp*> functionCalls = SageInterface::querySubTree<SgFunctionCallExp>(head, V_SgFunctionCallExp);
-        CFGNode cfgn;
+        VirtualCFG::CFGNode cfgn;
         SgGraphNode *graphNode;
         bool change = false;
         // For each Function Call Site
@@ -593,7 +593,7 @@ void IntraProcAliasAnalysis::getFunctionParametersAliasRelations(SgFunctionCallE
                 if((*i)->variantT() == V_SgFunctionCallExp) {
                     SgFunctionCallExp *funcCall = isSgFunctionCallExp(*i);
                     ROSE_ASSERT(funcCall != NULL);
-                    CFGNode cfgn = funcCall->cfgForBeginning();
+                    VirtualCFG::CFGNode cfgn = funcCall->cfgForBeginning();
                     SgGraphNode* graphNode = cfg->toGraphNode(cfgn);
                     std::vector <std::pair<AliasRelationNode, AliasRelationNode> > relations = gen->getAliasRelations(graphNode);
                     for(index=0; index < relations.size(); index++) {
@@ -662,7 +662,7 @@ void IntraProcAliasAnalysis::getConstructorParametersAliasRelations(SgConstructo
                 if((*i)->variantT() == V_SgFunctionCallExp) {
                     SgFunctionCallExp *funcCall = isSgFunctionCallExp(*i);
                     ROSE_ASSERT(funcCall != NULL);
-                    CFGNode cfgn = funcCall->cfgForBeginning();
+                    VirtualCFG::CFGNode cfgn = funcCall->cfgForBeginning();
                     SgGraphNode* graphNode = cfg->toGraphNode(cfgn);
                     std::vector <std::pair<AliasRelationNode, AliasRelationNode> > relations = gen->getAliasRelations(graphNode);
                     for(index=0; index < relations.size(); index++) {

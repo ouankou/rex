@@ -373,6 +373,12 @@ ROSE_DLL_API SgTypeTuple* buildTupleType(SgType *t1 = NULL, SgType *t2 = NULL, S
 //! Build a non real type used for template parameter. Internally a SgNorealDecl is also built.
 ROSE_DLL_API SgNonrealType* buildNonrealType(const SgName & name,  SgDeclarationScope* scope);
 
+//! Build a non-real dependent type (optionally with template arguments).
+//! Internally a SgNonrealDecl is also built.
+ROSE_DLL_API SgNonrealType *
+buildNonrealType(const SgName &name, SgScopeStatement *scope,
+                 const SgTemplateArgumentPtrList *tplArgs);
+
 //@}
 
 //--------------------------------------------------------------

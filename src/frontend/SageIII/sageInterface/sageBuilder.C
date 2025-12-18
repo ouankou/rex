@@ -11568,6 +11568,37 @@ SgNonrealType * SageBuilder::buildNonrealType(const SgName & name, SgDeclaration
   return nrdecl->get_type();
 }
 
+SgNonrealType *
+SageBuilder::buildNonrealType(const SgName &name, SgScopeStatement *scope,
+                              const SgTemplateArgumentPtrList *tplArgs) {
+  SgScopeStatement *effective_scope = scope;
+  if (effective_scope == NULL) {
+    effective_scope = SageBuilder::topScopeStack();
+  }
+  ROSE_ASSERT(effective_scope != NULL);
+
+  SgDeclarationScope *decl_scope = isSgDeclarationScope(effective_scope);
+  if (decl_scope == NULL) {
+    decl_scope = SageBuilder::buildDeclarationScope();
+    decl_scope->set_parent(effective_scope);
+  }
+
+  SgNonrealDecl *nrdecl = buildNonrealDecl(name, decl_scope);
+  ROSE_ASSERT(nrdecl != NULL);
+
+  if (tplArgs != NULL && !tplArgs->empty()) {
+    nrdecl->set_is_nonreal_template(true);
+    nrdecl->get_tpl_args() = *tplArgs;
+    for (SgTemplateArgument *arg : nrdecl->get_tpl_args()) {
+      if (arg != NULL) {
+        arg->set_parent(nrdecl);
+      }
+    }
+  }
+
+  return nrdecl->get_type();
+}
+
 SgRangeExp* SageBuilder::buildRangeExp(SgExpression *start)
 {
   SgRangeExp *result = new SgRangeExp();

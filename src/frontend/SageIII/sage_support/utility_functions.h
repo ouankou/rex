@@ -103,7 +103,13 @@ ROSE_DLL_API void generateAstGraph ( const SgProject* project, int maxSize = 200
 //#include "../midend/astProcessing/AstDotGeneration.h"
 //using namespace AstDOTGenerationExtended_Defaults;
 //#include "../midend/astProcessing/AstDOTGeneration.h"
-#include "AstDOTGeneration.h"
+
+namespace AstDOTGenerationExtended_Defaults {
+struct DefaultExtraNodeInfo;
+struct DefaultExtraNodeOptions;
+struct DefaultExtraEdgeInfo;
+struct DefaultExtraEdgeOptions;
+} // namespace AstDOTGenerationExtended_Defaults
 
 template <typename ExtraNodeInfo_t = AstDOTGenerationExtended_Defaults::DefaultExtraNodeInfo, typename ExtraNodeOptions_t = AstDOTGenerationExtended_Defaults::DefaultExtraNodeOptions, typename ExtraEdgeInfo_t = AstDOTGenerationExtended_Defaults::DefaultExtraEdgeInfo, typename ExtraEdgeOptions_t = AstDOTGenerationExtended_Defaults::DefaultExtraEdgeOptions>
 struct generateDOTExtended ;
@@ -287,10 +293,3 @@ namespace Rose
 #endif
 
 #endif // ifndef UTILITY_FUNCTIONS_H
-
-
-
-
-
-
-

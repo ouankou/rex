@@ -24,6 +24,11 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue107_redundant.cpp
   rex_test2025_issue107_enable_if.cpp
   rex_test2025_issue113_instantiation_spelling.cpp
+  rex_test2025_issue115_unresolved_lookup.cpp
+  rex_test2025_issue115_dependent_member.cpp
+  rex_test2025_issue115_qualified_unresolved_lookup.cpp
+  rex_test2025_dependent_template_specialization_type.cpp
+  rex_test2025_nonreal_type_global_qualifier.cpp
   rex_test2025_issue123_std_double_colon.cpp
   rex_test2025_issue124_system_header_specialization_args.cpp
   rex_test2025_issue125_fixup_child_list_warning.cpp
