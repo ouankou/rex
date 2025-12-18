@@ -2133,28 +2133,17 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       return;
     }
 
-    if (!is_decl_attached_to_scope_child_list(current_scope, decl_stmt)) {
-      if (SgScopeStatement *old_scope =
-              isSgScopeStatement(decl_stmt->get_scope())) {
-        if (old_scope != current_scope) {
-          detach_decl_from_scope_child_list(decl_stmt, old_scope);
-        }
+    if (SgScopeStatement *old_parent =
+            isSgScopeStatement(decl_stmt->get_parent())) {
+      if (old_parent != current_scope &&
+          is_decl_attached_to_scope_child_list(old_parent, decl_stmt)) {
+        SageInterface::removeStatement(decl_stmt, false);
+        decl_stmt->set_parent(nullptr);
       }
-      if (SgScopeStatement *old_parent =
-              isSgScopeStatement(decl_stmt->get_parent())) {
-        if (old_parent != current_scope) {
-          detach_decl_from_scope_child_list(decl_stmt, old_parent);
-        }
-      }
-      SageInterface::appendStatement(decl_stmt, current_scope);
     }
 
-    if (decl_stmt->get_parent() != current_scope) {
-      decl_stmt->set_parent(current_scope);
-    }
-    if (decl_stmt->get_scope() != current_scope) {
-      decl_stmt->set_scope(current_scope);
-    }
+    ensure_decl_in_scope_child_list(decl_stmt, current_scope,
+                                    "VisitLinkageSpecDecl");
   };
 
   for (auto it = linkage_spec_decl->decls_begin();
