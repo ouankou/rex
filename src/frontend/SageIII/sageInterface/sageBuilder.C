@@ -8189,6 +8189,33 @@ SageBuilder::buildVarRefExp_nfi(SgVariableSymbol* sym)
      return varRef;
    }
 
+   namespace {
+   class RexNonrealQualifiedPrefixAttribute : public AstAttribute {
+   public:
+     explicit RexNonrealQualifiedPrefixAttribute(const std::string &prefix)
+         : prefix_(prefix) {}
+
+     OwnershipPolicy getOwnershipPolicy() const override {
+       return CONTAINER_OWNERSHIP;
+     }
+
+     AstAttribute *copy() const override {
+       return new RexNonrealQualifiedPrefixAttribute(prefix_);
+     }
+
+     std::string attribute_class_name() const override {
+       return "RexNonrealQualifiedPrefixAttribute";
+     }
+
+     std::string toString() override { return prefix_; }
+
+   private:
+     std::string prefix_;
+   };
+
+   const char kRexNonrealQualifiedPrefixAttr[] = "rex_nonreal_qualified_prefix";
+   } // namespace
+
    SgNonrealRefExp *
    SageBuilder::buildNonrealRefExp(const SgName &name, SgScopeStatement *scope,
                                    const SgName &qualifiedPrefix,
@@ -8225,8 +8252,9 @@ SageBuilder::buildVarRefExp_nfi(SgVariableSymbol* sym)
      ROSE_ASSERT(refexp != NULL);
 
      if (qualifiedPrefix.is_null() == false) {
-       SgNode::get_globalQualifiedNameMapForNames()[refexp] =
-           qualifiedPrefix.getString();
+       refexp->setAttribute(
+           kRexNonrealQualifiedPrefixAttr,
+           new RexNonrealQualifiedPrefixAttribute(qualifiedPrefix.getString()));
      }
 
      return refexp;

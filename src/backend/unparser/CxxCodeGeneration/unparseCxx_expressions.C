@@ -330,8 +330,15 @@ Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression* expr, SgUnparse_Info
   SgNonrealRefExp * nr_refexp = isSgNonrealRefExp(expr);
   ASSERT_not_null(nr_refexp);
 
-  SgName nameQualifier = nr_refexp->get_qualified_name_prefix();
-  curprint(nameQualifier.str());
+  static const char kRexNonrealQualifiedPrefixAttr[] =
+      "rex_nonreal_qualified_prefix";
+  if (AstAttribute *attr =
+          nr_refexp->getAttribute(kRexNonrealQualifiedPrefixAttr)) {
+    curprint(attr->toString());
+  } else {
+    SgName nameQualifier = nr_refexp->get_qualified_name_prefix();
+    curprint(nameQualifier.str());
+  }
 
   SgNonrealSymbol * nrsym = nr_refexp->get_symbol();
   ASSERT_not_null(nrsym);
