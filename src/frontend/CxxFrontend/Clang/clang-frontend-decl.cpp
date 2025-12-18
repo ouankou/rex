@@ -2098,6 +2098,65 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
 #endif
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+  ROSE_ASSERT(linkage_spec_decl != nullptr);
+  ROSE_ASSERT(current_scope != nullptr);
+
+  std::string linkage;
+  switch (linkage_spec_decl->getLanguage()) {
+  case clang::LinkageSpecLanguageIDs::C:
+    linkage = "C";
+    break;
+  case clang::LinkageSpecLanguageIDs::CXX:
+    linkage = "C++";
+    break;
+  }
+  ROSE_ASSERT(!linkage.empty());
+
+  bool has_braces = linkage_spec_decl->hasBraces();
+
+  auto apply_linkage = [&](SgDeclarationStatement *decl_stmt) {
+    if (decl_stmt == nullptr) {
+      return;
+    }
+
+    decl_stmt->set_linkage(linkage);
+
+    if (has_braces) {
+      decl_stmt->setExternBrace();
+    } else {
+      SageInterface::setExtern(decl_stmt);
+    }
+  };
+
+  auto attach_to_current_scope = [&](SgDeclarationStatement *decl_stmt) {
+    if (decl_stmt == nullptr) {
+      return;
+    }
+
+    if (!is_decl_attached_to_scope_child_list(current_scope, decl_stmt)) {
+      if (SgScopeStatement *old_scope =
+              isSgScopeStatement(decl_stmt->get_scope())) {
+        if (old_scope != current_scope) {
+          detach_decl_from_scope_child_list(decl_stmt, old_scope);
+        }
+      }
+      if (SgScopeStatement *old_parent =
+              isSgScopeStatement(decl_stmt->get_parent())) {
+        if (old_parent != current_scope) {
+          detach_decl_from_scope_child_list(decl_stmt, old_parent);
+        }
+      }
+      SageInterface::appendStatement(decl_stmt, current_scope);
+    }
+
+    if (decl_stmt->get_parent() != current_scope) {
+      decl_stmt->set_parent(current_scope);
+    }
+    if (decl_stmt->get_scope() != current_scope) {
+      decl_stmt->set_scope(current_scope);
+    }
+  };
+
   for (auto it = linkage_spec_decl->decls_begin();
        it != linkage_spec_decl->decls_end(); ++it) {
     clang::Decl *inner_decl = *it;
@@ -2106,9 +2165,9 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
 
     SgNode *child = Traverse(inner_decl);
     if (SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child)) {
-      if (decl_stmt->get_parent() == nullptr && current_scope != nullptr) {
-        SageInterface::appendStatement(decl_stmt, current_scope);
-      }
+      apply_linkage(decl_stmt);
+      apply_linkage(decl_stmt->get_firstNondefiningDeclaration());
+      attach_to_current_scope(decl_stmt);
     }
   }
 

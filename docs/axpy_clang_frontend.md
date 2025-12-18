@@ -43,14 +43,15 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
      them back into the active `PreprocessorOptions`.
 
 2. **Unhandled `LinkageSpecDecl` (extern "C"/"C++")**  
-   - *Symptom*: Parsing headers that contain `extern "C"` blocks aborted with
-     `Unknown declaration kind: LinkageSpec !`.  
-   - *Fix*: Added a traversal case for `clang::Decl::LinkageSpec` that recursively
-     visits contained declarations and reuses the current scope when appending
-     the resulting `SgDeclarationStatement` nodes
-     (`src/frontend/CxxFrontend/Clang/clang-frontend-decl.cpp:666`).
-   - *Limitation*: We currently do not emit dedicated `SgClinkage*` nodes, so
-     linkage metadata is dropped, but this is sufficient for ingestion.
+   - *Symptom*: Declarations inside `extern "C"` could be dropped from the ROSE
+     AST (unreachable / missing from the owning scope), and linkage information
+     could be lost during unparsing.  
+   - *Fix*: `VisitLinkageSpecDecl` now always attaches translated inner
+     declarations to the current scope and preserves language linkage on those
+     declarations (e.g., `set_linkage("C")` + `setExtern()` for `extern "C" T f()`
+     forms). Brace-form `extern "C" { ... }` is preserved via the existing
+     preprocessing-info mechanism (and marked via `setExternBrace()` on the
+     contained declarations) so the unparser round-trips the original structure.
 
 3. **Anonymous namespace handling**  
    - *Symptom*: The translator asserted inside
