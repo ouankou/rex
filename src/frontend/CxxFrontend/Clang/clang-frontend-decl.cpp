@@ -5493,7 +5493,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           SgInitializedName *cloned_param =
               SageBuilder::buildInitializedName_nfi(
                   init_name->get_name(), init_name->get_type(), cloned_init);
-          cloned_param->set_parent(cloned);
           cloned->append_arg(cloned_param);
         }
         return cloned;
