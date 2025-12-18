@@ -5454,6 +5454,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       for (const clang::TemplateArgument &arg : clang_args->asArray()) {
         if (arg.getKind() == clang::TemplateArgument::Type) {
           clang::QualType qt = arg.getAsType();
+          while (qt->isPointerType() || qt->isReferenceType()) {
+            qt = qt->getPointeeType();
+          }
           if (const clang::TagType *tag = qt->getAs<clang::TagType>()) {
             Traverse(tag->getDecl());
           }
