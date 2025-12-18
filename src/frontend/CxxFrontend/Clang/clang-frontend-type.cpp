@@ -110,6 +110,7 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
     return getTemplateNameBase(deduced->getUnderlying());
   }
 
+  ROSE_ASSERT(!"Unhandled clang::TemplateName kind");
   return "";
 }
 
