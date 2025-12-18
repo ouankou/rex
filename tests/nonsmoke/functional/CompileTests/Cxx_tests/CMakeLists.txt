@@ -145,6 +145,41 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 151: LinkageSpecDecl (extern "C") must not drop declarations and must
+# preserve linkage in the generated output.
+add_test(
+  NAME Cxx_tests_rex_test2025_extern_c_roundtrip_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -F 'extern \"C\"' rose_rex_test2025_extern_c_roundtrip.cpp && grep -E '(^|[^[:alnum:]_])int[[:space:]]+foo[[:space:]]*[(]' rose_rex_test2025_extern_c_roundtrip.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_extern_c_roundtrip.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_extern_c_roundtrip.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_extern_c_roundtrip_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
+# Issue 151: Preserve extern "C" brace form without flattening.
+add_test(
+  NAME Cxx_tests_rex_test2025_extern_c_brace_roundtrip_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -F 'extern \"C\" {' rose_rex_test2025_extern_c_brace_roundtrip.cpp && grep -E '(^|[^[:alnum:]_])int[[:space:]]+foo[[:space:]]*[(]' rose_rex_test2025_extern_c_brace_roundtrip.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_extern_c_brace_roundtrip.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_extern_c_brace_roundtrip.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_extern_c_brace_roundtrip_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 123: Function refs must not emit duplicated qualification (e.g. std::::get).
 add_test(
   NAME Cxx_tests_rex_test2025_issue123_std_double_colon_unparse

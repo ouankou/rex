@@ -2098,6 +2098,71 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
 #endif
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+  ROSE_ASSERT(linkage_spec_decl != nullptr);
+  ROSE_ASSERT(current_scope != nullptr);
+
+  std::string linkage;
+  switch (linkage_spec_decl->getLanguage()) {
+  case clang::LinkageSpecLanguageIDs::C:
+    linkage = "C";
+    break;
+  case clang::LinkageSpecLanguageIDs::CXX:
+    linkage = "C++";
+    break;
+  default:
+    ROSE_ASSERT(!"Unhandled clang::LinkageSpecLanguageIDs");
+    break;
+  }
+  ROSE_ASSERT(!linkage.empty());
+
+  bool has_braces = linkage_spec_decl->hasBraces();
+
+  auto apply_linkage = [&](SgDeclarationStatement *decl_stmt) {
+    if (decl_stmt == nullptr) {
+      return;
+    }
+
+    decl_stmt->set_linkage(linkage);
+
+    if (has_braces) {
+      decl_stmt->setExternBrace();
+    } else {
+      SageInterface::setExtern(decl_stmt);
+    }
+  };
+
+  auto attach_to_current_scope = [&](SgDeclarationStatement *decl_stmt) {
+    if (decl_stmt == nullptr) {
+      return;
+    }
+
+    if (SgStatement *old_parent_stmt = isSgStatement(decl_stmt->get_parent())) {
+      if (old_parent_stmt != current_scope) {
+        bool attached_to_old_parent = false;
+        if (SgScopeStatement *old_parent_scope =
+                isSgScopeStatement(old_parent_stmt)) {
+          attached_to_old_parent =
+              is_decl_attached_to_scope_child_list(old_parent_scope, decl_stmt);
+        } else {
+          std::vector<SgNode *> successors =
+              old_parent_stmt->get_traversalSuccessorContainer();
+          attached_to_old_parent =
+              std::find(successors.begin(), successors.end(), decl_stmt) !=
+              successors.end();
+        }
+
+        if (attached_to_old_parent &&
+            SageInterface::isRemovableStatement(decl_stmt)) {
+          SageInterface::removeStatement(decl_stmt, false);
+          decl_stmt->set_parent(nullptr);
+        }
+      }
+    }
+
+    ensure_decl_in_scope_child_list(decl_stmt, current_scope,
+                                    "VisitLinkageSpecDecl");
+  };
+
   for (auto it = linkage_spec_decl->decls_begin();
        it != linkage_spec_decl->decls_end(); ++it) {
     clang::Decl *inner_decl = *it;
@@ -2106,9 +2171,9 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
 
     SgNode *child = Traverse(inner_decl);
     if (SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child)) {
-      if (decl_stmt->get_parent() == nullptr && current_scope != nullptr) {
-        SageInterface::appendStatement(decl_stmt, current_scope);
-      }
+      apply_linkage(decl_stmt);
+      apply_linkage(decl_stmt->get_firstNondefiningDeclaration());
+      attach_to_current_scope(decl_stmt);
     }
   }
 
