@@ -35,22 +35,6 @@ namespace StaticCFG
             all_nodes_[VirtualCFG::CFGNode(p.first.getNode(), 0)] = p.second; 
     }
 
-    template <typename _filter>
-    void ROSE_DLL_API CustomFilteredCFG<_filter>::printEdge(
-        std::ostream &o, SgDirectedGraphEdge *edge, bool isInEdge) {
-      AstAttribute *attr = edge->getAttribute("info");
-
-      if (auto *edge_attr = dynamic_cast<
-              CFGEdgeAttribute<VirtualCFG::FilteredCFGEdge<_filter>> *>(attr)) {
-        VirtualCFG::FilteredCFGEdge<_filter> e = edge_attr->getEdge();
-        o << e.source().id() << " -> " << e.target().id() << " [label=\""
-          << escapeString(e.toString()) << "\", style=\""
-          << (isInEdge ? "dotted" : "solid") << "\"];\n";
-      } else {
-        ROSE_ABORT();
-      }
-    }
-
 template<typename _filter>    
 template <class NodeT, class EdgeT>
 void CustomFilteredCFG<_filter>::buildTemplatedCFG(NodeT n, std::map<NodeT, SgGraphNode*>& all_nodes, std::set<NodeT>& explored)

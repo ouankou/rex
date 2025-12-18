@@ -8,6 +8,8 @@
 #ifndef CUSTOMFILTEREDCFG_H
 #define CUSTOMFILTEREDCFG_H
 
+#include "Cxx_Grammar.h"
+#include "Escape.h"
 #include "filteredCFG.h"
 #include "staticCFG.h"
 
@@ -28,7 +30,20 @@ public:
 protected:        
         //! Virtual function Overloaded to print the Custom Filtered CFG Edges
   void printEdge(std::ostream &o, SgDirectedGraphEdge *edge,
-                 bool isInEdge) override;
+                 bool isInEdge) override {
+
+    AstAttribute *attr = edge->getAttribute("info");
+
+    if (CFGEdgeAttribute<VirtualCFG::FilteredCFGEdge<_Filter>> *edge_attr =
+            dynamic_cast<CFGEdgeAttribute<VirtualCFG::FilteredCFGEdge<_Filter>>
+                             *>(attr)) {
+      VirtualCFG::FilteredCFGEdge<_Filter> e = edge_attr->getEdge();
+      o << e.source().id() << " -> " << e.target().id() << " [label=\""
+        << escapeString(e.toString()) << "\", style=\""
+        << (isInEdge ? "dotted" : "solid") << "\"];\n";
+    } else
+      ROSE_ABORT();
+  }
 
 private:        
         template <class NodeT, class EdgeT>
