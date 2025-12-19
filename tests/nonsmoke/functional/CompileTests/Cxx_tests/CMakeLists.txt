@@ -219,6 +219,23 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 146: Global function template instantiations must keep :: under shadowing.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue146_shadowed_function_template_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -E '(^|[^[:alnum:]_])::make_tag' rose_rex_test2025_issue146_shadowed_function_template.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue146_shadowed_function_template.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue146_shadowed_function_template.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue146_shadowed_function_template_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 124: System header template specializations must preserve template args.
 add_test(
   NAME Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
