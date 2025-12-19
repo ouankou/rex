@@ -207,7 +207,7 @@ add_test(
   NAME Cxx_tests_rex_test2025_issue146_std_iota_quad_colon_unparse
   COMMAND
     sh -c
-    "\"$@\" && ! grep -E \"::::\" rose_rex_test2025_issue146_std_iota_quad_colon.cpp && grep -E \"std::iota\" rose_rex_test2025_issue146_std_iota_quad_colon.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue146_std_iota_quad_colon.cpp"
+    "\"$@\" && ! grep -F '::::' rose_rex_test2025_issue146_std_iota_quad_colon.cpp && grep -E '(^|[^[:alnum:]_])std::iota[[:space:]]*(<|\\()' rose_rex_test2025_issue146_std_iota_quad_colon.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue146_std_iota_quad_colon.cpp"
     dummy
     $<TARGET_FILE:${translator}>
     ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
