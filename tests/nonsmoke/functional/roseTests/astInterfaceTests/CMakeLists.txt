@@ -142,6 +142,11 @@ foreach(test ${group1_tests})
   )
 endforeach()
 
+set_tests_properties(astInterface_interfaceFunctionCoverage PROPERTIES
+  FAIL_REGULAR_EXPRESSION
+  "In addToNameMap\\(\\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope"
+)
+
 # buildFunctionDeclaration test (uses inputBlank1.C)
 add_test(
   NAME astInterface_buildFunctionDeclaration

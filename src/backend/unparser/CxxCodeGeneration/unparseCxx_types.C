@@ -35,6 +35,13 @@ static std::string trim_whitespace(std::string name) {
 
   return name;
 }
+
+static SgStatement* find_enclosing_statement(SgNode* node) {
+  while (node != NULL && isSgStatement(node) == NULL) {
+    node = node->get_parent();
+  }
+  return isSgStatement(node);
+}
 } // unnamed namespace
 
 // If this is turned on then we get the message to the
@@ -705,26 +712,70 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
           printf ("rrrrrrrrrrrr In unparseType() output type generated name: nodeReferenceToType = %p = %s SgNode::get_globalTypeNameMap().size() = %" PRIuPTR " \n",
                nodeReferenceToType,nodeReferenceToType->class_name().c_str(),SgNode::get_globalTypeNameMap().size());
 #endif
-          std::map<SgNode*,std::string>::iterator i = SgNode::get_globalTypeNameMap().find(nodeReferenceToType);
-          if (i != SgNode::get_globalTypeNameMap().end())
+          std::map<SgNode*,std::map<SgNode*,std::string> >::iterator typeMapIterator =
+               SgNode::get_globalQualifiedNameMapForMapsOfTypes().find(nodeReferenceToType);
+          if (typeMapIterator != SgNode::get_globalQualifiedNameMapForMapsOfTypes().end())
              {
-            // usingGeneratedNameQualifiedTypeNameString = true;
-               if (info.isTypeSecondPart() == false)
+               std::map<SgNode*,std::string> & scopedTypeNameMap = typeMapIterator->second;
+               std::map<SgNode*,std::string>::iterator scopedTypeNameIterator =
+                    scopedTypeNameMap.end();
+
+               SgStatement* positionStatement = find_enclosing_statement(nodeReferenceToType);
+               if (positionStatement != NULL)
                   {
-                    usingGeneratedNameQualifiedTypeNameString = true;
+                    scopedTypeNameIterator =
+                         scopedTypeNameMap.find(positionStatement);
+                  }
+               if (scopedTypeNameIterator == scopedTypeNameMap.end() &&
+                   info.get_current_scope() != NULL)
+                  {
+                    scopedTypeNameIterator =
+                         scopedTypeNameMap.find(info.get_current_scope());
+                  }
+               if (scopedTypeNameIterator == scopedTypeNameMap.end())
+                  {
+                    scopedTypeNameIterator =
+                         scopedTypeNameMap.find(nodeReferenceToType);
                   }
 
-               typeNameString = i->second.c_str();
+               if (scopedTypeNameIterator != scopedTypeNameMap.end())
+                  {
+                    if (info.isTypeSecondPart() == false)
+                       {
+                         usingGeneratedNameQualifiedTypeNameString = true;
+                       }
+
+                    typeNameString = scopedTypeNameIterator->second.c_str();
 #if DEBUG_GENERATED_STRING_USE
-               printf ("ssssssssssssssss Found type name in SgNode::get_globalTypeNameMap() typeNameString = %s for nodeReferenceToType = %p = %s \n",
-                    typeNameString.c_str(),nodeReferenceToType,nodeReferenceToType->class_name().c_str());
+                    printf ("ssssssssssssssss Found type name in SgNode::get_globalQualifiedNameMapForMapsOfTypes() typeNameString = %s for nodeReferenceToType = %p = %s \n",
+                         typeNameString.c_str(),nodeReferenceToType,nodeReferenceToType->class_name().c_str());
 #endif
+                  }
              }
-            else
+
+          if (usingGeneratedNameQualifiedTypeNameString == false)
              {
+               std::map<SgNode*,std::string>::iterator i = SgNode::get_globalTypeNameMap().find(nodeReferenceToType);
+               if (i != SgNode::get_globalTypeNameMap().end())
+                  {
+                 // usingGeneratedNameQualifiedTypeNameString = true;
+                    if (info.isTypeSecondPart() == false)
+                       {
+                         usingGeneratedNameQualifiedTypeNameString = true;
+                       }
+
+                    typeNameString = i->second.c_str();
 #if DEBUG_GENERATED_STRING_USE
-               printf ("In unparseType(): string not found in globalTypeNameMap \n");
+                    printf ("ssssssssssssssss Found type name in SgNode::get_globalTypeNameMap() typeNameString = %s for nodeReferenceToType = %p = %s \n",
+                         typeNameString.c_str(),nodeReferenceToType,nodeReferenceToType->class_name().c_str());
 #endif
+                  }
+                 else
+                  {
+#if DEBUG_GENERATED_STRING_USE
+                    printf ("In unparseType(): string not found in globalTypeNameMap \n");
+#endif
+                  }
              }
         }
 

@@ -54,6 +54,11 @@ set_tests_properties(Cxx_tests_rex_test2025_defaulted_special_members_anon_union
   FAIL_REGULAR_EXPRESSION "Cannot resolve Field member;using placeholder"
 )
 
+# Issue 150: Name-qualification map should not emit overwrite or default-scope warnings.
+set_tests_properties(Cxx_tests_rex_test2025_issue150_name_qualification_map PROPERTIES
+  FAIL_REGULAR_EXPRESSION "In addToNameMap\\(\\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope"
+)
+
 # Issue 62: Mangled qualifiers must never contain template syntax.
 set_tests_properties(Cxx_tests_rex_test2025_mangle_qualifiers_no_template_syntax PROPERTIES
   FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"

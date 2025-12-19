@@ -39,6 +39,35 @@ std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
   return result;
 }
 
+std::string getDeclarationNameString(const clang::DeclarationName &name,
+                                     const clang::LangOptions &lang_opts) {
+  if (name.isEmpty()) {
+    return "";
+  }
+
+  if (const clang::IdentifierInfo *identifier = name.getAsIdentifierInfo()) {
+    return identifier->getName().str();
+  }
+
+  if (clang::OverloadedOperatorKind op = name.getCXXOverloadedOperator();
+      op != clang::OO_None) {
+    return buildOverloadedOperatorName(op);
+  }
+
+  if (const clang::IdentifierInfo *literal = name.getCXXLiteralIdentifier()) {
+    std::string result = "operator\"\"";
+    result += literal->getName().str();
+    return result;
+  }
+
+  clang::PrintingPolicy policy(lang_opts);
+  std::string result;
+  llvm::raw_string_ostream stream(result);
+  name.print(stream, policy);
+  stream.flush();
+  return result;
+}
+
 bool nestedNameSpecifierHasGlobal(const clang::NestedNameSpecifier *qualifier) {
   for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
        nns = nns->getPrefix()) {
@@ -103,7 +132,8 @@ std::string mangleTemplateName(const clang::TemplateName &tname) {
   return result;
 }
 
-std::string getTemplateNameBase(const clang::TemplateName &tname) {
+std::string getTemplateNameBase(const clang::TemplateName &tname,
+                                const clang::LangOptions &lang_opts) {
   if (clang::TemplateDecl *template_decl = tname.getAsTemplateDecl()) {
     if (clang::TemplateTemplateParmDecl *parm =
             llvm::dyn_cast<clang::TemplateTemplateParmDecl>(template_decl)) {
@@ -121,7 +151,7 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
 
   if (const clang::QualifiedTemplateName *qtn =
           tname.getAsQualifiedTemplateName()) {
-    return getTemplateNameBase(qtn->getUnderlyingTemplate());
+    return getTemplateNameBase(qtn->getUnderlyingTemplate(), lang_opts);
   }
 
   if (const clang::DependentTemplateName *dtn =
@@ -134,7 +164,7 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
 
   if (const clang::SubstTemplateTemplateParmStorage *subst =
           tname.getAsSubstTemplateTemplateParm()) {
-    return getTemplateNameBase(subst->getReplacement());
+    return getTemplateNameBase(subst->getReplacement(), lang_opts);
   }
 
   if (clang::UsingShadowDecl *using_shadow = tname.getAsUsingShadowDecl()) {
@@ -144,16 +174,7 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
   if (clang::AssumedTemplateStorage *assumed =
           tname.getAsAssumedTemplateName()) {
     clang::DeclarationName decl_name = assumed->getDeclName();
-    if (decl_name.isIdentifier()) {
-      return decl_name.getAsIdentifierInfo()->getName().str();
-    }
-    if (clang::OverloadedOperatorKind op = decl_name.getCXXOverloadedOperator();
-        op != clang::OO_None) {
-      std::string name = "operator";
-      name += clang::getOperatorSpelling(op);
-      return name;
-    }
-    return decl_name.getAsString();
+    return getDeclarationNameString(decl_name, lang_opts);
   }
 
   if (clang::OverloadedTemplateStorage *overloaded =
@@ -181,7 +202,7 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
 
   if (const clang::DeducedTemplateStorage *deduced =
           tname.getAsDeducedTemplateName()) {
-    return getTemplateNameBase(deduced->getUnderlying());
+    return getTemplateNameBase(deduced->getUnderlying(), lang_opts);
   }
 
   ROSE_ASSERT(!"Unhandled clang::TemplateName kind");
@@ -1955,7 +1976,8 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
   if (const clang::TemplateSpecializationType *tst =
           llvm::dyn_cast<clang::TemplateSpecializationType>(clang_type)) {
     clang::TemplateName tname = tst->getTemplateName();
-    std::string base_name = getTemplateNameBase(tname);
+    std::string base_name =
+        getTemplateNameBase(tname, p_compiler_instance->getLangOpts());
     ROSE_ASSERT(!base_name.empty());
 
     SgTemplateArgumentPtrList tpl_args = buildTemplateArguments(tst);
@@ -2286,7 +2308,8 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
 
   if (template_specialization_type->isDependentType()) {
     clang::TemplateName tname = template_specialization_type->getTemplateName();
-    std::string base_name = getTemplateNameBase(tname);
+    std::string base_name =
+        getTemplateNameBase(tname, p_compiler_instance->getLangOpts());
     ROSE_ASSERT(!base_name.empty());
 
     SgTemplateArgumentPtrList tpl_args =

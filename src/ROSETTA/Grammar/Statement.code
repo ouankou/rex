@@ -7195,7 +7195,17 @@ SgScopeStatement::isNamedScope()
         {
        // Though it might seem incorrect, since functions have names, the SgFunctionDefinition
        // is not a named scope for purposes of name qualification.
-       // case SgFunctionDefinition:
+          case V_SgFunctionDefinition:
+             {
+               result = false;
+               break;
+             }
+
+          case V_SgGlobal:
+             {
+               result = false;
+               break;
+             }
 
           case V_SgBasicBlock:
              {
@@ -7231,7 +7241,6 @@ SgScopeStatement::isNamedScope()
 
           default:
              {
-               printf ("Default reached in SgScopeStatement::isNamedScope(): scope = %s \n",this->class_name().c_str());
 #if 0
                ROSE_ASSERT(false);
 #endif

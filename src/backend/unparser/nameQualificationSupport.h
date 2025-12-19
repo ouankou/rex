@@ -359,6 +359,8 @@ class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQuali
 
        // DQ (6/21/2011): Added function to store names with associated SgNode IR nodes.
           void addToNameMap ( SgNode* nodeReference, std::string typeNameString );
+          void addToNameMap ( SgNode* nodeReference, SgNode* typeKey, std::string typeNameString );
+          void addToNameMap ( SgNode* nodeReference, SgNode* typeKey, SgNode* mapKey, std::string typeNameString );
 
        // This extracts the template arguments and calls the function to evaluate them.
           void evaluateTemplateInstantiationDeclaration ( SgDeclarationStatement* declaration, SgScopeStatement* currentScope, SgStatement* positionStatement );
@@ -382,6 +384,5 @@ class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQuali
        // DQ (3/14/2019): Adding debugging support to output the map of names.
           void outputNameQualificationMap( const std::map<SgNode*,std::string> & qualifiedNameMap );
    };
-
 
 
