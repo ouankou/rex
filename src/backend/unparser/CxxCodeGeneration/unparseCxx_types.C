@@ -49,23 +49,13 @@ static SgStatement* find_enclosing_statement(SgNode* node) {
 static std::map<SgNode*, std::string>::const_iterator find_scoped_type_name(
     const std::map<SgNode*, std::string> &scoped_map, SgNode* position_node,
     SgNode* scope_node, SgNode* reference_node) {
-  if (position_node != NULL) {
-    std::map<SgNode*, std::string>::const_iterator it =
-        scoped_map.find(position_node);
-    if (it != scoped_map.end()) {
-      return it;
+  SgNode *lookup_keys[3] = {position_node, scope_node, reference_node};
+  for (size_t i = 0; i < 3; ++i) {
+    if (lookup_keys[i] == NULL) {
+      continue;
     }
-  }
-  if (scope_node != NULL) {
-    std::map<SgNode*, std::string>::const_iterator it =
-        scoped_map.find(scope_node);
-    if (it != scoped_map.end()) {
-      return it;
-    }
-  }
-  if (reference_node != NULL) {
-    std::map<SgNode*, std::string>::const_iterator it =
-        scoped_map.find(reference_node);
+    std::map<SgNode *, std::string>::const_iterator it =
+        scoped_map.find(lookup_keys[i]);
     if (it != scoped_map.end()) {
       return it;
     }
