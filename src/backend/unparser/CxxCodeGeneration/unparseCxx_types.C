@@ -37,10 +37,13 @@ static std::string trim_whitespace(std::string name) {
 }
 
 static SgStatement* find_enclosing_statement(SgNode* node) {
-  while (node != NULL && isSgStatement(node) == NULL) {
+  while (node != NULL) {
+    if (SgStatement* stmt = isSgStatement(node)) {
+      return stmt;
+    }
     node = node->get_parent();
   }
-  return isSgStatement(node);
+  return NULL;
 }
 } // unnamed namespace
 
