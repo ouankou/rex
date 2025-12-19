@@ -6987,14 +6987,8 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   }
 
   // Pei-Hung (06/16/22) added "static" modifier
-  bool shouldSetStatic = var_decl->getStorageClass() == clang::SC_Static;
-  if (shouldSetStatic && var_decl->isStaticDataMember()) {
-    const clang::DeclContext *lexicalContext =
-        var_decl->getLexicalDeclContext();
-    if (lexicalContext == NULL || !lexicalContext->isRecord()) {
-      shouldSetStatic = false;
-    }
-  }
+  bool shouldSetStatic = (var_decl->getStorageClass() == clang::SC_Static) &&
+                         !var_decl->isOutOfLine();
   if (shouldSetStatic) {
     sg_var_decl->get_declarationModifier().get_storageModifier().setStatic();
   }
