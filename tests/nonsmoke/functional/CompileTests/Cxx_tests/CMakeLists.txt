@@ -34,6 +34,11 @@ set_tests_properties(Cxx_tests_rex_test2025_issue92_redundant_sym PROPERTIES
   FAIL_REGULAR_EXPRESSION "Redundant symbol removed"
 )
 
+# Issue 145: Defaulted/deleted special members must not trigger placeholder warnings.
+set_tests_properties(Cxx_tests_rex_test2025_defaulted_special_members_anon_union PROPERTIES
+  FAIL_REGULAR_EXPRESSION "Cannot resolve Field member;using placeholder"
+)
+
 # Issue 62: Mangled qualifiers must never contain template syntax.
 set_tests_properties(Cxx_tests_rex_test2025_mangle_qualifiers_no_template_syntax PROPERTIES
   FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"
@@ -339,6 +344,23 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue94_template_arg_spacing.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_issue94_template_arg_spacing_unparse PROPERTIES LABELS Cxx_tests)
+
+# Issue 145: Preserve explicit = default and avoid implicit-body placeholders.
+add_test(
+  NAME Cxx_tests_rex_test2025_defaulted_special_members_anon_union_unparse
+  COMMAND sh -c "\"$@\" && grep -F \"= default\" rose_rex_test2025_defaulted_special_members_anon_union.cpp && ! grep -F \".  operator=  .\" rose_rex_test2025_defaulted_special_members_anon_union.cpp && ! grep -F \"(this) ->  .\" rose_rex_test2025_defaulted_special_members_anon_union.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_defaulted_special_members_anon_union.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -std=c++20
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_defaulted_special_members_anon_union.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_defaulted_special_members_anon_union_unparse
+  PROPERTIES LABELS Cxx_tests
+  FAIL_REGULAR_EXPRESSION "Cannot resolve Field member;using placeholder"
+)
 
 # Verify explicit template arguments are preserved in calls
 add_test(
