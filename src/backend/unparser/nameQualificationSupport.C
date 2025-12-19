@@ -3631,8 +3631,31 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                               ASSERT_not_null(classDeclaration);
                               ASSERT_not_null(associatedClassDeclaration);
 
-                              if (associatedClassDeclaration->get_firstNondefiningDeclaration() == classDeclaration->get_firstNondefiningDeclaration())
-                                 {
+                              bool same_declaration =
+                                  (associatedClassDeclaration
+                                       ->get_firstNondefiningDeclaration() ==
+                                   classDeclaration
+                                       ->get_firstNondefiningDeclaration());
+                              if (same_declaration == false) {
+                                SgTemplateInstantiationDecl
+                                    *templateInstantiationDecl =
+                                        isSgTemplateInstantiationDecl(
+                                            classDeclaration);
+                                if (templateInstantiationDecl != NULL) {
+                                  SgTemplateClassDeclaration *templateDecl =
+                                      templateInstantiationDecl
+                                          ->get_templateDeclaration();
+                                  if (templateDecl != NULL) {
+                                    same_declaration =
+                                        (associatedClassDeclaration
+                                             ->get_firstNondefiningDeclaration() ==
+                                         templateDecl
+                                             ->get_firstNondefiningDeclaration());
+                                  }
+                                }
+                              }
+
+                              if (same_declaration == true) {
 // #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
 #if 0
                                 // This class is visible from where it is referenced.
@@ -3757,9 +3780,7 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                                    MLOG_WARN_C(MLOG_UNPARSER, "I think this is associated with a template, need to stop here! \n");
                                    ROSE_ABORT();
 #endif
-                                 }
-                                else
-                                 {
+          } else {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                                 // The name does not match, so the associatedClassDeclaration is hidding the base class declaration.
                                    MLOG_WARN_C(MLOG_UNPARSER, "This class is NOT visible from where it is referenced (declaration with same name does not match) \n");
@@ -3772,7 +3793,7 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                                    MLOG_WARN_C(MLOG_UNPARSER, "Exiting for unimplemented case (class) \n");
                                    ROSE_ABORT();
 #endif
-                                 }
+          }
 
                               break;
                             }

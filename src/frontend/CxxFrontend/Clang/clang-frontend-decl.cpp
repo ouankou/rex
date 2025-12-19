@@ -6392,6 +6392,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         .setExtern();
   }
 
+  if (function_decl->getStorageClass() == clang::SC_Static &&
+      llvm::isa<clang::CXXMethodDecl>(function_decl) == false) {
+    sg_function_decl->get_declarationModifier()
+        .get_storageModifier()
+        .setStatic();
+  }
+
   // CLANG FRONTEND FIX: Preserve C++ static member function declarations.
   // Clang models these as CXXMethodDecl::isStatic(), but ROSE expects the
   // storage modifier to be written only for in-class declarations/definitions.
@@ -6980,8 +6987,9 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   }
 
   // Pei-Hung (06/16/22) added "static" modifier
-  bool isStaticDecl = var_decl->isStaticLocal();
-  if (isStaticDecl) {
+  bool shouldSetStatic = (var_decl->getStorageClass() == clang::SC_Static) &&
+                         !var_decl->isOutOfLine();
+  if (shouldSetStatic) {
     sg_var_decl->get_declarationModifier().get_storageModifier().setStatic();
   }
 

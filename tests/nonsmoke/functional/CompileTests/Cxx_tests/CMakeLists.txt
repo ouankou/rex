@@ -59,6 +59,36 @@ set_tests_properties(Cxx_tests_rex_test2025_issue150_name_qualification_map PROP
   FAIL_REGULAR_EXPRESSION "In addToNameMap\\(\\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope"
 )
 
+# Issue 160: Preserve file-scope static and implicit member access in unparse output.
+string(CONCAT rex_test2025_issue160_axpy_roundtrip_unparse_command
+  "\"$@\" && "
+  "grep -E \"^[[:space:]]*static[[:space:]]+const[[:space:]]+unsigned[[:space:]]+long[[:space:]]+kElements\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "grep -E \"^[[:space:]]*static[[:space:]]+void[[:space:]]+axpy[[:space:]]*[(]\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "grep -E \"^[[:space:]]*static[[:space:]]+double[[:space:]]+checksum[[:space:]]*[(]\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "! grep -E \"(^|[^[:alnum:]_])::Array\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "! grep -E \"(^|[^[:alnum:]_])this([^[:alnum:]_]|$)\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "! grep -E \"checksum[[:space:]]*[(][[:space:]]*[(][[:space:]]*y[[:space:]]*[.][[:space:]]*get_data\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "! grep -E \",[[:space:]]*[(][[:space:]]*x[[:space:]]*[.][[:space:]]*get_data\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "! grep -E \",[[:space:]]*[(][[:space:]]*y[[:space:]]*[.][[:space:]]*get_data\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "! grep -E \",[[:space:]]*[(][[:space:]]*y[[:space:]]*[.][[:space:]]*size\" rose_rex_test2025_issue160_axpy_roundtrip.cpp && "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue160_axpy_roundtrip.cpp"
+)
+add_test(
+  NAME Cxx_tests_rex_test2025_issue160_axpy_roundtrip_unparse
+  COMMAND
+    sh -c
+    "${rex_test2025_issue160_axpy_roundtrip_unparse_command}"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue160_axpy_roundtrip.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue160_axpy_roundtrip_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 62: Mangled qualifiers must never contain template syntax.
 set_tests_properties(Cxx_tests_rex_test2025_mangle_qualifiers_no_template_syntax PROPERTIES
   FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"
