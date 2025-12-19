@@ -7196,11 +7196,6 @@ SgScopeStatement::isNamedScope()
        // Though it might seem incorrect, since functions have names, the SgFunctionDefinition
        // is not a named scope for purposes of name qualification.
           case V_SgFunctionDefinition:
-             {
-               result = false;
-               break;
-             }
-
           case V_SgGlobal:
              {
                result = false;
