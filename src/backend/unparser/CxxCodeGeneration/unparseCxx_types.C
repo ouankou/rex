@@ -712,6 +712,10 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
           printf ("rrrrrrrrrrrr In unparseType() output type generated name: nodeReferenceToType = %p = %s SgNode::get_globalTypeNameMap().size() = %" PRIuPTR " \n",
                nodeReferenceToType,nodeReferenceToType->class_name().c_str(),SgNode::get_globalTypeNameMap().size());
 #endif
+          std::string found_name_string;
+          bool name_found = false;
+          bool found_in_qualified_map = false;
+
           std::map<SgNode*,std::map<SgNode*,std::string> >::iterator typeMapIterator =
                SgNode::get_globalQualifiedNameMapForMapsOfTypes().find(nodeReferenceToType);
           if (typeMapIterator != SgNode::get_globalQualifiedNameMapForMapsOfTypes().end())
@@ -740,35 +744,19 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 
                if (scopedTypeNameIterator != scopedTypeNameMap.end())
                   {
-                    if (info.isTypeSecondPart() == false)
-                       {
-                         usingGeneratedNameQualifiedTypeNameString = true;
-                       }
-
-                    typeNameString = scopedTypeNameIterator->second.c_str();
-#if DEBUG_GENERATED_STRING_USE
-                    printf ("ssssssssssssssss Found type name in SgNode::get_globalQualifiedNameMapForMapsOfTypes() typeNameString = %s for nodeReferenceToType = %p = %s \n",
-                         typeNameString.c_str(),nodeReferenceToType,nodeReferenceToType->class_name().c_str());
-#endif
+                    found_name_string = scopedTypeNameIterator->second;
+                    name_found = true;
+                    found_in_qualified_map = true;
                   }
              }
 
-          if (usingGeneratedNameQualifiedTypeNameString == false)
+          if (name_found == false)
              {
                std::map<SgNode*,std::string>::iterator i = SgNode::get_globalTypeNameMap().find(nodeReferenceToType);
                if (i != SgNode::get_globalTypeNameMap().end())
                   {
-                 // usingGeneratedNameQualifiedTypeNameString = true;
-                    if (info.isTypeSecondPart() == false)
-                       {
-                         usingGeneratedNameQualifiedTypeNameString = true;
-                       }
-
-                    typeNameString = i->second.c_str();
-#if DEBUG_GENERATED_STRING_USE
-                    printf ("ssssssssssssssss Found type name in SgNode::get_globalTypeNameMap() typeNameString = %s for nodeReferenceToType = %p = %s \n",
-                         typeNameString.c_str(),nodeReferenceToType,nodeReferenceToType->class_name().c_str());
-#endif
+                    found_name_string = i->second;
+                    name_found = true;
                   }
                  else
                   {
@@ -776,6 +764,28 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
                     printf ("In unparseType(): string not found in globalTypeNameMap \n");
 #endif
                   }
+             }
+
+          if (name_found == true)
+             {
+               if (info.isTypeSecondPart() == false)
+                  {
+                    usingGeneratedNameQualifiedTypeNameString = true;
+                  }
+
+               typeNameString = found_name_string.c_str();
+#if DEBUG_GENERATED_STRING_USE
+               if (found_in_qualified_map)
+                  {
+                    printf ("Found type name in SgNode::get_globalQualifiedNameMapForMapsOfTypes() typeNameString = %s for nodeReferenceToType = %p = %s \n",
+                         typeNameString.c_str(),nodeReferenceToType,nodeReferenceToType->class_name().c_str());
+                  }
+                 else
+                  {
+                    printf ("Found type name in SgNode::get_globalTypeNameMap() typeNameString = %s for nodeReferenceToType = %p = %s \n",
+                         typeNameString.c_str(),nodeReferenceToType,nodeReferenceToType->class_name().c_str());
+                  }
+#endif
              }
         }
 
