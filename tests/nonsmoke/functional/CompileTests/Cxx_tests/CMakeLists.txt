@@ -202,6 +202,23 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 146: Namespace-scope template instantiations must not emit std::::iota.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue146_std_iota_quad_colon_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && ! grep -E \"::::\" rose_rex_test2025_issue146_std_iota_quad_colon.cpp && grep -E \"std::iota\" rose_rex_test2025_issue146_std_iota_quad_colon.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue146_std_iota_quad_colon.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue146_std_iota_quad_colon.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue146_std_iota_quad_colon_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 124: System header template specializations must preserve template args.
 add_test(
   NAME Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse

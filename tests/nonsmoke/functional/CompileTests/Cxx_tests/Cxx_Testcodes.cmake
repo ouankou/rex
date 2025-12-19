@@ -32,6 +32,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_extern_c_roundtrip.cpp
   rex_test2025_extern_c_brace_roundtrip.cpp
   rex_test2025_issue123_std_double_colon.cpp
+  rex_test2025_issue146_std_iota_quad_colon.cpp
   rex_test2025_issue124_system_header_specialization_args.cpp
   rex_test2025_issue125_fixup_child_list_warning.cpp
   rex_test2025_issue126_default_template_args.cpp

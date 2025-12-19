@@ -6470,19 +6470,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
-  // REX FIX: Always require global qualification for template instantiations
-  // This ensures that the unparser prints "::" (e.g. "::std::sort")
-  // which prevents ambiguity when global templates are shadowed.
-  if (function_decl->getTemplateSpecializationKind() != clang::TSK_Undeclared) {
-    // Only enforce a leading global qualifier for instantiations that live in a
-    // namespace scope. Avoid forcing "::" for translation-unit scope
-    // instantiations (e.g., friend templates injected into the global scope),
-    // which can otherwise produce duplicated qualifiers like "::::foo".
-    if (llvm::isa<clang::NamespaceDecl>(function_decl->getDeclContext())) {
-      sg_function_decl->set_global_qualification_required(true);
-    }
-  }
-
   // Many SageBuilder "defining" builders create an associated non-defining
   // declaration even when no such declaration exists in the source (notably for
   // in-class definitions). In C++, an in-class member function definition
