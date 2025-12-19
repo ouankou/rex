@@ -30,33 +30,38 @@ static void axpy(double a, const double *x, double *y, std::size_t n) {
 
 ## Changes Made
 
-### 1. Permissive Error Handling (CRITICAL)
+### 1. Permissive Error Handling (Opt-in)
 
 **File**: `src/frontend/CxxFrontend/Clang/clang-frontend.cpp`
 **Lines**: 461-473
 
 **Problem**: Clang diagnostics (missing headers) caused `frontend_failed` exception even though AST was successfully built.
 
-**Solution**: Check if AST (`global_scope`) is valid before failing.
+**Solution**: Default to strict error handling (Clang errors are fatal), with an explicit opt-in
+flag to allow best-effort AST translation and backend execution.
 
 ```cpp
-// Before:
-return numErrors;  // Any non-zero = failure
-
-// After:
-if (global_scope != NULL) {
-    if (numErrors > 0) {
-        printf("Note: Proceeding to backend despite %d Clang diagnostic error(s) "
-               "because AST was successfully constructed\n", numErrors);
-    }
-    return 0;  // Success - AST was built
-} else {
+if (global_scope == NULL) {
     printf("Error: Failed to build AST - global_scope is NULL\n");
     return (numErrors > 0) ? numErrors : 1;
 }
+
+if (numErrors > 0) {
+    if (continue_on_error) {
+        printf("Note: Proceeding to backend despite %d Clang diagnostic error(s) "
+               "because AST was successfully constructed\n", numErrors);
+        return 0;
+    }
+    printf("Error: Clang reported %d diagnostic error(s); refusing to run backend "
+           "(use -rex:clang:continue-on-error to override)\n", numErrors);
+    return numErrors;
+}
+
+return 0;
 ```
 
-**Impact**: Enabled code generation for the first time with C++ STL headers.
+**Impact**: CI/tooling now treats Clang errors as failures by default while still allowing
+explicit best-effort code generation when requested.
 
 ### 2. UnresolvedLookupExpr Support
 

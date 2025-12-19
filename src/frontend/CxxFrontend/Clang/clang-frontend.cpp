@@ -72,6 +72,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     bool enable_openmp = false;
     bool enable_openmp_simd = false;
     bool disable_openmp_via_flag = false;
+    bool continue_on_error = false;
 
     for (int i = 0; i < argc; i++) {
         std::string current_arg(argv[i]);
@@ -150,6 +151,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
         else if (current_arg == "-fopenmp-simd") {
             enable_openmp_simd = true;
             enable_openmp = true;  // SIMD is a subset of OpenMP, enable full pragma capture
+        }
+        else if (current_arg == "-rex:clang:continue-on-error") {
+            continue_on_error = true;
         }
         else if (!current_arg.empty() && current_arg[0] == '-') {
             // TODO -include
@@ -646,19 +650,23 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     delete compiler_instance;
 
-    // REX: Experimental C++ frontend is permissive - if we successfully built an AST
-    // (valid global_scope), allow backend to run even if Clang reported errors.
-    // This is necessary because Clang may report missing headers or other compilation
-    // errors, but we still want to attempt code generation with the partial AST.
-    if (global_scope != NULL) {
-        if (numErrors > 0) {
-            printf ("Note: Proceeding to backend despite %d Clang diagnostic error(s) because AST was successfully constructed\n", numErrors);
-        }
-        return 0;  // Success - AST was built
-    } else {
+    // REX: By default, treat Clang diagnostic errors as fatal.
+    // Use -rex:clang:continue-on-error to allow backend to run with a partial AST.
+    if (global_scope == NULL) {
         printf ("Error: Failed to build AST - global_scope is NULL\n");
         return (numErrors > 0) ? numErrors : 1;  // Failure - no AST
     }
+
+    if (numErrors > 0) {
+        if (continue_on_error) {
+            printf ("Note: Proceeding to backend despite %d Clang diagnostic error(s) because AST was successfully constructed\n", numErrors);
+            return 0;  // Success - AST was built
+        }
+        printf ("Error: Clang reported %d diagnostic error(s); refusing to run backend (use -rex:clang:continue-on-error to override)\n", numErrors);
+        return numErrors;
+    }
+
+    return 0;  // Success - AST was built
 }
 
 void finishSageAST(ClangToSageTranslator & translator) {

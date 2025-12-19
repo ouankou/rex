@@ -6,6 +6,11 @@ include(Cxx_Failing_Tests.cmake)
 
 set(CXX_TESTCODES_TO_RUN ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
+set(REX_FRONTEND_ERROR_TESTS
+  rex_test2025_cfe_error_exit_code.cpp
+  rex_test2025_issue99.cpp
+)
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${REX_FRONTEND_ERROR_TESTS})
 
 set(ROSE_FLAGS
   --edg:no_warnings -w -rose:verbose 0
@@ -23,6 +28,20 @@ endif()
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
 endforeach()
+
+# Issue 99: Friend function template lookup requires error-tolerant mode today.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue99
+  COMMAND
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rex:clang:continue-on-error ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue99
+  PROPERTIES LABELS Cxx_tests
+)
 
 # Issue 91: Declaration chains must not emit "firstNondefiningDeclaration == NULL"
 set_tests_properties(Cxx_tests_rex_test2025_issue91_decl_chain PROPERTIES
@@ -249,6 +268,38 @@ set_tests_properties(
   PROPERTIES
     LABELS Cxx_tests
     FAIL_REGULAR_EXPRESSION "Unsupported declaration = .*SgFunctionParameterList"
+)
+
+# Issue 144: Clang diagnostic errors must be fatal by default.
+add_test(
+  NAME Cxx_tests_rex_test2025_cfe_error_exit_code
+  COMMAND
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_cfe_error_exit_code.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_cfe_error_exit_code
+  PROPERTIES LABELS Cxx_tests WILL_FAIL TRUE
+)
+
+# Issue 144: Allow backend when explicitly opted in.
+add_test(
+  NAME Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && test -f rose_rex_test2025_cfe_error_exit_code.cpp && { ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_cfe_error_exit_code.cpp 2> compile.err || true; } && grep -F \"non-void function 'main' should return a value\" compile.err"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_cfe_error_exit_code.cpp
+    -rex:clang:continue-on-error
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
+  PROPERTIES LABELS Cxx_tests
 )
 
 # Issue 124: System header template specializations must preserve template args.

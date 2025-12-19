@@ -26,6 +26,10 @@ int main( int argc, char * argv[] ) {
 #endif
 
   SgProject * project = frontend(args);
+  int frontend_status = project->get_frontendErrorCode();
+  if (frontend_status != 0) {
+    return frontend_status;
+  }
   int status = backend(project);
 
   return status;

@@ -44,12 +44,17 @@ if(REX_ENABLE_FAILING_TESTS)
 endif()
 
 foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
+  set(extra_frontend_flags "")
+  if (file_to_test STREQUAL "rex_test2025_cfe_error_exit_code.cpp" OR
+      file_to_test STREQUAL "rex_test2025_issue99.cpp")
+    set(extra_frontend_flags -rex:clang:continue-on-error)
+  endif()
 
   add_test(
     NAME testStaticCFG_Cxx_${file_to_test}
     COMMAND testStaticCFG ${ROSE_FLAGS}
       -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
-      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
   set_tests_properties(testStaticCFG_Cxx_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
@@ -57,7 +62,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
     NAME testInterproceduralCFG_Cxx_${file_to_test}
     COMMAND testInterproceduralCFG ${ROSE_FLAGS}
       -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
-      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
 
   set_tests_properties(testInterproceduralCFG_Cxx_${file_to_test}

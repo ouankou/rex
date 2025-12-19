@@ -15,8 +15,13 @@ set(normalizationTranslator_SWITCHES
   -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
 
 foreach(file_to_test ${ROSE__CXX_TESTS})
+  set(extra_frontend_flags "")
+  if (file_to_test STREQUAL "rex_test2025_cfe_error_exit_code.cpp" OR
+      file_to_test STREQUAL "rex_test2025_issue99.cpp")
+    set(extra_frontend_flags -rex:clang:continue-on-error)
+  endif()
   add_test(
     NAME normalizationTranslator_${file_to_test}
-    COMMAND normalizationTranslator ${normalizationTranslator_SWITCHES}
+    COMMAND normalizationTranslator ${normalizationTranslator_SWITCHES} ${extra_frontend_flags}
       -c ${TESTCODE_DIR}/${file_to_test})
 endforeach()

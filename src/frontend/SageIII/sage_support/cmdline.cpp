@@ -4097,6 +4097,7 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
   //----------------------------------------------------------------------------
 
      Rose::Cmdline::StripRoseOptions(argv);
+     CommandlineProcessing::removeArgs(argv, "-rex:clang:continue-on-error");
 
   //----------------------------------------------------------------------------
 
@@ -4545,6 +4546,7 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
 
     std::vector<std::string> inc_dirs_list;
     std::vector<std::string> define_list;
+    std::vector<std::string> clang_frontend_args;
     std::string input_file;
 
     for (size_t i = 0; i < argv.size(); i++) {
@@ -4586,6 +4588,9 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
                  current_arg.rfind("-fopenmp=", 0) == 0 ||
                  current_arg == "-fopenmp-simd") {}
         else if (current_arg.find("--rex-omp-") == 0) {}
+        else if (current_arg == "-rex:clang:continue-on-error") {
+            clang_frontend_args.push_back(current_arg);
+        }
         else {
             input_file = current_arg;
         }
@@ -4596,6 +4601,8 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
         inputCommandLine.push_back("-D" + *it_str);
     for (it_str = inc_dirs_list.begin(); it_str != inc_dirs_list.end(); it_str++)
         inputCommandLine.push_back("-I" + StringUtility::getAbsolutePathFromRelativePath(*it_str));
+    for (it_str = clang_frontend_args.begin(); it_str != clang_frontend_args.end(); it_str++)
+        inputCommandLine.push_back(*it_str);
 
     std::string input_file_path = StringUtility::getPathFromFileName(input_file);
     input_file = StringUtility::stripPathFromFileName(input_file);

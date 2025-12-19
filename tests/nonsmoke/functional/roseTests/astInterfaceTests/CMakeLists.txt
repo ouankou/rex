@@ -204,7 +204,7 @@ add_test(
 # abiStuffTest (doesn't produce C file)
 add_test(
   NAME astInterface_abiStuffTest
-  COMMAND abiStuffTest ${CMAKE_CURRENT_SOURCE_DIR}/inputAbiStuffTest.c
+  COMMAND abiStuffTest -rex:clang:continue-on-error ${CMAKE_CURRENT_SOURCE_DIR}/inputAbiStuffTest.c
 )
 
 # abiStuffTestUPC - DISABLED: UPC language not fully supported with Clang frontend
@@ -282,7 +282,7 @@ add_test(
 # insertStatementBeforeFunction test (needs -I flag)
 add_test(
   NAME astInterface_insertStatementBeforeFunction
-  COMMAND insertStatementBeforeFunction ${TEST_CXXFLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/inputinsertStatementBeforeFunction.C
+  COMMAND insertStatementBeforeFunction ${TEST_CXXFLAGS} -rex:clang:continue-on-error -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/inputinsertStatementBeforeFunction.C
 )
 
 # removeStatementCommentRelocation tests (multiple variants)
@@ -299,7 +299,7 @@ set(comment_relocation_tests
 foreach(test ${comment_relocation_tests})
   add_test(
     NAME astInterface_${test}
-    COMMAND removeStatementCommentRelocation ${TEST_CXXFLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/${test}.C
+    COMMAND removeStatementCommentRelocation ${TEST_CXXFLAGS} -rex:clang:continue-on-error -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/${test}.C
   )
 endforeach()
 

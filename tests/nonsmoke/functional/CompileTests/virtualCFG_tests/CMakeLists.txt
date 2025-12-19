@@ -33,10 +33,15 @@ if(REX_ENABLE_FAILING_TESTS)
 endif()
 
 foreach(file_to_test ${CXX_TESTCODES_FOR_VIRTUAL_CFG})
+  set(extra_frontend_flags "")
+  if (file_to_test STREQUAL "rex_test2025_cfe_error_exit_code.cpp" OR
+      file_to_test STREQUAL "rex_test2025_issue99.cpp")
+    set(extra_frontend_flags -rex:clang:continue-on-error)
+  endif()
   add_test(
     NAME testVirtualCFG_CXX_${file_to_test}
     COMMAND testVirtualCFG ${ROSE_FLAGS}
-    -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+    -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
   set_tests_properties(testVirtualCFG_CXX_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
 endforeach()
