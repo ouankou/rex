@@ -19,6 +19,28 @@ namespace si = SageInterface;
 #define DEBUG_INITIALIZED_NAME 0
 // #define DEBUG_INITIALIZED_NAME DEBUG_NAME_QUALIFICATION_LEVEL
 
+namespace {
+size_t count_scope_qualifiers(const std::string &name) {
+  size_t count = 0;
+  size_t pos = name.find("::");
+  while (pos != std::string::npos) {
+    ++count;
+    pos = name.find("::", pos + 2);
+  }
+  return count;
+}
+
+bool should_replace_type_name(const std::string &existing,
+                              const std::string &candidate) {
+  const size_t existing_depth = count_scope_qualifiers(existing);
+  const size_t candidate_depth = count_scope_qualifiers(candidate);
+  if (candidate_depth != existing_depth) {
+    return candidate_depth > existing_depth;
+  }
+  return candidate.size() > existing.size();
+}
+} // unnamed namespace
+
 // ***********************************************************
 // Main calling function to support name qualification support
 // ***********************************************************
@@ -5384,31 +5406,45 @@ NameQualificationTraversal::outputNameQualificationMap( const std::map<SgNode*,s
 
 
 void
-NameQualificationTraversal::addToNameMap ( SgNode* nodeReference, string typeNameString )
+NameQualificationTraversal::addToNameMap ( SgNode* reference_node, string qualified_name )
+   {
+     addToNameMap(reference_node, static_cast<SgNode*>(NULL), qualified_name);
+   }
+
+void
+NameQualificationTraversal::addToNameMap ( SgNode* reference_node, SgNode* type_node, string qualified_name )
+   {
+     addToNameMap(reference_node, type_node, static_cast<SgNode*>(NULL), qualified_name);
+   }
+
+void
+NameQualificationTraversal::addToNameMap ( SgNode* reference_node, SgNode* type_node, SgNode* context_node, string qualified_name )
    {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
-     MLOG_WARN_C(MLOG_UNPARSER, "In addToNameMap(): nodeReference = %p = %s typeNameString = %s \n",nodeReference,nodeReference->class_name().c_str(),typeNameString.c_str());
+     MLOG_WARN_C(MLOG_UNPARSER, "In addToNameMap(): nodeReference = %p = %s typeNameString = %s \n",reference_node,reference_node->class_name().c_str(),qualified_name.c_str());
 #endif
+
+     ASSERT_not_null(reference_node);
 
   // DQ (6/21/2011): This is refactored code used in traverseType() and traverseTemplatedFunction().
   // bool isTemplateName = (typeNameString.find('<') != string::npos) && (typeNameString.find("::") != string::npos);
-     bool isTemplateName = (typeNameString.find('<') != string::npos); // && (typeNameString.find("::") != string::npos);
+     bool isTemplateName = (qualified_name.find('<') != string::npos); // && (qualified_name.find("::") != string::npos);
 
-     bool isPointerMemberType = (isSgPointerMemberType(nodeReference) != NULL);
+     bool isPointerMemberType = (isSgPointerMemberType(reference_node) != NULL);
 
   // DQ (4/21/2019): Unclear if we should store the intermediately generated strings for each part of a type.
   // I think that test2019_385.C makes it clear that we need to allow the SgPointerMemberType intermediate
   // strings to be reset.
   // isPointerMemberType = false;
 
-     bool isInitializedName    = (isSgInitializedName(nodeReference) != NULL);
+     bool isInitializedName    = (isSgInitializedName(reference_node) != NULL);
 
   // DQ (4/28/2019): Adding support for the base type if a SgTypedefDeclaration.
-     bool isTypedefDeclaration = (isSgTypedefDeclaration(nodeReference) != NULL);
+     bool isTypedefDeclaration = (isSgTypedefDeclaration(reference_node) != NULL);
 
   // DQ (4/28/2019): We only want to save the type as a string if it has a SgPointerMemberType (or a template instantiation).
   // I think the same thing is also true for the type associated with a SgInitializedName as well.
-     SgTypedefDeclaration* typedefDeclaration = isSgTypedefDeclaration(nodeReference);
+     SgTypedefDeclaration* typedefDeclaration = isSgTypedefDeclaration(reference_node);
      if (typedefDeclaration != NULL)
         {
           SgType* baseType = typedefDeclaration->get_base_type();
@@ -5435,7 +5471,7 @@ NameQualificationTraversal::addToNameMap ( SgNode* nodeReference, string typeNam
         }
 
   // DQ (4/28/2019): Handle the SgInitialzedName the same as the typedef.
-     SgInitializedName* initializedName = isSgInitializedName(nodeReference);
+     SgInitializedName* initializedName = isSgInitializedName(reference_node);
      if (initializedName != NULL)
         {
           SgType* type = initializedName->get_type();
@@ -5481,7 +5517,7 @@ NameQualificationTraversal::addToNameMap ( SgNode* nodeReference, string typeNam
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
      MLOG_WARN_C(MLOG_UNPARSER, "In addToNameMap(): isTemplateName = %s isPointerMemberType = %s nodeReference = %p = %s typeNameString = %s \n",
-          isTemplateName ? "true" : "false",isPointerMemberType ? "true" : "false",nodeReference,nodeReference->class_name().c_str(),typeNameString.c_str());
+          isTemplateName ? "true" : "false",isPointerMemberType ? "true" : "false",reference_node,reference_node->class_name().c_str(),qualified_name.c_str());
 #endif
 
   // DQ (4/21/2019): Adding case to support SgInitializedName.
@@ -5491,42 +5527,74 @@ NameQualificationTraversal::addToNameMap ( SgNode* nodeReference, string typeNam
   // if (isTemplateName == true || isPointerMemberType == true || isInitializedName == true)
      if (isTemplateName == true || isPointerMemberType == true || isInitializedName == true || isTypedefDeclaration == true)
         {
-          if (typeNameMap.find(nodeReference) == typeNameMap.end())
+          SgNode* contextKey = (context_node != NULL) ? context_node : reference_node;
+          if (type_node != NULL)
              {
+               std::map<SgNode*,std::string> & scopedTypeNameMap =
+                    qualifiedNameMapForMapsOfTypes[reference_node];
+               std::map<SgNode*,std::string>::iterator scopedIter =
+                    scopedTypeNameMap.find(contextKey);
+               if (scopedIter == scopedTypeNameMap.end())
+                  {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
-               MLOG_WARN_C(MLOG_UNPARSER, "============== Inserting qualifier for name = %s into typeNameMap list at IR node = %p = %s \n",
-                    typeNameString.c_str(),nodeReference,nodeReference->class_name().c_str());
+                    MLOG_WARN_C(MLOG_UNPARSER, "============== Inserting qualifier for name = %s into scoped type name map at IR node = %p = %s \n",
+                         typeNameString.c_str(),contextKey,contextKey->class_name().c_str());
 #endif
-               typeNameMap.insert(std::pair<SgNode*,std::string>(nodeReference,typeNameString));
+                    scopedTypeNameMap.insert(
+                         std::pair<SgNode*,std::string>(contextKey,qualified_name));
+                  }
+                 else
+                  {
+                    if (scopedIter->second != qualified_name &&
+                        should_replace_type_name(scopedIter->second,
+                                                 qualified_name))
+                       {
+                        scopedIter->second = qualified_name;
+                       }
+                  }
+
+               std::map<SgNode*,std::string>::iterator legacyIter =
+                    typeNameMap.find(reference_node);
+               if (legacyIter == typeNameMap.end())
+                  {
+                    typeNameMap.insert(
+                         std::pair<SgNode*,std::string>(reference_node,
+                                                       qualified_name));
+                  }
+                 else if (legacyIter->second != qualified_name &&
+                          should_replace_type_name(legacyIter->second,
+                                                   qualified_name))
+                  {
+                    legacyIter->second = qualified_name;
+                  }
              }
             else
              {
-            // If it already exists, then overwrite the existing information.
-               std::map<SgNode*,std::string>::iterator i = typeNameMap.find(nodeReference);
-               ROSE_ASSERT (i != typeNameMap.end());
-
-               string previousTypeName = i->second.c_str();
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
-               MLOG_WARN_C(MLOG_UNPARSER, "WARNING: replacing previousTypeName = %s with new typeNameString = %s for nodeReference = %p = %s \n",
-                    previousTypeName.c_str(),typeNameString.c_str(),nodeReference,nodeReference->class_name().c_str());
-#endif
-               if (i->second != typeNameString)
+               if (typeNameMap.find(reference_node) == typeNameMap.end())
                   {
-                    i->second = typeNameString;
-#if 0
-                    MLOG_WARN_C(MLOG_UNPARSER, "Error: name in qualifiedNameMapForNames already exists and is different... nodeReference = %p = %s \n",nodeReference,nodeReference->class_name().c_str());
-                    ROSE_ABORT();
-#else
-                    MLOG_WARN_C(MLOG_UNPARSER, "In addToNameMap(): Allow this for replacement now! \n");
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
+                    MLOG_WARN_C(MLOG_UNPARSER, "============== Inserting qualifier for name = %s into typeNameMap list at IR node = %p = %s \n",
+                         qualified_name.c_str(),reference_node,reference_node->class_name().c_str());
 #endif
-                 }
+                    typeNameMap.insert(std::pair<SgNode*,std::string>(reference_node,qualified_name));
+                  }
+                 else
+                  {
+                    std::map<SgNode*,std::string>::iterator i = typeNameMap.find(reference_node);
+                    ROSE_ASSERT (i != typeNameMap.end());
+                    if (i->second != qualified_name &&
+                        should_replace_type_name(i->second, qualified_name))
+                       {
+                        i->second = qualified_name;
+                       }
+                  }
              }
         }
        else
         {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
        // DQ (8/19/2013): comment added for debugging.
-          MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::addToNameMap(): isTemplateName == false, typeNameString = %s NOT added to typeNameMap for key = %p = %s \n",typeNameString.c_str(),nodeReference,nodeReference->class_name().c_str());
+          MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::addToNameMap(): isTemplateName == false, typeNameString = %s NOT added to typeNameMap for key = %p = %s \n",qualified_name.c_str(),reference_node,reference_node->class_name().c_str());
 #endif
         }
 
@@ -5954,7 +6022,7 @@ NameQualificationTraversal::traverseType ( SgType* type, SgNode* nodeReferenceTo
 #endif
 
        // DQ (6/21/2011): Refactored this code for use in traverseTemplatedFunction()
-          addToNameMap(nodeReferenceToType,typeNameString);
+          addToNameMap(nodeReferenceToType,type,positionStatement,typeNameString);
 
        // DQ (2/18/2013): Fixing generation of too many SgUnparse_Info object.
           delete unparseInfoPointer;
