@@ -12744,25 +12744,22 @@ UnparseLanguageIndependentConstructs::requiresParentheses(SgExpression* expr, Sg
 
         if (isSgExprListExp(parentExpr) != NULL) {
           SgFunctionCallExp *argumentCall = isSgFunctionCallExp(expr);
-          if (argumentCall != NULL) {
-            SgFunctionCallExp *parentCall =
-                isSgFunctionCallExp(parentExpr->get_parent());
-            if (parentCall != NULL) {
-              SgExpression *parentFunction = parentCall->get_function();
-              SgFunctionRefExp *functionRefExp =
-                  isSgFunctionRefExp(parentFunction);
-              SgFunctionDeclaration *functionDeclaration = NULL;
-              if (functionRefExp != NULL) {
-                SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
-                if (functionSymbol != NULL) {
-                  functionDeclaration = functionSymbol->get_declaration();
-                }
-              }
-              if (functionDeclaration == NULL ||
-                  functionDeclaration->get_specialFunctionModifier()
-                          .isOperator() == false) {
-                return false;
-              }
+          SgFunctionCallExp *parentCall =
+              isSgFunctionCallExp(parentExpr->get_parent());
+
+          if (argumentCall != NULL && parentCall != NULL) {
+            SgFunctionRefExp *functionRefExp =
+                isSgFunctionRefExp(parentCall->get_function());
+            SgFunctionDeclaration *functionDeclaration = NULL;
+            if (functionRefExp != NULL &&
+                functionRefExp->get_symbol() != NULL) {
+              functionDeclaration =
+                  functionRefExp->get_symbol()->get_declaration();
+            }
+            if (functionDeclaration == NULL ||
+                functionDeclaration->get_specialFunctionModifier()
+                        .isOperator() == false) {
+              return false;
             }
           }
         }
