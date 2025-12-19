@@ -6008,16 +6008,20 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
   bool res = true;
 
-  SgNode *tmp_base = Traverse(member_expr->getBase());
-  SgExpression *base = isSgExpression(tmp_base);
-  if (base == NULL) {
-    // std::cerr << "DEBUG: VisitMemberExpr base is NULL! Base stmt class: " <<
-    // member_expr->getBase()->getStmtClassName() << std::endl;
-  } else {
-    // std::cerr << "DEBUG: VisitMemberExpr base type: " << base->class_name()
-    // << std::endl;
+  bool implicit_access = member_expr->isImplicitAccess();
+  SgExpression *base = NULL;
+  if (!implicit_access) {
+    SgNode *tmp_base = Traverse(member_expr->getBase());
+    base = isSgExpression(tmp_base);
+    if (base == NULL) {
+      // std::cerr << "DEBUG: VisitMemberExpr base is NULL! Base stmt class: "
+      // << member_expr->getBase()->getStmtClassName() << std::endl;
+    } else {
+      // std::cerr << "DEBUG: VisitMemberExpr base type: " << base->class_name()
+      // << std::endl;
+    }
+    ROSE_ASSERT(base != NULL);
   }
-  ROSE_ASSERT(base != NULL);
 
   SgSymbol *sym = GetSymbolFromSymbolTable(member_expr->getMemberDecl());
 
@@ -6231,10 +6235,13 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
   // TODO (C++) member_expr->getQualifier() : for 'a->Base::foo'
 
-  if (member_expr->isArrow())
+  if (implicit_access) {
+    *node = sg_member_expr;
+  } else if (member_expr->isArrow()) {
     *node = SageBuilder::buildArrowExp(base, sg_member_expr);
-  else
+  } else {
     *node = SageBuilder::buildDotExp(base, sg_member_expr);
+  }
 
   return VisitExpr(member_expr, node) && res;
 }

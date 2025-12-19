@@ -12742,6 +12742,41 @@ UnparseLanguageIndependentConstructs::requiresParentheses(SgExpression* expr, Sg
           return false;
         }
 
+        if (isSgExprListExp(parentExpr) != NULL) {
+          SgFunctionCallExp *argumentCall = isSgFunctionCallExp(expr);
+          if (argumentCall != NULL) {
+            SgFunctionCallExp *parentCall =
+                isSgFunctionCallExp(parentExpr->get_parent());
+            if (parentCall != NULL) {
+              SgExpression *parentFunction = parentCall->get_function();
+              SgFunctionRefExp *functionRefExp =
+                  isSgFunctionRefExp(parentFunction);
+              SgMemberFunctionRefExp *memberFunctionRefExp =
+                  isSgMemberFunctionRefExp(parentFunction);
+              SgFunctionDeclaration *functionDeclaration = NULL;
+              if (functionRefExp != NULL) {
+                SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
+                if (functionSymbol != NULL) {
+                  functionDeclaration = functionSymbol->get_declaration();
+                }
+              } else {
+                if (memberFunctionRefExp != NULL) {
+                  SgFunctionSymbol *functionSymbol =
+                      memberFunctionRefExp->get_symbol();
+                  if (functionSymbol != NULL) {
+                    functionDeclaration = functionSymbol->get_declaration();
+                  }
+                }
+              }
+              if (functionDeclaration == NULL ||
+                  functionDeclaration->get_specialFunctionModifier()
+                          .isOperator() == false) {
+                return false;
+              }
+            }
+          }
+        }
+
 #if 1
     // Liao, 8/27/2008, bug 229
     // A nasty workaround since set_need_paren() has no definite effect
