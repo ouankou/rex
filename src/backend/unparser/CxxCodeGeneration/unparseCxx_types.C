@@ -45,6 +45,34 @@ static SgStatement* find_enclosing_statement(SgNode* node) {
   }
   return NULL;
 }
+
+static std::map<SgNode*, std::string>::const_iterator find_scoped_type_name(
+    const std::map<SgNode*, std::string> &scoped_map, SgNode* position_node,
+    SgNode* scope_node, SgNode* reference_node) {
+  if (position_node != NULL) {
+    std::map<SgNode*, std::string>::const_iterator it =
+        scoped_map.find(position_node);
+    if (it != scoped_map.end()) {
+      return it;
+    }
+  }
+  if (scope_node != NULL) {
+    std::map<SgNode*, std::string>::const_iterator it =
+        scoped_map.find(scope_node);
+    if (it != scoped_map.end()) {
+      return it;
+    }
+  }
+  if (reference_node != NULL) {
+    std::map<SgNode*, std::string>::const_iterator it =
+        scoped_map.find(reference_node);
+    if (it != scoped_map.end()) {
+      return it;
+    }
+  }
+
+  return scoped_map.end();
+}
 } // unnamed namespace
 
 // If this is turned on then we get the message to the
@@ -719,31 +747,19 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
           bool name_found = false;
           bool found_in_qualified_map = false;
 
-          std::map<SgNode*,std::map<SgNode*,std::string> >::iterator typeMapIterator =
-               SgNode::get_globalQualifiedNameMapForMapsOfTypes().find(nodeReferenceToType);
-          if (typeMapIterator != SgNode::get_globalQualifiedNameMapForMapsOfTypes().end())
+          const std::map<SgNode*,std::map<SgNode*,std::string> > & qualifiedNameMaps =
+               SgNode::get_globalQualifiedNameMapForMapsOfTypes();
+          std::map<SgNode*,std::map<SgNode*,std::string> >::const_iterator typeMapIterator =
+               qualifiedNameMaps.find(nodeReferenceToType);
+          if (typeMapIterator != qualifiedNameMaps.end())
              {
-               std::map<SgNode*,std::string> & scopedTypeNameMap = typeMapIterator->second;
-               std::map<SgNode*,std::string>::iterator scopedTypeNameIterator =
-                    scopedTypeNameMap.end();
-
+               const std::map<SgNode*,std::string> & scopedTypeNameMap = typeMapIterator->second;
                SgStatement* positionStatement = find_enclosing_statement(nodeReferenceToType);
-               if (positionStatement != NULL)
-                  {
-                    scopedTypeNameIterator =
-                         scopedTypeNameMap.find(positionStatement);
-                  }
-               if (scopedTypeNameIterator == scopedTypeNameMap.end() &&
-                   info.get_current_scope() != NULL)
-                  {
-                    scopedTypeNameIterator =
-                         scopedTypeNameMap.find(info.get_current_scope());
-                  }
-               if (scopedTypeNameIterator == scopedTypeNameMap.end())
-                  {
-                    scopedTypeNameIterator =
-                         scopedTypeNameMap.find(nodeReferenceToType);
-                  }
+               std::map<SgNode*,std::string>::const_iterator scopedTypeNameIterator =
+                    find_scoped_type_name(scopedTypeNameMap,
+                                          positionStatement,
+                                          info.get_current_scope(),
+                                          nodeReferenceToType);
 
                if (scopedTypeNameIterator != scopedTypeNameMap.end())
                   {
@@ -755,8 +771,11 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
 
           if (name_found == false)
              {
-               std::map<SgNode*,std::string>::iterator i = SgNode::get_globalTypeNameMap().find(nodeReferenceToType);
-               if (i != SgNode::get_globalTypeNameMap().end())
+               const std::map<SgNode*,std::string> & globalTypeNameMap =
+                    SgNode::get_globalTypeNameMap();
+               std::map<SgNode*,std::string>::const_iterator i =
+                    globalTypeNameMap.find(nodeReferenceToType);
+               if (i != globalTypeNameMap.end())
                   {
                     found_name_string = i->second;
                     name_found = true;
