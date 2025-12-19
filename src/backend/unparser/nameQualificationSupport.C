@@ -39,6 +39,39 @@ bool should_replace_type_name(const std::string &existing,
   }
   return candidate.size() > existing.size();
 }
+
+SgName
+get_template_name_for_instantiation(SgDeclarationStatement *declaration) {
+  if (SgTemplateInstantiationDecl *instantiation =
+          isSgTemplateInstantiationDecl(declaration)) {
+    if (SgTemplateClassDeclaration *templateDecl =
+            instantiation->get_templateDeclaration()) {
+      return templateDecl->get_name();
+    }
+  }
+  if (SgTemplateInstantiationFunctionDecl *instantiation =
+          isSgTemplateInstantiationFunctionDecl(declaration)) {
+    if (SgTemplateFunctionDeclaration *templateDecl =
+            instantiation->get_templateDeclaration()) {
+      return templateDecl->get_name();
+    }
+  }
+  if (SgTemplateInstantiationMemberFunctionDecl *instantiation =
+          isSgTemplateInstantiationMemberFunctionDecl(declaration)) {
+    if (SgTemplateMemberFunctionDeclaration *templateDecl =
+            instantiation->get_templateDeclaration()) {
+      return templateDecl->get_name();
+    }
+  }
+  if (SgTemplateInstantiationTypedefDeclaration *instantiation =
+          isSgTemplateInstantiationTypedefDeclaration(declaration)) {
+    if (SgTemplateTypedefDeclaration *templateDecl =
+            instantiation->get_templateDeclaration()) {
+      return templateDecl->get_name();
+    }
+  }
+  return SgName();
+}
 } // unnamed namespace
 
 // ***********************************************************
@@ -1317,6 +1350,11 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                    (templateDeclaration       != NULL) ? templateDeclaration->get_name()  :
                    (enumDeclaration           != NULL) ? enumDeclaration->get_name()      : "unknown_name";
 
+     SgName templateName = get_template_name_for_instantiation(declaration);
+     if (templateName.is_null() == false) {
+       name = templateName;
+     }
+
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
      MLOG_WARN_C(MLOG_UNPARSER, "In nameQualificationDepth(SgDeclarationStatement*,...): declaration = %p = %s name = %s \n",declaration,declaration->class_name().c_str(),name.str());
 #endif
@@ -1360,6 +1398,13 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
   // DQ (8/16/2013): Build the template parameters and template arguments as appropriate (will be NULL pointers for some types of declarations).
      SgTemplateParameterPtrList* templateParameterList = SageBuilder::getTemplateParameterList(declaration);
      SgTemplateArgumentPtrList*  templateArgumentList  = SageBuilder::getTemplateArgumentList(declaration);
+     SgTemplateArgumentPtrList *lookupTemplateArgumentList =
+         templateArgumentList;
+     if (templateName.is_null() == false) {
+       // Use template names for scope lookup without binding to specific
+       // arguments.
+       lookupTemplateArgumentList = NULL;
+     }
 
 #if 0
   // DQ (5/8/2011): I think we don't need to handle this special case.
@@ -1790,7 +1835,9 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
        // DQ 8/21/2012): this is looking in the parent scopes of the currentScope and thus not including the currentScope.
        // This is a bug for test2011_31.C where there is a variable who's name hides the name in the parent scopes (and it not detected).
        // SgSymbol* symbol = SageInterface::lookupSymbolInParentScopes(name,currentScope);
-          SgSymbol* symbol = SageInterface::lookupSymbolInParentScopes(name,currentScope,templateParameterList,templateArgumentList);
+          SgSymbol *symbol = SageInterface::lookupSymbolInParentScopes(
+              name, currentScope, templateParameterList,
+              lookupTemplateArgumentList);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_FUNCTION_RESOLUTION
           MLOG_WARN_C(MLOG_UNPARSER, "Initial lookup: symbol = %p = %s \n",symbol,(symbol != NULL) ? symbol->class_name().c_str() : "NULL");
