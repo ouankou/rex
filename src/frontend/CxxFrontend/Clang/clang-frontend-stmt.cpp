@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "clang/AST/LambdaCapture.h"
-#include "clang/Basic/OperatorKinds.h"
 
 #include "clang/Lex/Lexer.h"
 
@@ -55,48 +54,6 @@ extendSourceRangeWithTrailingSemicolon(clang::SourceRange range,
 
   range.setEnd(tok.getLocation());
   return range;
-}
-
-std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
-  const char *spelling = clang::getOperatorSpelling(op);
-  ROSE_ASSERT(spelling != nullptr);
-
-  std::string result = "operator";
-  if (std::isalpha(static_cast<unsigned char>(spelling[0])) ||
-      spelling[0] == '_') {
-    result += ' ';
-  }
-  result += spelling;
-  return result;
-}
-
-std::string getDeclarationNameString(const clang::DeclarationName &name,
-                                     const clang::LangOptions &lang_opts) {
-  if (name.isEmpty()) {
-    return "";
-  }
-
-  if (const clang::IdentifierInfo *identifier = name.getAsIdentifierInfo()) {
-    return identifier->getName().str();
-  }
-
-  if (clang::OverloadedOperatorKind op = name.getCXXOverloadedOperator();
-      op != clang::OO_None) {
-    return buildOverloadedOperatorName(op);
-  }
-
-  if (const clang::IdentifierInfo *literal = name.getCXXLiteralIdentifier()) {
-    std::string result = "operator\"\"";
-    result += literal->getName().str();
-    return result;
-  }
-
-  clang::PrintingPolicy policy(lang_opts);
-  std::string result;
-  llvm::raw_string_ostream stream(result);
-  name.print(stream, policy);
-  stream.flush();
-  return result;
 }
 
 SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
@@ -4166,8 +4123,7 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
 
   // Get the member name
   std::string member_name =
-      getDeclarationNameString(cxx_dependent_scope_member_expr->getMember(),
-                               p_compiler_instance->getLangOpts());
+      cxx_dependent_scope_member_expr->getMember().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
   if (current_scope == NULL) {
@@ -5336,8 +5292,7 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
   // in template-dependent contexts).
 
   std::string decl_name =
-      getDeclarationNameString(dependent_scope_decl_ref_expr->getDeclName(),
-                               p_compiler_instance->getLangOpts());
+      dependent_scope_decl_ref_expr->getDeclName().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
   if (current_scope == NULL) {
@@ -6123,14 +6078,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
     // If not in map, traverse it (but this might fail for template members)
     if (tmp_member == NULL) {
-      if (p_decl_translation_in_progress.find(member_decl) !=
-          p_decl_translation_in_progress.end()) {
-        // Avoid infinite recursion when a member decl references itself
-        // while still being translated.
-        tmp_member = NULL;
-      } else {
-        tmp_member = Traverse(member_decl);
-      }
+      tmp_member = Traverse(member_decl);
     }
 
 #if DEBUG_VISIT_STMT
@@ -6258,9 +6206,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
     // If still NULL, create a placeholder
     if (sg_member_expr == NULL) {
-      std::string member_name =
-          getDeclarationNameString(member_expr->getMemberNameInfo().getName(),
-                                   p_compiler_instance->getLangOpts());
+      std::string member_name = member_expr->getMemberNameInfo().getAsString();
       clang::ValueDecl *member_decl = member_expr->getMemberDecl();
       if (member_decl) {
         std::cerr << "Warning: Cannot resolve "
@@ -6456,8 +6402,7 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   // resolved during parsing (e.g., template-dependent function names like
   // `foo(t)` that will be resolved during instantiation/ADL).
 
-  std::string function_name = getDeclarationNameString(
-      unresolved_lookup_expr->getName(), p_compiler_instance->getLangOpts());
+  std::string function_name = unresolved_lookup_expr->getName().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
   if (current_scope == NULL) {
@@ -6502,8 +6447,7 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
 
   // Get the member name
   std::string member_name =
-      getDeclarationNameString(unresolved_member_expr->getMemberName(),
-                               p_compiler_instance->getLangOpts());
+      unresolved_member_expr->getMemberName().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
   if (current_scope == NULL) {

@@ -7,8 +7,6 @@
 #include <functional>
 #include <set>
 
-#include "clang/Basic/OperatorKinds.h"
-
 namespace {
 bool containsUnknownType(SgType *type) {
   if (type == NULL)
@@ -110,48 +108,6 @@ buildTemplateInstantiationName(const std::string &base_name,
   return result;
 }
 
-std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
-  const char *spelling = clang::getOperatorSpelling(op);
-  ROSE_ASSERT(spelling != nullptr);
-
-  std::string result = "operator";
-  if (std::isalpha(static_cast<unsigned char>(spelling[0])) ||
-      spelling[0] == '_') {
-    result += ' ';
-  }
-  result += spelling;
-  return result;
-}
-
-std::string getDeclarationNameString(const clang::DeclarationName &name,
-                                     const clang::LangOptions &lang_opts) {
-  if (name.isEmpty()) {
-    return "";
-  }
-
-  if (const clang::IdentifierInfo *identifier = name.getAsIdentifierInfo()) {
-    return identifier->getName().str();
-  }
-
-  if (clang::OverloadedOperatorKind op = name.getCXXOverloadedOperator();
-      op != clang::OO_None) {
-    return buildOverloadedOperatorName(op);
-  }
-
-  if (const clang::IdentifierInfo *literal = name.getCXXLiteralIdentifier()) {
-    std::string result = "operator\"\"";
-    result += literal->getName().str();
-    return result;
-  }
-
-  clang::PrintingPolicy policy(lang_opts);
-  std::string result;
-  llvm::raw_string_ostream stream(result);
-  name.print(stream, policy);
-  stream.flush();
-  return result;
-}
-
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope);
 } // namespace
 
@@ -166,9 +122,7 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
       p_symbol_lookup_in_progress.end()) {
 #if DEBUG_SYMBOL_TABLE_LOOKUP
     std::cerr << "GetSymbolFromSymbolTable: Recursion detected for decl "
-              << getDeclarationNameString(decl->getDeclName(),
-                                          p_compiler_instance->getLangOpts())
-              << ", returning NULL" << std::endl;
+              << decl->getNameAsString() << ", returning NULL" << std::endl;
 #endif
     return NULL;
   }
@@ -199,8 +153,7 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
   /* Pei-Hung (08/29/2022) fieldDecl can be anonymous.
    * Apply anonymous name to allow symbol lookup.
    */
-  std::string declName = getDeclarationNameString(
-      decl->getDeclName(), p_compiler_instance->getLangOpts());
+  std::string declName = decl->getNameAsString();
 
   if (llvm::isa<clang::FieldDecl>(decl) &&
       ((clang::FieldDecl *)decl)->isAnonymousStructOrUnion()) {
@@ -238,18 +191,11 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
     break;
   }
   case clang::Decl::Var:
-  case clang::Decl::ParmVar:
-  case clang::Decl::Binding: {
+  case clang::Decl::ParmVar: {
     it = SageBuilder::ScopeStack.rbegin();
     while (it != SageBuilder::ScopeStack.rend() && sym == NULL) {
       sym = (*it)->lookup_variable_symbol(name);
       it++;
-    }
-    if (sym == NULL) {
-      if (SgScopeStatement *decl_scope =
-              resolveScopeFromDeclContext(decl->getDeclContext(), NULL)) {
-        sym = decl_scope->lookup_variable_symbol(name);
-      }
     }
     break;
   }
@@ -4707,90 +4653,8 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
 #endif
   bool res = true;
 
-  if (binding_decl == NULL) {
-    *node = NULL;
-    return false;
-  }
+  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
-  std::string binding_name = binding_decl->getNameAsString();
-  if (binding_name.empty()) {
-    binding_name = "__anonymous_binding_" +
-                   generate_source_position_string(binding_decl->getBeginLoc());
-  }
-
-  SgName name(binding_name);
-  SgType *binding_type = buildTypeFromQualifiedType(binding_decl->getType());
-  if (binding_type == NULL) {
-    binding_type = SageBuilder::buildUnknownType();
-  }
-
-  SgScopeStatement *binding_scope = resolveScopeFromDeclContext(
-      binding_decl->getDeclContext(), SageBuilder::topScopeStack());
-  if (binding_scope == NULL) {
-    binding_scope = getGlobalScope();
-  }
-
-  SgVariableDeclaration *sg_var_decl =
-      SageBuilder::buildVariableDeclaration_nfi(name, binding_type, NULL,
-                                                binding_scope);
-  sg_var_decl->set_firstNondefiningDeclaration(sg_var_decl);
-  sg_var_decl->set_parent(binding_scope);
-
-  SgInitializedName *init_name = NULL;
-  if (!sg_var_decl->get_variables().empty()) {
-    init_name = sg_var_decl->get_variables().front();
-    init_name->set_scope(binding_scope);
-  }
-
-  if (clang::Expr *binding_expr = binding_decl->getBinding()) {
-    SgNode *tmp_expr = Traverse(binding_expr);
-    SgExpression *expr = isSgExpression(tmp_expr);
-    if (expr != NULL) {
-      SgInitializer *init = isSgInitializer(expr);
-      if (init == NULL) {
-        init = SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
-      }
-      if (init != NULL) {
-        sg_var_decl->reset_initializer(init);
-        if (init_name != NULL) {
-          init->set_parent(init_name);
-        }
-        applySourceRange(init, binding_expr->getSourceRange());
-      }
-    } else if (tmp_expr != NULL) {
-      std::cerr << "Runtime error: not a SgExpression for BindingDecl '"
-                << binding_name << "'" << std::endl;
-      res = false;
-    }
-  }
-
-  applySourceRange(sg_var_decl, binding_decl->getSourceRange());
-  if (init_name != NULL) {
-    applySourceRange(init_name, binding_decl->getSourceRange());
-  }
-  if (SgVariableDefinition *var_def = sg_var_decl->get_definition()) {
-    applySourceRange(var_def, binding_decl->getSourceRange());
-  }
-
-  setCompilerGeneratedFileInfo(sg_var_decl);
-  suppress_unparse_output(sg_var_decl);
-  if (init_name != NULL) {
-    setCompilerGeneratedFileInfo(init_name);
-    suppress_unparse_output(init_name);
-  }
-  if (SgVariableDefinition *var_def = sg_var_decl->get_definition()) {
-    setCompilerGeneratedFileInfo(var_def);
-    suppress_unparse_output(var_def);
-  }
-  if (init_name != NULL && init_name->get_initializer() != NULL) {
-    setCompilerGeneratedFileInfo(init_name->get_initializer());
-    suppress_unparse_output(init_name->get_initializer());
-  }
-
-  ensure_decl_in_scope_child_list(sg_var_decl, binding_scope,
-                                  "VisitBindingDecl");
-
-  *node = sg_var_decl;
   return VisitValueDecl(binding_decl, node) && res;
 }
 
@@ -5067,9 +4931,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   //        function... It may be faster to recode from scratch...
   //   If I am not wrong this have been fixed....
 
-  std::string func_name = getDeclarationNameString(
-      function_decl->getDeclName(), p_compiler_instance->getLangOpts());
-  SgName name(func_name);
+  SgName name(function_decl->getNameAsString());
+  std::string func_name = function_decl->getNameAsString();
 
   bool is_builtin_decl =
       (function_decl->getBuiltinID() != clang::Builtin::NotBuiltin);
@@ -5500,14 +5363,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     bool body_res = true;
     if (defining_decl == NULL) {
       return false;
-    }
-
-    auto map_it = p_decl_translation_map.find(function_decl);
-    if (map_it == p_decl_translation_map.end()) {
-      p_decl_translation_map.insert(
-          std::make_pair(function_decl, defining_decl));
-    } else if (map_it->second == NULL) {
-      map_it->second = defining_decl;
     }
 
     // Only process the function body if it exists. Template functions and
