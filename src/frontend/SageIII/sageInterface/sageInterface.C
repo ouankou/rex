@@ -2977,6 +2977,39 @@ SageInterface::generateUniqueNameForUseAsIdentifier_support ( SgDeclarationState
                break;
              }
 
+          case V_SgFunctionParameterList:
+             {
+               SgFunctionParameterList* parameterList =
+                   isSgFunctionParameterList(declaration);
+               ROSE_ASSERT(parameterList != NULL);
+
+               SgFunctionDeclaration* functionDeclaration = NULL;
+               if (SgFunctionDeclaration* parentDecl =
+                       isSgFunctionDeclaration(parameterList->get_parent()))
+                  {
+                    functionDeclaration = parentDecl;
+                  }
+               else if (SgFunctionDefinition* functionDef =
+                            isSgFunctionDefinition(parameterList->get_parent()))
+                  {
+                    functionDeclaration = functionDef->get_declaration();
+                  }
+
+               if (functionDeclaration != NULL)
+                  {
+                    string function_name =
+                        generateUniqueNameForUseAsIdentifier_support(
+                            functionDeclaration);
+                    s = function_name + "__params";
+                  }
+               else
+                  {
+                    s = "params";
+                  }
+
+               break;
+             }
+
          case V_SgVariableDefinition:
             {
               SgVariableDefinition* varDef = isSgVariableDefinition(declaration);
