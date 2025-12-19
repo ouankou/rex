@@ -33,13 +33,18 @@ if(REX_ENABLE_FAILING_TESTS)
 endif()
 
 foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
+  set(extra_frontend_flags "")
+  if (file_to_test IN_LIST REX_FRONTEND_ERROR_TESTS)
+    set(extra_frontend_flags -rex:clang:continue-on-error)
+  endif()
+
   add_test(
     NAME ut_${file_to_test}
-    COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+    COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES} ${extra_frontend_flags}
             -c ${TESTCODE_DIR}/${file_to_test})
   add_test(
     NAME ua_${file_to_test}
-    COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+    COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES} ${extra_frontend_flags}
             -c ${TESTCODE_DIR}/${file_to_test})
 
   set_tests_properties(ua_${file_to_test}

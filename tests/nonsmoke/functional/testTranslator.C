@@ -17,6 +17,10 @@ int main( int argc, char * argv[] )
 #endif
 
      SgProject* project = frontend(argc,argv);
+     int frontend_status = project->get_frontendErrorCode();
+     if (frontend_status != 0) {
+       return frontend_status;
+     }
 
   // AST consistency tests (optional for users, but this enforces more of our tests)
      AstTests::runAllTests(project);
