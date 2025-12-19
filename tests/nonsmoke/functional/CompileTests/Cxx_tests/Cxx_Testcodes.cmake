@@ -2112,6 +2112,11 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue99_uaf.cpp
 )
 
+set(REX_FRONTEND_ERROR_TESTS
+  rex_test2025_cfe_error_exit_code.cpp
+  rex_test2025_issue99.cpp
+)
+
 # Export variables for downstream tests
 set(ROSE__CXX_TESTS ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 set(ROSE__CXX_TESTS__BOOST "")

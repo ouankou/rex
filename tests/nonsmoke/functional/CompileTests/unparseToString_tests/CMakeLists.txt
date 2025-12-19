@@ -34,8 +34,7 @@ endif()
 
 foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
   set(extra_frontend_flags "")
-  if (file_to_test STREQUAL "rex_test2025_cfe_error_exit_code.cpp" OR
-      file_to_test STREQUAL "rex_test2025_issue99.cpp")
+  if (file_to_test IN_LIST REX_FRONTEND_ERROR_TESTS)
     set(extra_frontend_flags -rex:clang:continue-on-error)
   endif()
 
