@@ -12751,21 +12751,11 @@ UnparseLanguageIndependentConstructs::requiresParentheses(SgExpression* expr, Sg
               SgExpression *parentFunction = parentCall->get_function();
               SgFunctionRefExp *functionRefExp =
                   isSgFunctionRefExp(parentFunction);
-              SgMemberFunctionRefExp *memberFunctionRefExp =
-                  isSgMemberFunctionRefExp(parentFunction);
               SgFunctionDeclaration *functionDeclaration = NULL;
               if (functionRefExp != NULL) {
                 SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
                 if (functionSymbol != NULL) {
                   functionDeclaration = functionSymbol->get_declaration();
-                }
-              } else {
-                if (memberFunctionRefExp != NULL) {
-                  SgFunctionSymbol *functionSymbol =
-                      memberFunctionRefExp->get_symbol();
-                  if (functionSymbol != NULL) {
-                    functionDeclaration = functionSymbol->get_declaration();
-                  }
                 }
               }
               if (functionDeclaration == NULL ||
