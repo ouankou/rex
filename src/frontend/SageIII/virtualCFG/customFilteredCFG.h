@@ -24,10 +24,9 @@ public:
         }
         ~CustomFilteredCFG() {
         }
-        virtual void buildFilteredCFG();
-        
-        
-protected:        
+        void buildFilteredCFG() override;
+
+      protected:
         //! Virtual function Overloaded to print the Custom Filtered CFG Edges
   void printEdge(std::ostream &o, SgDirectedGraphEdge *edge,
                  bool isInEdge) override {

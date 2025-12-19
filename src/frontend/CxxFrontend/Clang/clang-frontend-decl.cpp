@@ -337,25 +337,6 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
       return NULL;
     }
 
-    clang::QualType fieldQualType = field_decl->getType();
-
-    const clang::Type *fieldType = fieldQualType.getTypePtr();
-
-    while ((llvm::isa<clang::ElaboratedType>(fieldType)) ||
-           (llvm::isa<clang::ArrayType>(fieldType))) {
-      if (llvm::isa<clang::ElaboratedType>(fieldType)) {
-        fieldQualType = ((clang::ElaboratedType *)fieldType)->getNamedType();
-      } else if (llvm::isa<clang::ArrayType>(fieldType)) {
-        fieldQualType = ((clang::ArrayType *)fieldType)->getElementType();
-      }
-      fieldType = fieldQualType.getTypePtr();
-    }
-    bool isAnonymousStructOrUnion = false;
-    if (llvm::isa<clang::RecordType>(fieldType)) {
-      isAnonymousStructOrUnion =
-          ((clang::FieldDecl *)decl)->isAnonymousStructOrUnion();
-    }
-
     // CLANG FRONTEND FIX: Check if parent has been translated before calling
     // Traverse to avoid infinite recursion during template instantiation
     clang::Decl *parent_decl = ((clang::FieldDecl *)decl)->getParent();
@@ -442,10 +423,8 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
       visited.insert(scope);
 
       // Look up symbol in current scope
-      if (isAnonymousStructOrUnion)
-        sym = scope->lookup_class_symbol(name);
-      else
-        sym = scope->lookup_variable_symbol(name);
+      // Anonymous struct/union fields are still variables in ROSE.
+      sym = scope->lookup_variable_symbol(name);
 
       // Move to parent scope
       if (sym == NULL) {
@@ -970,7 +949,22 @@ void ClangToSageTranslator::populateClassDefinition(
     }
 
     if (inner_decl->isImplicit()) {
-      continue;
+      bool allow_implicit = false;
+      if (clang::FieldDecl *field_decl =
+              llvm::dyn_cast<clang::FieldDecl>(inner_decl)) {
+        if (field_decl->isAnonymousStructOrUnion()) {
+          const clang::CXXRecordDecl *parent_record =
+              llvm::dyn_cast<clang::CXXRecordDecl>(field_decl->getParent());
+          bool is_lambda_field =
+              parent_record != NULL && parent_record->isLambda();
+          // Anonymous unions are spelled in the source but modeled as implicit
+          // fields; keep them so the union definition is emitted in-class.
+          allow_implicit = !is_lambda_field;
+        }
+      }
+      if (!allow_implicit) {
+        continue;
+      }
     }
 
     SgNode *sg_child = Traverse(inner_decl);
@@ -4752,6 +4746,11 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
       name = synthesized_name;
     }
   }
+  if (isAnonymousStructOrUnion && !is_lambda_field &&
+      name.getString().empty()) {
+    name = "__anonymous_" +
+           generate_source_position_string(field_decl->getBeginLoc());
+  }
 
   SgType *sg_fieldType = buildTypeFromQualifiedType(fieldQualType);
   SgType *type = buildTypeFromQualifiedType(field_decl->getType());
@@ -4788,32 +4787,6 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
           : NULL;
   if (init != NULL)
     applySourceRange(init, init_expr->getSourceRange());
-
-  if (isAnonymousStructOrUnion && !is_lambda_field) {
-    if (isSgClassType(type) && iscompleteDefined) {
-      SgClassDeclaration *classDecl =
-          isSgClassDeclaration(isSgClassType(type)->get_declaration());
-      if (classDecl != NULL) {
-        SgClassDeclaration *classDefDecl =
-            isSgClassDeclaration(classDecl->get_definingDeclaration());
-        if (classDefDecl != NULL) {
-          *node = classDefDecl;
-          return VisitDeclaratorDecl(field_decl, node) && res;
-        }
-      }
-    } else if (isSgEnumType(type) && iscompleteDefined) {
-      SgEnumDeclaration *enumDecl =
-          isSgEnumDeclaration(isSgEnumType(type)->get_declaration());
-      if (enumDecl != NULL) {
-        SgEnumDeclaration *enumDefDecl =
-            isSgEnumDeclaration(enumDecl->get_definingDeclaration());
-        if (enumDefDecl != NULL) {
-          *node = enumDefDecl;
-          return VisitDeclaratorDecl(field_decl, node) && res;
-        }
-      }
-    }
-  }
 
   // Cannot use 'SageBuilder::buildVariableDeclaration' because of anonymous
   // field *node = SageBuilder::buildVariableDeclaration(name, type, init,
@@ -5381,6 +5354,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
+  const bool is_explicitly_defaulted = function_decl->isExplicitlyDefaulted();
+  const bool is_explicitly_deleted = function_decl->isDeletedAsWritten();
+  const bool is_explicitly_defaulted_or_deleted =
+      is_explicitly_defaulted || is_explicitly_deleted;
+
   auto translate_function_body = [&](SgFunctionDeclaration *defining_decl) {
     bool body_res = true;
     if (defining_decl == NULL) {
@@ -5389,7 +5367,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
     // Only process the function body if it exists. Template functions and
     // forward declarations may be marked as definitions but have no body.
-    if (function_decl->hasBody()) {
+    if (function_decl->hasBody() && !is_explicitly_defaulted_or_deleted) {
       SgFunctionDefinition *function_definition =
           defining_decl->get_definition();
       ROSE_ASSERT(function_definition != NULL);
@@ -5535,7 +5513,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
       const bool needs_defining_instantiation =
           function_decl->isThisDeclarationADefinition() &&
-          function_decl->hasBody();
+          function_decl->hasBody() && !is_explicitly_defaulted_or_deleted;
       auto clone_param_list =
           [&](SgFunctionParameterList *source) -> SgFunctionParameterList * {
         SgFunctionParameterList *cloned =
@@ -5743,7 +5721,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   }
 
   if (!handled_template_instantiation &&
-      function_decl->isThisDeclarationADefinition()) {
+      function_decl->isThisDeclarationADefinition() &&
+      !is_explicitly_defaulted_or_deleted) {
     // Build friend free-function definitions as free functions regardless of
     // lexical class scope.
     bool builder_force_free_scope = isFriendFreeFunction;
@@ -6321,6 +6300,15 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     } else {
       sg_function_decl->set_firstNondefiningDeclaration(sg_function_decl);
+    }
+  }
+
+  if (is_explicitly_defaulted_or_deleted) {
+    if (is_explicitly_defaulted) {
+      sg_function_decl->get_functionModifier().setMarkedDefault();
+    }
+    if (is_explicitly_deleted) {
+      sg_function_decl->get_functionModifier().setMarkedDelete();
     }
   }
 
