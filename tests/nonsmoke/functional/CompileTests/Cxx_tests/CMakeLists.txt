@@ -236,6 +236,21 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 149: Parameter lists must not be reported as unsupported declarations.
+add_test(
+  NAME Cxx_tests_rex_test2025_issue149_param_list_unique_name_interface_function_coverage
+  COMMAND
+    $<TARGET_FILE:interfaceFunctionCoverage>
+    -rose:verbose 0 -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue149_param_list_unique_name.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue149_param_list_unique_name_interface_function_coverage
+  PROPERTIES
+    LABELS Cxx_tests
+    FAIL_REGULAR_EXPRESSION "Unsupported declaration = .*SgFunctionParameterList"
+)
+
 # Issue 124: System header template specializations must preserve template args.
 add_test(
   NAME Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
