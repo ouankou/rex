@@ -2238,17 +2238,6 @@ Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement* decl_stmt, SgUnparse_I
              }
         }
 
-
-     SgVariableDeclaration* variableDeclaration = isSgVariableDeclaration(decl_stmt);
-     if (variableDeclaration != NULL)
-        {
-       // DQ (8/1/2014): Added support to output the constexpr keyword.
-          if (variableDeclaration->get_is_constexpr() == true)
-             {
-               curprint("constexpr ");
-             }
-        }
-
   // DQ (4/25/2004): Removed CC++ specific modifiers
   // if (decl_stmt->isAtomic() && !info.SkipAtomic() ) { curprint( "atomic "); }
   // if (decl_stmt->isGlobalClass() && !info.SkipGlobal() ) { curprint( "global "); }
@@ -2389,6 +2378,15 @@ Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement* decl_stmt, SgUnparse_I
      if (decl_stmt->get_declarationModifier().get_storageModifier().get_thread_local_storage() == true)
         {
           curprint( "__thread ");
+        }
+
+        SgVariableDeclaration *variableDeclaration =
+            isSgVariableDeclaration(decl_stmt);
+        if (variableDeclaration != NULL) {
+          // DQ (8/1/2014): Added support to output the constexpr keyword.
+          if (variableDeclaration->get_is_constexpr() == true) {
+            curprint("constexpr ");
+          }
         }
 
      if (unp->opt.get_auto_opt())    // checks option status before printing auto (to prevent redundant use)

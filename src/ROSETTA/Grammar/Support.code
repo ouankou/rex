@@ -8036,6 +8036,14 @@ SgSymbolTable::get_name( const SgNode* node) const
                break;
              }
 
+          case V_SgTemplateInstantiationDirectiveStatement:
+             {
+               const SgTemplateInstantiationDirectiveStatement* directive =
+                   isSgTemplateInstantiationDirectiveStatement(node);
+               name = directive->get_mangled_name();
+               break;
+             }
+
           case V_SgNamespaceDeclarationStatement:
              {
                const SgNamespaceDeclarationStatement* namespaceDeclarationStatement = isSgNamespaceDeclarationStatement(node);

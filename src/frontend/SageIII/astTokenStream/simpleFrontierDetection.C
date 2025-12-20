@@ -216,17 +216,35 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(SgNode*
 
                if (statement != NULL)
                   {
+                 bool allow_transform = true;
+                 if (inheritedAttribute.sourceFile != NULL &&
+                     inheritedAttribute.sourceFile->get_file_info() != NULL &&
+                     statement->get_file_info() != NULL) {
+                   int source_file_id =
+                       inheritedAttribute.sourceFile->get_file_info()
+                           ->get_physical_file_id();
+                   int stmt_file_id =
+                       statement->get_file_info()->get_physical_file_id();
+                   if (stmt_file_id != source_file_id &&
+                       stmt_file_id != Sg_File_Info::TRANSFORMATION_FILE_ID &&
+                       !statement->get_file_info()->isTransformation()) {
+                     allow_transform = false;
+                   }
+                 }
+
 #if 0
                     printf ("Marking statement = %p = %s to be a transformation and output in code generation \n",statement,statement->class_name().c_str());
 #endif
 #if 0
                     printf ("BEFORE: In SimpleFrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(): statement->get_file_info()->getFileName() = %s \n",statement->get_file_info()->get_filenameString().c_str());
 #endif
+                 if (allow_transform == true) {
 #if 1
-                 // Note that both of these must be set.
-                    statement->setTransformation();
-                    statement->setOutputInCodeGeneration();
+                   // Note that both of these must be set.
+                   statement->setTransformation();
+                   statement->setOutputInCodeGeneration();
 #endif
+                 }
 #if 0
                     printf ("AFTER: In SimpleFrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(): statement->get_file_info()->getFileName() = %s \n",statement->get_file_info()->get_filenameString().c_str());
 #endif

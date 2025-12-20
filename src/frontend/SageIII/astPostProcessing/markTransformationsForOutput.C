@@ -160,5 +160,4 @@ MarkTransformationsForOutput::evaluateInheritedAttribute (
         }
 
      return returnAttribute;
-   }
-
+}

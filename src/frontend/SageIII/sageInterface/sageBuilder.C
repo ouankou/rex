@@ -3169,7 +3169,7 @@ SgType * SageBuilder::buildOpaqueType(std::string const name, SgScopeStatement *
  // scope->get_symbol_table()->insert(n, type_symbol);
     scope->insert_symbol(n,type_symbol);
 
-    type_decl->set_firstNondefiningDeclaration (type_decl);
+    type_decl->set_firstNondefiningDeclaration(type_decl);
     setOneSourcePositionForTransformation(type_decl);
     prependStatement(type_decl,scope);
     // Hide it from unparser

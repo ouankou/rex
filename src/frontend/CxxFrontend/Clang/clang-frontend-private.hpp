@@ -367,8 +367,8 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // Template instantiation cache - maps instantiation signature to SgTemplateInstantiationDecl
         // Key: mangled instantiation name (e.g., "std::array<double, 1024>")
         // Value: Template instantiation declaration
-        std::map<std::string, SgTemplateInstantiationDecl*> p_template_inst_cache;
-
+        std::map<std::string, SgTemplateInstantiationDecl *>
+            p_template_inst_cache;
         struct CapturedPragma {
             unsigned line;
             std::string text;
@@ -423,6 +423,14 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         SgTemplateArgumentPtrList
         buildTemplateArguments(const clang::TemplateArgumentListInfo &arg_info,
                                bool explicitlySpecified = false);
+        SgTemplateArgumentPtrList
+        buildTemplateArguments(const clang::TemplateArgumentList &args,
+                               size_t explicit_count = 0);
+        void ensureTemplateArgumentParents(SgTemplateArgumentPtrList &args);
+        void applyExplicitTemplateArgumentFlags(SgTemplateArgumentPtrList &args,
+                                                size_t explicit_count);
+        size_t countExpandedTemplateArguments(
+            const clang::TemplateArgumentListInfo &arg_info);
 
         // Helper: Append translated template argument(s), flattening Clang
         // argument packs (TemplateArgument::Pack) into individual arguments.

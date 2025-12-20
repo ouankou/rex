@@ -89,6 +89,113 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 160: Preserve explicit qualifiers, casts, and list-init for std headers.
+string(CONCAT rex_test2025_issue160_axpy_system_headers_unparse_command
+  "\"$@\" && "
+  "cmp -s ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue160_axpy_system_headers.cpp "
+  "rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"constexpr[[:space:]]+std::size_t[[:space:]]+kElements\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"1u[[:space:]]*<<[[:space:]]*10\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"std::array<[^>]*>[[:space:]]+x[[:space:]]*\\{\\}\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"std::array<[^>]*>[[:space:]]+y[[:space:]]*\\{\\}\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "! grep -E \"std::iota[[:space:]]*<\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"std::iota[[:space:]]*\\([[:space:]]*x\\.begin\\(\\)\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"std::iota[[:space:]]*\\([[:space:]]*y\\.begin\\(\\)\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"axpy[[:space:]]*\\([[:space:]]*a[[:space:]]*,[[:space:]]*x\\.data\\(\\)[[:space:]]*,[[:space:]]*y\\.data\\(\\)[[:space:]]*,[[:space:]]*y\\.size\\(\\)[[:space:]]*\\)\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"static_cast[[:space:]]*<[^>]*double[^>]*>\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"std::fabs[[:space:]]*\\(\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"const[[:space:]]+double[[:space:]]+a[[:space:]]*=[[:space:]]*2\\.5\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "grep -E \"1e-9\" rose_rex_test2025_issue160_axpy_system_headers.cpp && "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue160_axpy_system_headers.cpp"
+)
+add_test(
+  NAME Cxx_tests_rex_test2025_issue160_axpy_system_headers_unparse
+  COMMAND
+    sh -c
+    "${rex_test2025_issue160_axpy_system_headers_unparse_command}"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue160_axpy_system_headers.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue160_axpy_system_headers_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
+# Issue 160: Preserve explicit instantiation keyword for struct templates.
+string(CONCAT rex_test2025_issue160_explicit_struct_instantiation_unparse_command
+  "\"$@\" && "
+  "grep -E \"^template[[:space:]]+struct[[:space:]]+Crate<\" "
+  "rose_rex_test2025_issue160_explicit_struct_instantiation.cpp && "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -c "
+  "rose_rex_test2025_issue160_explicit_struct_instantiation.cpp"
+)
+add_test(
+  NAME Cxx_tests_rex_test2025_issue160_explicit_struct_instantiation_unparse
+  COMMAND
+    sh -c
+    "${rex_test2025_issue160_explicit_struct_instantiation_unparse_command}"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue160_explicit_struct_instantiation.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue160_explicit_struct_instantiation_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
+# Issue 160: Explicit class template instantiation must unparse as a directive.
+string(CONCAT rex_test2025_issue160_explicit_class_instantiation_unparse_command
+  "\"$@\" && "
+  "grep -E \"^[[:space:]]*template[[:space:]]+class[[:space:]]+Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*;\" rose_rex_test2025_issue160_explicit_class_instantiation.cpp && "
+  "! grep -E \"template[[:space:]]+struct[[:space:]]+Box[[:space:]]*<[[:space:]]*int[[:space:]]*>\" rose_rex_test2025_issue160_explicit_class_instantiation.cpp && "
+  "! grep -E \"template[[:space:]]+class[[:space:]]+Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*\\{\" rose_rex_test2025_issue160_explicit_class_instantiation.cpp && "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue160_explicit_class_instantiation.cpp"
+)
+add_test(
+  NAME Cxx_tests_rex_test2025_issue160_explicit_class_instantiation_unparse
+  COMMAND
+    sh -c
+    "${rex_test2025_issue160_explicit_class_instantiation_unparse_command}"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue160_explicit_class_instantiation.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue160_explicit_class_instantiation_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
+# Issue 160: Extern class template instantiation must unparse with "extern".
+string(CONCAT rex_test2025_issue160_extern_class_instantiation_unparse_command
+  "\"$@\" && "
+  "grep -E \"^[[:space:]]*extern[[:space:]]+template[[:space:]]+struct[[:space:]]+Holder[[:space:]]*<[[:space:]]*double[[:space:]]*>[[:space:]]*;\" rose_rex_test2025_issue160_extern_class_instantiation.cpp && "
+  "! grep -E \"extern[[:space:]]+template[[:space:]]+class[[:space:]]+Holder[[:space:]]*<[[:space:]]*double[[:space:]]*>\" rose_rex_test2025_issue160_extern_class_instantiation.cpp && "
+  "! grep -E \"template[[:space:]]+struct[[:space:]]+Holder[[:space:]]*<[[:space:]]*double[[:space:]]*>[[:space:]]*\\{\" rose_rex_test2025_issue160_extern_class_instantiation.cpp && "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue160_extern_class_instantiation.cpp"
+)
+add_test(
+  NAME Cxx_tests_rex_test2025_issue160_extern_class_instantiation_unparse
+  COMMAND
+    sh -c
+    "${rex_test2025_issue160_extern_class_instantiation_unparse_command}"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue160_extern_class_instantiation.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue160_extern_class_instantiation_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 62: Mangled qualifiers must never contain template syntax.
 set_tests_properties(Cxx_tests_rex_test2025_mangle_qualifiers_no_template_syntax PROPERTIES
   FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"

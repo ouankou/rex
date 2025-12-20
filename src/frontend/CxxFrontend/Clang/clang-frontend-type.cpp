@@ -1045,11 +1045,12 @@ bool ClangToSageTranslator::VisitDecltypeType(
 #endif
   bool res = true;
 
-  // TODO: Full support for decltype not yet implemented
-  // decltype(expr) deduces the type of an expression
-  // For now, use a generic unknown type scoped to global scope to avoid
-  // ROSE-1378
-  *node = SageBuilder::buildOpaqueType("decltype", getGlobalScope());
+  clang::QualType underlying_type = decltype_type->getUnderlyingType();
+  if (!underlying_type.isNull()) {
+    *node = buildTypeFromQualifiedType(underlying_type);
+  } else {
+    *node = SageBuilder::buildUnknownType();
+  }
 
   return VisitType(decltype_type, node) && res;
 }
@@ -1085,10 +1086,8 @@ bool ClangToSageTranslator::VisitAutoType(clang::AutoType *auto_type,
 #endif
   bool res = true;
 
-  // TODO: Full support for auto type deduction not yet implemented
-  // auto keyword (C++11) allows type to be deduced from initializer
-  // For now, use a generic unknown type scoped to global scope
-  *node = SageBuilder::buildOpaqueType("auto", getGlobalScope());
+  // Represent C++ auto explicitly so we do not synthesize an opaque typedef.
+  *node = SageBuilder::buildAutoType();
 
   return VisitDeducedType(auto_type, node) && res;
 }
@@ -1789,6 +1788,17 @@ SgExpression *buildIntegralTemplateArgExpr(const llvm::APSInt &value,
 
   return expr;
 }
+
+size_t countExpandedTemplateArgument(const clang::TemplateArgument &arg) {
+  if (arg.getKind() == clang::TemplateArgument::Pack) {
+    size_t count = 0;
+    for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
+      count += countExpandedTemplateArgument(pack_arg);
+    }
+    return count;
+  }
+  return 1;
+}
 } // namespace
 
 SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
@@ -1901,6 +1911,7 @@ SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
     appendTemplateArguments(arg_list, arg, false);
   }
 
+  ensureTemplateArgumentParents(arg_list);
   return arg_list;
 }
 
@@ -1913,7 +1924,67 @@ SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
                             explicitlySpecified);
   }
 
+  ensureTemplateArgumentParents(arg_list);
   return arg_list;
+}
+
+SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
+    const clang::TemplateArgumentList &args, size_t explicit_count) {
+  SgTemplateArgumentPtrList arg_list;
+  for (unsigned i = 0; i < args.size(); ++i) {
+    appendTemplateArguments(arg_list, args.get(i), false);
+  }
+
+  applyExplicitTemplateArgumentFlags(arg_list, explicit_count);
+  ensureTemplateArgumentParents(arg_list);
+  return arg_list;
+}
+
+void ClangToSageTranslator::ensureTemplateArgumentParents(
+    SgTemplateArgumentPtrList &args) {
+  SgNode *fallback_parent = nullptr;
+  if (p_sage_source_file != NULL) {
+    fallback_parent = p_sage_source_file;
+  }
+  if (fallback_parent == nullptr) {
+    fallback_parent = SageBuilder::topScopeStack();
+  }
+  if (fallback_parent == nullptr) {
+    fallback_parent = getGlobalScope();
+  }
+  if (fallback_parent == nullptr) {
+    return;
+  }
+
+  for (SgTemplateArgument *arg : args) {
+    if (arg != NULL && arg->get_parent() == NULL) {
+      arg->set_parent(fallback_parent);
+    }
+  }
+}
+
+void ClangToSageTranslator::applyExplicitTemplateArgumentFlags(
+    SgTemplateArgumentPtrList &args, size_t explicit_count) {
+  if (explicit_count == 0) {
+    return;
+  }
+
+  size_t limit = explicit_count < args.size() ? explicit_count : args.size();
+  for (size_t i = 0; i < limit; ++i) {
+    SgTemplateArgument *arg = args[i];
+    if (arg != NULL && !arg->get_explicitlySpecified()) {
+      arg->set_explicitlySpecified(true);
+    }
+  }
+}
+
+size_t ClangToSageTranslator::countExpandedTemplateArguments(
+    const clang::TemplateArgumentListInfo &arg_info) {
+  size_t count = 0;
+  for (const clang::TemplateArgumentLoc &loc : arg_info.arguments()) {
+    count += countExpandedTemplateArgument(loc.getArgument());
+  }
+  return count;
 }
 
 SgNonrealType *

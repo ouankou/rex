@@ -31,6 +31,49 @@
 using namespace std;
 using namespace Rose;
 
+namespace {
+const char kRexImplicitConstexprConstAttr[] = "rex_implicit_constexpr_const";
+const char kRexExplicitInstantiationKeywordAttr[] =
+    "rex_explicit_instantiation_keyword";
+
+static std::string getExplicitInstantiationKeyword(const SgNode *node) {
+  if (node == NULL) {
+    return std::string();
+  }
+  AstAttribute *attr = node->getAttribute(kRexExplicitInstantiationKeywordAttr);
+  if (attr == NULL) {
+    return std::string();
+  }
+  return attr->toString();
+}
+
+static SgType *strip_top_level_const_preserve_typedef(SgType *type) {
+  SgModifierType *mod_type = isSgModifierType(type);
+  if (mod_type == NULL) {
+    return type;
+  }
+  if (!mod_type->get_typeModifier().get_constVolatileModifier().isConst()) {
+    return type;
+  }
+  SgModifierType *copy = isSgModifierType(SageInterface::deepCopy(mod_type));
+  ROSE_ASSERT(copy != NULL);
+  copy->get_typeModifier().get_constVolatileModifier().unsetConst();
+  return copy;
+}
+
+static SgType *
+maybe_strip_implicit_constexpr_const(SgInitializedName *decl_item,
+                                     SgType *type) {
+  if (decl_item == NULL || type == NULL) {
+    return type;
+  }
+  if (!decl_item->attributeExists(kRexImplicitConstexprConstAttr)) {
+    return type;
+  }
+  return strip_top_level_const_preserve_typedef(type);
+}
+} // namespace
+
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
 #define OUTPUT_DEBUGGING_FUNCTION_INTERNALS  0
 #define OUTPUT_DEBUGGING_UNPARSE_INFO        0
@@ -1399,8 +1442,8 @@ Unparse_ExprStmt::unparseFunctionParameterDeclaration (
 #if 1
             // DQ (4/12/2019): This version is required for C old-style function parameters.
             // DQ (4/11/2019): Try to comment this out to support Clang 8.0 which can't handle the "enum class" type elaboration.
-               if (initializedName->get_needs_definitions())
-                  {
+                  if (initializedName->get_needs_definitions() &&
+                      !ninfo.usedInUparseToStringFunction()) {
                     ninfo.unset_SkipClassDefinition();
                     ninfo.unset_SkipEnumDefinition();
                   }
@@ -1614,7 +1657,7 @@ Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration* funcdecl_stmt, SgUn
        // Check if this is the last argument (output a "," separator if not)
           if (p != funcdecl_stmt->get_args().end())
              {
-               curprint(",");
+            curprint(", ");
              }
         }
 
@@ -2807,7 +2850,30 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
             // curprint ( string("template ";
 #if 1
             // DQ (8/19/2014): Original code.
+               std::string keyword = getExplicitInstantiationKeyword(
+                   templateInstantiationDirective);
+               SgClassDeclaration::class_types original_class_type =
+                   classDeclaration->get_class_type();
+               bool override_keyword = false;
+               if (!keyword.empty()) {
+                 if (keyword == "class") {
+                   classDeclaration->set_class_type(
+                       SgClassDeclaration::e_class);
+                   override_keyword = true;
+                 } else if (keyword == "struct") {
+                   classDeclaration->set_class_type(
+                       SgClassDeclaration::e_struct);
+                   override_keyword = true;
+                 } else if (keyword == "union") {
+                   classDeclaration->set_class_type(
+                       SgClassDeclaration::e_union);
+                   override_keyword = true;
+                 }
+               }
                unparseClassDeclStmt(classDeclaration,info);
+               if (override_keyword) {
+                 classDeclaration->set_class_type(original_class_type);
+               }
 #else
             // DQ (8/19/2014): New code.
                unparseTemplateInstantiationDeclStmt(declarationStatement,info);
@@ -7749,8 +7815,10 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
           tmp_init = NULL;
 
           tmp_type = decl_item->get_type();
+          tmp_type = maybe_strip_implicit_constexpr_const(decl_item, tmp_type);
 
-       // DQ (5/11/2007): This fails in astCopy_tests for copyExample using copyExampleInput.C
+          // DQ (5/11/2007): This fails in astCopy_tests for copyExample using
+          // copyExampleInput.C
           ASSERT_not_null(isSgType(tmp_type));
 
 #if 0
@@ -7858,12 +7926,16 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 #endif
                tmp_name = decl_item->get_name();
                tmp_type = decl_item->get_type();
+               tmp_type =
+                   maybe_strip_implicit_constexpr_const(decl_item, tmp_type);
                ASSERT_not_null(isSgType(tmp_type));
 
             // TV (09/06/2018): if auto keyword is used then we unparse the associated declared type (before `auto` is resolved)
                if (decl_item->get_auto_decltype() != NULL)
                   {
                     tmp_type = decl_item->get_auto_decltype();
+                    tmp_type = maybe_strip_implicit_constexpr_const(decl_item,
+                                                                    tmp_type);
                   }
 
             // DQ (11/28/2004): Added to support new design
@@ -8859,22 +8931,27 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                 else
                                  {
                                 // DQ (1/16/2019): Output the equals operator in the case of a assignment or aggregate initializer.
-                                   if ( (tmp_init->variant() == ASSIGN_INIT) || (tmp_init->variant() == AGGREGATE_INIT) )
-                                // if ( (tmp_init->variant() == ASSIGN_INIT) || (tmp_init->variant() == AGGREGATE_INIT) || (output_using_assignment_copy_constructor_syntax == true) )
-                                      {
+                                bool is_braced_init =
+                                    decl_item->get_is_braced_initialized();
+                                if ((tmp_init->variant() == ASSIGN_INIT) ||
+                                    ((tmp_init->variant() == AGGREGATE_INIT) &&
+                                     (is_braced_init == false)))
+                                // if ( (tmp_init->variant() == ASSIGN_INIT) ||
+                                // (tmp_init->variant() == AGGREGATE_INIT) ||
+                                // (output_using_assignment_copy_constructor_syntax
+                                // == true) )
+                                {
 #if DEBUG_COPY_INITIALIZER_SYNTAX
                                         printf ("Output the = syntax in the case of a assignment or aggregate initializer \n");
 #endif
                                         curprint (" = ");
-                                      }
-                                     else
-                                      {
-                                     // This is the alternative syntax: class X(arg)
-                                     // So don't output a "="
+                                } else {
+                                  // This is the alternative syntax: class
+                                  // X(arg) So don't output a "="
 #if DEBUG_COPY_INITIALIZER_SYNTAX
                                         printf ("Skip output of the = syntax \n");
 #endif
-                                      }
+                                }
                                  }
                             }
                        }
@@ -11607,9 +11684,17 @@ Unparse_ExprStmt::unparseTemplateTypedefDeclaration(SgStatement* stmt, SgUnparse
 #endif
 
           SgUnparse_Info ninfo(info);
+          if (!ninfo.usedInUparseToStringFunction()) {
+            if (ninfo.SkipClassDefinition()) {
+              ninfo.unset_SkipClassDefinition();
+            }
+            if (ninfo.SkipEnumDefinition()) {
+              ninfo.unset_SkipEnumDefinition();
+            }
+          }
 
-          ROSE_ASSERT(ninfo.SkipClassDefinition() == false);
-          ROSE_ASSERT(ninfo.SkipEnumDefinition()  == false);
+          ROSE_ASSERT(ninfo.SkipClassDefinition() ==
+                      ninfo.SkipEnumDefinition());
 
 #if DEBUG_TEMPLATE_TYPEDEF
           printf ("In unparseTemplateTypeDefStmt(): templateTypedef_stmt->get_declaration() = %p \n",templateTypedef_stmt->get_declaration());
@@ -11748,10 +11833,15 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
         {
        // printf ("Output the full definition as a basis for the typedef base type \n");
        // DQ (10/5/2004): If this is a defining declaration then make sure that we don't skip the definition
-          ROSE_ASSERT(ninfo.SkipClassDefinition() == false);
-
-       // DQ (12/22/2005): Enum definition should be handled here as well
-          ROSE_ASSERT(ninfo.SkipEnumDefinition() == false);
+       if (!ninfo.usedInUparseToStringFunction()) {
+         if (ninfo.SkipClassDefinition()) {
+           ninfo.unset_SkipClassDefinition();
+         }
+         if (ninfo.SkipEnumDefinition()) {
+           ninfo.unset_SkipEnumDefinition();
+         }
+       }
+       ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
 
        // DQ (10/14/2006): As part of new implementation of qualified names we now default to the generation of all qualified names unless they are skipped.
           ninfo.set_SkipQualifiedNames();

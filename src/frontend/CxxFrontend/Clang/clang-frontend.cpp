@@ -557,6 +557,22 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
 //  printf ("Calling clang::ParseAST()\n");
 
+    struct SourcePositionModeGuard {
+      SageBuilder::SourcePositionClassification saved;
+      explicit SourcePositionModeGuard(
+          SageBuilder::SourcePositionClassification mode)
+          : saved(SageBuilder::getSourcePositionClassificationMode()) {
+        SageBuilder::setSourcePositionClassificationMode(mode);
+      }
+      ~SourcePositionModeGuard() {
+        SageBuilder::setSourcePositionClassificationMode(saved);
+      }
+    };
+
+    // Ensure frontend-created nodes do not start as transformations.
+    SourcePositionModeGuard source_position_guard(
+        SageBuilder::e_sourcePositionFrontendConstruction);
+
     compiler_instance->getDiagnosticClient().BeginSourceFile(compiler_instance->getLangOpts(), &(compiler_instance->getPreprocessor()));
     if (language == ClangToSageTranslator::CPLUSPLUS) {
         clang::IdentifierInfo &builtin_id =
@@ -659,8 +675,11 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (numErrors > 0) {
         if (continue_on_error) {
-            printf ("Note: Proceeding to backend despite %d Clang diagnostic error(s) because AST was successfully constructed\n", numErrors);
-            return 0;  // Success - AST was built
+          sageFile.set_skipfinalCompileStep(true);
+          printf("Note: Proceeding to backend despite %d Clang diagnostic "
+                 "error(s) because AST was successfully constructed\n",
+                 numErrors);
+          return 0; // Success - AST was built
         }
         printf ("Error: Clang reported %d diagnostic error(s); refusing to run backend (use -rex:clang:continue-on-error to override)\n", numErrors);
         return numErrors;
@@ -832,127 +851,144 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
                     ROSE_ASSERT(end.isValid());
                   }
 
-               clang::FileID file_begin = p_compiler_instance->getSourceManager().getFileID(begin);
-               clang::FileID file_end   = p_compiler_instance->getSourceManager().getFileID(end);
+                  clang::SourceManager &sm =
+                      p_compiler_instance->getSourceManager();
+                  const clang::LangOptions &lang_opts =
+                      p_compiler_instance->getLangOpts();
 
-               bool inv_begin_line;
-               bool inv_begin_col;
-               bool inv_end_line;
-               bool inv_end_col;
+                  clang::FileID file_begin = sm.getFileID(begin);
+                  clang::FileID file_end = sm.getFileID(end);
 
-               unsigned ls = p_compiler_instance->getSourceManager()
-                                 .getSpellingLineNumber(begin, &inv_begin_line);
-               unsigned cs =
-                   p_compiler_instance->getSourceManager()
-                       .getSpellingColumnNumber(begin, &inv_begin_col);
+                  if (!file_begin.isInvalid() && !file_end.isInvalid()) {
+                    auto end_buffer = sm.getBufferDataOrNone(file_end);
+                    const bool in_main_file = file_begin == sm.getMainFileID();
+                    bool inv_begin_line = false;
+                    bool inv_begin_col = false;
+                    bool inv_end_line = false;
+                    bool inv_end_col = false;
 
-               // Token-stream mapping expects end-of-construct to be
-               // token-accurate. Clang SourceRange ends are often at the
-               // *start* of the last token; convert to the last character of
-               // that token.
-               clang::SourceLocation end_for_fi = end;
-               {
-                 clang::SourceManager &sm =
-                     p_compiler_instance->getSourceManager();
-                 const clang::LangOptions &lang_opts =
-                     p_compiler_instance->getLangOpts();
-                 clang::SourceLocation after_token =
-                     clang::Lexer::getLocForEndOfToken(end_for_fi, 0, sm,
-                                                       lang_opts);
-                 if (after_token.isValid() && after_token.getRawEncoding() !=
-                                                  end_for_fi.getRawEncoding()) {
-                   clang::SourceLocation last_char =
-                       after_token.getLocWithOffset(-1);
-                   if (last_char.isValid()) {
-                     end_for_fi = last_char;
-                   }
-                 }
-               }
+                    unsigned ls =
+                        sm.getSpellingLineNumber(begin, &inv_begin_line);
+                    unsigned cs =
+                        sm.getSpellingColumnNumber(begin, &inv_begin_col);
 
-               unsigned le =
-                   p_compiler_instance->getSourceManager()
-                       .getSpellingLineNumber(end_for_fi, &inv_end_line);
-               unsigned ce =
-                   p_compiler_instance->getSourceManager()
-                       .getSpellingColumnNumber(end_for_fi, &inv_end_col);
+                    // Token-stream mapping expects end-of-construct to be
+                    // token-accurate. Clang SourceRange ends are often at the
+                    // *start* of the last token; convert to the last character
+                    // of that token.
+                    clang::SourceLocation end_for_fi = end;
+                    bool can_lex_end =
+                        end_for_fi.isFileID() && in_main_file && end_buffer;
+                    if (can_lex_end) {
+                      unsigned end_offset = sm.getFileOffset(end_for_fi);
+                      if (end_offset >= end_buffer->size()) {
+                        can_lex_end = false;
+                      }
+                    }
+                    if (can_lex_end) {
+                      bool invalid_char_data = false;
+                      (void)sm.getCharacterData(end_for_fi, &invalid_char_data);
+                      if (invalid_char_data) {
+                        can_lex_end = false;
+                      }
+                    }
+                    if (can_lex_end) {
+                      clang::SourceLocation after_token =
+                          clang::Lexer::getLocForEndOfToken(end_for_fi, 0, sm,
+                                                            lang_opts);
+                      if (after_token.isValid() &&
+                          after_token.getRawEncoding() !=
+                              end_for_fi.getRawEncoding()) {
+                        clang::SourceLocation last_char =
+                            after_token.getLocWithOffset(-1);
+                        if (last_char.isValid()) {
+                          end_for_fi = last_char;
+                        }
+                      }
+                    }
 
-               if (file_begin.isInvalid() || file_end.isInvalid() ||
-                   inv_begin_line || inv_begin_col || inv_end_line ||
-                   inv_end_col) {
-                 ROSE_ASSERT(!"Should not happen as everything have been check "
-                              "before...");
-               }
+                    unsigned le =
+                        sm.getSpellingLineNumber(end_for_fi, &inv_end_line);
+                    unsigned ce =
+                        sm.getSpellingColumnNumber(end_for_fi, &inv_end_col);
 
-               // In LLVM 20, getFileEntryForID still returns const FileEntry*
-               const clang::FileEntry* fileEntry = p_compiler_instance->getSourceManager().getFileEntryForID(file_begin);
-               if (fileEntry)
-                  {
-                    // In LLVM 20, FileEntry uses tryGetRealPathName() instead of getName()
-                    std::string file = fileEntry->tryGetRealPathName().str();
+                    if (inv_begin_line || inv_begin_col || inv_end_line ||
+                        inv_end_col) {
+                      ROSE_ASSERT(!"Should not happen as everything have been "
+                                   "check before...");
+                    }
 
-                 // start_fi = new Sg_File_Info(file, ls, cs);
-                 // end_fi   = new Sg_File_Info(file, le, ce);
+                    // In LLVM 20, getFileEntryForID still returns const
+                    // FileEntry*
+                    const clang::FileEntry *fileEntry =
+                        sm.getFileEntryForID(file_begin);
+                    if (fileEntry) {
+                      // In LLVM 20, FileEntry uses tryGetRealPathName() instead
+                      // of getName()
+                      std::string file = fileEntry->tryGetRealPathName().str();
+
+                      // start_fi = new Sg_File_Info(file, ls, cs);
+                      // end_fi   = new Sg_File_Info(file, le, ce);
 #if 0
-                    std::string rawFileName         = node->get_file_info()->get_raw_filename();
-                    std::string filenameWithoutPath = Rose::StringUtility::stripPathFromFileName(rawFileName);
-                    printf ("filenameWithoutPath = %s file = %s \n",filenameWithoutPath.c_str(),file.c_str());
+                     std::string rawFileName         = node->get_file_info()->get_raw_filename();
+                     std::string filenameWithoutPath = Rose::StringUtility::stripPathFromFileName(rawFileName);
+                     printf ("filenameWithoutPath = %s file = %s \n",filenameWithoutPath.c_str(),file.c_str());
 #endif
-                    // Mark nodes for code generation only when they originate
-                    // from the main file being compiled. This preserves ROSE's
-                    // default behavior of not inlining declarations from
-                    // included headers into the generated output file (e.g.
-                    // copyAST_copytest2007_40), while still allowing template
-                    // default-argument logic to reason about which declarations
-                    // will be unparsed in the main file (Issue 69).
-                    clang::SourceManager &sm =
-                        p_compiler_instance->getSourceManager();
-                    const bool in_main_file =
-                        sm.getFileID(begin) == sm.getMainFileID();
-
-                    if (file.find("clang-builtin-c.h") != std::string::npos) 
-                       {
+                      // Mark nodes for code generation only when they originate
+                      // from the main file being compiled. This preserves
+                      // ROSE's default behavior of not inlining declarations
+                      // from included headers into the generated output file
+                      // (e.g. copyAST_copytest2007_40), while still allowing
+                      // template default-argument logic to reason about which
+                      // declarations will be unparsed in the main file (Issue
+                      // 69).
+                      if (file.find("clang-builtin-c.h") != std::string::npos) {
 #if 0
-                         printf ("Processing a frontend specific file \n");
+                          printf ("Processing a frontend specific file \n");
 #endif
-                         start_fi = new Sg_File_Info(file, ls, cs);
-                         end_fi   = new Sg_File_Info(file, le, ce);
+                        start_fi = new Sg_File_Info(file, ls, cs);
+                        end_fi = new Sg_File_Info(file, le, ce);
 
-                      // DQ (11/29/2020): This is not doing what I had hoped it would do.
-                      // I think the solution is to use the -DSKIP_ROSE_BUILTIN_DECLARATIONS option,
-                      // but that is not working as I expected either.  Time to go home.
-                      // start_fi = Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
-                      // end_fi   = Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
-                         start_fi->set_classificationBitField(Sg_File_Info::e_frontend_specific);
-                         end_fi  ->set_classificationBitField(Sg_File_Info::e_frontend_specific);
-                         if (in_main_file) {
-                           start_fi->setOutputInCodeGeneration();
-                           end_fi->setOutputInCodeGeneration();
-                         }
-                       }
-                      else
-                       {
-                         start_fi = new Sg_File_Info(file, ls, cs);
-                         end_fi   = new Sg_File_Info(file, le, ce);
-                         if (in_main_file) {
-                           start_fi->setOutputInCodeGeneration();
-                           end_fi->setOutputInCodeGeneration();
-                         }
-                       }
+                        // DQ (11/29/2020): This is not doing what I had hoped
+                        // it would do. I think the solution is to use the
+                        // -DSKIP_ROSE_BUILTIN_DECLARATIONS option, but that is
+                        // not working as I expected either.  Time to go home.
+                        // start_fi =
+                        // Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+                        // end_fi   =
+                        // Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+                        start_fi->set_classificationBitField(
+                            Sg_File_Info::e_frontend_specific);
+                        end_fi->set_classificationBitField(
+                            Sg_File_Info::e_frontend_specific);
+                        if (in_main_file) {
+                          start_fi->setOutputInCodeGeneration();
+                          end_fi->setOutputInCodeGeneration();
+                        }
+                      } else {
+                        start_fi = new Sg_File_Info(file, ls, cs);
+                        end_fi = new Sg_File_Info(file, le, ce);
+                        if (in_main_file) {
+                          start_fi->setOutputInCodeGeneration();
+                          end_fi->setOutputInCodeGeneration();
+                        }
+                      }
 
 #if DEBUG_SOURCE_LOCATION
-                    std::cerr << "\tCreate FI for node in " << file << ":" << ls << ":" << cs << std::endl;
+                      std::cerr << "\tCreate FI for node in " << file << ":"
+                                << ls << ":" << cs << std::endl;
 #endif
-                  }
+                    }
 #if DEBUG_SOURCE_LOCATION
-                 else
-                  {
+                    else {
                     std::cerr << "\tDump SourceLocation for \"Invalid FileID\": " << std::endl << "\t";
                     begin.dump(p_compiler_instance->getSourceManager());
                     std::cerr << std::endl << "\t";
                     end.dump(p_compiler_instance->getSourceManager());
                     std::cerr << std::endl;
-                  }
+                    }
 #endif
+                  }
              }
         }
 
