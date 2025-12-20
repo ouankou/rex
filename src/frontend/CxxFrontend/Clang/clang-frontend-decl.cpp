@@ -1199,9 +1199,6 @@ bool is_decl_attached_to_scope_child_list(SgScopeStatement *scope,
   }
 
   if (scope->containsOnlyDeclarations()) {
-    if (isSgDeclarationScope(scope) != NULL) {
-      return false;
-    }
     const SgDeclarationStatementPtrList &decls = scope->getDeclarationList();
     return std::find(decls.begin(), decls.end(), decl) != decls.end();
   }
@@ -1230,9 +1227,6 @@ bool detach_decl_from_scope_child_list(SgDeclarationStatement *decl,
   };
 
   if (scope->containsOnlyDeclarations()) {
-    if (isSgDeclarationScope(scope) != NULL) {
-      return false;
-    }
     return erase_all(scope->getDeclarationList());
   }
 
@@ -1267,9 +1261,6 @@ void ensure_decl_in_scope_child_list(
   }
 
   if (scope->containsOnlyDeclarations()) {
-    if (isSgDeclarationScope(scope) != NULL) {
-      return;
-    }
     scope->getDeclarationList().push_back(decl);
     decl->set_parent(scope);
     return;
