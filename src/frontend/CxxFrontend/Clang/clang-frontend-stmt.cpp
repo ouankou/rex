@@ -3706,9 +3706,46 @@ bool ClangToSageTranslator::VisitCXXFunctionalCastExpr(
 #endif
   bool res = true;
 
-  // TODO
+  SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
+  if (clang::Expr *sub_expr = cxx_functional_cast_expr->getSubExpr()) {
+    SgNode *tmp_expr = Traverse(sub_expr);
+    if (SgExprListExp *expr_list = isSgExprListExp(tmp_expr)) {
+      args = expr_list;
+    } else if (SgExpression *expr = isSgExpression(tmp_expr)) {
+      args->append_expression(expr);
+    }
+  }
 
-  return VisitExplicitCastExpr(cxx_functional_cast_expr, node) && res;
+  SgType *cast_type =
+      buildTypeFromQualifiedType(cxx_functional_cast_expr->getTypeAsWritten());
+
+  bool class_unknown = false;
+  if (cast_type != nullptr) {
+    if (isSgTypedefType(cast_type) == nullptr &&
+        isSgClassType(cast_type) == nullptr) {
+      class_unknown = true;
+    }
+  } else {
+    class_unknown = true;
+  }
+
+  SgConstructorInitializer *ctor_init =
+      SageBuilder::buildConstructorInitializer_nfi(
+          NULL, // declaration (filled in later by AST fixup if needed)
+          args, cast_type,
+          true,         // need_name
+          false,        // need_qualifier
+          false,        // need_parenthesis_after_name
+          class_unknown // associated_class_unknown
+      );
+
+  ctor_init->set_is_explicit_cast(true);
+  ctor_init->set_is_braced_initialized(
+      cxx_functional_cast_expr->isListInitialization());
+
+  *node = ctor_init;
+
+  return VisitExpr(cxx_functional_cast_expr, node) && res;
 }
 
 bool ClangToSageTranslator::VisitCXXNamedCastExpr(
