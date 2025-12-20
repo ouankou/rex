@@ -5889,16 +5889,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           class_def = resolve_class_definition(parent_class);
         }
       }
-      if (class_def == NULL) {
-        if (SgClassDefinition *stack_def =
-                isSgClassDefinition(SageBuilder::topScopeStack())) {
-          class_def = stack_def;
-        }
-      }
-      if (class_def != NULL) {
-        proper_scope = class_def;
-        scope_assigned = true;
-      }
+      ROSE_ASSERT(class_def != NULL);
+      proper_scope = class_def;
+      scope_assigned = true;
     }
   }
   // For non-member functions, use DeclContext (namespace or class)
