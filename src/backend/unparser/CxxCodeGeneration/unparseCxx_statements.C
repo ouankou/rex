@@ -55,12 +55,19 @@ static SgType *strip_top_level_const_preserve_typedef(SgType *type) {
   if (!mod_type->get_typeModifier().get_constVolatileModifier().isConst()) {
     return type;
   }
-  SgModifierType *copy = isSgModifierType(SageInterface::deepCopy(mod_type));
-  if (copy == NULL) {
+  SgType *base_type = mod_type->get_base_type();
+  if (base_type == NULL) {
     return type;
   }
+  SgModifierType *copy = new SgModifierType(base_type);
+  copy->set_typeModifier(mod_type->get_typeModifier());
   copy->get_typeModifier().get_constVolatileModifier().unsetConst();
-  return copy;
+  SgModifierType *canonical =
+      SgModifierType::insertModifierTypeIntoTypeTable(copy);
+  if (canonical != copy) {
+    delete copy;
+  }
+  return canonical;
 }
 
 static SgType *

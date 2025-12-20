@@ -4045,8 +4045,10 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   p_decl_translation_map.insert(
       std::pair<clang::Decl *, SgNode *>(class_tpl_spec_decl, node_decl));
   if (definition_decl != NULL && definition_decl != class_tpl_spec_decl) {
+    SgNode *definition_node =
+        definingDecl != NULL ? static_cast<SgNode *>(definingDecl) : node_decl;
     p_decl_translation_map.insert(
-        std::pair<clang::Decl *, SgNode *>(definition_decl, node_decl));
+        std::pair<clang::Decl *, SgNode *>(definition_decl, definition_node));
   }
 
   // Ensure we return the correct node
