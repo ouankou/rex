@@ -4073,6 +4073,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
         nondef_decl->set_scope(scope);
       }
     }
+    ensure_decl_in_scope_child_list(instantiation_directive, scope,
+                                    "VisitClassTemplateSpecializationDecl");
     if (p_compiler_instance != nullptr && instantiation_directive != NULL &&
         instantiation_directive->getAttribute(
             kRexExplicitInstantiationKeywordAttr) == NULL) {
