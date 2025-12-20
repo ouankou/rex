@@ -60,7 +60,7 @@ static SgType *strip_top_level_const_preserve_typedef(SgType *type) {
     return type;
   }
   SgModifierType *copy = new SgModifierType(base_type);
-  copy->set_typeModifier(mod_type->get_typeModifier());
+  copy->get_typeModifier() = mod_type->get_typeModifier();
   copy->get_typeModifier().get_constVolatileModifier().unsetConst();
   SgModifierType *canonical =
       SgModifierType::insertModifierTypeIntoTypeTable(copy);
