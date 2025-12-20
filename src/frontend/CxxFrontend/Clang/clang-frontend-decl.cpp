@@ -13,6 +13,7 @@ static const char kRexImplicitConstexprConstAttr[] =
     "rex_implicit_constexpr_const";
 static const char kRexExplicitInstantiationKeywordAttr[] =
     "rex_explicit_instantiation_keyword";
+static const char kRexCopyListInitAttr[] = "rex_copy_list_init";
 
 class RexExplicitInstantiationKeywordAttribute : public AstAttribute {
 public:
@@ -7787,6 +7788,9 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   init_name->set_scope(SageBuilder::topScopeStack());
   if (var_decl->getInitStyle() == clang::VarDecl::ListInit) {
     init_name->set_is_braced_initialized(true);
+    if (!var_decl->isDirectInit()) {
+      init_name->setAttribute(kRexCopyListInitAttr, new AstAttribute);
+    }
   }
   if (p_compiler_instance != nullptr) {
     clang::PrintingPolicy policy(p_compiler_instance->getLangOpts());

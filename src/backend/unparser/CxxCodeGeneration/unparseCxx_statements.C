@@ -35,6 +35,7 @@ namespace {
 const char kRexImplicitConstexprConstAttr[] = "rex_implicit_constexpr_const";
 const char kRexExplicitInstantiationKeywordAttr[] =
     "rex_explicit_instantiation_keyword";
+const char kRexCopyListInitAttr[] = "rex_copy_list_init";
 
 static std::string getExplicitInstantiationKeyword(const SgNode *node) {
   if (node == NULL) {
@@ -80,6 +81,10 @@ maybe_strip_implicit_constexpr_const(SgInitializedName *decl_item,
     return type;
   }
   return strip_top_level_const_preserve_typedef(type);
+}
+
+static bool is_copy_list_initialization(const SgInitializedName *decl_item) {
+  return decl_item != NULL && decl_item->attributeExists(kRexCopyListInitAttr);
 }
 } // namespace
 
@@ -8916,6 +8921,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                    ASSERT_not_null(constructor);
                                 // bool suppressAssignmentSyntax = (constructor->get_args()->get_expressions().size() == 0);
                                    bool suppressAssignmentSyntax = (constructor->get_args()->get_expressions().size() == 0 && (constructor->get_is_explicit_cast() == false) );
+                                   bool is_copy_list_init =
+                                       is_copy_list_initialization(decl_item);
 
 #if DEBUG_COPY_INITIALIZER_SYNTAX
                                    printf ("constructor->get_is_braced_initialized() = %s \n",constructor->get_is_braced_initialized() ? "true" : "false");
@@ -8924,9 +8931,11 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                    if (constructor->get_is_braced_initialized() == true)
                                       {
 #if DEBUG_COPY_INITIALIZER_SYNTAX
-                                        printf ("Set suppressAssignmentSyntax = false because this is braced initialized \n");
+                                     printf("Update suppressAssignmentSyntax "
+                                            "for braced initialization \n");
 #endif
-                                        suppressAssignmentSyntax = true;
+                                     suppressAssignmentSyntax =
+                                         !is_copy_list_init;
                                       }
 
 #if DEBUG_COPY_INITIALIZER_SYNTAX
@@ -8942,9 +8951,12 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                 // DQ (1/16/2019): Output the equals operator in the case of a assignment or aggregate initializer.
                                 bool is_braced_init =
                                     decl_item->get_is_braced_initialized();
+                                bool is_copy_list_init =
+                                    is_copy_list_initialization(decl_item);
                                 if ((tmp_init->variant() == ASSIGN_INIT) ||
                                     ((tmp_init->variant() == AGGREGATE_INIT) &&
-                                     (is_braced_init == false)))
+                                     ((is_braced_init == false) ||
+                                      is_copy_list_init)))
                                 // if ( (tmp_init->variant() == ASSIGN_INIT) ||
                                 // (tmp_init->variant() == AGGREGATE_INIT) ||
                                 // (output_using_assignment_copy_constructor_syntax
