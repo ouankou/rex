@@ -71,6 +71,21 @@ void assert_valid_template_name(const std::string &name) {
   ROSE_ASSERT(!std::isspace(static_cast<unsigned char>(name.front())));
   ROSE_ASSERT(name.size() < 2 || name.compare(0, 2, "::") != 0);
 }
+
+SgTemplateArgumentPtrList
+collect_explicit_template_arguments(const SgTemplateArgumentPtrList &args) {
+  SgTemplateArgumentPtrList explicit_args;
+  for (SgTemplateArgument *arg : args) {
+    if (arg == NULL) {
+      continue;
+    }
+    if (!arg->get_explicitlySpecified()) {
+      break;
+    }
+    explicit_args.push_back(arg);
+  }
+  return explicit_args;
+}
 } // namespace
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
@@ -820,17 +835,10 @@ Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDec
 #if 0
           printf ("Calling unparseTemplateArgumentList() \n");
 #endif
-       SgTemplateArgumentPtrList explicit_args;
-       for (SgTemplateArgument *arg :
-            templateInstantiationFunctionDeclaration->get_templateArguments()) {
-         if (arg == NULL) {
-           continue;
-         }
-         if (!arg->get_explicitlySpecified()) {
-           break;
-         }
-         explicit_args.push_back(arg);
-       }
+       SgTemplateArgumentPtrList explicit_args =
+           collect_explicit_template_arguments(
+               templateInstantiationFunctionDeclaration
+                   ->get_templateArguments());
        unparseTemplateArgumentList(explicit_args, info);
         }
    }
@@ -903,18 +911,10 @@ Unparse_ExprStmt::unparseTemplateMemberFunctionName(SgTemplateInstantiationMembe
 
      if (skipTemplateArgumentList == false)
         {
-       SgTemplateArgumentPtrList explicit_args;
-       for (SgTemplateArgument *arg :
-            templateInstantiationMemberFunctionDeclaration
-                ->get_templateArguments()) {
-         if (arg == NULL) {
-           continue;
-         }
-         if (!arg->get_explicitlySpecified()) {
-           break;
-         }
-         explicit_args.push_back(arg);
-       }
+       SgTemplateArgumentPtrList explicit_args =
+           collect_explicit_template_arguments(
+               templateInstantiationMemberFunctionDeclaration
+                   ->get_templateArguments());
        unparseTemplateArgumentList(explicit_args, info);
         }
 
