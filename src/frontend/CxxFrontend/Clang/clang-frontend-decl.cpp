@@ -5889,7 +5889,15 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           class_def = resolve_class_definition(parent_class);
         }
       }
-      ROSE_ASSERT(class_def != NULL);
+      if (class_def == NULL) {
+        std::cerr << "Error: Could not resolve class definition for method '"
+                  << getDeclNameSafe(function_decl) << "'. Skipping function."
+                  << std::endl;
+        if (node != NULL) {
+          *node = NULL;
+        }
+        return false;
+      }
       proper_scope = class_def;
       scope_assigned = true;
     }

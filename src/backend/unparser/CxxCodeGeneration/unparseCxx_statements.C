@@ -56,7 +56,9 @@ static SgType *strip_top_level_const_preserve_typedef(SgType *type) {
     return type;
   }
   SgModifierType *copy = isSgModifierType(SageInterface::deepCopy(mod_type));
-  ROSE_ASSERT(copy != NULL);
+  if (copy == NULL) {
+    return type;
+  }
   copy->get_typeModifier().get_constVolatileModifier().unsetConst();
   return copy;
 }
