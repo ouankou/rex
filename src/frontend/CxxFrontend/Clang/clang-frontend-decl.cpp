@@ -197,7 +197,7 @@ static std::string findExplicitInstantiationKeyword(
   clang::SourceLocation name_loc = sm.getExpansionLoc(decl->getLocation());
   if (name_loc.isValid()) {
     clang::SourceLocation loc = name_loc;
-    for (int steps = 0; steps < 32; ++steps) {
+    while (true) {
       std::optional<clang::Token> prev =
           clang::Lexer::findPreviousToken(loc, sm, lang_opts, false);
       if (!prev) {
@@ -229,7 +229,11 @@ static std::string findExplicitInstantiationKeyword(
       if (prev->is(clang::tok::semi) || prev->is(clang::tok::l_brace)) {
         break;
       }
-      loc = prev->getLocation();
+      clang::SourceLocation prev_loc = prev->getLocation();
+      if (prev_loc.isInvalid() || prev_loc == loc) {
+        break;
+      }
+      loc = prev_loc;
     }
   }
   clang::SourceRange range = decl->getSourceRange();
