@@ -4919,13 +4919,16 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             } else {
               template_args = buildTemplateArguments(arg_info, true);
             }
+            SgTemplateArgumentPtrList *builder_args =
+                new SgTemplateArgumentPtrList(template_args);
             SgTemplateInstantiationMemberFunctionDecl *inst_decl =
                 isSgTemplateInstantiationMemberFunctionDecl(
                     SageBuilder::buildNondefiningMemberFunctionDeclaration(
                         SgName(method_decl->getNameAsString()), ret_type,
                         param_list, class_scope, /*decoratorList=*/NULL,
                         functionConstVolatileFlags,
-                        /*buildTemplateInstantiation=*/true, &template_args));
+                        /*buildTemplateInstantiation=*/true, builder_args));
+            delete builder_args;
 
             if (inst_decl != NULL) {
               inst_decl->set_template_argument_list_is_explicit(
@@ -5324,13 +5327,15 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 functionConstVolatileFlags = member_type->get_mfunc_specifier();
               }
 
+              SgTemplateArgumentPtrList *builder_args =
+                  new SgTemplateArgumentPtrList(*ensure_template_args());
               SgTemplateInstantiationMemberFunctionDecl *inst_decl =
                   isSgTemplateInstantiationMemberFunctionDecl(
                       SageBuilder::buildNondefiningMemberFunctionDeclaration(
                           template_base_name, ret_type, param_list, func_scope,
                           /*decoratorList=*/NULL, functionConstVolatileFlags,
-                          /*buildTemplateInstantiation=*/true,
-                          ensure_template_args()));
+                          /*buildTemplateInstantiation=*/true, builder_args));
+              delete builder_args;
 
               if (inst_decl != NULL) {
                 inst_decl->set_template_argument_list_is_explicit(
@@ -5596,14 +5601,17 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 param_list = SageBuilder::buildFunctionParameterList_nfi();
               }
 
+              SgTemplateArgumentPtrList *builder_args =
+                  new SgTemplateArgumentPtrList(*ensure_template_args());
               SgTemplateInstantiationFunctionDecl *inst_decl =
                   isSgTemplateInstantiationFunctionDecl(
                       SageBuilder::buildNondefiningFunctionDeclaration(
                           template_base_name, ret_type, param_list, func_scope,
                           /*decoratorList=*/NULL,
-                          /*buildTemplateInstantiation=*/true,
-                          ensure_template_args(), SgStorageModifier::e_default,
+                          /*buildTemplateInstantiation=*/true, builder_args,
+                          SgStorageModifier::e_default,
                           /*forceFreeFunctionScope=*/false));
+              delete builder_args;
 
               if (inst_decl != NULL) {
                 inst_decl->set_template_argument_list_is_explicit(
