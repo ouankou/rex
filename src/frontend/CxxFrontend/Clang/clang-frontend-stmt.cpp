@@ -4928,7 +4928,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         param_list, class_scope, /*decoratorList=*/NULL,
                         functionConstVolatileFlags,
                         /*buildTemplateInstantiation=*/true, builder_args));
-            delete builder_args;
 
             if (inst_decl != NULL) {
               inst_decl->set_template_argument_list_is_explicit(
@@ -5335,7 +5334,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                           template_base_name, ret_type, param_list, func_scope,
                           /*decoratorList=*/NULL, functionConstVolatileFlags,
                           /*buildTemplateInstantiation=*/true, builder_args));
-              delete builder_args;
 
               if (inst_decl != NULL) {
                 inst_decl->set_template_argument_list_is_explicit(
@@ -5611,7 +5609,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                           /*buildTemplateInstantiation=*/true, builder_args,
                           SgStorageModifier::e_default,
                           /*forceFreeFunctionScope=*/false));
-              delete builder_args;
 
               if (inst_decl != NULL) {
                 inst_decl->set_template_argument_list_is_explicit(
