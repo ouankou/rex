@@ -11,32 +11,8 @@
 namespace {
 static const char kRexImplicitConstexprConstAttr[] =
     "rex_implicit_constexpr_const";
-static const char kRexExplicitQualifierAttr[] = "rex_explicit_qualifier";
 static const char kRexExplicitInstantiationKeywordAttr[] =
     "rex_explicit_instantiation_keyword";
-
-class RexExplicitQualifierAttribute : public AstAttribute {
-public:
-  explicit RexExplicitQualifierAttribute(std::string qualifier)
-      : qualifier_(std::move(qualifier)) {}
-
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  AstAttribute *copy() const override {
-    return new RexExplicitQualifierAttribute(qualifier_);
-  }
-
-  std::string attribute_class_name() const override {
-    return "RexExplicitQualifierAttribute";
-  }
-
-  std::string toString() override { return qualifier_; }
-
-private:
-  std::string qualifier_;
-};
 
 class RexExplicitInstantiationKeywordAttribute : public AstAttribute {
 public:
@@ -328,19 +304,6 @@ static std::string trimWhitespace(std::string s) {
     s.pop_back();
   }
   return s;
-}
-
-static std::string
-buildQualifierString(const clang::NestedNameSpecifier *qualifier,
-                     const clang::PrintingPolicy &policy) {
-  if (qualifier == nullptr) {
-    return std::string();
-  }
-  std::string result;
-  llvm::raw_string_ostream os(result);
-  qualifier->print(os, policy);
-  os.flush();
-  return result;
 }
 
 static const clang::NestedNameSpecifier *
