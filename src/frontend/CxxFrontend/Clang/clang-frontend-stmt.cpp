@@ -238,6 +238,18 @@ printNestedNameSpecifier(const clang::NestedNameSpecifier *specifier,
   return buffer;
 }
 
+std::string normalizeQualifierToken(std::string token) {
+  token = trimWhitespace(token);
+  while (token.rfind("::", 0) == 0) {
+    token = token.substr(2);
+  }
+  while (token.size() >= 2 && token.compare(token.size() - 2, 2, "::") == 0) {
+    token.erase(token.size() - 2);
+  }
+  token = trimWhitespace(token);
+  return token;
+}
+
 std::string
 deriveNestedNameSpecifierToken(const clang::NestedNameSpecifier *specifier,
                                const clang::ASTContext &context) {
@@ -263,15 +275,37 @@ deriveNestedNameSpecifierToken(const clang::NestedNameSpecifier *specifier,
     token = token.substr(prefix_text.size());
   }
 
-  token = trimWhitespace(token);
-  while (token.rfind("::", 0) == 0) {
-    token = token.substr(2);
+  return normalizeQualifierToken(token);
+}
+
+std::string
+getNestedNameSpecifierLocToken(const clang::NestedNameSpecifierLoc &loc,
+                               clang::SourceManager &sm,
+                               const clang::LangOptions &lang_opts) {
+  if (loc.getNestedNameSpecifier() == nullptr) {
+    return "";
   }
-  while (token.size() >= 2 && token.compare(token.size() - 2, 2, "::") == 0) {
-    token.erase(token.size() - 2);
+
+  clang::SourceRange range = loc.getLocalSourceRange();
+  if (!range.isValid()) {
+    return "";
   }
-  token = trimWhitespace(token);
-  return token;
+
+  clang::SourceLocation begin = sm.getSpellingLoc(range.getBegin());
+  clang::SourceLocation end = sm.getSpellingLoc(range.getEnd());
+  if (!begin.isValid() || !end.isValid()) {
+    return "";
+  }
+
+  bool invalid = false;
+  llvm::StringRef text = clang::Lexer::getSourceText(
+      clang::CharSourceRange::getTokenRange(begin, end), sm, lang_opts,
+      &invalid);
+  if (invalid || text.empty()) {
+    return "";
+  }
+
+  return normalizeQualifierToken(text.str());
 }
 
 struct ExplicitQualifierInfo {
@@ -280,101 +314,120 @@ struct ExplicitQualifierInfo {
   SgStringList tokens;
 };
 
-ExplicitQualifierInfo
-getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier,
-                         const clang::ASTContext &context) {
+ExplicitQualifierInfo getExplicitQualifierInfo(
+    const clang::NestedNameSpecifier *qualifier,
+    const clang::ASTContext &context,
+    const clang::NestedNameSpecifierLoc *qualifier_loc = nullptr,
+    clang::SourceManager *sm = nullptr,
+    const clang::LangOptions *lang_opts = nullptr) {
   ExplicitQualifierInfo info;
-  bool tokens_valid = true;
   std::vector<std::string> reversed_tokens;
+  clang::NestedNameSpecifierLoc current_loc;
+  bool use_loc = false;
+  if (qualifier_loc != nullptr && sm != nullptr && lang_opts != nullptr &&
+      qualifier_loc->getNestedNameSpecifier() == qualifier) {
+    current_loc = *qualifier_loc;
+    use_loc = true;
+  }
   for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
        nns = nns->getPrefix()) {
     if (nns->getKind() == clang::NestedNameSpecifier::Global) {
       info.has_global = true;
+      if (use_loc && current_loc.getNestedNameSpecifier() == nns) {
+        current_loc = current_loc.getPrefix();
+      }
       continue;
     }
     ++info.depth;
     std::string token;
-    bool used_print_fallback = false;
-    switch (nns->getKind()) {
-    case clang::NestedNameSpecifier::Namespace: {
-      const clang::NamespaceDecl *ns = nns->getAsNamespace();
-      if (ns != nullptr) {
-        if (!ns->isAnonymousNamespace()) {
-          token = ns->getNameAsString();
+    bool token_from_source = false;
+    if (use_loc) {
+      if (current_loc.getNestedNameSpecifier() == nns) {
+        token = getNestedNameSpecifierLocToken(current_loc, *sm, *lang_opts);
+        token_from_source = !token.empty();
+        current_loc = current_loc.getPrefix();
+      } else {
+        use_loc = false;
+      }
+    }
+    if (token.empty()) {
+      switch (nns->getKind()) {
+      case clang::NestedNameSpecifier::Namespace: {
+        const clang::NamespaceDecl *ns = nns->getAsNamespace();
+        if (ns != nullptr) {
+          if (!ns->isAnonymousNamespace()) {
+            token = ns->getNameAsString();
+          }
         }
+        break;
       }
-      break;
-    }
-    case clang::NestedNameSpecifier::NamespaceAlias: {
-      const clang::NamespaceAliasDecl *alias = nns->getAsNamespaceAlias();
-      if (alias != nullptr) {
-        token = alias->getNameAsString();
-      }
-      break;
-    }
-    case clang::NestedNameSpecifier::Identifier: {
-      const clang::IdentifierInfo *ident = nns->getAsIdentifier();
-      if (ident != nullptr) {
-        token = ident->getName().str();
-      }
-      break;
-    }
-    case clang::NestedNameSpecifier::TypeSpec:
-    case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
-      const clang::Type *type = nns->getAsType();
-      if (const clang::ElaboratedType *elab =
-              llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
-        type = elab->getNamedType().getTypePtr();
-      }
-      if (const clang::TypedefType *typedef_type =
-              llvm::dyn_cast_or_null<clang::TypedefType>(type)) {
-        token = typedef_type->getDecl()->getNameAsString();
-      } else if (const clang::UsingType *using_type =
-                     llvm::dyn_cast_or_null<clang::UsingType>(type)) {
-        clang::UsingShadowDecl *using_shadow = using_type->getFoundDecl();
-        if (using_shadow != nullptr) {
-          token = using_shadow->getNameAsString();
+      case clang::NestedNameSpecifier::NamespaceAlias: {
+        const clang::NamespaceAliasDecl *alias = nns->getAsNamespaceAlias();
+        if (alias != nullptr) {
+          token = alias->getNameAsString();
         }
-      } else if (const clang::RecordType *record_type =
-                     llvm::dyn_cast_or_null<clang::RecordType>(type)) {
-        token = record_type->getDecl()->getNameAsString();
-      } else if (const clang::EnumType *enum_type =
-                     llvm::dyn_cast_or_null<clang::EnumType>(type)) {
-        token = enum_type->getDecl()->getNameAsString();
-      } else if (const clang::InjectedClassNameType *injected_type =
-                     llvm::dyn_cast_or_null<clang::InjectedClassNameType>(
-                         type)) {
-        token = injected_type->getDecl()->getNameAsString();
-      } else if (type != nullptr) {
-        clang::QualType qual_type(type, 0);
-        clang::PrintingPolicy policy(context.getLangOpts());
-        policy.SuppressScope = true;
-        policy.SuppressTagKeyword = true;
-        token = qual_type.getAsString(policy);
+        break;
       }
-      break;
-    }
-    case clang::NestedNameSpecifier::Super:
-      token = "super";
-      break;
-    case clang::NestedNameSpecifier::Global:
-      break;
+      case clang::NestedNameSpecifier::Identifier: {
+        const clang::IdentifierInfo *ident = nns->getAsIdentifier();
+        if (ident != nullptr) {
+          token = ident->getName().str();
+        }
+        break;
+      }
+      case clang::NestedNameSpecifier::TypeSpec:
+      case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+        const clang::Type *type = nns->getAsType();
+        if (const clang::ElaboratedType *elab =
+                llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
+          type = elab->getNamedType().getTypePtr();
+        }
+        if (const clang::TypedefType *typedef_type =
+                llvm::dyn_cast_or_null<clang::TypedefType>(type)) {
+          token = typedef_type->getDecl()->getNameAsString();
+        } else if (const clang::UsingType *using_type =
+                       llvm::dyn_cast_or_null<clang::UsingType>(type)) {
+          clang::UsingShadowDecl *using_shadow = using_type->getFoundDecl();
+          if (using_shadow != nullptr) {
+            token = using_shadow->getNameAsString();
+          }
+        } else if (const clang::RecordType *record_type =
+                       llvm::dyn_cast_or_null<clang::RecordType>(type)) {
+          token = record_type->getDecl()->getNameAsString();
+        } else if (const clang::EnumType *enum_type =
+                       llvm::dyn_cast_or_null<clang::EnumType>(type)) {
+          token = enum_type->getDecl()->getNameAsString();
+        } else if (const clang::InjectedClassNameType *injected_type =
+                       llvm::dyn_cast_or_null<clang::InjectedClassNameType>(
+                           type)) {
+          token = injected_type->getDecl()->getNameAsString();
+        } else if (type != nullptr) {
+          clang::QualType qual_type(type, 0);
+          clang::PrintingPolicy policy(context.getLangOpts());
+          policy.SuppressScope = true;
+          policy.SuppressTagKeyword = true;
+          token = qual_type.getAsString(policy);
+        }
+        break;
+      }
+      case clang::NestedNameSpecifier::Super:
+        token = "super";
+        break;
+      }
     }
     if (token.empty()) {
       token = deriveNestedNameSpecifierToken(nns, context);
-      used_print_fallback = !token.empty();
+      token_from_source = !token.empty();
     }
-    if (!token.empty() && !used_print_fallback &&
+    if (!token.empty() && !token_from_source &&
         nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
       token = "template " + token;
     }
-    if (token.empty()) {
-      tokens_valid = false;
-    } else {
+    if (!token.empty()) {
       reversed_tokens.push_back(token);
     }
   }
-  if (tokens_valid && !reversed_tokens.empty()) {
+  if (!reversed_tokens.empty()) {
     for (auto it = reversed_tokens.rbegin(); it != reversed_tokens.rend();
          ++it) {
       info.tokens.push_back(*it);
@@ -5065,8 +5118,15 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     if (qualifier == nullptr) {
       return;
     }
+    clang::NestedNameSpecifierLoc qualifier_loc =
+        decl_ref_expr->getQualifierLoc();
+    const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+        qualifier_loc.getNestedNameSpecifier() != nullptr ? &qualifier_loc
+                                                          : nullptr;
     const ExplicitQualifierInfo info = getExplicitQualifierInfo(
-        qualifier, p_compiler_instance->getASTContext());
+        qualifier, p_compiler_instance->getASTContext(), qualifier_loc_ptr,
+        &p_compiler_instance->getSourceManager(),
+        &p_compiler_instance->getLangOpts());
     setExplicitQualifierOnExpr(expr, info);
   };
 
