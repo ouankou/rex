@@ -39,6 +39,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue160_axpy_roundtrip.cpp
   rex_test2025_issue160_axpy_system_headers.cpp
   rex_test2025_issue160_axpy_explicit_template_call.cpp
+  rex_test2025_issue160_explicit_empty_template_id.cpp
   rex_test2025_issue160_explicit_class_instantiation.cpp
   rex_test2025_issue160_explicit_struct_instantiation.cpp
   rex_test2025_issue160_extern_class_instantiation.cpp

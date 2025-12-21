@@ -839,7 +839,13 @@ Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDec
            collect_explicit_template_arguments(
                templateInstantiationFunctionDeclaration
                    ->get_templateArguments());
-       unparseTemplateArgumentList(explicit_args, info);
+       if (explicit_args.empty()) {
+         unp->u_exprStmt->curprint("<");
+         unp->u_exprStmt->curprint(" ");
+         unp->u_exprStmt->curprint(">");
+       } else {
+         unparseTemplateArgumentList(explicit_args, info);
+       }
         }
    }
 
@@ -915,7 +921,13 @@ Unparse_ExprStmt::unparseTemplateMemberFunctionName(SgTemplateInstantiationMembe
            collect_explicit_template_arguments(
                templateInstantiationMemberFunctionDeclaration
                    ->get_templateArguments());
-       unparseTemplateArgumentList(explicit_args, info);
+       if (explicit_args.empty()) {
+         unp->u_exprStmt->curprint("<");
+         unp->u_exprStmt->curprint(" ");
+         unp->u_exprStmt->curprint(">");
+       } else {
+         unparseTemplateArgumentList(explicit_args, info);
+       }
         }
 
 #if 0
