@@ -85,6 +85,50 @@ extendSourceRangeWithTrailingSemicolon(clang::SourceRange range,
   return range;
 }
 
+std::string getFloatingLiteralSpelling(const clang::FloatingLiteral *literal,
+                                       clang::SourceManager &sm,
+                                       const clang::LangOptions &lang_opts) {
+  if (literal == NULL) {
+    return "";
+  }
+
+  clang::SourceLocation loc = literal->getLocation();
+  if (!loc.isValid()) {
+    return "";
+  }
+
+  loc = sm.getSpellingLoc(loc);
+  if (loc.isValid()) {
+    bool invalid = false;
+    llvm::StringRef spelling =
+        clang::Lexer::getSpelling(loc, sm, lang_opts, &invalid);
+    if (!invalid && !spelling.empty()) {
+      return spelling.str();
+    }
+  }
+
+  clang::SourceRange range = literal->getSourceRange();
+  if (!range.isValid()) {
+    return "";
+  }
+
+  clang::SourceLocation begin = sm.getSpellingLoc(range.getBegin());
+  clang::SourceLocation end = sm.getSpellingLoc(range.getEnd());
+  if (!begin.isValid() || !end.isValid()) {
+    return "";
+  }
+
+  bool invalid = false;
+  llvm::StringRef text = clang::Lexer::getSourceText(
+      clang::CharSourceRange::getTokenRange(begin, end), sm, lang_opts,
+      &invalid);
+  if (invalid) {
+    return "";
+  }
+
+  return text.str();
+}
+
 SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
   for (SgNode *node = starting_scope; node != NULL; node = node->get_parent()) {
     SgClassDefinition *class_def = isSgClassDefinition(node);
@@ -6097,6 +6141,19 @@ bool ClangToSageTranslator::VisitFloatingLiteral(
               << ", using double" << std::endl;
     *node = SageBuilder::buildDoubleVal(
         floating_literal->getValue().convertToDouble());
+  }
+
+  std::string spelling = getFloatingLiteralSpelling(
+      floating_literal, p_compiler_instance->getSourceManager(),
+      p_compiler_instance->getLangOpts());
+  if (!spelling.empty()) {
+    if (SgFloatVal *float_val = isSgFloatVal(*node)) {
+      float_val->set_valueString(spelling);
+    } else if (SgDoubleVal *double_val = isSgDoubleVal(*node)) {
+      double_val->set_valueString(spelling);
+    } else if (SgLongDoubleVal *long_double_val = isSgLongDoubleVal(*node)) {
+      long_double_val->set_valueString(spelling);
+    }
   }
 
   return VisitExpr(floating_literal, node);

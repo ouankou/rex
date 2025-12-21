@@ -31,14 +31,6 @@
 using namespace std;
 using namespace Rose;
 
-namespace {
-const char kRexCopyListInitAttr[] = "rex_copy_list_init";
-
-static bool is_copy_list_initialization(const SgInitializedName *decl_item) {
-  return decl_item != NULL && decl_item->attributeExists(kRexCopyListInitAttr);
-}
-} // namespace
-
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
 #define OUTPUT_DEBUGGING_FUNCTION_INTERNALS  0
 #define OUTPUT_DEBUGGING_UNPARSE_INFO        0
@@ -2811,8 +2803,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
                printf ("classDeclaration = %p = %s \n",classDeclaration,classDeclaration->class_name().c_str());
                printf ("classDeclaration->get_parent() = %p = %s \n",classDeclaration->get_parent(),classDeclaration->get_parent()->class_name().c_str());
 #endif
-               // DQ (8/29/2005): "template" keyword now output by
-               // Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
                unparseClassDeclStmt(classDeclaration, info);
                break;
              }
@@ -2823,8 +2813,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
             // ROSE_ASSERT(false);
                SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(declarationStatement);
                ASSERT_not_null(functionDeclaration);
-            // DQ (8/29/2005): "template" keyword now output by Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
-            // curprint ( string("template ";
                unparseFuncDeclStmt(functionDeclaration,info);
                break;
              }
@@ -2839,10 +2827,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
             // DQ (5/31/2005): for now we will only output directives for template member functions and not non-template 
             // member functions.  In the case of a template class NOT output as a specialization then the template 
             // instantiation directive for a non-templated member function is allows (likely is just instatiates the class).
-               if (memberFunctionDeclaration->isTemplateFunction() == true)
-                  {
-                 // DQ (8/29/2005): "template" keyword now output by Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
-                 // curprint ( string("template ";
+               if (memberFunctionDeclaration->isTemplateFunction() == true) {
 #if 0
                     printf ("memberFunctionDeclaration = %p = %s = %s \n",
                           memberFunctionDeclaration,
@@ -2850,9 +2835,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
                           memberFunctionDeclaration->get_name().str());
 #endif
                     unparseMFuncDeclStmt(memberFunctionDeclaration,info);
-                  }
-                 else
-                  {
+               } else {
                  // It seems that if the class declaration is not specialized then the non-member function template 
                  // instantiation directive is allowed. But we don't at this point know if the class declaration has 
                  // been output so skip all template instantiations of non-template member functions (in general).
@@ -2861,7 +2844,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
                     printf ("Warning: Skipping output of directived to build non-template member functions! \n");
                     curprint ( string("\n/* Warning: Skipping output of directived to build non-template member functions! */"));
 #endif
-                  }
+               }
                break;
              }
 
@@ -3014,8 +2997,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt (SgStatement* stmt, SgUnp
 
        // curprint ( string("\n /* unparseTemplateInstantiationDeclStmt */ ";
 
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
-       // curprint ( string("\ntemplate <> \n";
 
           unparseClassDeclStmt(classDeclaration,info);
 
@@ -3109,13 +3090,11 @@ Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt (SgStatement* stmt, SgUnp
 #if 0
           printf ("In unparseTemplateInstantiationDeclStmt(): Calling unparseClassDeclStmt() \n");
 #endif
-       // curprint ( string("\n /* unparseTemplateInstantiationDeclStmt */ ";
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
-       // curprint ( string("\ntemplate <> \n";
-          unparseClassDeclStmt(classDeclaration,info);
+             // curprint ( string("\n /* unparseTemplateInstantiationDeclStmt */
+             // ";
+             unparseClassDeclStmt(classDeclaration, info);
 
-          if (locatedInNamespace == true)
-             {
+             if (locatedInNamespace == true) {
                curprint("   }");
              }
         }
@@ -3331,7 +3310,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationFunctionDeclStmt (SgStatement* stm
         {
        // const SgTemplateArgumentPtrList& templateArgListPtr = templateInstantiationFunctionDeclaration->get_templateArguments();
 #if 0
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
 
        // DQ (3/2/2005): Comment out use of "template<>"
        // DQ (5/8/2004): Make this an explicit specialization (using the newer C++ syntax to support this)
@@ -3550,7 +3528,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt (SgStatemen
             // curprint ( string("\ntemplate <> ";
              }
 
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
        // curprint ( string("\ntemplate <> ";
 #if 0
           printf ("Calling unparseMFuncDeclStmt() \n");
@@ -8839,7 +8816,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                 // bool suppressAssignmentSyntax = (constructor->get_args()->get_expressions().size() == 0);
                                    bool suppressAssignmentSyntax = (constructor->get_args()->get_expressions().size() == 0 && (constructor->get_is_explicit_cast() == false) );
                                    bool is_copy_list_init =
-                                       is_copy_list_initialization(decl_item);
+                                       decl_item
+                                           ->get_using_assignment_copy_constructor_syntax();
 
 #if DEBUG_COPY_INITIALIZER_SYNTAX
                                    printf ("constructor->get_is_braced_initialized() = %s \n",constructor->get_is_braced_initialized() ? "true" : "false");
@@ -8869,7 +8847,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                 bool is_braced_init =
                                     decl_item->get_is_braced_initialized();
                                 bool is_copy_list_init =
-                                    is_copy_list_initialization(decl_item);
+                                    decl_item
+                                        ->get_using_assignment_copy_constructor_syntax();
                                 if ((tmp_init->variant() == ASSIGN_INIT) ||
                                     ((tmp_init->variant() == AGGREGATE_INIT) &&
                                      ((is_braced_init == false) ||

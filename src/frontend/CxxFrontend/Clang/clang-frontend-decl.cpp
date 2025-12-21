@@ -8,7 +8,6 @@
 #include <set>
 
 namespace {
-static const char kRexCopyListInitAttr[] = "rex_copy_list_init";
 
 static std::string trimWhitespace(std::string s) {
   size_t first = 0;
@@ -7378,7 +7377,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   if (var_decl->getInitStyle() == clang::VarDecl::ListInit) {
     init_name->set_is_braced_initialized(true);
     if (!var_decl->isDirectInit()) {
-      init_name->setAttribute(kRexCopyListInitAttr, new AstAttribute);
+      init_name->set_using_assignment_copy_constructor_syntax(true);
     }
   }
   // CLANG FRONTEND FIX: Set initializer parent to SgInitializedName
