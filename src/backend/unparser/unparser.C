@@ -696,26 +696,27 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
        // unparsing to avoid mixing stale token streams with modified subtrees.
        std::set<SgStatement *> transformedStatements =
            SageInterface::collectTransformedStatements(file);
-       Sg_File_Info *source_info = file->get_file_info();
-       int source_file_id =
-           source_info != NULL ? source_info->get_physical_file_id() : -1;
-
-       auto affects_current_file = [&](Sg_File_Info *node_info) -> bool {
-         if (source_info == NULL || node_info == NULL) {
+       auto affects_current_file = [&](SgLocatedNode *node) -> bool {
+         if (node == NULL) {
            return true;
          }
 
-         int node_file_id = node_info->get_physical_file_id();
-         if (node_file_id == source_file_id) {
+         Sg_File_Info *node_info = node->get_file_info();
+         if (node_info == NULL) {
            return true;
          }
 
-         if (node_info->isShared() == true) {
-           SgFileIdList &file_ids = node_info->get_fileIDsToUnparse();
-           for (size_t i = 0; i < file_ids.size(); ++i) {
-             if (file_ids[i] == source_file_id) {
-               return true;
-             }
+         if (node_info->isSameFile(file) == true) {
+           return true;
+         }
+
+         if (node_info->isTransformation() == true ||
+             node_info->get_physical_file_id() ==
+                 Sg_File_Info::TRANSFORMATION_FILE_ID) {
+           SgSourceFile *enclosing_file =
+               SageInterface::getEnclosingSourceFile(node);
+           if (enclosing_file == NULL || enclosing_file == file) {
+             return true;
            }
          }
 
@@ -735,7 +736,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
            continue;
          if (stmt_info->isOutputInCodeGeneration() == false)
            continue;
-         if (affects_current_file(stmt_info) == false)
+         if (affects_current_file(stmt) == false)
            continue;
          disable_tokens = true;
          break;
@@ -752,11 +753,9 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
              disable_tokens = true;
              break;
            }
-           if (node_info->isCompilerGenerated() == true)
-             continue;
            if (node_info->isOutputInCodeGeneration() == false)
              continue;
-           if (affects_current_file(node_info) == false)
+           if (affects_current_file(node) == false)
              continue;
            disable_tokens = true;
            break;
