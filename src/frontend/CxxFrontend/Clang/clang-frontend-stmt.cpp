@@ -7,9 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "clang/AST/LambdaCapture.h"
-
 #include "sageInterface.h"
+#include "clang/AST/LambdaCapture.h"
 #include "clang/Lex/Lexer.h"
 
 using llvm::isa; // For LLVM type checking (isa<Type>)
@@ -226,11 +225,15 @@ std::string trimWhitespace(const std::string &input) {
 struct ExplicitQualifierInfo {
   int depth = 0;
   bool has_global = false;
+  SgStringList tokens;
 };
 
 ExplicitQualifierInfo
-getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier) {
+getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier,
+                         const clang::ASTContext &context) {
   ExplicitQualifierInfo info;
+  bool tokens_valid = true;
+  std::vector<std::string> reversed_tokens;
   for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
        nns = nns->getPrefix()) {
     if (nns->getKind() == clang::NestedNameSpecifier::Global) {
@@ -238,41 +241,123 @@ getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier) {
       continue;
     }
     ++info.depth;
+    std::string token;
+    switch (nns->getKind()) {
+    case clang::NestedNameSpecifier::Namespace: {
+      const clang::NamespaceDecl *ns = nns->getAsNamespace();
+      if (ns != nullptr) {
+        token = ns->getNameAsString();
+      }
+      break;
+    }
+    case clang::NestedNameSpecifier::NamespaceAlias: {
+      const clang::NamespaceAliasDecl *alias = nns->getAsNamespaceAlias();
+      if (alias != nullptr) {
+        token = alias->getNameAsString();
+      }
+      break;
+    }
+    case clang::NestedNameSpecifier::Identifier: {
+      const clang::IdentifierInfo *ident = nns->getAsIdentifier();
+      if (ident != nullptr) {
+        token = ident->getName().str();
+      }
+      break;
+    }
+    case clang::NestedNameSpecifier::TypeSpec:
+    case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+      const clang::Type *type = nns->getAsType();
+      if (const clang::ElaboratedType *elab =
+              llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
+        type = elab->getNamedType().getTypePtr();
+      }
+      if (const clang::TypedefType *typedef_type =
+              llvm::dyn_cast_or_null<clang::TypedefType>(type)) {
+        token = typedef_type->getDecl()->getNameAsString();
+      } else if (const clang::UsingType *using_type =
+                     llvm::dyn_cast_or_null<clang::UsingType>(type)) {
+        clang::UsingShadowDecl *using_shadow = using_type->getFoundDecl();
+        if (using_shadow != nullptr) {
+          token = using_shadow->getNameAsString();
+        }
+      } else if (const clang::RecordType *record_type =
+                     llvm::dyn_cast_or_null<clang::RecordType>(type)) {
+        token = record_type->getDecl()->getNameAsString();
+      } else if (const clang::EnumType *enum_type =
+                     llvm::dyn_cast_or_null<clang::EnumType>(type)) {
+        token = enum_type->getDecl()->getNameAsString();
+      } else if (const clang::InjectedClassNameType *injected_type =
+                     llvm::dyn_cast_or_null<clang::InjectedClassNameType>(
+                         type)) {
+        token = injected_type->getDecl()->getNameAsString();
+      } else if (type != nullptr) {
+        clang::QualType qual_type(type, 0);
+        clang::PrintingPolicy policy(context.getLangOpts());
+        policy.SuppressScope = true;
+        policy.SuppressTagKeyword = true;
+        token = qual_type.getAsString(policy);
+      }
+      if (!token.empty() &&
+          nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+        token = "template " + token;
+      }
+      break;
+    }
+    case clang::NestedNameSpecifier::Super:
+      token = "super";
+      break;
+    case clang::NestedNameSpecifier::Global:
+      break;
+    }
+    if (token.empty()) {
+      tokens_valid = false;
+    } else {
+      reversed_tokens.push_back(token);
+    }
+  }
+  if (tokens_valid && !reversed_tokens.empty()) {
+    for (auto it = reversed_tokens.rbegin(); it != reversed_tokens.rend();
+         ++it) {
+      info.tokens.push_back(*it);
+    }
   }
   return info;
 }
 
 template <typename T>
-void setExplicitQualifierOnRef(T *ref, int depth, bool has_global) {
+void setExplicitQualifierOnRef(T *ref, const ExplicitQualifierInfo &info) {
   if (ref == nullptr) {
     return;
   }
-  ref->set_explicit_name_qualification_length(depth);
-  ref->set_explicit_global_qualification(has_global);
+  ref->set_explicit_name_qualification_length(info.depth);
+  ref->set_explicit_global_qualification(info.has_global);
+  if (!info.tokens.empty()) {
+    ref->set_explicit_name_qualification_tokens(info.tokens);
+  }
 }
 
-void setExplicitQualifierOnExpr(SgExpression *expr, int depth,
-                                bool has_global) {
-  if (expr == nullptr || (depth == 0 && !has_global)) {
+void setExplicitQualifierOnExpr(SgExpression *expr,
+                                const ExplicitQualifierInfo &info) {
+  if (expr == nullptr || (info.depth == 0 && !info.has_global)) {
     return;
   }
   if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
-    setExplicitQualifierOnRef(var_ref, depth, has_global);
+    setExplicitQualifierOnRef(var_ref, info);
   } else if (SgTemplateMemberFunctionRefExp *tmpl_member =
                  isSgTemplateMemberFunctionRefExp(expr)) {
-    setExplicitQualifierOnRef(tmpl_member, depth, has_global);
+    setExplicitQualifierOnRef(tmpl_member, info);
   } else if (SgMemberFunctionRefExp *member_ref =
                  isSgMemberFunctionRefExp(expr)) {
-    setExplicitQualifierOnRef(member_ref, depth, has_global);
+    setExplicitQualifierOnRef(member_ref, info);
   } else if (SgTemplateFunctionRefExp *tmpl_func =
                  isSgTemplateFunctionRefExp(expr)) {
-    setExplicitQualifierOnRef(tmpl_func, depth, has_global);
+    setExplicitQualifierOnRef(tmpl_func, info);
   } else if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
-    setExplicitQualifierOnRef(func_ref, depth, has_global);
+    setExplicitQualifierOnRef(func_ref, info);
   } else if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(expr)) {
-    setExplicitQualifierOnRef(nonreal_ref, depth, has_global);
+    setExplicitQualifierOnRef(nonreal_ref, info);
   } else if (SgEnumVal *enum_val = isSgEnumVal(expr)) {
-    setExplicitQualifierOnRef(enum_val, depth, has_global);
+    setExplicitQualifierOnRef(enum_val, info);
   }
 }
 
@@ -4914,12 +4999,16 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         !decl_ref_expr->hasQualifier()) {
       return;
     }
+    if (p_compiler_instance == nullptr) {
+      return;
+    }
     const clang::NestedNameSpecifier *qualifier = decl_ref_expr->getQualifier();
     if (qualifier == nullptr) {
       return;
     }
-    const ExplicitQualifierInfo info = getExplicitQualifierInfo(qualifier);
-    setExplicitQualifierOnExpr(expr, info.depth, info.has_global);
+    const ExplicitQualifierInfo info = getExplicitQualifierInfo(
+        qualifier, p_compiler_instance->getASTContext());
+    setExplicitQualifierOnExpr(expr, info);
   };
 
   // Phase C (Issue 115): Queue implicit template instantiations that are
