@@ -8497,7 +8497,7 @@ UnparseLanguageIndependentConstructs::unparseExprList(SgExpression* expr, SgUnpa
                i++;
                if (i != expr_list->get_expressions().end())
                   {
-                 curprint(",");
+                 curprint(", ");
                   }
                  else
                   {
