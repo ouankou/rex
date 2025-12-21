@@ -3644,6 +3644,11 @@ bool ClangToSageTranslator::VisitExplicitCastExpr(
 #endif
   bool res = true;
 
+  if (auto *functional =
+          llvm::dyn_cast<clang::CXXFunctionalCastExpr>(explicit_cast_expr)) {
+    return VisitCXXFunctionalCastExpr(functional, node);
+  }
+
   SgNode *tmp_expr = Traverse(explicit_cast_expr->getSubExpr());
   SgExpression *sg_expr = isSgExpression(tmp_expr);
   ROSE_ASSERT(sg_expr != NULL);
