@@ -99,9 +99,10 @@ std::string getFloatingLiteralSpelling(const clang::FloatingLiteral *literal,
 
   loc = sm.getSpellingLoc(loc);
   if (loc.isValid()) {
+    llvm::SmallString<64> buf;
     bool invalid = false;
     llvm::StringRef spelling =
-        clang::Lexer::getSpelling(loc, sm, lang_opts, &invalid);
+        clang::Lexer::getSpelling(loc, buf, sm, lang_opts, &invalid);
     if (!invalid && !spelling.empty()) {
       return spelling.str();
     }
