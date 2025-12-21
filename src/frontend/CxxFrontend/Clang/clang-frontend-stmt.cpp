@@ -222,6 +222,58 @@ std::string trimWhitespace(const std::string &input) {
   return input.substr(start, end - start);
 }
 
+std::string
+printNestedNameSpecifier(const clang::NestedNameSpecifier *specifier,
+                         const clang::ASTContext &context) {
+  if (specifier == nullptr) {
+    return "";
+  }
+  std::string buffer;
+  llvm::raw_string_ostream stream(buffer);
+  clang::PrintingPolicy policy(context.getLangOpts());
+  policy.SuppressScope = false;
+  policy.SuppressTagKeyword = true;
+  specifier->print(stream, policy);
+  stream.flush();
+  return buffer;
+}
+
+std::string
+deriveNestedNameSpecifierToken(const clang::NestedNameSpecifier *specifier,
+                               const clang::ASTContext &context) {
+  if (specifier == nullptr) {
+    return "";
+  }
+
+  std::string full_text = printNestedNameSpecifier(specifier, context);
+  if (full_text.empty()) {
+    return "";
+  }
+
+  std::string prefix_text;
+  if (const clang::NestedNameSpecifier *prefix = specifier->getPrefix()) {
+    prefix_text = printNestedNameSpecifier(prefix, context);
+  }
+
+  std::string token = full_text;
+  if (!prefix_text.empty()) {
+    if (token.rfind(prefix_text, 0) != 0) {
+      return "";
+    }
+    token = token.substr(prefix_text.size());
+  }
+
+  token = trimWhitespace(token);
+  while (token.rfind("::", 0) == 0) {
+    token = token.substr(2);
+  }
+  while (token.size() >= 2 && token.compare(token.size() - 2, 2, "::") == 0) {
+    token.erase(token.size() - 2);
+  }
+  token = trimWhitespace(token);
+  return token;
+}
+
 struct ExplicitQualifierInfo {
   int depth = 0;
   bool has_global = false;
@@ -242,11 +294,14 @@ getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier,
     }
     ++info.depth;
     std::string token;
+    bool used_print_fallback = false;
     switch (nns->getKind()) {
     case clang::NestedNameSpecifier::Namespace: {
       const clang::NamespaceDecl *ns = nns->getAsNamespace();
       if (ns != nullptr) {
-        token = ns->getNameAsString();
+        if (!ns->isAnonymousNamespace()) {
+          token = ns->getNameAsString();
+        }
       }
       break;
     }
@@ -297,10 +352,6 @@ getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier,
         policy.SuppressTagKeyword = true;
         token = qual_type.getAsString(policy);
       }
-      if (!token.empty() &&
-          nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
-        token = "template " + token;
-      }
       break;
     }
     case clang::NestedNameSpecifier::Super:
@@ -308,6 +359,14 @@ getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier,
       break;
     case clang::NestedNameSpecifier::Global:
       break;
+    }
+    if (token.empty()) {
+      token = deriveNestedNameSpecifierToken(nns, context);
+      used_print_fallback = !token.empty();
+    }
+    if (!token.empty() && !used_print_fallback &&
+        nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+      token = "template " + token;
     }
     if (token.empty()) {
       tokens_valid = false;
