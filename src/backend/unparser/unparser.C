@@ -29,6 +29,80 @@
 
 namespace si = SageInterface;
 
+namespace {
+bool fileHasRelevantModifications(SgSourceFile *file) {
+  if (file == NULL) {
+    return true;
+  }
+
+  std::set<SgStatement *> transformedStatements =
+      SageInterface::collectTransformedStatements(file);
+  auto affects_current_file = [&](SgLocatedNode *node) -> bool {
+    if (node == NULL) {
+      return true;
+    }
+
+    Sg_File_Info *node_info = node->get_file_info();
+    if (node_info == NULL) {
+      return true;
+    }
+
+    if (node_info->isSameFile(file) == true) {
+      return true;
+    }
+
+    if (node_info->isTransformation() == true ||
+        node_info->get_physical_file_id() ==
+            Sg_File_Info::TRANSFORMATION_FILE_ID) {
+      SgSourceFile *enclosing_file =
+          SageInterface::getEnclosingSourceFile(node);
+      if (enclosing_file == NULL || enclosing_file == file) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  for (SgStatement *stmt : transformedStatements) {
+    if (stmt == NULL) {
+      continue;
+    }
+    Sg_File_Info *stmt_info = stmt->get_file_info();
+    if (stmt_info == NULL) {
+      return true;
+    }
+    if (stmt_info->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+    if (affects_current_file(stmt) == false) {
+      continue;
+    }
+    return true;
+  }
+
+  std::set<SgLocatedNode *> modifiedNodes =
+      SageInterface::collectModifiedLocatedNodes(file);
+  for (SgLocatedNode *node : modifiedNodes) {
+    if (node == NULL) {
+      continue;
+    }
+    Sg_File_Info *node_info = node->get_file_info();
+    if (node_info == NULL) {
+      return true;
+    }
+    if (node_info->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+    if (affects_current_file(node) == false) {
+      continue;
+    }
+    return true;
+  }
+
+  return false;
+}
+} // namespace
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
@@ -692,75 +766,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 
   // DQ (12/6/2014): This is the part of the token stream support that is required after transformations have been done in the AST.
      if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
-       // If transformations are present in this file, fall back to AST
-       // unparsing to avoid mixing stale token streams with modified subtrees.
-       std::set<SgStatement *> transformedStatements =
-           SageInterface::collectTransformedStatements(file);
-       auto affects_current_file = [&](SgLocatedNode *node) -> bool {
-         if (node == NULL) {
-           return true;
-         }
-
-         Sg_File_Info *node_info = node->get_file_info();
-         if (node_info == NULL) {
-           return true;
-         }
-
-         if (node_info->isSameFile(file) == true) {
-           return true;
-         }
-
-         if (node_info->isTransformation() == true ||
-             node_info->get_physical_file_id() ==
-                 Sg_File_Info::TRANSFORMATION_FILE_ID) {
-           SgSourceFile *enclosing_file =
-               SageInterface::getEnclosingSourceFile(node);
-           if (enclosing_file == NULL || enclosing_file == file) {
-             return true;
-           }
-         }
-
-         return false;
-       };
-
-       bool disable_tokens = false;
-       for (SgStatement *stmt : transformedStatements) {
-         if (stmt == NULL)
-           continue;
-         Sg_File_Info *stmt_info = stmt->get_file_info();
-         if (stmt_info == NULL) {
-           disable_tokens = true;
-           break;
-         }
-         if (stmt_info->isOutputInCodeGeneration() == false)
-           continue;
-         if (affects_current_file(stmt) == false)
-           continue;
-         disable_tokens = true;
-         break;
-       }
-
-       if (disable_tokens == false) {
-         std::set<SgLocatedNode *> modifiedNodes =
-             SageInterface::collectModifiedLocatedNodes(file);
-         for (SgLocatedNode *node : modifiedNodes) {
-           if (node == NULL)
-             continue;
-           Sg_File_Info *node_info = node->get_file_info();
-           if (node_info == NULL) {
-             disable_tokens = true;
-             break;
-           }
-           if (node_info->isOutputInCodeGeneration() == false)
-             continue;
-           if (affects_current_file(node) == false)
-             continue;
-           disable_tokens = true;
-           break;
-         }
-       }
-
-       if (disable_tokens == true) {
+       if (fileHasRelevantModifications(file)) {
          file->set_unparse_tokens(false);
        }
      }
@@ -3408,54 +3414,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
                  (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
                   sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
                   sourceFile->get_OpenCL_only())) {
-               std::set<SgStatement *> transformedStatements =
-                   SageInterface::collectTransformedStatements(file);
-               auto affects_current_file = [&](SgLocatedNode *node) -> bool {
-                 if (node == NULL) {
-                   return true;
-                 }
-                 Sg_File_Info *node_info = node->get_file_info();
-                 if (node_info == NULL) {
-                   return true;
-                 }
-                 if (node_info->isSameFile(file) == true) {
-                   return true;
-                 }
-                 if (node_info->isTransformation() == true ||
-                     node_info->get_physical_file_id() ==
-                         Sg_File_Info::TRANSFORMATION_FILE_ID) {
-                   SgSourceFile *enclosing_file =
-                       SageInterface::getEnclosingSourceFile(node);
-                   if (enclosing_file == NULL || enclosing_file == file) {
-                     return true;
-                   }
-                 }
-                 return false;
-               };
-               bool transformed_in_source = false;
-               for (SgStatement *stmt : transformedStatements) {
-                 if (stmt == NULL) {
-                   continue;
-                 }
-                 Sg_File_Info *stmt_info = stmt->get_file_info();
-                 if (stmt_info == NULL) {
-                   transformed_in_source = true;
-                   break;
-                 }
-                 if (stmt_info->isCompilerGenerated() == true) {
-                   continue;
-                 }
-                 if (stmt_info->isOutputInCodeGeneration() == false) {
-                   continue;
-                 }
-                 if (affects_current_file(stmt) == false) {
-                   continue;
-                 }
-                 transformed_in_source = true;
-                 break;
-               }
-
-               if (transformed_in_source == false) {
+               if (fileHasRelevantModifications(sourceFile) == false) {
                  ROSEAttributesListContainerPtr filePreprocInfo =
                      sourceFile->get_preprocessorDirectivesAndCommentsList();
                  if (filePreprocInfo != NULL &&
