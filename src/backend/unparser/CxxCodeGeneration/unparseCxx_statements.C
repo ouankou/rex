@@ -7444,6 +7444,23 @@ Unparse_ExprStmt::unparseTrailingFunctionModifiers(SgMemberFunctionDeclaration* 
         }
    }
 
+   static SgType *stripConstexprImplicitConst(SgType *type) {
+     SgModifierType *modifier_type = isSgModifierType(type);
+     if (modifier_type == NULL) {
+       return type;
+     }
+
+     const SgTypeModifier &modifier = modifier_type->get_typeModifier();
+     if (modifier.get_constVolatileModifier().isConst() == false) {
+       return type;
+     }
+
+     SgModifierType *stripped_type =
+         new SgModifierType(modifier_type->get_base_type());
+     stripped_type->get_typeModifier() = modifier;
+     stripped_type->get_typeModifier().get_constVolatileModifier().unsetConst();
+     return SgModifierType::insertModifierTypeIntoTypeTable(stripped_type);
+   }
 
 void
 Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
@@ -7846,6 +7863,12 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                  tmp_type = decl_item->get_auto_decltype();
                   }
 
+                  SgType *type_for_unparse = tmp_type;
+                  if (vardecl_stmt->get_is_constexpr() == true &&
+                      decl_item->get_is_constexpr_const_implicit() == true) {
+                    type_for_unparse = stripConstexprImplicitConst(tmp_type);
+                  }
+
             // DQ (11/28/2004): Added to support new design
                tmp_init = decl_item->get_initializer();
 
@@ -7860,7 +7883,7 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 
                SgNamedType *namedType = isSgNamedType(tmp_type->findBaseType());
             // SgDeclarationStatement* declStmt = (namedType) ? namedType->get_declaration() : NULL;
-               SgDeclarationStatement* declStmt = NULL;
+               SgDeclarationStatement *declStmt = NULL;
 
                ASSERT_not_null(ninfo.get_declstatement_ptr());
 
@@ -8262,7 +8285,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                          printf ("In unparseVarDeclStmt(): calling unparseType() \n");
                          curprint("\n/* In unparseVarDeclStmt(): calling unparseType() */ \n");
 #endif
-                         unp->u_type->unparseType(tmp_type, ninfo_for_type);
+                      unp->u_type->unparseType(type_for_unparse,
+                                               ninfo_for_type);
 #if 0
                          printf ("In unparseVarDeclStmt(): DONE: calling unparseType() \n");
                          curprint("\n/* In unparseVarDeclStmt(): DONE: calling unparseType() */ \n");
@@ -8321,7 +8345,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                       else
                        {
                       // If this is not a class or enum type then output the type as we would otherwise.
-                         unp->u_type->unparseType(tmp_type, ninfo_for_type);
+                      unp->u_type->unparseType(type_for_unparse,
+                                               ninfo_for_type);
                        }
 #endif
                   }
@@ -8359,7 +8384,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                          printf ("In unparseVarDeclStmt(): calling unparseType(): tmp_type = %p = %s \n",tmp_type,tmp_type->class_name().c_str());
                          curprint("\n/* In unparseVarDeclStmt(): first part: calling unparseType() */ \n");
 #endif
-                         unp->u_type->unparseType(tmp_type, ninfo_for_type);
+                         unp->u_type->unparseType(type_for_unparse,
+                                                  ninfo_for_type);
 #if DEBUG_VARIABLE_DECLARATION
                          printf ("In unparseVarDeclStmt(): DONE: calling unparseType() \n");
                          curprint("\n/* In unparseVarDeclStmt(): DONE: first part: calling unparseType() */ \n");
@@ -8374,7 +8400,7 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 
 #error "DEAD CODE!"
 
-               unp->u_type->unparseType(tmp_type, ninfo_for_type);
+               unp->u_type->unparseType(type_for_unparse, ninfo_for_type);
 #endif
 
 #if 0
@@ -8593,7 +8619,7 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 
             // DQ (7/31/2006): I think that we can simplify to just this code.
             // unp->u_type->unparseType(tmp_type, ninfo2);
-               unp->u_type->unparseType(tmp_type, ninfo_for_type);
+               unp->u_type->unparseType(type_for_unparse, ninfo_for_type);
 
 #if DEBUG_VARIABLE_DECLARATION
                printf ("DONE: Calling 2nd part of unp->u_type->unparseType for %s \n",tmp_type->sage_class_name());
@@ -9003,7 +9029,6 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
      curprint("/* Leaving unparseVarDeclStmt() */ \n");
 #endif
    }
-
 
 void
 Unparse_ExprStmt::unparseVarDefnStmt(SgStatement* stmt, SgUnparse_Info& info)

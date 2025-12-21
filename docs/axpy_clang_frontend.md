@@ -22,7 +22,7 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 
 ## Source Example
 
-- Added `tests/nonsmoke/functional/input_codes/axpy.cpp` as a C++ example that
+- Added `tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_test2025_issue160_axpy_system_headers.cpp` as a C++ example that
   now exercises common standard headers (`<array>`, `<numeric>`, `<cmath>`) to
   validate language default initialisation.
 - The program initialises two fixed-size buffers with `std::array`, performs the
@@ -73,16 +73,16 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 
 ## Validation Flow
 
-1. Run the translator to generate `rose_axpy.cpp`:
+1. Run the translator to generate `rose_rex_test2025_issue160_axpy_system_headers.cpp`:
    ```sh
    LD_LIBRARY_PATH=$PWD/build-clang/lib \
-     ./build-clang/bin/rose-compiler tests/nonsmoke/functional/input_codes/axpy.cpp
+     ./build-clang/bin/rose-compiler tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_test2025_issue160_axpy_system_headers.cpp
    ```
    Output appears at the repository root.
 2. Verify both the original and generated sources compile and execute cleanly:
    ```sh
-   clang++ tests/nonsmoke/functional/input_codes/axpy.cpp -O2 -o /tmp/axpy_orig
-   clang++ rose_axpy.cpp -O2 -o /tmp/axpy_rose
+   clang++ tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_test2025_issue160_axpy_system_headers.cpp -O2 -o /tmp/axpy_orig
+   clang++ rose_rex_test2025_issue160_axpy_system_headers.cpp -O2 -o /tmp/axpy_rose
    /tmp/axpy_orig && /tmp/axpy_rose   # both exit 0
    ```
 
@@ -103,7 +103,7 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
   picking a GNU C++17 default, injecting implicit headers, and enabling builtin
   intrinsics. This unblocks `<cmath>`/`__builtin_*` usage and lines up with the
   intended Clang invocation (`clang-frontend.cpp:267`-`395`, `clang-to-dot.cpp:264`-`325`).
-- **AXPY sample**: the smoke test in `tests/nonsmoke/functional/input_codes/axpy.cpp`
+- **AXPY sample**: the smoke test in `tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_test2025_issue160_axpy_system_headers.cpp`
   now exercises `<array>`, `<numeric>`, `<cmath>`, and `<cstddef>`. It compiles and
   runs with stock `clang++`, but the current Clang→ROSE bridge still aborts when
   walking the resulting libstdc++ AST.
@@ -153,7 +153,7 @@ remaining tasks are strictly around AST translation hardening:
    - Reuse existing SageBuilder helpers where possible; skip unhandled nodes with
      `buildNullExpression()` rather than abort.
 5. **Regression loop**
-   - Re-run `rose-compiler tests/nonsmoke/functional/input_codes/axpy.cpp`
+   - Re-run `rose-compiler tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_test2025_issue160_axpy_system_headers.cpp`
      until it produces a translated file without crashing.
    - Expand coverage gradually (`<vector>`, `<algorithm>`, etc.) using the same
      smoke-test pattern.

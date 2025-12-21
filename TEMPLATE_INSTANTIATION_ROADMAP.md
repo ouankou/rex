@@ -582,7 +582,7 @@ struct array x;  // Current buggy output
 - ✅ Nested template instantiations work
 - ✅ Non-type template parameters work (e.g., `array<T, N>`)
 - ✅ Template-dependent member access works
-- ✅ All axpy.cpp test generates 100% correct code
+- ✅ axpy round-trip tests generate 100% correct code (`rex_test2025_issue160_axpy_system_headers.cpp`, `rex_test2025_issue163_axpy_roundtrip.cpp`)
 
 ## Timeline
 
