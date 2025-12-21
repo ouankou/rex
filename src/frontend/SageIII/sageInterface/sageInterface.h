@@ -865,6 +865,9 @@ void setSourcePositionPointersToNull(SgNode *node);
 //! Get the string representing the type name
 ROSE_DLL_API  std::string getTypeName ( SgType* type );
 
+//! Check if a type (or any nested type) is unknown/incomplete.
+ROSE_DLL_API bool containsUnknownType(SgType *type);
+
 //! Get the right bool type according to C or C++ language input
 ROSE_DLL_API SgType* getBoolType(SgNode* n);
 

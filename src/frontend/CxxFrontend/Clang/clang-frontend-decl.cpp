@@ -250,53 +250,6 @@ static std::string findExplicitInstantiationKeyword(
   return keyword;
 }
 
-bool containsUnknownType(SgType *type) {
-  if (type == NULL)
-    return true;
-
-  if (isSgTypeUnknown(type))
-    return true;
-  if (auto *mod = isSgModifierType(type)) {
-    return containsUnknownType(mod->get_base_type());
-  }
-  if (auto *ptr = isSgPointerType(type)) {
-    return containsUnknownType(ptr->get_base_type());
-  }
-  if (auto *memPtr = isSgPointerMemberType(type)) {
-    return containsUnknownType(memPtr->get_base_type());
-  }
-  if (auto *ref = isSgReferenceType(type)) {
-    return containsUnknownType(ref->get_base_type());
-  }
-  if (auto *rref = isSgRvalueReferenceType(type)) {
-    return containsUnknownType(rref->get_base_type());
-  }
-  if (auto *arr = isSgArrayType(type)) {
-    return containsUnknownType(arr->get_base_type());
-  }
-  if (auto *td = isSgTypedefType(type)) {
-    return containsUnknownType(td->get_base_type());
-  }
-  if (auto *func = isSgFunctionType(type)) {
-    if (containsUnknownType(func->get_return_type()))
-      return true;
-    SgFunctionParameterTypeList *params = func->get_argument_list();
-    if (params != NULL) {
-      const SgTypePtrList &args = params->get_arguments();
-      for (SgType *arg : args) {
-        if (containsUnknownType(arg))
-          return true;
-      }
-    }
-    return false;
-  }
-  if (auto *declType = isSgDeclType(type)) {
-    return containsUnknownType(declType->get_base_type());
-  }
-
-  return false;
-}
-
 static std::string trimWhitespace(std::string s) {
   size_t first = 0;
   while (first < s.size() &&
@@ -4760,7 +4713,7 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
   SgType *sg_underlyingType = buildTypeFromQualifiedType(underlyingQualType);
   SgType *type = buildTypeFromQualifiedType(typedef_decl->getUnderlyingType());
 
-  bool type_has_unknown = containsUnknownType(type);
+  bool type_has_unknown = SageInterface::containsUnknownType(type);
   if (type_has_unknown && SgProject::get_verbose() > 0) {
     std::cerr << "CFE: Typedef with unknown underlying type '" << name
               << "' spelled as '"
@@ -5376,7 +5329,7 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
   SgType *sg_fieldType = buildTypeFromQualifiedType(fieldQualType);
   SgType *type = buildTypeFromQualifiedType(field_decl->getType());
 
-  bool type_has_unknown = containsUnknownType(type);
+  bool type_has_unknown = SageInterface::containsUnknownType(type);
   if (type_has_unknown && SgProject::get_verbose() > 0) {
     std::cerr << "CFE: Field with unknown type '" << name << "' spelled as '"
               << field_decl->getType().getAsString()
