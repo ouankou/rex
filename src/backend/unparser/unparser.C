@@ -732,8 +732,6 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
            disable_tokens = true;
            break;
          }
-         if (stmt_info->isCompilerGenerated() == true)
-           continue;
          if (stmt_info->isOutputInCodeGeneration() == false)
            continue;
          if (affects_current_file(stmt) == false)
@@ -753,8 +751,6 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
              disable_tokens = true;
              break;
            }
-           if (node_info->isCompilerGenerated() == true)
-             continue;
            if (node_info->isOutputInCodeGeneration() == false)
              continue;
            if (affects_current_file(node) == false)
