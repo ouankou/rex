@@ -1,6 +1,7 @@
 #include "sage3basic.h"
 #include "nameQualificationSupport.h"
 
+#include "rexExplicitQualifierAttribute.h"
 #include "sageGeneric.h"
 
 using namespace std;
@@ -38,6 +39,22 @@ bool should_replace_type_name(const std::string &existing,
     return candidate_depth > existing_depth;
   }
   return candidate.size() > existing.size();
+}
+
+bool getExplicitQualifierLength(const SgNode *node, int &length) {
+  const RexExplicitQualifierAttribute *attr = getRexExplicitQualifier(node);
+  if (attr == nullptr) {
+    return false;
+  }
+  int explicit_length = attr->qualification_depth();
+  if (attr->has_global()) {
+    ++explicit_length;
+  }
+  if (explicit_length <= 0) {
+    return false;
+  }
+  length = explicit_length;
+  return true;
 }
 
 SgName
@@ -14960,7 +14977,11 @@ NameQualificationTraversal::setNameQualification(SgVarRefExp* varRefExp, SgVaria
      if (isAnUnamedConstructs == false)
         {
           SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(variableDeclaration);
-          string qualifier = setNameQualificationSupport(scope,amountOfNameQualificationRequired, outputNameQualificationLength, outputGlobalQualification, outputTypeEvaluation);
+          int effectiveNameQualification = amountOfNameQualificationRequired;
+          getExplicitQualifierLength(varRefExp, effectiveNameQualification);
+          string qualifier = setNameQualificationSupport(
+              scope, effectiveNameQualification, outputNameQualificationLength,
+              outputGlobalQualification, outputTypeEvaluation);
 
           varRefExp->set_global_qualification_required(outputGlobalQualification);
           varRefExp->set_name_qualification_length(outputNameQualificationLength);
@@ -15108,10 +15129,11 @@ NameQualificationTraversal::setNameQualification(SgFunctionRefExp* functionRefEx
 #endif
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(functionDeclaration);
+     int effectiveNameQualification = amountOfNameQualificationRequired;
+     getExplicitQualifierLength(functionRefExp, effectiveNameQualification);
      string qualifier = setNameQualificationSupport(
-         scope, amountOfNameQualificationRequired,
-         outputNameQualificationLength, outputGlobalQualification,
-         outputTypeEvaluation);
+         scope, effectiveNameQualification, outputNameQualificationLength,
+         outputGlobalQualification, outputTypeEvaluation);
      functionRefExp->set_global_qualification_required(outputGlobalQualification);
      functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
@@ -15315,10 +15337,11 @@ NameQualificationTraversal::setNameQualification(SgMemberFunctionRefExp* functio
 #endif
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(functionDeclaration);
+     int effectiveNameQualification = amountOfNameQualificationRequired;
+     getExplicitQualifierLength(functionRefExp, effectiveNameQualification);
      string qualifier = setNameQualificationSupport(
-         scope, amountOfNameQualificationRequired,
-         outputNameQualificationLength, outputGlobalQualification,
-         outputTypeEvaluation);
+         scope, effectiveNameQualification, outputNameQualificationLength,
+         outputGlobalQualification, outputTypeEvaluation);
      functionRefExp->set_global_qualification_required(outputGlobalQualification);
      functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
@@ -15524,7 +15547,11 @@ NameQualificationTraversal::setNameQualification(SgEnumVal* enumVal, SgEnumDecla
 #endif
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(enumDeclaration);
-     string qualifier = setNameQualificationSupport(scope,amountOfNameQualificationRequired, outputNameQualificationLength, outputGlobalQualification, outputTypeEvaluation);
+     int effectiveNameQualification = amountOfNameQualificationRequired;
+     getExplicitQualifierLength(enumVal, effectiveNameQualification);
+     string qualifier = setNameQualificationSupport(
+         scope, effectiveNameQualification, outputNameQualificationLength,
+         outputGlobalQualification, outputTypeEvaluation);
 
      enumVal->set_global_qualification_required(outputGlobalQualification);
      enumVal->set_name_qualification_length(outputNameQualificationLength);

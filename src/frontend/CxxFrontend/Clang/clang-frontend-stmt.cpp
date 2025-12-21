@@ -9,6 +9,7 @@
 
 #include "clang/AST/LambdaCapture.h"
 
+#include "rexExplicitQualifierAttribute.h"
 #include "sageInterface.h"
 #include "clang/Lex/Lexer.h"
 
@@ -221,6 +222,25 @@ std::string trimWhitespace(const std::string &input) {
     --end;
   }
   return input.substr(start, end - start);
+}
+
+struct ExplicitQualifierInfo {
+  int depth = 0;
+  bool has_global = false;
+};
+
+ExplicitQualifierInfo
+getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier) {
+  ExplicitQualifierInfo info;
+  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
+       nns = nns->getPrefix()) {
+    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
+      info.has_global = true;
+      continue;
+    }
+    ++info.depth;
+  }
+  return info;
 }
 
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
@@ -4856,6 +4876,21 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   }
 
   bool res = true;
+  auto attach_explicit_qualifier = [&](SgExpression *expr) {
+    if (expr == nullptr || decl_ref_expr == nullptr ||
+        !decl_ref_expr->hasQualifier()) {
+      return;
+    }
+    const clang::NestedNameSpecifier *qualifier = decl_ref_expr->getQualifier();
+    if (qualifier == nullptr) {
+      return;
+    }
+    ExplicitQualifierInfo info = getExplicitQualifierInfo(qualifier);
+    if (info.depth == 0 && !info.has_global) {
+      return;
+    }
+    setRexExplicitQualifier(expr, info.depth, info.has_global);
+  };
 
   // Phase C (Issue 115): Queue implicit template instantiations that are
   // referenced from user code. Translation is deferred until the TU pass
@@ -5028,6 +5063,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 SgExpression *ref_exp =
                     SageBuilder::buildMemberFunctionRefExp_nfi(inst_sym, false,
                                                                false);
+                attach_explicit_qualifier(ref_exp);
                 *node = ref_exp;
                 return VisitExpr(decl_ref_expr, node) && res;
               }
@@ -5136,6 +5172,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
     if (var_sym != NULL) {
       SgExpression *ref_exp = SageBuilder::buildVarRefExp(var_sym);
+      attach_explicit_qualifier(ref_exp);
       *node = ref_exp;
     } else {
       SgMemberFunctionSymbol *member_sym = member_func_sym;
@@ -5500,6 +5537,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         const bool need_qualifier = decl_ref_expr->hasQualifier();
         SgExpression *ref_exp = SageBuilder::buildMemberFunctionRefExp_nfi(
             ref_member_sym, false, need_qualifier);
+        attach_explicit_qualifier(ref_exp);
         *node = ref_exp;
       } else if (func_sym != NULL) {
         SgFunctionSymbol *ref_func_sym = func_sym;
@@ -5770,6 +5808,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
         }
         SgExpression *ref_exp = SageBuilder::buildFunctionRefExp(ref_func_sym);
+        attach_explicit_qualifier(ref_exp);
         *node = ref_exp;
       } else {
         if (enum_sym != NULL) {
@@ -5796,6 +5835,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           SgName name = enum_sym->get_name();
           SgExpression *ref_exp =
               SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
+          attach_explicit_qualifier(ref_exp);
           *node = ref_exp;
         } else {
           if (sym != NULL) {
@@ -5847,6 +5887,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     SgExpression *ref_exp = buildNonrealRefExpFromNestedNameSpecifier(
         decl_ref_expr->getQualifier(), current_scope, SgName(decl_name),
         decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
+    attach_explicit_qualifier(ref_exp);
     *node = ref_exp;
   }
 
