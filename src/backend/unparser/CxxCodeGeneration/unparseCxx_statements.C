@@ -32,56 +32,7 @@ using namespace std;
 using namespace Rose;
 
 namespace {
-const char kRexImplicitConstexprConstAttr[] = "rex_implicit_constexpr_const";
-const char kRexExplicitInstantiationKeywordAttr[] =
-    "rex_explicit_instantiation_keyword";
 const char kRexCopyListInitAttr[] = "rex_copy_list_init";
-
-static std::string getExplicitInstantiationKeyword(const SgNode *node) {
-  if (node == NULL) {
-    return std::string();
-  }
-  AstAttribute *attr = node->getAttribute(kRexExplicitInstantiationKeywordAttr);
-  if (attr == NULL) {
-    return std::string();
-  }
-  return attr->toString();
-}
-
-static SgType *strip_top_level_const_preserve_typedef(SgType *type) {
-  SgModifierType *mod_type = isSgModifierType(type);
-  if (mod_type == NULL) {
-    return type;
-  }
-  if (!mod_type->get_typeModifier().get_constVolatileModifier().isConst()) {
-    return type;
-  }
-  SgType *base_type = mod_type->get_base_type();
-  if (base_type == NULL) {
-    return type;
-  }
-  SgModifierType *copy = new SgModifierType(base_type);
-  copy->get_typeModifier() = mod_type->get_typeModifier();
-  copy->get_typeModifier().get_constVolatileModifier().unsetConst();
-  SgModifierType *canonical =
-      SgModifierType::insertModifierTypeIntoTypeTable(copy);
-  if (canonical != copy) {
-    delete copy;
-  }
-  return canonical;
-}
-
-static SgType *
-maybe_strip_implicit_constexpr_const(SgInitializedName *decl_item,
-                                     SgType *type) {
-  if (decl_item == NULL || type == NULL) {
-    return type;
-  }
-  if (!decl_item->attributeExists(kRexImplicitConstexprConstAttr)) {
-    return type;
-  }
-  return strip_top_level_const_preserve_typedef(type);
-}
 
 static bool is_copy_list_initialization(const SgInitializedName *decl_item) {
   return decl_item != NULL && decl_item->attributeExists(kRexCopyListInitAttr);
@@ -2860,38 +2811,9 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
                printf ("classDeclaration = %p = %s \n",classDeclaration,classDeclaration->class_name().c_str());
                printf ("classDeclaration->get_parent() = %p = %s \n",classDeclaration->get_parent(),classDeclaration->get_parent()->class_name().c_str());
 #endif
-            // DQ (8/29/2005): "template" keyword now output by Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
-            // curprint ( string("template ";
-#if 1
-            // DQ (8/19/2014): Original code.
-               std::string keyword = getExplicitInstantiationKeyword(
-                   templateInstantiationDirective);
-               SgClassDeclaration::class_types original_class_type =
-                   classDeclaration->get_class_type();
-               bool override_keyword = false;
-               if (!keyword.empty()) {
-                 if (keyword == "class") {
-                   classDeclaration->set_class_type(
-                       SgClassDeclaration::e_class);
-                   override_keyword = true;
-                 } else if (keyword == "struct") {
-                   classDeclaration->set_class_type(
-                       SgClassDeclaration::e_struct);
-                   override_keyword = true;
-                 } else if (keyword == "union") {
-                   classDeclaration->set_class_type(
-                       SgClassDeclaration::e_union);
-                   override_keyword = true;
-                 }
-               }
-               unparseClassDeclStmt(classDeclaration,info);
-               if (override_keyword) {
-                 classDeclaration->set_class_type(original_class_type);
-               }
-#else
-            // DQ (8/19/2014): New code.
-               unparseTemplateInstantiationDeclStmt(declarationStatement,info);
-#endif
+               // DQ (8/29/2005): "template" keyword now output by
+               // Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
+               unparseClassDeclStmt(classDeclaration, info);
                break;
              }
 
@@ -7829,7 +7751,6 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
           tmp_init = NULL;
 
           tmp_type = decl_item->get_type();
-          tmp_type = maybe_strip_implicit_constexpr_const(decl_item, tmp_type);
 
           // DQ (5/11/2007): This fails in astCopy_tests for copyExample using
           // copyExampleInput.C
@@ -7940,16 +7861,12 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 #endif
                tmp_name = decl_item->get_name();
                tmp_type = decl_item->get_type();
-               tmp_type =
-                   maybe_strip_implicit_constexpr_const(decl_item, tmp_type);
                ASSERT_not_null(isSgType(tmp_type));
 
             // TV (09/06/2018): if auto keyword is used then we unparse the associated declared type (before `auto` is resolved)
                if (decl_item->get_auto_decltype() != NULL)
                   {
-                    tmp_type = decl_item->get_auto_decltype();
-                    tmp_type = maybe_strip_implicit_constexpr_const(decl_item,
-                                                                    tmp_type);
+                 tmp_type = decl_item->get_auto_decltype();
                   }
 
             // DQ (11/28/2004): Added to support new design

@@ -89,6 +89,29 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 163: Round-trip axpy.cpp must match exactly.
+string(CONCAT rex_test2025_issue163_axpy_roundtrip_unparse_command
+  "\"$@\" && "
+  "cmp -s ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue163_axpy_roundtrip.cpp "
+  "rose_rex_test2025_issue163_axpy_roundtrip.cpp && "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2025_issue163_axpy_roundtrip.cpp"
+)
+add_test(
+  NAME Cxx_tests_rex_test2025_issue163_axpy_roundtrip_unparse
+  COMMAND
+    sh -c
+    "${rex_test2025_issue163_axpy_roundtrip_unparse_command}"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue163_axpy_roundtrip.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue163_axpy_roundtrip_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 160: Preserve explicit qualifiers, casts, and list-init for std headers.
 string(CONCAT rex_test2025_issue160_axpy_system_headers_unparse_command
   "\"$@\" && "

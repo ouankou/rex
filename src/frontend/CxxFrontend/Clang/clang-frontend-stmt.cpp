@@ -9,10 +9,8 @@
 
 #include "clang/AST/LambdaCapture.h"
 
-#include "clang/Lex/Lexer.h"
-#include "llvm/Support/raw_ostream.h"
-
 #include "sageInterface.h"
+#include "clang/Lex/Lexer.h"
 
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
@@ -133,41 +131,6 @@ std::string trimWhitespace(const std::string &input) {
     --end;
   }
   return input.substr(start, end - start);
-}
-
-std::string getSourceTokenText(const clang::Expr *expr,
-                               clang::SourceManager &sm,
-                               const clang::LangOptions &lang_opts) {
-  if (expr == nullptr) {
-    return std::string();
-  }
-
-  clang::SourceRange range = expr->getSourceRange();
-  if (!range.isValid()) {
-    return std::string();
-  }
-
-  clang::SourceLocation begin = range.getBegin();
-  clang::SourceLocation end = range.getEnd();
-  if (begin.isMacroID()) {
-    begin = sm.getExpansionLoc(begin);
-  }
-  if (end.isMacroID()) {
-    end = sm.getExpansionLoc(end);
-  }
-  if (!begin.isValid() || !end.isValid()) {
-    return std::string();
-  }
-
-  bool invalid = false;
-  clang::CharSourceRange char_range =
-      clang::CharSourceRange::getTokenRange(begin, end);
-  llvm::StringRef text =
-      clang::Lexer::getSourceText(char_range, sm, lang_opts, &invalid);
-  if (invalid || text.empty()) {
-    return std::string();
-  }
-  return text.str();
 }
 
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
@@ -4803,28 +4766,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   }
 
   bool res = true;
-  auto attach_explicit_qualifier = [&](SgExpression *expr) {
-    if (expr == NULL || decl_ref_expr == NULL ||
-        !decl_ref_expr->hasQualifier() || p_compiler_instance == NULL) {
-      return;
-    }
-    clang::NestedNameSpecifier *qualifier = decl_ref_expr->getQualifier();
-    if (qualifier == NULL) {
-      return;
-    }
-    clang::PrintingPolicy policy(p_compiler_instance->getLangOpts());
-    std::string qualifier_text = buildQualifierString(qualifier, policy);
-    qualifier_text = trimWhitespace(qualifier_text);
-    if (qualifier_text.empty()) {
-      return;
-    }
-    if (qualifier_text.size() < 2 ||
-        qualifier_text.substr(qualifier_text.size() - 2) != "::") {
-      qualifier_text += "::";
-    }
-    expr->setAttribute(kRexExplicitQualifierAttr,
-                       new RexExplicitQualifierAttribute(qualifier_text));
-  };
 
   // Phase C (Issue 115): Queue implicit template instantiations that are
   // referenced from user code. Translation is deferred until the TU pass
@@ -4998,7 +4939,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                     SageBuilder::buildMemberFunctionRefExp_nfi(inst_sym, false,
                                                                false);
                 *node = ref_exp;
-                attach_explicit_qualifier(ref_exp);
                 return VisitExpr(decl_ref_expr, node) && res;
               }
             }
@@ -5107,7 +5047,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     if (var_sym != NULL) {
       SgExpression *ref_exp = SageBuilder::buildVarRefExp(var_sym);
       *node = ref_exp;
-      attach_explicit_qualifier(ref_exp);
     } else {
       SgMemberFunctionSymbol *member_sym = member_func_sym;
       if (member_sym == NULL && func_sym != NULL) {
@@ -5472,7 +5411,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         SgExpression *ref_exp = SageBuilder::buildMemberFunctionRefExp_nfi(
             ref_member_sym, false, need_qualifier);
         *node = ref_exp;
-        attach_explicit_qualifier(ref_exp);
       } else if (func_sym != NULL) {
         SgFunctionSymbol *ref_func_sym = func_sym;
         if (has_explicit_template_args) {
@@ -5743,7 +5681,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
         SgExpression *ref_exp = SageBuilder::buildFunctionRefExp(ref_func_sym);
         *node = ref_exp;
-        attach_explicit_qualifier(ref_exp);
       } else {
         if (enum_sym != NULL) {
           // ROOT CAUSE FIX: Get enum declaration from the type instead of
@@ -5770,7 +5707,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           SgExpression *ref_exp =
               SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
           *node = ref_exp;
-          attach_explicit_qualifier(ref_exp);
         } else {
           if (sym != NULL) {
             std::cerr << "Runtime error: Unknown type of symbol for a "
@@ -5822,7 +5758,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         decl_ref_expr->getQualifier(), current_scope, SgName(decl_name),
         decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
     *node = ref_exp;
-    attach_explicit_qualifier(ref_exp);
   }
 
   return VisitExpr(decl_ref_expr, node) && res;
@@ -6164,21 +6099,6 @@ bool ClangToSageTranslator::VisitFloatingLiteral(
         floating_literal->getValue().convertToDouble());
   }
 
-  if (p_compiler_instance != nullptr) {
-    std::string literal_text = getSourceTokenText(
-        floating_literal, p_compiler_instance->getSourceManager(),
-        p_compiler_instance->getLangOpts());
-    if (!literal_text.empty()) {
-      if (SgFloatVal *float_val = isSgFloatVal(*node)) {
-        float_val->set_valueString(literal_text);
-      } else if (SgDoubleVal *double_val = isSgDoubleVal(*node)) {
-        double_val->set_valueString(literal_text);
-      } else if (SgLongDoubleVal *long_double_val = isSgLongDoubleVal(*node)) {
-        long_double_val->set_valueString(literal_text);
-      }
-    }
-  }
-
   return VisitExpr(floating_literal, node);
 }
 
@@ -6401,55 +6321,6 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
     } else {
       value_exp = SageBuilder::buildLongLongIntVal(
           static_cast<long long>(value.getSExtValue()));
-    }
-  }
-
-  if (value_exp != nullptr && p_compiler_instance != nullptr) {
-    std::string literal_text = getSourceTokenText(
-        integer_literal, p_compiler_instance->getSourceManager(),
-        p_compiler_instance->getLangOpts());
-    literal_text = trimWhitespace(literal_text);
-    if (!literal_text.empty()) {
-      bool starts_numeric =
-          std::isdigit(static_cast<unsigned char>(literal_text[0]));
-      if (!starts_numeric &&
-          (literal_text[0] == '+' || literal_text[0] == '-') &&
-          literal_text.size() > 1) {
-        starts_numeric =
-            std::isdigit(static_cast<unsigned char>(literal_text[1]));
-      }
-
-      if (!starts_numeric) {
-        *node = value_exp;
-        return VisitExpr(integer_literal, node);
-      }
-
-      if (SgIntVal *int_val = isSgIntVal(value_exp)) {
-        int_val->set_valueString(literal_text);
-      } else if (SgShortVal *short_val = isSgShortVal(value_exp)) {
-        short_val->set_valueString(literal_text);
-      } else if (SgLongIntVal *long_val = isSgLongIntVal(value_exp)) {
-        long_val->set_valueString(literal_text);
-      } else if (SgLongLongIntVal *long_long_val =
-                     isSgLongLongIntVal(value_exp)) {
-        long_long_val->set_valueString(literal_text);
-      } else if (SgUnsignedCharVal *uchar_val =
-                     isSgUnsignedCharVal(value_exp)) {
-        uchar_val->set_valueString(literal_text);
-      } else if (SgUnsignedShortVal *ushort_val =
-                     isSgUnsignedShortVal(value_exp)) {
-        ushort_val->set_valueString(literal_text);
-      } else if (SgUnsignedIntVal *uint_val = isSgUnsignedIntVal(value_exp)) {
-        uint_val->set_valueString(literal_text);
-      } else if (SgUnsignedLongVal *ulong_val =
-                     isSgUnsignedLongVal(value_exp)) {
-        ulong_val->set_valueString(literal_text);
-      } else if (SgUnsignedLongLongIntVal *ulong_long_val =
-                     isSgUnsignedLongLongIntVal(value_exp)) {
-        ulong_long_val->set_valueString(literal_text);
-      } else if (SgCharVal *char_val = isSgCharVal(value_exp)) {
-        char_val->set_valueString(literal_text);
-      }
     }
   }
 

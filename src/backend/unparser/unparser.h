@@ -271,9 +271,7 @@ class Unparser
           void resetSourcePosition (SgStatement* stmt);
 
        // DQ (9/30/2013): Unparse the file using the token stream (stored in the SgFile).
-          void unparseFileUsingTokenStream(
-              SgSourceFile *file,
-              const std::string *outputFilenameOverride = NULL);
+          void unparseFileUsingTokenStream(SgSourceFile *file);
 
           // DQ (9/30/2013): Supporting function for evaluating token source
           // position information. int getNumberOfLines( std::string s ) const;

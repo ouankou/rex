@@ -20,8 +20,6 @@ namespace si = SageInterface;
 // #define DEBUG_INITIALIZED_NAME DEBUG_NAME_QUALIFICATION_LEVEL
 
 namespace {
-const char kRexExplicitQualifierAttr[] = "rex_explicit_qualifier";
-
 size_t count_scope_qualifiers(const std::string &name) {
   size_t count = 0;
   size_t pos = name.find("::");
@@ -40,41 +38,6 @@ bool should_replace_type_name(const std::string &existing,
     return candidate_depth > existing_depth;
   }
   return candidate.size() > existing.size();
-}
-
-std::string trim_whitespace(const std::string &input) {
-  size_t start = 0;
-  while (start < input.size() &&
-         (input[start] == ' ' || input[start] == '\t')) {
-    ++start;
-  }
-  size_t end = input.size();
-  while (end > start && (input[end - 1] == ' ' || input[end - 1] == '\t')) {
-    --end;
-  }
-  return input.substr(start, end - start);
-}
-
-std::string normalize_explicit_qualifier(const std::string &raw) {
-  std::string qualifier = trim_whitespace(raw);
-  if (qualifier.empty()) {
-    return qualifier;
-  }
-  if (qualifier.size() < 2 || qualifier.substr(qualifier.size() - 2) != "::") {
-    qualifier += "::";
-  }
-  return qualifier;
-}
-
-std::string get_explicit_qualifier(const SgNode *node) {
-  if (node == NULL) {
-    return std::string();
-  }
-  AstAttribute *attr = node->getAttribute(kRexExplicitQualifierAttr);
-  if (attr == NULL) {
-    return std::string();
-  }
-  return normalize_explicit_qualifier(attr->toString());
 }
 
 SgName
@@ -15124,14 +15087,7 @@ NameQualificationTraversal::setNameQualification(SgVarRefExp* varRefExp, SgVaria
      MLOG_WARN_C(MLOG_UNPARSER, "Leaving setNameQualification(SgVarRefExp*) \n");
      ROSE_ABORT();
 #endif
-        std::string explicit_qualifier = get_explicit_qualifier(varRefExp);
-        if (!explicit_qualifier.empty()) {
-          qualifiedNameMapForNames[varRefExp] = explicit_qualifier;
-          varRefExp->set_global_qualification_required(false);
-          varRefExp->set_name_qualification_length(0);
-          varRefExp->set_type_elaboration_required(false);
-        }
-   }
+}
 
 
 void
@@ -15152,15 +15108,10 @@ NameQualificationTraversal::setNameQualification(SgFunctionRefExp* functionRefEx
 #endif
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(functionDeclaration);
-     string qualifier = setNameQualificationSupport(scope,amountOfNameQualificationRequired, outputNameQualificationLength, outputGlobalQualification, outputTypeEvaluation);
-     std::string explicit_qualifier = get_explicit_qualifier(functionRefExp);
-     if (!explicit_qualifier.empty()) {
-       qualifier = explicit_qualifier;
-       outputNameQualificationLength = 0;
-       outputGlobalQualification = false;
-       outputTypeEvaluation = false;
-     }
-
+     string qualifier = setNameQualificationSupport(
+         scope, amountOfNameQualificationRequired,
+         outputNameQualificationLength, outputGlobalQualification,
+         outputTypeEvaluation);
      functionRefExp->set_global_qualification_required(outputGlobalQualification);
      functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
@@ -15364,15 +15315,10 @@ NameQualificationTraversal::setNameQualification(SgMemberFunctionRefExp* functio
 #endif
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(functionDeclaration);
-     string qualifier = setNameQualificationSupport(scope,amountOfNameQualificationRequired, outputNameQualificationLength, outputGlobalQualification, outputTypeEvaluation);
-     std::string explicit_qualifier = get_explicit_qualifier(functionRefExp);
-     if (!explicit_qualifier.empty()) {
-       qualifier = explicit_qualifier;
-       outputNameQualificationLength = 0;
-       outputGlobalQualification = false;
-       outputTypeEvaluation = false;
-     }
-
+     string qualifier = setNameQualificationSupport(
+         scope, amountOfNameQualificationRequired,
+         outputNameQualificationLength, outputGlobalQualification,
+         outputTypeEvaluation);
      functionRefExp->set_global_qualification_required(outputGlobalQualification);
      functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
@@ -15907,16 +15853,10 @@ NameQualificationTraversal::setNameQualificationReturnType ( SgFunctionDeclarati
 #endif
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(declaration);
-     string qualifier = setNameQualificationSupport(scope,amountOfNameQualificationRequired, outputNameQualificationLength, outputGlobalQualification, outputTypeEvaluation);
-     std::string explicit_qualifier =
-         get_explicit_qualifier(functionDeclaration);
-     if (!explicit_qualifier.empty()) {
-       qualifier = explicit_qualifier;
-       outputNameQualificationLength = 0;
-       outputGlobalQualification = false;
-       outputTypeEvaluation = false;
-     }
-
+     string qualifier = setNameQualificationSupport(
+         scope, amountOfNameQualificationRequired,
+         outputNameQualificationLength, outputGlobalQualification,
+         outputTypeEvaluation);
      functionDeclaration->set_global_qualification_required_for_return_type(outputGlobalQualification);
      functionDeclaration->set_name_qualification_length_for_return_type(outputNameQualificationLength);
      functionDeclaration->set_type_elaboration_required_for_return_type(outputTypeEvaluation);
@@ -16189,54 +16129,43 @@ NameQualificationTraversal::setNameQualificationOnType(SgInitializedName* initia
 
      SgScopeStatement * scope = traverseNonrealDeclForCorrectScope(declaration);
      string qualifier = setNameQualificationSupport(scope,amountOfNameQualificationRequired, outputNameQualificationLength, outputGlobalQualification, outputTypeEvaluation);
-     std::string explicit_qualifier = get_explicit_qualifier(initializedName);
-     bool has_explicit_qualifier = !explicit_qualifier.empty();
-     if (has_explicit_qualifier) {
-       qualifier = explicit_qualifier;
-       outputNameQualificationLength = 0;
-       outputGlobalQualification = false;
-       outputTypeEvaluation = false;
-     }
+     SgClassDefinition *enclosing_class_definition =
+         SageInterface::getEnclosingClassDefinition(initializedName);
+     if (enclosing_class_definition != NULL) {
+       SgClassDeclaration *enclosing_class_decl =
+           enclosing_class_definition->get_declaration();
+       if (enclosing_class_decl != NULL) {
+         const std::string class_name =
+             enclosing_class_decl->get_name().getString();
+         const std::string qualified_name =
+             enclosing_class_decl->get_qualified_name().getString();
 
-     if (has_explicit_qualifier == false) {
-       SgClassDefinition *enclosing_class_definition =
-           SageInterface::getEnclosingClassDefinition(initializedName);
-       if (enclosing_class_definition != NULL) {
-         SgClassDeclaration *enclosing_class_decl =
-             enclosing_class_definition->get_declaration();
-         if (enclosing_class_decl != NULL) {
-           const std::string class_name =
-               enclosing_class_decl->get_name().getString();
-           const std::string qualified_name =
-               enclosing_class_decl->get_qualified_name().getString();
+         if (!class_name.empty()) {
+           std::vector<std::string> prefixes;
 
-           if (!class_name.empty()) {
-             std::vector<std::string> prefixes;
+           if (!qualified_name.empty()) {
+             prefixes.push_back(qualified_name + "::");
 
-             if (!qualified_name.empty()) {
-               prefixes.push_back(qualified_name + "::");
+             std::string with_global = qualified_name;
+             if (with_global.rfind("::", 0) != 0) {
+               with_global = "::" + with_global;
+             }
+             prefixes.push_back(with_global + "::");
+           }
 
-               std::string with_global = qualified_name;
-               if (with_global.rfind("::", 0) != 0) {
-                 with_global = "::" + with_global;
-               }
-               prefixes.push_back(with_global + "::");
+           prefixes.push_back(class_name + "::");
+           prefixes.push_back("::" + class_name + "::");
+
+           for (const std::string &prefix : prefixes) {
+             if (qualifier.rfind(prefix, 0) != 0) {
+               continue;
              }
 
-             prefixes.push_back(class_name + "::");
-             prefixes.push_back("::" + class_name + "::");
-
-             for (const std::string &prefix : prefixes) {
-               if (qualifier.rfind(prefix, 0) != 0) {
-                 continue;
-               }
-
-               qualifier = class_name + "::" + qualifier.substr(prefix.size());
-               if (prefix.rfind("::", 0) == 0) {
-                 outputGlobalQualification = false;
-               }
-               break;
+             qualifier = class_name + "::" + qualifier.substr(prefix.size());
+             if (prefix.rfind("::", 0) == 0) {
+               outputGlobalQualification = false;
              }
+             break;
            }
          }
        }
@@ -16291,8 +16220,7 @@ NameQualificationTraversal::setNameQualificationOnType(SgInitializedName* initia
   // if (skipGlobalQualification == true && qualifier == "::")
   // if (skipGlobalQualification == true)
   // if (skipGlobalQualification == true && qualifier == "::")
-     if (has_explicit_qualifier == false && skipGlobalQualification == true &&
-         outputNameQualification == false) {
+     if (skipGlobalQualification == true && outputNameQualification == false) {
 // #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
           MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::setNameQualification(SgInitializedName* initializedName): skipGlobalQualification has caused global qualification to be ignored \n");

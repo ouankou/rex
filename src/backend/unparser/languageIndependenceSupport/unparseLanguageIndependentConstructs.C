@@ -36,21 +36,6 @@ bool isConstruct = false;
 
 UnparseLanguageIndependentConstructs::unparsed_as_enum_type global_unparsed_as = UnparseLanguageIndependentConstructs::e_unparsed_as_error;
 
-namespace {
-std::string trimOperatorWhitespace(const std::string &input) {
-  size_t start = 0;
-  while (start < input.size() &&
-         (input[start] == ' ' || input[start] == '\t')) {
-    ++start;
-  }
-  size_t end = input.size();
-  while (end > start && (input[end - 1] == ' ' || input[end - 1] == '\t')) {
-    --end;
-  }
-  return input.substr(start, end - start);
-}
-} // namespace
-
 std::string
 UnparseLanguageIndependentConstructs::unparsed_as_kind(unparsed_as_enum_type x)
    {
@@ -6979,13 +6964,11 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                     curprint("/* Output operator name = " + info.get_operator_name() + " */\n ");
 #endif
                     const std::string &op_name = info.get_operator_name();
-                    const std::string trimmed_op =
-                        trimOperatorWhitespace(op_name);
-                    if (trimmed_op == "." || trimmed_op == "->" ||
-                        trimmed_op == ".*" || trimmed_op == "->*") {
-                      curprint(trimmed_op);
+                    if (op_name == "." || op_name == "->" || op_name == ".*" ||
+                        op_name == "->*") {
+                      curprint(op_name);
                     } else {
-                      curprint(string(" ") + trimmed_op + " ");
+                      curprint(string(" ") + op_name + " ");
                     }
 
                  // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
@@ -8514,7 +8497,7 @@ UnparseLanguageIndependentConstructs::unparseExprList(SgExpression* expr, SgUnpa
                i++;
                if (i != expr_list->get_expressions().end())
                   {
-                 curprint(", ");
+                 curprint(",");
                   }
                  else
                   {

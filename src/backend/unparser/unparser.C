@@ -691,6 +691,46 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 #endif
 
   // DQ (12/6/2014): This is the part of the token stream support that is required after transformations have been done in the AST.
+     if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
+       // If transformations are present, fall back to AST unparsing to avoid
+       // mixing stale token streams with modified subtrees.
+       std::set<SgStatement *> transformedStatements =
+           SageInterface::collectTransformedStatements(file);
+       bool disable_tokens = transformedStatements.empty() == false;
+
+       if (disable_tokens == false) {
+         std::set<SgLocatedNode *> modifiedNodes =
+             SageInterface::collectModifiedLocatedNodes(file);
+         Sg_File_Info *source_info = file->get_file_info();
+         int source_file_id =
+             source_info != NULL ? source_info->get_physical_file_id() : -1;
+         for (SgLocatedNode *node : modifiedNodes) {
+           if (node == NULL || node->isCompilerGenerated())
+             continue;
+           Sg_File_Info *node_info = node->get_file_info();
+           if (node_info == NULL) {
+             disable_tokens = true;
+             break;
+           }
+           if (node_info->isCompilerGenerated() == true)
+             continue;
+           if (node_info->isOutputInCodeGeneration() == false)
+             continue;
+           int node_file_id = node_info->get_physical_file_id();
+           if (node_info->isTransformation() == true ||
+               node_file_id == Sg_File_Info::TRANSFORMATION_FILE_ID ||
+               node_file_id == source_file_id) {
+             disable_tokens = true;
+             break;
+           }
+         }
+       }
+
+       if (disable_tokens == true) {
+         file->set_unparse_tokens(false);
+       }
+     }
+
      if ( (isCfile || isCxxFile) && file->get_unparse_tokens() == true)
         {
 #define DEBUG_UNPARSE_TOKENS 0
@@ -1278,8 +1318,7 @@ Unparser::getColumnNumberOfEndOfString( std::string internalString )
      return endingColumnNumber;
    }
 
-   void Unparser::unparseFileUsingTokenStream(
-       SgSourceFile *file, const std::string *outputFilenameOverride) {
+   void Unparser::unparseFileUsingTokenStream(SgSourceFile *file) {
      // DQ (9/30/2013): Unparse the file using the token stream (stored in the
      // SgFile).
 
@@ -1485,13 +1524,8 @@ Unparser::getColumnNumberOfEndOfString( std::string internalString )
 
 
   // DQ (10/27/2013): Use a different filename for the output of the raw token stream (not associated with individual statements).
-        string outputFilename;
-        if (outputFilenameOverride != NULL) {
-          outputFilename = *outputFilenameOverride;
-        } else {
-          outputFilename =
-              "rose_raw_tokens_" + file->get_sourceFileNameWithoutPath();
-        }
+        string outputFilename =
+            "rose_raw_tokens_" + file->get_sourceFileNameWithoutPath();
 
 #if 0
      printf ("In Unparser::unparseFileUsingTokenStream(): Output tokens stream to file: %s \n",outputFilename.c_str());
@@ -3327,82 +3361,17 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
 #if 0
           printf ("In unparseFile(SgFile*): open file for output of generated source code: outputFilename = %s \n",outputFilename.c_str());
 #endif
-             SgSourceFile *sourceFile = isSgSourceFile(file);
-             bool useRawTokenOutput = false;
-             if (sourceFile != NULL && file->get_unparse_tokens() == false &&
-                 (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-                  sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
-                  sourceFile->get_OpenCL_only())) {
-               std::set<SgStatement *> transformedStatements =
-                   SageInterface::collectTransformedStatements(file);
-               Sg_File_Info *source_info = sourceFile->get_file_info();
-               int source_file_id = source_info != NULL
-                                        ? source_info->get_physical_file_id()
-                                        : -1;
-               bool transformed_in_source = false;
-               if (source_file_id < 0) {
-                 transformed_in_source = true;
-               }
-               for (SgStatement *stmt : transformedStatements) {
-                 if (stmt == NULL) {
-                   continue;
-                 }
-                 if (stmt->isCompilerGenerated() == true) {
-                   continue;
-                 }
-                 Sg_File_Info *stmt_info = stmt->get_file_info();
-                 if (stmt_info == NULL) {
-                   transformed_in_source = true;
-                   break;
-                 }
-                 if (stmt_info->isCompilerGenerated() == true) {
-                   continue;
-                 }
-                 if (stmt_info->isOutputInCodeGeneration() == false) {
-                   continue;
-                 }
-                 int stmt_file_id = stmt_info->get_physical_file_id();
-                 if (stmt_info->isTransformation() == true ||
-                     stmt_file_id == Sg_File_Info::TRANSFORMATION_FILE_ID ||
-                     stmt_file_id == source_file_id) {
-                   transformed_in_source = true;
-                   break;
-                 }
-               }
+             fstream ROSE_OutputFile(outputFilename.c_str(), ios::out);
+             // ROSE_OutputFile.open(s_file.c_str());
 
-               if (transformed_in_source == false) {
-                 ROSEAttributesListContainerPtr filePreprocInfo =
-                     sourceFile->get_preprocessorDirectivesAndCommentsList();
-                 if (filePreprocInfo != NULL &&
-                     filePreprocInfo->getList().find(
-                         sourceFile->getFileName()) !=
-                         filePreprocInfo->getList().end()) {
-                   useRawTokenOutput = true;
-                 }
-               }
+             // DQ (12/8/2007): Added error checking for opening out output
+             // file.
+             if (!ROSE_OutputFile) {
+               // throw std::exception("(fstream) error while opening file.");
+               printf("Error detected in opening file %s for output \n",
+                      outputFilename.c_str());
+               ROSE_ABORT();
              }
-
-             if (useRawTokenOutput == true) {
-               Unparser_Opt dummyOptions;
-               ostringstream dummyStream;
-               Unparser rawTokenUnparser(
-                   &dummyStream,
-                   sourceFile->get_file_info()->get_filenameString(),
-                   dummyOptions, unparseHelp, unparseDelegate);
-               rawTokenUnparser.unparseFileUsingTokenStream(sourceFile,
-                                                            &outputFilename);
-             } else {
-               fstream ROSE_OutputFile(outputFilename.c_str(), ios::out);
-               // ROSE_OutputFile.open(s_file.c_str());
-
-               // DQ (12/8/2007): Added error checking for opening out output
-               // file.
-               if (!ROSE_OutputFile) {
-                 // throw std::exception("(fstream) error while opening file.");
-                 printf("Error detected in opening file %s for output \n",
-                        outputFilename.c_str());
-                 ROSE_ABORT();
-               }
 
 #if 0
           printf ("Exiting as a test! \n");
@@ -3555,7 +3524,6 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
               //unparseHelp->postOutputCallbacks.apply(true, args);
 	      MLOG_FATAL_CXX(MLOG_UNPARSER) << "Need callback mechanisms that were supported by Sawyer before\n";
           }
-             }
 
        // DQ (3/19/2014): If -rose:noclobber_if_different_output, then test the generated file against the original file.
           if (trigger_file_comparision == true)

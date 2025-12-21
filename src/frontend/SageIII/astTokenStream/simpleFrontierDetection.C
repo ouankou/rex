@@ -230,6 +230,10 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(SgNode*
                        !statement->get_file_info()->isTransformation()) {
                      allow_transform = false;
                    }
+                   if (statement->get_file_info()->isOutputInCodeGeneration() ==
+                       false) {
+                     allow_transform = false;
+                   }
                  }
 
 #if 0
