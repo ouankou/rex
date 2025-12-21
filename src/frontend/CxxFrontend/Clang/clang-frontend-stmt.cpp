@@ -130,6 +130,51 @@ std::string getFloatingLiteralSpelling(const clang::FloatingLiteral *literal,
   return text.str();
 }
 
+std::string getIntegerLiteralSpelling(const clang::IntegerLiteral *literal,
+                                      clang::SourceManager &sm,
+                                      const clang::LangOptions &lang_opts) {
+  if (literal == NULL) {
+    return "";
+  }
+
+  clang::SourceLocation loc = literal->getLocation();
+  if (!loc.isValid()) {
+    return "";
+  }
+
+  loc = sm.getSpellingLoc(loc);
+  if (loc.isValid()) {
+    llvm::SmallString<64> buf;
+    bool invalid = false;
+    llvm::StringRef spelling =
+        clang::Lexer::getSpelling(loc, buf, sm, lang_opts, &invalid);
+    if (!invalid && !spelling.empty()) {
+      return spelling.str();
+    }
+  }
+
+  clang::SourceRange range = literal->getSourceRange();
+  if (!range.isValid()) {
+    return "";
+  }
+
+  clang::SourceLocation begin = sm.getSpellingLoc(range.getBegin());
+  clang::SourceLocation end = sm.getSpellingLoc(range.getEnd());
+  if (!begin.isValid() || !end.isValid()) {
+    return "";
+  }
+
+  bool invalid = false;
+  llvm::StringRef text = clang::Lexer::getSourceText(
+      clang::CharSourceRange::getTokenRange(begin, end), sm, lang_opts,
+      &invalid);
+  if (invalid) {
+    return "";
+  }
+
+  return text.str();
+}
+
 SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
   for (SgNode *node = starting_scope; node != NULL; node = node->get_parent()) {
     SgClassDefinition *class_def = isSgClassDefinition(node);
@@ -6322,50 +6367,104 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
   const clang::BuiltinType *builtin_type =
       literal_type->getAs<clang::BuiltinType>();
   const llvm::APInt value = integer_literal->getValue();
+  std::string spelling = getIntegerLiteralSpelling(
+      integer_literal, p_compiler_instance->getSourceManager(),
+      p_compiler_instance->getLangOpts());
+  bool has_spelling = !spelling.empty();
 
   if (builtin_type != nullptr) {
     switch (builtin_type->getKind()) {
     case clang::BuiltinType::UChar:
     case clang::BuiltinType::Char_U:
-      value_exp = SageBuilder::buildUnsignedCharVal(
-          static_cast<unsigned char>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedCharVal_nfi(
+            static_cast<unsigned char>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedCharVal(
+            static_cast<unsigned char>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::UShort:
-      value_exp = SageBuilder::buildUnsignedShortVal(
-          static_cast<unsigned short>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedShortVal_nfi(
+            static_cast<unsigned short>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedShortVal(
+            static_cast<unsigned short>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::UInt:
-      value_exp = SageBuilder::buildUnsignedIntVal(
-          static_cast<unsigned int>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedIntVal_nfi(
+            static_cast<unsigned int>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedIntVal(
+            static_cast<unsigned int>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::ULong:
-      value_exp = SageBuilder::buildUnsignedLongVal(
-          static_cast<unsigned long>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedLongVal_nfi(
+            static_cast<unsigned long>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedLongVal(
+            static_cast<unsigned long>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::ULongLong:
-      value_exp = SageBuilder::buildUnsignedLongLongIntVal(
-          static_cast<unsigned long long>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal_nfi(
+            static_cast<unsigned long long>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal(
+            static_cast<unsigned long long>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::SChar:
     case clang::BuiltinType::Char_S:
-      value_exp =
-          SageBuilder::buildCharVal(static_cast<char>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildCharVal_nfi(
+            static_cast<char>(value.getSExtValue()), spelling);
+      } else {
+        value_exp =
+            SageBuilder::buildCharVal(static_cast<char>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::Short:
-      value_exp =
-          SageBuilder::buildShortVal(static_cast<short>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildShortVal_nfi(
+            static_cast<short>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildShortVal(
+            static_cast<short>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::Int:
-      value_exp =
-          SageBuilder::buildIntVal(static_cast<int>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildIntVal_nfi(
+            static_cast<int>(value.getSExtValue()), spelling);
+      } else {
+        value_exp =
+            SageBuilder::buildIntVal(static_cast<int>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::Long:
-      value_exp =
-          SageBuilder::buildLongIntVal(static_cast<long>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildLongIntVal_nfi(
+            static_cast<long>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildLongIntVal(
+            static_cast<long>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::LongLong:
-      value_exp = SageBuilder::buildLongLongIntVal(
-          static_cast<long long>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildLongLongIntVal_nfi(
+            static_cast<long long>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildLongLongIntVal(
+            static_cast<long long>(value.getSExtValue()));
+      }
       break;
     default:
       break;
@@ -6374,11 +6473,21 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
 
   if (value_exp == nullptr) {
     if (literal_type->isUnsignedIntegerType()) {
-      value_exp = SageBuilder::buildUnsignedLongLongIntVal(
-          static_cast<unsigned long long>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal_nfi(
+            static_cast<unsigned long long>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal(
+            static_cast<unsigned long long>(value.getLimitedValue()));
+      }
     } else {
-      value_exp = SageBuilder::buildLongLongIntVal(
-          static_cast<long long>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildLongLongIntVal_nfi(
+            static_cast<long long>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildLongLongIntVal(
+            static_cast<long long>(value.getSExtValue()));
+      }
     }
   }
 
