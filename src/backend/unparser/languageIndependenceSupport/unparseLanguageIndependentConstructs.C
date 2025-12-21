@@ -36,6 +36,21 @@ bool isConstruct = false;
 
 UnparseLanguageIndependentConstructs::unparsed_as_enum_type global_unparsed_as = UnparseLanguageIndependentConstructs::e_unparsed_as_error;
 
+namespace {
+std::string trimOperatorWhitespace(const std::string &input) {
+  size_t start = 0;
+  while (start < input.size() &&
+         (input[start] == ' ' || input[start] == '\t')) {
+    ++start;
+  }
+  size_t end = input.size();
+  while (end > start && (input[end - 1] == ' ' || input[end - 1] == '\t')) {
+    --end;
+  }
+  return input.substr(start, end - start);
+}
+} // namespace
+
 std::string
 UnparseLanguageIndependentConstructs::unparsed_as_kind(unparsed_as_enum_type x)
    {
@@ -202,7 +217,6 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
      ASSERT_not_null(stmt);
 
      bool statementInFile = false;
-
 #define DEBUG_STATEMENT_FROM_FILE 0
 
   // DQ (5/19/2020): Debugging new support for include directives.
@@ -377,33 +391,43 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
        // const char* statementfilename = "default";
           string statementfilename = "default";
 
-       // DQ (8/17/2005): At some point all transformation should be marked as isOutputInCodeGeneration
-       // DQ (6/17/2005): Not all compiler generated IR nodes are intended to be unparsed (e.g. implicit casts)
-       // some compiler generated IR nodes (e.g. required templates) are required in the generated source code
-       // so check explicitly for compiler generated IR nodes which are marked for output withn the generated
-       // source code (unparser).
-       // DQ (5/26/2005): Query isCompilerGenerated and isTransformation before processing the filename.
-       // bool isCompilerGenerated = stmt->get_file_info()->isCompilerGenerated();
-       // bool isCompilerGenerated = stmt->get_file_info()->isCompilerGeneratedNodeToBeUnparsed();
-       //
-       // Liao, 2021/1/4: outliner will build a lib file from input file. The introduced transformation should be preserved.
-       //
-       //   bool isTransformation    = stmt->get_file_info()->isTransformation();
-       // if (isCompilerGenerated || isTransformation)
+          // DQ (8/17/2005): At some point all transformation should be marked
+          // as isOutputInCodeGeneration DQ (6/17/2005): Not all compiler
+          // generated IR nodes are intended to be unparsed (e.g. implicit
+          // casts) some compiler generated IR nodes (e.g. required templates)
+          // are required in the generated source code so check explicitly for
+          // compiler generated IR nodes which are marked for output withn the
+          // generated source code (unparser). DQ (5/26/2005): Query
+          // isCompilerGenerated and isTransformation before processing the
+          // filename. bool isCompilerGenerated =
+          // stmt->get_file_info()->isCompilerGenerated(); bool
+          // isCompilerGenerated =
+          // stmt->get_file_info()->isCompilerGeneratedNodeToBeUnparsed();
+          //
+          // Liao, 2021/1/4: outliner will build a lib file from input file. The
+          // introduced transformation should be preserved.
+          //
+          //   bool isTransformation    =
+          //   stmt->get_file_info()->isTransformation();
+          // if (isCompilerGenerated || isTransformation)
           if (stmt->get_file_info() == NULL)
              {
                printf ("Error: stmt->get_file_info() == NULL stmt = %p = %s \n",stmt,stmt->class_name().c_str());
              }
-          ASSERT_not_null(stmt->get_file_info());
-          bool isOutputInCodeGeneration = stmt->get_file_info()->isOutputInCodeGeneration();
+             ASSERT_not_null(stmt->get_file_info());
+             bool isOutputInCodeGeneration =
+                 stmt->get_file_info()->isOutputInCodeGeneration();
 
-          SgSourceFile* sourceFile = info.get_current_source_file();
+             SgSourceFile *sourceFile = info.get_current_source_file();
 
-       // DQ (5/19/2011): Output generated code... (allows unparseToString() to be used with template instantations to support name qualification).
-          bool forceOutputOfGeneratedCode = info.outputCompilerGeneratedStatements();
+             // DQ (5/19/2011): Output generated code... (allows
+             // unparseToString() to be used with template instantations to
+             // support name qualification).
+             bool forceOutputOfGeneratedCode =
+                 info.outputCompilerGeneratedStatements();
 
-       // DQ (10/31/2018): Added assertion.
-       // ASSERT_not_null(sourceFile);
+             // DQ (10/31/2018): Added assertion.
+             // ASSERT_not_null(sourceFile);
 
 #if DEBUG_STATEMENT_FROM_FILE
           printf ("In statementFromFile(): isOutputInCodeGeneration = %s \n",isOutputInCodeGeneration ? "true" : "false");
@@ -1143,6 +1167,14 @@ UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(SgSourceFile*
      ASSERT_not_null(stmt);
 
 #define DEBUG_CAN_BE_UNPARSED 0
+
+     // Token-stream unparsing expects statements to be owned by a scope (or a
+     // function definition with a declaration-owned scope). Skip other cases
+     // to avoid invalid scope assumptions during trailing token handling.
+     if (isSgScopeStatement(stmt->get_parent()) == NULL &&
+         isSgGlobal(stmt) == NULL && isSgFunctionDefinition(stmt) == NULL) {
+       return false;
+     }
 
      bool canBeUnparsed = false;
 
@@ -2774,6 +2806,12 @@ UnparseLanguageIndependentConstructs::unparseStatement(SgStatement* stmt, SgUnpa
   // DQ (5/27/2005): fixup ordering of comments and any compiler generated code
      if ( info.outputCompilerGeneratedStatements() == false && stmt->get_file_info()->isCompilerGenerated() == true && isSgGlobal(stmt->get_parent()) != NULL )
         {
+       // Only queue compiler-generated statements that are explicitly marked
+       // for output. This lets the frontend suppress builtin/system decls
+       // without the unparser forcing them back into the output stream.
+       if (stmt->get_file_info()->isOutputInCodeGeneration() == false) {
+         return;
+       }
        // DQ (10/30/2013): This code is executed for C++ code (e.g. for test2004_58.C -- template support).
 
 #if 0
@@ -3085,7 +3123,15 @@ UnparseLanguageIndependentConstructs::unparseStatement(SgStatement* stmt, SgUnpa
             // static int lastUnparsedToken = 0;
 
             // bool unparseViaTokenStream = (isFrontierNode == true);
-               bool unparseViaTokenStream = (isFrontierNode == true && associatedFrontierNode->unparseUsingTokenStream == true);
+               bool unparseViaTokenStream =
+                   (isFrontierNode == true &&
+                    associatedFrontierNode->unparseUsingTokenStream == true);
+               bool canUseTokenStream =
+                   canBeUnparsedFromTokenStream(sourceFile, stmt);
+               if (unparseViaTokenStream == true &&
+                   canUseTokenStream == false) {
+                 unparseViaTokenStream = false;
+               }
 #if 0
                printf ("In UnparseLanguageIndependentConstructs::unparseStatement(): isFrontierNode = %s \n",isFrontierNode ? "true" : "false");
                printf ("In UnparseLanguageIndependentConstructs::unparseStatement(): associatedFrontierNode = %p \n",associatedFrontierNode);
@@ -3115,8 +3161,9 @@ UnparseLanguageIndependentConstructs::unparseStatement(SgStatement* stmt, SgUnpa
                     curprint ("/* unparseViaTokenStream == false (but test if this should be overruled) */");
 #endif
                  // unparseViaTokenStream = (stmt->get_containsTransformation() == false && stmt->isTransformation() == false);
-                    if (stmt->get_containsTransformation() == false && stmt->isTransformation() == false)
-                       {
+                    if (stmt->get_containsTransformation() == false &&
+                        stmt->isTransformation() == false &&
+                        canUseTokenStream == true) {
                       // I think this is an error and that we should be unparsing from the token stream.
 #if DEBUG_UNPARSE_STATEMENT
                          printf ("##### Overrule the frontier logic to unparse from the token stream: reset unparseViaTokenStream = true: stmt = %p = %s \n",stmt,stmt->class_name().c_str());
@@ -3125,7 +3172,7 @@ UnparseLanguageIndependentConstructs::unparseStatement(SgStatement* stmt, SgUnpa
                          curprint ("/* unparseViaTokenStream == true (overruled) */");
 #endif
                          unparseViaTokenStream = true;
-                       }
+                    }
                   }
                  else
                   {
@@ -6931,7 +6978,15 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                     printf("   --- In unparseBinaryExpr(): Output operator name = %s \n",info.get_operator_name().c_str());
                     curprint("/* Output operator name = " + info.get_operator_name() + " */\n ");
 #endif
-                    curprint ( string(" ") + info.get_operator_name() + " ");
+                    const std::string &op_name = info.get_operator_name();
+                    const std::string trimmed_op =
+                        trimOperatorWhitespace(op_name);
+                    if (trimmed_op == "." || trimmed_op == "->" ||
+                        trimmed_op == ".*" || trimmed_op == "->*") {
+                      curprint(trimmed_op);
+                    } else {
+                      curprint(string(" ") + trimmed_op + " ");
+                    }
 
                  // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
                     if (is_currently_a_function_call == true)
@@ -8459,7 +8514,7 @@ UnparseLanguageIndependentConstructs::unparseExprList(SgExpression* expr, SgUnpa
                i++;
                if (i != expr_list->get_expressions().end())
                   {
-                    curprint ( ",");
+                 curprint(", ");
                   }
                  else
                   {
@@ -12257,7 +12312,9 @@ UnparseLanguageIndependentConstructs::getPrecedence(SgExpression* expr)
                   }
                  else
                   {
-                    precedence_value = 0;
+                    // Explicit casts have unary precedence; avoid spurious
+                    // outer parentheses in generated code.
+                    precedence_value = 15;
                   }
 
             // return 0;
@@ -12714,6 +12771,12 @@ UnparseLanguageIndependentConstructs::requiresParentheses(SgExpression* expr, Sg
 #endif
 
   // DQ (1/26/2013): Moved to be located after the debugging information.
+        if (SgCastExp *parent_cast = isSgCastExp(parentExpr)) {
+          if (parent_cast->cast_type() != SgCastExp::e_C_style_cast) {
+            return false;
+          }
+        }
+
      if (isSgSubscriptExpression(expr) != NULL || isSgDotExp(expr) || isSgCAFCoExpression(expr) || isSgPntrArrRefExp(expr) )
         {
 #if DEBUG_PARENTHESIS_PLACEMENT
@@ -12878,6 +12941,7 @@ UnparseLanguageIndependentConstructs::requiresParentheses(SgExpression* expr, Sg
        // DQ (4/25/2012): Added template support (avoids output of extra "()" see test2012_51.C).
           case TEMPLATE_FUNCTION_REF:
           case TEMPLATE_MEMBER_FUNCTION_REF:
+          case TEMPLATE_PARAMETER_VAL:
 
           case PSEUDO_DESTRUCTOR_REF:
           case BOOL_VAL:

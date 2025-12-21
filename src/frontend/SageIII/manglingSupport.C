@@ -1456,6 +1456,17 @@ mangleExpression (const SgExpression* expr)
           mangled_name << "_bFunctionParameterRefExp_" << std::hex << e << "_eFunctionParameterRefExp_";
           break;
         }
+        case V_SgPseudoDestructorRefExp: {
+          const SgPseudoDestructorRefExp *e = isSgPseudoDestructorRefExp(expr);
+          mangled_name << "_bPseudoDestructorRefExp_";
+          if (e->get_object_type() != NULL) {
+            mangled_name << e->get_object_type()->get_mangled().getString();
+          } else {
+            mangled_name << "unknown";
+          }
+          mangled_name << "_ePseudoDestructorRefExp_";
+          break;
+        }
         case V_SgNullExpression: {
           // Handle null expressions (placeholders for unsupported C++ constructs)
           mangled_name << "_bNullExpr_";

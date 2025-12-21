@@ -37,6 +37,14 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue149_param_list_unique_name.cpp
   rex_test2025_issue150_name_qualification_map.cpp
   rex_test2025_issue160_axpy_roundtrip.cpp
+  rex_test2025_issue160_axpy_system_headers.cpp
+  rex_test2025_issue160_axpy_explicit_template_call.cpp
+  rex_test2025_issue160_explicit_empty_template_id.cpp
+  rex_test2025_issue160_explicit_class_instantiation.cpp
+  rex_test2025_issue160_explicit_struct_instantiation.cpp
+  rex_test2025_issue160_extern_class_instantiation.cpp
+  rex_test2025_issue160_system_header_instantiation.cpp
+  rex_test2025_issue160_system_header_class_instantiation.cpp
   rex_test2025_cfe_error_exit_code.cpp
   rex_test2025_issue124_system_header_specialization_args.cpp
   rex_test2025_issue125_fixup_child_list_warning.cpp

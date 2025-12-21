@@ -125,6 +125,45 @@
 #  define DEBUG_TRAVERSE_TYPE 0
 #endif
 
+static const char kRexExplicitQualifierAttr[] = "rex_explicit_qualifier";
+
+class RexExplicitQualifierAttribute : public AstAttribute {
+public:
+  explicit RexExplicitQualifierAttribute(std::string qualifier)
+      : qualifier_(std::move(qualifier)) {}
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  AstAttribute *copy() const override {
+    return new RexExplicitQualifierAttribute(qualifier_);
+  }
+
+  std::string attribute_class_name() const override {
+    return "RexExplicitQualifierAttribute";
+  }
+
+  std::string toString() override { return qualifier_; }
+
+private:
+  std::string qualifier_;
+};
+
+inline std::string
+buildQualifierString(const clang::NestedNameSpecifier *qualifier,
+                     const clang::PrintingPolicy &policy) {
+  if (qualifier == nullptr) {
+    return std::string();
+  }
+
+  std::string result;
+  llvm::raw_string_ostream os(result);
+  qualifier->print(os, policy);
+  os.flush();
+  return result;
+}
+
 // Print debug info when attaching source location
 #ifndef DEBUG_SOURCE_LOCATION
 #  define DEBUG_SOURCE_LOCATION 0
@@ -367,8 +406,8 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // Template instantiation cache - maps instantiation signature to SgTemplateInstantiationDecl
         // Key: mangled instantiation name (e.g., "std::array<double, 1024>")
         // Value: Template instantiation declaration
-        std::map<std::string, SgTemplateInstantiationDecl*> p_template_inst_cache;
-
+        std::map<std::string, SgTemplateInstantiationDecl *>
+            p_template_inst_cache;
         struct CapturedPragma {
             unsigned line;
             std::string text;
@@ -423,6 +462,14 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         SgTemplateArgumentPtrList
         buildTemplateArguments(const clang::TemplateArgumentListInfo &arg_info,
                                bool explicitlySpecified = false);
+        SgTemplateArgumentPtrList
+        buildTemplateArguments(const clang::TemplateArgumentList &args,
+                               size_t explicit_count = 0);
+        void ensureTemplateArgumentParents(SgTemplateArgumentPtrList &args);
+        void applyExplicitTemplateArgumentFlags(SgTemplateArgumentPtrList &args,
+                                                size_t explicit_count);
+        size_t countExpandedTemplateArguments(
+            const clang::TemplateArgumentListInfo &arg_info);
 
         // Helper: Append translated template argument(s), flattening Clang
         // argument packs (TemplateArgument::Pack) into individual arguments.

@@ -4646,17 +4646,20 @@ SgSourceFile::processCppLinemarkers()
 int
 SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputCommandLine )
    {
-     // SG (7/9/2015) In case of a mixed language project, force case
-     // sensitivity here.
-     SageBuilder::symbol_table_case_insensitive_semantics = false;
+  // SG (7/9/2015) In case of a mixed language project, force case
+  // sensitivity here.
+  SageBuilder::symbol_table_case_insensitive_semantics = false;
 
-     std::string frontEndCommandLineString;
-     frontEndCommandLineString = std::string(argv[0]) + std::string(" ") + CommandlineProcessing::generateStringFromArgList(inputCommandLine,false,false);
+  std::string frontEndCommandLineString;
+  frontEndCommandLineString = std::string(argv[0]) + std::string(" ") +
+                              CommandlineProcessing::generateStringFromArgList(
+                                  inputCommandLine, false, false);
 
-     if ( get_verbose() > 1 )
-        {
-          printf ("In build_C_and_Cxx_AST(): Before calling edg_main: frontEndCommandLineString = %s \n",frontEndCommandLineString.c_str());
-        }
+  if (get_verbose() > 1) {
+    printf("In build_C_and_Cxx_AST(): Before calling edg_main: "
+           "frontEndCommandLineString = %s \n",
+           frontEndCommandLineString.c_str());
+  }
 
      int c_cxx_argc = 0;
      char **c_cxx_argv = nullptr;

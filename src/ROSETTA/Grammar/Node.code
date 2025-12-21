@@ -2024,7 +2024,6 @@ SgNode::set_isModified ( bool isModified)
    {
   // DQ (4/14/2015): Detect if this is called from a NULL pointer.
      ROSE_ASSERT(this != NULL);
-
 #if 0
   // DQ (6/4/2019): Use this to debug the outlining to seperate file mechanism (remove some spew by ignoring some IR nodes).
      if (variantT() != V_Sg_File_Info && variantT() != V_SgUnparse_Info)

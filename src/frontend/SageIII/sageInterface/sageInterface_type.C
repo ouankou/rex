@@ -205,6 +205,65 @@ namespace SageInterface
        return typeName;
   }
 
+  bool containsUnknownType(SgType *type) {
+    if (type == NULL)
+      return true;
+
+    if (isSgTypeUnknown(type))
+      return true;
+
+    if (auto *mod = isSgModifierType(type))
+      return containsUnknownType(mod->get_base_type());
+    if (auto *ptr = isSgPointerType(type))
+      return containsUnknownType(ptr->get_base_type());
+    if (auto *memPtr = isSgPointerMemberType(type))
+      return containsUnknownType(memPtr->get_base_type());
+    if (auto *ref = isSgReferenceType(type))
+      return containsUnknownType(ref->get_base_type());
+    if (auto *rref = isSgRvalueReferenceType(type))
+      return containsUnknownType(rref->get_base_type());
+    if (auto *arr = isSgArrayType(type))
+      return containsUnknownType(arr->get_base_type());
+    if (auto *td = isSgTypedefType(type))
+      return containsUnknownType(td->get_base_type());
+    if (auto *tmpl = isSgTemplateType(type)) {
+      if (SgType *class_type = tmpl->get_class_type()) {
+        if (containsUnknownType(class_type))
+          return true;
+      }
+      if (SgType *parent_class_type = tmpl->get_parent_class_type()) {
+        if (containsUnknownType(parent_class_type))
+          return true;
+      }
+      for (SgTemplateArgument *arg : tmpl->get_tpl_args()) {
+        if (arg != NULL && arg->get_type() != NULL &&
+            containsUnknownType(arg->get_type()))
+          return true;
+      }
+      for (SgTemplateArgument *arg : tmpl->get_part_spec_tpl_args()) {
+        if (arg != NULL && arg->get_type() != NULL &&
+            containsUnknownType(arg->get_type()))
+          return true;
+      }
+    }
+    if (auto *func = isSgFunctionType(type)) {
+      if (containsUnknownType(func->get_return_type()))
+        return true;
+      SgFunctionParameterTypeList *params = func->get_argument_list();
+      if (params != NULL) {
+        const SgTypePtrList &args = params->get_arguments();
+        for (SgType *arg : args) {
+          if (containsUnknownType(arg))
+            return true;
+        }
+      }
+      return false;
+    }
+    if (auto *declType = isSgDeclType(type))
+      return containsUnknownType(declType->get_base_type());
+
+    return false;
+  }
 
   // by Jeremiah
   // Return bool for C++ code, and int for C code
@@ -2521,6 +2580,4 @@ if (!sgClassType) { \
 
 #endif //CPP_TYPE_TRAITS
 
-
-} //end of namespace
-
+    } // namespace SageInterface

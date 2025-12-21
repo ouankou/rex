@@ -71,6 +71,21 @@ void assert_valid_template_name(const std::string &name) {
   ROSE_ASSERT(!std::isspace(static_cast<unsigned char>(name.front())));
   ROSE_ASSERT(name.size() < 2 || name.compare(0, 2, "::") != 0);
 }
+
+SgTemplateArgumentPtrList
+collect_explicit_template_arguments(const SgTemplateArgumentPtrList &args) {
+  SgTemplateArgumentPtrList explicit_args;
+  for (SgTemplateArgument *arg : args) {
+    if (arg == NULL) {
+      continue;
+    }
+    if (!arg->get_explicitlySpecified()) {
+      break;
+    }
+    explicit_args.push_back(arg);
+  }
+  return explicit_args;
+}
 } // namespace
 
 // DQ (10/14/2010):  This should only be included by source files that require it.
@@ -452,11 +467,11 @@ Unparse_ExprStmt::unparseLambdaExpression(SgExpression* expr, SgUnparse_Info& in
               if (commaCounter == 0) // look backwards one identifier
               {
                 if (hasCaptureCharacter)
-                  curprint(",");
+                  curprint(", ");
                 commaCounter ++; 
               }
               else {
-                curprint(",");
+                curprint(", ");
               }
 
               SgExpression * capt_var_expr = lambdaCapture->get_capture_variable();
@@ -487,7 +502,7 @@ Unparse_ExprStmt::unparseLambdaExpression(SgExpression* expr, SgUnparse_Info& in
 #if 0
           if (i < bound-1)
              {
-               curprint(",");
+               curprint(", ");
              }
 #endif             
         }
@@ -820,7 +835,17 @@ Unparse_ExprStmt::unparseTemplateFunctionName(SgTemplateInstantiationFunctionDec
 #if 0
           printf ("Calling unparseTemplateArgumentList() \n");
 #endif
-          unparseTemplateArgumentList(templateInstantiationFunctionDeclaration->get_templateArguments(),info);
+       SgTemplateArgumentPtrList explicit_args =
+           collect_explicit_template_arguments(
+               templateInstantiationFunctionDeclaration
+                   ->get_templateArguments());
+       if (explicit_args.empty()) {
+         unp->u_exprStmt->curprint("<");
+         unp->u_exprStmt->curprint(" ");
+         unp->u_exprStmt->curprint(">");
+       } else {
+         unparseTemplateArgumentList(explicit_args, info);
+       }
         }
    }
 
@@ -892,7 +917,17 @@ Unparse_ExprStmt::unparseTemplateMemberFunctionName(SgTemplateInstantiationMembe
 
      if (skipTemplateArgumentList == false)
         {
-          unparseTemplateArgumentList(templateInstantiationMemberFunctionDeclaration->get_templateArguments(),info);
+       SgTemplateArgumentPtrList explicit_args =
+           collect_explicit_template_arguments(
+               templateInstantiationMemberFunctionDeclaration
+                   ->get_templateArguments());
+       if (explicit_args.empty()) {
+         unp->u_exprStmt->curprint("<");
+         unp->u_exprStmt->curprint(" ");
+         unp->u_exprStmt->curprint(">");
+       } else {
+         unparseTemplateArgumentList(explicit_args, info);
+       }
         }
 
 #if 0
@@ -3868,7 +3903,7 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
                       // DQ (6/15/2013): This is the older version of the code (which si a problem for test2013_206.C).
                       // curprint(func_name);
 #error "DEAD CODE!"
-                         curprint(" " + func_name + " ");
+                         curprint(func_name);
 #else
 #if 1
                       // DQ (6/15/2013): The code for processing the function name when it contains template arguments that requires name qualification.
@@ -3927,14 +3962,14 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
 
                                 // DQ (6/15/2013): I think this mod is required for test2010_03.C.
                                 // curprint (func_name);
-                                   curprint(" " + func_name + " ");
+                                   curprint(func_name);
                                  }
                             }
                            else
                             {
                            // DQ (6/15/2013): I think this mod is required for test2010_03.C.
                            // curprint (func_name);
-                              curprint(" " + func_name + " ");
+                           curprint(func_name);
                             }
 #else
                  // DQ (10/21/2006): Only do name qualification of function names for C++
@@ -4016,7 +4051,7 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
 #if 0
 #error "DEAD CODE!"
                       // DQ (5/25/2013): This is the older version of the code.
-                         curprint(" " + func_name + " ");
+                         curprint(func_name);
 #else
                       // DQ (5/25/2013): Added support to unparse the template arguments seperately from the member function name (which should NOT 
                       // include the template arguments when unparsing). Note the the template arguments in the name are important for the generation
@@ -4098,9 +4133,13 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
                               printf ("In unparseMFuncRefSupport(): not overloaded reference or dereference operator: function name IS output: func_name = %s \n",func_name.c_str());
                               curprint("/* In unparseMFuncRefSupport(): not overloaded reference or dereference operator: function name = " + func_name + " IS output */ \n");
 #endif
-                              curprint(" " + func_name + " ");
-                           // curprint(" /* In unparseMFuncRefSupport(): function name is NOT output (not overloaded reference or dereference operator) */ " + func_name + " ");
-                           // curprint(" /* In unparseMFuncRefSupport(): after output of function_name */ ");
+                              curprint(func_name);
+                              // curprint(" /* In unparseMFuncRefSupport():
+                              // function name is NOT output (not overloaded
+                              // reference or dereference operator) */ " +
+                              // func_name + " "); curprint(" /* In
+                              // unparseMFuncRefSupport(): after output of
+                              // function_name */ ");
                             }
                            else
                             {
@@ -4109,7 +4148,7 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
 #endif
                               if (info.isPrefixOperator() == true)
                                  {
-                                   curprint(" " + func_name + " ");
+                                curprint(func_name);
                                  }
                                 else
                                  {
@@ -4733,7 +4772,7 @@ Unparse_ExprStmt::unparseTypeTraitBuiltinOperator(SgExpression* expr, SgUnparse_
        // DQ (4/24/2013): Moved this to be ahead so that the unparseArg value would be associated with the current argument.
           if (operand != list.begin())
              {
-               curprint(","); 
+            curprint(", ");
              }
 
           SgType*       type       = isSgType(*operand);
@@ -5698,7 +5737,7 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
                     // ROOT CAUSE FIX: Don't output comma if this is the first arg after [ for operator[]
                     if (arg != list.begin() && unparseArg == true && !isFirstArgAfterBracket)
                        {
-                         curprint(",");
+                      curprint(", ");
                        }
                     // Clear the flag after first use
                     if (isFirstArgAfterBracket)
@@ -5735,7 +5774,7 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
                  // if (arg != list.end())
                     if (arg != list.end() && unparseArg == true)
                        {
-                         curprint(","); 
+                         curprint(", ");
                        }
 #endif
                  // DQ (1/2/2018): Supress the trailing function argument in the case of a postfix non-member function using operator syntax.
@@ -6416,8 +6455,9 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
      newinfo.unset_PrintName();
      newinfo.unset_isTypeFirstPart();
      newinfo.unset_isTypeSecondPart();
+     newinfo.set_inTemplateList();
 
-  // DQ (5/30/2011): Added support for name qualification.
+     // DQ (5/30/2011): Added support for name qualification.
      newinfo.set_reference_node_for_qualification(cast_op);
      ASSERT_not_null(newinfo.get_reference_node_for_qualification());
 
@@ -6509,8 +6549,7 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
           ROSE_ASSERT(newinfo.SkipEnumDefinition() == true);
         }
 
-     bool addParens = false;
-     bool suppressedCast = false;  // ROOT CAUSE FIX: Track if we suppressed a problematic cast
+        bool addParens = false;
 
 #if 0
      printf ("In unparseCastOp(): cast_op->cast_type() = %d \n",cast_op->cast_type());
@@ -6534,13 +6573,13 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
           case SgCastExp::e_dynamic_cast:
              {
             // dynamic_cast <P *> (expr)
-               curprint ( "dynamic_cast < ");
+            curprint("dynamic_cast<");
 
             // DQ (1/14/2006): p_expression_type is no longer stored (type is computed instead)
             // unp->u_type->unparseType(cast_op->get_expression_type(), newinfo); // first/second part
                unp->u_type->unparseType(cast_op->get_type(), newinfo); // first/second part
 
-               curprint ( " > "); // paren are in operand_i
+               curprint(">"); // paren are in operand_i
                addParens = true;
                break; 
              }
@@ -6548,13 +6587,13 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
           case SgCastExp::e_reinterpret_cast:
              {
             // reinterpret_cast <P *> (expr)
-               curprint ( "reinterpret_cast < ");
+            curprint("reinterpret_cast<");
 
             // DQ (1/14/2006): p_expression_type is no longer stored (type is computed instead)
             // unp->u_type->unparseType(cast_op->get_expression_type(), newinfo);
                unp->u_type->unparseType(cast_op->get_type(), newinfo);
 
-               curprint ( " > ");
+               curprint(">");
                addParens = true;
                break;
              }
@@ -6562,13 +6601,13 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
           case SgCastExp::e_const_cast:
              {
             // const_cast <P *> (expr)
-               curprint ( "const_cast < ");
+            curprint("const_cast<");
 
             // DQ (1/14/2006): p_expression_type is no longer stored (type is computed instead)
             // unp->u_type->unparseType(cast_op->get_expression_type(), newinfo);
                unp->u_type->unparseType(cast_op->get_type(), newinfo);
 
-               curprint ( " > ");
+               curprint(">");
                addParens = true;
                break;
              }
@@ -6576,13 +6615,13 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
           case SgCastExp::e_static_cast:
              {
             // static_cast <P *> (expr)
-               curprint ( "static_cast < ");
+            curprint("static_cast<");
 
             // DQ (1/14/2006): p_expression_type is no longer stored (type is computed instead)
             // unp->u_type->unparseType(cast_op->get_expression_type(), newinfo);
                unp->u_type->unparseType(cast_op->get_type(), newinfo);
 
-               curprint ( " > ");
+               curprint(">");
                addParens = true;
                break;
              }
@@ -6622,6 +6661,9 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
             // if (cast_op->get_file_info()->isCompilerGenerated() == false)
                if (cast_op->get_startOfConstruct()->isCompilerGenerated() == false)
                   {
+                 if (SageInterface::containsUnknownType(cast_op->get_type())) {
+                   break;
+                 }
                  // (P *) expr
                  // check if the expression that we are casting is not a string
 
@@ -6644,60 +6686,7 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
 #endif
                     if (cast_op->get_operand_i()->variant() != STRING_VAL)
                        {
-                      // ROOT CAUSE FIX: Check if the cast type has incomplete template information
-                      // OR if it's a function pointer cast with UNKNOWN types (unresolved overloads)
-                      // These happen when frontend creates wrong types for implicit casts
-                      bool suppressCast = false;
-                      SgType* castType = cast_op->get_type();
-
-                      // Check for UNKNOWN types in function pointer casts
-                      if (castType->variantT() == V_SgFunctionType || castType->variantT() == V_SgPointerType) {
-                         SgType* checkType = castType;
-                         if (SgPointerType* ptrType = isSgPointerType(castType)) {
-                            checkType = ptrType->get_base_type();
-                         }
-                         if (SgFunctionType* funcType = isSgFunctionType(checkType)) {
-                            // Check if return type or any argument type is UNKNOWN
-                            if (funcType->get_return_type()->variantT() == V_SgTypeUnknown) {
-                               suppressCast = true;
-                            } else {
-                               SgTypePtrList& args = funcType->get_arguments();
-                               for (auto argType : args) {
-                                  if (argType->variantT() == V_SgTypeUnknown) {
-                                     suppressCast = true;
-                                     break;
-                                  }
-                               }
-                            }
-                         }
-                      }
-
-                      // Check for incomplete template types
-                      if (!suppressCast) {
-                         // Strip modifiers to get to the base type
-                         while (SgModifierType* modType = isSgModifierType(castType)) {
-                            castType = modType->get_base_type();
-                         }
-                         if (SgClassType* classType = isSgClassType(castType)) {
-                            SgClassDeclaration* classDecl = isSgClassDeclaration(classType->get_declaration());
-                            if (classDecl != NULL) {
-                               SgTemplateClassDeclaration* tplDecl = isSgTemplateClassDeclaration(classDecl);
-                               SgTemplateInstantiationDecl* instDecl = isSgTemplateInstantiationDecl(classDecl);
-                               // If it's a template but not an instantiation and is compiler-generated, it's incomplete
-                               if (tplDecl != NULL && instDecl == NULL && classDecl->get_file_info()->isCompilerGenerated()) {
-                                  suppressCast = true;
-                               }
-                            }
-                         }
-                      }
-
-                      // Skip outputting problematic casts - just output the operand
-                      if (suppressCast) {
-                         // Just unparse the expression being cast, without the cast
-                         unparseExpression(cast_op->get_operand_i(), info);
-                         suppressedCast = true;  // Mark that we already output the operand
-                      } else {
-                      // It is not a string, so we always cast
+                      // It is not a string, so we always cast.
 #if 0
                          curprint("/* unparseCastOp SgCastExp::c_cast_e nonstring */ ");
 #endif
@@ -6717,22 +6706,8 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
                          newinfo.display("In unparseCastOp(): calling unparseType(): first part");
 #endif
 
-                      // DQ (10/17/2012): We have to separate these out if we want to output the defining declarations.
-                         newinfo.set_isTypeFirstPart();
                          unp->u_type->unparseType(cast_op->get_type(), newinfo);
-#if 0
-                         curprint("/* unparseCastOp SgCastExp::c_cast_e after unparse first type */ ");
-#endif
-#if 0
-                         newinfo.display("In unparseCastOp(): calling unparseType(): second part");
-#endif
-                         newinfo.set_isTypeSecondPart();
-                         unp->u_type->unparseType(cast_op->get_type(), newinfo);
-#if 0
-                         curprint("/* unparseCastOp SgCastExp::c_cast_e after unparse second type */ ");
-#endif
                          curprint(")");
-                      } // end else (not hasIncompleteTemplateType)
                        }
                  // cast_op->get_operand_i()->variant() == STRING_VAL
                  // it is a string, so now check if the cast is not a "const char* "
@@ -6778,7 +6753,7 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
   // DQ (6/15/2005): reinterpret_cast always needs parens
      if (addParens == true)
         {
-          curprint(" (");
+       curprint("(");
         }
 
   // DQ (6/21/2011): Added support for name qualification.
@@ -6797,10 +6772,7 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
      printf("In unparseCastOp(): case SgCastExp::e_C_style_cast: cast_op->get_operand() = %p = %s \n",cast_op->get_operand(),cast_op->get_operand()->class_name().c_str());
 #endif
 
-     // ROOT CAUSE FIX: Only unparse operand if we didn't already suppress the cast and output it
-     if (!suppressedCast) {
-        unparseExpression(cast_op->get_operand(), info);
-     } 
+     unparseExpression(cast_op->get_operand(), info);
 
      if (addParens == true)
         {

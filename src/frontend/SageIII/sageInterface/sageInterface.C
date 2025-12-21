@@ -7357,8 +7357,9 @@ SageInterface::setSourcePosition(SgNode* node)
                                  }
                                 else
                                  {
-                                   printf ("Error: can't call setSourcePosition() in mode e_sourcePositionFrontendConstruction with non SgLocatedNode (node = %p = %s) \n",node,node->class_name().c_str());
-                                   ROSE_ABORT();
+                                   // Non-located nodes (e.g., template
+                                   // arguments) have no source position. Accept
+                                   // them in frontend construction mode.
                                  }
                             }
                        }
