@@ -29,6 +29,80 @@
 
 namespace si = SageInterface;
 
+namespace {
+bool fileHasRelevantModifications(SgSourceFile *file) {
+  if (file == NULL) {
+    return true;
+  }
+
+  std::set<SgStatement *> transformedStatements =
+      SageInterface::collectTransformedStatements(file);
+  auto affects_current_file = [&](SgLocatedNode *node) -> bool {
+    if (node == NULL) {
+      return true;
+    }
+
+    Sg_File_Info *node_info = node->get_file_info();
+    if (node_info == NULL) {
+      return true;
+    }
+
+    if (node_info->isSameFile(file) == true) {
+      return true;
+    }
+
+    if (node_info->isTransformation() == true ||
+        node_info->get_physical_file_id() ==
+            Sg_File_Info::TRANSFORMATION_FILE_ID) {
+      SgSourceFile *enclosing_file =
+          SageInterface::getEnclosingSourceFile(node);
+      if (enclosing_file == NULL || enclosing_file == file) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  for (SgStatement *stmt : transformedStatements) {
+    if (stmt == NULL) {
+      continue;
+    }
+    Sg_File_Info *stmt_info = stmt->get_file_info();
+    if (stmt_info == NULL) {
+      return true;
+    }
+    if (stmt_info->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+    if (affects_current_file(stmt) == false) {
+      continue;
+    }
+    return true;
+  }
+
+  std::set<SgLocatedNode *> modifiedNodes =
+      SageInterface::collectModifiedLocatedNodes(file);
+  for (SgLocatedNode *node : modifiedNodes) {
+    if (node == NULL) {
+      continue;
+    }
+    Sg_File_Info *node_info = node->get_file_info();
+    if (node_info == NULL) {
+      return true;
+    }
+    if (node_info->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+    if (affects_current_file(node) == false) {
+      continue;
+    }
+    return true;
+  }
+
+  return false;
+}
+} // namespace
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
@@ -691,6 +765,12 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 #endif
 
   // DQ (12/6/2014): This is the part of the token stream support that is required after transformations have been done in the AST.
+     if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
+       if (fileHasRelevantModifications(file)) {
+         file->set_unparse_tokens(false);
+       }
+     }
+
      if ( (isCfile || isCxxFile) && file->get_unparse_tokens() == true)
         {
 #define DEBUG_UNPARSE_TOKENS 0
@@ -1486,7 +1566,8 @@ Unparser::getColumnNumberOfEndOfString( std::string internalString )
 
   // DQ (10/27/2013): Use a different filename for the output of the raw token stream (not associated with individual statements).
         string outputFilename;
-        if (outputFilenameOverride != NULL) {
+        if (outputFilenameOverride != NULL &&
+            outputFilenameOverride->empty() == false) {
           outputFilename = *outputFilenameOverride;
         } else {
           outputFilename =
@@ -3333,44 +3414,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
                  (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
                   sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
                   sourceFile->get_OpenCL_only())) {
-               std::set<SgStatement *> transformedStatements =
-                   SageInterface::collectTransformedStatements(file);
-               Sg_File_Info *source_info = sourceFile->get_file_info();
-               int source_file_id = source_info != NULL
-                                        ? source_info->get_physical_file_id()
-                                        : -1;
-               bool transformed_in_source = false;
-               if (source_file_id < 0) {
-                 transformed_in_source = true;
-               }
-               for (SgStatement *stmt : transformedStatements) {
-                 if (stmt == NULL) {
-                   continue;
-                 }
-                 if (stmt->isCompilerGenerated() == true) {
-                   continue;
-                 }
-                 Sg_File_Info *stmt_info = stmt->get_file_info();
-                 if (stmt_info == NULL) {
-                   transformed_in_source = true;
-                   break;
-                 }
-                 if (stmt_info->isCompilerGenerated() == true) {
-                   continue;
-                 }
-                 if (stmt_info->isOutputInCodeGeneration() == false) {
-                   continue;
-                 }
-                 int stmt_file_id = stmt_info->get_physical_file_id();
-                 if (stmt_info->isTransformation() == true ||
-                     stmt_file_id == Sg_File_Info::TRANSFORMATION_FILE_ID ||
-                     stmt_file_id == source_file_id) {
-                   transformed_in_source = true;
-                   break;
-                 }
-               }
-
-               if (transformed_in_source == false) {
+               if (fileHasRelevantModifications(sourceFile) == false) {
                  ROSEAttributesListContainerPtr filePreprocInfo =
                      sourceFile->get_preprocessorDirectivesAndCommentsList();
                  if (filePreprocInfo != NULL &&
@@ -3555,7 +3599,6 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
               //unparseHelp->postOutputCallbacks.apply(true, args);
 	      MLOG_FATAL_CXX(MLOG_UNPARSER) << "Need callback mechanisms that were supported by Sawyer before\n";
           }
-             }
 
        // DQ (3/19/2014): If -rose:noclobber_if_different_output, then test the generated file against the original file.
           if (trigger_file_comparision == true)
@@ -3640,6 +3683,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
 
                     ROSE_ABORT();
                   }
+             }
              }
         }
    }

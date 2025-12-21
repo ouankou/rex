@@ -7,12 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "clang/AST/LambdaCapture.h"
-
-#include "clang/Lex/Lexer.h"
-#include "llvm/Support/raw_ostream.h"
-
 #include "sageInterface.h"
+#include "clang/AST/LambdaCapture.h"
+#include "clang/Lex/Lexer.h"
 
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
@@ -87,6 +84,96 @@ extendSourceRangeWithTrailingSemicolon(clang::SourceRange range,
   return range;
 }
 
+std::string getFloatingLiteralSpelling(const clang::FloatingLiteral *literal,
+                                       clang::SourceManager &sm,
+                                       const clang::LangOptions &lang_opts) {
+  if (literal == NULL) {
+    return "";
+  }
+
+  clang::SourceLocation loc = literal->getLocation();
+  if (!loc.isValid()) {
+    return "";
+  }
+
+  loc = sm.getSpellingLoc(loc);
+  if (loc.isValid()) {
+    llvm::SmallString<64> buf;
+    bool invalid = false;
+    llvm::StringRef spelling =
+        clang::Lexer::getSpelling(loc, buf, sm, lang_opts, &invalid);
+    if (!invalid && !spelling.empty()) {
+      return spelling.str();
+    }
+  }
+
+  clang::SourceRange range = literal->getSourceRange();
+  if (!range.isValid()) {
+    return "";
+  }
+
+  clang::SourceLocation begin = sm.getSpellingLoc(range.getBegin());
+  clang::SourceLocation end = sm.getSpellingLoc(range.getEnd());
+  if (!begin.isValid() || !end.isValid()) {
+    return "";
+  }
+
+  bool invalid = false;
+  llvm::StringRef text = clang::Lexer::getSourceText(
+      clang::CharSourceRange::getTokenRange(begin, end), sm, lang_opts,
+      &invalid);
+  if (invalid) {
+    return "";
+  }
+
+  return text.str();
+}
+
+std::string getIntegerLiteralSpelling(const clang::IntegerLiteral *literal,
+                                      clang::SourceManager &sm,
+                                      const clang::LangOptions &lang_opts) {
+  if (literal == NULL) {
+    return "";
+  }
+
+  clang::SourceLocation loc = literal->getLocation();
+  if (!loc.isValid()) {
+    return "";
+  }
+
+  loc = sm.getSpellingLoc(loc);
+  if (loc.isValid()) {
+    llvm::SmallString<64> buf;
+    bool invalid = false;
+    llvm::StringRef spelling =
+        clang::Lexer::getSpelling(loc, buf, sm, lang_opts, &invalid);
+    if (!invalid && !spelling.empty()) {
+      return spelling.str();
+    }
+  }
+
+  clang::SourceRange range = literal->getSourceRange();
+  if (!range.isValid()) {
+    return "";
+  }
+
+  clang::SourceLocation begin = sm.getSpellingLoc(range.getBegin());
+  clang::SourceLocation end = sm.getSpellingLoc(range.getEnd());
+  if (!begin.isValid() || !end.isValid()) {
+    return "";
+  }
+
+  bool invalid = false;
+  llvm::StringRef text = clang::Lexer::getSourceText(
+      clang::CharSourceRange::getTokenRange(begin, end), sm, lang_opts,
+      &invalid);
+  if (invalid) {
+    return "";
+  }
+
+  return text.str();
+}
+
 SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
   for (SgNode *node = starting_scope; node != NULL; node = node->get_parent()) {
     SgClassDefinition *class_def = isSgClassDefinition(node);
@@ -135,39 +222,255 @@ std::string trimWhitespace(const std::string &input) {
   return input.substr(start, end - start);
 }
 
-std::string getSourceTokenText(const clang::Expr *expr,
+std::string
+printNestedNameSpecifier(const clang::NestedNameSpecifier *specifier,
+                         const clang::ASTContext &context) {
+  if (specifier == nullptr) {
+    return "";
+  }
+  std::string buffer;
+  llvm::raw_string_ostream stream(buffer);
+  clang::PrintingPolicy policy(context.getLangOpts());
+  policy.SuppressScope = false;
+  policy.SuppressTagKeyword = true;
+  specifier->print(stream, policy);
+  stream.flush();
+  return buffer;
+}
+
+std::string normalizeQualifierToken(std::string token) {
+  token = trimWhitespace(token);
+  while (token.rfind("::", 0) == 0) {
+    token = token.substr(2);
+  }
+  while (token.size() >= 2 && token.compare(token.size() - 2, 2, "::") == 0) {
+    token.erase(token.size() - 2);
+  }
+  token = trimWhitespace(token);
+  return token;
+}
+
+std::string
+deriveNestedNameSpecifierToken(const clang::NestedNameSpecifier *specifier,
+                               const clang::ASTContext &context) {
+  if (specifier == nullptr) {
+    return "";
+  }
+
+  std::string full_text = printNestedNameSpecifier(specifier, context);
+  if (full_text.empty()) {
+    return "";
+  }
+
+  std::string prefix_text;
+  if (const clang::NestedNameSpecifier *prefix = specifier->getPrefix()) {
+    prefix_text = printNestedNameSpecifier(prefix, context);
+  }
+
+  std::string token = full_text;
+  if (!prefix_text.empty()) {
+    if (token.rfind(prefix_text, 0) != 0) {
+      return "";
+    }
+    token = token.substr(prefix_text.size());
+  }
+
+  return normalizeQualifierToken(token);
+}
+
+std::string
+getNestedNameSpecifierLocToken(const clang::NestedNameSpecifierLoc &loc,
                                clang::SourceManager &sm,
                                const clang::LangOptions &lang_opts) {
-  if (expr == nullptr) {
-    return std::string();
+  if (loc.getNestedNameSpecifier() == nullptr) {
+    return "";
   }
 
-  clang::SourceRange range = expr->getSourceRange();
+  clang::SourceRange range = loc.getLocalSourceRange();
   if (!range.isValid()) {
-    return std::string();
+    return "";
   }
 
-  clang::SourceLocation begin = range.getBegin();
-  clang::SourceLocation end = range.getEnd();
-  if (begin.isMacroID()) {
-    begin = sm.getExpansionLoc(begin);
-  }
-  if (end.isMacroID()) {
-    end = sm.getExpansionLoc(end);
-  }
+  clang::SourceLocation begin = sm.getSpellingLoc(range.getBegin());
+  clang::SourceLocation end = sm.getSpellingLoc(range.getEnd());
   if (!begin.isValid() || !end.isValid()) {
-    return std::string();
+    return "";
   }
 
   bool invalid = false;
-  clang::CharSourceRange char_range =
-      clang::CharSourceRange::getTokenRange(begin, end);
-  llvm::StringRef text =
-      clang::Lexer::getSourceText(char_range, sm, lang_opts, &invalid);
+  llvm::StringRef text = clang::Lexer::getSourceText(
+      clang::CharSourceRange::getTokenRange(begin, end), sm, lang_opts,
+      &invalid);
   if (invalid || text.empty()) {
-    return std::string();
+    return "";
   }
-  return text.str();
+
+  return normalizeQualifierToken(text.str());
+}
+
+struct ExplicitQualifierInfo {
+  int depth = 0;
+  bool has_global = false;
+  SgStringList tokens;
+};
+
+ExplicitQualifierInfo getExplicitQualifierInfo(
+    const clang::NestedNameSpecifier *qualifier,
+    const clang::ASTContext &context,
+    const clang::NestedNameSpecifierLoc *qualifier_loc = nullptr,
+    clang::SourceManager *sm = nullptr,
+    const clang::LangOptions *lang_opts = nullptr) {
+  ExplicitQualifierInfo info;
+  std::vector<std::string> reversed_tokens;
+  clang::NestedNameSpecifierLoc current_loc;
+  bool use_loc = false;
+  if (qualifier_loc != nullptr && sm != nullptr && lang_opts != nullptr &&
+      qualifier_loc->getNestedNameSpecifier() == qualifier) {
+    current_loc = *qualifier_loc;
+    use_loc = true;
+  }
+  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
+       nns = nns->getPrefix()) {
+    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
+      info.has_global = true;
+      if (use_loc && current_loc.getNestedNameSpecifier() == nns) {
+        current_loc = current_loc.getPrefix();
+      }
+      continue;
+    }
+    ++info.depth;
+    std::string token;
+    bool token_from_source = false;
+    if (use_loc) {
+      if (current_loc.getNestedNameSpecifier() == nns) {
+        token = getNestedNameSpecifierLocToken(current_loc, *sm, *lang_opts);
+        token_from_source = !token.empty();
+        current_loc = current_loc.getPrefix();
+      } else {
+        use_loc = false;
+      }
+    }
+    if (token.empty()) {
+      switch (nns->getKind()) {
+      case clang::NestedNameSpecifier::Namespace: {
+        const clang::NamespaceDecl *ns = nns->getAsNamespace();
+        if (ns != nullptr) {
+          if (!ns->isAnonymousNamespace()) {
+            token = ns->getNameAsString();
+          }
+        }
+        break;
+      }
+      case clang::NestedNameSpecifier::NamespaceAlias: {
+        const clang::NamespaceAliasDecl *alias = nns->getAsNamespaceAlias();
+        if (alias != nullptr) {
+          token = alias->getNameAsString();
+        }
+        break;
+      }
+      case clang::NestedNameSpecifier::Identifier: {
+        const clang::IdentifierInfo *ident = nns->getAsIdentifier();
+        if (ident != nullptr) {
+          token = ident->getName().str();
+        }
+        break;
+      }
+      case clang::NestedNameSpecifier::TypeSpec:
+      case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+        const clang::Type *type = nns->getAsType();
+        if (const clang::ElaboratedType *elab =
+                llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
+          type = elab->getNamedType().getTypePtr();
+        }
+        if (const clang::TypedefType *typedef_type =
+                llvm::dyn_cast_or_null<clang::TypedefType>(type)) {
+          token = typedef_type->getDecl()->getNameAsString();
+        } else if (const clang::UsingType *using_type =
+                       llvm::dyn_cast_or_null<clang::UsingType>(type)) {
+          clang::UsingShadowDecl *using_shadow = using_type->getFoundDecl();
+          if (using_shadow != nullptr) {
+            token = using_shadow->getNameAsString();
+          }
+        } else if (const clang::RecordType *record_type =
+                       llvm::dyn_cast_or_null<clang::RecordType>(type)) {
+          token = record_type->getDecl()->getNameAsString();
+        } else if (const clang::EnumType *enum_type =
+                       llvm::dyn_cast_or_null<clang::EnumType>(type)) {
+          token = enum_type->getDecl()->getNameAsString();
+        } else if (const clang::InjectedClassNameType *injected_type =
+                       llvm::dyn_cast_or_null<clang::InjectedClassNameType>(
+                           type)) {
+          token = injected_type->getDecl()->getNameAsString();
+        } else if (type != nullptr) {
+          clang::QualType qual_type(type, 0);
+          clang::PrintingPolicy policy(context.getLangOpts());
+          policy.SuppressScope = true;
+          policy.SuppressTagKeyword = true;
+          token = qual_type.getAsString(policy);
+        }
+        break;
+      }
+      case clang::NestedNameSpecifier::Super:
+        token = "super";
+        break;
+      }
+    }
+    if (token.empty()) {
+      token = deriveNestedNameSpecifierToken(nns, context);
+      token_from_source = !token.empty();
+    }
+    if (!token.empty() && !token_from_source &&
+        nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+      token = "template " + token;
+    }
+    if (!token.empty()) {
+      reversed_tokens.push_back(token);
+    }
+  }
+  if (!reversed_tokens.empty()) {
+    for (auto it = reversed_tokens.rbegin(); it != reversed_tokens.rend();
+         ++it) {
+      info.tokens.push_back(*it);
+    }
+  }
+  return info;
+}
+
+template <typename T>
+void setExplicitQualifierOnRef(T *ref, const ExplicitQualifierInfo &info) {
+  if (ref == nullptr) {
+    return;
+  }
+  ref->set_explicit_name_qualification_length(info.depth);
+  ref->set_explicit_global_qualification(info.has_global);
+  if (!info.tokens.empty()) {
+    ref->set_explicit_name_qualification_tokens(info.tokens);
+  }
+}
+
+void setExplicitQualifierOnExpr(SgExpression *expr,
+                                const ExplicitQualifierInfo &info) {
+  if (expr == nullptr || (info.depth == 0 && !info.has_global)) {
+    return;
+  }
+  if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+    setExplicitQualifierOnRef(var_ref, info);
+  } else if (SgTemplateMemberFunctionRefExp *tmpl_member =
+                 isSgTemplateMemberFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(tmpl_member, info);
+  } else if (SgMemberFunctionRefExp *member_ref =
+                 isSgMemberFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(member_ref, info);
+  } else if (SgTemplateFunctionRefExp *tmpl_func =
+                 isSgTemplateFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(tmpl_func, info);
+  } else if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(func_ref, info);
+  } else if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(expr)) {
+    setExplicitQualifierOnRef(nonreal_ref, info);
+  } else if (SgEnumVal *enum_val = isSgEnumVal(expr)) {
+    setExplicitQualifierOnRef(enum_val, info);
+  }
 }
 
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
@@ -4804,26 +5107,27 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
   bool res = true;
   auto attach_explicit_qualifier = [&](SgExpression *expr) {
-    if (expr == NULL || decl_ref_expr == NULL ||
-        !decl_ref_expr->hasQualifier() || p_compiler_instance == NULL) {
+    if (expr == nullptr || decl_ref_expr == nullptr ||
+        !decl_ref_expr->hasQualifier()) {
       return;
     }
-    clang::NestedNameSpecifier *qualifier = decl_ref_expr->getQualifier();
-    if (qualifier == NULL) {
+    if (p_compiler_instance == nullptr) {
       return;
     }
-    clang::PrintingPolicy policy(p_compiler_instance->getLangOpts());
-    std::string qualifier_text = buildQualifierString(qualifier, policy);
-    qualifier_text = trimWhitespace(qualifier_text);
-    if (qualifier_text.empty()) {
+    const clang::NestedNameSpecifier *qualifier = decl_ref_expr->getQualifier();
+    if (qualifier == nullptr) {
       return;
     }
-    if (qualifier_text.size() < 2 ||
-        qualifier_text.substr(qualifier_text.size() - 2) != "::") {
-      qualifier_text += "::";
-    }
-    expr->setAttribute(kRexExplicitQualifierAttr,
-                       new RexExplicitQualifierAttribute(qualifier_text));
+    clang::NestedNameSpecifierLoc qualifier_loc =
+        decl_ref_expr->getQualifierLoc();
+    const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+        qualifier_loc.getNestedNameSpecifier() != nullptr ? &qualifier_loc
+                                                          : nullptr;
+    const ExplicitQualifierInfo info = getExplicitQualifierInfo(
+        qualifier, p_compiler_instance->getASTContext(), qualifier_loc_ptr,
+        &p_compiler_instance->getSourceManager(),
+        &p_compiler_instance->getLangOpts());
+    setExplicitQualifierOnExpr(expr, info);
   };
 
   // Phase C (Issue 115): Queue implicit template instantiations that are
@@ -4997,8 +5301,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 SgExpression *ref_exp =
                     SageBuilder::buildMemberFunctionRefExp_nfi(inst_sym, false,
                                                                false);
-                *node = ref_exp;
                 attach_explicit_qualifier(ref_exp);
+                *node = ref_exp;
                 return VisitExpr(decl_ref_expr, node) && res;
               }
             }
@@ -5106,8 +5410,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
     if (var_sym != NULL) {
       SgExpression *ref_exp = SageBuilder::buildVarRefExp(var_sym);
-      *node = ref_exp;
       attach_explicit_qualifier(ref_exp);
+      *node = ref_exp;
     } else {
       SgMemberFunctionSymbol *member_sym = member_func_sym;
       if (member_sym == NULL && func_sym != NULL) {
@@ -5471,8 +5775,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         const bool need_qualifier = decl_ref_expr->hasQualifier();
         SgExpression *ref_exp = SageBuilder::buildMemberFunctionRefExp_nfi(
             ref_member_sym, false, need_qualifier);
-        *node = ref_exp;
         attach_explicit_qualifier(ref_exp);
+        *node = ref_exp;
       } else if (func_sym != NULL) {
         SgFunctionSymbol *ref_func_sym = func_sym;
         if (has_explicit_template_args) {
@@ -5742,8 +6046,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
         }
         SgExpression *ref_exp = SageBuilder::buildFunctionRefExp(ref_func_sym);
-        *node = ref_exp;
         attach_explicit_qualifier(ref_exp);
+        *node = ref_exp;
       } else {
         if (enum_sym != NULL) {
           // ROOT CAUSE FIX: Get enum declaration from the type instead of
@@ -5769,8 +6073,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           SgName name = enum_sym->get_name();
           SgExpression *ref_exp =
               SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
-          *node = ref_exp;
           attach_explicit_qualifier(ref_exp);
+          *node = ref_exp;
         } else {
           if (sym != NULL) {
             std::cerr << "Runtime error: Unknown type of symbol for a "
@@ -5821,8 +6125,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     SgExpression *ref_exp = buildNonrealRefExpFromNestedNameSpecifier(
         decl_ref_expr->getQualifier(), current_scope, SgName(decl_name),
         decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
-    *node = ref_exp;
     attach_explicit_qualifier(ref_exp);
+    *node = ref_exp;
   }
 
   return VisitExpr(decl_ref_expr, node) && res;
@@ -6164,18 +6468,16 @@ bool ClangToSageTranslator::VisitFloatingLiteral(
         floating_literal->getValue().convertToDouble());
   }
 
-  if (p_compiler_instance != nullptr) {
-    std::string literal_text = getSourceTokenText(
-        floating_literal, p_compiler_instance->getSourceManager(),
-        p_compiler_instance->getLangOpts());
-    if (!literal_text.empty()) {
-      if (SgFloatVal *float_val = isSgFloatVal(*node)) {
-        float_val->set_valueString(literal_text);
-      } else if (SgDoubleVal *double_val = isSgDoubleVal(*node)) {
-        double_val->set_valueString(literal_text);
-      } else if (SgLongDoubleVal *long_double_val = isSgLongDoubleVal(*node)) {
-        long_double_val->set_valueString(literal_text);
-      }
+  std::string spelling = getFloatingLiteralSpelling(
+      floating_literal, p_compiler_instance->getSourceManager(),
+      p_compiler_instance->getLangOpts());
+  if (!spelling.empty()) {
+    if (SgFloatVal *float_val = isSgFloatVal(*node)) {
+      float_val->set_valueString(spelling);
+    } else if (SgDoubleVal *double_val = isSgDoubleVal(*node)) {
+      double_val->set_valueString(spelling);
+    } else if (SgLongDoubleVal *long_double_val = isSgLongDoubleVal(*node)) {
+      long_double_val->set_valueString(spelling);
     }
   }
 
@@ -6344,50 +6646,104 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
   const clang::BuiltinType *builtin_type =
       literal_type->getAs<clang::BuiltinType>();
   const llvm::APInt value = integer_literal->getValue();
+  std::string spelling = getIntegerLiteralSpelling(
+      integer_literal, p_compiler_instance->getSourceManager(),
+      p_compiler_instance->getLangOpts());
+  bool has_spelling = !spelling.empty();
 
   if (builtin_type != nullptr) {
     switch (builtin_type->getKind()) {
     case clang::BuiltinType::UChar:
     case clang::BuiltinType::Char_U:
-      value_exp = SageBuilder::buildUnsignedCharVal(
-          static_cast<unsigned char>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedCharVal_nfi(
+            static_cast<unsigned char>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedCharVal(
+            static_cast<unsigned char>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::UShort:
-      value_exp = SageBuilder::buildUnsignedShortVal(
-          static_cast<unsigned short>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedShortVal_nfi(
+            static_cast<unsigned short>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedShortVal(
+            static_cast<unsigned short>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::UInt:
-      value_exp = SageBuilder::buildUnsignedIntVal(
-          static_cast<unsigned int>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedIntVal_nfi(
+            static_cast<unsigned int>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedIntVal(
+            static_cast<unsigned int>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::ULong:
-      value_exp = SageBuilder::buildUnsignedLongVal(
-          static_cast<unsigned long>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedLongVal_nfi(
+            static_cast<unsigned long>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedLongVal(
+            static_cast<unsigned long>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::ULongLong:
-      value_exp = SageBuilder::buildUnsignedLongLongIntVal(
-          static_cast<unsigned long long>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal_nfi(
+            static_cast<unsigned long long>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal(
+            static_cast<unsigned long long>(value.getLimitedValue()));
+      }
       break;
     case clang::BuiltinType::SChar:
     case clang::BuiltinType::Char_S:
-      value_exp =
-          SageBuilder::buildCharVal(static_cast<char>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildCharVal_nfi(
+            static_cast<char>(value.getSExtValue()), spelling);
+      } else {
+        value_exp =
+            SageBuilder::buildCharVal(static_cast<char>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::Short:
-      value_exp =
-          SageBuilder::buildShortVal(static_cast<short>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildShortVal_nfi(
+            static_cast<short>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildShortVal(
+            static_cast<short>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::Int:
-      value_exp =
-          SageBuilder::buildIntVal(static_cast<int>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildIntVal_nfi(
+            static_cast<int>(value.getSExtValue()), spelling);
+      } else {
+        value_exp =
+            SageBuilder::buildIntVal(static_cast<int>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::Long:
-      value_exp =
-          SageBuilder::buildLongIntVal(static_cast<long>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildLongIntVal_nfi(
+            static_cast<long>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildLongIntVal(
+            static_cast<long>(value.getSExtValue()));
+      }
       break;
     case clang::BuiltinType::LongLong:
-      value_exp = SageBuilder::buildLongLongIntVal(
-          static_cast<long long>(value.getSExtValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildLongLongIntVal_nfi(
+            static_cast<long long>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildLongLongIntVal(
+            static_cast<long long>(value.getSExtValue()));
+      }
       break;
     default:
       break;
@@ -6396,59 +6752,20 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
 
   if (value_exp == nullptr) {
     if (literal_type->isUnsignedIntegerType()) {
-      value_exp = SageBuilder::buildUnsignedLongLongIntVal(
-          static_cast<unsigned long long>(value.getLimitedValue()));
+      if (has_spelling) {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal_nfi(
+            static_cast<unsigned long long>(value.getLimitedValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildUnsignedLongLongIntVal(
+            static_cast<unsigned long long>(value.getLimitedValue()));
+      }
     } else {
-      value_exp = SageBuilder::buildLongLongIntVal(
-          static_cast<long long>(value.getSExtValue()));
-    }
-  }
-
-  if (value_exp != nullptr && p_compiler_instance != nullptr) {
-    std::string literal_text = getSourceTokenText(
-        integer_literal, p_compiler_instance->getSourceManager(),
-        p_compiler_instance->getLangOpts());
-    literal_text = trimWhitespace(literal_text);
-    if (!literal_text.empty()) {
-      bool starts_numeric =
-          std::isdigit(static_cast<unsigned char>(literal_text[0]));
-      if (!starts_numeric &&
-          (literal_text[0] == '+' || literal_text[0] == '-') &&
-          literal_text.size() > 1) {
-        starts_numeric =
-            std::isdigit(static_cast<unsigned char>(literal_text[1]));
-      }
-
-      if (!starts_numeric) {
-        *node = value_exp;
-        return VisitExpr(integer_literal, node);
-      }
-
-      if (SgIntVal *int_val = isSgIntVal(value_exp)) {
-        int_val->set_valueString(literal_text);
-      } else if (SgShortVal *short_val = isSgShortVal(value_exp)) {
-        short_val->set_valueString(literal_text);
-      } else if (SgLongIntVal *long_val = isSgLongIntVal(value_exp)) {
-        long_val->set_valueString(literal_text);
-      } else if (SgLongLongIntVal *long_long_val =
-                     isSgLongLongIntVal(value_exp)) {
-        long_long_val->set_valueString(literal_text);
-      } else if (SgUnsignedCharVal *uchar_val =
-                     isSgUnsignedCharVal(value_exp)) {
-        uchar_val->set_valueString(literal_text);
-      } else if (SgUnsignedShortVal *ushort_val =
-                     isSgUnsignedShortVal(value_exp)) {
-        ushort_val->set_valueString(literal_text);
-      } else if (SgUnsignedIntVal *uint_val = isSgUnsignedIntVal(value_exp)) {
-        uint_val->set_valueString(literal_text);
-      } else if (SgUnsignedLongVal *ulong_val =
-                     isSgUnsignedLongVal(value_exp)) {
-        ulong_val->set_valueString(literal_text);
-      } else if (SgUnsignedLongLongIntVal *ulong_long_val =
-                     isSgUnsignedLongLongIntVal(value_exp)) {
-        ulong_long_val->set_valueString(literal_text);
-      } else if (SgCharVal *char_val = isSgCharVal(value_exp)) {
-        char_val->set_valueString(literal_text);
+      if (has_spelling) {
+        value_exp = SageBuilder::buildLongLongIntVal_nfi(
+            static_cast<long long>(value.getSExtValue()), spelling);
+      } else {
+        value_exp = SageBuilder::buildLongLongIntVal(
+            static_cast<long long>(value.getSExtValue()));
       }
     }
   }

@@ -1245,6 +1245,16 @@ Grammar::setUpExpressions ()
   //                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      VarRefExp.setDataPrototype("bool","global_qualification_required","= false",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     VarRefExp.setDataPrototype("int", "explicit_name_qualification_length",
+                                "= -1", NO_CONSTRUCTOR_PARAMETER,
+                                NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     VarRefExp.setDataPrototype("bool", "explicit_global_qualification",
+                                "= false", NO_CONSTRUCTOR_PARAMETER,
+                                NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     VarRefExp.setDataPrototype("SgStringList",
+                                "explicit_name_qualification_tokens", "",
+                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                NO_TRAVERSAL, NO_DELETE);
 
      NonrealRefExp.setFunctionPrototype ( "HEADER_NONREAL_REF_EXPRESSION", "../Grammar/Expression.code" );
 
@@ -1258,7 +1268,18 @@ Grammar::setUpExpressions ()
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      NonrealRefExp.setDataPrototype ("bool","global_qualification_required","= false",
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
+     NonrealRefExp.setDataPrototype("int", "explicit_name_qualification_length",
+                                    "= -1", NO_CONSTRUCTOR_PARAMETER,
+                                    NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                    NO_DELETE);
+     NonrealRefExp.setDataPrototype("bool", "explicit_global_qualification",
+                                    "= false", NO_CONSTRUCTOR_PARAMETER,
+                                    NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                    NO_DELETE);
+     NonrealRefExp.setDataPrototype(
+         "SgStringList", "explicit_name_qualification_tokens", "",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
 
      LabelRefExp.setFunctionPrototype ( "HEADER_LABEL_REF_EXPRESSION", "../Grammar/Expression.code" );
      LabelRefExp.setDataPrototype ( "SgLabelSymbol*", "symbol", "= NULL",
@@ -1311,6 +1332,18 @@ Grammar::setUpExpressions ()
   //                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      FunctionRefExp.setDataPrototype("bool","global_qualification_required","= false",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     FunctionRefExp.setDataPrototype(
+         "int", "explicit_name_qualification_length", "= -1",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
+     FunctionRefExp.setDataPrototype("bool", "explicit_global_qualification",
+                                     "= false", NO_CONSTRUCTOR_PARAMETER,
+                                     NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                     NO_DELETE);
+     FunctionRefExp.setDataPrototype(
+         "SgStringList", "explicit_name_qualification_tokens", "",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
 
      MemberFunctionRefExp.setFunctionPrototype ( "HEADER_MEMBER_FUNCTION_REF_EXPRESSION", "../Grammar/Expression.code" );
      MemberFunctionRefExp.setDataPrototype ( "SgMemberFunctionSymbol*", "symbol_i", "= NULL",
@@ -1351,13 +1384,25 @@ Grammar::setUpExpressions ()
   //                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      MemberFunctionRefExp.setDataPrototype("bool","global_qualification_required","= false",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     MemberFunctionRefExp.setDataPrototype(
+         "int", "explicit_name_qualification_length", "= -1",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
+     MemberFunctionRefExp.setDataPrototype(
+         "bool", "explicit_global_qualification", "= false",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
+     MemberFunctionRefExp.setDataPrototype(
+         "SgStringList", "explicit_name_qualification_tokens", "",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
 
-  // *****************************************************************************
-  // DQ (12/15/2011) Added template declaration support and so we need support for
-  // calling template functions and template member functions as expressions.
-  // NOTE: These have a similar interface to the SgFunctionRefExp and
-  // SgTemplateMemberFunctionRefExp.
-  // *****************************************************************************
+     // *****************************************************************************
+     // DQ (12/15/2011) Added template declaration support and so we need
+     // support for calling template functions and template member functions as
+     // expressions. NOTE: These have a similar interface to the
+     // SgFunctionRefExp and SgTemplateMemberFunctionRefExp.
+     // *****************************************************************************
 
      TemplateFunctionRefExp.setFunctionPrototype ( "HEADER_TEMPLATE_FUNCTION_REF_EXPRESSION", "../Grammar/Expression.code" );
   // TemplateFunctionRefExp.setDataPrototype ( "SgTemplateSymbol*", "symbol_i", "= NULL",
@@ -1393,6 +1438,18 @@ Grammar::setUpExpressions ()
   //                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      TemplateFunctionRefExp.setDataPrototype("bool","global_qualification_required","= false",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     TemplateFunctionRefExp.setDataPrototype(
+         "int", "explicit_name_qualification_length", "= -1",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
+     TemplateFunctionRefExp.setDataPrototype(
+         "bool", "explicit_global_qualification", "= false",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
+     TemplateFunctionRefExp.setDataPrototype(
+         "SgStringList", "explicit_name_qualification_tokens", "",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
 
      TemplateMemberFunctionRefExp.setFunctionPrototype ( "HEADER_TEMPLATE_MEMBER_FUNCTION_REF_EXPRESSION", "../Grammar/Expression.code" );
   // TemplateMemberFunctionRefExp.setDataPrototype ( "SgTemplateSymbol*", "symbol_i", "= NULL",
@@ -1435,8 +1492,20 @@ Grammar::setUpExpressions ()
   //                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      TemplateMemberFunctionRefExp.setDataPrototype("bool","global_qualification_required","= false",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     TemplateMemberFunctionRefExp.setDataPrototype(
+         "int", "explicit_name_qualification_length", "= -1",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
+     TemplateMemberFunctionRefExp.setDataPrototype(
+         "bool", "explicit_global_qualification", "= false",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
+     TemplateMemberFunctionRefExp.setDataPrototype(
+         "SgStringList", "explicit_name_qualification_tokens", "",
+         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+         NO_DELETE);
 
-  // *****************************************************************************
+     // *****************************************************************************
 
 
 
@@ -1658,6 +1727,16 @@ Grammar::setUpExpressions ()
   //                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      EnumVal.setDataPrototype("bool","global_qualification_required","= false",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     EnumVal.setDataPrototype("int", "explicit_name_qualification_length",
+                              "= -1", NO_CONSTRUCTOR_PARAMETER,
+                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     EnumVal.setDataPrototype("bool", "explicit_global_qualification",
+                              "= false", NO_CONSTRUCTOR_PARAMETER,
+                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     EnumVal.setDataPrototype("SgStringList",
+                              "explicit_name_qualification_tokens", "",
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
 
      UnsignedIntVal.setFunctionPrototype ( "HEADER_UNSIGNED_INT_VALUE_EXPRESSION", "../Grammar/Expression.code" );
      UnsignedIntVal.setDataPrototype ( "unsigned int", "value", "= 0",

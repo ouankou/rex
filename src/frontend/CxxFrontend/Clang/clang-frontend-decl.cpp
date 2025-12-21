@@ -1,6 +1,5 @@
 #include "clang-frontend-private.hpp"
 #include "sage3basic.h"
-#include "clang/Lex/Lexer.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -9,246 +8,6 @@
 #include <set>
 
 namespace {
-static const char kRexImplicitConstexprConstAttr[] =
-    "rex_implicit_constexpr_const";
-static const char kRexExplicitInstantiationKeywordAttr[] =
-    "rex_explicit_instantiation_keyword";
-static const char kRexCopyListInitAttr[] = "rex_copy_list_init";
-
-class RexExplicitInstantiationKeywordAttribute : public AstAttribute {
-public:
-  explicit RexExplicitInstantiationKeywordAttribute(std::string keyword)
-      : keyword_(std::move(keyword)) {}
-
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  AstAttribute *copy() const override {
-    return new RexExplicitInstantiationKeywordAttribute(keyword_);
-  }
-
-  std::string attribute_class_name() const override {
-    return "RexExplicitInstantiationKeywordAttribute";
-  }
-
-  std::string toString() override { return keyword_; }
-
-private:
-  std::string keyword_;
-};
-
-bool scan_for_explicit_const(clang::SourceLocation begin,
-                             clang::SourceLocation end,
-                             clang::SourceManager &sm,
-                             const clang::LangOptions &lang_opts,
-                             bool &found_const) {
-  begin = sm.getExpansionLoc(begin);
-  end = sm.getExpansionLoc(end);
-  if (begin.isInvalid() || end.isInvalid()) {
-    return false;
-  }
-  if (!sm.isWrittenInSameFile(begin, end)) {
-    return false;
-  }
-  clang::SourceLocation end_loc =
-      clang::Lexer::getLocForEndOfToken(end, 0, sm, lang_opts);
-  if (end_loc.isInvalid()) {
-    return false;
-  }
-  clang::SourceLocation loc = begin;
-  clang::Token tok;
-  int angle_depth = 0;
-  while (loc.isValid() && sm.isBeforeInTranslationUnit(loc, end_loc)) {
-    if (clang::Lexer::getRawToken(loc, tok, sm, lang_opts, true)) {
-      return false;
-    }
-    if (tok.is(clang::tok::kw_const) && angle_depth == 0) {
-      found_const = true;
-      return true;
-    }
-    switch (tok.getKind()) {
-    case clang::tok::less:
-      ++angle_depth;
-      break;
-    case clang::tok::greater:
-      if (angle_depth > 0) {
-        --angle_depth;
-      }
-      break;
-    case clang::tok::greatergreater:
-      angle_depth = std::max(0, angle_depth - 2);
-      break;
-    default:
-      break;
-    }
-    clang::SourceLocation next =
-        clang::Lexer::getLocForEndOfToken(tok.getLocation(), 0, sm, lang_opts);
-    if (next.isInvalid() || next == loc) {
-      break;
-    }
-    loc = next;
-  }
-  found_const = false;
-  return true;
-}
-
-bool has_explicit_const_qualifier(const clang::VarDecl *var_decl,
-                                  clang::SourceManager &sm,
-                                  const clang::LangOptions &lang_opts) {
-  if (var_decl == NULL) {
-    return true;
-  }
-  bool found_const = false;
-  if (const clang::TypeSourceInfo *type_info = var_decl->getTypeSourceInfo()) {
-    clang::TypeLoc type_loc = type_info->getTypeLoc();
-    if (scan_for_explicit_const(type_loc.getBeginLoc(), type_loc.getEndLoc(),
-                                sm, lang_opts, found_const)) {
-      return found_const;
-    }
-  }
-  if (scan_for_explicit_const(var_decl->getBeginLoc(), var_decl->getLocation(),
-                              sm, lang_opts, found_const)) {
-    return found_const;
-  }
-  return true;
-}
-
-static std::string
-findExplicitInstantiationKeywordInRange(clang::SourceRange range,
-                                        clang::SourceManager &sm,
-                                        const clang::LangOptions &lang_opts) {
-  clang::SourceLocation begin = sm.getExpansionLoc(range.getBegin());
-  clang::SourceLocation end = sm.getExpansionLoc(range.getEnd());
-  if (begin.isInvalid() || end.isInvalid()) {
-    return std::string();
-  }
-  if (!sm.isWrittenInSameFile(begin, end)) {
-    return std::string();
-  }
-  clang::SourceLocation end_loc =
-      clang::Lexer::getLocForEndOfToken(end, 0, sm, lang_opts);
-  if (end_loc.isInvalid()) {
-    return std::string();
-  }
-  clang::SourceLocation loc = begin;
-  clang::Token tok;
-  int angle_depth = 0;
-  while (loc.isValid() && sm.isBeforeInTranslationUnit(loc, end_loc)) {
-    if (clang::Lexer::getRawToken(loc, tok, sm, lang_opts, true)) {
-      return std::string();
-    }
-    if (angle_depth == 0) {
-      if (tok.is(clang::tok::kw_class)) {
-        return "class";
-      }
-      if (tok.is(clang::tok::kw_struct)) {
-        return "struct";
-      }
-      if (tok.is(clang::tok::kw_union)) {
-        return "union";
-      }
-      if (tok.is(clang::tok::raw_identifier) ||
-          tok.is(clang::tok::identifier)) {
-        llvm::StringRef spelling =
-            clang::Lexer::getSpelling(tok, sm, lang_opts);
-        if (spelling == "class") {
-          return "class";
-        }
-        if (spelling == "struct") {
-          return "struct";
-        }
-        if (spelling == "union") {
-          return "union";
-        }
-      }
-    }
-    switch (tok.getKind()) {
-    case clang::tok::less:
-      ++angle_depth;
-      break;
-    case clang::tok::greater:
-      if (angle_depth > 0) {
-        --angle_depth;
-      }
-      break;
-    case clang::tok::greatergreater:
-      angle_depth = std::max(0, angle_depth - 2);
-      break;
-    default:
-      break;
-    }
-    clang::SourceLocation next =
-        clang::Lexer::getLocForEndOfToken(tok.getLocation(), 0, sm, lang_opts);
-    if (next.isInvalid() || next == loc) {
-      break;
-    }
-    loc = next;
-  }
-  return std::string();
-}
-
-static std::string findExplicitInstantiationKeyword(
-    const clang::ClassTemplateSpecializationDecl *decl,
-    clang::SourceManager &sm, const clang::LangOptions &lang_opts) {
-  if (decl == nullptr) {
-    return std::string();
-  }
-  clang::SourceLocation name_loc = sm.getExpansionLoc(decl->getLocation());
-  if (name_loc.isValid()) {
-    clang::SourceLocation loc = name_loc;
-    while (true) {
-      std::optional<clang::Token> prev =
-          clang::Lexer::findPreviousToken(loc, sm, lang_opts, false);
-      if (!prev) {
-        break;
-      }
-      if (prev->is(clang::tok::kw_class)) {
-        return "class";
-      }
-      if (prev->is(clang::tok::kw_struct)) {
-        return "struct";
-      }
-      if (prev->is(clang::tok::kw_union)) {
-        return "union";
-      }
-      if (prev->is(clang::tok::raw_identifier) ||
-          prev->is(clang::tok::identifier)) {
-        llvm::StringRef spelling =
-            clang::Lexer::getSpelling(*prev, sm, lang_opts);
-        if (spelling == "class") {
-          return "class";
-        }
-        if (spelling == "struct") {
-          return "struct";
-        }
-        if (spelling == "union") {
-          return "union";
-        }
-      }
-      if (prev->is(clang::tok::semi) || prev->is(clang::tok::l_brace)) {
-        break;
-      }
-      clang::SourceLocation prev_loc = prev->getLocation();
-      if (prev_loc.isInvalid() || prev_loc == loc) {
-        break;
-      }
-      loc = prev_loc;
-    }
-  }
-  clang::SourceRange range = decl->getSourceRange();
-  clang::SourceLocation template_loc = decl->getTemplateKeywordLoc();
-  if (template_loc.isValid()) {
-    range = clang::SourceRange(template_loc, range.getEnd());
-  }
-  std::string keyword =
-      findExplicitInstantiationKeywordInRange(range, sm, lang_opts);
-  if (keyword.empty() && template_loc.isValid()) {
-    keyword = findExplicitInstantiationKeywordInRange(decl->getSourceRange(),
-                                                      sm, lang_opts);
-  }
-  return keyword;
-}
 
 static std::string trimWhitespace(std::string s) {
   size_t first = 0;
@@ -262,115 +21,6 @@ static std::string trimWhitespace(std::string s) {
     s.pop_back();
   }
   return s;
-}
-
-static const clang::NestedNameSpecifier *
-findTypeQualifier(clang::TypeLoc type_loc) {
-  while (type_loc) {
-    if (auto elaborated = type_loc.getAs<clang::ElaboratedTypeLoc>()) {
-      const clang::NestedNameSpecifier *qual =
-          elaborated.getQualifierLoc().getNestedNameSpecifier();
-      if (qual != nullptr) {
-        return qual;
-      }
-      type_loc = elaborated.getNamedTypeLoc();
-      continue;
-    }
-    if (auto dependent = type_loc.getAs<clang::DependentNameTypeLoc>()) {
-      const clang::NestedNameSpecifier *qual =
-          dependent.getQualifierLoc().getNestedNameSpecifier();
-      if (qual != nullptr) {
-        return qual;
-      }
-      break;
-    }
-    if (auto dependent_template =
-            type_loc.getAs<clang::DependentTemplateSpecializationTypeLoc>()) {
-      const clang::NestedNameSpecifier *qual =
-          dependent_template.getQualifierLoc().getNestedNameSpecifier();
-      if (qual != nullptr) {
-        return qual;
-      }
-      break;
-    }
-    if (auto template_spec =
-            type_loc.getAs<clang::TemplateSpecializationTypeLoc>()) {
-      clang::TemplateName template_name =
-          template_spec.getTypePtr()->getTemplateName();
-      if (const clang::QualifiedTemplateName *qualified =
-              template_name.getAsQualifiedTemplateName()) {
-        return qualified->getQualifier();
-      }
-      if (const clang::DependentTemplateName *dependent_name =
-              template_name.getAsDependentTemplateName()) {
-        return dependent_name->getQualifier();
-      }
-      break;
-    }
-    if (auto pointer = type_loc.getAs<clang::PointerTypeLoc>()) {
-      type_loc = pointer.getPointeeLoc();
-      continue;
-    }
-    if (auto lref = type_loc.getAs<clang::LValueReferenceTypeLoc>()) {
-      type_loc = lref.getPointeeLoc();
-      continue;
-    }
-    if (auto rref = type_loc.getAs<clang::RValueReferenceTypeLoc>()) {
-      type_loc = rref.getPointeeLoc();
-      continue;
-    }
-    if (auto array = type_loc.getAs<clang::ArrayTypeLoc>()) {
-      type_loc = array.getElementLoc();
-      continue;
-    }
-    if (auto paren = type_loc.getAs<clang::ParenTypeLoc>()) {
-      type_loc = paren.getInnerLoc();
-      continue;
-    }
-    if (auto qualified = type_loc.getAs<clang::QualifiedTypeLoc>()) {
-      type_loc = qualified.getUnqualifiedLoc();
-      continue;
-    }
-    break;
-  }
-  return nullptr;
-}
-
-static std::string
-getExplicitTypeQualifier(const clang::TypeSourceInfo *type_info,
-                         const clang::PrintingPolicy &policy) {
-  if (type_info == nullptr) {
-    return std::string();
-  }
-  clang::TypeLoc type_loc = type_info->getTypeLoc();
-  const clang::NestedNameSpecifier *qualifier = findTypeQualifier(type_loc);
-  if (qualifier == nullptr) {
-    return std::string();
-  }
-  std::string qualifier_text = buildQualifierString(qualifier, policy);
-  qualifier_text = trimWhitespace(qualifier_text);
-  if (qualifier_text.empty()) {
-    return qualifier_text;
-  }
-  if (qualifier_text.size() < 2 ||
-      qualifier_text.substr(qualifier_text.size() - 2) != "::") {
-    qualifier_text += "::";
-  }
-  return qualifier_text;
-}
-
-static void attachExplicitTypeQualifier(const clang::TypeSourceInfo *type_info,
-                                        SgNode *target,
-                                        const clang::PrintingPolicy &policy) {
-  if (target == nullptr) {
-    return;
-  }
-  std::string qualifier = getExplicitTypeQualifier(type_info, policy);
-  if (qualifier.empty()) {
-    return;
-  }
-  target->setAttribute(kRexExplicitQualifierAttr,
-                       new RexExplicitQualifierAttribute(qualifier));
 }
 
 static std::string getDeclNameSafe(clang::NamedDecl *named_decl) {
@@ -4033,19 +3683,6 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     }
     ensure_decl_in_scope_child_list(instantiation_directive, scope,
                                     "VisitClassTemplateSpecializationDecl");
-    if (p_compiler_instance != nullptr && instantiation_directive != NULL &&
-        instantiation_directive->getAttribute(
-            kRexExplicitInstantiationKeywordAttr) == NULL) {
-      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-      const clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
-      std::string keyword =
-          findExplicitInstantiationKeyword(class_tpl_spec_decl, sm, lang_opts);
-      if (!keyword.empty()) {
-        instantiation_directive->setAttribute(
-            kRexExplicitInstantiationKeywordAttr,
-            new RexExplicitInstantiationKeywordAttribute(keyword));
-      }
-    }
     if (instantiation_directive != NULL &&
         instantiation_directive->get_firstNondefiningDeclaration() == NULL) {
       instantiation_directive->set_firstNondefiningDeclaration(
@@ -5457,12 +5094,6 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
   ROSE_ASSERT(init_name != NULL);
   init_name->set_parent(var_decl);
   init_name->set_scope(SageBuilder::topScopeStack());
-  if (p_compiler_instance != nullptr) {
-    clang::PrintingPolicy policy(p_compiler_instance->getLangOpts());
-    attachExplicitTypeQualifier(field_decl->getTypeSourceInfo(), init_name,
-                                policy);
-  }
-
   applySourceRange(init_name, field_decl->getSourceRange());
 
   // CLANG FRONTEND FIX: declptr should point to SgVariableDefinition, not
@@ -7746,22 +7377,9 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   if (var_decl->getInitStyle() == clang::VarDecl::ListInit) {
     init_name->set_is_braced_initialized(true);
     if (!var_decl->isDirectInit()) {
-      init_name->setAttribute(kRexCopyListInitAttr, new AstAttribute);
+      init_name->set_using_assignment_copy_constructor_syntax(true);
     }
   }
-  if (p_compiler_instance != nullptr) {
-    clang::PrintingPolicy policy(p_compiler_instance->getLangOpts());
-    attachExplicitTypeQualifier(var_decl->getTypeSourceInfo(), init_name,
-                                policy);
-  }
-  if (var_decl->isConstexpr() && var_decl->getType().isConstQualified()) {
-    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-    const clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
-    if (!has_explicit_const_qualifier(var_decl, sm, lang_opts)) {
-      init_name->setAttribute(kRexImplicitConstexprConstAttr, new AstAttribute);
-    }
-  }
-
   // CLANG FRONTEND FIX: Set initializer parent to SgInitializedName
   // The initializer is a child of the SgInitializedName, not the
   // SgVariableDeclaration
@@ -7897,11 +7515,6 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
 
   SgInitializedName *param_init_name =
       SageBuilder::buildInitializedName(name, type, init);
-  if (p_compiler_instance != nullptr) {
-    clang::PrintingPolicy policy(p_compiler_instance->getLangOpts());
-    attachExplicitTypeQualifier(param_var_decl->getTypeSourceInfo(),
-                                param_init_name, policy);
-  }
   if (param_var_decl->isParameterPack()) {
     param_init_name->set_is_parameter_pack(true);
     param_init_name->set_is_pack_element(true);

@@ -325,6 +325,16 @@ HEADER_VAR_REF_EXPRESSION_START
           bool get_global_qualification_required() const override;
           void set_global_qualification_required(bool global_qualification_required) override;
 
+       // Explicit qualifiers are recorded separately from computed name qualification.
+          int get_explicit_name_qualification_length() const;
+          void set_explicit_name_qualification_length(int explicit_name_qualification_length);
+          bool get_explicit_global_qualification() const;
+          void set_explicit_global_qualification(bool explicit_global_qualification);
+          const SgStringList &get_explicit_name_qualification_tokens() const;
+          SgStringList &get_explicit_name_qualification_tokens();
+          void set_explicit_name_qualification_tokens(
+              const SgStringList &explicit_name_qualification_tokens);
+
 HEADER_VAR_REF_EXPRESSION_END
 
 HEADER_NONREAL_REF_EXPRESSION_START
@@ -342,6 +352,15 @@ HEADER_NONREAL_REF_EXPRESSION_START
 
           bool get_global_qualification_required() const override;
           void set_global_qualification_required(bool global_qualification_required) override;
+
+          int get_explicit_name_qualification_length() const;
+          void set_explicit_name_qualification_length(int explicit_name_qualification_length);
+          bool get_explicit_global_qualification() const;
+          void set_explicit_global_qualification(bool explicit_global_qualification);
+          const SgStringList &get_explicit_name_qualification_tokens() const;
+          SgStringList &get_explicit_name_qualification_tokens();
+          void set_explicit_name_qualification_tokens(
+              const SgStringList &explicit_name_qualification_tokens);
 HEADER_NONREAL_REF_EXPRESSION_END
 
 HEADER_COMPOUND_LITERAL_EXPRESSION_START
@@ -424,6 +443,16 @@ HEADER_FUNCTION_REF_EXPRESSION_START
           bool get_global_qualification_required() const override;
           void set_global_qualification_required(bool global_qualification_required) override;
 
+       // Explicit qualifiers are recorded separately from computed name qualification.
+          int get_explicit_name_qualification_length() const;
+          void set_explicit_name_qualification_length(int explicit_name_qualification_length);
+          bool get_explicit_global_qualification() const;
+          void set_explicit_global_qualification(bool explicit_global_qualification);
+          const SgStringList &get_explicit_name_qualification_tokens() const;
+          SgStringList &get_explicit_name_qualification_tokens();
+          void set_explicit_name_qualification_tokens(
+              const SgStringList &explicit_name_qualification_tokens);
+
 HEADER_FUNCTION_REF_EXPRESSION_END
 
 
@@ -457,6 +486,16 @@ HEADER_MEMBER_FUNCTION_REF_EXPRESSION_START
        // DQ (6/11/2015): Added support for none ROSETTA generated access functions to avoid isModified flag setting semantics.
           bool get_global_qualification_required() const override;
           void set_global_qualification_required(bool global_qualification_required) override;
+
+       // Explicit qualifiers are recorded separately from computed name qualification.
+          int get_explicit_name_qualification_length() const;
+          void set_explicit_name_qualification_length(int explicit_name_qualification_length);
+          bool get_explicit_global_qualification() const;
+          void set_explicit_global_qualification(bool explicit_global_qualification);
+          const SgStringList &get_explicit_name_qualification_tokens() const;
+          SgStringList &get_explicit_name_qualification_tokens();
+          void set_explicit_name_qualification_tokens(
+              const SgStringList &explicit_name_qualification_tokens);
 
 HEADER_MEMBER_FUNCTION_REF_EXPRESSION_END
 
@@ -495,6 +534,15 @@ HEADER_TEMPLATE_FUNCTION_REF_EXPRESSION_START
           bool get_global_qualification_required() const override;
           void set_global_qualification_required(bool global_qualification_required) override;
 
+          int get_explicit_name_qualification_length() const;
+          void set_explicit_name_qualification_length(int explicit_name_qualification_length);
+          bool get_explicit_global_qualification() const;
+          void set_explicit_global_qualification(bool explicit_global_qualification);
+          const SgStringList &get_explicit_name_qualification_tokens() const;
+          SgStringList &get_explicit_name_qualification_tokens();
+          void set_explicit_name_qualification_tokens(
+              const SgStringList &explicit_name_qualification_tokens);
+
 HEADER_TEMPLATE_FUNCTION_REF_EXPRESSION_END
 
 
@@ -531,6 +579,15 @@ HEADER_TEMPLATE_MEMBER_FUNCTION_REF_EXPRESSION_START
        // DQ (6/11/2015): Added support for none ROSETTA generated access functions to avoid isModified flag setting semantics.
           bool get_global_qualification_required() const override;
           void set_global_qualification_required(bool global_qualification_required) override;
+
+          int get_explicit_name_qualification_length() const;
+          void set_explicit_name_qualification_length(int explicit_name_qualification_length);
+          bool get_explicit_global_qualification() const;
+          void set_explicit_global_qualification(bool explicit_global_qualification);
+          const SgStringList &get_explicit_name_qualification_tokens() const;
+          SgStringList &get_explicit_name_qualification_tokens();
+          void set_explicit_name_qualification_tokens(
+              const SgStringList &explicit_name_qualification_tokens);
 
 HEADER_TEMPLATE_MEMBER_FUNCTION_REF_EXPRESSION_END
 
@@ -645,6 +702,15 @@ HEADER_ENUM_VALUE_EXPRESSION_START
        // DQ (6/11/2015): Added support for none ROSETTA generated access functions to avoid isModified flag setting semantics.
           bool get_global_qualification_required() const override;
           void set_global_qualification_required(bool global_qualification_required) override;
+
+          int get_explicit_name_qualification_length() const;
+          void set_explicit_name_qualification_length(int explicit_name_qualification_length);
+          bool get_explicit_global_qualification() const;
+          void set_explicit_global_qualification(bool explicit_global_qualification);
+          const SgStringList &get_explicit_name_qualification_tokens() const;
+          SgStringList &get_explicit_name_qualification_tokens();
+          void set_explicit_name_qualification_tokens(
+              const SgStringList &explicit_name_qualification_tokens);
 
 HEADER_ENUM_VALUE_EXPRESSION_END
 
@@ -3398,6 +3464,58 @@ SgVarRefExp::set_global_qualification_required ( bool global_qualification_requi
      p_global_qualification_required = global_qualification_required;
    }
 
+int
+SgVarRefExp::get_explicit_name_qualification_length() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_length;
+   }
+
+void
+SgVarRefExp::set_explicit_name_qualification_length(
+    int explicit_name_qualification_length)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_length = explicit_name_qualification_length;
+   }
+
+bool
+SgVarRefExp::get_explicit_global_qualification() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_global_qualification;
+   }
+
+void
+SgVarRefExp::set_explicit_global_qualification(
+    bool explicit_global_qualification)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_global_qualification = explicit_global_qualification;
+   }
+
+const SgStringList &
+SgVarRefExp::get_explicit_name_qualification_tokens() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+SgStringList &
+SgVarRefExp::get_explicit_name_qualification_tokens()
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+void
+SgVarRefExp::set_explicit_name_qualification_tokens(
+    const SgStringList &explicit_name_qualification_tokens)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
+   }
+
 SOURCE_VARIABLE_REFERENCE_EXPRESSION_END
 
 SOURCE_NONREAL_REF_EXPRESSION_START
@@ -3443,6 +3561,59 @@ SgNonrealRefExp::set_global_qualification_required ( bool global_qualification_r
 
      p_global_qualification_required = global_qualification_required;
    }
+
+int
+SgNonrealRefExp::get_explicit_name_qualification_length() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_length;
+   }
+
+void
+SgNonrealRefExp::set_explicit_name_qualification_length(
+    int explicit_name_qualification_length)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_length = explicit_name_qualification_length;
+   }
+
+bool
+SgNonrealRefExp::get_explicit_global_qualification() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_global_qualification;
+   }
+
+void
+SgNonrealRefExp::set_explicit_global_qualification(
+    bool explicit_global_qualification)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_global_qualification = explicit_global_qualification;
+   }
+
+const SgStringList &
+SgNonrealRefExp::get_explicit_name_qualification_tokens() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+SgStringList &
+SgNonrealRefExp::get_explicit_name_qualification_tokens()
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+void
+SgNonrealRefExp::set_explicit_name_qualification_tokens(
+    const SgStringList &explicit_name_qualification_tokens)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
+   }
+
 SOURCE_NONREAL_REF_EXPRESSION_END
 
 SOURCE_COMPOUND_LITERAL_EXPRESSION_START
@@ -3689,6 +3860,58 @@ SgFunctionRefExp::set_global_qualification_required ( bool global_qualification_
      p_global_qualification_required = global_qualification_required;
    }
 
+int
+SgFunctionRefExp::get_explicit_name_qualification_length() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_length;
+   }
+
+void
+SgFunctionRefExp::set_explicit_name_qualification_length(
+    int explicit_name_qualification_length)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_length = explicit_name_qualification_length;
+   }
+
+bool
+SgFunctionRefExp::get_explicit_global_qualification() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_global_qualification;
+   }
+
+void
+SgFunctionRefExp::set_explicit_global_qualification(
+    bool explicit_global_qualification)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_global_qualification = explicit_global_qualification;
+   }
+
+const SgStringList &
+SgFunctionRefExp::get_explicit_name_qualification_tokens() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+SgStringList &
+SgFunctionRefExp::get_explicit_name_qualification_tokens()
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+void
+SgFunctionRefExp::set_explicit_name_qualification_tokens(
+    const SgStringList &explicit_name_qualification_tokens)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
+   }
+
 SOURCE_FUNCTION_REFERENCE_EXPRESSION_END
 
 
@@ -3802,6 +4025,58 @@ SgMemberFunctionRefExp::set_global_qualification_required ( bool global_qualific
      p_global_qualification_required = global_qualification_required;
    }
 
+int
+SgMemberFunctionRefExp::get_explicit_name_qualification_length() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_length;
+   }
+
+void
+SgMemberFunctionRefExp::set_explicit_name_qualification_length(
+    int explicit_name_qualification_length)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_length = explicit_name_qualification_length;
+   }
+
+bool
+SgMemberFunctionRefExp::get_explicit_global_qualification() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_global_qualification;
+   }
+
+void
+SgMemberFunctionRefExp::set_explicit_global_qualification(
+    bool explicit_global_qualification)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_global_qualification = explicit_global_qualification;
+   }
+
+const SgStringList &
+SgMemberFunctionRefExp::get_explicit_name_qualification_tokens() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+SgStringList &
+SgMemberFunctionRefExp::get_explicit_name_qualification_tokens()
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+void
+SgMemberFunctionRefExp::set_explicit_name_qualification_tokens(
+    const SgStringList &explicit_name_qualification_tokens)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
+   }
+
 SOURCE_MEMBER_FUNCTION_REFERENCE_EXPRESSION_END
 
 
@@ -3893,6 +4168,58 @@ SgTemplateFunctionRefExp::set_global_qualification_required ( bool global_qualif
   // set_isModified(true);
 
      p_global_qualification_required = global_qualification_required;
+   }
+
+int
+SgTemplateFunctionRefExp::get_explicit_name_qualification_length() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_length;
+   }
+
+void
+SgTemplateFunctionRefExp::set_explicit_name_qualification_length(
+    int explicit_name_qualification_length)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_length = explicit_name_qualification_length;
+   }
+
+bool
+SgTemplateFunctionRefExp::get_explicit_global_qualification() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_global_qualification;
+   }
+
+void
+SgTemplateFunctionRefExp::set_explicit_global_qualification(
+    bool explicit_global_qualification)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_global_qualification = explicit_global_qualification;
+   }
+
+const SgStringList &
+SgTemplateFunctionRefExp::get_explicit_name_qualification_tokens() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+SgStringList &
+SgTemplateFunctionRefExp::get_explicit_name_qualification_tokens()
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+void
+SgTemplateFunctionRefExp::set_explicit_name_qualification_tokens(
+    const SgStringList &explicit_name_qualification_tokens)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
    }
 
 SOURCE_TEMPLATE_FUNCTION_REFERENCE_EXPRESSION_END
@@ -3987,6 +4314,58 @@ SgTemplateMemberFunctionRefExp::set_global_qualification_required ( bool global_
   // set_isModified(true);
 
      p_global_qualification_required = global_qualification_required;
+   }
+
+int
+SgTemplateMemberFunctionRefExp::get_explicit_name_qualification_length() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_length;
+   }
+
+void
+SgTemplateMemberFunctionRefExp::set_explicit_name_qualification_length(
+    int explicit_name_qualification_length)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_length = explicit_name_qualification_length;
+   }
+
+bool
+SgTemplateMemberFunctionRefExp::get_explicit_global_qualification() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_global_qualification;
+   }
+
+void
+SgTemplateMemberFunctionRefExp::set_explicit_global_qualification(
+    bool explicit_global_qualification)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_global_qualification = explicit_global_qualification;
+   }
+
+const SgStringList &
+SgTemplateMemberFunctionRefExp::get_explicit_name_qualification_tokens() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+SgStringList &
+SgTemplateMemberFunctionRefExp::get_explicit_name_qualification_tokens()
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+void
+SgTemplateMemberFunctionRefExp::set_explicit_name_qualification_tokens(
+    const SgStringList &explicit_name_qualification_tokens)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
    }
 
 SOURCE_TEMPLATE_MEMBER_FUNCTION_REFERENCE_EXPRESSION_END
@@ -4238,6 +4617,58 @@ SgEnumVal::set_global_qualification_required ( bool global_qualification_require
   // set_isModified(true);
 
      p_global_qualification_required = global_qualification_required;
+   }
+
+int
+SgEnumVal::get_explicit_name_qualification_length() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_length;
+   }
+
+void
+SgEnumVal::set_explicit_name_qualification_length(
+    int explicit_name_qualification_length)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_length = explicit_name_qualification_length;
+   }
+
+bool
+SgEnumVal::get_explicit_global_qualification() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_global_qualification;
+   }
+
+void
+SgEnumVal::set_explicit_global_qualification(
+    bool explicit_global_qualification)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_global_qualification = explicit_global_qualification;
+   }
+
+const SgStringList &
+SgEnumVal::get_explicit_name_qualification_tokens() const
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+SgStringList &
+SgEnumVal::get_explicit_name_qualification_tokens()
+   {
+     ROSE_ASSERT(this != NULL);
+     return p_explicit_name_qualification_tokens;
+   }
+
+void
+SgEnumVal::set_explicit_name_qualification_tokens(
+    const SgStringList &explicit_name_qualification_tokens)
+   {
+     ROSE_ASSERT(this != NULL);
+     p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
    }
 
 SOURCE_ENUM_VALUE_EXPRESSION_END

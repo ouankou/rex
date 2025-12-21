@@ -31,63 +31,6 @@
 using namespace std;
 using namespace Rose;
 
-namespace {
-const char kRexImplicitConstexprConstAttr[] = "rex_implicit_constexpr_const";
-const char kRexExplicitInstantiationKeywordAttr[] =
-    "rex_explicit_instantiation_keyword";
-const char kRexCopyListInitAttr[] = "rex_copy_list_init";
-
-static std::string getExplicitInstantiationKeyword(const SgNode *node) {
-  if (node == NULL) {
-    return std::string();
-  }
-  AstAttribute *attr = node->getAttribute(kRexExplicitInstantiationKeywordAttr);
-  if (attr == NULL) {
-    return std::string();
-  }
-  return attr->toString();
-}
-
-static SgType *strip_top_level_const_preserve_typedef(SgType *type) {
-  SgModifierType *mod_type = isSgModifierType(type);
-  if (mod_type == NULL) {
-    return type;
-  }
-  if (!mod_type->get_typeModifier().get_constVolatileModifier().isConst()) {
-    return type;
-  }
-  SgType *base_type = mod_type->get_base_type();
-  if (base_type == NULL) {
-    return type;
-  }
-  SgModifierType *copy = new SgModifierType(base_type);
-  copy->get_typeModifier() = mod_type->get_typeModifier();
-  copy->get_typeModifier().get_constVolatileModifier().unsetConst();
-  SgModifierType *canonical =
-      SgModifierType::insertModifierTypeIntoTypeTable(copy);
-  if (canonical != copy) {
-    delete copy;
-  }
-  return canonical;
-}
-
-static SgType *
-maybe_strip_implicit_constexpr_const(SgInitializedName *decl_item,
-                                     SgType *type) {
-  if (decl_item == NULL || type == NULL) {
-    return type;
-  }
-  if (!decl_item->attributeExists(kRexImplicitConstexprConstAttr)) {
-    return type;
-  }
-  return strip_top_level_const_preserve_typedef(type);
-}
-
-static bool is_copy_list_initialization(const SgInitializedName *decl_item) {
-  return decl_item != NULL && decl_item->attributeExists(kRexCopyListInitAttr);
-}
-} // namespace
-
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
 #define OUTPUT_DEBUGGING_FUNCTION_INTERNALS  0
 #define OUTPUT_DEBUGGING_UNPARSE_INFO        0
@@ -2860,38 +2803,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
                printf ("classDeclaration = %p = %s \n",classDeclaration,classDeclaration->class_name().c_str());
                printf ("classDeclaration->get_parent() = %p = %s \n",classDeclaration->get_parent(),classDeclaration->get_parent()->class_name().c_str());
 #endif
-            // DQ (8/29/2005): "template" keyword now output by Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
-            // curprint ( string("template ";
-#if 1
-            // DQ (8/19/2014): Original code.
-               std::string keyword = getExplicitInstantiationKeyword(
-                   templateInstantiationDirective);
-               SgClassDeclaration::class_types original_class_type =
-                   classDeclaration->get_class_type();
-               bool override_keyword = false;
-               if (!keyword.empty()) {
-                 if (keyword == "class") {
-                   classDeclaration->set_class_type(
-                       SgClassDeclaration::e_class);
-                   override_keyword = true;
-                 } else if (keyword == "struct") {
-                   classDeclaration->set_class_type(
-                       SgClassDeclaration::e_struct);
-                   override_keyword = true;
-                 } else if (keyword == "union") {
-                   classDeclaration->set_class_type(
-                       SgClassDeclaration::e_union);
-                   override_keyword = true;
-                 }
-               }
-               unparseClassDeclStmt(classDeclaration,info);
-               if (override_keyword) {
-                 classDeclaration->set_class_type(original_class_type);
-               }
-#else
-            // DQ (8/19/2014): New code.
-               unparseTemplateInstantiationDeclStmt(declarationStatement,info);
-#endif
+               unparseClassDeclStmt(classDeclaration, info);
                break;
              }
 
@@ -2901,8 +2813,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
             // ROSE_ASSERT(false);
                SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(declarationStatement);
                ASSERT_not_null(functionDeclaration);
-            // DQ (8/29/2005): "template" keyword now output by Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
-            // curprint ( string("template ";
                unparseFuncDeclStmt(functionDeclaration,info);
                break;
              }
@@ -2917,10 +2827,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
             // DQ (5/31/2005): for now we will only output directives for template member functions and not non-template 
             // member functions.  In the case of a template class NOT output as a specialization then the template 
             // instantiation directive for a non-templated member function is allows (likely is just instatiates the class).
-               if (memberFunctionDeclaration->isTemplateFunction() == true)
-                  {
-                 // DQ (8/29/2005): "template" keyword now output by Unparse_ExprStmt::outputTemplateSpecializationSpecifier()
-                 // curprint ( string("template ";
+               if (memberFunctionDeclaration->isTemplateFunction() == true) {
 #if 0
                     printf ("memberFunctionDeclaration = %p = %s = %s \n",
                           memberFunctionDeclaration,
@@ -2928,9 +2835,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
                           memberFunctionDeclaration->get_name().str());
 #endif
                     unparseMFuncDeclStmt(memberFunctionDeclaration,info);
-                  }
-                 else
-                  {
+               } else {
                  // It seems that if the class declaration is not specialized then the non-member function template 
                  // instantiation directive is allowed. But we don't at this point know if the class declaration has 
                  // been output so skip all template instantiations of non-template member functions (in general).
@@ -2939,7 +2844,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt (SgStatement* stmt, 
                     printf ("Warning: Skipping output of directived to build non-template member functions! \n");
                     curprint ( string("\n/* Warning: Skipping output of directived to build non-template member functions! */"));
 #endif
-                  }
+               }
                break;
              }
 
@@ -3092,8 +2997,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt (SgStatement* stmt, SgUnp
 
        // curprint ( string("\n /* unparseTemplateInstantiationDeclStmt */ ";
 
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
-       // curprint ( string("\ntemplate <> \n";
 
           unparseClassDeclStmt(classDeclaration,info);
 
@@ -3187,13 +3090,11 @@ Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt (SgStatement* stmt, SgUnp
 #if 0
           printf ("In unparseTemplateInstantiationDeclStmt(): Calling unparseClassDeclStmt() \n");
 #endif
-       // curprint ( string("\n /* unparseTemplateInstantiationDeclStmt */ ";
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
-       // curprint ( string("\ntemplate <> \n";
-          unparseClassDeclStmt(classDeclaration,info);
+             // curprint ( string("\n /* unparseTemplateInstantiationDeclStmt */
+             // ";
+             unparseClassDeclStmt(classDeclaration, info);
 
-          if (locatedInNamespace == true)
-             {
+             if (locatedInNamespace == true) {
                curprint("   }");
              }
         }
@@ -3409,7 +3310,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationFunctionDeclStmt (SgStatement* stm
         {
        // const SgTemplateArgumentPtrList& templateArgListPtr = templateInstantiationFunctionDeclaration->get_templateArguments();
 #if 0
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
 
        // DQ (3/2/2005): Comment out use of "template<>"
        // DQ (5/8/2004): Make this an explicit specialization (using the newer C++ syntax to support this)
@@ -3628,7 +3528,6 @@ Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt (SgStatemen
             // curprint ( string("\ntemplate <> ";
              }
 
-       // DQ (8/29/2005): This is now output by the Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
        // curprint ( string("\ntemplate <> ";
 #if 0
           printf ("Calling unparseMFuncDeclStmt() \n");
@@ -7829,7 +7728,6 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
           tmp_init = NULL;
 
           tmp_type = decl_item->get_type();
-          tmp_type = maybe_strip_implicit_constexpr_const(decl_item, tmp_type);
 
           // DQ (5/11/2007): This fails in astCopy_tests for copyExample using
           // copyExampleInput.C
@@ -7940,16 +7838,12 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 #endif
                tmp_name = decl_item->get_name();
                tmp_type = decl_item->get_type();
-               tmp_type =
-                   maybe_strip_implicit_constexpr_const(decl_item, tmp_type);
                ASSERT_not_null(isSgType(tmp_type));
 
             // TV (09/06/2018): if auto keyword is used then we unparse the associated declared type (before `auto` is resolved)
                if (decl_item->get_auto_decltype() != NULL)
                   {
-                    tmp_type = decl_item->get_auto_decltype();
-                    tmp_type = maybe_strip_implicit_constexpr_const(decl_item,
-                                                                    tmp_type);
+                 tmp_type = decl_item->get_auto_decltype();
                   }
 
             // DQ (11/28/2004): Added to support new design
@@ -8922,7 +8816,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                 // bool suppressAssignmentSyntax = (constructor->get_args()->get_expressions().size() == 0);
                                    bool suppressAssignmentSyntax = (constructor->get_args()->get_expressions().size() == 0 && (constructor->get_is_explicit_cast() == false) );
                                    bool is_copy_list_init =
-                                       is_copy_list_initialization(decl_item);
+                                       decl_item
+                                           ->get_using_assignment_copy_constructor_syntax();
 
 #if DEBUG_COPY_INITIALIZER_SYNTAX
                                    printf ("constructor->get_is_braced_initialized() = %s \n",constructor->get_is_braced_initialized() ? "true" : "false");
@@ -8952,7 +8847,8 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                                 bool is_braced_init =
                                     decl_item->get_is_braced_initialized();
                                 bool is_copy_list_init =
-                                    is_copy_list_initialization(decl_item);
+                                    decl_item
+                                        ->get_using_assignment_copy_constructor_syntax();
                                 if ((tmp_init->variant() == ASSIGN_INIT) ||
                                     ((tmp_init->variant() == AGGREGATE_INIT) &&
                                      ((is_braced_init == false) ||

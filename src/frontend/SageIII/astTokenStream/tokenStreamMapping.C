@@ -552,8 +552,10 @@ class TokenMappingTraversal : public SgTopDownBottomUpProcessing<InheritedAttrib
    {
      public:
           vector<stream_element*> & tokenStream;
+          SgSourceFile *sourceFile;
 
-       // Graph functions that write DOT file nodes, any children (and edges from the node to the children) to the output file.
+          // Graph functions that write DOT file nodes, any children (and edges
+          // from the node to the children) to the output file.
           void graph ( SgNode* node );
 
        // DQ (1/20/2021): Changed the API to use a reference to the map<SgNode*,TokenStreamSequenceToNodeMapping*>.
@@ -578,10 +580,14 @@ class TokenMappingTraversal : public SgTopDownBottomUpProcessing<InheritedAttrib
        // DQ (1/20/2021): Changed the API to add a pointer the map<SgNode*,TokenStreamSequenceToNodeMapping*>.
        // DQ (12/11/2015): Adding capability for token sequence to update the source position info in IR nodes.
        // TokenMappingTraversal(vector<stream_element*> & tokenStream, bool input_useTokenSequenceToImproveSourcePositionInfo);
-          TokenMappingTraversal( vector<stream_element*> & tokenStream, bool input_useTokenSequenceToImproveSourcePositionInfo, 
-                                 std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenStreamSequenceMapPointer);
+          TokenMappingTraversal(
+              vector<stream_element *> &tokenStream,
+              SgSourceFile *input_sourceFile,
+              bool input_useTokenSequenceToImproveSourcePositionInfo,
+              std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+                  *tokenStreamSequenceMapPointer);
 
-       // virtual function must be defined
+          // virtual function must be defined
           InheritedAttribute evaluateInheritedAttribute(SgNode* n, InheritedAttribute inheritedAttribute);
 
        // virtual function must be defined
@@ -601,6 +607,9 @@ class TokenMappingTraversal : public SgTopDownBottomUpProcessing<InheritedAttrib
 
        // DQ (12/31/2014): Compute the location of the tokens associate with the else syntax.
           void discoverElseSyntax(TokenStreamSequenceToNodeMapping* if_statement_mappingInfo, TokenStreamSequenceToNodeMapping* true_body_mappingInfo, TokenStreamSequenceToNodeMapping* false_body_mappingInfo);
+
+          // Centralize the active source file for this traversal.
+          SgSourceFile *currentSourceFile() const { return sourceFile; }
    };
 
 
@@ -1491,7 +1500,8 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
         }
      printf ("   --- original_start_of_token_subsequence = %d original_end_of_token_subsequence = %d \n",original_start_of_token_subsequence,original_end_of_token_subsequence);
      printf ("   --- inheritedAttribute.processChildNodes         = %s \n",inheritedAttribute.processChildNodes ? "true" : "false");
-     printf ("   --- inheritedAttribute.sourceFile->getFileName() = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
+     printf("   --- currentSourceFile()->getFileName() = %s \n",
+            currentSourceFile()->getFileName().c_str());
      printf ("   --- tokenStreamSequenceMap.size()                = %" PRIuPTR " \n",tokenStreamSequenceMap.size());
      printf ("   --- tokenStreamSequenceVector.size()             = %" PRIuPTR " \n",tokenStreamSequenceVector.size());
      printf ("SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS \n");
@@ -1568,7 +1578,10 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
        // SgStatement IR nodes from the matching file. However, this may not be correct for the handling 
        // of the lib file in dynamic linking transformations which create a new file from the original 
        // input source file.
-          bool nodeInSourceFile = (locatedNode != NULL) && (locatedNode->get_file_info()->get_filenameString() == inheritedAttribute.sourceFile->getFileName());
+          bool nodeInSourceFile =
+              (locatedNode != NULL) &&
+              (locatedNode->get_file_info()->get_filenameString() ==
+               currentSourceFile()->getFileName());
 #if 0
        // DQ (4/26/2021): Force this to be true so that we process all IR nodes.
           nodeInSourceFile = true;
@@ -1597,10 +1610,14 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
           if ((locatedNode != NULL) && (nodeInSourceFile == false))
              {
-               printf ("In evaluateSynthesizedAttribute(): (locatedNode != NULL) && (nodeInSourceFile == false): inheritedAttribute.sourceFile->getFileName()       = %s \n",
-                    inheritedAttribute.sourceFile->getFileName().c_str());
-               printf ("In evaluateSynthesizedAttribute(): (locatedNode != NULL) && (nodeInSourceFile == false): locatedNode->get_file_info()->get_filenameString() = %s \n",
-                    locatedNode->get_file_info()->get_filenameString().c_str());
+            printf("In evaluateSynthesizedAttribute(): (locatedNode != NULL) "
+                   "&& (nodeInSourceFile == false): "
+                   "currentSourceFile()->getFileName()       = %s \n",
+                   currentSourceFile()->getFileName().c_str());
+            printf("In evaluateSynthesizedAttribute(): (locatedNode != NULL) "
+                   "&& (nodeInSourceFile == false): "
+                   "locatedNode->get_file_info()->get_filenameString() = %s \n",
+                   locatedNode->get_file_info()->get_filenameString().c_str());
              }
 #endif
 
@@ -2020,15 +2037,32 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                     if (childAttributes[i].node != NULL)
                        {
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-                         printf ("   --- Calling trimLeadingWhiteSpaceFromLeft() and trimTrailingWhiteSpaceFromRight(): inheritedAttribute.source = %p \n",inheritedAttribute.sourceFile);
-                         printf ("   ---  --- inheritedAttribute.sourceFile->getFileName()                   = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
-                         printf ("   ---  --- n->get_file_info()->get_filenameString()                       = %s \n",n->get_file_info()->get_filenameString().c_str());
-                         printf ("   ---  --- childAttributes[i].node->get_file_info()->get_filenameString() = %s \n",childAttributes[i].node->get_file_info()->get_filenameString().c_str());
+                      printf("   --- Calling trimLeadingWhiteSpaceFromLeft() "
+                             "and trimTrailingWhiteSpaceFromRight(): "
+                             "inheritedAttribute.source = %p \n",
+                             currentSourceFile());
+                      printf("   ---  --- currentSourceFile()->getFileName()   "
+                             "                = %s \n",
+                             currentSourceFile()->getFileName().c_str());
+                      printf("   ---  --- "
+                             "n->get_file_info()->get_filenameString()         "
+                             "              = %s \n",
+                             n->get_file_info()->get_filenameString().c_str());
+                      printf("   ---  --- "
+                             "childAttributes[i].node->get_file_info()->get_"
+                             "filenameString() = %s \n",
+                             childAttributes[i]
+                                 .node->get_file_info()
+                                 ->get_filenameString()
+                                 .c_str());
 #endif
                          string filename_of_child_node = childAttributes[i].node->get_file_info()->get_filenameString();
-                         string current_filename       = inheritedAttribute.sourceFile->getFileName();
+                         string current_filename =
+                             currentSourceFile()->getFileName();
 
-                      // from_current_file = inheritedAttribute.sourceFile->getFileName() == n->get_file_info()->get_filenameString();
+                         // from_current_file =
+                         // currentSourceFile()->getFileName() ==
+                         // n->get_file_info()->get_filenameString();
                          from_current_file = filename_of_child_node == current_filename;
                        }
                       else
@@ -2590,10 +2624,13 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                               if (statement != NULL)
                                  {
                                    Sg_File_Info* start_pos = statement->get_startOfConstruct();
-                                   ROSE_ASSERT(inheritedAttribute.sourceFile != NULL);
+                                   ROSE_ASSERT(currentSourceFile() != NULL);
 
-                                // Note that this is implemented internally to use the physical file information (not logical file info).
-                                   bool process_node = (start_pos->isSameFile(inheritedAttribute.sourceFile));
+                                   // Note that this is implemented internally
+                                   // to use the physical file information (not
+                                   // logical file info).
+                                   bool process_node = (start_pos->isSameFile(
+                                       currentSourceFile()));
 #if 0
                                    printf ("      --- process_node (is same file test) = %s \n",process_node ? "true" : "false");
 #endif
@@ -3018,8 +3055,13 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                          ROSE_ASSERT(mappingInfo->node != NULL);
 
 #if DEBUG_LEADING_AND_TRAILING_WHITESPACE
-                         printf ("Calling trimLeadingWhiteSpaceFromLeft() and trimTrailingWhiteSpaceFromRight(): inheritedAttribute.source = %p \n",inheritedAttribute.sourceFile);
-                         printf (" --- inheritedAttribute.sourceFile->getFileName()             = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
+                         printf("Calling trimLeadingWhiteSpaceFromLeft() and "
+                                "trimTrailingWhiteSpaceFromRight(): "
+                                "inheritedAttribute.source = %p \n",
+                                currentSourceFile());
+                         printf(" --- currentSourceFile()->getFileName()       "
+                                "      = %s \n",
+                                currentSourceFile()->getFileName().c_str());
                          printf (" --- n->get_file_info()->get_filenameString()                 = %s \n",n->get_file_info()->get_filenameString().c_str());
                          printf (" --- mappingInfo->node->get_file_info()->get_filenameString() = %s \n",mappingInfo->node->get_file_info()->get_filenameString().c_str());
 #endif
@@ -3032,17 +3074,16 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                       // the current file being processed. This is essential to supporting the token unparsing across multiple files.
                       // trimLeadingWhiteSpaceFromLeft(mappingInfo,original_start_of_token_subsequence);
                       // trimTrailingWhiteSpaceFromRight(mappingInfo,original_end_of_token_subsequence);
-                         if (inheritedAttribute.sourceFile->getFileName() == mappingInfo->node->get_file_info()->get_filenameString())
-                            {
+                         if (currentSourceFile()->getFileName() ==
+                             mappingInfo->node->get_file_info()
+                                 ->get_filenameString()) {
 #if DEBUG_LEADING_AND_TRAILING_WHITESPACE
                               printf ("&&&&&&&& Found a matching node to support trimLeadingWhiteSpaceFromLeft() and trimTrailingWhiteSpaceFromRight(): mappingInfo->node = %p = %s = %s \n",
                                    mappingInfo->node,mappingInfo->node->class_name().c_str(),SageInterface::get_name(mappingInfo->node).c_str());
 #endif
                               trimLeadingWhiteSpaceFromLeft(mappingInfo,original_start_of_token_subsequence);
                               trimTrailingWhiteSpaceFromRight(mappingInfo,original_end_of_token_subsequence);
-                            }
-                           else
-                            {
+                         } else {
 #if DEBUG_LEADING_AND_TRAILING_WHITESPACE
                               printf ("Not a matching node to the token sequence \n");
 #endif
@@ -3051,7 +3092,7 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                               mappingInfo->leading_whitespace_start  = mappingInfo->leading_whitespace_end;
                               mappingInfo->trailing_whitespace_start = mappingInfo->trailing_whitespace_end;
                               mappingInfo->else_whitespace_start     = mappingInfo->else_whitespace_end;
-                            }
+                         }
 #else
 #error "DEAD CODE!"
                          trimLeadingWhiteSpaceFromLeft(mappingInfo,original_start_of_token_subsequence);
@@ -4898,13 +4939,19 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                          size_t sizeBeforeNewTokenStreamSequenceToNodeMapping = tokenStreamSequenceVector.size();
 
                       // In this case we should know that this is a new TokenStreamSequenceToNodeMapping, so maybe we should call new directly.
-                         TokenStreamSequenceToNodeMapping* element = 
-                           // TokenStreamSequenceToNodeMapping::createTokenInterval(starting_node,
-                              TokenStreamSequenceToNodeMapping::createTokenInterval(inheritedAttribute.sourceFile,starting_node,
-                                   leading_whitespace_start,leading_whitespace_end,
-                                   start_of_token_subsequence,end_of_token_subsequence,
-                                   trailing_whitespace_start,trailing_whitespace_end,
-                                   else_whitespace_start,else_whitespace_end);
+                         TokenStreamSequenceToNodeMapping *element =
+                             // TokenStreamSequenceToNodeMapping::createTokenInterval(starting_node,
+                             TokenStreamSequenceToNodeMapping::
+                                 createTokenInterval(currentSourceFile(),
+                                                     starting_node,
+                                                     leading_whitespace_start,
+                                                     leading_whitespace_end,
+                                                     start_of_token_subsequence,
+                                                     end_of_token_subsequence,
+                                                     trailing_whitespace_start,
+                                                     trailing_whitespace_end,
+                                                     else_whitespace_start,
+                                                     else_whitespace_end);
 
                          element->constructedInEvaluationOfSynthesizedAttribute = true;
 
@@ -5185,7 +5232,8 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
         {
           printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
           printf ("Leaving evaluateSynthesizedAttribute() \n");
-          printf (" --- inheritedAttribute.sourceFile->getFileName() = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
+          printf(" --- currentSourceFile()->getFileName() = %s \n",
+                 currentSourceFile()->getFileName().c_str());
           printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
         }
 #endif
@@ -5267,7 +5315,7 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
      SgGlobal* globalScope = isSgGlobal(n);
      if (globalScope != NULL)
         {
-          SgSourceFile* sourceFile = inheritedAttribute.sourceFile;
+          SgSourceFile* sourceFile = currentSourceFile();
           ROSE_ASSERT(sourceFile != NULL);
 
        // if (classDeclarationStatement->get_name() == "XYZ_2" && sourceFile->getFileName() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/sources/test_152_2.h")
@@ -5310,7 +5358,7 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
           n,n->class_name().c_str(),original_start_of_token_subsequence,original_end_of_token_subsequence,processed ? "true" : "false");
      printf (" --- SageInterface::get_name(n): name             = %s \n",SageInterface::get_name(n).c_str());
      printf (" --- n->get_file_info()->get_filenameString()     = %s \n",n->get_file_info()->get_filenameString().c_str());
-     printf (" --- inheritedAttribute.sourceFile->getFileName() = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
+     printf (" --- currentSourceFile()->getFileName() = %s \n",currentSourceFile()->getFileName().c_str());
      printf ("   --- tokenStreamSequenceMap.size()                = %" PRIuPTR " \n",tokenStreamSequenceMap.size());
      printf ("   --- tokenStreamSequenceVector.size()             = %" PRIuPTR " \n",tokenStreamSequenceVector.size());
      printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
@@ -5346,12 +5394,23 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
         {
           printf ("   --- function name = %s \n",isSgFunctionDeclaration(n)->get_name().str());
         }
-     printf ("   --- inheritedAttribute.sourceFile->getFileName() = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
-     printf ("   --- start_of_token_subsequence                   = %d end_of_token_subsequence          = %d \n",start_of_token_subsequence,end_of_token_subsequence);
-     printf ("   --- original_start_of_token_subsequence          = %d original_end_of_token_subsequence = %d \n",original_start_of_token_subsequence,original_end_of_token_subsequence);
-     printf ("   --- tokenStreamSequenceMap.size()                = %" PRIuPTR " \n",tokenStreamSequenceMap.size());
-     printf ("   --- tokenStreamSequenceVector.size()             = %" PRIuPTR " \n",tokenStreamSequenceVector.size());
-     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
+        printf("   --- currentSourceFile()->getFileName() = %s \n",
+               currentSourceFile()->getFileName().c_str());
+        printf("   --- start_of_token_subsequence                   = %d "
+               "end_of_token_subsequence          = %d \n",
+               start_of_token_subsequence, end_of_token_subsequence);
+        printf("   --- original_start_of_token_subsequence          = %d "
+               "original_end_of_token_subsequence = %d \n",
+               original_start_of_token_subsequence,
+               original_end_of_token_subsequence);
+        printf("   --- tokenStreamSequenceMap.size()                = %" PRIuPTR
+               " \n",
+               tokenStreamSequenceMap.size());
+        printf("   --- tokenStreamSequenceVector.size()             = %" PRIuPTR
+               " \n",
+               tokenStreamSequenceVector.size());
+        printf("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII"
+               "III \n");
 #endif
 
 #if ERROR_CONSISTANCY_CHECKING
@@ -5367,7 +5426,7 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
           SgInitializedName* initializedName = SageInterface::getFirstInitializedName(variableDeclaration);
           ROSE_ASSERT(initializedName != NULL);
 
-          bool foundCorrectFile = (inheritedAttribute.sourceFile->getFileName() == "/home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test17/subdir/SimpleInternal.h");
+          bool foundCorrectFile = (currentSourceFile()->getFileName() == "/home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test17/subdir/SimpleInternal.h");
           if (initializedName->get_name() == "x" && foundCorrectFile == true)
              {
                printf ("Found variable declaration for int x; in correct file: Exiting as a test! \n");
@@ -5420,13 +5479,14 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 
        // Generate a unique TokenStreamSequenceToNodeMapping for each interval defined by (start_of_token_subsequence,end_of_token_subsequence).
        // TokenStreamSequenceToNodeMapping* element = new TokenStreamSequenceToNodeMapping(n,leading_whitespace_start,leading_whitespace_end,start_of_token_subsequence,end_of_token_subsequence,trailing_whitespace_start,trailing_whitespace_end);
-          TokenStreamSequenceToNodeMapping* element = 
-            // TokenStreamSequenceToNodeMapping::createTokenInterval(n,
-               TokenStreamSequenceToNodeMapping::createTokenInterval(inheritedAttribute.sourceFile,n,
-                    leading_whitespace_start,leading_whitespace_end,
-                    start_of_token_subsequence,end_of_token_subsequence,
-                    trailing_whitespace_start,trailing_whitespace_end,
-                    else_whitespace_start,else_whitespace_end);
+          TokenStreamSequenceToNodeMapping *element =
+              // TokenStreamSequenceToNodeMapping::createTokenInterval(n,
+              TokenStreamSequenceToNodeMapping::createTokenInterval(
+                  currentSourceFile(), n, leading_whitespace_start,
+                  leading_whitespace_end, start_of_token_subsequence,
+                  end_of_token_subsequence, trailing_whitespace_start,
+                  trailing_whitespace_end, else_whitespace_start,
+                  else_whitespace_end);
 
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE
           printf ("EVALUATE_INHERITED_ATTRIBUTE: test 1: Calling push_back on tokenStreamSequenceVector \n");
@@ -5471,7 +5531,10 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
        // SgStatement IR nodes from the matching file. However, this may not be correct for the handling 
        // of the lib file in dynamic linking transformations which create a new file from the original 
        // input source file.
-          bool nodeInSourceFile = (locatedNode != NULL) && (locatedNode->get_file_info()->get_filenameString() == inheritedAttribute.sourceFile->getFileName());
+          bool nodeInSourceFile =
+              (locatedNode != NULL) &&
+              (locatedNode->get_file_info()->get_filenameString() ==
+               currentSourceFile()->getFileName());
 #if 0
        // DQ (4/26/2021): Force this to be true so that we process all IR nodes.
           nodeInSourceFile = true;
@@ -5504,16 +5567,26 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE
           if ((locatedNode != NULL) && (nodeInSourceFile == false))
              {
-               printf ("In evaluateInheritedAttribute(): (locatedNode != NULL) && (nodeInSourceFile == false): inheritedAttribute.sourceFile->getFileName()       = %s \n",
-                    inheritedAttribute.sourceFile->getFileName().c_str());
-               printf ("In evaluateInheritedAttribute(): (locatedNode != NULL) && (nodeInSourceFile == false): locatedNode->get_file_info()->get_filenameString() = %s \n",
-                    locatedNode->get_file_info()->get_filenameString().c_str());
+            printf("In evaluateInheritedAttribute(): (locatedNode != NULL) && "
+                   "(nodeInSourceFile == false): "
+                   "currentSourceFile()->getFileName()       = %s \n",
+                   currentSourceFile()->getFileName().c_str());
+            printf("In evaluateInheritedAttribute(): (locatedNode != NULL) && "
+                   "(nodeInSourceFile == false): "
+                   "locatedNode->get_file_info()->get_filenameString() = %s \n",
+                   locatedNode->get_file_info()->get_filenameString().c_str());
              }
 #endif
 
        // DQ (4/21/2021): We need to support only the IR nodes that are in the source file being processed.
        // Each header file will have an associated source file, and thus we need to match the names of the
        // source file with the source filename of the IR nodes.
+             if (nodeInSourceFile == false) {
+               processed = false;
+               start_of_token_subsequence = -1;
+               end_of_token_subsequence = -1;
+             }
+
        // if (locatedNode != NULL)
        // if ( (locatedNode != NULL) && (isSgInitializedName(n) == NULL) )
           if ( (locatedNode != NULL) && (isSgInitializedName(n) == NULL) && (nodeInSourceFile == true))
@@ -5633,7 +5706,10 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
                          int computed_end_line     = 0; 
                          int computed_end_column   = 0;
 
-                         MaxSourceExtents::computeMaxSourceExtents(inheritedAttribute.sourceFile,n,computed_start_line,computed_start_column,computed_end_line,computed_end_column);
+                         MaxSourceExtents::computeMaxSourceExtents(
+                             currentSourceFile(), n, computed_start_line,
+                             computed_start_column, computed_end_line,
+                             computed_end_column);
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE
                          printf ("computed_start_line == computed_end_line     = %s \n",(computed_start_line == computed_end_line) ? "true" : "false");
                          printf ("computed_start_column == computed_end_column = %s \n",(computed_start_column == computed_end_column) ? "true" : "false");
@@ -5685,18 +5761,29 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE
                     printf ("process_node                     = %s \n",process_node ? "true" : "false");
 #endif
-                    ROSE_ASSERT(inheritedAttribute.sourceFile != NULL);
-                 // process_node = (process_node == true) && (start_pos->isSameFile(inheritedAttribute.sourceFile));
-                    process_node = (process_node == true) && (start_pos->isSameFile(inheritedAttribute.sourceFile) || subtreeHasValidSourcePosition == true);
+                    ROSE_ASSERT(currentSourceFile() != NULL);
+                    // process_node = (process_node == true) &&
+                    // (start_pos->isSameFile(currentSourceFile()));
+                    process_node =
+                        (process_node == true) &&
+                        (start_pos->isSameFile(currentSourceFile()) ||
+                         subtreeHasValidSourcePosition == true);
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE
                     printf ("process_node                                         = %s \n",process_node ? "true" : "false");
-                    printf ("start_pos->isSameFile(inheritedAttribute.sourceFile) = %s \n",start_pos->isSameFile(inheritedAttribute.sourceFile) ? "true" : "false");
+                    printf("start_pos->isSameFile(currentSourceFile()) = %s \n",
+                           start_pos->isSameFile(currentSourceFile())
+                               ? "true"
+                               : "false");
                     printf ("subtreeHasValidSourcePosition                        = %s \n",subtreeHasValidSourcePosition ? "true" : "false");
 #endif
 // #if 1
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE || 0
                     printf ("   --- (initial value 2) process_node = %s \n",process_node ? "true" : "false");
-                    printf ("   --- start_pos->isSameFile(inheritedAttribute.sourceFile) = %s \n",start_pos->isSameFile(inheritedAttribute.sourceFile) ? "true" : "false");
+                    printf("   --- start_pos->isSameFile(currentSourceFile()) "
+                           "= %s \n",
+                           start_pos->isSameFile(currentSourceFile())
+                               ? "true"
+                               : "false");
 #endif
 // #if 1
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE || 0
@@ -6467,13 +6554,19 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 
                            // Generate a unique TokenStreamSequenceToNodeMapping for each interval defined by (start_of_token_subsequence,end_of_token_subsequence).
                            // TokenStreamSequenceToNodeMapping* element = new TokenStreamSequenceToNodeMapping(n,leading_whitespace_start,leading_whitespace_end,start_of_token_subsequence,end_of_token_subsequence,trailing_whitespace_start,trailing_whitespace_end);
-                              TokenStreamSequenceToNodeMapping* element = 
-                                // TokenStreamSequenceToNodeMapping::createTokenInterval(n,
-                                   TokenStreamSequenceToNodeMapping::createTokenInterval(inheritedAttribute.sourceFile,n,
-                                        leading_whitespace_start,leading_whitespace_end,
-                                        start_of_token_subsequence,end_of_token_subsequence,
-                                        trailing_whitespace_start,trailing_whitespace_end,
-                                        else_whitespace_start,else_whitespace_end);
+                              TokenStreamSequenceToNodeMapping *element =
+                                  // TokenStreamSequenceToNodeMapping::createTokenInterval(n,
+                                  TokenStreamSequenceToNodeMapping::
+                                      createTokenInterval(
+                                          currentSourceFile(), n,
+                                          leading_whitespace_start,
+                                          leading_whitespace_end,
+                                          start_of_token_subsequence,
+                                          end_of_token_subsequence,
+                                          trailing_whitespace_start,
+                                          trailing_whitespace_end,
+                                          else_whitespace_start,
+                                          else_whitespace_end);
 #if DEBUG_TOKEN_MAPPING
                               printf ("Built element = %p element->node = %p n = %p = %s = %s \n",element,element->node,n,n->class_name().c_str(),SageInterface::get_name(n).c_str());
 #endif
@@ -6581,12 +6674,20 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
             // DQ (4/21/20201): Fixed comment output for IR nodes that are not being processed.
             // printf ("Not Handled: This is not a SgLocatedNode (or could be a SgInitializedName): n = %p = %s \n",n,n->class_name().c_str());
                printf ("In evaluateInheritedAttribute(): IR node not processed: This is either not a SgLocatedNode or not from the current source file being processed): n = %p = %s \n",n,n->class_name().c_str());
-            // bool nodeInSourceFile = (locatedNode != NULL) && (locatedNode->get_file_info()->get_filenameString() == inheritedAttribute.sourceFile->getFileName());
+               // bool nodeInSourceFile = (locatedNode != NULL) &&
+               // (locatedNode->get_file_info()->get_filenameString() ==
+               // currentSourceFile()->getFileName());
                SgLocatedNode* locatedNode = isSgLocatedNode(n);
                if (locatedNode != NULL)
                   {
-                    printf (" --- inheritedAttribute.sourceFile->getFileName() = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
-                    printf (" --- locatedNode->get_file_info()->get_filenameString() = %s \n",locatedNode->get_file_info()->get_filenameString().c_str());
+                 printf(" --- currentSourceFile()->getFileName() = %s \n",
+                        currentSourceFile()->getFileName().c_str());
+                 printf(
+                     " --- locatedNode->get_file_info()->get_filenameString() "
+                     "= %s \n",
+                     locatedNode->get_file_info()
+                         ->get_filenameString()
+                         .c_str());
                   }
 #endif
              }
@@ -6607,7 +6708,8 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE || 0
      printf ("#################################### \n");
      printf ("Leaving evaluateInheritedAttribute() \n");
-     printf (" --- inheritedAttribute.sourceFile->getFileName() = %s \n",inheritedAttribute.sourceFile->getFileName().c_str());
+     printf(" --- currentSourceFile()->getFileName() = %s \n",
+            currentSourceFile()->getFileName().c_str());
      printf (" --- tokenStreamSequenceMap.find(n) != tokenStreamSequenceMap.end() = %s \n",
           (tokenStreamSequenceMap.find(n) != tokenStreamSequenceMap.end()) ? "true" : "false");
      printf ("#################################### \n\n");
@@ -6640,7 +6742,7 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
      ROSE_ASSERT(end_of_token_subsequence >= -1);
      ROSE_ASSERT(end_of_token_subsequence == -1 || (size_t)end_of_token_subsequence < tokenStream.size());
 
-     ROSE_ASSERT(inheritedAttribute.sourceFile != NULL);
+     ROSE_ASSERT(currentSourceFile() != NULL);
 
 #if ERROR_CONSISTANCY_CHECKING
   // DQ (10/14/2013): Added consistancy test.
@@ -6758,27 +6860,34 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
         }
 #endif
 
-     return InheritedAttribute(inheritedAttribute.sourceFile,start_of_token_subsequence,end_of_token_subsequence,processed);
+        return InheritedAttribute(currentSourceFile(),
+                                  start_of_token_subsequence,
+                                  end_of_token_subsequence, processed);
    }
 
 
   // DQ (1/20/2021): Changed the API to add a pointer to the map<SgNode*,TokenStreamSequenceToNodeMapping*>.
-TokenMappingTraversal::TokenMappingTraversal( vector<stream_element*> & ts, bool input_useTokenSequenceToImproveSourcePositionInfo,
-                                              map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenStreamSequenceMapPointer)
-   : tokenStream(ts),
-  // DQ (1/20/2021): Changed the API to set a reference to the map<SgNode*,TokenStreamSequenceToNodeMapping*>.
-     tokenStreamSequenceMap(*tokenStreamSequenceMapPointer),
-  // DQ (12/11/2015): Adding capability for token sequence to update the source position info in IR nodes.
-     useTokenSequenceToImproveSourcePositionInfo(input_useTokenSequenceToImproveSourcePositionInfo)
-   {
+   TokenMappingTraversal::TokenMappingTraversal(
+       vector<stream_element *> &ts, SgSourceFile *input_sourceFile,
+       bool input_useTokenSequenceToImproveSourcePositionInfo,
+       map<SgNode *, TokenStreamSequenceToNodeMapping *>
+           *tokenStreamSequenceMapPointer)
+       : tokenStream(ts), sourceFile(input_sourceFile),
+         // DQ (1/20/2021): Changed the API to set a reference to the
+         // map<SgNode*,TokenStreamSequenceToNodeMapping*>.
+         tokenStreamSequenceMap(*tokenStreamSequenceMapPointer),
+         // DQ (12/11/2015): Adding capability for token sequence to update the
+         // source position info in IR nodes.
+         useTokenSequenceToImproveSourcePositionInfo(
+             input_useTokenSequenceToImproveSourcePositionInfo) {
 #if 0
      printf ("In TokenMappingTraversal constructor: tokenStream.size()                    = %zu \n",tokenStream.size());
      printf ("In TokenMappingTraversal constructor: tokenStreamSequenceMapPointer->size() = %zu \n",tokenStreamSequenceMapPointer->size());
 #endif
 
      ROSE_ASSERT(tokenStream.empty() == false);
+     ROSE_ASSERT(sourceFile != NULL);
    }
-
 
 void 
 ReplaceStringInPlace(std::string& subject, const std::string& search, const std::string& replace) 
@@ -7834,10 +7943,14 @@ buildTokenStreamMapping(SgSourceFile* sourceFile, vector<stream_element*> & toke
   // Build the traversal object
   // TokenMappingTraversal tokenMappingTraversal(tokenVector);
   // TokenMappingTraversal tokenMappingTraversal(tokenVector,sourceFile->get_use_token_stream_to_improve_source_position_info());
-     TokenMappingTraversal tokenMappingTraversal(tokenVector,sourceFile->get_use_token_stream_to_improve_source_position_info(),tokenStreamSequenceMapPointer);
+     TokenMappingTraversal tokenMappingTraversal(
+         tokenVector, sourceFile,
+         sourceFile->get_use_token_stream_to_improve_source_position_info(),
+         tokenStreamSequenceMapPointer);
 
-  // std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenSubsequenceMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
-  // ROSE_ASSERT(tokenSubsequenceMap != NULL);
+     // std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenSubsequenceMap
+     // = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+     // ROSE_ASSERT(tokenSubsequenceMap != NULL);
 
 #if DEBUG_TOKEN_STREAM_MAPPING || 0
   // Output the depth of the AST.
@@ -8267,6 +8380,4 @@ buildTokenStreamMapping(SgSourceFile* sourceFile, vector<stream_element*> & toke
      printf ("Exiting as a test! \n");
      ROSE_ASSERT(false);
 #endif
-   }
-
-
+}

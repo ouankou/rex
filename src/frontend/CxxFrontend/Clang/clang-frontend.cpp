@@ -25,6 +25,8 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
  // unparse templates from the AST instead of from saved strings.
  // This ensures template declarations like "template <class T>" are output correctly.
  sageFile.set_unparse_template_ast(true);
+ // Use token-based unparsing for Clang to preserve exact source text.
+ sageFile.set_unparse_tokens(true);
 
  // printf ("sageFile.get_clang_il_to_graphviz() = %s \n",sageFile.get_clang_il_to_graphviz() ? "true" : "false");
 
@@ -593,7 +595,16 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
   // 4 - Attach to the file
 
-    if (sageFile.get_globalScope() != NULL) SageInterface::deleteAST(sageFile.get_globalScope());
+    if (sageFile.get_globalScope() != NULL) {
+      SageInterface::deleteAST(sageFile.get_globalScope());
+      auto map_it = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(&sageFile);
+      if (map_it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() &&
+          map_it->second != NULL) {
+        // Clear stale token mappings from the previous AST to avoid
+        // dangling SgNode* references on re-parse.
+        map_it->second->clear();
+      }
+    }
 
     sageFile.set_globalScope(global_scope);
 
@@ -624,45 +635,28 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     global_scope->set_endOfConstruct(end_fi);
 
-  // 6 - Initialize token subsequence map for unparsing
-  // The backend unparser expects this map to exist (even if empty) for token-based unparsing
-  // Note: Raw pointer allocation follows ROSE's standard memory management pattern (see tokenStreamMapping.C).
-  // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and persists
-  // for the program lifetime, consistent with ROSE's architecture for AST-related data structures.
-  //
-  // Check if a token map already exists (e.g., from a previous parse after deleteAST).
-  // If it exists, clear it for reuse. Otherwise, create a new one.
-    if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(&sageFile) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end()) {
-        // Map already exists (re-parsing after deleteAST) - clear it for reuse
-        std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* existingMap = Rose::tokenSubsequenceMapOfMapsBySourceFile[&sageFile];
-        if (existingMap != nullptr) {
-            existingMap->clear();
-        }
-    } else {
-        // First time parsing this file - create new map
-        std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
-        sageFile.set_tokenSubsequenceMap(tokenMap);
-    }
-
-  // 7 - Finish the AST (fixup phase)
+    // 6 - Finish the AST (fixup phase)
 
     finishSageAST(*translator);
 
-  // 8 - OpenMP Processing
-  //
-  // NOTE: processOpenMP() is called automatically by sage_support.cpp after this function returns.
-  // If -fopenmp was specified, it will convert SgPragmaDeclaration nodes to OpenMP-specific AST nodes.
-  // The OpenMP flags have been set correctly earlier in this function.
+    // 7 - OpenMP Processing
+    //
+    // NOTE: processOpenMP() is called automatically by sage_support.cpp after
+    // this function returns. If -fopenmp was specified, it will convert
+    // SgPragmaDeclaration nodes to OpenMP-specific AST nodes. The OpenMP flags
+    // have been set correctly earlier in this function.
 
-  // 9 - Cleanup LLVM objects
-  //
-  // Now that we use createPhysicalFileSystem() instead of getRealFileSystem(),
-  // the CompilerInstance owns its own VFS instance rather than sharing the global singleton.
-  // This means we can safely delete the CompilerInstance without causing double-free errors.
-  //
-  // The translator is owned by CompilerInstance via unique_ptr<ASTConsumer>, so it will also
-  // be destroyed when CompilerInstance is deleted. The ROSE AST (global_scope, etc.) persists
-  // in sageFile and is NOT owned by the translator, so it remains valid after cleanup.
+    // 8 - Cleanup LLVM objects
+    //
+    // Now that we use createPhysicalFileSystem() instead of
+    // getRealFileSystem(), the CompilerInstance owns its own VFS instance
+    // rather than sharing the global singleton. This means we can safely delete
+    // the CompilerInstance without causing double-free errors.
+    //
+    // The translator is owned by CompilerInstance via unique_ptr<ASTConsumer>,
+    // so it will also be destroyed when CompilerInstance is deleted. The ROSE
+    // AST (global_scope, etc.) persists in sageFile and is NOT owned by the
+    // translator, so it remains valid after cleanup.
 
     delete compiler_instance;
 

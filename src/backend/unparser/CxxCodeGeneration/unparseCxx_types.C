@@ -18,8 +18,6 @@
 using namespace std;
 
 namespace {
-const char kRexImplicitConstexprConstAttr[] = "rex_implicit_constexpr_const";
-
 static std::string trim_whitespace(std::string name) {
   while (!name.empty() &&
          std::isspace(static_cast<unsigned char>(name.back()))) {
@@ -4139,16 +4137,9 @@ void Unparse_Type::unparseModifierType(SgType* type, SgUnparse_Info& info)
               curprint ( outstr.str().c_str() );
           }
 
-          bool skip_const = false;
-          if (SgNode *ref_node = info.get_reference_node_for_qualification()) {
-            if (SgInitializedName *init = isSgInitializedName(ref_node)) {
-              skip_const =
-                  init->attributeExists(kRexImplicitConstexprConstAttr);
-            }
-          }
-          if (!skip_const && mod_type->get_typeModifier()
-                                 .get_constVolatileModifier()
-                                 .isConst()) {
+          if (mod_type->get_typeModifier()
+                  .get_constVolatileModifier()
+                  .isConst()) {
             curprint("const ");
           }
           if (mod_type->get_typeModifier().get_constVolatileModifier().isVolatile())
