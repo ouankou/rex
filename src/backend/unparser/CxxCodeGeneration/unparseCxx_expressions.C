@@ -72,6 +72,42 @@ void assert_valid_template_name(const std::string &name) {
   ROSE_ASSERT(name.size() < 2 || name.compare(0, 2, "::") != 0);
 }
 
+bool contains_unknown_type(SgType *type) {
+  if (type == NULL) {
+    return true;
+  }
+  if (isSgTypeUnknown(type) != NULL) {
+    return true;
+  }
+  if (SgType *base = type->findBaseType()) {
+    if (isSgTypeUnknown(base) != NULL) {
+      return true;
+    }
+  }
+  if (SgModifierType *mod = isSgModifierType(type)) {
+    return contains_unknown_type(mod->get_base_type());
+  }
+  if (SgPointerType *ptr = isSgPointerType(type)) {
+    return contains_unknown_type(ptr->get_base_type());
+  }
+  if (SgPointerMemberType *ptr_mem = isSgPointerMemberType(type)) {
+    return contains_unknown_type(ptr_mem->get_base_type());
+  }
+  if (SgReferenceType *ref = isSgReferenceType(type)) {
+    return contains_unknown_type(ref->get_base_type());
+  }
+  if (SgRvalueReferenceType *rref = isSgRvalueReferenceType(type)) {
+    return contains_unknown_type(rref->get_base_type());
+  }
+  if (SgArrayType *arr = isSgArrayType(type)) {
+    return contains_unknown_type(arr->get_base_type());
+  }
+  if (SgTypedefType *td = isSgTypedefType(type)) {
+    return contains_unknown_type(td->get_base_type());
+  }
+  return false;
+}
+
 SgTemplateArgumentPtrList
 collect_explicit_template_arguments(const SgTemplateArgumentPtrList &args) {
   SgTemplateArgumentPtrList explicit_args;
@@ -6649,6 +6685,9 @@ Unparse_ExprStmt::unparseCastOp(SgExpression* expr, SgUnparse_Info& info)
             // if (cast_op->get_file_info()->isCompilerGenerated() == false)
                if (cast_op->get_startOfConstruct()->isCompilerGenerated() == false)
                   {
+                 if (contains_unknown_type(cast_op->get_type())) {
+                   break;
+                 }
                  // (P *) expr
                  // check if the expression that we are casting is not a string
 
