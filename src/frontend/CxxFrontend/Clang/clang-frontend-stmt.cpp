@@ -4972,8 +4972,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         /*buildTemplateInstantiation=*/true, builder_args));
 
             if (inst_decl != NULL) {
-              inst_decl->set_template_argument_list_is_explicit(
-                  explicit_arg_count != 0);
+              inst_decl->set_template_argument_list_is_explicit(true);
               SageBuilder::setTemplateArgumentsInDeclaration(inst_decl,
                                                              &template_args);
 
@@ -5145,7 +5144,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
         decl_ref_expr->copyTemplateArgumentsInto(arg_info);
         explicit_arg_count = countExpandedTemplateArguments(arg_info);
-        return explicit_arg_count != 0;
+        return true;
       };
 
       clang::TemplateArgumentListInfo explicit_arg_info;
@@ -5251,7 +5250,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
                   isSgTemplateInstantiationMemberFunctionDecl(member_decl)) {
             inst_decl->set_template_argument_list_is_explicit(
-                explicit_arg_count != 0);
+                has_explicit_template_args);
             SageBuilder::setTemplateArgumentsInDeclaration(
                 inst_decl, ensure_template_args());
             if (inst_decl->get_templateName().is_null() &&
@@ -5264,7 +5263,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                     isSgTemplateInstantiationMemberFunctionDecl(
                         member_decl->get_firstNondefiningDeclaration())) {
               inst_decl->set_template_argument_list_is_explicit(
-                  explicit_arg_count != 0);
+                  has_explicit_template_args);
               SageBuilder::setTemplateArgumentsInDeclaration(
                   inst_decl, ensure_template_args());
               if (inst_decl->get_templateName().is_null() &&
@@ -5340,7 +5339,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             if (inst_member_sym != NULL && inst_decl != NULL) {
               ref_member_sym = inst_member_sym;
               inst_decl->set_template_argument_list_is_explicit(
-                  explicit_arg_count != 0);
+                  has_explicit_template_args);
               SageBuilder::setTemplateArgumentsInDeclaration(
                   inst_decl, ensure_template_args());
               if (inst_decl->get_templateName().is_null() &&
@@ -5379,7 +5378,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
               if (inst_decl != NULL) {
                 inst_decl->set_template_argument_list_is_explicit(
-                    explicit_arg_count != 0);
+                    has_explicit_template_args);
                 SageBuilder::setTemplateArgumentsInDeclaration(
                     inst_decl, ensure_template_args());
 
@@ -5538,7 +5537,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (SgTemplateInstantiationFunctionDecl *inst_decl =
                   isSgTemplateInstantiationFunctionDecl(decl)) {
             inst_decl->set_template_argument_list_is_explicit(
-                explicit_arg_count != 0);
+                has_explicit_template_args);
             SageBuilder::setTemplateArgumentsInDeclaration(
                 inst_decl, ensure_template_args());
             if (inst_decl->get_templateName().is_null() &&
@@ -5551,7 +5550,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                     isSgTemplateInstantiationFunctionDecl(
                         decl->get_firstNondefiningDeclaration())) {
               inst_decl->set_template_argument_list_is_explicit(
-                  explicit_arg_count != 0);
+                  has_explicit_template_args);
               SageBuilder::setTemplateArgumentsInDeclaration(
                   inst_decl, ensure_template_args());
               if (inst_decl->get_templateName().is_null() &&
@@ -5619,7 +5618,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             if (inst_func_sym != NULL && inst_decl != NULL) {
               ref_func_sym = inst_func_sym;
               inst_decl->set_template_argument_list_is_explicit(
-                  explicit_arg_count != 0);
+                  has_explicit_template_args);
               SageBuilder::setTemplateArgumentsInDeclaration(
                   inst_decl, ensure_template_args());
               if (inst_decl->get_templateName().is_null() &&
@@ -5654,7 +5653,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
               if (inst_decl != NULL) {
                 inst_decl->set_template_argument_list_is_explicit(
-                    explicit_arg_count != 0);
+                    has_explicit_template_args);
                 SageBuilder::setTemplateArgumentsInDeclaration(
                     inst_decl, ensure_template_args());
 
