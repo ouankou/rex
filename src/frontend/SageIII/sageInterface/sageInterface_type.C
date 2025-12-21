@@ -226,8 +226,26 @@ namespace SageInterface
       return containsUnknownType(arr->get_base_type());
     if (auto *td = isSgTypedefType(type))
       return containsUnknownType(td->get_base_type());
-    if (auto *tmpl = isSgTemplateType(type))
-      return containsUnknownType(tmpl->get_base_type());
+    if (auto *tmpl = isSgTemplateType(type)) {
+      if (SgType *class_type = tmpl->get_class_type()) {
+        if (containsUnknownType(class_type))
+          return true;
+      }
+      if (SgType *parent_class_type = tmpl->get_parent_class_type()) {
+        if (containsUnknownType(parent_class_type))
+          return true;
+      }
+      for (SgTemplateArgument *arg : tmpl->get_tpl_args()) {
+        if (arg != NULL && arg->get_type() != NULL &&
+            containsUnknownType(arg->get_type()))
+          return true;
+      }
+      for (SgTemplateArgument *arg : tmpl->get_part_spec_tpl_args()) {
+        if (arg != NULL && arg->get_type() != NULL &&
+            containsUnknownType(arg->get_type()))
+          return true;
+      }
+    }
     if (auto *func = isSgFunctionType(type)) {
       if (containsUnknownType(func->get_return_type()))
         return true;
