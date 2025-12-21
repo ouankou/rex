@@ -692,18 +692,58 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 
   // DQ (12/6/2014): This is the part of the token stream support that is required after transformations have been done in the AST.
      if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
-       // If transformations are present, fall back to AST unparsing to avoid
-       // mixing stale token streams with modified subtrees.
+       // If transformations are present in this file, fall back to AST
+       // unparsing to avoid mixing stale token streams with modified subtrees.
        std::set<SgStatement *> transformedStatements =
            SageInterface::collectTransformedStatements(file);
-       bool disable_tokens = transformedStatements.empty() == false;
+       Sg_File_Info *source_info = file->get_file_info();
+       int source_file_id =
+           source_info != NULL ? source_info->get_physical_file_id() : -1;
+
+       auto affects_current_file = [&](Sg_File_Info *node_info) -> bool {
+         if (source_info == NULL || node_info == NULL) {
+           return true;
+         }
+
+         int node_file_id = node_info->get_physical_file_id();
+         if (node_file_id == source_file_id) {
+           return true;
+         }
+
+         if (node_info->isShared() == true) {
+           SgFileIdList &file_ids = node_info->get_fileIDsToUnparse();
+           for (size_t i = 0; i < file_ids.size(); ++i) {
+             if (file_ids[i] == source_file_id) {
+               return true;
+             }
+           }
+         }
+
+         return false;
+       };
+
+       bool disable_tokens = false;
+       for (SgStatement *stmt : transformedStatements) {
+         if (stmt == NULL)
+           continue;
+         Sg_File_Info *stmt_info = stmt->get_file_info();
+         if (stmt_info == NULL) {
+           disable_tokens = true;
+           break;
+         }
+         if (stmt_info->isCompilerGenerated() == true)
+           continue;
+         if (stmt_info->isOutputInCodeGeneration() == false)
+           continue;
+         if (affects_current_file(stmt_info) == false)
+           continue;
+         disable_tokens = true;
+         break;
+       }
 
        if (disable_tokens == false) {
          std::set<SgLocatedNode *> modifiedNodes =
              SageInterface::collectModifiedLocatedNodes(file);
-         Sg_File_Info *source_info = file->get_file_info();
-         int source_file_id =
-             source_info != NULL ? source_info->get_physical_file_id() : -1;
          for (SgLocatedNode *node : modifiedNodes) {
            if (node == NULL || node->isCompilerGenerated())
              continue;
@@ -716,13 +756,10 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
              continue;
            if (node_info->isOutputInCodeGeneration() == false)
              continue;
-           int node_file_id = node_info->get_physical_file_id();
-           if (node_info->isTransformation() == true ||
-               node_file_id == Sg_File_Info::TRANSFORMATION_FILE_ID ||
-               node_file_id == source_file_id) {
-             disable_tokens = true;
-             break;
-           }
+           if (affects_current_file(node_info) == false)
+             continue;
+           disable_tokens = true;
+           break;
          }
        }
 
