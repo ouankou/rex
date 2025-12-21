@@ -9,7 +9,6 @@
 
 #include "clang/AST/LambdaCapture.h"
 
-#include "rexExplicitQualifierAttribute.h"
 #include "sageInterface.h"
 #include "clang/Lex/Lexer.h"
 
@@ -241,6 +240,40 @@ getExplicitQualifierInfo(const clang::NestedNameSpecifier *qualifier) {
     ++info.depth;
   }
   return info;
+}
+
+template <typename T>
+void setExplicitQualifierOnRef(T *ref, int depth, bool has_global) {
+  if (ref == nullptr) {
+    return;
+  }
+  ref->set_explicit_name_qualification_length(depth);
+  ref->set_explicit_global_qualification(has_global);
+}
+
+void setExplicitQualifierOnExpr(SgExpression *expr, int depth,
+                                bool has_global) {
+  if (expr == nullptr || (depth == 0 && !has_global)) {
+    return;
+  }
+  if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+    setExplicitQualifierOnRef(var_ref, depth, has_global);
+  } else if (SgTemplateMemberFunctionRefExp *tmpl_member =
+                 isSgTemplateMemberFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(tmpl_member, depth, has_global);
+  } else if (SgMemberFunctionRefExp *member_ref =
+                 isSgMemberFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(member_ref, depth, has_global);
+  } else if (SgTemplateFunctionRefExp *tmpl_func =
+                 isSgTemplateFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(tmpl_func, depth, has_global);
+  } else if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
+    setExplicitQualifierOnRef(func_ref, depth, has_global);
+  } else if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(expr)) {
+    setExplicitQualifierOnRef(nonreal_ref, depth, has_global);
+  } else if (SgEnumVal *enum_val = isSgEnumVal(expr)) {
+    setExplicitQualifierOnRef(enum_val, depth, has_global);
+  }
 }
 
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
@@ -4885,11 +4918,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     if (qualifier == nullptr) {
       return;
     }
-    ExplicitQualifierInfo info = getExplicitQualifierInfo(qualifier);
-    if (info.depth == 0 && !info.has_global) {
-      return;
-    }
-    setRexExplicitQualifier(expr, info.depth, info.has_global);
+    const ExplicitQualifierInfo info = getExplicitQualifierInfo(qualifier);
+    setExplicitQualifierOnExpr(expr, info.depth, info.has_global);
   };
 
   // Phase C (Issue 115): Queue implicit template instantiations that are

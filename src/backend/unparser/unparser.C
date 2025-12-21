@@ -746,13 +746,15 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
          std::set<SgLocatedNode *> modifiedNodes =
              SageInterface::collectModifiedLocatedNodes(file);
          for (SgLocatedNode *node : modifiedNodes) {
-           if (node == NULL || node->isCompilerGenerated())
+           if (node == NULL)
              continue;
            Sg_File_Info *node_info = node->get_file_info();
            if (node_info == NULL) {
              disable_tokens = true;
              break;
            }
+           if (node_info->isCompilerGenerated() == true)
+             continue;
            if (node_info->isOutputInCodeGeneration() == false)
              continue;
            if (affects_current_file(node) == false)
