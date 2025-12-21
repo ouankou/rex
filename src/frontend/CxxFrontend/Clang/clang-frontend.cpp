@@ -595,7 +595,16 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
   // 4 - Attach to the file
 
-    if (sageFile.get_globalScope() != NULL) SageInterface::deleteAST(sageFile.get_globalScope());
+    if (sageFile.get_globalScope() != NULL) {
+      SageInterface::deleteAST(sageFile.get_globalScope());
+      auto map_it = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(&sageFile);
+      if (map_it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() &&
+          map_it->second != NULL) {
+        // Clear stale token mappings from the previous AST to avoid
+        // dangling SgNode* references on re-parse.
+        map_it->second->clear();
+      }
+    }
 
     sageFile.set_globalScope(global_scope);
 

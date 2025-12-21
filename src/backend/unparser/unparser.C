@@ -1356,7 +1356,8 @@ Unparser::getColumnNumberOfEndOfString( std::string internalString )
      return endingColumnNumber;
    }
 
-   void Unparser::unparseFileUsingTokenStream(SgSourceFile *file) {
+   void Unparser::unparseFileUsingTokenStream(
+       SgSourceFile *file, const std::string *outputFilenameOverride) {
      // DQ (9/30/2013): Unparse the file using the token stream (stored in the
      // SgFile).
 
@@ -1562,8 +1563,14 @@ Unparser::getColumnNumberOfEndOfString( std::string internalString )
 
 
   // DQ (10/27/2013): Use a different filename for the output of the raw token stream (not associated with individual statements).
-        string outputFilename =
-            "rose_raw_tokens_" + file->get_sourceFileNameWithoutPath();
+        string outputFilename;
+        if (outputFilenameOverride != NULL &&
+            outputFilenameOverride->empty() == false) {
+          outputFilename = *outputFilenameOverride;
+        } else {
+          outputFilename =
+              "rose_raw_tokens_" + file->get_sourceFileNameWithoutPath();
+        }
 
 #if 0
      printf ("In Unparser::unparseFileUsingTokenStream(): Output tokens stream to file: %s \n",outputFilename.c_str());
@@ -3399,17 +3406,92 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
 #if 0
           printf ("In unparseFile(SgFile*): open file for output of generated source code: outputFilename = %s \n",outputFilename.c_str());
 #endif
-             fstream ROSE_OutputFile(outputFilename.c_str(), ios::out);
-             // ROSE_OutputFile.open(s_file.c_str());
+             SgSourceFile *sourceFile = isSgSourceFile(file);
+             bool useRawTokenOutput = false;
+             if (sourceFile != NULL && file->get_unparse_tokens() == false &&
+                 (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+                  sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
+                  sourceFile->get_OpenCL_only())) {
+               std::set<SgStatement *> transformedStatements =
+                   SageInterface::collectTransformedStatements(file);
+               auto affects_current_file = [&](SgLocatedNode *node) -> bool {
+                 if (node == NULL) {
+                   return true;
+                 }
+                 Sg_File_Info *node_info = node->get_file_info();
+                 if (node_info == NULL) {
+                   return true;
+                 }
+                 if (node_info->isSameFile(file) == true) {
+                   return true;
+                 }
+                 if (node_info->isTransformation() == true ||
+                     node_info->get_physical_file_id() ==
+                         Sg_File_Info::TRANSFORMATION_FILE_ID) {
+                   SgSourceFile *enclosing_file =
+                       SageInterface::getEnclosingSourceFile(node);
+                   if (enclosing_file == NULL || enclosing_file == file) {
+                     return true;
+                   }
+                 }
+                 return false;
+               };
+               bool transformed_in_source = false;
+               for (SgStatement *stmt : transformedStatements) {
+                 if (stmt == NULL) {
+                   continue;
+                 }
+                 Sg_File_Info *stmt_info = stmt->get_file_info();
+                 if (stmt_info == NULL) {
+                   transformed_in_source = true;
+                   break;
+                 }
+                 if (stmt_info->isCompilerGenerated() == true) {
+                   continue;
+                 }
+                 if (stmt_info->isOutputInCodeGeneration() == false) {
+                   continue;
+                 }
+                 if (affects_current_file(stmt) == false) {
+                   continue;
+                 }
+                 transformed_in_source = true;
+                 break;
+               }
 
-             // DQ (12/8/2007): Added error checking for opening out output
-             // file.
-             if (!ROSE_OutputFile) {
-               // throw std::exception("(fstream) error while opening file.");
-               printf("Error detected in opening file %s for output \n",
-                      outputFilename.c_str());
-               ROSE_ABORT();
+               if (transformed_in_source == false) {
+                 ROSEAttributesListContainerPtr filePreprocInfo =
+                     sourceFile->get_preprocessorDirectivesAndCommentsList();
+                 if (filePreprocInfo != NULL &&
+                     filePreprocInfo->getList().find(
+                         sourceFile->getFileName()) !=
+                         filePreprocInfo->getList().end()) {
+                   useRawTokenOutput = true;
+                 }
+               }
              }
+
+             if (useRawTokenOutput == true) {
+               Unparser_Opt dummyOptions;
+               ostringstream dummyStream;
+               Unparser rawTokenUnparser(
+                   &dummyStream,
+                   sourceFile->get_file_info()->get_filenameString(),
+                   dummyOptions, unparseHelp, unparseDelegate);
+               rawTokenUnparser.unparseFileUsingTokenStream(sourceFile,
+                                                            &outputFilename);
+             } else {
+               fstream ROSE_OutputFile(outputFilename.c_str(), ios::out);
+               // ROSE_OutputFile.open(s_file.c_str());
+
+               // DQ (12/8/2007): Added error checking for opening out output
+               // file.
+               if (!ROSE_OutputFile) {
+                 // throw std::exception("(fstream) error while opening file.");
+                 printf("Error detected in opening file %s for output \n",
+                        outputFilename.c_str());
+                 ROSE_ABORT();
+               }
 
 #if 0
           printf ("Exiting as a test! \n");
@@ -3646,6 +3728,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
 
                     ROSE_ABORT();
                   }
+             }
              }
         }
    }
