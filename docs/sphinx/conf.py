@@ -71,7 +71,8 @@ breathe_projects = {
     "rex": str(_DOXYGEN_XML),
 }
 breathe_default_project = "rex"
-breathe_default_members = ("members", "undoc-members")
+# Removed breathe_default_members to prevent duplicate C++ declarations
+# (see issue #70, item 4)
 
 exhale_args = {
     "containmentFolder": str(_HERE / "api"),
@@ -79,6 +80,13 @@ exhale_args = {
     "rootFileTitle": "C++ API Reference",
     "doxygenStripFromPath": str(_REPO_ROOT),
     "createTreeView": True,
+    "minifyTreeView": False,  # Prevent line-length warnings (issue #70, 7C)
+    # Show members on class/struct/namespace/file pages, but keep breathe_default_members
+    # removed to prevent parent classes from duplicating nested class member docs (issue #70, item 4).
+    # Include namespace and file to preserve free functions, variables, and typedefs in API docs.
+    "customSpecificationsMapping": exhale.utils.makeCustomSpecificationsMapping(
+        lambda kind: [":members:", ":undoc-members:"] if kind in ("class", "struct", "namespace", "file") else []
+    ),
 }
 
 autosectionlabel_prefix_document = True
