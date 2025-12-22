@@ -7459,7 +7459,12 @@ Unparse_ExprStmt::unparseTrailingFunctionModifiers(SgMemberFunctionDeclaration* 
          new SgModifierType(modifier_type->get_base_type());
      stripped_type->get_typeModifier() = modifier;
      stripped_type->get_typeModifier().get_constVolatileModifier().unsetConst();
-     return SgModifierType::insertModifierTypeIntoTypeTable(stripped_type);
+     SgType *canonical_type =
+         SgModifierType::insertModifierTypeIntoTypeTable(stripped_type);
+     if (canonical_type != stripped_type) {
+       delete stripped_type;
+     }
+     return canonical_type;
    }
 
 void
