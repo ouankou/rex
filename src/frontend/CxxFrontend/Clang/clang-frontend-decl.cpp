@@ -7380,6 +7380,14 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
       init_name->set_using_assignment_copy_constructor_syntax(true);
     }
   }
+  if (var_decl->isConstexpr()) {
+    bool explicit_const = true;
+    if (const clang::TypeSourceInfo *type_info =
+            var_decl->getTypeSourceInfo()) {
+      explicit_const = type_info->getType().isLocalConstQualified();
+    }
+    init_name->set_is_constexpr_const_implicit(!explicit_const);
+  }
   // CLANG FRONTEND FIX: Set initializer parent to SgInitializedName
   // The initializer is a child of the SgInitializedName, not the
   // SgVariableDeclaration

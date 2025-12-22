@@ -9,7 +9,7 @@ Successfully enabled the REX/ROSE Clang frontend to generate C++ code from files
 
 **Key Achievement**: Eliminated the `frontend_failed` exception and implemented support for critical C++ template-dependent expression types, enabling code generation for the first time.
 
-## Test Case: axpy.cpp
+## Test Case: rex_test2025_issue160_axpy_system_headers.cpp
 
 ```cpp
 #include <array>
@@ -314,17 +314,19 @@ cmake --build . --target rose-compiler -j4
 
 ### Test
 ```bash
-./bin/rose-compiler -c ../tests/nonsmoke/functional/input_codes/axpy.cpp -o /tmp/axpy_test.o
+./bin/rose-compiler -c \
+  ../tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_test2025_issue160_axpy_system_headers.cpp \
+  -o /tmp/axpy_test.o
 ```
 
 **Expected Output**:
 - Clang diagnostics about missing headers (acceptable)
 - "Note: Proceeding to backend despite X diagnostic errors"
-- `rose_axpy.cpp` generated successfully
+- `rose_rex_test2025_issue160_axpy_system_headers.cpp` generated successfully
 
 ### Verify
 ```bash
-cat rose_axpy.cpp  # Check generated code quality
+cat rose_rex_test2025_issue160_axpy_system_headers.cpp  # Check generated code quality
 ```
 
 ## Performance Metrics
