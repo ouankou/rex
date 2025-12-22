@@ -105,7 +105,7 @@ else()
   endif()
 endif()
 
-set(ROSE_FLAGS -rose:C --edg:no_warnings -w)
+set(ROSE_FLAGS -rose:C  -w)
 
 function(compile_test_in_binary_dir input_file label)
   get_filename_component(test_name ${input_file} NAME_WE)

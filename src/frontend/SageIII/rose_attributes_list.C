@@ -2312,11 +2312,8 @@ ROSEAttributesList::isCppDirective( const string & line, PreprocessingInfo::Dire
                ROSE_ABORT();
                cppDeclarationKind = PreprocessingInfo::CpreprocessorUnknownDeclaration;
 #else
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               printf ("Warning: ROSEAttributesList::isCppDirective() found unknown cppIndentifier = %s\n Extracted from a line: =%s\n",
-                        cppIndentifier.c_str(), line.c_str());
-#endif
-               cppDeclarationKind = PreprocessingInfo::CpreprocessorUnknownDeclaration;
+            cppDeclarationKind =
+                PreprocessingInfo::CpreprocessorUnknownDeclaration;
 #endif
              }
 

@@ -31,15 +31,15 @@ TEST_SPECIMENS = test0 test1 test2 test3 test4 test5 test6 test7 test8 test9 tes
 EXTRA_DIST += $(TEST_SPECIMENS) UnparseHeadersTransformVisitor.h
 
 # DQ (11/2/2018): Test with -rose:unparse_tokens
-# ROSE_SWITCHES = --edg:no_warnings --edg:restrict -w -rose:verbose 1 -rose:unparseHeaderFiles
-# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS --edg:no_warnings --edg:restrict -w -rose:verbose 1 -rose:unparseHeaderFiles 
-# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS --edg:no_warnings --edg:restrict -w -rose:verbose 1 -rose:unparseHeaderFiles -rose:unparse_tokens
-# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS --edg:no_warnings --edg:restrict -w -rose:verbose 1 -rose:unparseHeaderFiles -rose:unparse_tokens -c
-# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS --edg:no_warnings --edg:restrict -w -rose:verbose 0 -rose:unparseHeaderFiles -c
-# ROSE_SWITCHES = --edg:no_warnings --edg:restrict -w -rose:verbose 0 -rose:unparseHeaderFiles -c
+# ROSE_SWITCHES =   -w -rose:verbose 1 -rose:unparseHeaderFiles
+# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS   -w -rose:verbose 1 -rose:unparseHeaderFiles 
+# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS   -w -rose:verbose 1 -rose:unparseHeaderFiles -rose:unparse_tokens
+# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS   -w -rose:verbose 1 -rose:unparseHeaderFiles -rose:unparse_tokens -c
+# ROSE_SWITCHES = -DSKIP_ROSE_BUILTIN_DECLARATIONS   -w -rose:verbose 0 -rose:unparseHeaderFiles -c
+# ROSE_SWITCHES =   -w -rose:verbose 0 -rose:unparseHeaderFiles -c
 
 # DQ (10/27/2019): Modified to reflect better options.
-ROSE_SWITCHES = --edg:no_warnings --edg:restrict -w -rose:verbose 0 -rose:unparseHeaderFiles -c
+ROSE_SWITCHES =   -w -rose:verbose 0 -rose:unparseHeaderFiles -c
 
 # -rose:outline:use_dlopen -rose:outline:copy_orig_file -rose:outline:temp_variable -I. -rose:outline:exclude_headers -rose:outline:output_path . -rose:unparseHeaderFiles -rose:unparseHeaderFilesRootFolder unparsedHeaders -rose:applicationRootDirectory /home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersTests/test0
 

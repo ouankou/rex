@@ -16,7 +16,6 @@
 //    (dbx: File '../bin/rose_script' is not in ELF format)
 #define USE_ARCHITECTURE_SPECIFIC_SCRIPT false
 
-// this comes from Sage/EDG--it may not be of any real use
 extern "C" char* C_output_file_name;
 
 extern int ROSE_DEBUG;

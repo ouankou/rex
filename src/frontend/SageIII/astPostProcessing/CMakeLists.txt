@@ -73,7 +73,7 @@ install(FILES  astPostProcessing.h       fixupDefiningAndNondefiningDeclarations
     fixupFileInfoFlags.h
     fixupTemplateArguments.h
     addPrototypesForTemplateInstantiations.h
-    markSharedDeclarationsForOutputInCodeGeneration.h addIncludeDirectives.h
+    markSharedDeclarationsForOutputInCodeGeneration.h 
     fixupInitializers.h
 
     DESTINATION ${INCLUDE_INSTALL_DIR})

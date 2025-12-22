@@ -6,7 +6,7 @@ add_subdirectory(std)
 include(ElsaTestCases_Testcodes.cmake)
 include(ElsaTestCases_Failing_Tests.cmake)
 
-set(ROSE_FLAGS --edg:no_warnings -w)
+set(ROSE_FLAGS  -w)
 
 foreach(file_to_test ${TESTCODES})
   compile_test(${file_to_test} ELSATEST)

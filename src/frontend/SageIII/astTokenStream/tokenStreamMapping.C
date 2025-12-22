@@ -999,26 +999,6 @@ Graph_TokenMappingTraversal::visit(SgNode* n)
         }
    }
 
-
-
-void
-Graph_TokenMappingTraversal::graph_ast_and_token_stream(string filename)
-   {
-  // DQ (3/18/2021): This is a simpler function to call (requires only the SgSourceFile.
-
-     ROSE_ASSERT(EDG_ROSE_Translation::edg_include_file_map.find(filename) != EDG_ROSE_Translation::edg_include_file_map.end());
-
-     SgSourceFile* sourceFile = EDG_ROSE_Translation::edg_include_file_map[filename]->get_source_file();
-     ROSE_ASSERT(sourceFile != NULL);
-
-     std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
-
-     vector<stream_element*> token_stream_vector = getTokenStream(sourceFile);
-
-     Graph_TokenMappingTraversal::graph_ast_and_token_stream(sourceFile,token_stream_vector,tokenStreamSequenceMap);
-   }
-
-
 void
 Graph_TokenMappingTraversal::graph_ast_and_token_stream(SgSourceFile* sourceFile)
    {

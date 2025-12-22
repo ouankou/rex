@@ -125,10 +125,9 @@ class Graph_TokenMappingTraversal : public AstSimpleProcessing
        // static void graph_ast_and_token_stream(SgSourceFile* file, vector<stream_element*> & tokenList);
           static void graph_ast_and_token_stream(SgSourceFile* file, std::vector<stream_element*> & tokenList, std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap);
 
-          static void graph_ast_and_token_stream(SgSourceFile* file);
-          static void graph_ast_and_token_stream(std::string filename);
+          static void graph_ast_and_token_stream(SgSourceFile *file);
 
-       // Map the toke_id to a string.
+          // Map the toke_id to a string.
           static std::string getTokenIdString (int i);
 
           static int* first_leading_whitespace_start;

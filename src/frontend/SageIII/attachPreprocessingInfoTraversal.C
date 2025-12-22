@@ -92,14 +92,6 @@ AttachPreprocessingInfoTreeTrav::~AttachPreprocessingInfoTreeTrav() {
     //do nothing
 }
 
-
-namespace EDG_ROSE_Translation
-   {
-  // DQ (9/18/2018): Declare this map so that we can use it for the unparse header files option.
-  // REX: Declaration simplified - defined in sageInterface.C
-     extern std::map<std::string, SgIncludeFile*> edg_include_file_map;
-   }
-
 // DQ (11/30/2008): Refactored this code out of the simpler function to isolate the Wave specific handling.
 
 // AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav( SgSourceFile* file, bool includeDirectivesAndCommentsFromAllFiles )
@@ -3964,10 +3956,6 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
                       // DQ (11/11/2012): Added assertion.
                          ROSE_ASSERT(n != NULL);
 
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                         printf ("Skipping any possability of attaching a comment/directive after a %s \n",n->class_name().c_str());
-                      // ROSE_ASSERT(false);
-#endif
 #if DEBUG_ATTACH_PREPROCESSING_INFO
                          ROSE_ASSERT(n->get_file_info() != NULL);
                          n->get_file_info()->display("Skipping any possability of attaching a comment/directive: debug");

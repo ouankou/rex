@@ -55,14 +55,6 @@
 #include <map>
 #include <cstring>
 
-// DQ (11/5/2019): Added to support SageInterface::statementCanBeTransformed().
-namespace EDG_ROSE_Translation
-   {
-  // DQ (9/18/2018): Declare this map so that we can use it for the unparse header files option.
-  // REX: Definition for Clang frontend (was extern for EDG)
-    std::map<std::string, SgIncludeFile*> edg_include_file_map;
-  }
-
 namespace sg
 {
   [[noreturn]]
@@ -1261,13 +1253,7 @@ SageInterface::set_name ( SgInitializedName *initializedNameNode, SgName new_nam
         }
 
   // DQ (11/12/2018): In general, this can't be tested if we permit it to be transformed.
-     if (statementCanBeTransformed(parent_declaration) == false)
-        {
-          printf ("WARNING: SageInterface::set_name(): This statement can not be transformed because it is part of a header file specific more then once with different include file syntax \n");
-          return 0;
-        }
-       else
-        {
+
 #if DEBUG_SET_NAME
           printf ("In SageInterface::set_name(): This statement can be transformed! parent_declaration = %p = %s \n",parent_declaration,get_name(parent_declaration).c_str());
 #endif
@@ -1277,22 +1263,20 @@ SageInterface::set_name ( SgInitializedName *initializedNameNode, SgName new_nam
           printf ("Exiting as a test! \n");
           ROSE_ABORT();
 #endif
-        }
 
-     SgSymbol * associated_symbol = (*found_it).second;
+          SgSymbol *associated_symbol = (*found_it).second;
 
-  // erase the name from there
-     scope_stmt->get_symbol_table()->get_table()->erase(found_it);
+          // erase the name from there
+          scope_stmt->get_symbol_table()->get_table()->erase(found_it);
 
-     // insert the new_name in the symbol table
-     found_it = scope_stmt->get_symbol_table()->get_table()->insert(
-         pair<SgName, SgSymbol *>(new_name, associated_symbol));
-     // if insertion failed
-     if (found_it == scope_stmt->get_symbol_table()->get_table()->end())
-        {
-          printf ("Warning: insertion of new symbol failed \n");
-          return 0;
-        }
+          // insert the new_name in the symbol table
+          found_it = scope_stmt->get_symbol_table()->get_table()->insert(
+              pair<SgName, SgSymbol *>(new_name, associated_symbol));
+          // if insertion failed
+          if (found_it == scope_stmt->get_symbol_table()->get_table()->end()) {
+            printf("Warning: insertion of new symbol failed \n");
+            return 0;
+          }
 
 #if DEBUG_SET_NAME
   // Set the p_name to the new_name
@@ -5782,18 +5766,6 @@ SageInterface::addMangledNameToCache( SgNode* astNode, const std::string & oldMa
      printf ("Updating mangled name cache for node = %p = %s with mangledName = %s \n",astNode,astNode->class_name().c_str(),mangledName.c_str());
 #endif
 
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-     SgStatement* statement = isSgStatement(astNode);
-     if (statement != NULL && statement->hasExplicitScope() == true)
-        {
-          if (statement->get_scope() == NULL)
-             {
-               printf ("Warning: SageInterface::addMangledNameToCache(): In it might be premature to add this IR node and name to the mangledNameCache: statement = %p = %s oldMangledName = %s \n",
-                    statement,statement->class_name().c_str(),oldMangledName.c_str());
-             }
-        }
-#endif
-
      mangledNameCache.insert(pair<SgNode*,string>(astNode,mangledName));
 
 #if DEBUG_SAGE_INTERFACE_ADD_MANGLED_TO_CACHE
@@ -7014,9 +6986,6 @@ void
 SageInterface::setOneSourcePositionForTransformation(SgNode *node)
    {
   // DQ (5/1/2012): Older depricated function.
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-     printf ("+++++ Depricated function (use setSourcePositionAsTransformation() instead) (no using internal source position mode) \n");
-#endif
 
   // setSourcePositionAsTransformation(node);
      setSourcePosition(node);
@@ -14071,19 +14040,12 @@ SageInterface::appendStatementList(const std::vector<SgStatement*>& stmts, SgSco
      for (size_t i = 0; i < stmts.size(); ++i)
         {
 #if 0
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-          printf ("In appendStatementList(): stmts[i = %" PRIuPTR "] = %p = %s \n",i,stmts[i],stmts[i]->class_name().c_str());
-       // printf ("In appendStatementList(): stmts[i = %" PRIuPTR "]->get_parent() = %p \n",i,stmts[i]->get_parent());
-#endif
 #endif
         appendStatement(stmts[i], scope); // Liao 5/15/2013, defer the logic of checking parent pointers to appendStatement()
 #if 0
           if (stmts[i]->get_parent() != NULL)
              {
 #if 0
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               printf ("   --- In appendStatementList(): stmts[i = %" PRIuPTR "] will be added to scope (because stmts[i]->get_parent() != NULL (= %p = %s) \n",i,stmts[i]->get_parent(),stmts[i]->get_parent()->class_name().c_str());
-#endif
 #endif
                appendStatement(stmts[i], scope);
              }
@@ -14473,7 +14435,6 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
              }
         }
      } // end if autoMovePreprocessingInfo
-
 
 #if 0
      printf ("In SageInterface::insertStatement(): after processing associated comments \n");
@@ -23830,77 +23791,6 @@ void SageInterface::replaceVariableReferences(SgVariableSymbol* old_sym, SgVaria
   }
 }
 
-
-// DQ (11/12/2018): Adding test to avoid issues that we can't test for in the unparsing of header files using the token based unparsing.
-//! If header file unparsing and token-based unparsing are used, then some statements in header files
-//! used with the same name and different include syntax can't be transformed. This is currently because
-//! there is no way to generally test the resulting transformed code generated by ROSE.
-//! NOTE: This is demonstrated by test8 in the unparse headers tests directory.
-bool
-SageInterface::statementCanBeTransformed(SgStatement* stmt)
-   {
-     bool result = true;
-
-     bool includingSelf = false;
-     SgSourceFile* sourceFile = getEnclosingSourceFile(stmt,includingSelf);
-
-     if (sourceFile == NULL)
-        {
-          printf ("In SageInterface::statementCanBeTransformed(): sourceFile not found \n");
-        }
-
-  // I think we can assert this!
-     ROSE_ASSERT(sourceFile != NULL);
-
-     if (sourceFile != NULL && sourceFile->get_unparse_tokens() == true && sourceFile->get_unparseHeaderFiles() == true)
-        {
-       // Need to look up the source file name, find the SgIncludeFile, and check if statements from this file can be transformed.
-       // There could be at least one other file is this is a header file that was included twice, but it should have a different path.
-          string source_filename = stmt->getFilenameString();
-#if 0
-          printf ("In SageInterface::statementCanBeTransformed(): source_filename = %s \n",source_filename.c_str());
-          printf (" --- Rose::includeFileMapForUnparsing.size()                   = %zu \n",Rose::includeFileMapForUnparsing.size());
-#endif
-
-       // DQ (11/5/2019): Using the edg_include_file_map instead (constructed in EDG/ROSE translation).
-       // if (Rose::includeFileMapForUnparsing.find(source_filename) != Rose::includeFileMapForUnparsing.end())
-          if (EDG_ROSE_Translation::edg_include_file_map.find(source_filename) != EDG_ROSE_Translation::edg_include_file_map.end())
-             {
-            // SgIncludeFile* include_file = Rose::includeFileMapForUnparsing[source_filename];
-               SgIncludeFile* include_file = EDG_ROSE_Translation::edg_include_file_map[source_filename];
-               ROSE_ASSERT(include_file != NULL);
-#if 0
-               printf ("include_file->get_can_be_supported_using_token_based_unparsing() = %s \n",include_file->get_can_be_supported_using_token_based_unparsing() ? "true" : "false");
-#endif
-               if (include_file->get_can_be_supported_using_token_based_unparsing() == false)
-                  {
-#if 0
-                    printf ("NOTE: Transformations of this statement cannot be supported using the header file unparsing with token unparsing options! \n");
-#endif
-                    result = false;
-                  }
-             }
-            else
-             {
-#if 1
-               printf ("Not found in Rose::includeFileMapForUnparsing: source_filename = %s \n",source_filename.c_str());
-#endif
-#if 1
-               printf ("Exiting as a test! \n");
-               ROSE_ABORT();
-#endif
-             }
-
-#if 0
-          printf ("Error: In statementCanBeTransformed(): this might be an issue! \n");
-          ROSE_ABORT();
-#endif
-        }
-
-     return result;
-   }
-
-
 //Note: this function is no longer used by decl move tool: we use copy and insert instead to support moving to multiple scopes
 //! Move a variable declaration from its original scope to a new scope, assuming original scope != target_scope
 void SageInterface::moveVariableDeclaration(SgVariableDeclaration* decl, SgScopeStatement* target_scope)
@@ -25233,29 +25123,20 @@ bool SageInterface::insideHeader (SgLocatedNode* node)
      ROSE_ASSERT(fileInfo != NULL);
      string filename = fileInfo->get_filenameString();
 
-#if 0
-     printf ("In SageInterface::insideHeader(): node = %s line: %d column: %d file: %s \n",node->class_name().c_str(),fileInfo->get_line(),fileInfo->get_col(),filename.c_str());
-#endif
-
-  // DQ (2/27/2021): We save a map of all of the header files processed in the generation of the ROSE AST,
-  // so the test is only if the filename is in the list.
-     if (EDG_ROSE_Translation::edg_include_file_map.find(filename) == EDG_ROSE_Translation::edg_include_file_map.end())
-        {
-#if 0
-          printf ("This is NOT in the EDG_ROSE_Translation::edg_include_file_map \n");
-#endif
-        }
-       else
-        {
-#if 0
-          printf ("This IS in the EDG_ROSE_Translation::edg_include_file_map \n");
-#endif
-          returnValue = true;
-        }
+     // Check for common header file extensions
+     if (filename.size() > 2) {
+       size_t dot_pos = filename.rfind('.');
+       if (dot_pos != string::npos) {
+         string ext = filename.substr(dot_pos);
+         if (ext == ".h" || ext == ".hpp" || ext == ".hxx" || ext == ".H" ||
+             ext == ".hh") {
+           returnValue = true;
+         }
+       }
+     }
 
      return returnValue;
    }
-
 
 //! Find the function type matching a function signature plus a given return type
 SgFunctionType* SageInterface::findFunctionType (SgType* return_type, SgFunctionParameterTypeList* typeList)

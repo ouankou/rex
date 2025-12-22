@@ -202,7 +202,7 @@ if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 endif
 
 # turn off edg warnings such as "variable x declared but never referenced" for test input files
-TEST_CXXFLAGS = -rose:verbose 0 --edg:no_warnings -g3
+TEST_CXXFLAGS = -rose:verbose 0  -g3
 
 # Many of these tests follow a very regular pattern and can be transformed into a testable command in the same way.  Some
 # of these tests originally redirected their stdout and/or stderr to a particular file--we no longer need to do that since

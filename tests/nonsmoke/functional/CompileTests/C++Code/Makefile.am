@@ -488,7 +488,7 @@ TEST_Objects = ${TESTCODES:.C=.o}
 # ROSE_FLAGS = -rose:test 6
 
 # Suppress all warnings (in EDG: --no_warnings) (in g++: -w) 
-ROSE_FLAGS = --edg:no_warnings -w
+ROSE_FLAGS =  -w
 
 ROSE_VERBOSE = -rose:verbose 0
 # ROSE_VERBOSE =
@@ -520,11 +520,11 @@ test2004_22.o: $(srcdir)/test2004_22.C $(TRANSLATOR_EXECUTABLE)
 
 # Test of export keyword
 test2004_30.o: $(srcdir)/test2004_30.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR) --edg:restrict --edg:export -c $(srcdir)/test2004_30.C
+	$(TEST_TRANSLATOR)  --edg:export -c $(srcdir)/test2004_30.C
 
 # Test of simple STL (list) example code
 test2004_41.o: $(srcdir)/test2004_41.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR) --edg:restrict --edg:export -I../g++_HEADERS/hdrs1/bits -c $(srcdir)/test2004_41.C 
+	$(TEST_TRANSLATOR)  --edg:export -I../g++_HEADERS/hdrs1/bits -c $(srcdir)/test2004_41.C 
 
 # Test for STL example code
 # test2004_92.o: $(srcdir)/test2004_92.C $(TRANSLATOR_EXECUTABLE)

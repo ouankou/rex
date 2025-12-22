@@ -343,8 +343,7 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
          argument == "-rose:outputFormat" ||
 #if 0
        // DQ (1/21/2017): Moved to be an option that has three parameters (rose option, edg option, and edg option's parameter).
-          argument == "-edg_parameter:" ||
-          argument == "--edg_parameter:" ||
+
 #endif
          argument == "-rose:generateSourcePositionCodes" ||
          argument == "-rose:embedColorCodesInGeneratedCode" ||
@@ -465,29 +464,7 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
 bool
 CommandlineProcessing::isOptionTakingThirdParameter( string argument )
    {
-     bool result = false;
-  // printf ("In CommandlineProcessing::isOptionTakingFileName(): argument = %s \n",argument.c_str());
-
-  // List any rose options that take source filenames here, so that they can avoid
-  // being confused with the source file name that is to be read by EDG and translated.
-
-  // DQ (1/6/2008): Added another test for a rose option that takes a filename
-     if ( false ||          // Used to specify yet another parameter
-
-       // DQ (8/20/2008): Add support for Qing's options!
-          argument == "-unroll" ||
-#if 1
-       // DQ (1/21/2017): Allow this to take the edg option plus it's parameter (3 paramters with the rose option wrapper, not two).
-          argument == "-edg_parameter:" ||
-          argument == "--edg_parameter:" ||
-#endif
-          false )
-        {
-          result = true;
-        }
-
-  // printf ("In CommandlineProcessing::isOptionTakingFileName(): argument = %s result = %s \n",argument.c_str(),result ? "true" : "false");
-     return result;
+  return (argument == "-unroll");
    }
 
 // DQ (1/16/2008): This function was moved from the commandling_processing.C file to support the debugging specific to binary analysis
@@ -1981,366 +1958,503 @@ void
 SgFile::usage ()
    {
        // it would be nice to insert the version of ROSE being used (using the VERSION macro)
-          fputs(
-"\n"
-"This ROSE translator provides a means for operating on C, C++, and Fortran source code.\n"
-"\n"
-"Usage: rose [OPTION]... FILENAME...\n"
-"\n"
-"If a long option shows a mandatory argument, it is mandatory for the equivalent\n"
-"short option as well, and similarly for optional arguments.\n"
-"\n"
-"Main operation mode:\n"
-"     -rose:(o|output) FILENAME\n"
-"                             file containing final unparsed C++ code\n"
-"                             (relative or absolute paths are supported)\n"
-"     -rose:keep_going\n"
-"                             Similar to GNU Make's --keep-going option.\n"
-"\n"
-"                             If ROSE encounters an error while processing your\n"
-"                             input code, ROSE will simply run your backend compiler on\n"
-"                             your original source code file, as is, without modification.\n"
-"\n"
-"                             This is useful for compiler tests. For example,\n"
-"                             when compiling a 100K LOC application, you can\n"
-"                             try to compile as much as possible, ignoring failures,\n"
-"                             in order to gauage the overall status of your translator,\n"
-"                             with respect to that application.\n"
-"\n"
-"Operation modifiers:\n"
-"     -rose:output_warnings   compile with warnings mode on\n"
-"     -rose:C_only, -rose:C   follow C89 standard, disable C++\n"
-"     -rose:C89_only, -rose:C89\n"
-"                             follow C89 standard, disable C++\n"
-"     -rose:C99_only, -rose:C99\n"
-"                             follow C99 standard, disable C++\n"
-"     -rose:C11_only, -rose:C11\n"
-"                             follow C11 standard, disable C++\n"
-"     -rose:C14_only, -rose:C14\n"
-"                             follow C14 standard, disable C++\n"
-"     -rose:Cxx_only, -rose:Cxx\n"
-"                             follow C++89 standard\n"
-"     -rose:Cxx11_only, -rose:Cxx11\n"
-"                             follow C++11 standard\n"
-"     -rose:Cxx14_only, -rose:Cxx14\n"
-"                             follow C++14 standard\n"
-"     -rose:OpenMP, -rose:openmp\n"
-"                             follow OpenMP 3.0 specification for C/C++ and Fortran, perform one of the following actions:\n"
-"     -rose:OpenMP:parse_only, -rose:openmp:parse_only\n"
-"                             parse OpenMP directives to OpenMPIR, no further actions (default behavior now)\n"
-"     -rose:OpenMP:ast_only, -rose:openmp:ast_only\n"
-"                             on top of -rose:openmp:parse_only, build OpenMP AST nodes from OpenMPIR, no further actions\n"
-"     -rose:OpenMP:lowering, -rose:openmp:lowering\n"
-"                             on top of -rose:openmp:ast_only, transform AST with OpenMP nodes into multithreaded code \n"
-"                             targeting GCC GOMP runtime library\n"
-"     --rex-omp-ast-only      REX convenience option: equivalent to -fopenmp --rose:openmp:ast_only\n"
-"     --rex-omp-lowering      REX convenience option: equivalent to -fopenmp -rose:openmp:lowering -rose:skipfinalCompileStep\n"
-"     -rose:fortran\n"
-"                             compile Fortran code, determining version of\n"
-"                             Fortran from file suffix)\n"
-"     -rose:CoArrayFortran, -rose:CAF, -rose:caf\n"
-"                             compile Co-Array Fortran code (extension of Fortran 2003)\n"
-"     -rose:CAF2.0, -rose:caf2.0\n"
-"                             compile Co-Array Fortran 2.0 code (Rice CAF extension)\n"
-"     -rose:Fortran2003, -rose:F2003, -rose:f2003\n"
-"                             compile Fortran 2003 code\n"
-"     -rose:Fortran95, -rose:F95, -rose:f95\n"
-"                             compile Fortran 95 code\n"
-"     -rose:Fortran90, -rose:F90, -rose:f90\n"
-"                             compile Fortran 90 code\n"
-"     -rose:Fortran77, -rose:F77, -rose:f77\n"
-"                             compile Fortran 77 code\n"
-"     -rose:Fortran66, -rose:F66, -rose:f66\n"
-"                             compile Fortran 66 code\n"
-"     -rose:FortranIV, -rose:FIV, -rose:fIV\n"
-"                             compile Fortran IV code\n"
-"     -rose:FortranII, -rose:FII, -rose:fII\n"
-"                             compile Fortran II code (not implemented yet)\n"
-"     -rose:FortranI, -rose:FI, -rose:fI\n"
-"                             compile Fortran I code (not implemented yet)\n"
-"     -rose:fortran:ofp:jvm_options\n"
-"                             Specifies the JVM startup options\n"
-"     -rose:strict            strict enforcement of ANSI/ISO standards\n"
-"     -rose:compilationPerformance\n"
-"                             Output compilation performance after compilation of input file.\n"
-"                             Reports internal phases of ROSE compilation (time and memory requirements), output to stdout.\n"
-"                             See also \"-rose:compilationPerformanceFile FILE\" for CSV report in a file.\n"
-"     -rose:compilationPerformanceFile FILE\n"
-"                             filename where compiler performance for internal\n"
-"                             phases (in CSV form) is placed for later\n"
-"                             processing (using script/graphPerformance)\n"
-"     -rose:exit_after_parser just call the parser (C, C++, and fortran only)\n"
-"     -rose:skip_syntax_check skip Fortran syntax checking (required for F2003 and Co-Array Fortran code\n"
-"                             when using gfortran versions greater than 4.1)\n"
-"     -rose:relax_syntax_check skip Fortran syntax checking (required for some F90 code\n"
-"                             when using gfortran based syntax checking)\n"
-"     -rose:skip_translation_from_edg_ast_to_rose_ast\n"
-"                             skip the translation of the EDG AST into the ROSE AST\n"
-"                             (an SgProject, SgFile, and empty SgGlobal will be constructed)\n"
-"     -rose:skip_transformation\n"
-"                             read input file and skip all transformations\n"
-"     -rose:skip_unparse      read and process input file but skip generation of\n"
-"                             final C++ output file\n"
-"     -rose:skipfinalCompileStep\n"
-"                             read and process input file, \n"
-"                             but skip invoking the backend compiler\n"
-"     -rose:collectAllCommentsAndDirectives\n"
-"                             store all comments and CPP directives in header\n"
-"                             files into the AST\n"
-"     -rose:unparseHeaderFiles\n"
-"                             unparse all directly or indirectly modified\n"
-"                             header files\n"
-"     -rose:excludeCommentsAndDirectives PATH\n"
-"                             provide path to exclude when using the\n"
-"                             collectAllCommentsAndDirectives option\n"
-"     -rose:excludeCommentsAndDirectivesFrom FILENAME\n"
-"                             provide filename to file with paths to exclude\n"
-"                             when using the collectAllCommentsAndDirectives\n"
-"                             option\n"
-"     -rose:includeCommentsAndDirectives PATH\n"
-"                             provide path to include when using the\n"
-"                             collectAllCommentsAndDirectives option\n"
-"     -rose:includeCommentsAndDirectivesFrom FILENAME\n"
-"                             provide filename to file with paths to include\n"
-"                             when using the collectAllCommentsAndDirectives\n"
-"                             option\n"
-"     -rose:skip_commentsAndDirectives\n"
-"                             ignore all comments and CPP directives (can\n"
-"                             generate (unparse) invalid code if not used with\n"
-"                             -rose:unparse_includes)\n"
-"     -rose:prelink           activate prelink mechanism to force instantiation\n"
-"                             of templates and assignment to files\n"
-"     -rose:instantiation XXX control template instantiation\n"
-"                             XXX is one of (none, used, all, local)\n"
-"     -rose:read_executable_file_format_only\n"
-"                             ignore disassemble of instructions (helps debug binary \n"
-"                             file format for binaries)\n"
-"     -rose:skipAstConsistancyTests\n"
-"                             skip AST consitancy testing (for better performance)\n"
-"     -rose:no_optimize_flag_for_frontend\n"
-"                             ignore use of __builtin functions in frontend processing\n"
-"                             all optimization specified is still done on ROSE generated code\n"
-"\n"
-"Plugin Mode:\n"
-"     -rose:plugin_lib <shared_lib_filename>\n"
-"                             Specify the file path to a shared library built from plugin source files \n"
-"                             This option can repeat multiple times to load multiple libraries \n"
-"     -rose:plugin_action <act_name>\n"
-"                             Specify the plugin action to be executed\n"
-"                             This option can repeat multiple times to execute multiple actions \n"
-"                             in the order shown up in command line \n"
-"     -rose:plugin_arg_<act_name>  <option>\n"
-"                             Specify one option to be passed to a plugin named act_name\n"
-"                             This option can repeat multiple times to provide multiple options to a plugin \n"
-"\n"
-"GNU g++ options recognized:\n"
-"     -ansi                   equivalent to -rose:strict\n"
-"     -fno-implicit-templates disable output of template instantiations in\n"
-"                             generated source\n"
-"     -fno-implicit-inline-templates\n"
-"                             disable output of inlined template instantiations\n"
-"                             in generated source\n"
-"     -S                      gnu option trivial\n"
-"     -u (-undefined)         gnu option trivial\n"
-"     -version-info <name>    gnu option trivial (option not passed on to linker yet, \n"
-"                             incomplete implementation)\n"
-"     -MM <filename>          gnu Makefile dependence generation (option not passed \n"
-"                             on to compiler yet, incomplete implementation)\n"
-"\n"
-"Informative output:\n"
-"     -rose:help, --help, -help, --h\n"
-"                             print this help, then exit\n"
-"     -rose:version, --version, --V\n"
-"                             print ROSE program version number, then exit\n"
-"     -rose:markGeneratedFiles\n"
-"                             add \"#define ROSE_GENERATED_CODE\" to top of all\n"
-"                               generated code\n"
-"     -rose:verbose [LEVEL]   verbosely list internal processing (0, 1, 2, 4) with default=0\n"
-"                                      0 (NONE), 1(KEY), 2(INFO), 3(MARCH), 4(TRACE)\n"
-"                               Higher values generate more output (can be\n"
-"                               applied to individual files and to the project\n"
-"                               separately, TBI).\n"
-"     -rose:output_parser_actions\n"
-"                             call parser with --dump option (fortran only)\n"
-"     -rose:embedColorCodesInGeneratedCode LEVEL\n"
-"                             embed color codes into generated output for\n"
-"                               visualization of highlighted text using tview\n"
-"                               tool for constructs specified by LEVEL\n"
-"                             LEVEL is one of:\n"
-"                               1: missing position information\n"
-"                               2: compiler-generated code\n"
-"                               3: other code\n"
-"     -rose:generateSourcePositionCodes LEVEL\n"
-"                             generate separate file of source position\n"
-"                               information for highlighting original source\n"
-"                               file using tview tool for constructs specified\n"
-"                               by LEVEL\n"
-"                             LEVEL is one of:\n"
-"                               1: statements, preprocessor directives and\n"
-"                                  comments\n"
-"                               2: expressions\n"
-"\n"
-"Control EDG frontend processing:\n"
-"     -edg:new_frontend       force use of external EDG front end (disables use\n"
-"                               of rest of ROSE/SAGE)\n"
-"     -edg:KCC_frontend       for use of KCC (with -c option) as new frontend\n"
-"                               (must be specified with -edg:new_frontend)\n"
-"     -edg:XXX                pass  -XXX to EDG front-end\n"
-"    --edg:XXX                pass --XXX to EDG front-end\n"
-"     -edg_parameter: XXX YYY pass  -XXX YYY to EDG front-end (note: space after colon is required)\n"
-"    --edg_parameter: XXX YYY pass --XXX YYY to EDG front-end (note: space after colon is required)\n"
-"\n"
-"Control Fortran frontend processing:\n"
-"     -rose:cray_pointer_support\n"
-"                             turn on internal support for cray pointers\n"
-"                             (Note: not implemented in front-end (OFP) yet.)\n"
-"     -fortran:XXX            pass -XXX to independent semantic analysis\n"
-"                             (useful for turning on specific warnings in front-end)\n"
-"\n"
-"Control code generation:\n"
-"     -rose:unparser:clobber_input_file\n"
-"                               **CAUTION**RED*ALERT**CAUTION**\n"
-"                               If you don't know what this option does, don't use it!\n"
-"                               We are not responsible for any mental or physical damage\n"
-"                               that you will incur with the use of this option :)\n"
-"\n"
-"                               Note: This option breaks parallel builds, so make sure\n"
-"                               that with this option you use ROSE, and run your build\n"
-"                               system, sequentially.\n"
-"                               **CAUTION**RED*ALERT**CAUTION**\n"
-"     -rose:unparse_line_directives\n"
-"                               unparse statements using #line directives with\n"
-"                               reference to the original file and line number\n"
-"                               to support view of original source in debuggers\n"
-"                               and external tools\n"
-"     -rose:unparse_function_calls_using_operator_syntax\n"
-"                               unparse overloaded operators using operator syntax\n"
-"                               relevant to C++ only (default is to reproduce use\n"
-"                               defined by the input code).\n"
-"     -rose:unparse_function_calls_using_operator_names\n"
-"                               unparse overloaded operators using operator names \n"
-"                               (not operator syntax) relevant to C++ only (default\n"
-"                               is to reproduce use defined by the input code).\n"
-"     -rose:unparse_instruction_addresses\n"
-"                               Outputs the addresses in left column (output\n"
-"                               inappropriate as input to assembler)\n"
-"     -rose:unparse_raw_memory_contents\n"
-"                               Outputs memory contents in left column\n"
-"     -rose:unparse_binary_file_format\n"
-"                               Outputs binary executable file format information\n"
-"     -rose:unparse_includes\n"
-"                               unparse all include files into the source file.\n"
-"                               This is a backup option for fail-safe processing\n"
-"                               of CPP directives (which can be tricky)\n"
-"     -rose:C_output_language\n"
-"                             force use of C as output language (currently\n"
-"                               generates C/C++)\n"
-"     -rose:Cxx_output_language\n"
-"                             force use of C++ as output language\n"
-"     -rose:Fortran_output_language\n"
-"                             force use of Fortran as output language\n"
-"     -rose:outputFormat      generate code in either fixed/free format (fortran only)\n"
-"                               options are: fixedOutput|fixedFormatOutput or \n"
-"                                            freeOutput|freeFormatOutput\n"
-"     -rose:backendCompileFormat\n"
-"                             use backend compiler option to compile generated code\n"
-"                               in either fixed/free format (fortran only)\n"
-"                               options are: fixedOutput|fixedFormatOutput or \n"
-"                                            freeOutput|freeFormatOutput\n"
-"     -rose:unparseHeaderFilesRootFolder FOLDERNAME\n"
-"                             A relative or an absolute path to the root folder,\n"
-"                             in which unparsed header files are stored.\n"
-"                             Note that the folder must be empty (or does not exist).\n"
-"                             If not specified, the default relative location _rose_ \n"
-"                             is used.\n"
-"     -rose:applicationRootDirectory DIRECTORYNAME\n"
-"                             A relative or an absolute path to the root folder,\n"
-"                             in which all application files will use for the unparsing \n"
-"                             of source files and header files. If not specified, the default \n"
-"                             location is the current directory. \n"
-"     -rose:unparse_in_same_directory_as_input_file\n"
-"                             Build the generated source file (unparse) in the same directory as \n"
-"                             the input source file.  This allows the backend compiler \n"
-"                             to compile the generated file exactly the same as the \n"
-"                             input would have been compiled (following original header file \n"
-"                             source path lookup rules precisely (this is rarely required)). \n"
-"     -rose:suppressConstantFoldingPostProcessing\n"
-"                             Optimization to avoid postprocessing phase in C code only\n"
-"                             This option has only shown an effect on the 2.5 million line\n"
-"                             wireshark application\n"
-"                             (not presently compatable with OpenMP or C++ code)\n"
-"     -rose:noclobber_output_file\n"
-"                             force error on rewrite of existing output file (default: false).\n"
-"     -rose:noclobber_if_different_output_file\n"
-"                             force error on rewrite of existing output file only if result\n"
-"                             if a different output file (default: false). \n"
-"     -rose:appendPID\n"
-"                             append PID into the temporary output name. \n"
-"                             This can avoid issues in parallel compilation (default: false). \n"
-"     -rose:unparse_tokens\n"
-"                             Unparses code using original token stream where possible.\n"
-"                             Only C/C++ are supported now. Fortran support is under development \n"
-"     -rose:unparse_using_leading_and_trailing_token_mappings \n"
-"                             unparses code using original token stream and forces the output \n"
-"                             of two files representing the unparsing of each statement using \n"
-"                             the token stream mapping to the AST.  The token_leading_* file \n"
-"                             uses the mapping and the leading whitespace mapping between \n"
-"                             statements, where as the token_trailing_* file uses the mapping \n"
-"                             and the trailing whitespace mapping between statements.  Both \n"
-"                             files should be identical, and the same as the input file. \n"
-"     -rose:unparse_template_ast\n"
-"                             unparse C++ templates from their AST, not from strings stored by EDG. \n"
-"\n"
-"Debugging options:\n"
-"     -rose:detect_dangling_pointers LEVEL \n"
-"                             detects references to previously deleted IR nodes in the AST\n"
-"                             (part of AST consistancy tests, default is false since some codes fail this test)\n"
-"                             LEVEL is one of:\n"
-"                               0: off (does not issue warning)\n"
-"                               1: on (issues warning with information)\n"
-"                               2: on (issues error and exists)\n"
-"\n"
-"Testing Options:\n"
-"     -rose:negative_test     test ROSE using input that is expected to fail\n"
-"                               (returns 0 if input test failed, else error if\n"
-"                               passed)\n"
-"     -rose:test LEVEL        limit parts of ROSE which are run\n"
-"                             LEVEL is one of:\n"
-"                               0: transparent (ROSE translator does nothing)\n"
-"                               1: run the KCC front end only (assumes it is in\n"
-"                                    path)\n"
-"                               2: run the newer version of EDG (compiled\n"
-"                                    separately from SAGE) 'edgFrontEnd'\n"
-"                                    (see\n"
-"                                    src/frontend/EDG/EDG_3.3/src/Makefile.am\n"
-"                                    for instructions on how to build EDG\n"
-"                                    without SAGE III)\n"
-"                               3: run internal (older) version of edg front end\n"
-"                                    (deprecated option)\n"
-"                               4: same as 3 plus parse into Sage III program\n"
-"                                    tree\n"
-"                               5: same as 4 plus unparse untransformed source\n"
-"                                    code\n"
-"                               6: same as 5 plus compile generated source code\n"
-"                               7: same as 5 plus build higher level grammars\n"
-"                                    before unparsing\n"
-"                               8: same as 6 plus run midend (transformations)\n"
-"                                    before unparsing\n"
-"\n"
-"Report bugs to <dquinlan@llnl.gov>.\n"
-  , stdout);
+       fputs(
+           "\n"
+           "This ROSE translator provides a means for operating on C, C++, and "
+           "Fortran source code.\n"
+           "\n"
+           "Usage: rose [OPTION]... FILENAME...\n"
+           "\n"
+           "If a long option shows a mandatory argument, it is mandatory for "
+           "the equivalent\n"
+           "short option as well, and similarly for optional arguments.\n"
+           "\n"
+           "Main operation mode:\n"
+           "     -rose:(o|output) FILENAME\n"
+           "                             file containing final unparsed C++ "
+           "code\n"
+           "                             (relative or absolute paths are "
+           "supported)\n"
+           "     -rose:keep_going\n"
+           "                             Similar to GNU Make's --keep-going "
+           "option.\n"
+           "\n"
+           "                             If ROSE encounters an error while "
+           "processing your\n"
+           "                             input code, ROSE will simply run your "
+           "backend compiler on\n"
+           "                             your original source code file, as "
+           "is, without modification.\n"
+           "\n"
+           "                             This is useful for compiler tests. "
+           "For example,\n"
+           "                             when compiling a 100K LOC "
+           "application, you can\n"
+           "                             try to compile as much as possible, "
+           "ignoring failures,\n"
+           "                             in order to gauage the overall status "
+           "of your translator,\n"
+           "                             with respect to that application.\n"
+           "\n"
+           "Operation modifiers:\n"
+           "     -rose:output_warnings   compile with warnings mode on\n"
+           "     -rose:C_only, -rose:C   follow C89 standard, disable C++\n"
+           "     -rose:C89_only, -rose:C89\n"
+           "                             follow C89 standard, disable C++\n"
+           "     -rose:C99_only, -rose:C99\n"
+           "                             follow C99 standard, disable C++\n"
+           "     -rose:C11_only, -rose:C11\n"
+           "                             follow C11 standard, disable C++\n"
+           "     -rose:C14_only, -rose:C14\n"
+           "                             follow C14 standard, disable C++\n"
+           "     -rose:Cxx_only, -rose:Cxx\n"
+           "                             follow C++89 standard\n"
+           "     -rose:Cxx11_only, -rose:Cxx11\n"
+           "                             follow C++11 standard\n"
+           "     -rose:Cxx14_only, -rose:Cxx14\n"
+           "                             follow C++14 standard\n"
+           "     -rose:OpenMP, -rose:openmp\n"
+           "                             follow OpenMP 3.0 specification for "
+           "C/C++ and Fortran, perform one of the following actions:\n"
+           "     -rose:OpenMP:parse_only, -rose:openmp:parse_only\n"
+           "                             parse OpenMP directives to OpenMPIR, "
+           "no further actions (default behavior now)\n"
+           "     -rose:OpenMP:ast_only, -rose:openmp:ast_only\n"
+           "                             on top of -rose:openmp:parse_only, "
+           "build OpenMP AST nodes from OpenMPIR, no further actions\n"
+           "     -rose:OpenMP:lowering, -rose:openmp:lowering\n"
+           "                             on top of -rose:openmp:ast_only, "
+           "transform AST with OpenMP nodes into multithreaded code \n"
+           "                             targeting GCC GOMP runtime library\n"
+           "     --rex-omp-ast-only      REX convenience option: equivalent to "
+           "-fopenmp --rose:openmp:ast_only\n"
+           "     --rex-omp-lowering      REX convenience option: equivalent to "
+           "-fopenmp -rose:openmp:lowering -rose:skipfinalCompileStep\n"
+           "     -rose:fortran\n"
+           "                             compile Fortran code, determining "
+           "version of\n"
+           "                             Fortran from file suffix)\n"
+           "     -rose:CoArrayFortran, -rose:CAF, -rose:caf\n"
+           "                             compile Co-Array Fortran code "
+           "(extension of Fortran 2003)\n"
+           "     -rose:CAF2.0, -rose:caf2.0\n"
+           "                             compile Co-Array Fortran 2.0 code "
+           "(Rice CAF extension)\n"
+           "     -rose:Fortran2003, -rose:F2003, -rose:f2003\n"
+           "                             compile Fortran 2003 code\n"
+           "     -rose:Fortran95, -rose:F95, -rose:f95\n"
+           "                             compile Fortran 95 code\n"
+           "     -rose:Fortran90, -rose:F90, -rose:f90\n"
+           "                             compile Fortran 90 code\n"
+           "     -rose:Fortran77, -rose:F77, -rose:f77\n"
+           "                             compile Fortran 77 code\n"
+           "     -rose:Fortran66, -rose:F66, -rose:f66\n"
+           "                             compile Fortran 66 code\n"
+           "     -rose:FortranIV, -rose:FIV, -rose:fIV\n"
+           "                             compile Fortran IV code\n"
+           "     -rose:FortranII, -rose:FII, -rose:fII\n"
+           "                             compile Fortran II code (not "
+           "implemented yet)\n"
+           "     -rose:FortranI, -rose:FI, -rose:fI\n"
+           "                             compile Fortran I code (not "
+           "implemented yet)\n"
+           "     -rose:fortran:ofp:jvm_options\n"
+           "                             Specifies the JVM startup options\n"
+           "     -rose:strict            strict enforcement of ANSI/ISO "
+           "standards\n"
+           "     -rose:compilationPerformance\n"
+           "                             Output compilation performance after "
+           "compilation of input file.\n"
+           "                             Reports internal phases of ROSE "
+           "compilation (time and memory requirements), output to stdout.\n"
+           "                             See also "
+           "\"-rose:compilationPerformanceFile FILE\" for CSV report in a "
+           "file.\n"
+           "     -rose:compilationPerformanceFile FILE\n"
+           "                             filename where compiler performance "
+           "for internal\n"
+           "                             phases (in CSV form) is placed for "
+           "later\n"
+           "                             processing (using "
+           "script/graphPerformance)\n"
+           "     -rose:exit_after_parser just call the parser (C, C++, and "
+           "fortran only)\n"
+           "     -rose:skip_syntax_check skip Fortran syntax checking "
+           "(required for F2003 and Co-Array Fortran code\n"
+           "                             when using gfortran versions greater "
+           "than 4.1)\n"
+           "     -rose:relax_syntax_check skip Fortran syntax checking "
+           "(required for some F90 code\n"
+           "                             when using gfortran based syntax "
+           "checking)\n"
 
-  // Obsolete options
-  // -sage:sage_backend            have EDG call the sage backend
-  // -sage:disable_cp_backend      prevent EDG from calling the cp backend
-  // -rose:outputGrammarTreeFiles  write out program tree representation in C++ grammar (useful for internal debugging)
-  // -rose:outputGrammarTreeFilesForHeaderFiles (include header files in above option (must be specified after above option)
+           "     -rose:skip_transformation\n"
+           "                             read input file and skip all "
+           "transformations\n"
+           "     -rose:skip_unparse      read and process input file but skip "
+           "generation of\n"
+           "                             final C++ output file\n"
+           "     -rose:skipfinalCompileStep\n"
+           "                             read and process input file, \n"
+           "                             but skip invoking the backend "
+           "compiler\n"
+           "     -rose:collectAllCommentsAndDirectives\n"
+           "                             store all comments and CPP directives "
+           "in header\n"
+           "                             files into the AST\n"
+           "     -rose:unparseHeaderFiles\n"
+           "                             unparse all directly or indirectly "
+           "modified\n"
+           "                             header files\n"
+           "     -rose:excludeCommentsAndDirectives PATH\n"
+           "                             provide path to exclude when using "
+           "the\n"
+           "                             collectAllCommentsAndDirectives "
+           "option\n"
+           "     -rose:excludeCommentsAndDirectivesFrom FILENAME\n"
+           "                             provide filename to file with paths "
+           "to exclude\n"
+           "                             when using the "
+           "collectAllCommentsAndDirectives\n"
+           "                             option\n"
+           "     -rose:includeCommentsAndDirectives PATH\n"
+           "                             provide path to include when using "
+           "the\n"
+           "                             collectAllCommentsAndDirectives "
+           "option\n"
+           "     -rose:includeCommentsAndDirectivesFrom FILENAME\n"
+           "                             provide filename to file with paths "
+           "to include\n"
+           "                             when using the "
+           "collectAllCommentsAndDirectives\n"
+           "                             option\n"
+           "     -rose:skip_commentsAndDirectives\n"
+           "                             ignore all comments and CPP "
+           "directives (can\n"
+           "                             generate (unparse) invalid code if "
+           "not used with\n"
+           "                             -rose:unparse_includes)\n"
+           "     -rose:prelink           activate prelink mechanism to force "
+           "instantiation\n"
+           "                             of templates and assignment to files\n"
+           "     -rose:instantiation XXX control template instantiation\n"
+           "                             XXX is one of (none, used, all, "
+           "local)\n"
+           "     -rose:read_executable_file_format_only\n"
+           "                             ignore disassemble of instructions "
+           "(helps debug binary \n"
+           "                             file format for binaries)\n"
+           "     -rose:skipAstConsistancyTests\n"
+           "                             skip AST consitancy testing (for "
+           "better performance)\n"
+           "     -rose:no_optimize_flag_for_frontend\n"
+           "                             ignore use of __builtin functions in "
+           "frontend processing\n"
+           "                             all optimization specified is still "
+           "done on ROSE generated code\n"
+           "\n"
+           "Plugin Mode:\n"
+           "     -rose:plugin_lib <shared_lib_filename>\n"
+           "                             Specify the file path to a shared "
+           "library built from plugin source files \n"
+           "                             This option can repeat multiple times "
+           "to load multiple libraries \n"
+           "     -rose:plugin_action <act_name>\n"
+           "                             Specify the plugin action to be "
+           "executed\n"
+           "                             This option can repeat multiple times "
+           "to execute multiple actions \n"
+           "                             in the order shown up in command line "
+           "\n"
+           "     -rose:plugin_arg_<act_name>  <option>\n"
+           "                             Specify one option to be passed to a "
+           "plugin named act_name\n"
+           "                             This option can repeat multiple times "
+           "to provide multiple options to a plugin \n"
+           "\n"
+           "GNU g++ options recognized:\n"
+           "     -ansi                   equivalent to -rose:strict\n"
+           "     -fno-implicit-templates disable output of template "
+           "instantiations in\n"
+           "                             generated source\n"
+           "     -fno-implicit-inline-templates\n"
+           "                             disable output of inlined template "
+           "instantiations\n"
+           "                             in generated source\n"
+           "     -S                      gnu option trivial\n"
+           "     -u (-undefined)         gnu option trivial\n"
+           "     -version-info <name>    gnu option trivial (option not passed "
+           "on to linker yet, \n"
+           "                             incomplete implementation)\n"
+           "     -MM <filename>          gnu Makefile dependence generation "
+           "(option not passed \n"
+           "                             on to compiler yet, incomplete "
+           "implementation)\n"
+           "\n"
+           "Informative output:\n"
+           "     -rose:help, --help, -help, --h\n"
+           "                             print this help, then exit\n"
+           "     -rose:version, --version, --V\n"
+           "                             print ROSE program version number, "
+           "then exit\n"
+           "     -rose:markGeneratedFiles\n"
+           "                             add \"#define ROSE_GENERATED_CODE\" "
+           "to top of all\n"
+           "                               generated code\n"
+           "     -rose:verbose [LEVEL]   verbosely list internal processing "
+           "(0, 1, 2, 4) with default=0\n"
+           "                                      0 (NONE), 1(KEY), 2(INFO), "
+           "3(MARCH), 4(TRACE)\n"
+           "                               Higher values generate more output "
+           "(can be\n"
+           "                               applied to individual files and to "
+           "the project\n"
+           "                               separately, TBI).\n"
+           "     -rose:output_parser_actions\n"
+           "                             call parser with --dump option "
+           "(fortran only)\n"
+           "     -rose:embedColorCodesInGeneratedCode LEVEL\n"
+           "                             embed color codes into generated "
+           "output for\n"
+           "                               visualization of highlighted text "
+           "using tview\n"
+           "                               tool for constructs specified by "
+           "LEVEL\n"
+           "                             LEVEL is one of:\n"
+           "                               1: missing position information\n"
+           "                               2: compiler-generated code\n"
+           "                               3: other code\n"
+           "     -rose:generateSourcePositionCodes LEVEL\n"
+           "                             generate separate file of source "
+           "position\n"
+           "                               information for highlighting "
+           "original source\n"
+           "                               file using tview tool for "
+           "constructs specified\n"
+           "                               by LEVEL\n"
+           "                             LEVEL is one of:\n"
+           "                               1: statements, preprocessor "
+           "directives and\n"
+           "                                  comments\n"
+           "                               2: expressions\n"
+           "\n"
 
-  // DQ (5/20/2005): More obsolete options
-  // -edg:disable_edg_backend      prevent EDG from calling the sage backend
-  // -sage:disable_sage_backend    prevent EDG from calling the sage backend
-  // -sage:enable_cp_backend       have EDG call the cp backend
-  // -sage:preinit_il              do a preinit stage between the front-end and
+           "\n"
+           "Control Fortran frontend processing:\n"
+           "     -rose:cray_pointer_support\n"
+           "                             turn on internal support for cray "
+           "pointers\n"
+           "                             (Note: not implemented in front-end "
+           "(OFP) yet.)\n"
+           "     -fortran:XXX            pass -XXX to independent semantic "
+           "analysis\n"
+           "                             (useful for turning on specific "
+           "warnings in front-end)\n"
+           "\n"
+           "Control code generation:\n"
+           "     -rose:unparser:clobber_input_file\n"
+           "                               **CAUTION**RED*ALERT**CAUTION**\n"
+           "                               If you don't know what this option "
+           "does, don't use it!\n"
+           "                               We are not responsible for any "
+           "mental or physical damage\n"
+           "                               that you will incur with the use of "
+           "this option :)\n"
+           "\n"
+           "                               Note: This option breaks parallel "
+           "builds, so make sure\n"
+           "                               that with this option you use ROSE, "
+           "and run your build\n"
+           "                               system, sequentially.\n"
+           "                               **CAUTION**RED*ALERT**CAUTION**\n"
+           "     -rose:unparse_line_directives\n"
+           "                               unparse statements using #line "
+           "directives with\n"
+           "                               reference to the original file and "
+           "line number\n"
+           "                               to support view of original source "
+           "in debuggers\n"
+           "                               and external tools\n"
+           "     -rose:unparse_function_calls_using_operator_syntax\n"
+           "                               unparse overloaded operators using "
+           "operator syntax\n"
+           "                               relevant to C++ only (default is to "
+           "reproduce use\n"
+           "                               defined by the input code).\n"
+           "     -rose:unparse_function_calls_using_operator_names\n"
+           "                               unparse overloaded operators using "
+           "operator names \n"
+           "                               (not operator syntax) relevant to "
+           "C++ only (default\n"
+           "                               is to reproduce use defined by the "
+           "input code).\n"
+           "     -rose:unparse_instruction_addresses\n"
+           "                               Outputs the addresses in left "
+           "column (output\n"
+           "                               inappropriate as input to "
+           "assembler)\n"
+           "     -rose:unparse_raw_memory_contents\n"
+           "                               Outputs memory contents in left "
+           "column\n"
+           "     -rose:unparse_binary_file_format\n"
+           "                               Outputs binary executable file "
+           "format information\n"
+           "     -rose:unparse_includes\n"
+           "                               unparse all include files into the "
+           "source file.\n"
+           "                               This is a backup option for "
+           "fail-safe processing\n"
+           "                               of CPP directives (which can be "
+           "tricky)\n"
+           "     -rose:C_output_language\n"
+           "                             force use of C as output language "
+           "(currently\n"
+           "                               generates C/C++)\n"
+           "     -rose:Cxx_output_language\n"
+           "                             force use of C++ as output language\n"
+           "     -rose:Fortran_output_language\n"
+           "                             force use of Fortran as output "
+           "language\n"
+           "     -rose:outputFormat      generate code in either fixed/free "
+           "format (fortran only)\n"
+           "                               options are: "
+           "fixedOutput|fixedFormatOutput or \n"
+           "                                            "
+           "freeOutput|freeFormatOutput\n"
+           "     -rose:backendCompileFormat\n"
+           "                             use backend compiler option to "
+           "compile generated code\n"
+           "                               in either fixed/free format "
+           "(fortran only)\n"
+           "                               options are: "
+           "fixedOutput|fixedFormatOutput or \n"
+           "                                            "
+           "freeOutput|freeFormatOutput\n"
+           "     -rose:unparseHeaderFilesRootFolder FOLDERNAME\n"
+           "                             A relative or an absolute path to the "
+           "root folder,\n"
+           "                             in which unparsed header files are "
+           "stored.\n"
+           "                             Note that the folder must be empty "
+           "(or does not exist).\n"
+           "                             If not specified, the default "
+           "relative location _rose_ \n"
+           "                             is used.\n"
+           "     -rose:applicationRootDirectory DIRECTORYNAME\n"
+           "                             A relative or an absolute path to the "
+           "root folder,\n"
+           "                             in which all application files will "
+           "use for the unparsing \n"
+           "                             of source files and header files. If "
+           "not specified, the default \n"
+           "                             location is the current directory. \n"
+           "     -rose:unparse_in_same_directory_as_input_file\n"
+           "                             Build the generated source file "
+           "(unparse) in the same directory as \n"
+           "                             the input source file.  This allows "
+           "the backend compiler \n"
+           "                             to compile the generated file exactly "
+           "the same as the \n"
+           "                             input would have been compiled "
+           "(following original header file \n"
+           "                             source path lookup rules precisely "
+           "(this is rarely required)). \n"
+           "     -rose:suppressConstantFoldingPostProcessing\n"
+           "                             Optimization to avoid postprocessing "
+           "phase in C code only\n"
+           "                             This option has only shown an effect "
+           "on the 2.5 million line\n"
+           "                             wireshark application\n"
+           "                             (not presently compatable with OpenMP "
+           "or C++ code)\n"
+           "     -rose:noclobber_output_file\n"
+           "                             force error on rewrite of existing "
+           "output file (default: false).\n"
+           "     -rose:noclobber_if_different_output_file\n"
+           "                             force error on rewrite of existing "
+           "output file only if result\n"
+           "                             if a different output file (default: "
+           "false). \n"
+           "     -rose:appendPID\n"
+           "                             append PID into the temporary output "
+           "name. \n"
+           "                             This can avoid issues in parallel "
+           "compilation (default: false). \n"
+           "     -rose:unparse_tokens\n"
+           "                             Unparses code using original token "
+           "stream where possible.\n"
+           "                             Only C/C++ are supported now. Fortran "
+           "support is under development \n"
+           "     -rose:unparse_using_leading_and_trailing_token_mappings \n"
+           "                             unparses code using original token "
+           "stream and forces the output \n"
+           "                             of two files representing the "
+           "unparsing of each statement using \n"
+           "                             the token stream mapping to the AST.  "
+           "The token_leading_* file \n"
+           "                             uses the mapping and the leading "
+           "whitespace mapping between \n"
+           "                             statements, where as the "
+           "token_trailing_* file uses the mapping \n"
+           "                             and the trailing whitespace mapping "
+           "between statements.  Both \n"
+           "                             files should be identical, and the "
+           "same as the input file. \n"
+           "     -rose:unparse_template_ast\n"
+           "                             unparse C++ templates from their AST. "
+           "\n"
+           "\n"
+           "Debugging options:\n"
+           "     -rose:detect_dangling_pointers LEVEL \n"
+           "                             detects references to previously "
+           "deleted IR nodes in the AST\n"
+           "                             (part of AST consistancy tests, "
+           "default is false since some codes fail this test)\n"
+           "                             LEVEL is one of:\n"
+           "                               0: off (does not issue warning)\n"
+           "                               1: on (issues warning with "
+           "information)\n"
+           "                               2: on (issues error and exists)\n"
+           "\n"
+           "Testing Options:\n"
+           "     -rose:negative_test     test ROSE using input that is "
+           "expected to fail\n"
+           "                               (returns 0 if input test failed, "
+           "else error if\n"
+           "                               passed)\n"
+           "     -rose:test LEVEL        limit parts of ROSE which are run\n"
+           "                             LEVEL is one of:\n"
+           "                               0: transparent (ROSE translator "
+           "does nothing)\n"
+           "                               1: run the KCC front end only "
+           "(assumes it is in\n"
+           "                                    path)\n"
+
+           "                               4: same as 3 plus parse into Sage "
+           "III program\n"
+           "                                    tree\n"
+           "                               5: same as 4 plus unparse "
+           "untransformed source\n"
+           "                                    code\n"
+           "                               6: same as 5 plus compile generated "
+           "source code\n"
+           "                               7: same as 5 plus build higher "
+           "level grammars\n"
+           "                                    before unparsing\n"
+           "                               8: same as 6 plus run midend "
+           "(transformations)\n"
+           "                                    before unparsing\n"
+           "\n"
+           "Report bugs to <dquinlan@llnl.gov>.\n",
+           stdout);
+
+       // Obsolete options
+       // -rose:outputGrammarTreeFiles  write out program tree representation in
+       // C++ grammar (useful for internal debugging)
+       // -rose:outputGrammarTreeFilesForHeaderFiles (include header files in
+       // above option (must be specified after above option)
+
+       // DQ (5/20/2005): More obsolete options
    }
 
 void
@@ -2597,16 +2711,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           set_relax_syntax_check(true);
         }
 
-  // TV (04/11/2018): Turn on generation of GraphViz representation of EDG's internal representation
-     set_edg_il_to_graphviz(false);
-     ROSE_ASSERT (get_edg_il_to_graphviz() == false);
-     if ( CommandlineProcessing::isOption(argv,"-rose:","edg_il_to_graphviz",true) == true )
-        {
-          if ( SgProject::get_verbose() >= 1 )
-               printf ("EDG IL to GraphViz ON \n");
-          set_edg_il_to_graphviz(true);
-        }
-
   // DQ (11/27/2020): Turn on generation of GraphViz representation of Clang's internal representation
      set_clang_il_to_graphviz(false);
      ROSE_ASSERT (get_clang_il_to_graphviz() == false);
@@ -2617,25 +2721,18 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           set_clang_il_to_graphviz(true);
         }
 
-  // TV (10/01/2018): ROSE-1424
-     set_no_optimize_flag_for_frontend(false);
-     if ( CommandlineProcessing::isOption(argv,"-rose:","no_optimize_flag_for_frontend",true) == true ) {
-       set_no_optimize_flag_for_frontend(true);
-     }
+        // TV (10/01/2018): ROSE-1424
 
-  // TV (10/08/2018): ROSE-1392
-     set_unparse_edg_normalized_method_ROSE_1392(false);
-     if ( CommandlineProcessing::isOption(argv,"-rose:","unparse_edg_normalized_method_ROSE_1392",true) == true ) {
-       set_unparse_edg_normalized_method_ROSE_1392(true);
-     }
-
-  // DQ (5/24/2015): Record type of optimization (-Os, -O, -O1, -O2, -O3, -O4, -O5), note -O0 means no optimization.
-  // This is required so that when optimization is specified we can turn on the __OPTIMIE__ macro.
-  // See test2015_153.c.
-  // if ( CommandlineProcessing::isOption(argv,"-O","(' '|0|1|2|3|4|5|s)",true) == true )
-     if ( CommandlineProcessing::isOption(argv,"-O","(1|2|3|4|5|s)",true) == true )
-        {
-       // printf ("optimizaztion specified on commend line (specific level provided) \n");
+        // DQ (5/24/2015): Record type of optimization (-Os, -O, -O1, -O2, -O3,
+        // -O4, -O5), note -O0 means no optimization. This is required so that
+        // when optimization is specified we can turn on the __OPTIMIE__ macro.
+        // See test2015_153.c.
+        // if ( CommandlineProcessing::isOption(argv,"-O","('
+        // '|0|1|2|3|4|5|s)",true) == true )
+        if (CommandlineProcessing::isOption(argv, "-O", "(1|2|3|4|5|s)",
+                                            true) == true) {
+          // printf ("optimizaztion specified on commend line (specific level
+          // provided) \n");
           set_optimization(true);
         }
        else
@@ -2693,14 +2790,12 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           set_C14_gnu_only();
         }
 
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(UPC|UPC_only)",true) ||
-          CommandlineProcessing::isOption(argv,"--edg:","(upc)",true) ||
-          CommandlineProcessing::isOption(argv,"-edg:","(upc)",true)
-     ) {
+        if (CommandlineProcessing::isOption(argv, "-rose:", "(UPC|UPC_only)",
+                                            true)) {
           printf ("WARNING: Command line option -rose:UPC is deprecated!\n");
 
           set_UPC_only();
-     }
+        }
 
      // Parsing ROSE's C++ dialect specification
 
@@ -3108,26 +3203,15 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        }
      }
 
-  // UPC: remove edg:restrict option (EDG frontend has been removed)
-     if (get_UPC_only() || get_UPCxx_only()) {
-       CommandlineProcessing::isOption(argv,"-edg:","(restrict)",true);
-       CommandlineProcessing::isOption(argv,"--edg:","(restrict)",true);
-     }
-
    // END parsing standard specifications for C/C++/Fortran (ROSE-1529)
    ////////////////////////////////////////////////////////////////////////
 
+     // remove -rose:upc_threads n
+     int integerOptionForUPCThreads = 0;
+     bool hasRoseUpcThreads = CommandlineProcessing::isOptionWithParameter(
+         argv, "-rose:", "(upc_threads)", integerOptionForUPCThreads, true);
 
-  // two situations: either of -rose:upc_threads n  and --edg:upc_threads n appears.
-  // set flags and remove both.
-     int integerOptionForUPCThreads  = 0;
-     int integerOptionForUPCThreads2 = 0;
-     bool hasRoseUpcThreads = CommandlineProcessing::isOptionWithParameter(argv,"-rose:","(upc_threads)", integerOptionForUPCThreads,true);
-     bool hasEDGUpcThreads  = CommandlineProcessing::isOptionWithParameter(argv,"--edg:","(upc_threads)", integerOptionForUPCThreads2,true);
-
-     integerOptionForUPCThreads = (integerOptionForUPCThreads != 0) ? integerOptionForUPCThreads : integerOptionForUPCThreads2;
-     if (hasRoseUpcThreads||hasEDGUpcThreads)
-        {
+     if (hasRoseUpcThreads) {
        // set ROSE SgFile::upc_threads value, done for ROSE
           set_upc_threads(integerOptionForUPCThreads);
           if ( SgProject::get_verbose() >= 1 )
@@ -3135,7 +3219,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
 
        // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
           Rose::is_UPC_dynamic_threads = true;
-        }
+     }
 
 #if 0
      printf ("After part 2 detection of Intel compiler: get_C_only()   = %s \n",get_C_only() ? "true" : "false");
@@ -3511,16 +3595,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
         }
 
   //
-  // skip_translation_from_edg_ast_to_rose_ast option: This variable is checked in the EDG frontend (4.3)
-  // and if set it will cause the translation from the EDG AST to the ROSE AST to be skipped.  A valid
-  // SgProject and/or SgFile with with SgGlobal (empty) will be built (as I recall).
-  //
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(skip_translation_from_edg_ast_to_rose_ast)",true) == true )
-        {
-          if ( SgProject::get_verbose() >= 1 )
-               printf ("option -rose:skip_translation_from_edg_ast_to_rose_ast found \n");
-          set_skip_translation_from_edg_ast_to_rose_ast(true);
-        }
 
   //
   // skip_transformation option: if transformations of the AST check this variable then the
@@ -3865,77 +3939,18 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
      if ( CommandlineProcessing::isOptionWithParameter(argv,"-rose:","test",integerOption,true) == true )
         {
        // printf ("option -rose:test %d found \n",integerOption);
-          p_testingLevel = integerOption;
+
           switch (integerOption)
              {
                case 0 :
                  // transparent mode (does nothing)
-                 // p_skip_buildHigherLevelGrammars  = true;
-                    p_disable_edg_backend  = true; // This variable should be called frontend NOT backend???
-                    p_skip_transformation  = true;
-                    p_skip_unparse         = true;
-                    p_skipfinalCompileStep = true;
-                    break;
-               case 1 :
-                 // run the KCC front end only (can't unparse or compile output)
-                 // p_skip_buildHigherLevelGrammars  = true;
-                    p_new_frontend         = true;
-                    p_KCC_frontend         = true;
-                    p_skip_transformation  = true;
-                    p_skip_unparse         = true;
-                    p_skipfinalCompileStep = true;
-                    break;
-               case 2 :
-                 // run the newer version of EDG (compiled separately from SAGE) "edgFrontEnd"
-                 // (can't unparse or compile output)
-                 // p_skip_buildHigherLevelGrammars  = true;
-                    p_new_frontend         = true;
-                    p_skip_transformation  = true;
-                    p_skip_unparse         = true;
-                    p_skipfinalCompileStep = true;
-                    break;
-               case 3 :
-                 // run internal (older) version of edg front end (compiled with SAGE)
-                 // p_skip_buildHigherLevelGrammars  = true;
-                    p_skip_transformation  = true;
-                    p_skip_unparse         = true;
-                    p_skipfinalCompileStep = true;
-                    break;
-               case 4 :
-                 // all of 3 (above) plus parse into SAGE program tree
-                 // p_skip_buildHigherLevelGrammars  = true;
-                    p_skip_transformation  = true;
-                    p_skip_unparse         = true;
-                    p_skipfinalCompileStep = true;
-                    break;
-               case 5 :
-                 // all of 4 (above) plus unparse to generate (untransformed source code)
-                 // p_skip_buildHigherLevelGrammars  = true;
-                    p_skip_transformation  = true;
-                    p_skipfinalCompileStep = true;
-                    break;
-               case 6 :
-                 // all of 4 (above) plus compile generated source code
-                 // p_skip_buildHigherLevelGrammars  = true;
-                    p_skip_transformation  = true;
-                    break;
-               case 7 :
-                 // all of 5 (above) plus parse into higher level grammars before unparsing
-                    p_skip_transformation  = true;
-                    p_skipfinalCompileStep = true;
-                    break;
-               case 8 :
-               // all of 7 (above) plus compile resulting unparsed code (without transformations)
-                    p_skip_transformation  = true;
-                    break;
-               case 9 :
-               // all of 8 (above) plus run transformations before unparsing (do everything)
-                    break;
+                 p_skip_transformation = true;
+                 p_skip_unparse = true;
+                 p_skipfinalCompileStep = true;
+                 break;
                default:
-                 // default mode is an error
-                    printf ("Default reached in processing -rose:test # option (use 0-6, input option = %d) \n",integerOption);
-                    ROSE_ABORT();
-                    break;
+                 // DQ (12/22/2021): Other test levels are obsolete.
+                 break;
              }
         }
 
@@ -3966,7 +3981,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
 #endif
           p_useBackendOnly = true;
        // p_skip_buildHigherLevelGrammars  = true;
-          p_disable_edg_backend  = true; // This variable should be called frontend NOT backend???
+
           p_skip_transformation  = true;
           p_skip_unparse         = true;
           p_skipfinalCompileStep = false;
@@ -3986,7 +4001,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
        // printf ("/* option -S found (just run backend compiler with -S to call gcc) */ \n");
           p_useBackendOnly = true;
        // p_skip_buildHigherLevelGrammars  = true;
-          p_disable_edg_backend  = true; // This variable should be called frontend NOT backend???
+
           p_skip_transformation  = true;
           p_skip_unparse         = true;
           p_skipfinalCompileStep = false;
@@ -4010,7 +4025,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
 #endif
           p_useBackendOnly = true;
        // p_skip_buildHigherLevelGrammars  = true;
-          p_disable_edg_backend  = true; // This variable should be called frontend NOT backend???
+
           p_skip_transformation  = true;
           p_skip_unparse         = true;
           p_skipfinalCompileStep = false;
@@ -4184,7 +4199,6 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
   // DQ (5/19/2005): The output file name is constructed from the input source name (as I recall)
   // optionCount = sla(argv, "-rose:", "($)^", "(o|output)", &p_unparse_output_filename ,1);
 
-     optionCount = sla(argv, "-rose:", "($)", "(skip_translation_from_edg_ast_to_rose_ast)",1);
      optionCount = sla(argv, "-rose:", "($)", "(skip_transformation)",1);
      optionCount = sla(argv, "-rose:", "($)", "(skip_unparse)",1);
      optionCount = sla(argv, "-rose:", "($)", "(skip_parser)",1);
@@ -4212,7 +4226,7 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
 
      optionCount = sla(argv, "-rose:", "($)", "(outputGrammarTreeFiles)",1);
      optionCount = sla(argv, "-rose:", "($)", "(outputGrammarTreeFilesForHeaderFiles)",1);
-     optionCount = sla(argv, "-rose:", "($)", "(outputGrammarTreeFilesForEDG)",1);
+
      optionCount = sla(argv, "-rose:", "($)", "(new_unparser)",1);
      optionCount = sla(argv, "-rose:", "($)", "(negative_test)",1);
      optionCount = sla(argv, "-rose:", "($)", "(strict)",1);
@@ -4342,17 +4356,8 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
   // DQ (9/20/2018): Removing option to specify support for header file unparsing report.
      optionCount = sla(argv, "-rose:", "($)", "(headerFileUnparsingReport)",1);
 
-  // TV (04/11/2018): Generates GraphViz from EDG internal representation
-     optionCount = sla(argv, "-rose:", "($)", "edg_il_to_graphviz",1);
-
   // DQ (11/27/2020): Generates GraphViz from Clang internal representation
      optionCount = sla(argv, "-rose:", "($)", "clang_il_to_graphviz",1);
-
-  // TV (10/04/2018): Do not pass -D__OPTIMIZE__ to EDG frontend (ROSE-1424)
-     optionCount = sla(argv, "-rose:", "($)", "no_optimize_flag_for_frontend",1);
-
-  // TV (10/09/2018): ROSE-1392
-     optionCount = sla(argv, "-rose:", "($)", "unparse_edg_normalized_method_ROSE_1392",1);
 
   // TV (11/20/2018): ROSE-1529: removed non-standard standard selection
   // Rasmussen (11/17/2018): ROSE-1584: separated "++" into single characters [+][+] for regex handling.
@@ -4377,46 +4382,6 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
           for (size_t i=0; i < argv.size(); i++)
              printf ("     argv[%" PRIuPTR "] = %s \n",i,argv[i].c_str());
         }
-#endif
-   }
-
-void
-SgFile::stripEdgCommandLineOptions ( vector<string> & argv )
-   {
-  // Strip out the EDG specific commandline options the assume all
-  // other arguments are to be passed onto the C or C++ compiler
-
-#if 0
-     if ( (ROSE_DEBUG >= 0) || (get_verbose() > 1) )
-        {
-          Rose_STL_Container<string> l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
-          printf ("In SgFile::stripEdgCommandLineOptions: argv = \n%s \n",StringUtility::listToString(l).c_str());
-        }
-#endif
-
-  // Split out the EDG options (ignore the returned Rose_STL_Container<string> object)
-     CommandlineProcessing::removeArgs (argv,"-edg:");
-     CommandlineProcessing::removeArgs (argv,"--edg:");
-     CommandlineProcessing::removeArgsWithParameters (argv,"-edg_parameter:");
-     CommandlineProcessing::removeArgsWithParameters (argv,"--edg_parameter:");
-
-  // Remove REX-specific OpenMP convenience options
-     CommandlineProcessing::removeArgs (argv,"--rex-omp-ast-only");
-     CommandlineProcessing::removeArgs (argv,"--rex-omp-lowering");
-
-  // DQ (2/20/2010): Remove this option when building the command line for the vendor compiler.
-
-  // DQ (12/9/2016): Eliminating a warning that we want to be an error: -Werror=unused-but-set-variable.
-     int optionCount = 0;
-
-     optionCount = sla(argv, "--edg:", "($)", "(no_warnings)",1);
-
-  // DQ (12/9/2016): Eliminating a warning that we want to be an error: -Werror=unused-but-set-variable.
-     ROSE_ASSERT(optionCount >= 0);
-
-#if 0
-     Rose_STL_Container<string> l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
-     printf ("In SgFile::stripEdgCommandLineOptions: argv = \n%s \n",StringUtility::listToString(l).c_str());
 #endif
    }
 

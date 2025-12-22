@@ -650,159 +650,8 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
                stmt->get_file_info()->display("In statementFromFile(): token stream test: debug");
                printf ("#################################################################### \n");
 #endif
-               string statementfilename = stmt->get_file_info()->get_physical_filename();
-               bool isInIncludeFileMap = EDG_ROSE_Translation::edg_include_file_map.find(statementfilename) != EDG_ROSE_Translation::edg_include_file_map.end();
-
-#if DEBUG_STATEMENT_FROM_FILE
-               printf ("statementfilename      = %s \n",statementfilename.c_str());
-               printf ("isTransformation       = %s \n",isTransformation ? "true" : "false");
-               printf ("containsTransformation = %s \n",containsTransformation ? "true" : "false");
-               printf ("isInIncludeFileMap     = %s \n",isInIncludeFileMap ? "true" : "false");
-#endif
-            // if (isTransformation == false && containsTransformation == false && EDG_ROSE_Translation::edg_include_file_map.find(statementfilename) != EDG_ROSE_Translation::edg_include_file_map.end())
-               if (isTransformation == false && containsTransformation == false && isInIncludeFileMap == true)
-                  {
-                    SgIncludeFile* includeFile = EDG_ROSE_Translation::edg_include_file_map[statementfilename];
-                    ROSE_ASSERT(includeFile != NULL);
-
-                    SgSourceFile* header_file_asssociated_source_file = includeFile->get_source_file();
-
-#if DEBUG_STATEMENT_FROM_FILE
-                    printf ("Processing header file: header_file_asssociated_source_file = %p \n",header_file_asssociated_source_file);
-#endif
-                 // DQ (3/14/2021): This is null for rose_edg_required_macros_and_functions.h (pre-included for all ROSE processed code).
-                 // ROSE_ASSERT(header_file_asssociated_source_file != NULL);
-                    if (header_file_asssociated_source_file != NULL)
-                       {
-#if DEBUG_STATEMENT_FROM_FILE
-                         printf ("case header_file_asssociated_source_file != NULL: header_file_asssociated_source_file = %p \n",header_file_asssociated_source_file);
-                         printf (" --- filename = %s \n",header_file_asssociated_source_file->getFileName().c_str());
-#endif
-#if 0
-                      // Printout the source files for which we have associated token streams.
-#endif
-                         if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
-                            {
-                           // This is a statement for which we might have a token subsequence.
-#if DEBUG_STATEMENT_FROM_FILE
-                              printf ("This is a statement for which we have a token subsequence \n");
-#endif
-#if DEBUG_USING_CURPRINT
-                              curprint ("\n/* This is a statement for which we have a token subsequence */ \n");
-#endif
-#if DEBUG_STATEMENT_FROM_FILE && 1
-                              printf ("Output the list of files with computed token subsequence lists: \n");
-                              std::map<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >::iterator i = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
-                              while (i != Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
-                                 {
-                                   SgSourceFile* sourceFile = i->first;
-                                   ROSE_ASSERT(sourceFile != NULL);
-                                   printf (" --- sourceFile = %p = %s filename = %s \n",sourceFile,sourceFile->class_name().c_str(),sourceFile->getFileName().c_str());
-                                   i++;
-                                 }
-#endif
-                              std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap = header_file_asssociated_source_file->get_tokenSubsequenceMap();
-#if DEBUG_STATEMENT_FROM_FILE
-                              printf (" --- tokenStreamSequenceMap.size() = %zu \n",tokenStreamSequenceMap.size());
-#endif
-#if DEBUG_USING_CURPRINT
-                              curprint ( string("\n/* --- tokenStreamSequenceMap.size() = " ) + StringUtility::numberToString(tokenStreamSequenceMap.size()) + " */ \n");
-#endif
-#if DEBUG_STATEMENT_FROM_FILE && 1
-                           // Printout the token stream so that we know it is the correct one.
-                              std::map<SgNode*,TokenStreamSequenceToNodeMapping*>::iterator j = tokenStreamSequenceMap.begin();
-                              while (j != tokenStreamSequenceMap.end())
-                                 {
-                                   SgNode* node = j->first;
-                                   ROSE_ASSERT(node != NULL);
-                                   printf (" --- node = %p = %s name = %s \n",node,node->class_name().c_str(),SageInterface::get_name(node).c_str());
-                                   j++;
-                                 }
-#endif
-                              if (tokenStreamSequenceMap.find(stmt) != tokenStreamSequenceMap.end())
-                                 {
-                                // The token sequence IS available for this statement.
-#if DEBUG_STATEMENT_FROM_FILE
-                                   printf ("############################################################# \n");
-                                   printf ("############################################################# \n");
-                                   printf ("In statementFromFile(): token stream subsequence IS available \n");
-                                   printf ("############################################################# \n");
-                                   printf ("############################################################# \n");
-#endif
-                                 }
-                                else
-                                 {
-                                // The token sequence is NOT available for this statement.
-#if DEBUG_STATEMENT_FROM_FILE
-                                   printf ("################################################################# \n");
-                                   printf ("################################################################# \n");
-                                   printf ("In statementFromFile(): token stream subsequence is NOT available \n");
-                                   printf ("################################################################# \n");
-                                   printf ("################################################################# \n");
-#endif
-                                   statementInFile = false;
-#if 0
-                                // DQ (4/11/2021): I think that this case allows header files of the generated library file in the code segregation to be
-                                // processed and skipped, since they are not supported in the token sequence constrcution (becasue it would be redundant).
-                                // DQ (4/10/2021): Make this an error (at least while I am debugging why the global scope of a header file is not being unparsed).
-                                   printf ("Exiting as a test! \n");
-                                   ROSE_ASSERT(false);
-#endif
-                                 }
-                            }
-                           else
-                            {
-                           // DQ (4/11/2021): If we are only unparsing headers without the token unparsing, then this is true,
-                           // else if we needed the token subsequences, then it is false.
-                           // statementInFile = false;
-                           // if (sourceFile->get_unparseHeaderFiles() == true)
-                              if (sourceFile->get_unparse_tokens() == true)
-                                 {
-                                   statementInFile = false;
-                                 }
-                                else
-                                 {
-                                // DQ (4/11/2021): If we are not using the token, then we need not have found them, but we
-                                // should be unparsing the header files.
-                                   ROSE_ASSERT(sourceFile->get_unparseHeaderFiles() == true);
-#if DEBUG_STATEMENT_FROM_FILE
-                                   printf ("Comparing filename: sourceFilename = %s \n",sourceFilename.c_str());
-                                   printf (" ----------------statementfilename = %s \n",statementfilename.c_str());
-#endif
-                                // DQ (4/11/2021): if the token subsequence is unavailable then we also have to check the names.
-                                // This is a bit more efficent if we use file_ids instead of strings.
-                                   if (sourceFilename == statementfilename)
-                                      {
-                                        statementInFile = true;
-                                      }
-                                     else
-                                      {
-                                        statementInFile = false;
-                                      }
-                                 }
-
-#if DEBUG_STATEMENT_FROM_FILE
-                              printf ("################################################################ \n");
-                              printf ("################################################################ \n");
-                              printf ("In statementFromFile(): Token map is not available for this file (but unparsing the header files without the tokens is OK) \n");
-                              printf ("################################################################ \n");
-                              printf ("################################################################ \n");
-#endif
-#if 0
-                              printf ("Exiting as a test! \n");
-                              ROSE_ASSERT(false);
-#endif
-                            }
-                       }
-                      else
-                       {
-#if DEBUG_STATEMENT_FROM_FILE
-                         printf ("In statementFromFile(): case header_file_asssociated_source_file == NULL \n");
-#endif
-                       }
-                  }
-                 else
-                  {
+               string statementfilename =
+                   stmt->get_file_info()->get_physical_filename();
 #if DEBUG_STATEMENT_FROM_FILE
                     printf ("Skipping processing of header file \n");
 #endif
@@ -819,8 +668,7 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
 #endif
                               statementInFile = true;
                             }
-                       }
-                  }
+                    }
              }
 
 #if 1
@@ -852,7 +700,7 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
 #if 0
             // DQ (5/28/2019): I think we should allow this to be unparsed, and so that any attached CPP directives
             // can be ouput, even if within the unparser we don't output the function definition.
-               if (sourcefile == NULL || sourcefile->get_unparse_edg_normalized_method_ROSE_1392() == false)
+               if (true)
                   {
 #if 0
                     printf ("In statementFromFile(): Detected a normalized template declaration: functionDeclaration = %p = %s name = %s \n",

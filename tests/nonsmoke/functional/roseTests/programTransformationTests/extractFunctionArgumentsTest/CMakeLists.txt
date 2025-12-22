@@ -11,7 +11,7 @@ include(${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/Cxx
 set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 
 set(normalizationTranslator_SWITCHES
-	--edg:no_warnings -w -rose:verbose 0 -I${TESTCODE_DIR}
+	 -w -rose:verbose 0 -I${TESTCODE_DIR}
   -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
 
 foreach(file_to_test ${ROSE__CXX_TESTS})

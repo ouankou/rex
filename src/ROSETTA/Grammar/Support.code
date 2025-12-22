@@ -6350,7 +6350,7 @@ public:
 
        // DQ (6/17/2005): I think that this should be a static function and perhaps moved to SgProject instead of in SgFile
       //! function that removes all EDG related options from a command line
-          static void stripEdgCommandLineOptions ( std::vector<std::string> & argv );
+
 
        // DQ (4/2/2011): Added Fortran specific support to filter command line options from the backend compiler's command line.
       //! function that removes all OFP related options from a command line
@@ -6761,7 +6761,7 @@ HEADER_APPLICATION_PROJECT_START
 
        // DQ: bool values on the SgFile nodes which can be queried on the SgProject
        // nodes (must be the same across all SgFile nodes in the project).
-          bool get_skip_translation_from_edg_ast_to_rose_ast (void) const;
+
           bool get_skip_transformation (void) const;
           bool get_skip_unparse (void) const;
           bool get_useBackendOnly (void) const;
@@ -16047,7 +16047,7 @@ SgFile::initialization()
      p_skip_unparse            = false;
 
   // DQ (11/1/2011): Added support to skip translation of EDG AST to ROSE AST.
-     p_skip_translation_from_edg_ast_to_rose_ast = false;
+
 
 #if 1
   // The default should be to act like a C++ compiler
@@ -16104,24 +16104,7 @@ SgFile::initialization()
   // DQ (1/13/2006): Initialize new AstAttributeMechanism pointer (moved from SgNode)
      p_attributeMechanism = NULL;
 
-     p_KCC_frontend            = false;
 
-  // Alternatively we can call the new edg frontend to test the edg process
-     p_new_frontend            = false;
-
-  // controls call to the edg_main (disables all processing
-  // and acts like a shell which calls the compiler)
-     p_disable_edg_backend     = false;
-
-  // Disable parsing of the EDG program tree into the SAGE program tree
-     p_disable_sage_backend    = false;
-
-  // Shorthand form for different levels of testing  (default is -1)
-     p_testingLevel            = -1;
-
-  // enable processing specific to templates
-     p_preinit_il              = false;
-     p_enable_cp_backend       = false;
 
   // p_outputGrammarTreeFiles  = false;  // default should be false (set to true while debugging)
   // p_outputGrammarTreeFilesForHeaderFiles = false; // default is to skip headers
@@ -16265,9 +16248,7 @@ SgFile::initialization()
      p_backendCompilerErrorCode = 0;
 
   // DQ (9/19/2019): Added these missing variable initializations.
-     p_edg_il_to_graphviz                      = false;
-     p_no_optimize_flag_for_frontend           = false;
-     p_unparse_edg_normalized_method_ROSE_1392 = false;
+
 
   // DQ (4/24/2021): Made p_header_file_unparsing_optimization a static data member.
   // DQ (9/19/2019): Support optimizations of header file unparsing (specifically restricting
@@ -16479,7 +16460,7 @@ SgFile::compileOutput ( int fileNameIndex )
 
      if (get_C_only() || get_Cxx_only() || get_Fortran_only() )
         {
-          stripEdgCommandLineOptions( argv );
+
         }
 
   // Pei-Hung: 12/20/2021, strip out options for frontend parsing.  Needed by ada2cpp
@@ -16862,7 +16843,7 @@ SgFile::display ( const std::string & label ) const
      printf ("     p_exit_after_parser                         = %s \n",(p_exit_after_parser == true) ? "true" : "false");
 
      printf ("     p_skip_syntax_check                         = %s \n",(p_skip_syntax_check      == true) ? "true" : "false");
-     printf ("     p_skip_translation_from_edg_ast_to_rose_ast = %s \n",(p_skip_translation_from_edg_ast_to_rose_ast == true) ? "true" : "false");
+
      printf ("     p_skip_transformation                       = %s \n",(p_skip_transformation    == true) ? "true" : "false");
      printf ("     p_skip_unparse                              = %s \n",(p_skip_unparse           == true) ? "true" : "false");
      printf ("     p_skipfinalCompileStep                      = %s \n",(p_skipfinalCompileStep   == true) ? "true" : "false");
@@ -16900,14 +16881,7 @@ SgFile::display ( const std::string & label ) const
 
      printf ("     p_preprocessorDirectivesAndCommentsList is %s pointer \n",(p_preprocessorDirectivesAndCommentsList != NULL) ? "VALID" : "NULL");
 
-     printf ("     p_KCC_frontend                              = %s \n",(p_KCC_frontend                         == true) ? "true" : "false");
-     printf ("     p_new_frontend                              = %s \n",(p_new_frontend                         == true) ? "true" : "false");
-     printf ("     p_disable_edg_backend                       = %s \n",(p_disable_edg_backend                  == true) ? "true" : "false");
-     printf ("     p_disable_sage_backend                      = %s \n",(p_disable_sage_backend                 == true) ? "true" : "false");
-     printf ("     p_testingLevel                              = %d \n",p_testingLevel);
 
-     printf ("     p_preinit_il                                = %s \n",(p_preinit_il                           == true) ? "true" : "false");
-     printf ("     p_enable_cp_backend                         = %s \n",(p_enable_cp_backend                    == true) ? "true" : "false");
 
 #if 0
      printf ("     p_outputGrammarTreeFiles                    = %s \n",(p_outputGrammarTreeFiles               == true) ? "true" : "false");
@@ -18765,18 +18739,7 @@ SgProject::set_unparseHeaderFilesDebug ( int x )
 
 
 
-bool
-SgProject::get_skip_translation_from_edg_ast_to_rose_ast (void) const
-   {
-  // look at how the files are set
-     bool returnSkipTranslation = (numberOfFiles() > 0) ? true : false;
-     for (int i = 0; i < numberOfFiles(); i++)
-        {
-          SgFile & file = get_file(i);
-          returnSkipTranslation = returnSkipTranslation && (bool) file.get_skip_translation_from_edg_ast_to_rose_ast();
-        }
-     return returnSkipTranslation;
-   }
+
 
 bool
 SgProject::get_skip_transformation (void) const

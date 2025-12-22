@@ -12978,46 +12978,12 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
 
          ASSERT_not_null(templateMemberFunctionDeclaration);
 
-         // TV (10/08/2018): temporary switch for ROSE-1392 (relies on template unparsing from AST)
-         if (sourcefile->get_unparse_edg_normalized_method_ROSE_1392()) {
-           SgDeclarationStatement * assoc_decl = templateMemberFunctionDeclaration->get_associatedClassDeclaration();
-           SgTemplateClassDeclaration * assoc_tpl_class_decl = isSgTemplateClassDeclaration(assoc_decl);
+         // TV (10/08/2018): temporary switch for ROSE-1392 (relies on template
+         // unparsing from AST)
 
-           SgNode * parent = templateMemberFunctionDeclaration->get_parent();
-           SgTemplateClassDefinition * parent_is_tpl_class_defn = isSgTemplateClassDefinition(parent);
-
-           if (assoc_tpl_class_decl != NULL && parent_is_tpl_class_defn == NULL) {
-             unparseTemplateHeader(assoc_tpl_class_decl,info);
-           }
-
-           unparseTemplateHeader(templateMemberFunctionDeclaration,info);
-
-           SgUnparse_Info ninfo(info);
-
-           SgType * rtype = NULL;
-           unparseReturnType(functionDeclaration, rtype, ninfo);
-
-           ninfo.set_declstatement_ptr(NULL);
-           ninfo.set_declstatement_ptr(functionDeclaration);
-
-           unparse_helper(functionDeclaration, ninfo);
-
-           ninfo.set_declstatement_ptr(NULL);
-
-           if (rtype != NULL) {
-             SgUnparse_Info ninfo3(ninfo);
-             ninfo3.set_isTypeSecondPart();
-
-             unp->u_type->unparseType(rtype, ninfo3);
-           }
-
-           unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,ninfo);
-
-           curprint(string("\n") + templateString + string("\n"));
-         }
-       } else {
 #if OUTPUT_PLACEHOLDER_COMMENTS_FOR_SUPRESSED_TEMPLATE_IR_NODES
-         // DQ (4/5/2018): For debugging, output something so that we know why nothing is output.
+         // DQ (4/5/2018): For debugging, output something so that we know why
+         // nothing is output.
          if (templateString.size() == 0)
             {
               curprint (" /* Output the templateString: templateString.size() = " + StringUtility::numberToString(templateString.size()) + " */ ");

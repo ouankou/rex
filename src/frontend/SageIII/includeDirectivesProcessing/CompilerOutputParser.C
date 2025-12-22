@@ -179,7 +179,7 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
      inputFile -> stripRoseCommandLineOptions(argv);
      if (inputFile -> get_C_only() == true || inputFile -> get_C99_only() == true || inputFile -> get_Cxx_only() == true)
         {
-          inputFile -> stripEdgCommandLineOptions(argv);
+
         }
        else
         {
@@ -187,7 +187,7 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
              {
             // DQ (4/2/2011): some Fortran tests pass in tests/nonsmoke/functional/roseTests/astInterfaceTests pass in EDG options, we
             // might want to correct this (for now we will clean up the command line as part of command line handling).
-               inputFile -> stripEdgCommandLineOptions(argv);
+
                inputFile -> stripFortranCommandLineOptions(argv);
              }
             else

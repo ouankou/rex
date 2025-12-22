@@ -62,7 +62,7 @@ LANG_FLAGS = -std=c++03
 
 ROSE_FLAGS =
 if !ROSE_USE_CLANG_FRONTEND
-   ROSE_FLAGS += --edg:no_warnings --edg:restrict
+   ROSE_FLAGS +=  
 endif
 ROSE_FLAGS += -w -rose:verbose 0 -rose:skip_unparse_asm_commands
 

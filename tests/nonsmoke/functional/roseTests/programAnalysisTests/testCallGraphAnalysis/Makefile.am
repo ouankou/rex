@@ -104,7 +104,7 @@ endif
 
 test01 test01.passed: testCG $(Test01SpecimenSource) $(Test01SpecimenHeaders)
 	@$(RTH_RUN) \
-	    CMD="./testCG --edg:no_warnings -I. -I$(Test01SpecimenDir) $(Test01SpecimenSource) -o Callgraph" \
+	    CMD="./testCG  -I. -I$(Test01SpecimenDir) $(Test01SpecimenSource) -o Callgraph" \
 	    $(top_srcdir)/scripts/test_exit_status $@
 
 EXTRA_DIST += $(Test01SpecimenDir) # test01.conf

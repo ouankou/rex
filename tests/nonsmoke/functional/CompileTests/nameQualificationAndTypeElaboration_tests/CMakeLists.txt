@@ -17,7 +17,7 @@ set(TESTCODES
 set(PERFORMANCE_REPORT_OPTION -rose:compilationPerformanceFile
   ${CMAKE_BINARY_DIR}/Cxx_ROSE_PERFORMANCE_DATA.csv)
 
-set(ROSE_FLAGS --edg:no_warnings -w -rose:verbose 0
+set(ROSE_FLAGS  -w -rose:verbose 0
   ${PERFORMANCE_REPORT_OPTION})
 
 ## Include the path to A++ and the transformation specification

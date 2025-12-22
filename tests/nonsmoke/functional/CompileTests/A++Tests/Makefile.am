@@ -14,7 +14,7 @@ TEST_Objects = ${TESTCODES:.C=.o}
 
 # Restrict to level 6 testing for the moment
 # ROSE_FLAGS = -rose:test 6
-ROSE_FLAGS = --edg:no_warnings -w -rose:verbose 0
+ROSE_FLAGS =  -w -rose:verbose 0
 
 TEST_TRANSLATOR = $(top_builddir)/tests/nonsmoke/functional/testTranslator $(ROSE_FLAGS)
 

@@ -78,7 +78,7 @@ TEST_Objects = ${TESTCODES:.cc=.o}
 
 TEST2_Objects = ${C_TESTCODES:.c=.o}
 
-ROSE_FLAGS = --edg:no_warnings -w
+ROSE_FLAGS =  -w
 
 TRANSLATOR_EXECUTABLE = $(top_builddir)/tests/nonsmoke/functional/testTranslator 
 TEST_TRANSLATOR = $(TRANSLATOR_EXECUTABLE) $(ROSE_FLAGS)

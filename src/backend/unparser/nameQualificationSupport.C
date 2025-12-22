@@ -8052,15 +8052,6 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
        // instead of indirectly through each SgVariableDeclaration).
 #error "DEAD CODE!"
 
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-       // DQ (8/24/2012): Allow this to be output a little less often.
-       // DQ (8/4/2012): Why is this case procesed if the SgInitializedNames are processed sperately (this appears to be redundant with that).
-          static int counter = 0;
-          if (counter++ % 100 == 0)
-             {
-               MLOG_WARN_C(MLOG_UNPARSER, "QUESTION: Why is this case of name qualification SgVariableDeclaration procesed if the SgInitializedNames are processed sperately (this appears to be redundant with that). \n");
-             }
-#endif
           SgInitializedName* initializedName = SageInterface::getFirstInitializedName(variableDeclaration);
           ASSERT_not_null(initializedName);
 
@@ -10204,10 +10195,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                                  }
                               ASSERT_not_null(declarationForReferencedNameSet);
 
-                           // DQ (8/4/2012): We would like to refactor this code (I think).
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                              MLOG_WARN_C(MLOG_UNPARSER, "Name qualification for SgFunctionDeclaration: I think this should be using the defined function xxx so that we isolate references to the referencedNameSet \n");
-#endif
+                              // DQ (8/4/2012): We would like to refactor this
+                              // code (I think).
                               if (referencedNameSet.find(declarationForReferencedNameSet) == referencedNameSet.end())
                                  {
                                 // No global qualification is required.
@@ -16422,9 +16411,6 @@ NameQualificationTraversal::setNameQualificationOnType(SgInitializedName* initia
              {
                i->second = qualifier;
 
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               MLOG_WARN_C(MLOG_UNPARSER, "WARNING: name in qualifiedNameMapForTypes already exists and is different... \n");
-#endif
             // ROSE_ASSERT(false);
              }
         }
@@ -16517,9 +16503,6 @@ NameQualificationTraversal::setNameQualificationOnName(SgInitializedName* initia
              {
                i->second = qualifier;
 
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               MLOG_WARN_C(MLOG_UNPARSER, "WARNING: name in qualifiedNameMapForNames already exists and is different... \n");
-#endif
             // ROSE_ASSERT(false);
              }
         }
@@ -16585,9 +16568,6 @@ NameQualificationTraversal::setNameQualification(SgVariableDeclaration* variable
              {
                i->second = qualifier;
 
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               MLOG_WARN_C(MLOG_UNPARSER, "WARNING: name in qualifiedNameMapForNames already exists and is different... \n");
-#endif
             // ROSE_ASSERT(false);
              }
 #if 0

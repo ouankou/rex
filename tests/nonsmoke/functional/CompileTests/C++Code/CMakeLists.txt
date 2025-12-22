@@ -1,4 +1,4 @@
-set(ROSE_FLAGS --edg:no_warnings -w)
+set(ROSE_FLAGS  -w)
 set(C_ONLY -rose:C_only)
 
 if(valgrind)
@@ -111,14 +111,14 @@ add_test(
 # Test of export keyword
 add_test(
   NAME test2004_30
-  COMMAND testTranslator ${ROSE_FLAGS} --edg:restrict --edg:export
+  COMMAND testTranslator ${ROSE_FLAGS}  --edg:export
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_30.C
 )
 
 # Test of simple STL (list) example code
 add_test(
   NAME test2004_41
-  COMMAND testTranslator ${ROSE_FLAGS} --edg:restrict --edg:export
+  COMMAND testTranslator ${ROSE_FLAGS}  --edg:export
           -I../g++_HEADERS/hdrs1/bits
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_41.C
 )

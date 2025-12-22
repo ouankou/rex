@@ -7,7 +7,7 @@ foreach(include ${Boost_INCLUDE_DIRS})
 endforeach()
 
 # default values for our compile tests
-set(ROSE_FLAGS --edg:no_warnings -w -rose:verbose 0)
+set(ROSE_FLAGS -w -rose:verbose 0)
 set(translator testTranslator)
 
 option(REX_ENABLE_FAILING_TESTS "Enable tests known to fail" OFF)

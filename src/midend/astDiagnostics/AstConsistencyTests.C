@@ -1199,11 +1199,7 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                          break;
                        }
 
-                    case V_SgDeclType:
-                       {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                         printf ("Warning: EDG 4.x specific case, found unusual case of SgDeclType returned from SgFunctionCallExp::get_type() member function \n");
-#endif
+                       case V_SgDeclType: {
                          break;
                        }
 
@@ -1262,12 +1258,8 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
             // DQ (2/22/2013): Ben Allen has noticed that this will assert fail instead of returning a null pointer.
             // This should be fixed now.
                SgFunctionDeclaration *declaration = fc->getAssociatedFunctionDeclaration();
-               if (declaration == NULL)
-                  {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                    printf ("Note that getAssociatedFunctionDeclaration() has returned NULL pointer (OK in certain cases, see test2013_68.C) \n");
-#endif
-                  }
+               if (declaration == NULL) {
+               }
 
                break;
              }
@@ -1611,26 +1603,19 @@ TestAstTemplateProperties::visit ( SgNode* astNode )
 
             // DQ (4/30/2012): Allow this test to pass for test2012_58.C (condition relaxed as part of new EDG support).
             // It might be that the function template does not exist but that the class template containing the function template is available.
-               if (s->get_templateDeclaration() == NULL)
-                  {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                    printf ("ERROR: s->get_templateDeclaration() == NULL (s = %p = SgTemplateInstantiationFunctionDecl) \n",s);
-#endif
-                  }
+               if (s->get_templateDeclaration() == NULL) {
+               }
              // ROSE_ASSERT (s->get_templateDeclaration() != NULL);
 
                if (s->get_templateDeclaration() != NULL)
                   {
                  // DQ (6/17/2005): Template declarations should not be marked as compiler generated
                  // (only the instantiations are possibly marked as compiler generated).
-                    if (s->get_templateDeclaration()->get_file_info()->isCompilerGenerated() == true && SgProject::get_verbose() > 0)
-                       {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                         printf ("Warning: SgTemplateInstantiationFunctionDecl's original template declaration %s is marked as compiler generated: \n", s->get_templateDeclaration()->get_qualified_name().str());
-                         s->get_startOfConstruct()->display("SgTemplateInstantiationFunctionDecl debug");
-                         s->get_templateDeclaration()->get_startOfConstruct()->display("SgTemplateDecl debug");
-#endif
-                       }
+                 if (s->get_templateDeclaration()
+                             ->get_file_info()
+                             ->isCompilerGenerated() == true &&
+                     SgProject::get_verbose() > 0) {
+                 }
                  // ROSE_ASSERT (s->get_templateDeclaration()->get_file_info()->isCompilerGenerated() == false);
                   }
                break;
@@ -1749,10 +1734,8 @@ TestAstTemplateProperties::visit ( SgNode* astNode )
                          SgTemplateClassDefinition* templateClassDefinition = isSgTemplateClassDefinition(classDefinition);
                          if (templateClassDefinition != NULL)
                             {
-                           // Special case...debugging new use of SgTemplateClassDefinition.
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                              printf ("AST ConsistancyTest: TestAstTemplateProperties Found a case of SgTemplateClassDefinition (case not handled) \n");
-#endif
+                           // Special case...debugging new use of
+                           // SgTemplateClassDefinition.
                             }
                            else
                             {
@@ -1761,13 +1744,9 @@ TestAstTemplateProperties::visit ( SgNode* astNode )
                               if (isSgTemplateInstantiationDecl(classDefinition->get_declaration()) == NULL)
                                  {
                                 // This is NOT a data member of the templated class (or nested class of a templated class)
-                                   if (variableDeclaration->get_specialization() != SgClassDeclaration::e_no_specialization)
-                                      {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                                        printf ("Note: AST ConsistancyTest: variableDeclaration->get_specialization() = %d != SgClassDeclaration::e_no_specialization  (variableDeclaration = %p) \n",variableDeclaration->get_specialization(),variableDeclaration);
-                                        variableDeclaration->get_file_info()->display("variableDeclaration->get_specialization() != SgClassDeclaration::e_no_specialization");
-#endif
-                                      }
+                                if (variableDeclaration->get_specialization() !=
+                                    SgClassDeclaration::e_no_specialization) {
+                                }
                                 // DQ (6/30/2005): Commented out to focus more on KULL, output a warning for now!
                                 // ROSE_ASSERT(variableDeclaration->get_specialization() == SgClassDeclaration::e_no_specialization);
                                  }
@@ -4763,13 +4742,8 @@ TestParentPointersInMemoryPool::visit(SgNode* node)
   // SgStatement and SgExpression IR nodes should always have a valid parent (except for the SgProject)
      if (locatedNode != NULL)
         {
-          if (locatedNode->get_parent() == NULL)
-             {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               printf ("Error: locatedNode->get_parent() == NULL locatedNode = %p = %s \n",locatedNode,locatedNode->class_name().c_str());
-            // printf ("Error: locatedNode->get_parent() == NULL locatedNode = %p = %s = %s \n",locatedNode,locatedNode->class_name().c_str(),SageInterface::get_name(locatedNode));
-#endif
-             }
+       if (locatedNode->get_parent() == NULL) {
+       }
 
        // DQ (3/3/2012): Commented this out test (for debugging purposes only).
        // printf ("In TestParentPointersInMemoryPool::visit(): Commented test for locatedNode->get_parent() != NULL \n");

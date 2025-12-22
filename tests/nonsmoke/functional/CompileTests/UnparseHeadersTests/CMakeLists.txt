@@ -17,7 +17,7 @@ set(TESTCODES_FOR_DEFAULT_UNPARSE_FOLDER test0/Simple0.C)
 # test.
 set(TEST_INCLUDE_PATHS -I${CMAKE_CURRENT_SOURCE_DIR}/test8/subdir)
 
-set(ROSE_FLAGS --edg:no_warnings --edg:restrict -w
+set(ROSE_FLAGS   -w
   -rose:verbose 1)
 
 foreach(file_to_test ${TESTCODES})

@@ -365,7 +365,7 @@ endif()
 # Clang/LLVM frontend (required when C/C++ support is enabled)
 ########################################################################################################################
 
-# REX uses Clang/LLVM frontend exclusively (EDG has been removed)
+# REX uses Clang/LLVM frontend exclusively
 # Only required when C/C++ analysis is enabled
 if(enable-c)
 

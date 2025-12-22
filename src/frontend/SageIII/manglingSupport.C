@@ -393,13 +393,6 @@ mangleQualifiersToString (const SgScopeStatement* scope)
                   {
 #if 1
                  // DQ (8/26/2012): Decrease the volume of warnings from this part of the code.
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                    static int count = 0;
-                    if (count++ % 100 == 0)
-                       {
-                         printf ("WARNING: In mangleQualifiersToString(const SgScopeStatement*): Case SgTemplateFunctionDefinition not implemented \n");
-                       }
-#endif
 #else
                     printf ("WARNING: In mangleQualifiersToString(const SgScopeStatement*): Case SgTemplateFunctionDefinition not implemented \n");
 #endif

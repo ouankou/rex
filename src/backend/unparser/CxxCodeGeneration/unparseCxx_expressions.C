@@ -477,24 +477,24 @@ Unparse_ExprStmt::unparseLambdaExpression(SgExpression* expr, SgUnparse_Info& in
               SgExpression * capt_var_expr = lambdaCapture->get_capture_variable();
               ASSERT_not_null(capt_var_expr);
 
-          // TV (11/14/2018): ROSE-1525: Made a separated case when 'this' is captured to properly handle the changes in EDG 4.14
-          // REX: EDG removed - Clang frontend uses the modern behavior (EDG >= 4.14)
-             if (isSgThisExp(capt_var_expr)) {
-               if (lambdaCapture->get_capture_by_reference() == false) {
-                 curprint("*");
-               }
-               curprint("this");
-             } else {
-              if (lambdaCapture->get_capture_by_reference() == true)
-                 {
-                   curprint("&");
-                 }
-              unp->u_exprStmt->unparseExpression(capt_var_expr,info);
+              // TV (11/14/2018): ROSE-1525: Made a separated case when 'this'
+              // is captured to properly handle the changes in EDG 4.14
+              if (isSgThisExp(capt_var_expr)) {
+                if (lambdaCapture->get_capture_by_reference() == false) {
+                  curprint("*");
+                }
+                curprint("this");
+              } else {
+                if (lambdaCapture->get_capture_by_reference() == true) {
+                  curprint("&");
+                }
+                unp->u_exprStmt->unparseExpression(capt_var_expr, info);
 
-              if (SgExpression* init_expr = lambdaCapture->get_source_closure_variable()) {
-                 curprint(" = ");
-                 unp->u_exprStmt->unparseExpression(init_expr, info);
-              }
+                if (SgExpression *init_expr =
+                        lambdaCapture->get_source_closure_variable()) {
+                  curprint(" = ");
+                  unp->u_exprStmt->unparseExpression(init_expr, info);
+                }
              }
 
              }
@@ -1163,15 +1163,6 @@ Unparse_ExprStmt::unparseTemplateArgumentList(const SgTemplateArgumentPtrList & 
   // It is less clear how to refactor this code.
 
 #define DEBUG_TEMPLATE_ARGUMENT_LIST 0
-
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-  // DQ (8/24/2012): Print this out a little less often; but still enough so that we know to fix this later.
-     static int counter = 0;
-     if (counter++ % 100 == 0)
-        {
-          printf ("In Unparse_ExprStmt::unparseTemplateArgumentList(): CRITICAL FUNCTION TO BE REFACTORED \n");
-        }
-#endif
 
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
      printf ("In unparseTemplateArgumentList(): templateArgListPtr.size() = %" PRIuPTR " \n",input_templateArgListPtr.size());

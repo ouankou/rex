@@ -25,7 +25,7 @@ endif()
 # complex_02.c
 # complex_04.c
 
-set(ROSE_FLAGS -rose:verbose 0 -rose:C99 --edg:no_warnings -w --edg:restrict)
+set(ROSE_FLAGS -rose:verbose 0 -rose:C99  -w )
 
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} C99TEST)

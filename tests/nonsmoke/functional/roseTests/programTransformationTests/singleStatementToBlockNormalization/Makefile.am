@@ -21,7 +21,7 @@ singleStatementToBlockNormalization_SPECIMENS = $(filter-out $(BROKEN_TESTS), $(
 singleStatementToBlockNormalization_TEST_TARGETS = $(addsuffix .passed, $(singleStatementToBlockNormalization_SPECIMENS))
 
 singleStatementToBlockNormalization_SWITCHES = \
-	--edg:no_warnings -w -rose:verbose 0 $(ROSE_BOOST_NORMAL_INCLUDE_PATH) -I$(ROSE__CXX_TESTS_DIR) \
+	 -w -rose:verbose 0 $(ROSE_BOOST_NORMAL_INCLUDE_PATH) -I$(ROSE__CXX_TESTS_DIR) \
 	-I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Code
 
 $(singleStatementToBlockNormalization_TEST_TARGETS): \

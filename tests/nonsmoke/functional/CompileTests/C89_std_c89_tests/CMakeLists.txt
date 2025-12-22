@@ -21,7 +21,7 @@ set(files_to_test
 
 set(ROSE_FLAGS -std=c89)
 if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  list(APPEND ROSE_FLAGS --edg:no_warnings --edg:restrict)
+  list(APPEND ROSE_FLAGS  )
 endif()
 list(APPEND ROSE_FLAGS -w)
 

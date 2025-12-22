@@ -105,7 +105,7 @@ ALL_TESTCODES = \
 $(REX_TESTCODES_REQUIRED_TO_PASS) \
 $(TESTCODE_CURRENTLY_FAILING)
 
-ROSE_FLAGS = -rose:C_only --edg:no_warnings -w -rose:verbose 0 --edg:restrict -rose:openmp -rose:openmp:ast_only
+ROSE_FLAGS = -rose:C_only  -w -rose:verbose 0  -rose:openmp -rose:openmp:ast_only
 
 PASSING_TEST_Objects = ${TESTCODES:.c=.o}
 TEST_Objects = ${ALL_TESTCODES:.c=.o}

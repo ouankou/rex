@@ -19,7 +19,7 @@ TESTDIR = $(srcdir)/tests/
 TEST_TARGETS = $(addprefix nt_, $(addsuffix .passed, $(SPECIMEN_NAMES)))
 
 SWITCHES = \
-        --edg:no_warnings -w 
+         -w 
 
 # The original comment was:
 #     type traits is a not fully supported in older gcc versions. We enable tests only when rose is compiled with gcc 4.2 or

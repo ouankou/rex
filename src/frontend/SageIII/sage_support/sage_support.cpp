@@ -1154,7 +1154,6 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
        //   1) a link command, or
        //   2) called as part of the SageBuilder::buildFile()
        // using the C++ compiler.  In this case skip the EDG processing.
-          file->set_disable_edg_backend(true);
         }
 
 #if 0
@@ -1845,8 +1844,7 @@ SgProject::parse()
             // file->secondaryPassOverSourceFile();
 
             // if (file->get_skip_translation_from_edg_ast_to_rose_ast() == false)
-               if (file->get_disable_edg_backend() == false)
-                  {
+            if (true) {
 #if 0
                  // Output an optional graph of the AST (just the tree, when active). Note that we need to multiple file version
                  // of this with includes so that we can present a single SgProject rooted AST with multiple SgFile objects.
@@ -1947,13 +1945,11 @@ SgProject::parse()
 #if 0
                     printf ("In SgProject::parse(): DONE: Calling secondaryPassOverSourceFile() \n");
 #endif
-                  }
-                 else
-                  {
+            } else {
 #if 0
                     printf ("Skipping the call to secondaryPassOverSourceFile() \n");
 #endif
-                  }
+            }
 #if 0
                printf ("Exiting after test! \n");
                ROSE_ABORT();
@@ -2036,59 +2032,6 @@ SgProject::parse()
        // ROSE_ASSERT(file->get_header_file_unparsing_optimization() == true);
        // ROSE_ASSERT(file->get_header_file_unparsing_optimization_source_file() == false);
        // ROSE_ASSERT(file->get_header_file_unparsing_optimization_header_file() == false);
-
-       // DQ (4/25/2021): Adding code to process header files when file->get_header_file_unparsing_optimization() == false.
-          if (SgFile::get_header_file_unparsing_optimization() == false)
-             {
-               std::map<std::string, SgIncludeFile*>::iterator i = EDG_ROSE_Translation::edg_include_file_map.begin();
-               while (i != EDG_ROSE_Translation::edg_include_file_map.end())
-                  {
-                    string filename = i->first;
-#if 0
-                    printf ("filename = %s \n",filename.c_str());
-#endif
-                    SgIncludeFile* include_file = i->second;
-                    if (include_file != nullptr)
-                       {
-#if 0
-                         printf ("include_file = %p filename = %s \n",include_file,include_file->get_filename().str());
-#endif
-                         SgSourceFile* sourceFile = include_file->get_source_file();
-                         if (sourceFile != nullptr)
-                            {
-#if 0
-                              printf ("sourceFile = %p filename = %s \n",sourceFile,sourceFile->getFileName().c_str());
-                              printf ("unparse_using_tokens = %s \n",unparse_using_tokens ? "true" : "false");
-                              printf ("sourceFile->get_unparse_tokens() = %s \n",sourceFile->get_unparse_tokens() ? "true" : "false");
-#endif
-                              if (sourceFile->get_unparse_tokens() == false && unparse_using_tokens == true)
-                                 {
-#if 0
-                                   printf ("Setting sourceFile->set_unparse_tokens(true) \n");
-#endif
-                                   sourceFile->set_unparse_tokens(true);
-                                 }
-                              ROSE_ASSERT(sourceFile->get_unparse_tokens() == unparse_using_tokens);
-
-                              sourceFile->secondaryPassOverSourceFile();
-                            }
-                           else
-                            {
-#if 0
-                              printf ("sourceFile == NULL \n");
-#endif
-                            }
-                       }
-
-                    i++;
-                  }
-
-#if 0
-            // DQ (4/24/2021): Testing for case of non-optimized header file unparsing, need to process ALL header files.
-               printf ("In SgFile::parse(): file->get_header_file_unparsing_optimization() == false: Exiting as a test! \n");
-               ROSE_ABORT();
-#endif
-             }
 
 #if 0
        // DQ (4/24/2021): Testing for case of non-optimized header file unparsing, need to process ALL header files.
@@ -2464,71 +2407,11 @@ SgFile::callFrontEnd()
   // PP (8/23/2022): Experimental: Do not override the flag from the command line. RC-1381
   //   set_skip_unparse(false);
 
-     if ((get_C_only() || get_Cxx_only()) &&
-      // DQ (1/22/2004): As I recall this has a name that really
-      // should be "disable_edg" instead of "disable_edg_backend".
-          get_disable_edg_backend() == false && get_new_frontend() == true)
-        {
-       // Rose::new_frontend = true;
-
-       // We can either use the newest EDG frontend separately (useful for debugging)
-       // or the EDG frontend that is included in SAGE III (currently EDG 3.3).
-       // New EDG frontend:
-       //      This permits testing with the most up-to-date version of the EDG frontend and
-       //      can be useful in identifing errors or bugs in the SAGE processing (or ROSE itself).
-       // EDG frontend used by SAGE III:
-       //      The use of this frontend permits the continued processing via ROSE and the
-       //      unparsing of the AST to rebuilt the C++ source code (with transformations if any
-       //      were done).
-
-       // DQ (10/15/2005): This is now a C++ string (and not char* C style string)
-       // Make sure that we have generated a proper file name (or move filename
-       // processing to processRoseCommandLineOptions()).
-       // printf ("Print out the file name to make sure it is processed \n");
-       // printf ("     filename = %s \n",get_unparse_output_filename());
-       // ROSE_ASSERT (get_unparse_output_filename() != NULL);
-       // ROSE_ASSERT (get_unparse_output_filename().empty() == false);
-
-      // Use the current version of the EDG frontend from EDG (or any other version)
-      // abort();
-         printf ("Rose::new_frontend == true (call edgFrontEnd using unix system() function!) \n");
-
-         std::string frontEndCommandLineString;
-         if ( get_KCC_frontend() == true )
-            {
-              frontEndCommandLineString = "KCC ";  // -cpfe_only is no longer supported (I think)
-            }
-           else
-            {
-           // frontEndCommandLineString = "edgFrontEnd ";
-              frontEndCommandLineString = "edgcpfe --g++ --gnu_version 40201 ";
-            }
-         frontEndCommandLineString += CommandlineProcessing::generateStringFromArgList(inputCommandLine,true,false);
-
-         if ( get_verbose() > -1 )
-              printf ("frontEndCommandLineString = %s \n\n",frontEndCommandLineString.c_str());
-
-      // ROSE_ASSERT (!"Should not get here");
-         int status = system(frontEndCommandLineString.c_str());
-
-         printf ("After calling edgcpfe as a test (status = %d) \n",status);
-         ROSE_ASSERT(status == 0);
-      // ROSE_ASSERT(false);
-        }
-       else
-        {
-          if ((get_C_only() || get_Cxx_only()) && get_disable_edg_backend() == true)
-             {
-               if (SgProject::get_verbose() > 0)
-                  {
-                    std::cout << "[INFO] [SgFile::callFrontEnd] Skipping EDG frontend" << std::endl;
-                  }
-             }
-            else
-             {
-            // DQ (9/2/2008): Factored out the details of building the AST for Source code (SgSourceFile IR node) and Binaries (SgBinaryComposite IR node)
-            // Note that making buildAST() a virtual function does not appear to solve the problems since it is called form the base class.  This is
-            // awkward code which is temporary.
+     // DQ (9/2/2008): Factored out the details of building the AST for Source
+     // code (SgSourceFile IR node) and Binaries (SgBinaryComposite IR node)
+     // Note that making buildAST() a virtual function does not appear to solve
+     // the problems since it is called form the base class.  This is awkward
+     // code which is temporary.
 #if 0
                printf ("Before calling buildAST(): this->class_name() = %s \n",this->class_name().c_str());
 #endif
@@ -2553,9 +2436,7 @@ SgFile::callFrontEnd()
                          printf ("Error: default reached in Rose parser/IR translation processing: class name = %s \n",this->class_name().c_str());
                          ROSE_ABORT();
                        }
-                  }
-             }
-        }
+                       }
 
 #if 0
      printf ("After calling buildAST(): this->class_name() = %s \n",this->class_name().c_str());
@@ -5197,7 +5078,6 @@ SgProject::compileOutput()
           SgFile::stripRoseCommandLineOptions( argv );
 
        // strip out edg specific options that would cause an error in the backend linker (compiler).
-          SgFile::stripEdgCommandLineOptions( argv );
 
           vector<string> originalCommandLine = argv;
           ROSE_ASSERT (!originalCommandLine.empty());
@@ -5254,7 +5134,6 @@ SgProject::compileOutput()
           SgFile::stripRoseCommandLineOptions( argv );
 
        // strip out edg specific options that would cause an error in the backend linker (compiler).
-          SgFile::stripEdgCommandLineOptions( argv );
 
        // Skip the name of the ROSE translator (so that we can insert the backend compiler name, below)
        // bool skipInitialEntry = true;
@@ -5561,7 +5440,6 @@ int SgProject::link ( std::string linkerName )
      SgFile::stripRoseCommandLineOptions( argcArgvList );
 
   // strip out edg specific options that would cause an error in the backend linker (compiler).
-     SgFile::stripEdgCommandLineOptions( argcArgvList );
 
      SgFile::stripTranslationCommandLineOptions( argcArgvList );
 
@@ -6439,11 +6317,7 @@ SgFunctionCallExp::getAssociatedFunctionSymbol() const
              }
 
        // DQ (2/22/2013): added case to support something reported in test2013_68.C, but not yet verified.
-          case V_SgVarRefExp:
-             {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               printf ("In SgFunctionCallExp::getAssociatedFunctionSymbol(): case of SgVarRefExp: returning NULL \n");
-#endif
+             case V_SgVarRefExp: {
 #if 0
                printf ("I would like to verify that I can trap this case \n");
                ROSE_ABORT();
@@ -6451,9 +6325,9 @@ SgFunctionCallExp::getAssociatedFunctionSymbol() const
                break;
              }
 
-       // DQ (12/17/2016): added case to support reducing output spew from C++11 tests and applications.
-          case V_SgThisExp:
-             {
+               // DQ (12/17/2016): added case to support reducing output spew
+               // from C++11 tests and applications.
+             case V_SgThisExp: {
 #if 0
                printf ("I would like to verify that I can trap this case \n");
                ROSE_ABORT();

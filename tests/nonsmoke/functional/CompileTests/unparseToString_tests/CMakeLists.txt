@@ -1,7 +1,7 @@
 add_executable(unparseToString unparseToString.C )
 target_link_libraries(unparseToString ROSE_DLL ${link_with_libraries} )
 
-set(ROSE_FLAGS --edg:no_warnings -w --edg:restrict)
+set(ROSE_FLAGS  -w )
 
 set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 

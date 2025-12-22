@@ -261,7 +261,7 @@ OpenMP_TEST_INCLUDES = -I$(OpenMP_TEST_DIR)
 # this flag is used for the files listed within this file: C_TESTS_REQUIRED_TO_PASS and CXX_TESTS_REQUIRED_TO_PASS
 # TODO remove -rose:skipfinalCompileStep when the command line issue is solved
 #-rose:outline:temp_variable
-OUTLINE_FLAGS= --edg:no_warnings -rose:verbose 0 -rose:outline:parameter_wrapper -rose:detect_dangling_pointers 1
+OUTLINE_FLAGS=  -rose:verbose 0 -rose:outline:parameter_wrapper -rose:detect_dangling_pointers 1
 
 #------------------------------------------------------------------------------------------------------------------------
 # Test outlining using the classic scheme, using tests within the current folder

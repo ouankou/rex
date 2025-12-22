@@ -25,11 +25,6 @@ checkIsCompilerGeneratedFlag(SgNode *ast)
         void fix(SgNode *node, Sg_File_Info *finfo) {
             if (finfo && finfo->isFrontendSpecific() && !finfo->isCompilerGenerated()) {
 #if 0
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                std::cerr <<finfo->get_filenameString() <<":" <<finfo->get_line() <<"." <<finfo->get_col() <<": "
-                          <<"node should be marked as compiler-generated: "
-                          <<"(" << node->class_name() /*stringifyVariantT(node->variantT(), "V_")*/ <<"*)" <<node <<"\n";
-#endif
 #endif
                 finfo->setCompilerGenerated();
                 ++nviolations;

@@ -12,7 +12,7 @@ target_link_libraries(testInterproceduralCFG ROSE_DLL ${link_with_libraries} )
 # Include the path to A++ and the transformation specification
 set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
 
-set(ROSE_FLAGS --edg:no_warnings -w -rose:verbose 0 --edg:restrict)
+set(ROSE_FLAGS  -w -rose:verbose 0 )
 
 # This populates the list ROSE__CXX_TESTS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)

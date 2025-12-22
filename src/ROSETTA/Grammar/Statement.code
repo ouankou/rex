@@ -1233,10 +1233,6 @@ StatementListInsertChild( SgStatement *parent, Rose_STL_Container<Elemtype*>& st
                                  {
                                    ROSE_ASSERT(parent != NULL);
                                    ROSE_ASSERT(n->get_parent());
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                                   printf ("In Cxx_Grammar.h StatementListInsertChild(): n->get_parent() != NULL and is set incorrectly to %p = %s for statement = %p = %s it will be set to parent = %p = %s \n",
-                                        n,n->class_name().c_str(),n->get_parent(),n->get_parent()->class_name().c_str(),parent,parent->class_name().c_str());
-#endif
                                  }
                             }
 
@@ -8683,16 +8679,6 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
                                           // SgTemplateType* templateType = isSgTemplateType(argumentType);
 #if 1
                                           // DQ (8/26/2012): Decrease the volume of warnings from this part of the code.
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                                             static int count = 0;
-
-                                          // DQ (6/30/2018): Debuging infinite loop in test2018_117.C.
-                                          // if (count++ % 1 == 0)
-                                             if (count++ % 100 == 0)
-                                                {
-                                                  printf ("In SgDeclarationStatement::resetTemplateNameSupport(): case SgTemplateArgument::type_argument: Found a SgTemplateType ... (nothing done in this case) \n");
-                                                }
-#endif
 #else
                                              printf ("In SgDeclarationStatement::resetTemplateNameSupport(): case SgTemplateArgument::type_argument: Found a SgTemplateType ... (nothing done in this case) \n");
 #endif
@@ -8753,9 +8739,6 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
 
                                          default:
                                            {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                                             printf ("Default reached in switch over SgTemplateArgument::type_argument (argumentType = %p = %s) \n",argumentType,argumentType->class_name().c_str());
-#endif
                                           // ROSE_ASSERT(false);
                                            }
                                       }
@@ -13248,9 +13231,6 @@ SgVariableDeclaration::compute_baseTypeDefiningDeclaration() const
        // ROSE_ASSERT(p_baseTypeDefiningDeclaration == NULL);
           if (p_baseTypeDefiningDeclaration != NULL)
              {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               printf ("Warning: In SgVariableDeclaration::compute_baseTypeDefiningDeclaration(): p_baseTypeDefiningDeclaration != NULL but returning NULL \n");
-#endif
              }
 
           return NULL;
@@ -15162,9 +15142,6 @@ SgEnumDeclaration::get_mangled_name (void) const
             // mangleQualifiersString = mangleQualifiers(get_scope());
                if (get_scope() == NULL)
                   {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                    printf ("WARNING: SgEnumDeclaration::get_mangled_name(): get_scope() == NULL, mangleQualifiers will be incomplete (empty) \n");
-#endif
                   }
                  else
                   {
@@ -15202,9 +15179,6 @@ SgEnumDeclaration::get_mangled_name (void) const
              }
             else
              {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-               printf ("In SgEnumDeclaration::get_mangled_name(void): SKIP putting name into MangleNameToCache: mangledName = %s \n",mangledName.str());
-#endif
              }
 #if 0
           printf ("In SgEnumDeclaration::get_mangled_name(void): generated name: mangledName = %s \n",mangledName.str());

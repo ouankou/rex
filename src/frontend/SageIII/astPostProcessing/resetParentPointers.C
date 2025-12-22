@@ -1133,12 +1133,8 @@ ResetParentPointers::evaluateInheritedAttribute (
                     resetParentPointersInDeclaration (templateInstantiation, inheritedAttribute.parentNode);
 
                     SgDeclarationStatement* templateDeclaration = templateInstantiation->get_templateDeclaration();
-                    if (templateDeclaration == NULL)
-                       {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                         printf ("WARNING: templateInstantiation->get_templateDeclaration() == NULL templateInstantiation = %p = %s \n",templateInstantiation,templateInstantiation->class_name().c_str());
-#endif
-                       }
+                    if (templateDeclaration == NULL) {
+                    }
                  // DQ (5/3/2012): commented out for the new EDG 4.3 support.
                  // ROSE_ASSERT(templateDeclaration != NULL);
 
@@ -2373,9 +2369,6 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
 #if 0
                       // DQ (3/3/2012): I think we might not need to have this test (or at least I want to debug this case using the AST Whole AST dot graph).
                       // This is a problem (failing test) for test2006_01.C.
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                         printf ("WARNING: In ResetParentPointersInMemoryPool::visit(declaration = %p = %s): test commented out for declaration->get_parent() != NULL \n",node,node->class_name().c_str());
-#endif
                       // ROSE_ASSERT(declaration->get_parent() != NULL);
 #else
                       // DQ (8/3/2019): This assertion is a problem (failing C language test) for test2012_47.c (and about 27 other C language tests).

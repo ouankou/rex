@@ -618,7 +618,7 @@ $(failing_test_targets): %.passed: $(TESTCODES_DIRECTORY)/%
 # How to execute the fileLocation tests
 
 fileLocation_test_targets = $(addprefix fileLocation_, $(addsuffix .passed, $(TESTCODES_REQUIRED_TO_PASS)))
-fileLocation_test_flags = --edg:no_warnings -w -rose:verbose 0 -I$(TESTCODES_DIRECTORY)/../A++Code -I$(TESTCODES_DIRECTORY)
+fileLocation_test_flags =  -w -rose:verbose 0 -I$(TESTCODES_DIRECTORY)/../A++Code -I$(TESTCODES_DIRECTORY)
 EXTRA_DIST += fileLocation.conf
 
 # The original makefile had all these commented out for Mac OS X, but no explanation as to why

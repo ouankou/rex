@@ -7,17 +7,7 @@
 
 #include "IncludedFilesUnparser.h"
 
-// DQ (10/26/2019): Added header file to access buildSourceFileForHeaderFile().
 #include "unparser.h"
-
-
-// DQ (10/10/2019): Adding support to access the map of filenames to SgIncludeFile IR nodes.
-namespace EDG_ROSE_Translation
-   {
-  // DQ (9/18/2018): Declare this map so that we can use it for the unparse header files option.
-  // REX: Declaration simplified - defined in sageInterface.C
-     extern std::map<std::string, SgIncludeFile*> edg_include_file_map;
-   }
 
 using namespace std;
 
@@ -127,7 +117,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
 #endif
 
 #if 0
-     printf ("TOP of figureOutWhichFilesToUnparse(): EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
      workingDirectory = FileHelper::normalizePath((* projectNode -> get_fileList().begin()) -> getWorkingDirectory());
@@ -166,7 +155,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
         }
 
 #if 0
-     printf ("In figureOutWhichFilesToUnparse(): test 1: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
   // Should be erased completely at every run to avoid name collisions with previous runs.
@@ -214,7 +202,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
        // ROSE_ASSERT(modifiedFiles.empty() == true);
 
 #if 0
-          printf ("In figureOutWhichFilesToUnparse(): before first while loop: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
        // modifiedFiles = allFiles;
@@ -306,7 +293,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
 #endif
 
 #if 0
-     printf ("In figureOutWhichFilesToUnparse(): before while loop: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
   // DQ (11/30/2019): Process the header files to include possible header files that only contained another header files 
@@ -316,7 +302,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
      while (k != allFiles.end())
         {
 #if 0
-          printf ("In figureOutWhichFilesToUnparse(): at top inside of while loop: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
 #if 1
@@ -331,163 +316,13 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
        // Lookup the include file, so that we can traverse it's parents to a known file (in the allFiles list).
 #if 1
        // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 4)
-             {
-               printf ("   --- EDG_ROSE_Translation::edg_include_file_map.find(filename) != EDG_ROSE_Translation::edg_include_file_map.end() = %s \n",
-                    EDG_ROSE_Translation::edg_include_file_map.find(filename) != EDG_ROSE_Translation::edg_include_file_map.end() ? "true" : "false");
-               if (unparseAllHeaderFiles == true)
-                  {
-                    printf ("   --- Mark this as a file to unparse: filename = %s \n",filename.c_str());
-                  }
-             }
+          if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+            if (unparseAllHeaderFiles == true) {
+              printf("   --- Mark this as a file to unparse: filename = %s \n",
+                     filename.c_str());
+            }
+          }
 #endif
-       // The source file in root in the include file list, so we can't support this assertion.
-       // ROSE_ASSERT (EDG_ROSE_Translation::edg_include_file_map.find(filename) != EDG_ROSE_Translation::edg_include_file_map.end());
-          if (EDG_ROSE_Translation::edg_include_file_map.find(filename) != EDG_ROSE_Translation::edg_include_file_map.end())
-             {
-            // DQ (2/23/2021): This access is adding an entry to the edg_include_file_map that is NULL, so we need to make sure that the parent_filename is in the map before.
-               ROSE_ASSERT(EDG_ROSE_Translation::edg_include_file_map.find(filename) != EDG_ROSE_Translation::edg_include_file_map.end());
-
-               SgIncludeFile* include_file = EDG_ROSE_Translation::edg_include_file_map[filename];
-            // ASSERT_not_null(include_file);
-               if (include_file != NULL)
-                  {
-#if 1
-                 // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-                    if (SgProject::get_unparseHeaderFilesDebug() >= 4)
-                       {
-                         printf ("include_file->get_filename() = %s \n",include_file->get_filename().str());
-                       }
-#endif
-                    SgIncludeFile* parent_include_file = isSgIncludeFile(include_file->get_parent());
-#if 1
-                 // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-                    if (SgProject::get_unparseHeaderFilesDebug() >= 4)
-                       {
-                         printf ("parent_include_file = %p \n",parent_include_file);
-                       }
-#endif
-                    while (parent_include_file != NULL)
-                       {
-                         string parent_filename = parent_include_file->get_filename().str();
-#if 1
-                      // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-                         if (SgProject::get_unparseHeaderFilesDebug() >= 4)
-                            {
-                              printf ("parent_include_file->get_filename() = %s \n",parent_include_file->get_filename().str());
-                            }
-#endif
-#if 0
-                      // DQ (4/8/2020): if we are not using the defered evaluation (default) then the default behavior 
-                      // is to unparse all header files.
-                         if (unparseAllHeaderFiles == true)
-                            {
-                              if (allFiles.find(parent_filename) == allFiles.end())
-                                 {
-                                // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-                                   if (SgProject::get_unparseHeaderFilesDebug() >= 2)
-                                      {
-                                        printf ("Adding parent_filename to modifiedFiles list: parent_include_file->get_filename() = %s \n",parent_include_file->get_filename().str());
-                                      }
-                                   modifiedFiles.insert(parent_filename);
-                                 }
-                            }
-#endif
-
-                         if (allFiles.find(parent_filename) == allFiles.end())
-                            {
-                           // There may be an arbitraily long chain of parents include files that only include a 
-                           // nested include file. so this should be an iteration over the parent chain.
-#if 0
-                              printf ("parent_filename NOT in allFiles list \n");
-#endif
-                           // See test12 for exactly such a case!
-                           // printf ("NOTE: MUST ITERATE OVER THE CHAIN OF PARENTS \n");
-
-#if 0
-                              printf ("In figureOutWhichFilesToUnparse(): before allFiles.insert(): EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
-#endif
-
-                              allFiles.insert(parent_filename);
-
-#if 0
-                              printf ("In figureOutWhichFilesToUnparse(): after allFiles.insert(): EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
-#endif
-                            }
-                           else
-                            {
-#if 0
-                              printf ("parent_filename FOUND in allFiles list \n");
-#endif
-                            }
-
-#if 0
-                         printf ("In figureOutWhichFilesToUnparse(): before access to EDG_ROSE_Translation::edg_include_file_map: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",
-                              EDG_ROSE_Translation::edg_include_file_map.size());
-                         printf ("parent_filename = %s \n",parent_filename.c_str());
-#endif
-                      // DQ (2/23/2021): This access is adding an entry to the edg_include_file_map that is NULL, so we need to make sure that the parent_filename is in the map before.
-                      // include_file = EDG_ROSE_Translation::edg_include_file_map[parent_filename];
-                         if (EDG_ROSE_Translation::edg_include_file_map.find(parent_filename) != EDG_ROSE_Translation::edg_include_file_map.end())
-                            {
-                              include_file = EDG_ROSE_Translation::edg_include_file_map[parent_filename];
-                            }
-                           else
-                            {
-                              include_file = NULL;
-                            }
-#if 0
-                         printf ("In figureOutWhichFilesToUnparse(): after access to EDG_ROSE_Translation::edg_include_file_map: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",
-                              EDG_ROSE_Translation::edg_include_file_map.size());
-#endif
-#if 0
-                         printf ("include_file = %p \n",include_file);
-#endif
-                      // ASSERT_not_null(include_file);
-                         if (include_file != NULL)
-                            {
-#if 0
-                              printf ("include_file->get_parent() = %p \n",include_file->get_parent());
-#endif
-                              parent_include_file = isSgIncludeFile(include_file->get_parent());
-                            }
-                           else
-                            {
-                              parent_include_file = NULL;
-                            }
-                       }
-                  }
-
-#if 0
-               while (SgIncludeFile* parent_include_file = isSgIncludeFile(include_file->get_parent()) && allFiles.find(parent_include_file->get_filename().str()) == allFiles.end()) { }
-#endif
-#if 0
-               SgIncludeFile* parent_include_file = isSgIncludeFile(include_file->get_parent());
-
-               if (parent_include_file != NULL)
-                  {
-                    string parent_filename = parent_include_file->get_filename().str();
-
-                    printf ("parent_include_file->get_filename() = %s \n",parent_include_file->get_filename().str());
-
-                 // Make sure this is in the allFile list (and if not add it).
-                    if (allFiles.find(parent_filename) == allFiles.end())
-                       {
-                      // There may be an arbitraily long chain of parents include files that only include a 
-                      // nested include file. so this should be an iteration over the parent chain.
-
-                      // See test12 for exactly such a case!
-                         printf ("NOTE: MUST ITERATE OVER THE CHAIN OF PARENTS \n");
-
-                         allFiles.insert(parent_filename);
-                       }
-                  }
-                 else
-                  {
-                    printf ("parent_include_file == NULL \n");
-                  }
-#endif
-             }
 #if 0
           printf ("In IncludedFilesUnparser::figureOutWhichFilesToUnparse(): END OF LOOP: tmp_counter = %d \n",tmp_counter);
 #endif
@@ -497,7 +332,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
         }
 
 #if 0
-     printf ("In figureOutWhichFilesToUnparse(): after while loop: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
 #if 1
@@ -551,7 +385,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
 #endif
 
 #if 0
-     printf ("In figureOutWhichFilesToUnparse(): before do-while loop: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
   // A more efficient way would be to do it incrementally rather than repeating the whole iteration. But the probability of more than 
@@ -635,9 +468,7 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
         }
      while (!newFilesToUnparse.empty());
 
-
 #if 0
-     printf ("In figureOutWhichFilesToUnparse(): after do-while loop: EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",EDG_ROSE_Translation::edg_include_file_map.size());
 #endif
 
   // DQ (11/13/2018): If we are unparsing from the token stream, then we can't be modifying the include directives. 
@@ -1250,69 +1081,6 @@ IncludedFilesUnparser::initializeFilesToUnparse()
                   {
 #if DEBUG_INITIALIZER_FILES_TO_UNPARSE
                     printf ("Entry not found in unparseSourceFileMap \n");
-#endif
-                  }
-
-            // DQ (10/10/2019): Look in the SgIncludeFile map.
-            // extern std::map<std::string, SgIncludeFile*> edg_include_file_map;
-               if (EDG_ROSE_Translation::edg_include_file_map.find(filename) != EDG_ROSE_Translation::edg_include_file_map.end())
-                  {
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-                    printf ("In initializeFilesToUnparse(): Looking for a SgIncludeFile: filename = %s \n",filename.c_str());
-#endif
-                    SgIncludeFile* includeFile = EDG_ROSE_Translation::edg_include_file_map[filename];
-                 // ASSERT_not_null(includeFile);
-                    if (includeFile != NULL)
-                       {
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-                         printf ("In initializeFilesToUnparse(): includeFile = %p \n",includeFile);
-#endif
-                      // SgSourceFile* sourceFile = includeFile->get_source_file();
-                         sourceFile = includeFile->get_source_file();
-
-                      // DQ (10/26/2019): When this is NULL we need to add it directly.
-                         if (sourceFile == NULL)
-                            {
-                              printf ("When sourceFile == NULL we need to add it directly: filename = %s \n",filename.c_str());
-
-                              ASSERT_not_null(projectNode);
-                              sourceFile = buildSourceFileForHeaderFile(projectNode,filename);
-
-                              ASSERT_not_null(sourceFile);
-
-                              printf ("Calling includeFile->set_source_file(sourceFile): includeFile = %p filename = %s sourceFile = %p \n",includeFile,includeFile->get_filename().str(),sourceFile);
-
-                           // This is set in buildSourceFileForHeaderFile().
-                              ASSERT_not_null(includeFile->get_source_file());
-                           // includeFile->set_source_file(sourceFile);
-#if 0
-                              printf ("Exiting as a test! \n");
-                              ROSE_ABORT();
-#endif
-                            }
-                           else
-                            {
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-                              printf ("sourceFile = %p filename = %s \n",sourceFile,sourceFile->getFileName().c_str());
-#endif
-                            }
-                       }
-                      else
-                       {
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-                         printf ("EDG_ROSE_Translation::edg_include_file_map[filename] is NOT a SgIncludeFile \n");
-#endif
-                       }
-
-                    ASSERT_not_null(sourceFile);
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-                    printf ("Found entry in EDG_ROSE_Translation::edg_include_file_map: sourceFile = %p = %s \n",sourceFile,sourceFile->class_name().c_str());
-#endif
-                  }
-                 else
-                  {
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-                    printf ("Entry not found in EDG_ROSE_Translation::edg_include_file_map \n");
 #endif
                   }
 

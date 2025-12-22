@@ -68,7 +68,7 @@ TEST_INCLUDES = -I$(top_srcdir)/src/frontend/SageIII -I$(top_srcdir)/src/midend/
 ../roseomp:
 	make -C ../. roseomp
 # this flag is used for the long list of CXX test files
-TEST_FLAGS = $(TEST_INCLUDES) -rose:openmp:lowering -g --edg:no_warnings #-fno-underscoring #-rose:verbose 2 #--edg:restrict #-rose:wave 
+TEST_FLAGS = $(TEST_INCLUDES) -rose:openmp:lowering -g  #-fno-underscoring #-rose:verbose 2 # #-rose:wave 
 
 
 # rules to build .o from .f for OpenMP test codes

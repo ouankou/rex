@@ -1025,8 +1025,8 @@ $(F90_TESTCODES_REQUIRING_PREPROCESSOR_CURRENTLY_FAILING)
 # File option to accumulate performance information about the compilation
 PERFORMANCE_REPORT_OPTION = -rose:compilationPerformanceFile $(top_builddir)/FORTRAN_ROSE_PERFORMANCE_DATA.csv
 
-# ROSE_FLAGS = -rose:C_only -rose:verbose 2 --edg:restrict
-# ROSE_FLAGS = -rose:C_only -rose:verbose 2 --edg:restrict $(PERFORMANCE_REPORT_OPTION)
+# ROSE_FLAGS = -rose:C_only -rose:verbose 2 
+# ROSE_FLAGS = -rose:C_only -rose:verbose 2  $(PERFORMANCE_REPORT_OPTION)
 # ROSE_FLAGS = -rose:verbose 3 -rose:output_parser_actions -I$(srcdir)
 # ROSE_FLAGS = -rose:verbose 0 -rose:unparse_tokens -rose:output_parser_actions -I$(srcdir)
 # ROSE_FLAGS = -rose:verbose 0 -rose:unparse_tokens -I$(srcdir)
