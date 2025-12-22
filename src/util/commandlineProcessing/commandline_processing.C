@@ -96,7 +96,7 @@ CommandlineProcessing::generateStringFromArgList ( Rose_STL_Container<string> ar
                string arg    = *i;
                string suffix = "";
          if (arg.length() > 2) suffix = arg.substr(arg.size() - 2);
-         if (suffix == ".C" || arg.find("--edg:definition_list_file") == 0) {
+         if (suffix == ".C") {
                  // DQ (5/13/2004): It was not a great idea to put this filter into this function
                  // remove it and handle the filtering of definition_list_file better ...  later!
            continue;

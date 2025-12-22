@@ -681,8 +681,8 @@ PERFORMANCE_REPORT_OPTION = -rose:compilationPerformanceFile $(top_builddir)/COM
 COMMENTS_FROM_ALL_FILES_OPTION = -rose:collectAllCommentsAndDirectives
 # COMMENTS_FROM_ALL_FILES_OPTION = 
 
-#ROSE_FLAGS = -rose:verbose 2  --edg:export
-#ROSE_FLAGS = -rose:verbose 2  --edg:export $(PERFORMANCE_REPORT_OPTION)
+#ROSE_FLAGS = -rose:verbose 2  
+#ROSE_FLAGS = -rose:verbose 2   $(PERFORMANCE_REPORT_OPTION)
 # Suppress all warnings (in EDG: --no_warnings) (in g++: -w)
 # ROSE_FLAGS =  -w -rose:verbose 2 $(PERFORMANCE_REPORT_OPTION)
 ROSE_FLAGS =  -w -rose:verbose 0 $(PERFORMANCE_REPORT_OPTION) $(COMMENTS_FROM_ALL_FILES_OPTION)

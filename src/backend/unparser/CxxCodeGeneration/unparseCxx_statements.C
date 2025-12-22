@@ -1324,7 +1324,7 @@ Unparse_ExprStmt::unparseFunctionParameterDeclaration (
 
      if (storage.isRegister())
         {
-       // DQ (12/10/2007): This is a fix for C_tests/test2007_177.c (this is only an issue if --edg:restrict is used on the commandline).
+       // DQ (12/10/2007): This is a fix for C_tests/test2007_177.c (this is only an issue if  is used on the commandline).
        // curprint( "register ");
           if ( (oldStyleDefinition == false) || (outputParameterDeclaration == true) )
              {

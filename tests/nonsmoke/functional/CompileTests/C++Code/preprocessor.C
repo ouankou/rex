@@ -215,8 +215,8 @@ main ( int argc, char* argv[] )
      printf ("Preprocessor (before): argv = \n%s \n",StringUtility::listToString(l).c_str());
 
   // testing removeArgs
-     CommandlineProcessing::removeArgs (argc,argv,"-edg:");
-     CommandlineProcessing::removeArgs (argc,argv,"--edg:");
+     CommandlineProcessing::removeArgs (argc,argv,"
+     CommandlineProcessing::removeArgs (argc,argv,"
      CommandlineProcessing::removeArgsWithParameters (argc,argv,"-edg_parameter:");
      CommandlineProcessing::removeArgsWithParameters (argc,argv,"--edg_parameter:");
 

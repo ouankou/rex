@@ -13,8 +13,8 @@ main ( int argc, char* argv[] )
      printf ("Preprocessor (before): argv = \n%s \n",StringUtility::listToString(l).c_str());
 
   // Remove certain sorts of options from the command line
-     CommandlineProcessing::removeArgs (l,"-edg:");
-     CommandlineProcessing::removeArgs (l,"--edg:");
+     CommandlineProcessing::removeArgs (l,"
+     CommandlineProcessing::removeArgs (l,"
      CommandlineProcessing::removeArgsWithParameters (l,"-edg_parameter:");
      CommandlineProcessing::removeArgsWithParameters (l,"--edg_parameter:");
 

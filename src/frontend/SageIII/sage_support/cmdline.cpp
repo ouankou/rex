@@ -2426,26 +2426,9 @@ SgFile::usage ()
            "                             LEVEL is one of:\n"
            "                               0: transparent (ROSE translator "
            "does nothing)\n"
-           "                               1: run the KCC front end only "
-           "(assumes it is in\n"
-           "                                    path)\n"
-
-           "                               4: same as 3 plus parse into Sage "
-           "III program\n"
-           "                                    tree\n"
-           "                               5: same as 4 plus unparse "
-           "untransformed source\n"
-           "                                    code\n"
-           "                               6: same as 5 plus compile generated "
-           "source code\n"
-           "                               7: same as 5 plus build higher "
-           "level grammars\n"
-           "                                    before unparsing\n"
-           "                               8: same as 6 plus run midend "
-           "(transformations)\n"
-           "                                    before unparsing\n"
-           "\n"
-           "Report bugs to <dquinlan@llnl.gov>.\n",
+           "                               4: parse into Sage III program tree\n"
+            "\n"
+            "Report bugs to <dquinlan@llnl.gov>.\n",
            stdout);
 
        // Obsolete options
@@ -3943,6 +3926,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           switch (integerOption)
              {
                case 0 :
+               case 4 :
                  // transparent mode (does nothing)
                  p_skip_transformation = true;
                  p_skip_unparse = true;
@@ -4023,7 +4007,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
         {
        // DQ (1/23/2018): Note, we can call the backend compiler using -H or call edg with -H.
        // This option will call the backend compiler with -H, if we want to call edg with -H
-       // then we use -edg:H as the option to ROSE.
+       // then we use  as the option to ROSE.
 #if 0
           printf ("option -H found (just run backend compiler with -H to call CPP) \n");
 #endif

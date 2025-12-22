@@ -8,7 +8,7 @@ AM_LDFLAGS = $(ROSE_RPATHS)
 
 # all: exampleMakefile
 
-ROSE_FLAGS = --edg:no_warnings -w
+ROSE_FLAGS =  -w
 
 noinst_HEADERS = \
    coverage_funcsC.h \
@@ -371,27 +371,27 @@ testReductionRecognition: reductionRecognition
 
 # turn off the warning for input code with unused variable declarations
 testAddVariableDeclaration: addVariableDeclaration
-	./addVariableDeclaration --edg:no_warnings -c $(srcdir)/inputCode_AddVariableDeclaration.C
+	./addVariableDeclaration  -c $(srcdir)/inputCode_AddVariableDeclaration.C
 
 testAddVariableDeclaration2: addVariableDeclaration2
-	./addVariableDeclaration2 --edg:no_warnings -c $(srcdir)/inputCode_AddVariableDeclaration2.C
+	./addVariableDeclaration2  -c $(srcdir)/inputCode_AddVariableDeclaration2.C
 
 testAddFunctionDeclaration: addFunctionDeclaration
-	./addFunctionDeclaration --edg:no_warnings -c $(srcdir)/inputCode_AddFunctionDeclaration.C
+	./addFunctionDeclaration  -c $(srcdir)/inputCode_AddFunctionDeclaration.C
 
 testAddFunctionDeclaration2: addFunctionDeclaration2
-	./addFunctionDeclaration2 --edg:no_warnings -c $(srcdir)/inputCode_AddFunctionDeclaration2.C
+	./addFunctionDeclaration2  -c $(srcdir)/inputCode_AddFunctionDeclaration2.C
 testAddFunctionDeclaration3: addFunctionDeclaration3
-	./addFunctionDeclaration3 --edg:no_warnings -c $(srcdir)/inputCode_AddFunctionDeclaration3.C
+	./addFunctionDeclaration3  -c $(srcdir)/inputCode_AddFunctionDeclaration3.C
 
 testAddAssignmentStmt: addAssignmentStmt
-	./addAssignmentStmt --edg:no_warnings -c $(srcdir)/inputCode_AddAssignmentStmt.C
+	./addAssignmentStmt  -c $(srcdir)/inputCode_AddAssignmentStmt.C
 
 testAddExpression: addExpression
-	./addExpression --edg:no_warnings -c $(srcdir)/inputCode_AddExpression.C
+	./addExpression  -c $(srcdir)/inputCode_AddExpression.C
 
 testAddFunctionCalls: addFunctionCalls
-	./addFunctionCalls --edg:no_warnings -c $(srcdir)/inputCode_AddFunctionCalls.C
+	./addFunctionCalls  -c $(srcdir)/inputCode_AddFunctionCalls.C
 
 testLoopOptimization: loopOptimization
 	$(VALGRIND) ./loopOptimization -c $(srcdir)/inputCode_LoopOptimization.C
@@ -1066,7 +1066,7 @@ debuggingSourceCodePositionInformation.out: debuggingSourceCodePositionInformati
 
 commandlineProcessing.out: commandlineProcessing
 	@echo "Generate executable from compilation of input code (commandlineProcessing) ..."
-	./commandlineProcessing $(ROSE_FLAGS) -c $(srcdir)/inputCode_ExampleDebugging.C -edg:restrict -myTranslator:verbose 42 > commandlineProcessing.out
+	./commandlineProcessing $(ROSE_FLAGS) -c $(srcdir)/inputCode_ExampleDebugging.C  -myTranslator:verbose 42 > commandlineProcessing.out
 
 charmSupport.out: charmSupport
 	@echo "Generate executable from compilation of input code (charmSupport) ..."

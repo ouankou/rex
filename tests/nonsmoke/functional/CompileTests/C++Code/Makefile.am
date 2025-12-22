@@ -516,15 +516,15 @@ test2004_21.o: $(srcdir)/test2004_21.c $(TRANSLATOR_EXECUTABLE)
 
 # Test for UPC example code
 test2004_22.o: $(srcdir)/test2004_22.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR) --edg:upc -c $(srcdir)/test2004_22.C
+	$(TEST_TRANSLATOR)  -c $(srcdir)/test2004_22.C
 
 # Test of export keyword
 test2004_30.o: $(srcdir)/test2004_30.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR)  --edg:export -c $(srcdir)/test2004_30.C
+	$(TEST_TRANSLATOR)   -c $(srcdir)/test2004_30.C
 
 # Test of simple STL (list) example code
 test2004_41.o: $(srcdir)/test2004_41.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR)  --edg:export -I../g++_HEADERS/hdrs1/bits -c $(srcdir)/test2004_41.C 
+	$(TEST_TRANSLATOR)   -I../g++_HEADERS/hdrs1/bits -c $(srcdir)/test2004_41.C 
 
 # Test for STL example code
 # test2004_92.o: $(srcdir)/test2004_92.C $(TRANSLATOR_EXECUTABLE)

@@ -5119,7 +5119,7 @@ SgProject::compileOutput()
        // exit(1);
         }
 
-  // NOTE: that get_C_PreprocessorOnly() is true only if using the "-E" option and not for the "-edg:E" option.
+  // NOTE: that get_C_PreprocessorOnly() is true only if using the "-E" option and not for the " option.
 #if 0
      printf ("In SgProject::compileOutput(): get_C_PreprocessorOnly() = %s \n",get_C_PreprocessorOnly() ? "true" : "false");
 #endif

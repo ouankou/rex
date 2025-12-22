@@ -30,8 +30,8 @@ main ( int argc, char* argv[] )
      printf ("Preprocessor (before): argv = \n%s \n",StringUtility::listToString(l).c_str());
 
   // testing removeArgs
-     CommandlineProcessing::removeArgs (argc,argv,"-edg:");
-     CommandlineProcessing::removeArgs (argc,argv,"--edg:");
+     CommandlineProcessing::removeArgs (argc,argv,"
+     CommandlineProcessing::removeArgs (argc,argv,"
      CommandlineProcessing::removeArgsWithParameters (argc,argv,"-edg_parameter:");
      CommandlineProcessing::removeArgsWithParameters (argc,argv,"--edg_parameter:");
 
@@ -105,7 +105,7 @@ main ( int argc, char* argv[] )
      char** modifiedArgv = NULL;
 
   // resets modifiedArgc and allocates memory to modifiedArgv
-     list<string> edgOptionList = CommandlineProcessing::generateOptionList (argc, argv,"-edg:",modifiedArgc,modifiedArgv);
+     list<string> edgOptionList = CommandlineProcessing::generateOptionList (argc, argv,"
 
   // resets modifiedArgc to zero and releases memory from modifiedArgv (resets modifiedArgv to NULL)
      CommandlineProcessing::releaseArgListMemory(modifiedArgc,modifiedArgv);
@@ -121,13 +121,13 @@ main ( int argc, char* argv[] )
         }
 
      int integerParameter;
-     if ( CommandlineProcessing::isOptionWithParameter(argc,argv,"-edg:","test",integerParameter,true) )
+     if ( CommandlineProcessing::isOptionWithParameter(argc,argv," )
         {
           printf ("Option (integer parameter) -test %d found! \n",integerParameter);
         }
 
      string stringParameter;
-     if ( CommandlineProcessing::isOptionWithParameter(argc,argv,"-edg:","test",stringParameter,true) )
+     if ( CommandlineProcessing::isOptionWithParameter(argc,argv," )
         {
           printf ("Option (string parameter) -test %s found! \n",stringParameter.c_str());
         }

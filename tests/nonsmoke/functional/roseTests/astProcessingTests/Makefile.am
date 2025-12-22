@@ -209,7 +209,7 @@ VALGRIND =
 endif
 
 $(astTraversalTest_TEST_TARGETS): att_%.passed: % $(TEST_CONFIG) astTraversalTest
-	@$(RTH_RUN) CMD="./astTraversalTest -edg:w -c $<" $(TEST_CONFIG) $@
+	@$(RTH_RUN) CMD="./astTraversalTest  -c $<" $(TEST_CONFIG) $@
 
 .PHONY: check-astTraversalTest
 check-astTraversalTest: $(astTraversalTest_TEST_TARGETS)

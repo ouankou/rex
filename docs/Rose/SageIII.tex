@@ -611,7 +611,7 @@ transformations on templates can be supported.  And I am learning as I go :-).
 consider supporting additional modes later.
 % other modes to perhaps support at a later date.  
 ROSE will respond to the EDG options to control automatic template instantiation using the
-option {\tt -edg:t{\it mode}},
+option {\tt  mode}},
 where the mode is either:
 \begin{enumerate}
    \item none (default) \\
@@ -804,7 +804,7 @@ Example {\em template instantiation} file (rose\_file.ti):
 {\mySmallFontSize
 
 \begin{verbatim}
-cmd:./translator -rose:verbose 2 --edg:restrict --edg:export -I/home/dquinlan/ROSE/NEW_ROSE/tests/nonsmoke/functional/CompileTests/A++Code -c -rose:prelink
+cmd:./translator -rose:verbose 2   -I/home/dquinlan/ROSE/NEW_ROSE/tests/nonsmoke/functional/CompileTests/A++Code -c -rose:prelink
 dir:/home/dquinlan2/ROSE/LINUX-3.3.2/developersScratchSpace/Dan
 fnm:/home/dquinlan2/ROSE/LINUX-3.3.2/developersScratchSpace/Dan/rose_test2005_74.C
 flg:foo__tm__2_i__FiZ1Z_v:TC
@@ -1887,7 +1887,7 @@ in allowing large complex {\tt Makefiles} to be used by only changing the name o
 compiler ({\tt CC} or {\tt CXX}).
 
     Command line options are considered EDG-specified when prefixed with 
-option: {\tt -edg:xxx}, {\tt --edg:xxx}, {\tt -edg\_parameter:xxx n}, or 
+option: {\tt  {\tt  {\tt -edg\_parameter:xxx n}, or 
 {\tt --edg\_parameter:xxx n}, which then translates to {\tt -xxx}, {\tt --xxx}, 
 {\tt -xxx n}, or {\tt --xxx n} (respectively) for only the command line passed to 
 the EDG front-end (not passed to the back-end compiler).  These are
@@ -1911,12 +1911,12 @@ IR, and the EDG front-end).  There are five modes supported:
    \begin{enumerate}
       \item C++ mode (default). \\
         This mode is used when compiling all files when no command line options are specified.
-      \item C++ (strict\_warnings) mode {\tt -edg:a}. \\
-        This is the mode used when compiling with the {\tt -edg:a}, violations are issued
+      \item C++ (strict\_warnings) mode {\tt  \\
+        This is the mode used when compiling with the {\tt  violations are issued
         as warnings. Note that currently, gnu builtin functions
         are not properly defined in strict modes (so they modes should not be used).
-      \item C++ (strict) mode {\tt -edg:A}. \\
-        This is the mode used when compiling with the {\tt -edg:A}, violations are issued
+      \item C++ (strict) mode {\tt  \\
+        This is the mode used when compiling with the {\tt  violations are issued
         as errors. Note that currently, gnu builtin functions
         are not properly defined in strict modes (so they modes should not be used).
         So these strict modes are incompatable with the use of the g++ and gcc compilers
@@ -1928,15 +1928,15 @@ IR, and the EDG front-end).  There are five modes supported:
       \item ANSI C (non-strict) mode. \\
         This is the mode used when compiling with the {\tt -rose:C\_only} C89 standard 
         (works best if files have ".c" filename extension). This implies conformance with 
-        the C89 ANSI standard. Also equivalent to {\tt --edg:c} option.
-      \item ANSI C (strict\_warnings) mode {\tt -edg:a}. \\
-        This is the mode used when compiling with the {\tt -edg:a} in addition to the 
-        {\tt --edg:c} or {\tt -rose:C\_only} options (file must have ".c"
+        the C89 ANSI standard. Also equivalent to {\tt  option.
+      \item ANSI C (strict\_warnings) mode {\tt  \\
+        This is the mode used when compiling with the {\tt  in addition to the 
+        {\tt  or {\tt -rose:C\_only} options (file must have ".c"
         filename extension).  This implies conformance with the C89 standard,
         violations are issued as warnings.
-      \item ANSI C (strict) mode {\tt -edg:A}. \\
-        This is the mode used when compiling with the {\tt -edg:A} in addition to the 
-        {\tt --edg:c} or {\tt -rose:C\_only} options (file must have ".c"
+      \item ANSI C (strict) mode {\tt  \\
+        This is the mode used when compiling with the {\tt  in addition to the 
+        {\tt  or {\tt -rose:C\_only} options (file must have ".c"
         filename extension).  This implies conformance with the C89 standard,
         violations are issued as errors. 
    \end{enumerate}
@@ -1944,12 +1944,12 @@ IR, and the EDG front-end).  There are five modes supported:
    \item C99 mode. \\
    \begin{enumerate}
       \item ANSI C99 default mode. \\
-        This is the mode used when compiling with the {\tt --edg:c99} (file must have ".c"
+        This is the mode used when compiling with the {\tt  (file must have ".c"
         filename extension). This implies conformance with the C99 standard. This is 
         the same as using {\tt -rose:C99\_only}.
       \item ANSI C99 {\em strict} mode. \\
-        This is the mode used when compiling with the {\tt -edg:a} in addition to the 
-        {\tt --edg:c99} or {\tt -rose:C99\_only} options (file must have ".c"
+        This is the mode used when compiling with the {\tt  in addition to the 
+        {\tt  or {\tt -rose:C99\_only} options (file must have ".c"
         filename extension).  This implies conformance with the C89 standard,
         violations are issued as errors.
    \end{enumerate}
@@ -1958,7 +1958,7 @@ IR, and the EDG front-end).  There are five modes supported:
 
    \item UPC mode. \\
         This is the mode used when compiling with UPC specific modifiers, use 
-        {\tt --edg:upc}.  Note that we have modified the EDG front-end to support
+        {\tt   Note that we have modified the EDG front-end to support
         this mode for both C and C++ programs.  The generated code does not 
         support calls to a UPC runtime system at present, so this is just the 
         mode required to support building the translator for C or C++ which would
@@ -1966,11 +1966,11 @@ IR, and the EDG front-end).  There are five modes supported:
         as has been done for OpenMP by Liao from University of Houston).
 
    \item K\&R C {\em strict} mode. \\
-        This is the mode used when compiling with the {\tt --edg:old\_c} (file must have ".c"
+        This is the mode used when compiling with the {\tt  (file must have ".c"
         filename extension).  This option will not currently work with ROSE because 
         prototyped versions of functions are used within
         {\tt rose\_edg\_required\_macros\_and\_functions.h} and these are not allowed in EDG's
-        {\tt --old\_c} mode (translated from the ROSE {\tt --edg:old\_c}.
+        {\tt --old\_c} mode (translated from the ROSE {\tt 
 \end{enumerate}
 
   Most of the time the C++ mode is sufficient for compiling either C or C++ 

@@ -15,7 +15,7 @@ main( int argc, char * argv[] )
      argvList.push_back("-rose:skip_translation_from_edg_ast_to_rose_ast");
 
   // Alternatively call the edgcpfe (EDG Cxx front-end) executable.
-  // argvList.push_back("-edg:new_frontend");
+  // argvList.push_back("
 
   // SgProject* project = frontend(argc,argv);
      SgProject* project = frontend(argvList);

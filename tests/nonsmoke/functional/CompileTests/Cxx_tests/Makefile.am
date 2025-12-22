@@ -2939,8 +2939,8 @@ testBuildUsingAbsolutePath: $(TEST_TRANSLATOR)
 
 # DQ (4/26/2019): Test the use of the -ansi option in ROSE.
 test_ansi_and_nonansi_modes:
-# DQ (4/26/2019): It appears that -edg:strict option does not work.
-#	$(TEST_TRANSLATOR) -rose:verbose 0 -edg:strict $(srcdir)/test_ansi.C
+# DQ (4/26/2019): It appears that  option does not work.
+#	$(TEST_TRANSLATOR) -rose:verbose 0  $(srcdir)/test_ansi.C
 #	$(TEST_TRANSLATOR) -rose:verbose 0 $(srcdir)/test_nonansi.C
 	$(TEST_TRANSLATOR) -rose:verbose 0 -ansi -c $(srcdir)/test_ansi.C
 	$(TEST_TRANSLATOR) -rose:verbose 0 -c $(srcdir)/test_nonansi.C
