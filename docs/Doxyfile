@@ -43,3 +43,15 @@ WARN_AS_ERROR          = NO
 
 TAB_SIZE               = 2
 USE_MDFILE_AS_MAINPAGE = README.md
+
+# Preprocessing: strip export macros that break Breathe/Sphinx parsing
+# and expand PROTO macros to their actual function declarations
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+PREDEFINED             = ROSE_DLL_API= \
+                         ROSE_UTIL_API= \
+                         DOXYGEN_SHOULD_SKIP_THIS
+
+# Disable program listings to avoid toctree reference errors
+XML_PROGRAMLISTING     = NO
