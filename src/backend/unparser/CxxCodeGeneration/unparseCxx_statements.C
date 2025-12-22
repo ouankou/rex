@@ -12969,15 +12969,6 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
                                               ( templateMemberFunctionDeclaration != NULL &&
                                                      templateMemberFunctionDeclaration->get_string_represents_function_body() );
 
-       if (string_represents_function_body == true) {
-         // DQ (9/7/2014): This is the special case (to output template member and non-member function declarations after EDG normalization 
-         // to move then out of a template class declaration.
-         SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(template_stmt);
-         ASSERT_not_null(functionDeclaration);
-         ROSE_ASSERT(functionDeclaration->isNormalizedTemplateFunction());
-
-         ASSERT_not_null(templateMemberFunctionDeclaration);
-
          // TV (10/08/2018): temporary switch for ROSE-1392 (relies on template
          // unparsing from AST)
 
@@ -12990,7 +12981,6 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
             }
 #endif
          curprint(string("\n") + templateString);
-       }
      }
 
 #if 0

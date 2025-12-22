@@ -3949,8 +3949,12 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
                  p_skipfinalCompileStep = true;
                  break;
                default:
-                 // DQ (12/22/2021): Other test levels are obsolete.
-                 break;
+                 // default mode is an error
+                 // Obsolete EDG-related test levels (1-3, 5-9) have been removed.
+                 // Only level 0 and 4 are currently supported.
+                    printf ("Default reached in processing -rose:test # option (use 0 or 4, input option = %d) \n",integerOption);
+                    ROSE_ABORT();
+                    break;
              }
         }
 
