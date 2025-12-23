@@ -1393,11 +1393,16 @@ SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
   struct OnDemandGuard {
     std::set<clang::Decl *> &set;
     clang::Decl *decl;
+    bool inserted;
     OnDemandGuard(std::set<clang::Decl *> &set, clang::Decl *decl)
-        : set(set), decl(decl) {
-      set.insert(decl);
+        : set(set), decl(decl), inserted(false) {
+      inserted = set.insert(decl).second;
     }
-    ~OnDemandGuard() { set.erase(decl); }
+    ~OnDemandGuard() {
+      if (inserted) {
+        set.erase(decl);
+      }
+    }
   } guard(p_decl_translation_on_demand, decl);
 
   return Traverse(decl);
