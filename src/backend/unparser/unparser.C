@@ -4069,6 +4069,46 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
           const string& unparseRootPath                          = includedFilesUnparser.getUnparseRootPath();
           const map<string, string>& unparseMap                  = includedFilesUnparser.getUnparseMap();
           const map<string, SgScopeStatement*>& unparseScopesMap = includedFilesUnparser.getUnparseScopesMap();
+          auto copy_header_to_unparse_root =
+              [&](const string &originalFileName) {
+                ASSERT_not_null(project);
+                string applicationRootDirectory =
+                    project->get_applicationRootDirectory();
+                string filenameWithOutPath =
+                    FileHelper::getFileName(originalFileName);
+                string adjusted_header_file_directory = unparseRootPath;
+                string name_used_in_include_directive = originalFileName;
+                string directoryPathPrefix =
+                    Rose::getPathFromFileName(name_used_in_include_directive);
+
+                size_t pos = directoryPathPrefix.find(applicationRootDirectory);
+                if (pos != string::npos) {
+                  directoryPathPrefix.erase(pos,
+                                            applicationRootDirectory.length());
+                }
+
+                if (directoryPathPrefix == ".") {
+                  directoryPathPrefix = "";
+                }
+
+                if (!directoryPathPrefix.empty()) {
+                  directoryPathPrefix += "/";
+                }
+
+                adjusted_header_file_directory += "/" + directoryPathPrefix;
+
+                std::filesystem::path pathPrefix(
+                    adjusted_header_file_directory);
+                create_directories(pathPrefix);
+
+                std::filesystem::path originalFileNamePath(originalFileName);
+                std::filesystem::path newFileNamePath(
+                    adjusted_header_file_directory + filenameWithOutPath);
+                if (exists(newFileNamePath) == false) {
+                  copy_file(originalFileNamePath, newFileNamePath,
+                            std::filesystem::copy_options::none);
+                }
+              };
 #if 0
           printf ("In unparseIncludedFiles(): Calling prependIncludeOptionsToCommandLine(): includedFilesUnparser.getIncludeCompilerOptions().size() = %zu \n",
                includedFilesUnparser.getIncludeCompilerOptions().size());
@@ -4413,27 +4453,16 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
             // map<string, SgSourceFile*> unparseSourceFileMap = includedFilesUnparser.getUnparseSourceFileMap();
                map<string, SgSourceFile*> unparseSourceFileMap = includedFilesUnparser.getUnparseSourceFileMap();
 
-            // DQ (9/10/2018): This appears to be an error, force this as a test and exit until we fix this.
+               // DQ (9/10/2018): Missing headers should fall back to copying
+               // the original file when no SgSourceFile was materialized.
                if (unparseSourceFileMap.find(originalFileName) ==
                    unparseSourceFileMap.end()) {
-                 printf("Error: originalFileName = %s not found in "
-                        "unparseSourceFileMap\n",
+                 printf("Warning: originalFileName = %s not found in "
+                        "unparseSourceFileMap; copying original header\n",
                         originalFileName.c_str());
-                 printf("Note: On-demand header file building was removed with "
-                        "EDG frontend cleanup.\n");
-                 ROSE_ABORT();
+                 copy_header_to_unparse_root(originalFileName);
+                 continue;
                }
-#if 1
-            // DQ (9/27/2019): Since header files are in a separate list (I think) it should not be an error to misss it in this list.
-            // I think I need to re-evaluate this!
-               ROSE_ASSERT(unparseSourceFileMap.find(originalFileName) != unparseSourceFileMap.end());
-#endif
-
-#if 1
-            // DQ (9/27/2019): Since header files are in a separate list (I think) it should not be an error to misss it in this list.
-            // I think I need to re-evaluate this!
-               ROSE_ASSERT(unparseSourceFileMap.find(originalFileName) != unparseSourceFileMap.end());
-#endif
 
                SgSourceFile* unparsedFile = unparseSourceFileMap[originalFileName];
                ASSERT_not_null(unparsedFile);
