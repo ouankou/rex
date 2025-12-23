@@ -1878,25 +1878,16 @@ where the documentation should be clear. The code for this is in the
 SgType IR nodes (and its derived IR nodes).  The codes used for the operators is
 present in the function {\tt SgType::mangledNameSupport(SgName,SgUnparse\_Info)}.
 
-\section{Passing Options to EDG and ROSE}
+\section{Passing Options to ROSE}
 
-    By default, all command line options (except EDG or ROSE-specific options) are 
+    By default, all command line options (except ROSE-specific options) are 
 passed to the back-end compiler.  As a result the command line for the compiler
 can be used with any translator built using ROSE.  This is particularly effective
 in allowing large complex {\tt Makefiles} to be used by only changing the name of the 
 compiler ({\tt CC} or {\tt CXX}).
 
-    Command line options are considered EDG-specified when prefixed with 
-option: {\tt  {\tt  {\tt -edg\_parameter:xxx n}, or 
-{\tt --edg\_parameter:xxx n}, which then translates to {\tt -xxx}, {\tt --xxx}, 
-{\tt -xxx n}, or {\tt --xxx n} (respectively) for only the command line passed to 
-the EDG front-end (not passed to the back-end compiler).  These are
-required to support the different types of command line arguments used in EDG.
-For a complete list of the EDG options, see the EDG documentation (available 
-only from EDG and covered under their license to use EDG).
-
-     Similarly, ROSE-specific command line options are prefixed using {\tt -rose:xxx}
-and only interpreted by ROSE (not passed on to EDG or the back-end compiler).  To see 
+    ROSE-specific command line options are prefixed using {\tt -rose:xxx}
+and only interpreted by ROSE (not passed on to the back-end compiler).  To see 
 a complete list use any translator build using ROSE with the option {\tt --help}.
 
      All other options are passed to the back-end compiler with no processing.
@@ -1904,86 +1895,38 @@ a complete list use any translator build using ROSE with the option {\tt --help}
 
 \section{How to Control Language Specific Modes: C++, C, C99, UPC}
 
-   ROSE supports a number of different modes internally (within ROSE, the SAGE III
-IR, and the EDG front-end).  There are five modes supported:
+   ROSE supports a number of different modes internally (within ROSE and the SAGE III
+IR).  There are four modes supported:
 \begin{enumerate}
    \item C++ mode. \\
-   \begin{enumerate}
-      \item C++ mode (default). \\
         This mode is used when compiling all files when no command line options are specified.
-      \item C++ (strict\_warnings) mode {\tt  \\
-        This is the mode used when compiling with the {\tt  violations are issued
-        as warnings. Note that currently, gnu builtin functions
-        are not properly defined in strict modes (so they modes should not be used).
-      \item C++ (strict) mode {\tt  \\
-        This is the mode used when compiling with the {\tt  violations are issued
-        as errors. Note that currently, gnu builtin functions
-        are not properly defined in strict modes (so they modes should not be used).
-        So these strict modes are incompatable with the use of the g++ and gcc compilers
-        as a back-end to ROSE.
-   \end{enumerate}
 
    \item C mode. \\
-   \begin{enumerate}
-      \item ANSI C (non-strict) mode. \\
-        This is the mode used when compiling with the {\tt -rose:C\_only} C89 standard 
-        (works best if files have ".c" filename extension). This implies conformance with 
-        the C89 ANSI standard. Also equivalent to {\tt  option.
-      \item ANSI C (strict\_warnings) mode {\tt  \\
-        This is the mode used when compiling with the {\tt  in addition to the 
-        {\tt  or {\tt -rose:C\_only} options (file must have ".c"
-        filename extension).  This implies conformance with the C89 standard,
-        violations are issued as warnings.
-      \item ANSI C (strict) mode {\tt  \\
-        This is the mode used when compiling with the {\tt  in addition to the 
-        {\tt  or {\tt -rose:C\_only} options (file must have ".c"
-        filename extension).  This implies conformance with the C89 standard,
-        violations are issued as errors. 
-   \end{enumerate}
+        This is the mode used when compiling with the {\tt -rose:C\_only} or
+        {\tt -rose:C89\_only} options (works best if files have ".c" filename extension).
+        This implies conformance with the C89 ANSI standard.
 
    \item C99 mode. \\
-   \begin{enumerate}
-      \item ANSI C99 default mode. \\
-        This is the mode used when compiling with the {\tt  (file must have ".c"
-        filename extension). This implies conformance with the C99 standard. This is 
-        the same as using {\tt -rose:C99\_only}.
-      \item ANSI C99 {\em strict} mode. \\
-        This is the mode used when compiling with the {\tt  in addition to the 
-        {\tt  or {\tt -rose:C99\_only} options (file must have ".c"
-        filename extension).  This implies conformance with the C89 standard,
-        violations are issued as errors.
-   \end{enumerate}
+        This is the mode used when compiling with the {\tt -rose:C99\_only} option
+        (file must have ".c" filename extension). This implies conformance with the
+        C99 standard.
    Note that in ANSI C99, flexible array structures can not be data members of 
    other structures. See test2005\_189.c for an example.
 
    \item UPC mode. \\
-        This is the mode used when compiling with UPC specific modifiers, use 
-        {\tt   Note that we have modified the EDG front-end to support
-        this mode for both C and C++ programs.  The generated code does not 
+        This is the mode used when compiling with UPC specific modifiers; use
+        {\tt -rose:UPC}. The generated code does not 
         support calls to a UPC runtime system at present, so this is just the 
         mode required to support building the translator for C or C++ which would
         introduce the transformations required to call a UPC runtime system (such
         as has been done for OpenMP by Liao from University of Houston).
-
-   \item K\&R C {\em strict} mode. \\
-        This is the mode used when compiling with the {\tt  (file must have ".c"
-        filename extension).  This option will not currently work with ROSE because 
-        prototyped versions of functions are used within
-        {\tt rose\_edg\_required\_macros\_and\_functions.h} and these are not allowed in EDG's
-        {\tt --old\_c} mode (translated from the ROSE {\tt 
 \end{enumerate}
 
   Most of the time the C++ mode is sufficient for compiling either C or C++ 
 applications.  Sometimes the C mode is required (then, typically {\tt -rose:C\_only} is
-sufficient).  The specific K\&R strict C mode does not currently work in ROSE. But
-K\&R C will compile in both the C and often C++ modes without problem. For 
+sufficient). For 
 C99-specific codes (relatively rare), {\tt -rose:C99\_only} is sufficient.  On rare 
 occasions, a greater level of control is required and the other modes can be used.
-
-\subsection{Strict modes can not be used with g++ and gcc compilers as back-ends to ROSE}
-   Note that currently, gnu builtin functions are not properly defined in strict 
-modes (so they modes should not be used).  This is a problem for strict modes for 
-both C and C++.
 
 \subsection{Use {\tt *.c} filename suffix to compile C language files}
 In general most C programs can be compiled using the {\tt -rose:C\_only}
@@ -1991,7 +1934,7 @@ independent of their filename suffix. However,
 sometimes C program files that use a non *.c suffix cannot be handled by the
 {\tt -rose:C\_only} option because they contain keywords from C++ as variable 
 names, etc.  In order to compile these C language programs their files must use 
-a *.c (lower case {\em c}) as a filename extension (suffix).  This is an EDG
+a *.c (lower case {\em c}) as a filename extension (suffix).  This is a frontend
 issue related to the front-end parsing and the language rules that are selected
 (seemingly independent of the options specified to EDG and based partly on the
 filename suffix).  Fortunately most C language programs already use the lower
@@ -2018,8 +1961,6 @@ low level handling of the AST.  Significant new work is being done
 to simplify the direct construction of the AST.  This work is not
 available yet.  It is not discussed in this draft of the manual.
 }
-
-
 
 
 

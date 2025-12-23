@@ -165,8 +165,8 @@ so that all dependencies are built as normal by the backend compiler.
   \item[\{compiler arguments\ldots\}] : The arguments specified on
 	the command-line of the project build system.
   \item[\{ROSE arguments\ldots\}] : The arguments to the ROSE translator
-	prefixed with -rose:$<$ROSE argument$>$, e.x. 
-	{\tt -rose: Note, these may be placed anywhere
+	prefixed with -rose:$<$ROSE argument$>$, e.g.
+	{\tt -rose:verbose 1}. Note, these may be placed anywhere
 	after the $<$Backend Compiler$>$ argument.
 \end{description}
 
@@ -183,7 +183,7 @@ so that all dependencies are built as normal by the backend compiler.
 	the backend compiler.
   \item[ARGUMENTS] : The compile-line arguments specified on the command-line
 	with any script user specified arguments for the ROSE translator such
-	as {\tt  bound for the QMTest test file.
+	as {\tt -rose:verbose 1} bound for the QMTest test file.
   \item[LAST\_ARG] : The closing stub to the QMTest arguments format along with
 	the {\tt -o <object file name>} argument.
   \item[ARG] : The current compile-line argument place holder used in
@@ -440,4 +440,3 @@ qmtest gui
 # runs the QMTest GUI by which the user may read results stored in results.qmr 
 # or run additional tests.
 \end{verbatim}
-
