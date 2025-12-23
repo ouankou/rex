@@ -4486,7 +4486,7 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
           } else {
             i++;
             if (i < argv.size())
-              define_list.push_back(current_arg);
+              define_list.push_back(argv[i]);
             else
               break;
           }
