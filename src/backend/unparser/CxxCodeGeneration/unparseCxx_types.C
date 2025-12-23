@@ -182,8 +182,6 @@ string get_type_name(SgType* t)
 
             // DQ (8/27/2006): Later we want to make this an error!
             // if (SgProject::get_C_only() == true)
-            if (SageInterface::is_C_language() == true) {
-            }
 
             // DQ (10/27/2012): Modified to generate consistant with C applications used with GNU.
             // I'm not sure if this is a great idea, but it appears to be more consistant with the
