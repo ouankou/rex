@@ -4457,6 +4457,14 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
                // the original file when no SgSourceFile was materialized.
                if (unparseSourceFileMap.find(originalFileName) ==
                    unparseSourceFileMap.end()) {
+                 if (unparseScopesMap.find(originalFileName) !=
+                     unparseScopesMap.end()) {
+                   printf("Error: originalFileName = %s not found in "
+                          "unparseSourceFileMap but has modified scope; cannot "
+                          "safely copy header\n",
+                          originalFileName.c_str());
+                   ROSE_ABORT();
+                 }
                  printf("Warning: originalFileName = %s not found in "
                         "unparseSourceFileMap; copying original header\n",
                         originalFileName.c_str());
