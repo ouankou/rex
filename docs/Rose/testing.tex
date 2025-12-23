@@ -348,7 +348,7 @@ QM = /home/yuan5/RoseQMTest/scripts/qm.sh
 ROSE = /home/yuan5/bin/identityTranslator
 MYCC = $(QM) rose.RoseTest $(ROSE)
 CXX = $(MYCC) g++
-ROSEFLAGS = -rose:
+ROSEFLAGS =
 CFLAGS = $(ROSEFLAGS) -g -Wall
                                                                                 
 CPU.out : main.o registers.o reader.o decoder.o
@@ -381,13 +381,13 @@ be made along with all the QMTest {\tt .qmt} files.
 \begin{verbatim}
 bash-2.05b$ make
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
-g++ -rose: -g -Wall -c main.c
+g++ -g -Wall -c main.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
-g++ -rose: -g -Wall -c registers.c
+g++ -g -Wall -c registers.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator
-g++ -rose: -g -Wall -c reader.c
+g++ -g -Wall -c reader.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
-g++ -rose: -g -Wall -c decoder.c
+g++ -g -Wall -c decoder.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
 g++ -rose: -g -Wall -o CPU.out reader.o registers.o decoder.o main.o
 \end{verbatim}
@@ -440,5 +440,4 @@ qmtest gui
 # runs the QMTest GUI by which the user may read results stored in results.qmr 
 # or run additional tests.
 \end{verbatim}
-
 
