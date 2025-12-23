@@ -1764,19 +1764,18 @@ SgNode *ClangToSageTranslator::Traverse(clang::Decl *decl) {
         if (target_ctx != nullptr) {
           SgNode *parent_node = ds->get_parent();
           SgScopeStatement *parent_scope = isSgScopeStatement(parent_node);
-          if (parent_node == NULL || parent_scope != NULL) {
-            clang::Decl *ctx_decl = llvm::dyn_cast<clang::Decl>(
-                const_cast<clang::DeclContext *>(target_ctx));
-            if (ctx_decl != NULL &&
-                p_decl_translation_map.find(ctx_decl) ==
-                    p_decl_translation_map.end() &&
-                p_decl_translation_in_progress.find(ctx_decl) ==
-                    p_decl_translation_in_progress.end()) {
-              if (!llvm::isa<clang::NamespaceDecl>(ctx_decl)) {
-                p_decl_translation_in_progress.insert(ctx_decl);
-                TraverseOnDemand(ctx_decl);
-                p_decl_translation_in_progress.erase(ctx_decl);
-              }
+          clang::Decl *ctx_decl = llvm::dyn_cast<clang::Decl>(
+              const_cast<clang::DeclContext *>(target_ctx));
+          if (ctx_decl != NULL &&
+              p_decl_translation_map.find(ctx_decl) ==
+                  p_decl_translation_map.end() &&
+              p_decl_translation_in_progress.find(ctx_decl) ==
+                  p_decl_translation_in_progress.end()) {
+            if (!llvm::isa<clang::NamespaceDecl>(ctx_decl)) {
+              p_decl_translation_in_progress.insert(ctx_decl);
+              TraverseOnDemand(ctx_decl);
+              p_decl_translation_in_progress.erase(ctx_decl);
+            }
             }
 
             SgScopeStatement *target_scope = resolveScopeFromDeclContext(
@@ -1798,7 +1797,6 @@ SgNode *ClangToSageTranslator::Traverse(clang::Decl *decl) {
               ensure_decl_in_scope_child_list(ds, target_scope,
                                               "Traverse:decl-context");
             }
-          }
         }
       }
     }
