@@ -1324,7 +1324,7 @@ Unparse_ExprStmt::unparseFunctionParameterDeclaration (
 
      if (storage.isRegister())
         {
-       // DQ (12/10/2007): This is a fix for C_tests/test2007_177.c (this is only an issue if  is used on the commandline).
+       // DQ (12/10/2007): This is a fix for C_tests/test2007_177.c.
        // curprint( "register ");
           if ( (oldStyleDefinition == false) || (outputParameterDeclaration == true) )
              {
@@ -12963,14 +12963,6 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
 #if 0
        printf ("denormalizedAttributeTemplateString = %s \n",templateString.c_str());
 #endif
-
-       bool string_represents_function_body = ( templateFunctionDeclaration != NULL &&
-                                                    templateFunctionDeclaration->get_string_represents_function_body() ) ||
-                                              ( templateMemberFunctionDeclaration != NULL &&
-                                                     templateMemberFunctionDeclaration->get_string_represents_function_body() );
-
-         // TV (10/08/2018): temporary switch for ROSE-1392 (relies on template
-         // unparsing from AST)
 
 #if OUTPUT_PLACEHOLDER_COMMENTS_FOR_SUPRESSED_TEMPLATE_IR_NODES
          // DQ (4/5/2018): For debugging, output something so that we know why

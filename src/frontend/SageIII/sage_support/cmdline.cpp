@@ -2424,8 +2424,8 @@ SgFile::usage ()
            "                               passed)\n"
            "     -rose:test LEVEL        limit parts of ROSE which are run\n"
            "                             LEVEL is one of:\n"
-           "                               0: transparent (ROSE translator "
-           "does nothing)\n"
+           "                               0: parse into Sage III program tree "
+           "(alias of 4)\n"
            "                               4: parse into Sage III program tree\n"
             "\n"
             "Report bugs to <dquinlan@llnl.gov>.\n",
@@ -3927,7 +3927,7 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
              {
                case 0 :
                case 4 :
-                 // transparent mode (does nothing)
+                 // Parse only: skip transformations, unparse, and compile.
                  p_skip_transformation = true;
                  p_skip_unparse = true;
                  p_skipfinalCompileStep = true;

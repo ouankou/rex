@@ -215,10 +215,6 @@ main ( int argc, char* argv[] )
      printf ("Preprocessor (before): argv = \n%s \n",StringUtility::listToString(l).c_str());
 
   // testing removeArgs
-     CommandlineProcessing::removeArgs (argc,argv,"
-     CommandlineProcessing::removeArgs (argc,argv,"
-     CommandlineProcessing::removeArgsWithParameters (argc,argv,"-edg_parameter:");
-     CommandlineProcessing::removeArgsWithParameters (argc,argv,"--edg_parameter:");
 
      printf ("argc = %d \n",argc);
      l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
@@ -231,13 +227,6 @@ main ( int argc, char* argv[] )
 
      SgProject* project = frontend(argc,argv);
      ROSE_ASSERT (project != NULL);
-
-#if 0
-  // See if we can access the EDG AST directly
-     ROSE_ASSERT (il_header.primary_source_file != NULL);
-     ROSE_ASSERT (il_header.primary_source_file->file_name != NULL);
-     printf ("##### il_header.primary_source_file->file_name = %s \n",il_header.primary_source_file->file_name);
-#endif
 
   // DQ (2/6/2004): These tests fail in Coco for test2004_14.C
      AstTests::runAllTests(const_cast<SgProject*>(project));
@@ -287,8 +276,6 @@ main ( int argc, char* argv[] )
      return backend(project);
   // return backend(frontend(argc,argv));
    }
-
-
 
 
 

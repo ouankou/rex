@@ -516,7 +516,7 @@ test2004_21.o: $(srcdir)/test2004_21.c $(TRANSLATOR_EXECUTABLE)
 
 # Test for UPC example code
 test2004_22.o: $(srcdir)/test2004_22.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR)  -c $(srcdir)/test2004_22.C
+	$(TEST_TRANSLATOR) -rose:UPC -c $(srcdir)/test2004_22.C
 
 # Test of export keyword
 test2004_30.o: $(srcdir)/test2004_30.C $(TRANSLATOR_EXECUTABLE)
@@ -668,7 +668,6 @@ check-local: $(TRANSLATOR_EXECUTABLE) test2004_19.o test2004_21.o test2004_22.o 
 	@echo "*********************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/CompileTests/C++Code: make check rule complete (terminated normally) ******"
 	@echo "*********************************************************************************************"
-
 
 
 
