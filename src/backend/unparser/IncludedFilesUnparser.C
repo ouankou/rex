@@ -11,6 +11,55 @@
 
 using namespace std;
 
+namespace {
+string normalizePathIfPossible(const string &path) {
+  if (path.empty())
+    return path;
+  if (!FileHelper::fileExists(path))
+    return path;
+  return FileHelper::normalizePath(path);
+}
+
+void buildIncludeTreeParentMap(
+    SgIncludeFile *includeTreeRoot,
+    map<string, set<string>> &includedToIncludingFiles) {
+  if (includeTreeRoot == nullptr)
+    return;
+
+  vector<SgIncludeFile *> worklist;
+  set<SgIncludeFile *> visited;
+  worklist.push_back(includeTreeRoot);
+
+  while (!worklist.empty()) {
+    SgIncludeFile *includingFile = worklist.back();
+    worklist.pop_back();
+    if (includingFile == nullptr)
+      continue;
+
+    if (!visited.insert(includingFile).second)
+      continue;
+
+    const string includingFileName =
+        normalizePathIfPossible(includingFile->get_filename());
+
+    const SgIncludeFilePtrList &includeFileList =
+        includingFile->get_include_file_list();
+    for (size_t i = 0; i < includeFileList.size(); ++i) {
+      SgIncludeFile *includedFile = includeFileList[i];
+      if (includedFile == nullptr)
+        continue;
+
+      worklist.push_back(includedFile);
+
+      const string includedFileName =
+          normalizePathIfPossible(includedFile->get_filename());
+      if (!includedFileName.empty() && !includingFileName.empty())
+        includedToIncludingFiles[includedFileName].insert(includingFileName);
+    }
+  }
+}
+} // namespace
+
 const string IncludedFilesUnparser::defaultUnparseFolderName = "_rose_unparsed_headers_";
 
 
@@ -292,44 +341,68 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
 
   // DQ (11/30/2019): Process the header files to include possible header files that only contained another header files 
   // (and so are not supported within the traversal).  This addresses at least test11 in the UnparseHeadersTest directory.
-        set<string> workSet = allFiles;
-        while (!workSet.empty()) {
-          set<string> newParents;
-          for (const string &filename : workSet) {
-            if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-              printf("   --- allFiles entry = %s \n", filename.c_str());
-            }
-            const map<string, set<PreprocessingInfo *>>
-                &includingPreprocessingInfosMap =
-                    projectNode->get_includingPreprocessingInfosMap();
-            const string normalizedFilename =
-                FileHelper::normalizePath(filename);
-            map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
-                includingPreprocessingInfosMap.find(normalizedFilename);
-            if (mapEntry == includingPreprocessingInfosMap.end())
-              mapEntry = includingPreprocessingInfosMap.find(filename);
-            if (mapEntry != includingPreprocessingInfosMap.end()) {
-              const set<PreprocessingInfo *> &includingPreprocessingInfos =
-                  mapEntry->second;
-              for (set<PreprocessingInfo *>::const_iterator
-                       includingPreprocessingInfoPtr =
-                           includingPreprocessingInfos.begin();
-                   includingPreprocessingInfoPtr !=
-                   includingPreprocessingInfos.end();
-                   includingPreprocessingInfoPtr++) {
-                string normalizedIncludingFileName =
-                    FileHelper::getNormalizedContainingFileName(
-                        *includingPreprocessingInfoPtr);
-                if (allFiles.find(normalizedIncludingFileName) ==
-                    allFiles.end()) {
-                  allFiles.insert(normalizedIncludingFileName);
-                  newParents.insert(normalizedIncludingFileName);
-                }
-              }
-            }
-          }
-          workSet.swap(newParents);
-        }
+     map<string, set<string>> includedToIncludingFiles;
+     const SgFilePtrList &fileList = projectNode->get_fileList();
+     for (SgFilePtrList::const_iterator file = fileList.begin();
+          file != fileList.end(); ++file) {
+       SgSourceFile *sourceFile = isSgSourceFile(*file);
+       if (sourceFile == nullptr)
+         continue;
+
+       buildIncludeTreeParentMap(sourceFile->get_associated_include_file(),
+                                 includedToIncludingFiles);
+     }
+
+     const map<string, set<PreprocessingInfo *>>
+         &includingPreprocessingInfosMap =
+             projectNode->get_includingPreprocessingInfosMap();
+
+     set<string> workSet = allFiles;
+     while (!workSet.empty()) {
+       set<string> newParents;
+       for (const string &filename : workSet) {
+         if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+           printf("   --- allFiles entry = %s \n", filename.c_str());
+         }
+
+         const string normalizedFilename = normalizePathIfPossible(filename);
+
+         map<string, set<string>>::const_iterator includeTreeEntry =
+             includedToIncludingFiles.find(normalizedFilename);
+         if (includeTreeEntry == includedToIncludingFiles.end())
+           includeTreeEntry = includedToIncludingFiles.find(filename);
+         if (includeTreeEntry != includedToIncludingFiles.end()) {
+           for (const string &includingFileName : includeTreeEntry->second) {
+             if (!FileHelper::fileExists(includingFileName))
+               continue;
+             if (allFiles.insert(includingFileName).second)
+               newParents.insert(includingFileName);
+           }
+         }
+
+         map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
+             includingPreprocessingInfosMap.find(normalizedFilename);
+         if (mapEntry == includingPreprocessingInfosMap.end())
+           mapEntry = includingPreprocessingInfosMap.find(filename);
+         if (mapEntry != includingPreprocessingInfosMap.end()) {
+           const set<PreprocessingInfo *> &includingPreprocessingInfos =
+               mapEntry->second;
+           for (set<PreprocessingInfo *>::const_iterator
+                    includingPreprocessingInfoPtr =
+                        includingPreprocessingInfos.begin();
+                includingPreprocessingInfoPtr !=
+                includingPreprocessingInfos.end();
+                includingPreprocessingInfoPtr++) {
+             string normalizedIncludingFileName =
+                 FileHelper::getNormalizedContainingFileName(
+                     *includingPreprocessingInfoPtr);
+             if (allFiles.insert(normalizedIncludingFileName).second)
+               newParents.insert(normalizedIncludingFileName);
+           }
+         }
+       }
+       workSet.swap(newParents);
+     }
 
   // DQ (4/6/2020): Added header file unparsing feature specific debug level.
      if (SgProject::get_unparseHeaderFilesDebug() >= 4)
