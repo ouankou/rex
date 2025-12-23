@@ -302,8 +302,12 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
             const map<string, set<PreprocessingInfo *>>
                 &includingPreprocessingInfosMap =
                     projectNode->get_includingPreprocessingInfosMap();
+            const string normalizedFilename =
+                FileHelper::normalizePath(filename);
             map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
-                includingPreprocessingInfosMap.find(filename);
+                includingPreprocessingInfosMap.find(normalizedFilename);
+            if (mapEntry == includingPreprocessingInfosMap.end())
+              mapEntry = includingPreprocessingInfosMap.find(filename);
             if (mapEntry != includingPreprocessingInfosMap.end()) {
               const set<PreprocessingInfo *> &includingPreprocessingInfos =
                   mapEntry->second;
