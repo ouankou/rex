@@ -93,11 +93,6 @@ main ( int argc, char* argv[] )
   // Get the command line so that we can add an option.
      std::vector<std::string> commandLine = CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
 
-  // Use -rose:no_optimize_flag_for_frontend option to avoid issue with builtin functions not yet supported in ROSE.
-  // This allows more general support of the latest versions of compilers that have additional builtin functions.
-  // NOTE: This does not effect optimizations at the backend compiler.
-     commandLine.push_back("-rose:no_optimize_flag_for_frontend");
-
   // CmdOptions::GetInstance()->SetOptions(argc, argv);
      SgProject* project = frontend(commandLine);
      ROSE_ASSERT (project != NULL);
@@ -114,5 +109,3 @@ main ( int argc, char* argv[] )
   // This tool only does analysis so we can compile the original source code.
      return backendCompilesUsingOriginalInputFile(project);
    }
-
-

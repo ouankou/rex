@@ -2146,12 +2146,6 @@ SgFile::usage ()
            "     -rose:skipAstConsistancyTests\n"
            "                             skip AST consitancy testing (for "
            "better performance)\n"
-           "     -rose:no_optimize_flag_for_frontend\n"
-           "                             ignore use of __builtin functions in "
-           "frontend processing\n"
-           "                             all optimization specified is still "
-           "done on ROSE generated code\n"
-           "\n"
            "Plugin Mode:\n"
            "     -rose:plugin_lib <shared_lib_filename>\n"
            "                             Specify the file path to a shared "
@@ -4101,10 +4095,7 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
 
      optionCount = sla(argv, "-rose:", "($)", "(output_parser_actions)",1);
 
-     optionCount = sla(argv, "-rose:", "($)", "(unparse_tokens)",1);
-     optionCount =
-         sla(argv, "-rose:", "($)", "(no_optimize_flag_for_frontend)", 1);
-
+     optionCount = sla(argv, "-rose:", "($)", "(unparse_tokens)", 1);
      optionCount = sla(argv, "-rose:simd:", "($)", "(intel-avx)", 1);
      optionCount = sla(argv, "-rose:simd:", "($)", "(arm-sve)", 1);
      optionCount = sla(argv, "-rose:simd:", "($)", "(addr3)", 1);
