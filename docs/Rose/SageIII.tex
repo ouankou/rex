@@ -610,9 +610,8 @@ transformations on templates can be supported.  And I am learning as I go :-).
     We first supported only a single mode of template instantiation. Later we will
 consider supporting additional modes later.
 % other modes to perhaps support at a later date.  
-ROSE will respond to the EDG options to control automatic template instantiation using the
-option {\tt  mode}},
-where the mode is either:
+ROSE controls automatic template instantiation using the option
+{\tt -rose:instantiation <mode>}, where the mode is either:
 \begin{enumerate}
    \item none (default) \\
          No template instantiation will be done.
@@ -1961,7 +1960,6 @@ low level handling of the AST.  Significant new work is being done
 to simplify the direct construction of the AST.  This work is not
 available yet.  It is not discussed in this draft of the manual.
 }
-
 
 
 
