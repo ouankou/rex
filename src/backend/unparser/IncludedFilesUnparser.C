@@ -297,38 +297,41 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
 
   // DQ (11/30/2019): Process the header files to include possible header files that only contained another header files 
   // (and so are not supported within the traversal).  This addresses at least test11 in the UnparseHeadersTest directory.
-     set<string>::iterator k = allFiles.begin();
-     size_t tmp_counter = 0;
-     while (k != allFiles.end())
-        {
-#if 0
-#endif
-
+        set<string> workSet = allFiles;
+        while (!workSet.empty()) {
+          set<string> newParents;
+          for (const string &filename : workSet) {
 #if 1
-       // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 4)
-             {
-               printf ("   --- allFiles[%zu] = %s \n",tmp_counter,(*k).c_str());
-             }
+            if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+              printf("   --- allFiles entry = %s \n", filename.c_str());
+            }
 #endif
-          string filename = *k;
-
-       // Lookup the include file, so that we can traverse it's parents to a known file (in the allFiles list).
-#if 1
-       // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-            if (unparseAllHeaderFiles == true) {
-              printf("   --- Mark this as a file to unparse: filename = %s \n",
-                     filename.c_str());
+            const map<string, set<PreprocessingInfo *>>
+                &includingPreprocessingInfosMap =
+                    projectNode->get_includingPreprocessingInfosMap();
+            map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
+                includingPreprocessingInfosMap.find(filename);
+            if (mapEntry != includingPreprocessingInfosMap.end()) {
+              const set<PreprocessingInfo *> &includingPreprocessingInfos =
+                  mapEntry->second;
+              for (set<PreprocessingInfo *>::const_iterator
+                       includingPreprocessingInfoPtr =
+                           includingPreprocessingInfos.begin();
+                   includingPreprocessingInfoPtr !=
+                   includingPreprocessingInfos.end();
+                   includingPreprocessingInfoPtr++) {
+                string normalizedIncludingFileName =
+                    FileHelper::getNormalizedContainingFileName(
+                        *includingPreprocessingInfoPtr);
+                if (allFiles.find(normalizedIncludingFileName) ==
+                    allFiles.end()) {
+                  allFiles.insert(normalizedIncludingFileName);
+                  newParents.insert(normalizedIncludingFileName);
+                }
+              }
             }
           }
-#endif
-#if 0
-          printf ("In IncludedFilesUnparser::figureOutWhichFilesToUnparse(): END OF LOOP: tmp_counter = %d \n",tmp_counter);
-#endif
-
-          k++;
-          tmp_counter++;
+          workSet.swap(newParents);
         }
 
 #if 0
