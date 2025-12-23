@@ -4470,12 +4470,6 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
                 else
                     break;
             }
-        } else if (current_arg == "-isystem") {
-          ++i;
-          if (i < argv.size())
-            sys_dirs_list.push_back(argv[i]);
-          else
-            break;
         } else if (current_arg.rfind("-isystem", 0) == 0) {
           if (current_arg.size() > 8) {
             sys_dirs_list.push_back(current_arg.substr(8));

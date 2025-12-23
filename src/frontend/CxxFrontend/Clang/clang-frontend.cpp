@@ -89,18 +89,10 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                 else
                     break;
             }
-        } else if (current_arg == "-isystem") {
-          ++i;
-          if (i < argc) {
-            sys_dirs_list.push_back(argv[i]);
-          } else {
-            break;
-          }
         } else if (current_arg.rfind("-isystem", 0) == 0) {
           if (current_arg.size() > 8) {
             sys_dirs_list.push_back(current_arg.substr(8));
           } else {
-            // Treat bare -isystem like the separate-arg form.
             ++i;
             if (i < argc) {
               sys_dirs_list.push_back(argv[i]);
