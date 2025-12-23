@@ -1777,23 +1777,7 @@ SgNode *ClangToSageTranslator::Traverse(clang::Decl *decl) {
               p_decl_translation_in_progress.find(ctx_decl) ==
                   p_decl_translation_in_progress.end()) {
             if (!llvm::isa<clang::NamespaceDecl>(ctx_decl)) {
-              struct InProgressGuard {
-                std::set<clang::Decl *> &set;
-                clang::Decl *decl;
-                bool inserted;
-                InProgressGuard(std::set<clang::Decl *> &set, clang::Decl *decl)
-                    : set(set), decl(decl), inserted(false) {
-                  inserted = set.insert(decl).second;
-                }
-                ~InProgressGuard() {
-                  if (inserted) {
-                    set.erase(decl);
-                  }
-                }
-              } in_progress_guard(p_decl_translation_in_progress, ctx_decl);
-              if (in_progress_guard.inserted) {
-                TraverseOnDemand(ctx_decl);
-              }
+              TraverseOnDemand(ctx_decl);
             }
           }
 
