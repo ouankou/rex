@@ -4102,7 +4102,9 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
      optionCount = sla(argv, "-rose:", "($)", "(output_parser_actions)",1);
 
      optionCount = sla(argv, "-rose:", "($)", "(unparse_tokens)",1);
-     
+     optionCount =
+         sla(argv, "-rose:", "($)", "(no_optimize_flag_for_frontend)", 1);
+
      optionCount = sla(argv, "-rose:simd:", "($)", "(intel-avx)", 1);
      optionCount = sla(argv, "-rose:simd:", "($)", "(arm-sve)", 1);
      optionCount = sla(argv, "-rose:simd:", "($)", "(addr3)", 1);
