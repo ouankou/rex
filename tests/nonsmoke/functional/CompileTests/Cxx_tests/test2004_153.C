@@ -23,7 +23,7 @@ chadd
 TEST CASES:
 
 Here is the command I use to run rose over each of these files:
-mytool -rose:C --edg:c99 --edg:extended_variadic_macros -c filename.c
+mytool -rose:C   -c filename.c
 
 Here are each of the files I've been using as test cases, all are
 derived from source code i have seen in either Wine (winehq.com)

@@ -6,7 +6,7 @@ MOSTLYCLEANFILES =
 AM_CPPFLAGS = $(ROSE_INCLUDES)
 AM_LDFLAGS = $(ROSE_RPATHS)
 
-EDG_VERSION = @ROSE_EDG_MAJOR_VERSION_NUMBER@
+
 
 #------------------------------------------------------------------------------------------------------------------------
 # Scope matching
@@ -33,7 +33,7 @@ LIN_SPECIMENS = testLin1.c testLin2.c
 LIN_TEST_TARGETS = $(addprefix lin_, $(addsuffix .passed, $(LIN_SPECIMENS)))
 LIN_TEST_CONFIG = $(srcdir)/testLinearization.conf
 $(LIN_TEST_TARGETS): lin_%.passed: ${srcdir}/tests/% testLinearization $(LIN_TEST_CONFIG)
-	@$(RTH_RUN) SPECIMEN=$< EDG=$(EDG_VERSION) $(LIN_TEST_CONFIG) $@
+	@$(RTH_RUN) SPECIMEN=$< $(LIN_TEST_CONFIG) $@
 
 EXTRA_DIST += $(LIN_TEST_CONFIG)
 

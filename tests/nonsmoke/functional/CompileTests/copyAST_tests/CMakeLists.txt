@@ -173,7 +173,7 @@ else()
     test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C)
 endif()
 
-set(ROSE_FLAGS --edg:no_warnings -rose:verbose 0 --edg:restrict)
+set(ROSE_FLAGS  -rose:verbose 0 )
 
 ## Include the path to A++ and the transformation specification
 set(TESTCODE_INCLUDES "-I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code")

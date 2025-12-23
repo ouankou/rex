@@ -355,12 +355,17 @@ public:
                 tokens.push_back(macro_name);
 
                 boost::wave::util::file_position_type filepos;
-                if (
-               macro_name.get_position().get_file().find("<default>") == std::string::npos && 
-               macro_name.get_position().get_file().find("<built-in>") == std::string::npos && 
-               macro_name.get_position().get_file().find("<command line>") == std::string::npos && 
-               macro_name.get_position().get_file().find("rose_edg_required_macros_and_functions") == std::string::npos)
-                        filepos = boost::wave::util::file_position_type(BOOST_WAVE_STRINGTYPE(ROSE_WAVE_PSEUDO_FILE), 0, 0);
+                if (macro_name.get_position().get_file().find("<default>") ==
+                        std::string::npos &&
+                    macro_name.get_position().get_file().find("<built-in>") ==
+                        std::string::npos &&
+                    macro_name.get_position().get_file().find(
+                        "<command line>") == std::string::npos &&
+                    macro_name.get_position().get_file().find(
+                        "rose_required_macros_and_functions") ==
+                        std::string::npos)
+                  filepos = boost::wave::util::file_position_type(
+                      BOOST_WAVE_STRINGTYPE(ROSE_WAVE_PSEUDO_FILE), 0, 0);
                 else
                         filepos = boost::wave::util::file_position_type(macro_name.get_position().get_file(), 0, 0);
 
@@ -880,4 +885,3 @@ public:
 };
 
 #endif // !defined(BOOST_WAVE_ADVANCED_PREPROCESSING_HOOKS_INCLUDED)
-

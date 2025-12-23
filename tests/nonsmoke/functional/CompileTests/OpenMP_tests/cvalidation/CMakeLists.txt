@@ -21,7 +21,7 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     omp_pragma_example2.c)
 endif()
 
-set(ROSE_FLAGS -rose:C_only --edg:no_warnings -w -rose:verbose 0 --edg:restrict
+set(ROSE_FLAGS -rose:C_only  -w -rose:verbose 0 
                -rose:openmp -rose:openmp:ast_only)
 
 foreach(file_to_test ${TESTCODES})

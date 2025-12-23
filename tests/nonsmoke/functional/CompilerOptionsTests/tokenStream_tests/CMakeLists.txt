@@ -57,7 +57,7 @@ install(TARGETS main DESTINATION bin)
 #PASSING_TEST_Objects = ${TESTCODES:.C=.o}
 #TEST_Objects = ${ALL_TESTCODES:.C=.o}
 #
-#ROSE_FLAGS = --edg:no_warnings -w -rose:verbose 0
+#ROSE_FLAGS =  -w -rose:verbose 0
 #
 #$(TEST_Objects): main
 #	echo "Copy the file to build a second one to main ..."

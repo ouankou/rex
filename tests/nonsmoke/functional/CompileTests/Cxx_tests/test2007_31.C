@@ -12,7 +12,7 @@ Thomas
 
 
 
-01:21 PM :~/development/ROSE-0107/gcc3.4.6/bin > identityTranslator -edg:w testcase.C
+01:21 PM :~/development/ROSE-0107/gcc3.4.6/bin > identityTranslator  testcase.C
 Warning in sage_gen_routine_name(): rout->declared_type == NULL
 Warning edgRoutine->assoc_scope == 0
 Inside of Sg_File_Info::display(Warning edgRoutine->assoc_scope <= 0)

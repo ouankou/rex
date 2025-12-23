@@ -49,7 +49,7 @@ endif
 # Build the list of object files
 TEST_Objects = ${TESTCODES:.C=.o}
 
-ROSE_FLAGS = --edg:no_warnings -w -rose:verbose 0
+ROSE_FLAGS =  -w -rose:verbose 0
 
 TEST_TRANSLATOR = $(top_builddir)/tests/nonsmoke/functional/testTranslator $(ROSE_FLAGS)
 

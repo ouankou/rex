@@ -88,15 +88,17 @@ createMap::internalMatchBetweenASTandTokenStreamSeparator(separator*
     for(vector<separator>::iterator sep_it = tokenBraceMapForThisScope.begin(); 
         sep_it != tokenBraceMapForThisScope.end(); ++sep_it){
 
-        if( tokenStream[sep_it->begin_pos].get_position().get_file().find("rose_edg_required_macros_and_functions.h") != string::npos ){
-            tokensToIgnore.push_back(*sep_it);
-            //std::cout << "IGNORING" << std::endl;
-            //sep_it->printValues(tokenStream,5);
-        }
-        //else
-        //if(tokenStream[sep_it->end_pos].get_position().get_file().find("rose_edg_required_macros_and_functions.h") == string::npos ){
-        //    tokensToIgnore.push_back(*sep_it);
-        // };
+      if (tokenStream[sep_it->begin_pos].get_position().get_file().find(
+              "rose_required_macros_and_functions.h") != string::npos) {
+        tokensToIgnore.push_back(*sep_it);
+        // std::cout << "IGNORING" << std::endl;
+        // sep_it->printValues(tokenStream,5);
+      }
+      // else
+      // if(tokenStream[sep_it->end_pos].get_position().get_file().find("rose_required_macros_and_functions.h")
+      // == string::npos ){
+      //     tokensToIgnore.push_back(*sep_it);
+      //  };
     }
 
     for(vector<separator>::iterator eq_it = tokensToIgnore.begin(); 
@@ -234,6 +236,4 @@ void
 createMap::printTokenToNodeMap()
    {
   // Nothing implemented here.
-   }
-
-
+}

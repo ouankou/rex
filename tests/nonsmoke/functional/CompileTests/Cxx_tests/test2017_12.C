@@ -2,7 +2,7 @@
 #include <cfloat>
 
 // DQ (3/30/2017): We now include this as defined in ROSE
-// (specifically in rose_edg_required_macros_and_functions.h).
+// (specifically in rose_required_macros_and_functions.h).
 // typedef long double __float128;
 
 typedef __float128  long_double_t;

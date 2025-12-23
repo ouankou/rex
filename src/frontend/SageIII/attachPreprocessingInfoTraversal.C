@@ -92,14 +92,6 @@ AttachPreprocessingInfoTreeTrav::~AttachPreprocessingInfoTreeTrav() {
     //do nothing
 }
 
-
-namespace EDG_ROSE_Translation
-   {
-  // DQ (9/18/2018): Declare this map so that we can use it for the unparse header files option.
-  // REX: Declaration simplified - defined in sageInterface.C
-     extern std::map<std::string, SgIncludeFile*> edg_include_file_map;
-   }
-
 // DQ (11/30/2008): Refactored this code out of the simpler function to isolate the Wave specific handling.
 
 // AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav( SgSourceFile* file, bool includeDirectivesAndCommentsFromAllFiles )
@@ -3115,14 +3107,35 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
                                                 printf ("globalScope->get_declarations().size() = %zu \n",globalScope->get_declarations().size());
                                                 if (globalScope->get_declarations().empty() == false)
                                                    {
-                                                  // When there is no statement outside of the frontend (rose_edg_required_macros_and_functions.h), we want
-                                                  // to put this after the last statement from rose_edg_required_macros_and_functions.h.
-                                                     SgStatement* firstStatement = globalScope->get_declarations()[0];
-                                                     printf ("Addressing insertion into globa scope: firstStatement = %p = %s \n",firstStatement,firstStatement->class_name().c_str());
-                                                     ROSE_ASSERT(firstStatement != NULL);
+                                                  // When there is no statement
+                                                  // outside of the frontend
+                                                  // (rose_required_macros_and_functions.h),
+                                                  // we want to put this after
+                                                  // the last statement from
+                                                  // rose_required_macros_and_functions.h.
+                                                  SgStatement *firstStatement =
+                                                      globalScope
+                                                          ->get_declarations()
+                                                              [0];
+                                                  printf("Addressing insertion "
+                                                         "into globa scope: "
+                                                         "firstStatement = %p "
+                                                         "= %s \n",
+                                                         firstStatement,
+                                                         firstStatement
+                                                             ->class_name()
+                                                             .c_str());
+                                                  ROSE_ASSERT(firstStatement !=
+                                                              NULL);
 
-                                                     SgStatement* firstStatementAfterPreincludeStatements = SageInterface::lastFrontEndSpecificStatement(globalScope);
-                                                     ROSE_ASSERT(firstStatementAfterPreincludeStatements != NULL);
+                                                  SgStatement *
+                                                      firstStatementAfterPreincludeStatements =
+                                                          SageInterface::
+                                                              lastFrontEndSpecificStatement(
+                                                                  globalScope);
+                                                  ROSE_ASSERT(
+                                                      firstStatementAfterPreincludeStatements !=
+                                                      NULL);
 #if 0
                                                      printf ("Addressing insertion into globa scope: firstStatementAfterPreincludeStatements = %p = %s \n",
                                                           firstStatementAfterPreincludeStatements,firstStatementAfterPreincludeStatements->class_name().c_str());
@@ -3964,10 +3977,6 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
                       // DQ (11/11/2012): Added assertion.
                          ROSE_ASSERT(n != NULL);
 
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                         printf ("Skipping any possability of attaching a comment/directive after a %s \n",n->class_name().c_str());
-                      // ROSE_ASSERT(false);
-#endif
 #if DEBUG_ATTACH_PREPROCESSING_INFO
                          ROSE_ASSERT(n->get_file_info() != NULL);
                          n->get_file_info()->display("Skipping any possability of attaching a comment/directive: debug");

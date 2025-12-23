@@ -121,10 +121,10 @@ execute_process(
     --constexpr=${CMAKE_SOURCE_DIR}/config/constexpr_builtins.def ${CMAKE_SOURCE_DIR}/config/Builtins.def)
 
 if(VERBOSE)
-  message(STATUS "adding contents of rose_generated_builtin_functions.h to rose_edg_required_macros_and_functions.h...")
+  message(STATUS "adding contents of rose_generated_builtin_functions.h to rose_required_macros_and_functions.h...")
 endif()
 
 execute_process(
   COMMAND sed -i
   "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r${CMAKE_BINARY_DIR}/include-staging/${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS/rose_generated_builtin_functions.h"
-  ${CMAKE_BINARY_DIR}/include-staging/${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS/rose_edg_required_macros_and_functions.h)
+  ${CMAKE_BINARY_DIR}/include-staging/${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS/rose_required_macros_and_functions.h)

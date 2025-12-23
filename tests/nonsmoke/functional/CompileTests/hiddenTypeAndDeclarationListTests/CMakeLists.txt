@@ -13,7 +13,7 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
   )
 endif()
 
-set(ROSE_FLAGS --edg:no_warnings -w -rose:verbose 0)
+set(ROSE_FLAGS  -w -rose:verbose 0)
 
 set(TESTCODE_INCLUDES
   -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code

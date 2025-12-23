@@ -31,7 +31,7 @@ endif
 # we only care about unparsing for ACC input, not the object file generation
 C_OMP_ACC_TEST_Unparsed = $(addprefix rose_,${C_OMP_ACC_TESTCODES_REQUIRED_TO_PASS})
 
-ROSE_FLAGS = -rose:openmp:ast_only --edg:no_warnings -w -rose:verbose 0 --edg:restrict #-rose:wave
+ROSE_FLAGS = -rose:openmp:ast_only  -w -rose:verbose 0  #-rose:wave
 # used to find omp.h, added it as one of  rose headers
 TESTCODE_INCLUDES = -I$(top_srcdir)/src/frontend/SageIII
 

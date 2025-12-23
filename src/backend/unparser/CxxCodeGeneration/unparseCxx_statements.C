@@ -1324,7 +1324,7 @@ Unparse_ExprStmt::unparseFunctionParameterDeclaration (
 
      if (storage.isRegister())
         {
-       // DQ (12/10/2007): This is a fix for C_tests/test2007_177.c (this is only an issue if --edg:restrict is used on the commandline).
+       // DQ (12/10/2007): This is a fix for C_tests/test2007_177.c.
        // curprint( "register ");
           if ( (oldStyleDefinition == false) || (outputParameterDeclaration == true) )
              {
@@ -12964,67 +12964,15 @@ Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(SgStatement* stmt, 
        printf ("denormalizedAttributeTemplateString = %s \n",templateString.c_str());
 #endif
 
-       bool string_represents_function_body = ( templateFunctionDeclaration != NULL &&
-                                                    templateFunctionDeclaration->get_string_represents_function_body() ) ||
-                                              ( templateMemberFunctionDeclaration != NULL &&
-                                                     templateMemberFunctionDeclaration->get_string_represents_function_body() );
-
-       if (string_represents_function_body == true) {
-         // DQ (9/7/2014): This is the special case (to output template member and non-member function declarations after EDG normalization 
-         // to move then out of a template class declaration.
-         SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(template_stmt);
-         ASSERT_not_null(functionDeclaration);
-         ROSE_ASSERT(functionDeclaration->isNormalizedTemplateFunction());
-
-         ASSERT_not_null(templateMemberFunctionDeclaration);
-
-         // TV (10/08/2018): temporary switch for ROSE-1392 (relies on template unparsing from AST)
-         if (sourcefile->get_unparse_edg_normalized_method_ROSE_1392()) {
-           SgDeclarationStatement * assoc_decl = templateMemberFunctionDeclaration->get_associatedClassDeclaration();
-           SgTemplateClassDeclaration * assoc_tpl_class_decl = isSgTemplateClassDeclaration(assoc_decl);
-
-           SgNode * parent = templateMemberFunctionDeclaration->get_parent();
-           SgTemplateClassDefinition * parent_is_tpl_class_defn = isSgTemplateClassDefinition(parent);
-
-           if (assoc_tpl_class_decl != NULL && parent_is_tpl_class_defn == NULL) {
-             unparseTemplateHeader(assoc_tpl_class_decl,info);
-           }
-
-           unparseTemplateHeader(templateMemberFunctionDeclaration,info);
-
-           SgUnparse_Info ninfo(info);
-
-           SgType * rtype = NULL;
-           unparseReturnType(functionDeclaration, rtype, ninfo);
-
-           ninfo.set_declstatement_ptr(NULL);
-           ninfo.set_declstatement_ptr(functionDeclaration);
-
-           unparse_helper(functionDeclaration, ninfo);
-
-           ninfo.set_declstatement_ptr(NULL);
-
-           if (rtype != NULL) {
-             SgUnparse_Info ninfo3(ninfo);
-             ninfo3.set_isTypeSecondPart();
-
-             unp->u_type->unparseType(rtype, ninfo3);
-           }
-
-           unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,ninfo);
-
-           curprint(string("\n") + templateString + string("\n"));
-         }
-       } else {
 #if OUTPUT_PLACEHOLDER_COMMENTS_FOR_SUPRESSED_TEMPLATE_IR_NODES
-         // DQ (4/5/2018): For debugging, output something so that we know why nothing is output.
+         // DQ (4/5/2018): For debugging, output something so that we know why
+         // nothing is output.
          if (templateString.size() == 0)
             {
               curprint (" /* Output the templateString: templateString.size() = " + StringUtility::numberToString(templateString.size()) + " */ ");
             }
 #endif
          curprint(string("\n") + templateString);
-       }
      }
 
 #if 0

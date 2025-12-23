@@ -2,24 +2,18 @@
 #define MARK_BACKEND_COMPILER_SPECIFIC_FUNCTIONS_AS_COMPILER_GENERATED_H
 
 // DQ (3/5/2006):
-// This file declares the function in ROSE which marks back end (vendor compiler)
-// specific functions as compiler generated.  Such declarations appear in the file:
-// rose_edg_macros_and_functions_required_for_gnu.h and are specific to the use of 
-// the GNU gcc and g++ backend.  Other backends can expect to use similarly specific
-// declarations.  These are what should have perhaps been accepted by EDG without
-// requiring there explicit declaration, but this is likely an oversight in the
-// GNU gcc and g++ compatability mode of EDG.
+// This file declares the ROSE support that marks backend (vendor compiler)
+// specific declarations as compiler generated. These declarations are injected
+// via the ROSE preinclude file `rose_required_macros_and_functions.h` and are
+// specific to the selected backend compiler.
 
 // DQ (3/5/2006):
 /*! \brief Mark an backend specific functions as compiler generated.
 
-    This function the function marks back end (vendor compiler)
-    specific functions as compiler generated.  Such declarations appear in the file:
-    rose_edg_macros_and_functions_required_for_gnu.h and are specific to the use of 
-    the GNU gcc and g++ backend.  Other backends can expect to use similarly specific
-    declarations.  These are what should have perhaps been accepted by EDG without
-    requiring there explicit declaration, but this is likely an oversight in the
-    GNU gcc and g++ compatability mode of EDG.
+    This function marks backend (vendor compiler) specific declarations as
+   compiler generated. These declarations appear in the ROSE preinclude file
+    `rose_required_macros_and_functions.h` and are specific to the selected
+   backend compiler.
  */
 void markBackendSpecificFunctionsAsCompilerGenerated( SgNode* node );
 

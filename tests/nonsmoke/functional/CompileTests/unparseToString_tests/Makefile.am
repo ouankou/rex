@@ -43,9 +43,9 @@ check-unparseType: $(unparseType_TEST_TARGETS)
 
 # How to run each test across each specimen
 $(unparseAll_TEST_TARGETS): ua_%.passed: $(SPECIMEN_DIR)/% $(TEST_CONFIG) unparseToString
-	@$(RTH_RUN) CMD="./unparseToString --all --edg:no_warnings -w --edg:restrict $(TEST_INCLUDES) -c $<" $(TEST_CONFIG) $@
+	@$(RTH_RUN) CMD="./unparseToString --all  -w  $(TEST_INCLUDES) -c $<" $(TEST_CONFIG) $@
 $(unparseType_TEST_TARGETS): ut_%.passed: $(SPECIMEN_DIR)/% $(TEST_CONFIG) unparseToString
-	@$(RTH_RUN) CMD="./unparseToString       --edg:no_warnings -w --edg:restrict $(TEST_INCLUDES) -c $<" $(TEST_CONFIG) $@
+	@$(RTH_RUN) CMD="./unparseToString        -w  $(TEST_INCLUDES) -c $<" $(TEST_CONFIG) $@
 
 test_unparseProject: unparseProject
 	./unparseProject $(srcdir)/test2014_26.C

@@ -36,7 +36,7 @@ AM_LDFLAGS = $(ROSE_RPATHS)
 ## of some environment variables (we have to see)
 ## TESTS = $(TESTCODES)
 
-# ROSE_FLAGS = -rose:test 6
+# ROSE_FLAGS = -rose:skip_transformation
 # ROSE_FLAGS = -rose:outputGrammarTreeFiles
 # ROSE_FLAGS =
 ROSE_FLAGS = -DRESTRICT=""

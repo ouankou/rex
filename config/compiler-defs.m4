@@ -438,7 +438,7 @@ AC_DEFUN([GET_BACKEND_COMPILER_MACROS],[
     # to
     #     {"-Dapple=red", "-Dbanana=yellow"}
     macroString=""
-    for macro in $BACKEND_CXX_VERSION_MACROS --preinclude rose_edg_required_macros_and_functions.h; do
+    for macro in $BACKEND_CXX_VERSION_MACROS --preinclude rose_required_macros_and_functions.h; do
         if test "$macroString" = ""; then
             macroString="\"$macro\""
         else

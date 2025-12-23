@@ -165,8 +165,8 @@ so that all dependencies are built as normal by the backend compiler.
   \item[\{compiler arguments\ldots\}] : The arguments specified on
 	the command-line of the project build system.
   \item[\{ROSE arguments\ldots\}] : The arguments to the ROSE translator
-	prefixed with -rose:$<$ROSE argument$>$, e.x. 
-	{\tt -rose:--edg:no\_warnings}. Note, these may be placed anywhere
+	prefixed with -rose:$<$ROSE argument$>$, e.g.
+	{\tt -rose:verbose 1}. Note, these may be placed anywhere
 	after the $<$Backend Compiler$>$ argument.
 \end{description}
 
@@ -183,7 +183,7 @@ so that all dependencies are built as normal by the backend compiler.
 	the backend compiler.
   \item[ARGUMENTS] : The compile-line arguments specified on the command-line
 	with any script user specified arguments for the ROSE translator such
-	as {\tt --edg:no\_warnings} bound for the QMTest test file.
+	as {\tt -rose:verbose 1} bound for the QMTest test file.
   \item[LAST\_ARG] : The closing stub to the QMTest arguments format along with
 	the {\tt -o <object file name>} argument.
   \item[ARG] : The current compile-line argument place holder used in
@@ -348,7 +348,7 @@ QM = /home/yuan5/RoseQMTest/scripts/qm.sh
 ROSE = /home/yuan5/bin/identityTranslator
 MYCC = $(QM) rose.RoseTest $(ROSE)
 CXX = $(MYCC) g++
-ROSEFLAGS = -rose:--edg:no_warnings
+ROSEFLAGS =
 CFLAGS = $(ROSEFLAGS) -g -Wall
                                                                                 
 CPU.out : main.o registers.o reader.o decoder.o
@@ -381,15 +381,15 @@ be made along with all the QMTest {\tt .qmt} files.
 \begin{verbatim}
 bash-2.05b$ make
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
-g++ -rose:--edg:no_warnings -g -Wall -c main.c
+g++ -g -Wall -c main.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
-g++ -rose:--edg:no_warnings -g -Wall -c registers.c
+g++ -g -Wall -c registers.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator
-g++ -rose:--edg:no_warnings -g -Wall -c reader.c
+g++ -g -Wall -c reader.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
-g++ -rose:--edg:no_warnings -g -Wall -c decoder.c
+g++ -g -Wall -c decoder.c
 /home/yuan5/RoseQMTest/scripts/qm_file.sh rose.RoseTest /home/yuan5/bin/identityTranslator 
-g++ -rose:--edg:no_warnings -g -Wall -o CPU.out reader.o registers.o decoder.o main.o
+g++ -g -Wall -o CPU.out reader.o registers.o decoder.o main.o
 \end{verbatim}
 }
 \caption{{\tt make} output}
@@ -440,5 +440,3 @@ qmtest gui
 # runs the QMTest GUI by which the user may read results stored in results.qmr 
 # or run additional tests.
 \end{verbatim}
-
-

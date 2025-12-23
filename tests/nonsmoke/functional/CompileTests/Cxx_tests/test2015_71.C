@@ -1,138 +1,14 @@
 # 1 "/home/dquinlan/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2015_70.C"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
- 
- 
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
- 
+# 284 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 323 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 353 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-
-
- 
-
-
-
-
- 
-
-
-
-
- 
-
-
- 
- 
-
-
-
- 
-
-
- 
-# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-# 284 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
- 
-
-
-
-
- 
-
-
-
-
- 
- 
-
-
-
-
-
-
- 
-# 323 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
- 
- 
- 
-
- 
-
- 
-
- 
-
-
-
-# 353 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
- 
-
-
-
-
-
-
-
-
-
-
-
- 
-
- 
- 
-
-
-
-
-
- 
- 
- 
-
-
-
-
-
-
-
-
-
-
- 
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
- 
 double      __builtin_copysign  (double __builtin__x, double __builtin__y);
 float       __builtin_copysignf (float __builtin__x, float __builtin__y);
 long double __builtin_copysignl (long double __builtin__x, long double __builtin__y);
@@ -228,10 +104,7 @@ long double __builtin_sinl   (long double __builtin__x);
 float       __builtin_sqrtf  (float       __builtin__x);
 long double __builtin_sqrtl  (long double __builtin__x);
 
- 
-
-
-# 517 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
+# 517 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 int __builtin_isgreater(double x, double y);
 int __builtin_isgreaterequal(double x, double y);
 int __builtin_isless(double x, double y);
@@ -255,17 +128,8 @@ void               __builtin_ia32_fxrstor64(void *__P);
 unsigned char      __builtin_ia32_addcarryx_u32(unsigned char __CF, unsigned int __X, unsigned int __Y, unsigned int *__P);
 unsigned char      __builtin_ia32_addcarryx_u64(unsigned char __CF, unsigned long __X, unsigned long __Y, unsigned long long *__P);
 
-# 603 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
+# 603 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-
-
-
-
-
-
- 
-
- 
 void * __builtin_return_address (unsigned int level);
 void * __builtin_frame_address (unsigned int level);
 
@@ -339,260 +203,24 @@ double      __builtin_powi (double __builtin__x, int __builtin__y);
 float       __builtin_powif (float __builtin__x, int __builtin__y);
 long double __builtin_powil (long double __builtin__x, int __builtin__y);
 
+# 767 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
- 
-
-
-
-
-
- 
- 
-
- 
-
-
-
-
-
-
-
-
- 
-# 767 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
- 
 int __builtin_abs (int __builtin__x);
 
+# 862 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 936 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 1002 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 1042 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 1070 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 1508 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
+# 2173 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
- 
-
-
-
-
-
-
-
-
-
-
- 
-# 862 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
- 
- 
- 
-
- 
-
-
-
-
-
- 
-
-
-
-
- 
- 
-# 936 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
- 
-
- 
-
-
-
-
- 
-
- 
-
-
- 
- 
- 
-# 1002 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
- 
-# 1042 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
- 
-
-
-
- 
- 
-
-# 1070 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
-
-
- 
- 
-
-
- 
-
-
-
- 
-
-
-
-
- 
-
-# 1508 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-# 2173 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
- 
-
- 
 void __builtin_ia32_emms();
 int __builtin_ia32_vec_init_v2si(int,int);
 int __builtin_ia32_vec_ext_v2si(int,int);
@@ -930,19 +558,9 @@ int __builtin_ia32_psrlwi(int,int);
 int __builtin_ia32_psrldi(int,int);
 int __builtin_ia32_psrlqi(long long,int);
 
+int __builtin_bswap32(int x);
 
-
-
-
-
-
-
-
-int __builtin_bswap32 (int x);
- 
-
- 
-# 2545 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_edg_required_macros_and_functions.h"
+# 2545 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
 
 # 1 "/home/dquinlan/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2015_70.C"
 # 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/memory"

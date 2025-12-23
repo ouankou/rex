@@ -3,7 +3,7 @@ target_link_libraries(testAstVisualization ROSE_DLL ${link_with_libraries} )
 install(TARGETS testAstVisualization DESTINATION bin)
 
 set(TESTCODES inputExample.C)
-set(ROSE_FLAGS --edg:no_warnings -w --edg:restrict)
+set(ROSE_FLAGS  -w )
 
 foreach(file_to_test ${TESTCODES})
   add_test(

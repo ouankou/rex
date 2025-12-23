@@ -40,19 +40,16 @@ checkIsFrontendSpecificFlag(SgNode *ast)
 
         // Criteria for deciding whether we're entering the top of an AST that's frontend-specific.
         bool is_frontend_specific(Sg_File_Info *finfo) {
-            static const char *header_name = "/rose_edg_required_macros_and_functions.h";
-            return finfo && std::string::npos!=finfo->get_filenameString().rfind(header_name);
+          static const char *header_name =
+              "/rose_required_macros_and_functions.h";
+          return finfo && std::string::npos !=
+                              finfo->get_filenameString().rfind(header_name);
         }
 
         // Mark node as frontend-specific and emit a warning if it wasn't already so marked.
         void fix(SgNode *node, Sg_File_Info *finfo) {
             if (finfo && !finfo->isFrontendSpecific()) {
 #if 0
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                std::cerr <<finfo->get_filenameString() <<":" <<finfo->get_line() <<"." <<finfo->get_col() <<": "
-                          <<"node should be marked as frontend-specific: "
-                          <<"(" << node->class_name() /* stringifyVariantT(node->variantT(), "V_") */ <<"*)" <<node <<"\n";
-#endif
 #endif
                 finfo->setFrontendSpecific();
                 ++nviolations;

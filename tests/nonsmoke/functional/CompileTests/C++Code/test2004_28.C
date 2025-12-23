@@ -4,7 +4,7 @@ int volatile x;
 extern const volatile int *y;
 #endif
 
-// Turn on use of restrict in EDG front-end using --edg:restrict
+// Turn on use of restrict in EDG front-end using 
 #ifdef __GNUC__
 // for GNU g++
 #define RESTRICT __restrict__

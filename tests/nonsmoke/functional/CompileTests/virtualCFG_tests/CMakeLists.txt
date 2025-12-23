@@ -12,7 +12,7 @@ set(TESTCODE_INCLUDES
   -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
 
 set(ROSE_FLAGS
-  --edg:no_warnings -w -rose:verbose 0 --edg:restrict)
+   -w -rose:verbose 0 )
 
 # This populates the list EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)

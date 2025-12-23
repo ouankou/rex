@@ -46,7 +46,7 @@ BIN_EXECUTABLES = \
 
 classMemberVariablesInLambdas_SOURCES = classMemberVariablesInLambdas.C
 classMemberVariablesInLambdas.test: classMemberVariablesInLambdas
-	./classMemberVariablesInLambdas -std=c++11 --edg:no_warnings -c $(top_srcdir)/tests/nonsmoke/functional/CompileTests/Cxx11_tests/classMemberVariablesInLambdas_test_01.C
+	./classMemberVariablesInLambdas -std=c++11  -c $(top_srcdir)/tests/nonsmoke/functional/CompileTests/Cxx11_tests/classMemberVariablesInLambdas_test_01.C
 
 #------------------------------------------------------------------------------
 TEST_TARGETS = ${BIN_EXECUTABLES:=.test}

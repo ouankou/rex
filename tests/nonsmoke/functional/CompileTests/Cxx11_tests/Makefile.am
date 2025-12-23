@@ -1151,7 +1151,7 @@ VALGRIND =
 endif
 
 globalVariablesInLambdas_test: globalVariablesInLambdas
-	./globalVariablesInLambdas -std=c++11 --edg:no_warnings -c $(srcdir)/globalVariablesInLambdas_test_01.C
+	./globalVariablesInLambdas -std=c++11  -c $(srcdir)/globalVariablesInLambdas_test_01.C
 
 # DQ (12/13/2017): Need to add support for multiple versions of Raja.
 # Use --with-research-raja=... and --with-ares-raja=... , and for other specific applications dependent on Raja.
@@ -1261,7 +1261,7 @@ endif
 
 ROSE_FLAGS =
 if !ROSE_USE_CLANG_FRONTEND
-   ROSE_FLAGS += --edg:no_warnings --edg:restrict
+   ROSE_FLAGS +=  
 endif
 ROSE_FLAGS += -w -rose:verbose 0 -rose:skip_unparse_asm_commands
 

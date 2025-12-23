@@ -262,12 +262,8 @@ FixupAstSymbolTables::visit ( SgNode* node )
                            // DQ (6/22/2011): This assertion fails for CompileTests/copyAST_tests/copytest2007_24.C
                            // A simple rule that all declarations should follow (now that we have proper global type tables).
                            // ROSE_ASSERT(definingDeclarationType == declarationType);
-                              if (definingDeclarationType != declarationType)
-                                 {
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-                                   printf ("In fixupSymbolTables.C: Note that definingDeclarationType != declarationType \n");
-#endif
-                                 }
+                              if (definingDeclarationType != declarationType) {
+                              }
                             }
 
                          SgNamedType* namedType = isSgNamedType(declarationType);

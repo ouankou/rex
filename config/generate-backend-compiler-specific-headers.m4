@@ -119,9 +119,9 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
    
    ${srcdir}/scripts/builtinLlvmFunctions.pl --constexpr=${srcdir}/config/constexpr_builtins.def ${srcdir}/config/Builtins.def > ./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h
    if test "x$build_vendor" = "xapple"; then
-     sed -i ".original" "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerName}_HEADERS/rose_edg_required_macros_and_functions.h"
+     sed -i ".original" "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerName}_HEADERS/rose_required_macros_and_functions.h"
    else
-     sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerName}_HEADERS/rose_edg_required_macros_and_functions.h"
+     sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerName}_HEADERS/rose_required_macros_and_functions.h"
    fi
 ])
 
@@ -351,9 +351,9 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 # exit 1
    ${srcdir}/scripts/builtinLlvmFunctions.pl --constexpr=${srcdir}/config/constexpr_builtins.def ${srcdir}/config/Builtins.def > ./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h
    if test "x$build_vendor" = "xapple"; then
-     sed -i ".original" "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_edg_required_macros_and_functions.h"
+     sed -i ".original" "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_required_macros_and_functions.h"
    else
-     sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_edg_required_macros_and_functions.h"
+     sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_required_macros_and_functions.h"
    fi
 ])
 

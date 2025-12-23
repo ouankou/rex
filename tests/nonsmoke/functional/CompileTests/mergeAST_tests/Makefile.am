@@ -249,8 +249,8 @@ else
 VALGRIND =
 endif
 
-# ROSE_FLAGS = -rose:C_only -rose:verbose 2 --edg:restrict
-ROSE_FLAGS = --edg:no_warnings -w --edg:restrict -rose:ast:merge
+# ROSE_FLAGS = -rose:C_only -rose:verbose 2 
+ROSE_FLAGS =  -w  -rose:ast:merge
 
 PASSING_TEST_Objects = ${TESTCODES:.C=.o}
 TEST_Objects = ${ALL_TESTCODES:.C=.o}

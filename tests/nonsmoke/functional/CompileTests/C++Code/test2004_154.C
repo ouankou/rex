@@ -5,7 +5,7 @@ includes a file "heap.h" (ie #include "heap.h") the heap.h that
 rose/edg pulls in is the heap.h under g++_HEADERS/hdrs3, even if you 
 have something like this:
 
-mytool -c -rose:C --edg:c99 -I../include fileThatIncludesHeap.c 
+mytool -c -rose:C  -I../include fileThatIncludesHeap.c 
 
 where heap.h exists in the directory ../include.
 
@@ -33,7 +33,7 @@ mytool -c -rose:C fileThatIncludesStddef.c
 
 And rose-g++-headerfilefixup.h has C++ style comments.
 
-Note that using the --edg:c99 command line option seems
+Note that using the  command line option seems
 to allow C code to contain C++ style comments.
 
 thanks,

@@ -485,10 +485,10 @@ TESTCODES = \
 TEST_Objects = ${TESTCODES:.C=.o}
 
 # Restrict to level 6 testing for the moment
-# ROSE_FLAGS = -rose:test 6
+# ROSE_FLAGS = -rose:skip_transformation
 
 # Suppress all warnings (in EDG: --no_warnings) (in g++: -w) 
-ROSE_FLAGS = --edg:no_warnings -w
+ROSE_FLAGS =  -w
 
 ROSE_VERBOSE = -rose:verbose 0
 # ROSE_VERBOSE =
@@ -516,15 +516,15 @@ test2004_21.o: $(srcdir)/test2004_21.c $(TRANSLATOR_EXECUTABLE)
 
 # Test for UPC example code
 test2004_22.o: $(srcdir)/test2004_22.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR) --edg:upc -c $(srcdir)/test2004_22.C
+	$(TEST_TRANSLATOR) -rose:UPC -c $(srcdir)/test2004_22.C
 
 # Test of export keyword
 test2004_30.o: $(srcdir)/test2004_30.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR) --edg:restrict --edg:export -c $(srcdir)/test2004_30.C
+	$(TEST_TRANSLATOR)   -c $(srcdir)/test2004_30.C
 
 # Test of simple STL (list) example code
 test2004_41.o: $(srcdir)/test2004_41.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR) --edg:restrict --edg:export -I../g++_HEADERS/hdrs1/bits -c $(srcdir)/test2004_41.C 
+	$(TEST_TRANSLATOR)   -I../g++_HEADERS/hdrs1/bits -c $(srcdir)/test2004_41.C 
 
 # Test for STL example code
 # test2004_92.o: $(srcdir)/test2004_92.C $(TRANSLATOR_EXECUTABLE)
@@ -668,7 +668,6 @@ check-local: $(TRANSLATOR_EXECUTABLE) test2004_19.o test2004_21.o test2004_22.o 
 	@echo "*********************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/CompileTests/C++Code: make check rule complete (terminated normally) ******"
 	@echo "*********************************************************************************************"
-
 
 
 

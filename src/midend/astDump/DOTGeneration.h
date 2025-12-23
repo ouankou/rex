@@ -12,10 +12,10 @@
 class DOTInheritedAttribute : public SgInheritedAttribute 
    {
      public:
-       // DQ (5/3/2006): Used to filter out compiler generated IR nodes 
-       // from "rose_edg_required_macros_and_functions.h"
+       // DQ (5/3/2006): Used to filter out compiler generated IR nodes
+       // from "rose_required_macros_and_functions.h"
        // These are specific gnu compatability details.
-          bool skipSubTree;
+       bool skipSubTree;
 
        // DQ (12/20/2018): Skip template instantiations that can make the DOT files too large to generate or look at easily.
           bool skipTemplateInstantiations;

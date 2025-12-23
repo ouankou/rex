@@ -45,7 +45,7 @@ $(TRANSLATOR_EXECUTABLE):
 # Build the list of object files
 TEST_Objects = ${TESTCODES:.cc=.o}
 
-ROSE_FLAGS = --edg:no_warnings -w
+ROSE_FLAGS =  -w
 
 TRANSLATOR_EXECUTABLE = $(top_builddir)/tests/nonsmoke/functional/testTranslator 
 TEST_TRANSLATOR = $(TRANSLATOR_EXECUTABLE) $(ROSE_FLAGS)

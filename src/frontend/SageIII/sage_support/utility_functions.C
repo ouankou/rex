@@ -497,7 +497,6 @@ frontendShell (const std::vector<std::string>& argv)
 
        // Things set by "-rose:skip_rose" option, which must be unset (reset to default valees)!
           (*i)->set_skip_transformation(false);
-          (*i)->set_disable_edg_backend(false);
 
        // Leave this set to true so that the frontend can set it if the frontend is called for this SgFile
        // (*i)->set_skip_unparse(false);
@@ -771,7 +770,6 @@ backendCompilesUsingOriginalInputFile ( SgProject* project, bool compile_with_US
 
        // DQ (2/20/2010): Added filtering of options that should not be passed to the vendor compiler.
           SgFile::stripRoseCommandLineOptions(originalCommandLineArgumentList);
-          SgFile::stripEdgCommandLineOptions(originalCommandLineArgumentList);
 
           SgStringList::iterator it = originalCommandLineArgumentList.begin();
 

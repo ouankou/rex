@@ -25,7 +25,7 @@ unparsed code.
 (including templated functions and member functions).
 
 \todo Need to mark function declarations appearing in the file
-rose_edg_required_macros_and_functions.h as compiler generated
+rose_required_macros_and_functions.h as compiler generated
 since they are either builtin functions for gcc and g++ or those those
 builtin function that gcc and g++ required and which EDG fails to include
 as builtin when compiling with EDG's GNU_COMPATABILITY_MODE (current 

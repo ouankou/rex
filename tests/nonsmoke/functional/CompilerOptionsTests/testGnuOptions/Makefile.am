@@ -37,7 +37,7 @@ testUseOfGnuOptions: $(srcdir)/test-includeOption.C $(srcdir)/test-isystemOption
 
 test_skip_rose_option:
 	$(TEST_TRANSLATOR) -rose:verbose 0 -isystem $(srcdir) -c $(srcdir)/test-isystemOption.C -rose:skip_rose
-	$(TEST_TRANSLATOR) -rose:C --edg:no_warnings --edg:restrict -w  -c $(top_srcdir)/tests/nonsmoke/functional/CompileTests/C_tests/test2006_135.c -rose:skip_rose
+	$(TEST_TRANSLATOR) -rose:C   -w  -c $(top_srcdir)/tests/nonsmoke/functional/CompileTests/C_tests/test2006_135.c -rose:skip_rose
 
 test_minus_x_option:
 	$(TEST_TRANSLATOR) -c -x c /dev/null -rose:verbose 2

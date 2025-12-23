@@ -1104,13 +1104,13 @@ Grammar::setUpSupport ()
 
   // DQ (11/1/2011): Added support to just run the EDG front-end without translation of the EDG AST to the ROSE AST.
   // This is helpful in evaluating the EDG frontend within the move to EDG 4.3 and later versions (update for C++ robustness).
-     File.setDataPrototype         ( "bool", "skip_translation_from_edg_ast_to_rose_ast", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      File.setDataPrototype         ( "bool", "skip_transformation", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
      File.setDataPrototype         ( "bool", "skip_unparse", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
      File.setDataPrototype         ( "bool", "skipfinalCompileStep", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1130,14 +1130,17 @@ Grammar::setUpSupport ()
   // reproduce the function call use as specified in the input code.
      File.setDataPrototype         ( "bool", "unparse_function_calls_using_operator_syntax", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
      File.setDataPrototype         ( "bool", "unparse_function_calls_using_operator_names", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (8/30/2008): Added support for tailoring the output of unparsed disassembled instructions
      File.setDataPrototype         ( "bool", "unparse_instruction_addresses", "= true",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
      File.setDataPrototype         ( "bool", "unparse_raw_memory_contents", "= true",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
      File.setDataPrototype         ( "bool", "unparse_binary_file_format", "= true",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1168,6 +1171,7 @@ Grammar::setUpSupport ()
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      File.setDataPrototype         ( "std::string" , "sourceFileNameWithoutPath", "= \"\"",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   // File.setDataPrototype         ( "bool", "skip_buildHigherLevelGrammars", "= false",
   //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // File.setDataPrototype         ( "char*"  , "unparse_output_filename", "= NULL",
@@ -1181,6 +1185,7 @@ Grammar::setUpSupport ()
   // file, and then call the linker seperately to using the object files to generate the named executable.
      File.setDataPrototype         ( "std::string" , "objectFileNameWithPath", "= \"\"",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
      File.setDataPrototype         ( "std::string" , "objectFileNameWithoutPath", "= \"\"",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1253,42 +1258,6 @@ Grammar::setUpSupport ()
             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
      File.setFunctionPrototype      ( "HEADER_ATTRIBUTE_SUPPORT", "../Grammar/Support.code");
      File.setFunctionSource         ( "SOURCE_ATTRIBUTE_SUPPORT", "../Grammar/Support.code");
-
-  // Testing options
-     File.setDataPrototype         ( "bool", "KCC_frontend", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype         ( "bool", "new_frontend", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-#if 0
-  // DQ (10/26/2009): After discussion with Peter, this data member should be removed.
-  // MS: DOT option flag (depricate this if it is not needed any more)
-     File.setDataPrototype         ( "bool", "travTraceToDOT", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-
-  // Older options (will be depricated)
-     File.setDataPrototype         ( "bool", "disable_edg_backend", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype         ( "bool", "disable_sage_backend", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype         ( "int"    , "testingLevel", "= -1",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype         ( "bool", "preinit_il", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype         ( "bool", "enable_cp_backend", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#if 0
-  // DQ (10/26/2009): After discussion with Peter, this data member should be removed.
-     File.setDataPrototype         ( "bool", "outputGrammarTreeFiles", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype         ( "bool", "outputGrammarTreeFilesForHeaderFiles", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (10/15/2001): added to make output of PDF version of EDG AST optional
-  // (since they are very large and most often only the SAGE III version is wanted)
-     File.setDataPrototype         ( "bool", "outputGrammarTreeFilesForEDG", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
 
   // DQ (8/8/2006): Permit marking of the generated source code with "#define ROSE_GENERATED_CODE"
   // option requested by Yarden at IBM.
@@ -1498,20 +1467,8 @@ Grammar::setUpSupport ()
      File.setDataPrototype ("bool", "suppress_variable_declaration_normalization", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // TV (04/11/2018): Whether or not to generate a graphviz representation of the EDG internal representation
-     File.setDataPrototype("bool", "edg_il_to_graphviz", "= false",
-                 NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // TV (11/27/2020): Whether or not to generate a graphviz representation of the Clang internal representation
      File.setDataPrototype("bool", "clang_il_to_graphviz", "= false",
-                 NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // TV (10/01/2018): ROSE-1424
-     File.setDataPrototype("bool", "no_optimize_flag_for_frontend", "= false",
-                 NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // TV (10/08/2018): ROSE-1392
-     File.setDataPrototype("bool", "unparse_edg_normalized_method_ROSE_1392", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (4/24/2021): Change this to be a static data member.

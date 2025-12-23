@@ -37,7 +37,7 @@ mergeTest_111.C
 )
 endif()
 
-set(ROSE_FLAGS --edg:no_warnings -w --edg:restrict -rose:ast:merge)
+set(ROSE_FLAGS  -w  -rose:ast:merge)
 
 foreach(file_to_test ${TESTCODES})
   add_test(

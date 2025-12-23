@@ -1,0 +1,32 @@
+/*
+ * ROSE backend-compiler preinclude template.
+ *
+ * This file is expanded during the build to create a per-backend-compiler header
+ * in `include-staging/<compiler>_HEADERS/rose_required_macros_and_functions.h`.
+ *
+ * The build system injects:
+ *  - compiler predefined macros at `$REPLACE_ME_WITH_MACRO_DEFINITIONS`
+ *  - ROSE-generated builtin declarations at `$REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS`
+ *
+ * This header is part of ROSE/REX header staging and is not tied to any specific
+ * frontend implementation.
+ */
+
+#ifndef ROSE_REQUIRED_MACROS_AND_FUNCTIONS_H
+#define ROSE_REQUIRED_MACROS_AND_FUNCTIONS_H
+
+// When generating preprocessed output through ROSE, we define USE_ROSE_CPP_PROCESSING
+// to avoid re-defining these macros/builtins in the generated output.
+#ifndef USE_ROSE_CPP_PROCESSING
+
+// Define this macro to skip emitting ROSE builtin declarations (useful for debugging).
+#ifndef SKIP_ROSE_BUILTIN_DECLARATIONS
+
+// $REPLACE_ME_WITH_MACRO_DEFINITIONS
+
+// $REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS
+
+#endif // SKIP_ROSE_BUILTIN_DECLARATIONS
+#endif // USE_ROSE_CPP_PROCESSING
+
+#endif // ROSE_REQUIRED_MACROS_AND_FUNCTIONS_H

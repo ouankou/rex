@@ -24,7 +24,7 @@
 #endif
 
 // DQ (11/29/2006): Added ROSE_LANGUAGE_MODE macro for use in:
-//      rose_edg_required_macros_and_functions.h.
+//      rose_required_macros_and_functions.h.
 // Note that ROSE_LANGUAGE_MODE should always be defined since we require it to
 // communicate to the ROSE spsecific header files if we are in C or C++ mode.
 // Note that the macro __cplusplus macro is not enough since it is true when

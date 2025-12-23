@@ -104,7 +104,7 @@ if (HAVE_SYS_TIME_H)
 
   add_test(
     NAME astTraversalTest_input1C
-    COMMAND astTraversalTest -edg:w -c ${CMAKE_CURRENT_SOURCE_DIR}/input1.C
+    COMMAND astTraversalTest  -c ${CMAKE_CURRENT_SOURCE_DIR}/input1.C
   )
 
   #-----------------------------------------------------------------------------

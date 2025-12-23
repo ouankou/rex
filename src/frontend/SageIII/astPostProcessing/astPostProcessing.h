@@ -84,8 +84,8 @@
 // DQ (2/25/2019): Adding support for marking shared defining declarations across multiple files.
 #include "markSharedDeclarationsForOutputInCodeGeneration.h"
 
-// DQ (5/7/2020): Added support to interleaving include directives into the code.
-#include "addIncludeDirectives.h"
+// DQ (5/7/2020): Added support to interleaving include directives into the
+// code.
 
 // DQ (8/25/2020): Added support to remove redundant include files used to initialize variable declarations.
 #include "fixupInitializers.h"

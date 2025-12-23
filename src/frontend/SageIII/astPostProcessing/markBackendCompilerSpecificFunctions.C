@@ -23,7 +23,7 @@ markBackendSpecificFunctionsAsCompilerGenerated( SgNode* node )
 
 MarkBackendSpecificFunctionsAsCompilerGenerated::MarkBackendSpecificFunctionsAsCompilerGenerated()
    {
-     targetFileName = "rose_edg_required_macros_and_functions.h";
+  targetFileName = "rose_required_macros_and_functions.h";
 
   // printf ("In MarkBackendSpecificFunctionsAsCompilerGenerated constructor: targetFileName = %s \n",targetFileName.c_str());
 
@@ -94,13 +94,13 @@ MarkBackendSpecificFunctionsAsCompilerGenerated::MarkBackendSpecificFunctionsAsC
 
 MarkBackendSpecificFunctionsAsCompilerGenerated::~MarkBackendSpecificFunctionsAsCompilerGenerated()
    {
-  // This should be true if the file was generated with a modified commandline that includes the
-  // edg option to force the rose_edg_required_macros_and_functions.h to be read first.
-  // but Qing's mechanism for building some AST fragments does not do this, so it is not always
+  // This should be true if the file was generated with a modified command line
+  // that preincludes rose_required_macros_and_functions.h. but Qing's mechanism
+  // for building some AST fragments does not do this, so it is not always
   // valid.  This might be fixed up later.
   // ROSE_ASSERT(targetFile != NULL);
-     delete targetFile;
-     targetFile = NULL;
+  delete targetFile;
+  targetFile = NULL;
    }
 
 void
@@ -153,9 +153,10 @@ MarkBackendSpecificFunctionsAsCompilerGenerated::visit(SgNode* node)
 #if 0
                     printf ("Calling Sg_File_Info::setFrontendSpecific() for case #2 \n");
 #endif
-                 // DQ (5/6/2006): Added new classification so distinguish IR nodes from functions, variable,
-                 // typedefs, etc. that are placed into "rose_edg_required_macros_and_functions.h" to
-                 // support the GNU compatability mode that is incompletely implemented by EDG).
+                    // DQ (5/6/2006): Added new classification to distinguish IR
+                    // nodes from functions, variables, typedefs, etc. that are
+                    // placed into "rose_required_macros_and_functions.h" to
+                    // support the GNU compatibility mode.
                     node->get_file_info()->setFrontendSpecific();
 
                     node->get_file_info()->setCompilerGenerated();
@@ -193,9 +194,9 @@ MarkBackendSpecificFunctionsAsCompilerGenerated::visit(SgNode* node)
              {
             // printf ("Found a node from targetFile->get_filename() = %s (mark it as compiler generated) \n",targetFile->get_filename());
 
-            // DQ (5/6/2006): Added new classification so distinguish IR nodes from functions, variable,
-            // typedefs, etc. that are placed into "rose_edg_required_macros_and_functions.h" to
-            // support the GNU compatability mode that is incompletely implemented by EDG).
+            // DQ (5/6/2006): Added new classification to distinguish IR nodes from functions, variables,
+            // typedefs, etc. that are placed into "rose_required_macros_and_functions.h" to
+            // support the GNU compatibility mode.
                functionSymbol->get_file_info()->setFrontendSpecific();
 
                functionSymbol->get_file_info()->setCompilerGenerated();
@@ -205,6 +206,4 @@ MarkBackendSpecificFunctionsAsCompilerGenerated::visit(SgNode* node)
           returnValue.addToGraph = false;
         }
 #endif
-
-   }
-
+}

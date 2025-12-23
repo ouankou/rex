@@ -29,12 +29,6 @@ main ( int argc, char* argv[] )
      list<string> l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
      printf ("Preprocessor (before): argv = \n%s \n",StringUtility::listToString(l).c_str());
 
-  // testing removeArgs
-     CommandlineProcessing::removeArgs (argc,argv,"-edg:");
-     CommandlineProcessing::removeArgs (argc,argv,"--edg:");
-     CommandlineProcessing::removeArgsWithParameters (argc,argv,"-edg_parameter:");
-     CommandlineProcessing::removeArgsWithParameters (argc,argv,"--edg_parameter:");
-
      printf ("argc = %d \n",argc);
      l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
      printf ("l.size() = %d \n",l.size());
@@ -42,25 +36,6 @@ main ( int argc, char* argv[] )
 
   // printf ("Exiting in main! \n");
   // ROSE_ASSERT(1 == 2);
-#endif
-
-#if 0
-     int modifiedArgc    = 0;
-     char** modifiedArgv = NULL;
-
-  // resets modifiedArgc and allocates memory to modifiedArgv
-  // list<string> edgOptionWithNameParameterList = 
-  //      CommandlineProcessing::generateOptionWithNameParameterList (argc, argv,"-edg_parameter:",modifiedArgc,modifiedArgv);
-
-  // resets modifiedArgc and allocates memory to modifiedArgv
-     list<string> edgOptionWithNumberParameterList =
-          CommandlineProcessing::generateOptionWithNameParameterList (argc, argv,"-edg_parameter:",modifiedArgc,modifiedArgv);
-
-     l = CommandlineProcessing::generateArgListFromArgcArgv (modifiedArgc,modifiedArgv);
-     printf ("Preprocessor (after): argv = \n%s \n",StringUtility::listToString(l).c_str());
-
-  // resets modifiedArgc to zero and releases memory from modifiedArgv (resets modifiedArgv to NULL)
-     CommandlineProcessing::releaseArgListMemory(modifiedArgc,modifiedArgv);
 #endif
 
 #if 0
@@ -100,48 +75,9 @@ main ( int argc, char* argv[] )
 #endif
 
 
-#if 0
-     int modifiedArgc    = 0;
-     char** modifiedArgv = NULL;
-
-  // resets modifiedArgc and allocates memory to modifiedArgv
-     list<string> edgOptionList = CommandlineProcessing::generateOptionList (argc, argv,"-edg:",modifiedArgc,modifiedArgv);
-
-  // resets modifiedArgc to zero and releases memory from modifiedArgv (resets modifiedArgv to NULL)
-     CommandlineProcessing::releaseArgListMemory(modifiedArgc,modifiedArgv);
-
-     if ( CommandlineProcessing::isOption(argc,argv,"-","help",true) )
-        {
-          printf ("Option -help found! \n");
-        }
-
-     if ( CommandlineProcessing::isOption(argc,argv,"--","help",true) )
-        {
-          printf ("Option --help found! \n");
-        }
-
-     int integerParameter;
-     if ( CommandlineProcessing::isOptionWithParameter(argc,argv,"-edg:","test",integerParameter,true) )
-        {
-          printf ("Option (integer parameter) -test %d found! \n",integerParameter);
-        }
-
-     string stringParameter;
-     if ( CommandlineProcessing::isOptionWithParameter(argc,argv,"-edg:","test",stringParameter,true) )
-        {
-          printf ("Option (string parameter) -test %s found! \n",stringParameter.c_str());
-        }
-#endif
 
      SgProject* project = frontend(argc,argv);
      ROSE_ASSERT (project != NULL);
-
-#if 0
-  // See if we can access the EDG AST directly
-     ROSE_ASSERT (il_header.primary_source_file != NULL);
-     ROSE_ASSERT (il_header.primary_source_file->file_name != NULL);
-     printf ("##### il_header.primary_source_file->file_name = %s \n",il_header.primary_source_file->file_name);
-#endif
 
   // DQ (2/6/2004): These tests fail in Coco for test2004_14.C
   // AstTests::runAllTests(const_cast<SgProject*>(project));
@@ -157,7 +93,6 @@ main ( int argc, char* argv[] )
   // alternative form
   // return backend(frontend(argc,argv));
    }
-
 
 
 

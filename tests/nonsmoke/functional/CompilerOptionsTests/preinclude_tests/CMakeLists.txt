@@ -35,8 +35,8 @@ include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
 #$(TESTCODES_REQUIRED_TO_PASS) \
 #$(TESTCODE_CURRENTLY_FAILING)
 #
-## ROSE_FLAGS = -rose:C_only -rose:verbose 2 --edg:restrict
-#ROSE_FLAGS = -rose:verbose 0 --edg:restrict
+## ROSE_FLAGS = -rose:C_only -rose:verbose 2 
+#ROSE_FLAGS = -rose:verbose 0 
 #
 #VALGRIND_OPTIONS = --tool=memcheck -v --num-callers=30 --leak-check=no --error-limit=no --show-reachable=yes
 ## VALGRIND = /usr/apps/valgrind/new/bin/valgrind $(VALGRIND_OPTIONS)

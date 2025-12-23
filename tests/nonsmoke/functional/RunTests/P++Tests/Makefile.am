@@ -18,7 +18,7 @@ endif
 ## Include the path to A++ and the transformation specification
 AM_CPPFLAGS = -I. -I../.. -I$(top_srcdir)/include -I$(top_srcdir)/ExamplePreprocessors/A++Preprocessor/ArrayTransformationGrammar
 
-# ROSE_FLAGS = -rose:test 6
+# ROSE_FLAGS = -rose:skip_transformation
 # ROSE_FLAGS = -rose:outputGrammarTreeFiles
 ROSE_FLAGS =
 

@@ -203,13 +203,10 @@ previous section, type {\tt exampleTranslator --help}.  Figure
 
   Executing a translator built with ROSE is just like running a compiler
 with the compiler name changed to the name of the translator executable.
-All the command line arguments (except ROSE-specific and EDG-specific options) 
-are internally handed to the backend compiler (additional command line options 
-required for the EDG front-end are specified for the frontend along with any 
-EDG-specific options; e.g. {\tt --edg:no\_warnings}). All ROSE and EDG specific 
-options are stripped from the command line that is passed to the backend compiler 
-for final compilation of the ROSE generated code; so as not to confuse the backend
-compiler.
+All command line arguments (except ROSE-specific options) are internally handed
+to the backend compiler. ROSE-specific options are stripped from the command line
+that is passed to the backend compiler for final compilation of the ROSE generated
+code, so as not to confuse the backend compiler.
 
 Figure \ref{usingRose:exampleCommandline} shows the execution of a test code through an example translator.
 
@@ -278,4 +275,3 @@ of the processing through the translator.
 }
 % End of scope in indentation
 }
-

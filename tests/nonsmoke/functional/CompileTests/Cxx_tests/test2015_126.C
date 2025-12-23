@@ -1,5 +1,5 @@
 #if 0
-// DQ (12/15/2016): These are from an older version of the rose_edg_required_macros_and_functions.h.in file
+// DQ (12/15/2016): These are from an older version of the rose_required_macros_and_functions.h.in file
 
 double      __builtin_copysign  (double __builtin__x, double __builtin__y);
 float       __builtin_copysignf (float __builtin__x, float __builtin__y);
@@ -133,7 +133,7 @@ int __builtin_abs (int __builtin__x);
 
  
 #if 0
-// DQ (9/12/2016): These are from an older version of the rose_edg_required_macros_and_functions.h.in file
+// DQ (9/12/2016): These are from an older version of the rose_required_macros_and_functions.h.in file
  
 void __builtin_ia32_emms();
 int __builtin_ia32_vec_init_v2si(int,int);
@@ -482,7 +482,7 @@ int __builtin_ia32_psrlqi(long long,int);
 
 int __builtin_bswap32 (int x);
  
-// DQ (9/12/2016): These are from an older version of the rose_edg_required_macros_and_functions.h.in file
+// DQ (9/12/2016): These are from an older version of the rose_required_macros_and_functions.h.in file
 #endif
  
 

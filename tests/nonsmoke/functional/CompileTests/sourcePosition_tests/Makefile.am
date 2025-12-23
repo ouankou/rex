@@ -680,7 +680,7 @@ VALGRIND =
 PASSING_TEST_Objects = ${TESTCODES:.C=.o}
 TEST_Objects = ${ALL_TESTCODES:.C=.o}
 
-ROSE_FLAGS = --edg:no_warnings -w
+ROSE_FLAGS =  -w
 
 ## Include the path to A++ and the transformation specification
 TESTCODE_INCLUDES = -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Code

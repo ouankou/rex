@@ -40,7 +40,7 @@ testVariableRenaming_LDADD = $(ROSE_LIBS)
 # The individual tests: the test executable run against each individual input specimen.
 ###############################################################################################################################
 
-testVariableRenamingSwitches = --edg:no_warnings -w -rose:verbose -I$(SPECIMEN_DIR)/../A++Code -I$(SPECIMEN_DIR)
+testVariableRenamingSwitches =  -w -rose:verbose -I$(SPECIMEN_DIR)/../A++Code -I$(SPECIMEN_DIR)
 testVariableRenamingTests = $(addprefix tvr_, $(addsuffix .passed, $(SPECIMENS)))
 $(testVariableRenamingTests): tvr_%.passed: $(SPECIMEN_DIR)/% $(TEST_EXIT_STATUS) testVariableRenaming
 	@$(RTH_RUN) CMD="./testVariableRenaming $(testVariableRenamingSwitches) -c $<" $(TEST_EXIT_STATUS) $@
