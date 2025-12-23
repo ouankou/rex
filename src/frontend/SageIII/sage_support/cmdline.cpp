@@ -4454,6 +4454,7 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
     std::vector<std::string> inc_dirs_list;
     std::vector<std::string> define_list;
     std::vector<std::string> clang_frontend_args;
+    std::vector<std::string> sys_dirs_list;
     std::string input_file;
 
     for (size_t i = 0; i < argv.size(); i++) {
@@ -4469,37 +4470,51 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
                 else
                     break;
             }
+        } else if (current_arg == "-isystem") {
+          ++i;
+          if (i < argv.size())
+            sys_dirs_list.push_back(argv[i]);
+          else
+            break;
+        } else if (current_arg.rfind("-isystem", 0) == 0) {
+          if (current_arg.size() > 8) {
+            sys_dirs_list.push_back(current_arg.substr(8));
+          } else {
+            ++i;
+            if (i < argv.size())
+              sys_dirs_list.push_back(argv[i]);
+            else
+              break;
+          }
+        } else if (current_arg.find("-D") == 0) {
+          if (current_arg.length() > 2) {
+            define_list.push_back(current_arg.substr(2));
+          } else {
+            i++;
+            if (i < argv.size())
+              define_list.push_back(current_arg);
+            else
+              break;
+          }
+        } else if (current_arg.find("-c") == 0) {
+        } else if (current_arg.find("-o") == 0) {
+          if (current_arg.length() == 2) {
+            i++;
+            if (i >= argv.size())
+              break;
+          }
+        } else if (current_arg.find("-rose") == 0) {
         }
-        else if (current_arg.find("-D") == 0) {
-            if (current_arg.length() > 2) {
-                define_list.push_back(current_arg.substr(2));
-            }
-            else {
-                i++;
-                if (i < argv.size())
-                    define_list.push_back(current_arg);
-                else
-                    break;
-            }
-        }
-        else if (current_arg.find("-c") == 0) {}
-        else if (current_arg.find("-o") == 0) {
-            if (current_arg.length() == 2) {
-                i++;
-                if (i >= argv.size()) break;
-            }
-        }
-        else if (current_arg.find("-rose") == 0) {}
-        // Filter out OpenMP flags - REX captures pragmas as plain text, not via Clang
+        // Filter out OpenMP flags - REX captures pragmas as plain text, not via
+        // Clang
         else if (current_arg == "-fopenmp" ||
                  current_arg.rfind("-fopenmp=", 0) == 0 ||
-                 current_arg == "-fopenmp-simd") {}
-        else if (current_arg.find("--rex-omp-") == 0) {}
-        else if (current_arg == "-rex:clang:continue-on-error") {
-            clang_frontend_args.push_back(current_arg);
-        }
-        else {
-            input_file = current_arg;
+                 current_arg == "-fopenmp-simd") {
+        } else if (current_arg.find("--rex-omp-") == 0) {
+        } else if (current_arg == "-rex:clang:continue-on-error") {
+          clang_frontend_args.push_back(current_arg);
+        } else {
+          input_file = current_arg;
         }
     }
 
@@ -4508,6 +4523,10 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
         inputCommandLine.push_back("-D" + *it_str);
     for (it_str = inc_dirs_list.begin(); it_str != inc_dirs_list.end(); it_str++)
         inputCommandLine.push_back("-I" + StringUtility::getAbsolutePathFromRelativePath(*it_str));
+    for (it_str = sys_dirs_list.begin(); it_str != sys_dirs_list.end();
+         it_str++)
+      inputCommandLine.push_back(
+          "-isystem" + StringUtility::getAbsolutePathFromRelativePath(*it_str));
     for (it_str = clang_frontend_args.begin(); it_str != clang_frontend_args.end(); it_str++)
         inputCommandLine.push_back(*it_str);
 

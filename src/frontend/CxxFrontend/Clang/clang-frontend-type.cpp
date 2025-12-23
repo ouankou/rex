@@ -350,7 +350,7 @@ SgType *getTypeFromTraversedRecordDecl(ClangToSageTranslator *translator,
     return NULL;
   }
 
-  SgNode *tmp_decl = translator->Traverse(record_decl);
+  SgNode *tmp_decl = translator->TraverseOnDemand(record_decl);
   if (SgClassDeclaration *sg_decl = isSgClassDeclaration(tmp_decl)) {
     ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
     return sg_decl->get_type();
@@ -1423,7 +1423,7 @@ bool ClangToSageTranslator::VisitEnumType(clang::EnumType *enum_type,
   SgEnumSymbol *enum_sym = isSgEnumSymbol(sym);
 
   if (enum_sym == NULL) {
-    SgNode *tmp_decl = Traverse(enum_type->getDecl());
+    SgNode *tmp_decl = TraverseOnDemand(enum_type->getDecl());
     SgEnumDeclaration *sg_decl = isSgEnumDeclaration(tmp_decl);
 
     ROSE_ASSERT(sg_decl != NULL);
@@ -1833,7 +1833,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
     clang::TemplateDecl *template_decl =
         arg.getAsTemplate().getAsTemplateDecl();
     if (template_decl != nullptr) {
-      SgNode *traverse_result = Traverse(template_decl);
+      SgNode *traverse_result = TraverseOnDemand(template_decl);
       SgDeclarationStatement *sg_decl =
           isSgDeclarationStatement(traverse_result);
 
@@ -2433,7 +2433,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
   if (clang_template_decl) {
     // std::cerr << "DEBUG: Found clang_template_decl for " << template_name <<
     // std::endl;
-    SgNode *tmp_node = Traverse(clang_template_decl);
+    SgNode *tmp_node = TraverseOnDemand(clang_template_decl);
     template_decl = isSgTemplateClassDeclaration(tmp_node);
     if (template_decl) {
       // std::cerr << "DEBUG: Found existing SgTemplateClassDeclaration for " <<
@@ -2524,7 +2524,8 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType *typedef_type,
     // its declaration is processed.
     auto it = p_decl_translation_map.find(typedef_type->getDecl());
     if (it == p_decl_translation_map.end()) {
-      Traverse(const_cast<clang::TypedefNameDecl *>(typedef_type->getDecl()));
+      TraverseOnDemand(
+          const_cast<clang::TypedefNameDecl *>(typedef_type->getDecl()));
       sym = GetSymbolFromSymbolTable(typedef_type->getDecl());
       tdef_sym = isSgTypedefSymbol(sym);
     }

@@ -1116,34 +1116,11 @@ StatementListInsertChild( SgStatement *parent, Rose_STL_Container<Elemtype*>& st
                target->class_name().c_str(),
                target->get_parent(),
                target->get_parent() != NULL ? target->get_parent()->class_name().c_str() : "null");
-          bool inSystemHeader = false;
           if (Sg_File_Info* targetFileInfo = target->get_file_info())
              {
                printf ("       target location: %s:%d\n",targetFileInfo->get_filenameString().c_str(),targetFileInfo->get_line());
-               if (targetFileInfo->get_filenameString().find("/usr/include/") != std::string::npos)
-                    inSystemHeader = true;
              }
           fflush(stdout);
-
-          if (inSystemHeader == true)
-             {
-            // Keep any insertion node connected enough for downstream queries
-            // (even if we skip structural insertion in compiler/system headers).
-               if (n != NULL)
-                  {
-                    n->set_parent(parent);
-                    if (n->hasExplicitScope())
-                       {
-                         SgScopeStatement* parentScope = isSgScopeStatement(parent);
-                         if (parentScope == NULL)
-                              parentScope = parent->get_scope();
-
-                         if (parentScope != NULL)
-                              n->set_scope(parentScope);
-                       }
-                  }
-               return true;
-             }
           ROSE_ASSERT(false);
         }
   // ROSE_ASSERT (find(statement_or_declaration_container.begin(),statement_or_declaration_container.end(),target) != statement_or_declaration_container.end());
@@ -15691,19 +15668,28 @@ SgCaseOptionStmt::replace_child(SgStatement *target,SgStatement *newstmt,
 bool
 SgCaseOptionStmt::insert_child(SgStatement* target, SgStatement* newstmt, bool inFront, bool extractBasicBlock)
    {
-     // SgCaseOptionStmt has a body where statements can be inserted
-     SgBasicBlock* case_body = isSgBasicBlock(p_body);
-     if (case_body != NULL)
+     if (p_body == NULL || target == NULL)
         {
-          // Try inserting into case body
-          if (StatementListInsertChild(case_body, case_body->get_statements(), target, newstmt, inFront, extractBasicBlock, false))
-             {
-               return true;
-             }
+          return false;
         }
 
-     // Target not found in case body
-     return false;
+     // SgCaseOptionStmt has a body where statements can be inserted
+     SgBasicBlock* case_body = isSgBasicBlock(p_body);
+     if (case_body == NULL)
+        {
+          if (p_body != target)
+             {
+               return false;
+             }
+
+          case_body = SageBuilder::buildBasicBlock(p_body);
+          case_body->set_parent(this);
+          set_body(case_body);
+        }
+
+     // Try inserting into case body
+     return StatementListInsertChild(case_body, case_body->get_statements(),
+                                     target, newstmt, inFront, extractBasicBlock, false);
    }
 
 SOURCE_CASE_OPTION_STATEMENT_END
@@ -15945,6 +15931,7 @@ SgDefaultOptionStmt::replace_child(SgStatement *target,SgStatement *newstmt,
    {
      return ( StatementReplace(this, p_body, target, newstmt) == true );
    }
+
 
 #if 0
 SgStatement*

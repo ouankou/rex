@@ -354,6 +354,33 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
 )
 
+# Issue 148: Mutating system-header declarations must preserve AST invariants.
+add_executable(
+  rex_test2025_issue148_system_header_mutation_translator
+  rex_test2025_issue148_system_header_mutation_translator.cpp
+)
+target_link_libraries(
+  rex_test2025_issue148_system_header_mutation_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+set(rex_test2025_issue148_system_header_dir
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
+add_test(
+  NAME Cxx_tests_rex_test2025_issue148_system_header_mutation
+  COMMAND
+    $<TARGET_FILE:rex_test2025_issue148_system_header_mutation_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -isystem ${rex_test2025_issue148_system_header_dir}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue148_system_header_mutation.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue148_system_header_mutation
+  PROPERTIES LABELS Cxx_tests
+)
+
 # Issue 151: LinkageSpecDecl (extern "C") must not drop declarations and must
 # preserve linkage in the generated output.
 add_test(

@@ -89,82 +89,99 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                 else
                     break;
             }
-        }
-        else if (current_arg.find("-D") == 0) {
-            std::string define_value;
-            if (current_arg.length() > 2) {
-                define_value = current_arg.substr(2);
+        } else if (current_arg == "-isystem") {
+          ++i;
+          if (i < argc) {
+            sys_dirs_list.push_back(argv[i]);
+          } else {
+            break;
+          }
+        } else if (current_arg.rfind("-isystem", 0) == 0) {
+          if (current_arg.size() > 8) {
+            sys_dirs_list.push_back(current_arg.substr(8));
+          } else {
+            // Treat bare -isystem like the separate-arg form.
+            ++i;
+            if (i < argc) {
+              sys_dirs_list.push_back(argv[i]);
             } else {
-                ++i;
-                if (i < argc)
-                    define_value = argv[i];
-                else
-                    break;
+              break;
             }
-            const bool is_openmp_define =
-                (define_value == "_OPENMP") ||
-                (define_value.rfind("_OPENMP=", 0) == 0);
-            if (is_openmp_define)
-                openmp_define_list.push_back(define_value);
-            else
-                define_list.push_back(define_value);
-        }
-        // Note: -fopenmp is processed by ROSE's command line processor before reaching here
-        // ROSE sets sageFile.set_openmp(true) and related flags automatically
-        // We don't need to parse it again here
-        else if (current_arg.find("-c") == 0) {}
-        else if (current_arg == "-std") {
-            passthrough_args.push_back(current_arg);
+          }
+        } else if (current_arg.find("-D") == 0) {
+          std::string define_value;
+          if (current_arg.length() > 2) {
+            define_value = current_arg.substr(2);
+          } else {
             ++i;
             if (i < argc)
-                passthrough_args.push_back(argv[i]);
+              define_value = argv[i];
             else
-                break;
+              break;
+          }
+          const bool is_openmp_define =
+              (define_value == "_OPENMP") ||
+              (define_value.rfind("_OPENMP=", 0) == 0);
+          if (is_openmp_define)
+            openmp_define_list.push_back(define_value);
+          else
+            define_list.push_back(define_value);
         }
-        else if (current_arg.rfind("-std=", 0) == 0) {
-            passthrough_args.push_back(current_arg);
-        }
-        else if (current_arg.find("-o") == 0) {
-            if (current_arg.length() == 2) {
-                i++;
-                if (i >= argc) break;
+        // Note: -fopenmp is processed by ROSE's command line processor before
+        // reaching here ROSE sets sageFile.set_openmp(true) and related flags
+        // automatically We don't need to parse it again here
+        else if (current_arg.find("-c") == 0) {
+        } else if (current_arg == "-std") {
+          passthrough_args.push_back(current_arg);
+          ++i;
+          if (i < argc)
+            passthrough_args.push_back(argv[i]);
+          else
+            break;
+        } else if (current_arg.rfind("-std=", 0) == 0) {
+          passthrough_args.push_back(current_arg);
+        } else if (current_arg.find("-o") == 0) {
+          if (current_arg.length() == 2) {
+            i++;
+            if (i >= argc)
+              break;
+          }
+        } else if (current_arg.rfind("-fopenmp", 0) == 0) {
+          // Don't pass -fopenmp to Clang - REX captures OpenMP pragmas as plain
+          // text
+          bool explicitly_disabled = false;
+          if (current_arg.size() > 8 && current_arg[8] == '=') {
+            std::string value = current_arg.substr(9);
+            std::string lower_value = value;
+            std::transform(lower_value.begin(), lower_value.end(),
+                           lower_value.begin(), [](unsigned char c) {
+                             return static_cast<char>(std::tolower(c));
+                           });
+            if (lower_value == "0" || lower_value == "false" ||
+                lower_value == "disabled") {
+              explicitly_disabled = true;
             }
-        }
-        else if (current_arg.rfind("-fopenmp", 0) == 0) {
-            // Don't pass -fopenmp to Clang - REX captures OpenMP pragmas as plain text
-            bool explicitly_disabled = false;
-            if (current_arg.size() > 8 && current_arg[8] == '=') {
-                std::string value = current_arg.substr(9);
-                std::string lower_value = value;
-                std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(),
-                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                if (lower_value == "0" || lower_value == "false" || lower_value == "disabled") {
-                    explicitly_disabled = true;
-                }
-            }
+          }
 
-            if (explicitly_disabled) {
-                disable_openmp_via_flag = true;
-                enable_openmp = false;
-            } else if (!disable_openmp_via_flag) {
-                enable_openmp = true;
-            }
-        }
-        else if (current_arg == "-fopenmp-simd") {
-            enable_openmp_simd = true;
-            enable_openmp = true;  // SIMD is a subset of OpenMP, enable full pragma capture
-        }
-        else if (current_arg == "-rex:clang:continue-on-error") {
-            continue_on_error = true;
-        }
-        else if (!current_arg.empty() && current_arg[0] == '-') {
-            // TODO -include
+          if (explicitly_disabled) {
+            disable_openmp_via_flag = true;
+            enable_openmp = false;
+          } else if (!disable_openmp_via_flag) {
+            enable_openmp = true;
+          }
+        } else if (current_arg == "-fopenmp-simd") {
+          enable_openmp_simd = true;
+          enable_openmp =
+              true; // SIMD is a subset of OpenMP, enable full pragma capture
+        } else if (current_arg == "-rex:clang:continue-on-error") {
+          continue_on_error = true;
+        } else if (!current_arg.empty() && current_arg[0] == '-') {
+          // TODO -include
 #if DEBUG_ARGS
             std::cerr << "argv[" << i << "] = " << current_arg << " preserved as passthrough option."  << std::endl;
 #endif
             passthrough_args.push_back(current_arg);
-        }
-        else {
+        } else {
 #if DEBUG_ARGS
             std::cerr << "argv[" << i << "] = " << current_arg << " is neither define or include dir. Use it as input file."  << std::endl;
 #endif

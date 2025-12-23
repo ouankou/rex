@@ -34,6 +34,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue123_std_double_colon.cpp
   rex_test2025_issue146_std_iota_quad_colon.cpp
   rex_test2025_issue146_shadowed_function_template.cpp
+  rex_test2025_issue148_system_header_mutation.cpp
   rex_test2025_issue149_param_list_unique_name.cpp
   rex_test2025_issue150_name_qualification_map.cpp
   rex_test2025_issue160_axpy_roundtrip.cpp
@@ -2126,6 +2127,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 
 set(REX_FRONTEND_ERROR_TESTS
   rex_test2025_cfe_error_exit_code.cpp
+  rex_test2025_issue148_system_header_mutation.cpp
   rex_test2025_issue99.cpp
 )
 
