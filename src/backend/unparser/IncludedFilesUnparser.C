@@ -284,16 +284,11 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
           printf ("In IncludedFilesUnparser::figureOutWhichFilesToUnparse(): unparseAllHeaderFiles = %s \n",unparseAllHeaderFiles ? "true" : "false");
         }
 
-#if 1
   // DQ (4/6/2020): Added header file unparsing feature specific debug level.
      if (SgProject::get_unparseHeaderFilesDebug() >= 4)
         {
           printf ("List allFiles list: processing parent include files chain: (size = %zu): \n",allFiles.size());
-        }
-#endif
-
-#if 0
-#endif
+     }
 
   // DQ (11/30/2019): Process the header files to include possible header files that only contained another header files 
   // (and so are not supported within the traversal).  This addresses at least test11 in the UnparseHeadersTest directory.
@@ -301,11 +296,9 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
         while (!workSet.empty()) {
           set<string> newParents;
           for (const string &filename : workSet) {
-#if 1
             if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
               printf("   --- allFiles entry = %s \n", filename.c_str());
             }
-#endif
             const map<string, set<PreprocessingInfo *>>
                 &includingPreprocessingInfosMap =
                     projectNode->get_includingPreprocessingInfosMap();
@@ -334,10 +327,6 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
           workSet.swap(newParents);
         }
 
-#if 0
-#endif
-
-#if 1
   // DQ (4/6/2020): Added header file unparsing feature specific debug level.
      if (SgProject::get_unparseHeaderFilesDebug() >= 4)
         {
@@ -346,8 +335,7 @@ IncludedFilesUnparser::figureOutWhichFilesToUnparse()
              {
                printf ("   --- allFiles = %s \n",(*i).c_str());
              }
-        }
-#endif
+     }
 
 #if DEBUG_FIGURE_OUT
   // DQ (4/6/2020): Added header file unparsing feature specific debug level.

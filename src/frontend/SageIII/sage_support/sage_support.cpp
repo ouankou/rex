@@ -1843,112 +1843,17 @@ SgProject::parse()
             // This will fix the negative test in Plum hall for what should be an error to the C preprocessor.
             // file->secondaryPassOverSourceFile();
 
-            if (true) {
-#if 0
-                 // Output an optional graph of the AST (just the tree, when active). Note that we need to multiple file version
-                 // of this with includes so that we can present a single SgProject rooted AST with multiple SgFile objects.
-                 // generateDOT ( *globalProject );
-                    printf ("\n\nGenerating a dot file of the secondaryPassOverSourceFile AST (could be very large) \n");
-                    generateDOT_withIncludes ( *this, "before_secondaryPassOverSourceFileAST" );
-                    printf ("DONE: Generating a dot file of the secondaryPassOverSourceFile AST \n");
-#endif
-#if 0
-                 // Output an optional graph of the AST (just the tree, when active)
-                    printf ("Generating a dot file... (ROSE Release Note: turn off output of dot files before committing code) \n");
-                 // DQ (12/22/2019): Call multi-file version (instead of generateDOT() function).
-                 // generateAstGraph(project, 2000);
-                 // generateDOT ( *project );
-                    generateDOTforMultipleFile(*this);
-#endif
-#if 0
-                    printf ("Exiting after test! \n");
-                    ROSE_ABORT();
-#endif
-#if 0
-                    printf ("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ \n");
-                    printf ("Calling secondaryPassOverSourceFile(): file = %s \n",file->getFileName().c_str());
-#endif
-                 // DQ (8/19/2019): Divide this into two parts, for optimization of header file unparsing, optionally
-                 // support the main file collection of comments and CPP directives, and seperately the header file
-                 // collection of comments and CPP directives.
-#if 0
-                    printf ("######### In calling secondaryPassOverSourceFile() support an optimization improve performance of header file unparsing \n");
-#endif
-                 // DQ (1/27/2019): Comment out enough to generate the dot file to debug symbol with null basis.
-                 // printf ("ERROR: In Project::parse(): Comment out file->secondaryPassOverSourceFile() to generate the dot file to debug symbol with null basis \n");
-#if 0
-                    file->set_header_file_unparsing_optimization(false);
-                    file->secondaryPassOverSourceFile();
-#else
-#if 0
-                    printf ("############### Setting file->set_header_file_unparsing_optimization(true): file = %p = %s \n",file,file->class_name().c_str());
-#endif
-#if 0
-                 // DQ (4/24/2021): This data member header_file_unparsing_optimization is now static (so we don't need this code).
-                    printf ("This is required to be set here, even though it is set in the codeSegregation tool explicitly \n");
-#endif
-                 // DQ (4/25/2021): Test without this code.
-                 // file->set_header_file_unparsing_optimization(true);
-
-                 // DQ (4/24/2021): Debugging header file optimization.
-                 // file->set_header_file_unparsing_optimization_source_file(true);
-#if 0
-                    printf ("In SgProject::parse(): Perform collection of comments and CPP directives only on the source file \n");
-                    printf ("###################################################### \n");
-                    printf ("Processing comments and CPP directives for source file \n");
-                    printf ("###################################################### \n");
-#endif
-                    file->secondaryPassOverSourceFile();
-#if 0
-                    printf ("Exiting after test! processed first phase of collecting comments and CPP directives for source file) \n");
-                    ROSE_ABORT();
-#endif
-#if 0
-                    printf ("############### Setting file->set_header_file_unparsing_optimization_source_file(false): file = %p = %s \n",file,file->class_name().c_str());
-                    printf ("############### Setting file->set_header_file_unparsing_optimization_header_file(true):  file = %p = %s \n",file,file->class_name().c_str());
-#endif
-                 // DQ (4/24/2021): Debugging header file optimization.
-                 // file->set_header_file_unparsing_optimization_source_file(false);
-
-
-#if 0
-                    file->set_header_file_unparsing_optimization_header_file(true);
-
-#error "DEAD CODE!"
-
-#if 0
-                    printf ("Perform collection of comments and CPP directives only on the header files \n");
-                    printf ("####################################################### \n");
-                    printf ("Processing comments and CPP directives for header files \n");
-                    printf ("####################################################### \n");
-#endif
-                 // printf ("Commented out specific header file collection of comments and CPP directives \n");
-                    file->secondaryPassOverSourceFile();
-#if 0
-                    printf ("Exiting after test! processed second phase of collecting comments and CPP directives for header files) \n");
-                    ROSE_ABORT();
-#endif
-#if 0
-                    printf ("############### Setting file->set_header_file_unparsing_optimization_header_file(false): file = %p = %s \n",file,file->class_name().c_str());
-#endif
-#error "DEAD CODE!"
-                    file->set_header_file_unparsing_optimization_header_file(false);
-#endif
-#endif
-                 // DQ (4/25/2021): Test without this assertion.
-                 // DQ (9/18/2019): I think this is true, though it might depend on the command-line options.
-                 // ROSE_ASSERT(file->get_header_file_unparsing_optimization() == true);
-
-                    ROSE_ASSERT(file->get_header_file_unparsing_optimization_source_file() == false);
-                    ROSE_ASSERT(file->get_header_file_unparsing_optimization_header_file() == false);
-#if 0
-                    printf ("In SgProject::parse(): DONE: Calling secondaryPassOverSourceFile() \n");
-#endif
-            } else {
-#if 0
-                    printf ("Skipping the call to secondaryPassOverSourceFile() \n");
-#endif
-            }
+            // DQ (8/19/2019): Divide this into two parts, for optimization of
+            // header file unparsing, optionally support the main file
+            // collection of comments and CPP directives, and seperately the
+            // header file collection of comments and CPP directives.
+            file->secondaryPassOverSourceFile();
+            ROSE_ASSERT(
+                file->get_header_file_unparsing_optimization_source_file() ==
+                false);
+            ROSE_ASSERT(
+                file->get_header_file_unparsing_optimization_header_file() ==
+                false);
 #if 0
                printf ("Exiting after test! \n");
                ROSE_ABORT();

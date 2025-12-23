@@ -93,7 +93,6 @@ main ( int argc, char* argv[] )
   // Get the command line so that we can add an option.
      std::vector<std::string> commandLine = CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
 
-  // CmdOptions::GetInstance()->SetOptions(argc, argv);
      SgProject* project = frontend(commandLine);
      ROSE_ASSERT (project != NULL);
 
