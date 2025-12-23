@@ -60,12 +60,10 @@ filterOnNodes::operator()(filterOnNodes::argument_type x) const
           Sg_File_Info* fileInfo = locatedNode->get_file_info();
           std::string filename(Rose::utility_stripPathFromFileName(fileInfo->get_filename()));
 
-
-
-          if (filename.find("rose_edg_macros_and_functions_required_for_gnu.h") != std::string::npos)
-             {
-               returnValue.addToGraph = false;
-             }
+          if (filename.find("rose_required_macros_and_functions.h") !=
+              std::string::npos) {
+            returnValue.addToGraph = false;
+          }
 
           if (fileInfo->isCompilerGenerated()==true)
              {

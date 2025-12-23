@@ -92,8 +92,10 @@ IncludeFileSupport::PrefixTraversal::evaluateSynthesizedAttribute ( SgNode* node
 #if 0
           printf ("include file: filename = %s \n",includeFile->get_filename().str());
 #endif
-       // DQ (11/17/2018): the default setting for the rose_edg_required_macros_and_functions.h is true, since it is not inlcuded in the children.
-          bool unparseAllChildren = true;
+       // DQ (11/17/2018): the default setting for the
+       // rose_required_macros_and_functions.h is true, since it is not inlcuded
+       // in the children.
+       bool unparseAllChildren = true;
 
        // Loop over the children.
           for (size_t i = 0; i < synthesizedAttributeList.size(); i++)

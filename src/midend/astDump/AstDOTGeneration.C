@@ -110,20 +110,22 @@ AstDOTGeneration::evaluateInheritedAttribute(SgNode* node, DOTInheritedAttribute
      printf ("AstDOTGeneration::evaluateInheritedAttribute(): node = %s \n",node->class_name().c_str());
 #endif
 
-  // We might not want to increment the trace position information for
-  // the IR nodes from rose_edg_required_macros_and_functions.h
-  // ia.tdbuTracePos = tdbuTrace++;
-  // ia.tdTracePos   = tdTrace++;
+     // We might not want to increment the trace position information for
+     // the IR nodes from rose_required_macros_and_functions.h
+     // ia.tdbuTracePos = tdbuTrace++;
+     // ia.tdTracePos   = tdTrace++;
 
-  // DQ (5/3/2006)
-  // We put macros and functions required for GNU compatability in the file:
-  //    rose_edg_required_macros_and_functions.h
-  // and we want to avoid generating nodes for these within visualizations of the AST.
-  // Once EDG supports these functions (we have collected the onese missed by EDG here)
-  // this file will not be required.  We could filter on declaration first to avoid
-  // lots of string comparision.  Or use a static pointer to save the first fileInfo
-  // from "rose_edg_required_macros_and_functions.h" and then use the
-  // Sg_File_Info::sameFile() function (this reduces to an integer comparision internally).
+     // DQ (5/3/2006)
+     // We put macros and functions required for GNU compatability in the file:
+     //    rose_required_macros_and_functions.h
+     // and we want to avoid generating nodes for these within visualizations of
+     // the AST. Once EDG supports these functions (we have collected the onese
+     // missed by EDG here) this file will not be required.  We could filter on
+     // declaration first to avoid lots of string comparision.  Or use a static
+     // pointer to save the first fileInfo from
+     // "rose_required_macros_and_functions.h" and then use the
+     // Sg_File_Info::sameFile() function (this reduces to an integer
+     // comparision internally).
      Sg_File_Info* fileInfo = node->get_file_info();
      if (fileInfo != NULL)
         {
@@ -132,25 +134,27 @@ AstDOTGeneration::evaluateInheritedAttribute(SgNode* node, DOTInheritedAttribute
        // to debug using valgrind).
           bool isCompilerGeneratedOrPartOfTransformation = fileInfo->isCompilerGenerated();
 
-       // DQ (5/3/2006): All constructs from the rose_edg_required_macros_and_functions.h
-       // file are marked as compiler generated.  These are declarations required for GNU
-       // compatability and we would like to have them be ignored because they should be
-       // considered builtin and not explicitly represented.  In a sense this file is special.
-       // Not that if we traverse the AST without constraint then we traverse these IR nodes.
+          // DQ (5/3/2006): All constructs from the
+          // rose_required_macros_and_functions.h file are marked as compiler
+          // generated.  These are declarations required for GNU compatability
+          // and we would like to have them be ignored because they should be
+          // considered builtin and not explicitly represented.  In a sense this
+          // file is special. Not that if we traverse the AST without constraint
+          // then we traverse these IR nodes.
           if (isCompilerGeneratedOrPartOfTransformation == true)
              {
-               std::string targetFileName      = "rose_edg_required_macros_and_functions.h";
-               std::string rawFileName         = node->get_file_info()->get_raw_filename();
-               std::string filenameWithoutPath = StringUtility::stripPathFromFileName(rawFileName);
-               if (filenameWithoutPath == targetFileName)
-                  {
+            std::string targetFileName = "rose_required_macros_and_functions.h";
+            std::string rawFileName = node->get_file_info()->get_raw_filename();
+            std::string filenameWithoutPath =
+                StringUtility::stripPathFromFileName(rawFileName);
+            if (filenameWithoutPath == targetFileName) {
 #if 0
                  // DQ (8/22/2018): This can be handy to comment out when debuging associating comments
                  // and CPP directives to IR nodes (e.g. unparse header support).
                  // This permits the visualization of the AST to be smaller (skips things in std namespace for example).
                     ia.skipSubTree = true;
 #endif
-                  }
+            }
 
             // DQ (12/20/2018): Skip template instantiations that can make the DOT files too large to
             // generate or look at easily.
@@ -220,10 +224,9 @@ AstDOTGeneration::evaluateInheritedAttribute(SgNode* node, DOTInheritedAttribute
 #endif
         }
 
-  // We might not want to increment the trace position information for
-  // the IR nodes from rose_edg_required_macros_and_functions.h
-     if (ia.skipSubTree == false)
-        {
+        // We might not want to increment the trace position information for
+        // the IR nodes from rose_required_macros_and_functions.h
+        if (ia.skipSubTree == false) {
           ia.tdbuTracePos = tdbuTrace++;
           ia.tdTracePos   = tdTrace++;
         }

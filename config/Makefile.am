@@ -28,11 +28,10 @@ endif
 # the configuration will exit and the backend specific compiler header file are not built.
 # DQ (10/22/2003) Support for GNU header file processing (including STL header file processing)
 EXTRA_DIST = CMakeLists.txt \
-     rose_edg_required_macros_and_functions.h.cmake \
      Makefile.for.ROSE.includes.and.libs \
      QMTest_makefile.inc \
      gnu-3.x-headerfile-fixup.pl \
-     rose_edg_required_macros_and_functions.h.in \
+     rose_required_macros_and_functions.h.in \
      config.guess \
      depend \
      install-sh \

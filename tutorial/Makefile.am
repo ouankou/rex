@@ -1156,10 +1156,10 @@ rose_inputCode_typeTransformation.C: typeTransformation
 	./typeTransformation $(ROSE_FLAGS) -c $(srcdir)/inputCode_typeTransformation.C
 
 generatingUniqueNamesFromDeclaration.out: generatingUniqueNamesFromDeclaration
-	./generatingUniqueNamesFromDeclaration $(ROSE_FLAGS) -c $(srcdir)/inputCode_generatingUniqueNamesFromDeclaration.C | grep -v rose_edg_macros_and_functions_required_for_gnu > generatingUniqueNamesFromDeclaration.out
+	./generatingUniqueNamesFromDeclaration $(ROSE_FLAGS) -c $(srcdir)/inputCode_generatingUniqueNamesFromDeclaration.C | grep -v rose_required_macros_and_functions > generatingUniqueNamesFromDeclaration.out
 
 generatingUniqueNamesFromDeclaration2.out: generatingUniqueNamesFromDeclaration
-	./generatingUniqueNamesFromDeclaration $(ROSE_FLAGS) -c $(srcdir)/inputCode_generatingUniqueNamesFromDeclaration2.C | grep -v rose_edg_macros_and_functions_required_for_gnu > generatingUniqueNamesFromDeclaration2.out
+	./generatingUniqueNamesFromDeclaration $(ROSE_FLAGS) -c $(srcdir)/inputCode_generatingUniqueNamesFromDeclaration2.C | grep -v rose_required_macros_and_functions > generatingUniqueNamesFromDeclaration2.out
 #	echo "Test Failed!" > generatingUniqueNamesFromDeclaration2.out
 
 symbolTableHandling.out: symbolTableHandling

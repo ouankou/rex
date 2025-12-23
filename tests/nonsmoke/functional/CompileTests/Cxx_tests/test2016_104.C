@@ -1,199 +1,41 @@
 # 1 "/home/quinlan1/ROSE/git_rose_upgrade_to_edg_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
- 
- 
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
- 
+# 325 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 346 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 368 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 387 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 421 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
- 
+# 451 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 490 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 506 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 531 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
- 
-
-
-
-
- 
-
-
- 
- 
-
-
-
- 
-
-
- 
-# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-# 325 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
- 
-# 346 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
- 
-# 368 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
- 
-
-
-
-
- 
- 
-# 387 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
- 
- 
-
-
-
-
-
-
- 
-
-
-
-
- 
-# 421 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
- 
- 
- 
-
- 
-
- 
-
- 
-
-
-
-# 451 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
- 
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
- 
- 
-
-
- 
-
- 
-
-# 490 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
- 
- 
-# 506 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
- 
-
-
-
-
-
-
- 
- 
- 
- 
-
- 
- 
-
-
- 
-# 531 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
-
-
- 
-
-
-
-
-
-
- 
 long long          __builtin_bswap64(long long __X);
 void               __builtin_ia32_fxsave(void *__P);
 void               __builtin_ia32_fxrstor(void *__P);
 void               __builtin_ia32_fxsave64(void *__P);
 void               __builtin_ia32_fxrstor64(void *__P);
 
+# 699 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 1153 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
- 
-# 699 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
+# 2736 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
+# 3101 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-
-
- 
-# 1153 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
- 
-# 2736 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
- 
- 
- 
-# 3101 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
-
-
-
-
-
- 
-
-
- 
-# 3126 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_edg_required_macros_and_functions.h"
+# 3126 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
 # 1 "/home/quinlan1/ROSE/git_rose_upgrade_to_edg_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"
 # 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-BOOST_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"

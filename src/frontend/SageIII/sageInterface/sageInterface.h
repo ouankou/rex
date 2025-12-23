@@ -1995,7 +1995,8 @@ ROSE_DLL_API void insertStatementBeforeFirstNonDeclaration(SgStatement *newStmt,
 //then the new statements are inserted at the end of the scope.
 ROSE_DLL_API void insertStatementListBeforeFirstNonDeclaration(const std::vector<SgStatement*> &newStmts, SgScopeStatement *scope);
 
-// DQ (11/21/2018): We need to sometimes insert something after the last statement of the collection from rose_edg_required_macros_and_functions.h.
+// DQ (11/21/2018): We need to sometimes insert something after the last
+// statement of the collection from rose_required_macros_and_functions.h.
 ROSE_DLL_API SgStatement* lastFrontEndSpecificStatement( SgGlobal* globalScope );
 
 ROSE_DLL_API bool isRemovableStatement ( SgStatement* s );

@@ -1661,16 +1661,14 @@ void IncludedFilesUnparser::collectNewFilesToCopy(const string& includedFile, Pr
 #if 0
                printf ("In collectNewFilesToCopy(): filtering ROSE preinclude file: filenameWithOutPath = %s \n",filenameWithOutPath.c_str());
 #endif
-               if (filenameWithOutPath != "rose_edg_required_macros_and_functions.h")
-                  {
-                    filesToCopy.insert(*i);
-                  }
-                 else
-                  {
+               if (filenameWithOutPath !=
+                   "rose_required_macros_and_functions.h") {
+                 filesToCopy.insert(*i);
+               } else {
 #if 0
                     printf ("@@@@@@@@ Filtered file: *i = %s \n",(*i).c_str());
 #endif
-                  }
+               }
              }
 
           i++;
@@ -1880,20 +1878,26 @@ void IncludedFilesUnparser::visit(SgNode* node)
                   }
                  else
                   {
-                    printf ("In IncludedFilesUnparser::visit(): for includeDirectiveStatement = %p headerFile == NULL \n",includeDirectiveStatement);
+                    if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+                      printf("NOTE: In IncludedFilesUnparser::visit(): "
+                             "includeDirectiveStatement = %p headerFile == "
+                             "NULL \n",
+                             includeDirectiveStatement);
+                    }
                   }
-#if 1
-               printf ("Exiting as a test! \n");
-               ROSE_ABORT();
-#endif
              }
             else
              {
-#if 1
-            // Make this a warning for now.
-               printf ("NOTE: In IncludedFilesUnparser::visit(): headerFileBody == NULL: includeDirectiveStatement->get_directiveString() = %s \n",
-                    includeDirectiveStatement->get_directiveString().c_str());
-#endif
+               if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+                 // Header files may not have a materialized AST body (e.g.,
+                 // when the frontend doesn't build SgHeaderFileBody instances
+                 // for a directive).
+                 printf(
+                     "NOTE: In IncludedFilesUnparser::visit(): headerFileBody "
+                     "== NULL: "
+                     "includeDirectiveStatement->get_directiveString() = %s \n",
+                     includeDirectiveStatement->get_directiveString().c_str());
+               }
              }
         }
 

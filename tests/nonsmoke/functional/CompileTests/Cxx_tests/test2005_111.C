@@ -7,8 +7,8 @@
 // a typedef type and the declaration of the typedef type is
 // the declaration "int _April_12_2005 = 0;"
 
-// This code appears in rose_edg_macros_and_functions_required_for_gnu.h
-// which is in the ROSE/config directory and is copied into the 
+// This code appears in rose_required_macros_and_functions.h
+// which is in the ROSE/config directory and is copied into the
 // compile tree: ROSE/g++_HEADERS.
 
 // Previously it appeared that the va_start function was eating the first declaration

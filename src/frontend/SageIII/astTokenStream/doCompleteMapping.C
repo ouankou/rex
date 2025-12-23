@@ -99,58 +99,65 @@ separator* mapSeparatorsAST(std::vector<SgNode*>& linearizedAST){
 
         for(unsigned int i = 0; i < linearizedAST.size(); i++){
 
-                if( ( isSgScopeStatement(linearizedAST[i]) != NULL ) &&
-          ( isSgFunctionDefinition(linearizedAST[i]) == NULL ) &&
-          ( isSgSwitchStatement(linearizedAST[i]) == NULL ) &&
-            ( isSgIfStmt(linearizedAST[i]) == NULL ) &&
-            ( isSgWhileStmt(linearizedAST[i]) == NULL)  &&
-            ( find(ignoreScopes.begin(), ignoreScopes.end(),linearizedAST[i]) == ignoreScopes.end() )  
-            //&& ( isSgScopeStatement(linearizedAST[i])->get_file_info()->get_filenameString().find("rose_edg_required_macros_and_functions.h") == string::npos)
-                                //( isSgBasicBlock(linearizedAST[i])     == NULL ) //&&  
-                                //( (isSgScopeStatement(linearizedAST[i])->get_file_info()->isCompilerGenerated() == false) ||
-                                  //Because of a bug which marks namespace definition statements in rose_edg_required_macros_and_functions.h
-                                  //as compiler generated even when they are not I am putting in this fix
-                                  //Can a namespace be compiler generated?
-                                //  (isSgNamespaceDefinitionStatement(linearizedAST[i]) != NULL )
-                                ///)
-                  ){
-                        if(    ( lastScopeStmt != NULL )
-                                        && ( lastScopeStmt == linearizedAST[i] )
-                          ){
-                                int begin_sep_pos = curlyBraceStackAST[curlyBraceStackAST.size()-1];
-                                int end_sep_pos   = i;
+          if ((isSgScopeStatement(linearizedAST[i]) != NULL) &&
+              (isSgFunctionDefinition(linearizedAST[i]) == NULL) &&
+              (isSgSwitchStatement(linearizedAST[i]) == NULL) &&
+              (isSgIfStmt(linearizedAST[i]) == NULL) &&
+              (isSgWhileStmt(linearizedAST[i]) == NULL) &&
+              (find(ignoreScopes.begin(), ignoreScopes.end(),
+                    linearizedAST[i]) == ignoreScopes.end())
+              //&& (
+              // isSgScopeStatement(linearizedAST[i])->get_file_info()->get_filenameString().find("rose_required_macros_and_functions.h")
+              //== string::npos) ( isSgBasicBlock(linearizedAST[i])     == NULL
+              //) //&& (
+              //(isSgScopeStatement(linearizedAST[i])->get_file_info()->isCompilerGenerated()
+              //== false) || Because of a bug which marks namespace definition
+              // statements in rose_required_macros_and_functions.h as compiler
+              // generated even when they are not I am putting in this fix Can a
+              // namespace be compiler generated?
+              //  (isSgNamespaceDefinitionStatement(linearizedAST[i]) != NULL )
+              ///)
+          ) {
+            if ((lastScopeStmt != NULL) &&
+                (lastScopeStmt == linearizedAST[i])) {
+              int begin_sep_pos =
+                  curlyBraceStackAST[curlyBraceStackAST.size() - 1];
+              int end_sep_pos = i;
 
-                                tmp_curlyBraceStackAST[curlyBraceStackAST.size()-1].push_back( 
-                                                separator(begin_sep_pos,end_sep_pos, 
-                                                        tmp_curlyBraceStackAST[curlyBraceStackAST.size()]) );
-                                tmp_curlyBraceStackAST.pop_back();
+              tmp_curlyBraceStackAST[curlyBraceStackAST.size() - 1].push_back(
+                  separator(begin_sep_pos, end_sep_pos,
+                            tmp_curlyBraceStackAST[curlyBraceStackAST.size()]));
+              tmp_curlyBraceStackAST.pop_back();
 
-                                //Make sure that the new last scope statement is the one before the previous one
-                                curlyBraceStackAST.pop_back();
+              // Make sure that the new last scope statement is the one before
+              // the previous one
+              curlyBraceStackAST.pop_back();
 
-                                begin_sep_pos = curlyBraceStackAST[curlyBraceStackAST.size()-1];
+              begin_sep_pos = curlyBraceStackAST[curlyBraceStackAST.size() - 1];
 
-                                lastScopeStmt = linearizedAST[begin_sep_pos];
-                        }else{
-                switch(linearizedAST[i]->variantT()){
-                  case V_SgFunctionDefinition:
-                    ignoreScopes.push_back( isSgFunctionDefinition(linearizedAST[i])->get_body()  );
-                    break;
-                  case V_SgSwitchStatement:
-                    ignoreScopes.push_back( isSgSwitchStatement(linearizedAST[i])->get_body()  );
-                    break;
-                  default:
-                    break;
-                      
-                }
-                                curlyBraceStackAST.push_back(i);
-                                if( tmp_curlyBraceStackAST.size() == curlyBraceStackAST.size()  )
-                                        tmp_curlyBraceStackAST.push_back( vector<separator>() );
-                                else if( tmp_curlyBraceStackAST.size() != ( curlyBraceStackAST.size()+1 ) )
-                                        ROSE_ABORT();
-                                lastScopeStmt = linearizedAST[i];
-                        }
-                }
+              lastScopeStmt = linearizedAST[begin_sep_pos];
+            } else {
+              switch (linearizedAST[i]->variantT()) {
+              case V_SgFunctionDefinition:
+                ignoreScopes.push_back(
+                    isSgFunctionDefinition(linearizedAST[i])->get_body());
+                break;
+              case V_SgSwitchStatement:
+                ignoreScopes.push_back(
+                    isSgSwitchStatement(linearizedAST[i])->get_body());
+                break;
+              default:
+                break;
+              }
+              curlyBraceStackAST.push_back(i);
+              if (tmp_curlyBraceStackAST.size() == curlyBraceStackAST.size())
+                tmp_curlyBraceStackAST.push_back(vector<separator>());
+              else if (tmp_curlyBraceStackAST.size() !=
+                       (curlyBraceStackAST.size() + 1))
+                ROSE_ABORT();
+              lastScopeStmt = linearizedAST[i];
+            }
+          }
         }
 
         ROSE_ASSERT(tmp_curlyBraceStackAST.size()==1);

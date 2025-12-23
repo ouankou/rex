@@ -1,11 +1,11 @@
 
-/* 
-   This test code fails for a mysterious reason, if any line is removed 
+/*
+   This test code fails for a mysterious reason, if any line is removed
    a file_info object is not generated correctly and the translation fails :-).
    This may be an EDG problem (this codes was simplified from complex_01.c).
 
    This is a C and C99 test code of the use of complex types.
-   It works because the rose_edg_required_macros_and_functions.h
+   It works because the rose_required_macros_and_functions.h
    file redefines __complex__ using:
    #define __complex__ _Complex
  */

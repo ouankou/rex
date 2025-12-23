@@ -159,26 +159,29 @@ int main( int argc, char * argv[] )
 //           std::cout << i->get_value().c_str();
 //           std::cout.flush();
 		   const std::string& thisfile = i->get_position().get_file().c_str();
-           if (//thisfile.length() > 0 &&
-               thisfile.find("<default>") == std::string::npos && 
-               thisfile.find("<built-in>") == std::string::npos && 
-               thisfile.find("<command line>") == std::string::npos && 
-               thisfile.find("rose_edg_required_macros_and_functions") == std::string::npos)
-		   {
-			   if (thisfile.length() == 0)
-			   {
-//				   boost::wave::token_id id = boost::wave::token_id(*i);
-//				   // King84 (2010.09.23): Hack because we had to insert some whitespace
-//				   if (id == boost::wave::T_NEWLINE || id == boost::wave::T_SPACE || id == boost::wave::T_RIGHTPAREN || id == boost::wave::T_LEFTPAREN)
-//					   outfile << i->get_value().c_str();
-			   }
-			   else
-				   outfile << i->get_value().c_str();
-	             if (i->get_value() == ",")
+                   if ( // thisfile.length() > 0 &&
+                       thisfile.find("<default>") == std::string::npos &&
+                       thisfile.find("<built-in>") == std::string::npos &&
+                       thisfile.find("<command line>") == std::string::npos &&
+                       thisfile.find("rose_required_macros_and_functions") ==
+                           std::string::npos) {
+                     if (thisfile.length() == 0) {
+                       //				   boost::wave::token_id
+                       // id = boost::wave::token_id(*i);
+                       //				   // King84
+                       //(2010.09.23): Hack because we had to insert some
+                       // whitespace 				   if (id ==
+                       // boost::wave::T_NEWLINE || id == boost::wave::T_SPACE
+                       // || id == boost::wave::T_RIGHTPAREN
+                       //|| id == boost::wave::T_LEFTPAREN)
+                       //outfile << i->get_value().c_str();
+                     } else
+                       outfile << i->get_value().c_str();
+                     if (i->get_value() == ",")
 			   {
 				   std::cout << "***** GOT A COMMA from file " << i->get_position().get_file().c_str() << "*****" << std::endl;
 			   }
-		   }
+                   }
          }
          outfile.close();
 

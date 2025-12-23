@@ -1873,7 +1873,7 @@ UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(SgSourceFi
                             {
 #error "DEAD CODE!"
                            // Else we have to make sure that none of the declarations in global scope are from this file.
-                           // These can de declarations from header files or the rose_edg_required_macros_and_functions.h
+                           // These can de declarations from header files or the rose_required_macros_and_functions.h
                            // file that is read to support GNU predefined macros.
                               lastStatementOfGlobalScopeUnparsedUsingTokenStream = true;
                               for (size_t i = 0; i < globalScope->get_declarations().size(); i++)

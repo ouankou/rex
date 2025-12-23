@@ -5771,7 +5771,7 @@ HEADER_FILE_INFORMATION_START
              - Examples of frontend specific IR nodes include:
                 -# float __builtin_acosf (float __builtin__x);
                 -# #define __builtin_va_start va_start
-                -# All functions and variables defined in "rose_edg_required_macros_and_functions.h"
+                -# All functions and variables defined in "rose_required_macros_and_functions.h"
 
           \internal We need constructors taking a value of this type.
        */
@@ -5781,7 +5781,7 @@ HEADER_FILE_INFORMATION_START
                e_compiler_generated                      = 0x2,  /*!< classify as compiler generated */
                e_output_in_code_generation               = 0x4,  /*!< classify as required when generating code in unparser (orthogonal concept to transformation and compiler generated) */
                e_shared                                  = 0x8,  /*!< classify as a shared IR node (part of evolving support for AST merging) */
-               e_frontend_specific                       = 0x10, /*!< classify as frontend specific (e.g. gnu compatable function from rose_edg_required_macros_and_functions.h) */
+               e_frontend_specific                       = 0x10, /*!< classify as frontend specific (e.g. gnu compatable function from rose_required_macros_and_functions.h) */
                e_source_position_unavailable_in_frontend = 0x20, /*!< classify as explictly unabailable from front-end */
                e_comment_or_directive                    = 0x40, /*!< classify as a comment or directive (not a part of the language grammar) */
                e_token                                   = 0x80, /*!< classify as a token from the parser (not a part of the language grammar) */
@@ -14284,10 +14284,10 @@ Sg_File_Info::get_file_id () const
         }
        else
         {
-       // DQ (11/1/2007): This does not allow for isSameFile() to compare properly when testing for "rose_edg_required_macros_and_functions.h"
+       // DQ (11/1/2007): This does not allow for isSameFile() to compare properly when testing for "rose_required_macros_and_functions.h"
           if ( isCompilerGenerated() == true )
              {
-            // DQ (11/1/2007): check if this is frontEndSpecific, and if so return the file_id of the associated file ("rose_edg_required_macros_and_functions.h")
+            // DQ (11/1/2007): check if this is frontEndSpecific, and if so return the file_id of the associated file ("rose_required_macros_and_functions.h")
             // returnValue = undefinedValue;
                if ( isFrontendSpecific() == true )
                   {
@@ -14295,7 +14295,7 @@ Sg_File_Info::get_file_id () const
 #if FAIL_ON_ROSE_1532
                     if (p_fileidtoname_map.count(p_file_id) == 0 && p_file_id == COMPILER_GENERATED_FILE_ID) {
                       printf("ERROR: Sg_File_Info::get_file_id(this = %p):\n", this);
-                      printf("  isFrontendSpecific() == true => p_file_id == file_id_of(\"rose_edg_required_macros_and_functions.h\")\n");
+                      printf("  isFrontendSpecific() == true => p_file_id == file_id_of(\"rose_required_macros_and_functions.h\")\n");
                       printf("  BUT:  p_file_id = %d\n", p_file_id);
                       printf("  HERE: p_file_id == COMPILER_GENERATED_FILE_ID\n");
                       printf("  BYPASSED: seen for a SgInitializedName in the parameter list of __builtin_atan2\n");
@@ -14304,7 +14304,7 @@ Sg_File_Info::get_file_id () const
 #endif
                  // ROSE-1499: check that p_file_id is valid
                     ROSE_ASSERT(p_file_id == COMPILER_GENERATED_FILE_ID || p_fileidtoname_map.count(p_file_id) > 0);
-                 // In this case return the file_id of the specific file which indicates this properly ("rose_edg_required_macros_and_functions.h").
+                 // In this case return the file_id of the specific file which indicates this properly ("rose_required_macros_and_functions.h").
                     returnValue = p_file_id;
                   }
                  else
@@ -14700,11 +14700,11 @@ Sg_File_Info::get_filenameString() const
         {
           if (isCompilerGenerated() == true)
              {
-            // DQ (11/1/2007): check if this is frontEndSpecific, and if so return the filename of the associated file ("rose_edg_required_macros_and_functions.h")
+            // DQ (11/1/2007): check if this is frontEndSpecific, and if so return the filename of the associated file ("rose_required_macros_and_functions.h")
             // This has been fixed to be consistant with the implementation of get_file_id().
                if ( isFrontendSpecific() == true )
                   {
-                 // In this case return the filename of the specific file which indicates this properly ("rose_edg_required_macros_and_functions.h").
+                 // In this case return the filename of the specific file which indicates this properly ("rose_required_macros_and_functions.h").
                     returnString = &getFilenameFromID(p_file_id);
                   }
                  else
@@ -14767,11 +14767,11 @@ Sg_File_Info::get_physical_filename() const
         {
           if (isCompilerGenerated() == true)
              {
-            // DQ (11/1/2007): check if this is frontEndSpecific, and if so return the filename of the associated file ("rose_edg_required_macros_and_functions.h")
+            // DQ (11/1/2007): check if this is frontEndSpecific, and if so return the filename of the associated file ("rose_required_macros_and_functions.h")
             // This has been fixed to be consistant with the implementation of get_file_id().
                if ( isFrontendSpecific() == true )
                   {
-                 // In this case return the filename of the specific file which indicates this properly ("rose_edg_required_macros_and_functions.h").
+                 // In this case return the filename of the specific file which indicates this properly ("rose_required_macros_and_functions.h").
                     returnString = &getFilenameFromID(p_physical_file_id);
                   }
                  else
@@ -14853,7 +14853,7 @@ Sg_File_Info::get_line() const
                returnValue = p_line;
 #else
             // DQ (3/18/2017): Add to the cases where we want to output an undefined value.
-            // I think it is helpful to know the position in the rose_edg_required_macros_and_functions.h
+            // I think it is helpful to know the position in the rose_required_macros_and_functions.h
             // file (so don't output undefined value for case of isFrontendSpecific() == true).
             // if (isFrontendSpecific() == true || isSourcePositionUnavailableInFrontend() == true )
                if ( isSourcePositionUnavailableInFrontend() == true )
@@ -14900,7 +14900,7 @@ Sg_File_Info::get_line(int file_id) const
             else
              {
             // DQ (3/18/2017): Add to the cases where we want to output an undefined value.
-            // I think it is helpful to know the position in the rose_edg_required_macros_and_functions.h
+            // I think it is helpful to know the position in the rose_required_macros_and_functions.h
             // file (so don't output undefined value for case of isFrontendSpecific() == true).
             // if (isFrontendSpecific() == true || isSourcePositionUnavailableInFrontend() == true )
                if ( isSourcePositionUnavailableInFrontend() == true )
@@ -15080,7 +15080,7 @@ Sg_File_Info::get_col() const
                returnValue = p_col;
 #else
             // DQ (3/18/2017): Add to the cases where we want to output an undefined value.
-            // I think it is helpful to know the position in the rose_edg_required_macros_and_functions.h
+            // I think it is helpful to know the position in the rose_required_macros_and_functions.h
             // file (so don't output undefined value for case of isFrontendSpecific() == true).
             // if (isFrontendSpecific() == true || isSourcePositionUnavailableInFrontend() == true )
                if ( isSourcePositionUnavailableInFrontend() == true )

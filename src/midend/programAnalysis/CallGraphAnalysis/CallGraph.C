@@ -573,7 +573,7 @@ builtinFilter::operator() (SgFunctionDeclaration* funcDecl) const
   //string::size_type loc;
 
   //Filter out functions from the ROSE preinclude header file
-  if(filename.find("rose_edg_required_macros_and_functions")!=string::npos)
+  if (filename.find("rose_required_macros_and_functions") != string::npos)
     returnValue = false;
   //Filter out compiler generated functions
   else if(funcDecl->get_file_info()->isCompilerGenerated()==true)

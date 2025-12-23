@@ -2739,7 +2739,7 @@ SgFile::secondaryPassOverSourceFile()
                          printf ("In SgProject::parse(): includeFile->get_filename() = %s \n",includeFile->get_filename().str());
 #endif
                       // DQ (9/26/2018): Note that this is null for include files that are not explicit in the source file (e.g. -isystem option).
-                      // The common example is the header file "rose_edg_required_macros_and_functions.h", which is never explicit include by the
+                      // The common example is the header file "rose_required_macros_and_functions.h", which is never explicit include by the
                       // the source (*.C) file.
                          SgSourceFile* header_file = includeFile->get_source_file();
                       // ROSE_ASSERT(header_file != NULL);

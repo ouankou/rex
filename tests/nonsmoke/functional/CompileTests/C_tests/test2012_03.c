@@ -11,6 +11,7 @@ struct X {};
 
 // void foo_b (int __mode , struct X* __list[]);
 
-// Note that we defined away "__restrict" in gcc_HEADERS/rose_edg_required_macros_and_functions.h to simplify this.
+// Note that we defined away "__restrict" in
+// gcc_HEADERS/rose_required_macros_and_functions.h to simplify this.
 void foo_b (int __mode , struct X* __list[__restrict]);
 

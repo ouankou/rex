@@ -14203,17 +14203,19 @@ bool  SageInterface::hasSimpleChildrenList (SgScopeStatement* scope)
   return rt;
 }
 
-
-// DQ (11/21/2018): We need to sometimes insert something after the last statement of the collection from rose_edg_required_macros_and_functions.h.
+// DQ (11/21/2018): We need to sometimes insert something after the last
+// statement of the collection from rose_required_macros_and_functions.h.
 SgStatement* SageInterface::lastFrontEndSpecificStatement( SgGlobal* globalScope )
    {
-  // When inserting a statement into global scope, if inserting at the top of scope it is best to insert
-  // after the last statement from the preinclude file rose_edg_required_macros_and_functions.h.
+  // When inserting a statement into global scope, if inserting at the top of
+  // scope it is best to insert after the last statement from the preinclude
+  // file rose_required_macros_and_functions.h.
 
-     SgDeclarationStatementPtrList & declarationList = globalScope->get_declarations();
+  SgDeclarationStatementPtrList &declarationList =
+      globalScope->get_declarations();
 
-     SgStatement* last_statement = NULL;
-     SgDeclarationStatementPtrList::iterator i = declarationList.begin();
+  SgStatement *last_statement = NULL;
+  SgDeclarationStatementPtrList::iterator i = declarationList.begin();
   // while (i != declarationList.end())
      while (i != declarationList.end() && (*i)->get_file_info() != NULL && (*i)->get_file_info()->isFrontendSpecific() == true)
         {

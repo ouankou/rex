@@ -3210,9 +3210,15 @@ HiddenListTraversal::evaluateInheritedAttribute(SgNode* n, HiddenListInheritedAt
              }
             else
              {
-            // This appears to fail for something in rose_edg_required_macros_and_functions.h.
-                printf ("I hope that we can make this an error (scopeOfDeclaration == NULL) declaration = %p = %s declaration->get_parent() = %p = %s \n",declaration,declaration->class_name().c_str(),declaration->get_parent(),declaration->get_parent()->class_name().c_str());
-            // ROSE_ASSERT(false);
+               // This appears to fail for something in
+               // rose_required_macros_and_functions.h.
+               printf("I hope that we can make this an error "
+                      "(scopeOfDeclaration == NULL) declaration = %p = %s "
+                      "declaration->get_parent() = %p = %s \n",
+                      declaration, declaration->class_name().c_str(),
+                      declaration->get_parent(),
+                      declaration->get_parent()->class_name().c_str());
+               // ROSE_ASSERT(false);
              }
 
           ROSE_ASSERT(declarationForReferencedNameSet != NULL);

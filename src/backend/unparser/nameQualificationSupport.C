@@ -14180,10 +14180,13 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
              }
             else
              {
-            // This appears to fail for something in rose_edg_required_macros_and_functions.h.
+               // This appears to fail for something in
+               // rose_required_macros_and_functions.h.
 
-            // DQ (2/18/2019): This case happens when an enum declaration is contained as the base type in a typedef declaration.
-            // In which case the scope is just the scope of the enclosing typedef declaration.
+               // DQ (2/18/2019): This case happens when an enum declaration is
+               // contained as the base type in a typedef declaration. In which
+               // case the scope is just the scope of the enclosing typedef
+               // declaration.
                SgNode* parent = declaration->get_parent();
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0

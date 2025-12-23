@@ -4349,7 +4349,7 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
                          printf ("Note: skip copying non-application header file \n");
 #endif
                        }
-#if 1
+#if 0
                     printf ("Exiting as a test! \n");
                     ROSE_ABORT();
 #endif
@@ -4414,17 +4414,35 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
             // map<string, SgSourceFile*> unparseSourceFileMap = includedFilesUnparser.getUnparseSourceFileMap();
                map<string, SgSourceFile*> unparseSourceFileMap = includedFilesUnparser.getUnparseSourceFileMap();
 
-               // DQ (9/10/2018): Missing headers should fall back to copying
-               // the original file when no SgSourceFile was materialized.
-               if (unparseSourceFileMap.find(originalFileName) ==
-                   unparseSourceFileMap.end()) {
-                 printf("Error: originalFileName = %s not found in "
-                        "unparseSourceFileMap; header cannot be unparsed\n",
-                        originalFileName.c_str());
-                 ROSE_ABORT();
+               // If no SgSourceFile was materialized for a header, we can't
+               // token-unparse it; fall back to copying the original header
+               // into the computed output location so downstream compilation
+               // still succeeds.
+               map<string, SgSourceFile *>::const_iterator sourceFileIter =
+                   unparseSourceFileMap.find(originalFileName);
+               if (sourceFileIter == unparseSourceFileMap.end()) {
+                 const string outputFileName = FileHelper::concatenatePaths(
+                     unparseRootPath, unparseMapEntry->second);
+
+                 if (SgProject::get_unparseHeaderFilesDebug() >= 2) {
+                   printf("NOTE: Header file missing SgSourceFile; copying "
+                          "instead of unparsing: %s -> %s\n",
+                          originalFileName.c_str(), outputFileName.c_str());
+                 }
+
+                 std::filesystem::path originalFileNamePath(originalFileName);
+                 std::filesystem::path outputFileNamePath(outputFileName);
+                 create_directories(outputFileNamePath.parent_path());
+
+                 if (exists(originalFileNamePath) &&
+                     !exists(outputFileNamePath))
+                   copy_file(originalFileNamePath, outputFileNamePath,
+                             std::filesystem::copy_options::none);
+
+                 continue;
                }
 
-               SgSourceFile* unparsedFile = unparseSourceFileMap[originalFileName];
+               SgSourceFile *unparsedFile = sourceFileIter->second;
                ASSERT_not_null(unparsedFile);
 
             // #if DEBUG_UNPARSE_INCLUDE_FILES
