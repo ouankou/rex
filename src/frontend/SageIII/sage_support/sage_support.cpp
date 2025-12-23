@@ -1843,7 +1843,6 @@ SgProject::parse()
             // This will fix the negative test in Plum hall for what should be an error to the C preprocessor.
             // file->secondaryPassOverSourceFile();
 
-            // if (file->get_skip_translation_from_edg_ast_to_rose_ast() == false)
             if (true) {
 #if 0
                  // Output an optional graph of the AST (just the tree, when active). Note that we need to multiple file version

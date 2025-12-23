@@ -11,13 +11,12 @@ main( int argc, char * argv[] )
 
      std::vector<std::string> argvList(argv, argv + argc);
 
-  // This is not exactly the option I want but use this for testing.
-     argvList.push_back("-rose:skip_translation_from_edg_ast_to_rose_ast");
+     // This is not exactly the option I want but use this for testing.
 
-  // Alternatively call the edgcpfe (EDG Cxx front-end) executable.
-  // argvList.push_back("
+     // Alternatively call the edgcpfe (EDG Cxx front-end) executable.
+     // argvList.push_back("
 
-  // SgProject* project = frontend(argc,argv);
+     // SgProject* project = frontend(argc,argv);
      SgProject* project = frontend(argvList);
 
      AstTests::runAllTests(project);
