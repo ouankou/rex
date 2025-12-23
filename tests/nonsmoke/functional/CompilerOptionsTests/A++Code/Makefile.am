@@ -25,7 +25,7 @@ TESTCODES = test_bool.C data_hash.C \
 TEST_Objects = ${TESTCODES:.C=.o}
 
 # Restrict to level 6 testing for the moment
-ROSE_FLAGS = -rose:test 6
+ROSE_FLAGS = -rose:skip_transformation
 
 TEST_TRANSLATOR = $(top_builddir)/tests/nonsmoke/functional/testTranslator $(ROSE_FLAGS)
 

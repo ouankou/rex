@@ -103,7 +103,7 @@ TEST_Objects = ${TESTCODES:.cc=.o}
 C_TEST_Objects = ${TESTCODES:.c=.o}
 
 # Restrict to level 6 testing for the moment
-#ROSE_FLAGS = -rose:test 6
+#ROSE_FLAGS = -rose:skip_transformation
 ROSE_FLAGS = 
 
 ROSE_VERBOSE = -rose:verbose

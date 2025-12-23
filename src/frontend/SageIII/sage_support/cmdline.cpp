@@ -338,7 +338,6 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
                                                    // compilation phases
          argument == "-rose:verbose" || // Used to specify output of internal
                                         // information about ROSE phases
-         argument == "-rose:test" ||
          argument == "-rose:backendCompileFormat" ||
          argument == "-rose:outputFormat" ||
 #if 0
@@ -2422,13 +2421,8 @@ SgFile::usage ()
            "                               (returns 0 if input test failed, "
            "else error if\n"
            "                               passed)\n"
-           "     -rose:test LEVEL        limit parts of ROSE which are run\n"
-           "                             LEVEL is one of:\n"
-           "                               0: parse into Sage III program tree "
-           "(alias of 4)\n"
-           "                               4: parse into Sage III program tree\n"
-            "\n"
-            "Report bugs to <dquinlan@llnl.gov>.\n",
+           "\n"
+           "Report bugs to <dquinlan@llnl.gov>.\n",
            stdout);
 
        // Obsolete options
@@ -3915,45 +3909,12 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           set_skipAstConsistancyTests(true);
         }
 
-  //
-  // internal testing option (for internal use only, these may disappear at some point)
-  //
-     int integerOption = 0;
-     if ( CommandlineProcessing::isOptionWithParameter(argv,"-rose:","test",integerOption,true) == true )
-        {
-       // printf ("option -rose:test %d found \n",integerOption);
-
-          switch (integerOption)
-             {
-               case 0 :
-               case 4 :
-                 // Parse only: skip transformations, unparse, and compile.
-                 p_skip_transformation = true;
-                 p_skip_unparse = true;
-                 p_skipfinalCompileStep = true;
-                 break;
-               default:
-                 // default mode is an error
-                 // Obsolete EDG-related test levels (1-3, 5-9) have been removed.
-                 // Only level 0 and 4 are currently supported.
-                    printf ("Default reached in processing -rose:test # option (use 0 or 4, input option = %d) \n",integerOption);
-                    ROSE_ABORT();
-                    break;
-             }
-        }
-
-#if 0
-     printf ("Exiting after test of test option! \n");
-     exit (0);
-#endif
-
-  // printf ("After processing -rose:test # option argc = %d \n",argc);
-
-  //
-  // new_unparser option
-  //
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(skipfinalCompileStep)",true) == true )
-        {
+        //
+        //
+        // new_unparser option
+        //
+        if (CommandlineProcessing::isOption(
+                argv, "-rose:", "(skipfinalCompileStep)", true) == true) {
           if (get_verbose()>0) // Liao, 8/29/2008, Only show it in verbose mode.
                printf ("option -rose:skipfinalCompileStep found \n");
           set_skipfinalCompileStep(true);

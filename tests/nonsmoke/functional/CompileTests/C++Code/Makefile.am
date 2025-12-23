@@ -485,7 +485,7 @@ TESTCODES = \
 TEST_Objects = ${TESTCODES:.C=.o}
 
 # Restrict to level 6 testing for the moment
-# ROSE_FLAGS = -rose:test 6
+# ROSE_FLAGS = -rose:skip_transformation
 
 # Suppress all warnings (in EDG: --no_warnings) (in g++: -w) 
 ROSE_FLAGS =  -w
