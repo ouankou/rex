@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <utility>
 
-#include "rosePublicConfig.h" // for ROSE_BUILD_JAVA_LANGUAGE_SUPPORT
-#include "nodeQuery.h" //for querySubTree
+#include "nodeQuery.h"        //for querySubTree
+#include "rosePublicConfig.h" // for ROSE public configuration macros
 
 #if 0   // FMZ(07/07/2010): the argument "nextErrorCode" should be call-by-reference
 SgFile* determineFileType ( std::vector<std::string> argv, int nextErrorCode, SgProject* project );
@@ -650,29 +650,28 @@ void markNodeToBeUnparsed(SgNode* node, int physical_file_id);
   /*! Brief These traverse the memory pool of SgFile IR nodes and determine what languages are in use!
    */
 #if INLINE_OPTIMIZED_IS_LANGUAGE_KIND_FUNCTIONS
-ROSE_DLL_API inline bool is_C_language() { return Rose::is_C_language; }
-ROSE_DLL_API inline bool is_OpenMP_language() {
-  return Rose::is_OpenMP_language;
-}
-ROSE_DLL_API inline bool is_C99_language() { return Rose::is_C99_language; }
-ROSE_DLL_API inline bool is_Cxx_language() { return Rose::is_Cxx_language; }
-ROSE_DLL_API inline bool is_Fortran_language() {
-  return Rose::is_Fortran_language;
-}
-ROSE_DLL_API inline bool is_CAF_language() { return Rose::is_CAF_language; }
-ROSE_DLL_API inline bool is_Cuda_language() { return Rose::is_Cuda_language; }
-ROSE_DLL_API inline bool is_OpenCL_language() {
-  return Rose::is_OpenCL_language;
-}
+  ROSE_DLL_API inline bool is_C_language ()         { return Rose::is_C_language; }
+  ROSE_DLL_API inline bool is_OpenMP_language ()    { return Rose::is_OpenMP_language; }
+  ROSE_DLL_API inline bool is_UPC_language ()       { return Rose::is_UPC_language; }
+  ROSE_DLL_API inline bool is_UPC_dynamic_threads() { return Rose::is_UPC_dynamic_threads; }
+  ROSE_DLL_API inline bool is_C99_language ()       { return Rose::is_C99_language; }
+  ROSE_DLL_API inline bool is_Cxx_language ()       { return Rose::is_Cxx_language; }
+  ROSE_DLL_API inline bool is_Fortran_language ()   { return Rose::is_Fortran_language; }
+  ROSE_DLL_API inline bool is_CAF_language ()       { return Rose::is_CAF_language; }
+  ROSE_DLL_API inline bool is_Cuda_language()       { return Rose::is_Cuda_language; }
+  ROSE_DLL_API inline bool is_OpenCL_language()     { return Rose::is_OpenCL_language; }
 #else
-ROSE_DLL_API bool is_C_language();
-ROSE_DLL_API bool is_OpenMP_language();
-ROSE_DLL_API bool is_C99_language();
-ROSE_DLL_API bool is_Cxx_language();
-ROSE_DLL_API bool is_Fortran_language();
-ROSE_DLL_API bool is_CAF_language();
-ROSE_DLL_API bool is_Cuda_language();
-ROSE_DLL_API bool is_OpenCL_language();
+  ROSE_DLL_API bool is_C_language ();
+  ROSE_DLL_API bool is_OpenMP_language ();
+  ROSE_DLL_API bool is_UPC_language ();
+  //! Check if dynamic threads compilation is used for UPC programs
+  ROSE_DLL_API bool is_UPC_dynamic_threads();
+  ROSE_DLL_API bool is_C99_language ();
+  ROSE_DLL_API bool is_Cxx_language ();
+  ROSE_DLL_API bool is_Fortran_language ();
+  ROSE_DLL_API bool is_CAF_language ();
+  ROSE_DLL_API bool is_Cuda_language();
+  ROSE_DLL_API bool is_OpenCL_language();
 #endif
 
   ROSE_DLL_API bool is_mixed_C_and_Cxx_language ();
@@ -950,12 +949,10 @@ ROSE_DLL_API std::string mangleType(SgType* type);
 //! Generate mangled scalar type names according to Itanium C++ ABI, the input type should pass isScalarType() in ROSE
 ROSE_DLL_API std::string mangleScalarType(SgType* type);
 
-//! Generated mangled modifier types, include const, volatile,according to
-//! Itanium C++ ABI.
+//! Generated mangled modifier types, include const, volatile,according to Itanium C++ ABI, with extension to handle UPC shared types.
 ROSE_DLL_API std::string mangleModifierType(SgModifierType* type);
 
-//! Calculate the number of elements of an array type: dim1* dim2*... , assume
-//! element count is 1 for int a[].
+//! Calculate the number of elements of an array type: dim1* dim2*... , assume element count is 1 for int a[]; Strip off THREADS if it is a UPC array.
 ROSE_DLL_API size_t getArrayElementCount(SgArrayType* t);
 
 //! Get the number of dimensions of an array type
@@ -1022,8 +1019,48 @@ ROSE_DLL_API bool isArrayReference(SgExpression* ref, SgExpression** arrayNameEx
 
 
 //! Collect variable references in array types. The default NodeQuery::querySubTree() will miss variables referenced in array type's index list. e.g. double *buffer = new double[numItems] ;
-ROSE_DLL_API int collectVariableReferencesInArrayTypes(
-    SgLocatedNode *root, Rose_STL_Container<SgNode *> &currentVarRefList);
+ROSE_DLL_API int collectVariableReferencesInArrayTypes (SgLocatedNode* root, Rose_STL_Container<SgNode*> & currentVarRefList);
+//! Has a UPC shared type of any kinds (shared-to-shared, private-to-shared, shared-to-private, shared scalar/array)? An optional parameter, mod_type_out, stores the first SgModifierType with UPC access information.
+/*!
+ * Note: we classify private-to-shared as 'has shared' type for convenience here. It is indeed a private type in strict sense.
+  AST graph for some examples:
+    - shared scalar: SgModifierType -->base type
+    - shared array: SgArrayType --> SgModiferType --> base type
+    - shared to shared: SgModifierType --> SgPointerType --> SgModifierType ->SgTypeInt
+    - shared to private: SgModifierType --> SgPointerType --> base type
+    - private to shared: SgPointerType --> SgModifierType --> base type
+ */
+ROSE_DLL_API bool hasUpcSharedType(SgType* t, SgModifierType ** mod_type_out = NULL  );
+
+//! Check if a type is a UPC shared type, including shared array, shared pointers etc. Exclude private pointers to shared types. Optionally return the modifier type with the UPC shared property.
+/*!
+ * ROSE uses SgArrayType of SgModifierType to represent shared arrays, not SgModifierType points to SgArrayType. Also typedef may cause a chain of nodes before reach the actual SgModifierType with UPC shared property.
+ */
+ROSE_DLL_API bool isUpcSharedType(SgType* t, SgModifierType ** mod_type_out = NULL);
+
+//! Check if a modifier type is a UPC shared type.
+ROSE_DLL_API bool isUpcSharedModifierType (SgModifierType* mod_type);
+
+//! Check if an array type is a UPC shared type. ROSE AST represents a UPC shared array as regular array of elements of UPC shared Modifier Type. Not directly a UPC shared Modifier Type of an array.
+ROSE_DLL_API bool isUpcSharedArrayType (SgArrayType* array_type);
+
+//! Check if a shared UPC type is strict memory consistency or not. Return false if it is relaxed. (So isUpcRelaxedSharedModifierType() is not necessary.)
+ROSE_DLL_API bool isUpcStrictSharedModifierType(SgModifierType* mode_type);
+
+//! Get the block size of a UPC shared modifier type
+ROSE_DLL_API size_t getUpcSharedBlockSize(SgModifierType* mod_type);
+
+//! Get the block size of a UPC shared type, including Modifier types and array of modifier types (shared arrays)
+ROSE_DLL_API size_t getUpcSharedBlockSize(SgType* t);
+
+//! Is UPC phase-less shared type? Phase-less means block size of the first SgModifierType with UPC information is 1 or 0/unspecified. Also return false if the type is not a UPC shared type.
+ROSE_DLL_API bool isUpcPhaseLessSharedType (SgType* t);
+
+//! Is a UPC private-to-shared pointer?  SgPointerType comes first compared to SgModifierType with UPC information. Input type must be any of UPC shared types first.
+ROSE_DLL_API bool isUpcPrivateToSharedType(SgType* t);
+
+//! Is a UPC array with dimension of X*THREADS
+ROSE_DLL_API bool isUpcArrayWithThreads(SgArrayType* t);
 
 //! Lookup a named type based on its name, bottomup searching from a specified scope. Note name collison might be allowed for c (not C++) between typedef and enum/struct. Only the first matched named type will be returned in this case. typedef is returned as it is, not the base type it actually refers to.
 ROSE_DLL_API SgType* lookupNamedTypeInParentScopes(const std::string& type_name, SgScopeStatement* scope=NULL);
@@ -2288,10 +2325,7 @@ ROSE_DLL_API void ReductionRecognition(SgForStatement* loop, std::set< std::pair
 ROSE_DLL_API void constantFolding(SgNode* r);
 
 //!Instrument(Add a statement, often a function call) into a function right before the return points, handle multiple return statements (with duplicated statement s) and return expressions with side effects. Return the number of statements inserted.
-/*! Useful when adding a runtime library call to terminate the runtime system
- * right before the end of a program (e.g., OpenMP). Return with complex
- * expressions with side effects are rewritten using an additional assignment
- * statement.
+/*! Useful when adding a runtime library call to terminate the runtime system right before the end of a program, especially for OpenMP and UPC runtime systems. Return with complex expressions with side effects are rewritten using an additional assignment statement.
  */
 ROSE_DLL_API int instrumentEndOfFunction(SgFunctionDeclaration * func, SgStatement* s);
 
@@ -2358,6 +2392,9 @@ ROSE_DLL_API void changeBreakStatementsToGotos(SgStatement* loopOrSwitch);
 //! Check if the body of a 'for' statement is a SgBasicBlock, create one if not.
 ROSE_DLL_API SgBasicBlock* ensureBasicBlockAsBodyOfFor(SgForStatement* fs);
 
+//! Check if the body of a 'upc_forall' statement is a SgBasicBlock, create one if not.
+ROSE_DLL_API SgBasicBlock* ensureBasicBlockAsBodyOfUpcForAll(SgUpcForAllStatement* fs);
+
 //! Check if the body of a 'while' statement is a SgBasicBlock, create one if not.
 ROSE_DLL_API SgBasicBlock* ensureBasicBlockAsBodyOfWhile(SgWhileStmt* ws);
 
@@ -2393,8 +2430,8 @@ ROSE_DLL_API void cleanupNontransformedBasicBlockNode();
 //! Record where normalization have been done so that we can preform denormalizations as required for the token-based unparsing to generate minimal diffs.
 ROSE_DLL_API void recordNormalizations(SgStatement* s);
 
-//! Check if a statement is a (true or false) body of a container-like parent,
-//! such as For, Do-while, switch, If, Catch, OmpBodyStmt, etc
+//! Check if a statement is a (true or false) body of a container-like parent, such as For, Upc_forall, Do-while,
+//! switch, If, Catch, OmpBodyStmt, etc
 bool isBodyStatement (SgStatement* s);
 
 //! Fix up ifs, loops, while, switch, Catch, OmpBodyStatement, etc. to have blocks as body components. It also adds an empty else body to if statements that don't have them.
@@ -2403,8 +2440,7 @@ void changeAllBodiesToBlocks(SgNode* top, bool createEmptyBody = true);
 // The same as changeAllBodiesToBlocks(SgNode* top). Phased out.
 //void changeAllLoopBodiesToBlocks(SgNode* top);
 
-//! Make a single statement body to be a basic block. Its parent is if, while,
-//! catch, etc.
+//! Make a single statement body to be a basic block. Its parent is if, while, catch, or upc_forall etc.
 SgBasicBlock * makeSingleStatementBodyToBlock(SgStatement* singleStmt);
 
 #if 0

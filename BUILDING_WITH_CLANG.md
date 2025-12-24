@@ -157,7 +157,6 @@ cmake .. \
     -Denable-clang-frontend=ON \
     -Denable-c=ON \
     -Denable-fortran=OFF \
-    -Denable-java=OFF \
     -DCMAKE_CXX_STANDARD=17
 ```
 

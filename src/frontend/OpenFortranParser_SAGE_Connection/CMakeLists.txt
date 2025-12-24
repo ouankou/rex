@@ -1,4 +1,4 @@
-if(enable-fortran)
+if(enable-fortran AND enable-fortran-ofp)
   include_directories(${CMAKE_SOURCE_DIR}/src/frontend/OpenFortranParser_SAGE_Connection ${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
 
 

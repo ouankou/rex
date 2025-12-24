@@ -57,13 +57,15 @@ jobs:
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
+          # Fortran OFP uses the JVM via JNI.
           openjdk-17-jdk \
           python3-dev
 
     # Simplified build using build-rex.sh script
     - name: Build and Install (Debug)
       env:
-        # Set up LLVM 20 paths so "clang" command resolves to clang-20
+        # Set up LLVM 20 paths so "clang" command resolves to clang-20.
+        # Keep the JVM path available for the Fortran OFP frontend.
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
         CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}

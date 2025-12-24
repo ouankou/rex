@@ -51,88 +51,83 @@ namespace Cmdline {
    *
    *  For example,
    *
-   *      -rose:java:classpath "/some/class/path"
+   *      -rose:fortran:ofp:classpath "/some/class/path"
    *
    *      becomes
    *
-   *      -classpath "/some/class/path"
+   *      -ofp:classpath "/some/class/path"
    *
    *  Whereas, this ROSE-only option is completely removed:
    *
    *      -rose:verose 3
    */
-  void
-  StripRoseOptions (std::vector<std::string>& argv);
+  void StripRoseOptions(std::vector<std::string> &argv);
 
-  void
-  ProcessKeepGoing (SgProject* project, std::vector<std::string>& argv);
+  void ProcessKeepGoing(SgProject *project, std::vector<std::string> &argv);
 
   namespace Unparser {
-    static const std::string option_prefix = "-rose:unparser:";
+  static const std::string option_prefix = "-rose:unparser:";
 
-    /** @returns true if the Unparser option requires a user-specified argument.
-     */
-    bool
-    OptionRequiresArgument (const std::string& option);
+  /** @returns true if the Unparser option requires a user-specified argument.
+   */
+  bool OptionRequiresArgument(const std::string &option);
 
-    void
-    StripRoseOptions (std::vector<std::string>& argv);
+  void StripRoseOptions(std::vector<std::string> &argv);
 
-    /** Process all Unparser-specific commandline options, i.e. -rose:unparser.
-     */
-    void
-    Process (SgProject* project, std::vector<std::string>& argv);
+  /** Process all Unparser-specific commandline options, i.e. -rose:unparser.
+   */
+  void Process(SgProject *project, std::vector<std::string> &argv);
 
-    void
-    ProcessClobberInputFile (SgProject* project, std::vector<std::string>& argv);
-  } // namespace ::Rose::Cmdline::Unparser
+  void ProcessClobberInputFile(SgProject *project,
+                               std::vector<std::string> &argv);
+  } // namespace Unparser
 
   namespace Fortran {
-    static const std::string option_prefix = "-rose:fortran:";
+  static const std::string option_prefix = "-rose:fortran:";
 
-    /** @returns true if the Java option requires a user-specified argument.
-     */
-    bool
-    OptionRequiresArgument (const std::string& option);
+  /** @returns true if the Fortran option requires a user-specified argument.
+   */
+  bool OptionRequiresArgument(const std::string &option);
 
-    void
-    StripRoseOptions (std::vector<std::string>& argv);
+  void StripRoseOptions(std::vector<std::string> &argv);
 
-    /** Process all Fortran commandline options.
-     */
-    void
-    Process (SgProject* project, std::vector<std::string>& argv);
+  /** Process all Fortran commandline options.
+   */
+  void Process(SgProject *project, std::vector<std::string> &argv);
 
-    // -rose:fortran
-    void
-    ProcessFortranOnly (SgProject* project, std::vector<std::string>& argv);
+  // -rose:fortran
+  void ProcessFortranOnly(SgProject *project, std::vector<std::string> &argv);
 
-    /** Targeted for src/frontend/OpenFortranParser_SAGE_Connection/jserver.C,
-     */
-    namespace Ofp {
-      extern ROSE_DLL_API std::list<std::string> jvm_options;
+  /** Targeted for src/frontend/OpenFortranParser_SAGE_Connection/jserver.C,
+   */
+  namespace Ofp {
+  extern ROSE_DLL_API std::list<std::string> jvm_options;
+  extern ROSE_DLL_API std::list<std::string> classpath_entries;
 
-      ROSE_DLL_API void
-      StripRoseOptions (std::vector<std::string>& argv);
+  ROSE_DLL_API void StripRoseOptions(std::vector<std::string> &argv);
 
-      ROSE_DLL_API std::string
-      GetRoseClasspath();
+  ROSE_DLL_API std::string GetRoseClasspath();
 
-      ROSE_DLL_API void
-      Process (SgProject* project, std::vector<std::string>& argv);
+  ROSE_DLL_API void Process(SgProject *project, std::vector<std::string> &argv);
 
-      /** -rose:fortran:ofp:jvm_options
-       */
-      ROSE_DLL_API void
-      ProcessJvmOptions (SgProject* project, std::vector<std::string>& argv);
+  /** -rose:fortran:ofp:jvm_options
+   */
+  ROSE_DLL_API void ProcessJvmOptions(SgProject *project,
+                                      std::vector<std::string> &argv);
 
-      /** -rose:fortran:ofp:enable_remote_debugging
-       *  Enable remote debugging of the Java Virtual Machine (JVM).
-       */
-      ROSE_DLL_API void
-      ProcessEnableRemoteDebugging (SgProject* project, std::vector<std::string>& argv);
-    } // namespace Rose::Cmdline::Fortran::OpenFortranParser
-  } // namespace Rose::Cmdline::Fortran
+  /** -rose:fortran:ofp:classpath
+   */
+  ROSE_DLL_API void ProcessClasspath(SgProject *project,
+                                     std::vector<std::string> &argv);
+
+  /** -rose:fortran:ofp:enable_remote_debugging
+   *  Enable remote debugging of the Java Virtual Machine (JVM).
+   */
+  ROSE_DLL_API void
+  ProcessEnableRemoteDebugging(SgProject *project,
+                               std::vector<std::string> &argv);
+  } // namespace Ofp
+  } // namespace Fortran
 
   namespace Gnu {
     /** @returns true if the GNU option requires a user-specified argument.
@@ -150,4 +145,3 @@ namespace Cmdline {
 } // namespace Rose::Cmdline
 } // namespace Rose
 #endif // ROSE_SAGESUPPORT_CMDLINE_H
-

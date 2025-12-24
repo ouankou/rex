@@ -6642,15 +6642,6 @@ HEADER_APPLICATION_PROJECT_START
           bool get_CoArrayFortran_only (void) const;
 
 
-          std::list<std::string> get_Java_classpath (void) const;
-          void set_Java_classpath (std::list<std::string> param);
-          std::list<std::string> get_Java_sourcepath (void) const;
-          void set_Java_sourcepath (std::list<std::string> param);
-          std::string get_Java_destdir (void) const;
-          void set_Java_destdir (std::string param);
-          std::string get_Java_source_destdir (void) const;
-          void set_Java_source_destdir (std::string param);
-
           void display ( const std::string & label ) const;
 
           void initialization();
@@ -19007,61 +18998,6 @@ SgProject::get_CoArrayFortran_only (void) const
         }
      return result;
    }
-
-void
-SgProject::set_Java_classpath (std::list<std::string> param)
-   {
-     p_Java_classpath = param;
-   }
-
-std::list<std::string>
-SgProject::get_Java_classpath (void) const
-   {
-     return p_Java_classpath;
-   }
-
-void
-SgProject::set_Java_sourcepath (std::list<std::string> param)
-   {
-     p_Java_sourcepath = param;
-   }
-
-std::list<std::string>
-SgProject::get_Java_sourcepath (void) const
-   {
-     return p_Java_sourcepath;
-   }
-
-void
-SgProject::set_Java_destdir (std::string param)
-   {
-     p_Java_destdir = param;
-   }
-
-std::string
-SgProject::get_Java_destdir (void) const
-   {
-    if (p_Java_destdir == "") {
-      return Rose::getWorkingDirectory();
-    }
-    return p_Java_destdir;
-   }
-
-void
-SgProject::set_Java_source_destdir (std::string param)
-   {
-     p_Java_source_destdir = param;
-   }
-
-std::string
-SgProject::get_Java_source_destdir (void) const
-   {
-    if (p_Java_source_destdir == "") {
-      return Rose::getWorkingDirectory();
-    }
-    return p_Java_source_destdir;
-  }
-
 
 void
 SgProject::skipfinalCompileStep(bool value)

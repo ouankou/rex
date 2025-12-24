@@ -37,6 +37,7 @@ Grammar::setUpSupport ()
   // storage specifiers (auto, static, register, extern, mutable)
   // access specifiers (private, protected, public)
   // function specifiers (inline, virtual, pure-specifier, explicit)
+  // UPC access specifiers (unspecified, shared, strict, relaxed)
   // special_function specifiers (constructor, destructor, conversion, operator)
   // declaration specifiers (storage specifiers, type specifiers, function specifiers,
   //           friend, typedef, export, exception-specifier)
@@ -52,15 +53,15 @@ Grammar::setUpSupport ()
   // Original SAGE modfifier support (ModifierNodes)
      NEW_TERMINAL_MACRO (ModifierNodes          ,"ModifierNodes"          , "ModifierNodesTag" );
 
-     // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
-     // ConstVolatileModifier, StorageModifier, AccessModifier,
-     // FunctionModifier, SpecialFunctionModifier, DeclarationModifier,
-     // TypeModifier, ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
+  // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
+  // ConstVolatileModifier, StorageModifier, AccessModifier, FunctionModifier,
+  // UPC_AccessModifier, SpecialFunctionModifier, DeclarationModifier, TypeModifier,
+  // ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
      NEW_TERMINAL_MACRO (ConstVolatileModifier  ,"ConstVolatileModifier"  , "ConstVolatileModifierTag" );
      NEW_TERMINAL_MACRO (StorageModifier        ,"StorageModifier"        , "StorageModifierTag" );
      NEW_TERMINAL_MACRO (AccessModifier         ,"AccessModifier"         , "AccessModifierTag" );
-     NEW_TERMINAL_MACRO(FunctionModifier, "FunctionModifier",
-                        "FunctionModifierTag");
+     NEW_TERMINAL_MACRO (FunctionModifier       ,"FunctionModifier"       , "FunctionModifierTag" );
+     NEW_TERMINAL_MACRO (UPC_AccessModifier     ,"UPC_AccessModifier"     , "UPC_AccessModifierTag" );
      NEW_TERMINAL_MACRO (LinkageModifier        ,"LinkageModifier"        , "LinkageModifierTag" );
      NEW_TERMINAL_MACRO (SpecialFunctionModifier,"SpecialFunctionModifier", "SpecialFunctionModifierTag" );
      NEW_TERMINAL_MACRO (TypeModifier           ,"TypeModifier"           , "TypeModifierTag" );
@@ -81,14 +82,12 @@ Grammar::setUpSupport ()
   // DQ (4/19/2004): Added new modifiers (C++ grammar calls them specifiers)
   // DQ (4/21/2004): Order is important here since the objects are included in
   //                 other objects and the size must be known.
-     NEW_NONTERMINAL_MACRO(
-         Modifier,
-         ModifierNodes | ConstVolatileModifier | StorageModifier |
-             AccessModifier | FunctionModifier | SpecialFunctionModifier |
-             ElaboratedTypeModifier | LinkageModifier | BaseClassModifier |
-             StructureModifier | TypeModifier | DeclarationModifier |
-             OpenclAccessModeModifier,
-         "Modifier", "ModifierTag", false);
+     NEW_NONTERMINAL_MACRO (Modifier,
+          ModifierNodes           | ConstVolatileModifier  | StorageModifier    |
+          AccessModifier          | FunctionModifier       | UPC_AccessModifier |
+          SpecialFunctionModifier | ElaboratedTypeModifier | LinkageModifier    |
+          BaseClassModifier       | StructureModifier      | TypeModifier       |
+          DeclarationModifier     | OpenclAccessModeModifier, "Modifier", "ModifierTag", false);
 
      NEW_TERMINAL_MACRO (File_Info, "_File_Info", "_File_InfoTag" );
 
@@ -365,20 +364,18 @@ Grammar::setUpSupport ()
      Pragma.setFunctionPrototype              ( "HEADER_PRAGMA", "../Grammar/Support.code");
      BitAttribute.setFunctionPrototype        ( "HEADER_BIT_ATTRIBUTE", "../Grammar/Support.code");
 
-     // DQ (4/6/2004): Depricated ModifierNodes node and new separate
-     // TypeModifier and StorageModifier nodes DQ (4/19/2004): New modifiers
-     // (C++ grammar calls them specifiers)
-     //    ConstVolatileModifier, StorageModifier, AccessModifier,
-     //    FunctionModifier, SpecialFunctionModifier, DeclarationModifier,
-     //    TypeModifier, ElaboratedTypeModifier, LinkageModifier,
-     //    BaseClassModifier
+  // DQ (4/6/2004): Depricated ModifierNodes node and new separate TypeModifier and StorageModifier nodes
+  // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
+  //    ConstVolatileModifier, StorageModifier, AccessModifier, FunctionModifier,
+  //    UPC_AccessModifier, SpecialFunctionModifier, DeclarationModifier, TypeModifier,
+  //    ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
      Modifier.setFunctionPrototype                ( "HEADER_MODIFIER"                 , "../Grammar/Support.code");
      ModifierNodes.setFunctionPrototype           ( "HEADER_MODIFIER_NODES"           , "../Grammar/Support.code");
      ConstVolatileModifier.setFunctionPrototype   ( "HEADER_CV_TYPE_MODIFIER"         , "../Grammar/Support.code");
      StorageModifier.setFunctionPrototype         ( "HEADER_STORAGE_MODIFIER"         , "../Grammar/Support.code");
      AccessModifier.setFunctionPrototype          ( "HEADER_ACCESS_MODIFIER"          , "../Grammar/Support.code");
-     FunctionModifier.setFunctionPrototype("HEADER_FUNCTION_MODIFIER",
-                                           "../Grammar/Support.code");
+     FunctionModifier.setFunctionPrototype        ( "HEADER_FUNCTION_MODIFIER"        , "../Grammar/Support.code");
+     UPC_AccessModifier.setFunctionPrototype      ( "HEADER_UPC_ACCESS_MODIFIER"     , "../Grammar/Support.code");
      SpecialFunctionModifier.setFunctionPrototype ( "HEADER_SPECIAL_FUNCTION_MODIFIER", "../Grammar/Support.code");
      TypeModifier.setFunctionPrototype            ( "HEADER_TYPE_MODIFIER"            , "../Grammar/Support.code");
      DeclarationModifier.setFunctionPrototype     ( "HEADER_DECLARATION_MODIFIER"     , "../Grammar/Support.code");
@@ -1033,6 +1030,9 @@ Grammar::setUpSupport ()
      File.setDataPrototype         ( "bool", "CoArrayFortran_only", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
+     File.setDataPrototype         ( "int", "upc_threads", "= 0",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   // TV (05/17/2010) Cuda support
      File.setDataPrototype         ( "bool", "Cuda_only", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1431,6 +1431,14 @@ Grammar::setUpSupport ()
      File.setDataPrototype("bool", "skipAstConsistancyTests", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
+
+  // DQ (4/28/2014): This might be improved it it were moved to the translator directly.  The result
+  // would be the demonstration of a more general mechansim requireing no modification to ROSE directly.
+  // DQ (4/28/2014): Added support for shared keyword as extension to C (implemented as embedded DSL
+  // within UPC base language, this serves as an example of what is required to support a simple DSL
+  // in ROSE).  In general we would need a more flexible mechanism than adding a flag to ROSE.
+  // File.setDataPrototype ("bool", "shared_memory_dsl", "= false",
+  //             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (4/17/2015): Adding multifile handling support for commandline generation.
      File.setDataPrototype ("bool", "multifile_support", "= false",
@@ -1957,37 +1965,32 @@ Grammar::setUpSupport ()
      Project.setDataPrototype ( "bool", "Cxx14_only", "= false",
             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     Project.setDataPrototype ( "bool", "Fortran_only", "= false",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     Project.setDataPrototype("bool", "Fortran_only", "= false",
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
 
-     Project.setDataPrototype ("std::list<std::string>", "Fortran_ofp_jvm_options", "",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     Project.setDataPrototype("std::list<std::string>",
+                              "Fortran_ofp_jvm_options", "",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
+     Project.setDataPrototype("std::list<std::string>", "Fortran_ofp_classpath",
+                              "", NO_CONSTRUCTOR_PARAMETER,
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-
-  // Liao 6/29/2012: support using rose translator to act like a linker wrapper if -rose:openmp:lowering is specified
-  // Add a flag to indicate if this is a linking involved in the lowered OpenMP input program.
-  // The openmp_lowering flag at SgFile level won't exist when there are no input source files at the linking stage
-  //
-  // Simply using OpenMP_Only is not sufficient for OpenMP since OpenMP input files can be handled in three different ways in ROSE:
-  // 1) parsing only 2) generating dedicated AST 3) actual OpenMP lowering
-  // Only the one with lowering will need special linking support to connect to libxomp.a and pthreads.
+     // Liao 6/29/2012: support using rose translator to act like a linker
+     // wrapper if -rose:openmp:lowering is specified Add a flag to indicate if
+     // this is a linking involved in the lowered OpenMP input program. The
+     // openmp_lowering flag at SgFile level won't exist when there are no input
+     // source files at the linking stage
+     //
+     // Simply using OpenMP_Only is not sufficient for OpenMP since OpenMP input
+     // files can be handled in three different ways in ROSE: 1) parsing only 2)
+     // generating dedicated AST 3) actual OpenMP lowering Only the one with
+     // lowering will need special linking support to connect to libxomp.a and
+     // pthreads.
      Project.setDataPrototype ( "bool", "openmp_linking", "= false",
             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     Project.setDataPrototype ("std::list<std::string>", "Java_ecj_jvm_options", "",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     Project.setDataPrototype ("bool", "Java_batch_mode", "= false",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     Project.setDataPrototype ("std::list<std::string>", "Java_classpath", "",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype ("std::list<std::string>", "Java_sourcepath", "",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("std::string", "Java_destdir", "= Rose::getWorkingDirectory()",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("std::string", "Java_source_destdir", "= Rose::getWorkingDirectory()",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // DQ (10/3/2010): Adding support for having CPP directives explicitly in the AST (as IR nodes instead of handled similar to comments).
      Project.setDataPrototype ( "bool", "addCppDirectivesToAST", "= false",
             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2158,19 +2161,19 @@ Specifiers that can have only one value (implemented with a protected enum varia
      storage specifiers
      const_volatile
      access specifiers
+     UPC access specifiers
      linkage-specification
 #endif
 
-     // DQ (4/6/2004): New nodes (use "modifiers" if multiple values can be set,
-     //                use "modifier" if only one value can be set).
-     // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
-     //    ConstVolatileModifier, StorageModifier, AccessModifier,
-     //    FunctionModifier, SpecialFunctionModifier, DeclarationModifier,
-     //    TypeModifier, ElaboratedTypeModifier, LinkageModifier,
-     //    BaseClassModifier
-     // DQ (4/19/2004): Commented out override of construction of constructors
-     // xxxModifier.setAutomaticGenerationOfConstructor(false);
-     // xxxModifier.setAutomaticGenerationOfDestructor (false);
+  // DQ (4/6/2004): New nodes (use "modifiers" if multiple values can be set,
+  //                use "modifier" if only one value can be set).
+  // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
+  //    ConstVolatileModifier, StorageModifier, AccessModifier, FunctionModifier,
+  //    UPC_AccessModifier, SpecialFunctionModifier, DeclarationModifier, TypeModifier,
+  //    ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
+  // DQ (4/19/2004): Commented out override of construction of constructors
+  // xxxModifier.setAutomaticGenerationOfConstructor(false);
+  // xxxModifier.setAutomaticGenerationOfDestructor (false);
      ConstVolatileModifier.setDataPrototype("SgConstVolatileModifier::cv_modifier_enum", "modifier", "= SgConstVolatileModifier::e_unknown",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      StorageModifier.setDataPrototype("SgStorageModifier::storage_modifier_enum", "modifier","= SgStorageModifier::e_unknown",
@@ -2210,6 +2213,18 @@ Specifiers that can have only one value (implemented with a protected enum varia
      SpecialFunctionModifier.setDataPrototype("SgBitVector","modifierVector", "",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
+     UPC_AccessModifier.setDataPrototype("SgUPC_AccessModifier::upc_access_modifier_enum", "modifier", "= SgUPC_AccessModifier::e_unknown",
+                                    NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     UPC_AccessModifier.setDataPrototype("bool", "isShared","= false",
+                                    NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // Note that layout == 0 means allocate all to one thread (what EDG calls "INDEFINITE") (also same as "[]"),
+  //           layout == -1 means no layout was specified (what EDG calls "NONE"),
+  //           layout == -2 means layout == "*" (what EDG calls "BLOCK")
+  // any non-zero positive value is the block size,
+  // the default is block size == 1 (cyclic distribution).
+     UPC_AccessModifier.setDataPrototype("long", "layout","= -1",
+                                    NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   // Rasmussen (4/4/2020): Added SgStructureModifier for Jovial tables
      StructureModifier.setDataPrototype("SgStructureModifier::jovial_structure_modifier_enum", "modifier","= SgStructureModifier::e_default",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2239,9 +2254,10 @@ Specifiers that can have only one value (implemented with a protected enum varia
      DeclarationModifier.setDataPrototype("std::string", "microsoft_property_put_function_name", "=\"\"",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     TypeModifier.setDataPrototype(
-         "SgBitVector", "modifierVector", "", NO_CONSTRUCTOR_PARAMETER,
-         BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     TypeModifier.setDataPrototype("SgBitVector", "modifierVector", "",
+                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     TypeModifier.setDataPrototype("SgUPC_AccessModifier", "upcModifier", ".reset()",
+                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      TypeModifier.setDataPrototype("SgStructureModifier", "structureModifier", ".reset()",
                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      TypeModifier.setDataPrototype("SgConstVolatileModifier", "constVolatileModifier", ".reset()",
@@ -2677,20 +2693,18 @@ Specifiers that can have only one value (implemented with a protected enum varia
      Pragma.setFunctionSource          ( "SOURCE_PRAGMA", "../Grammar/Support.code");
      BitAttribute.setFunctionSource    ( "SOURCE_BIT_ATTRIBUTE", "../Grammar/Support.code");
 
-     // DQ (4/6/2004): Depricated ModifierNodes node and new separate
-     // TypeModifier and StorageModifier nodes DQ (4/19/2004): New modifiers
-     // (C++ grammar calls them specifiers)
-     //    ConstVolatileModifier, StorageModifier, AccessModifier,
-     //    FunctionModifier, SpecialFunctionModifier, DeclarationModifier,
-     //    TypeModifier, ElaboratedTypeModifier, LinkageModifier,
-     //    BaseClassModifier
+  // DQ (4/6/2004): Depricated ModifierNodes node and new separate TypeModifier and StorageModifier nodes
+  // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
+  //    ConstVolatileModifier, StorageModifier, AccessModifier, FunctionModifier,
+  //    UPC_AccessModifier, SpecialFunctionModifier, DeclarationModifier, TypeModifier,
+  //    ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
      Modifier.setFunctionSource                ( "SOURCE_MODIFIER"                 , "../Grammar/Support.code");
      ModifierNodes.setFunctionSource           ( "SOURCE_MODIFIER_NODES"           , "../Grammar/Support.code");
      ConstVolatileModifier.setFunctionSource   ( "SOURCE_CV_TYPE_MODIFIER"         , "../Grammar/Support.code");
      StorageModifier.setFunctionSource         ( "SOURCE_STORAGE_MODIFIER"         , "../Grammar/Support.code");
      AccessModifier.setFunctionSource          ( "SOURCE_ACCESS_MODIFIER"          , "../Grammar/Support.code");
-     FunctionModifier.setFunctionSource("SOURCE_FUNCTION_MODIFIER",
-                                        "../Grammar/Support.code");
+     FunctionModifier.setFunctionSource        ( "SOURCE_FUNCTION_MODIFIER"        , "../Grammar/Support.code");
+     UPC_AccessModifier.setFunctionSource      ( "SOURCE_UPC_ACCESS_MODIFIER"      , "../Grammar/Support.code");
      SpecialFunctionModifier.setFunctionSource ( "SOURCE_SPECIAL_FUNCTION_MODIFIER", "../Grammar/Support.code");
      DeclarationModifier.setFunctionSource     ( "SOURCE_DECLARATION_MODIFIER"     , "../Grammar/Support.code");
      TypeModifier.setFunctionSource            ( "SOURCE_TYPE_MODIFIER"            , "../Grammar/Support.code");

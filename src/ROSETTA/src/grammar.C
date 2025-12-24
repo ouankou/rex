@@ -1161,75 +1161,90 @@ generate_override_keyword( AstNodeClass & node, GrammarString & data )
   // unnecessary step and wasted effort.
 
   // Except in the root class for the virtual access function.
-     if ( (nodeName == "XXXPragma"                  && variableNameString == "startOfConstruct")  ||
-          (nodeName == "XXXPragma"                  && variableNameString == "endOfConstruct")    ||
-          (nodeName == "IfStmt"                     && variableNameString == "end_numeric_label") ||
-          (nodeName == "WhileStmt"                  && variableNameString == "end_numeric_label") ||
-          (nodeName == "SwitchStatement"            && variableNameString == "end_numeric_label") ||
-          (nodeName == "FortranDo"                  && variableNameString == "end_numeric_label") ||
-          (nodeName == "ForAllStatement"            && variableNameString == "end_numeric_label") ||
-          (nodeName == "InterfaceStatement"         && variableNameString == "end_numeric_label") ||
-          (nodeName == "DerivedTypeStatement"       && variableNameString == "end_numeric_label") ||
-          (nodeName == "ModuleStatement"            && variableNameString == "end_numeric_label") ||
-          (nodeName == "ProgramHeaderStatement"     && variableNameString == "end_numeric_label") ||
-          (nodeName == "ProcedureHeaderStatement"   && variableNameString == "end_numeric_label") ||
-          (nodeName == "WhereStatement"             && variableNameString == "end_numeric_label") ||
-          (nodeName == "QualifiedName"              && variableNameString == "scope") ||
-          (nodeName == "InitializedName"            && variableNameString == "scope") ||
-          (nodeName == "TemplateParameter"          && variableNameString == "type")  ||
-          (nodeName == "TemplateArgument"           && variableNameString == "type")  ||
-          (nodeName == "JavaQualifiedType"          && variableNameString == "type")  ||
-          (nodeName == "EnumDeclaration"            && variableNameString == "type")  ||
-          (nodeName == "TypedefDeclaration"         && variableNameString == "type")  ||
-          (nodeName == "ClassDeclaration"           && variableNameString == "type")  ||
-          (nodeName == "FunctionDeclaration"        && variableNameString == "type")  ||
-          (nodeName == "AsmExpression"              && variableNameString == "type")  ||
-          (nodeName == "AsmGenericSymbol"           && variableNameString == "type")  ||
-          (nodeName == "AsmElfSegmentTableEntry"    && variableNameString == "type")  ||
-          (nodeName == "AsmElfRelocEntry"           && variableNameString == "type")  ||
-          (nodeName == "AsmElfNoteEntry"            && variableNameString == "type")  ||
-          (nodeName == "AsmJvmConstantPoolEntry"    && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "SymbolTable"                && variableNameString == "name")  ||
-          (nodeName == "Attribute"                  && variableNameString == "name")  ||
-          (nodeName == "Directory"                  && variableNameString == "name")  ||
-          (nodeName == "Graph"                      && variableNameString == "name")  ||
-          (nodeName == "GraphNode"                  && variableNameString == "name")  ||
-          (nodeName == "GraphEdge"                  && variableNameString == "name")  ||
-          (nodeName == "TemplateType"               && variableNameString == "name")  ||
-          (nodeName == "TypeDefault"                && variableNameString == "name")  ||
-          (nodeName == "TypeLabel"                  && variableNameString == "name")  ||
-          (nodeName == "InitializedName"            && variableNameString == "name")  ||
-          (nodeName == "EnumDeclaration"            && variableNameString == "name")  ||
-          (nodeName == "TemplateDeclaration"        && variableNameString == "name")  ||
-          (nodeName == "UseStatement"               && variableNameString == "name")  ||
-          (nodeName == "NamespaceDeclarationStatement" && variableNameString == "name")  ||
-          (nodeName == "InterfaceStatement"         && variableNameString == "name")  ||
-          (nodeName == "NamespaceAliasDeclarationStatement" && variableNameString == "name")  ||
-          (nodeName == "TypedefDeclaration"         && variableNameString == "name")  ||
-          (nodeName == "ClassDeclaration"           && variableNameString == "name")  ||
-          (nodeName == "FunctionDeclaration"        && variableNameString == "name")  ||
-          (nodeName == "InquireStatement"           && variableNameString == "name")  ||
-          (nodeName == "OmpCriticalStatement"       && variableNameString == "name")  ||
-          (nodeName == "OmpDepobjStatement"         && variableNameString == "name")  ||
-          (nodeName == "EnumVal"                    && variableNameString == "name")  ||
-          (nodeName == "IOItemExpression"           && variableNameString == "name")  ||
-          (nodeName == "AsmOp"                      && variableNameString == "name")  ||
-          (nodeName == "UnknownArrayOrFunctionReference" && variableNameString == "name")  ||
-          (nodeName == "TypeTraitBuiltinOperator"   && variableNameString == "name")   )
-       {
-         returnResult = false;
+     if ((nodeName == "XXXPragma" &&
+          variableNameString == "startOfConstruct") ||
+         (nodeName == "XXXPragma" && variableNameString == "endOfConstruct") ||
+         (nodeName == "IfStmt" && variableNameString == "end_numeric_label") ||
+         (nodeName == "WhileStmt" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "SwitchStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "FortranDo" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "ForAllStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "InterfaceStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "DerivedTypeStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "ModuleStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "ProgramHeaderStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "ProcedureHeaderStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "WhereStatement" &&
+          variableNameString == "end_numeric_label") ||
+         (nodeName == "QualifiedName" && variableNameString == "scope") ||
+         (nodeName == "InitializedName" && variableNameString == "scope") ||
+         (nodeName == "TemplateParameter" && variableNameString == "type") ||
+         (nodeName == "TemplateArgument" && variableNameString == "type") ||
+         (nodeName == "EnumDeclaration" && variableNameString == "type") ||
+         (nodeName == "TypedefDeclaration" && variableNameString == "type") ||
+         (nodeName == "ClassDeclaration" && variableNameString == "type") ||
+         (nodeName == "FunctionDeclaration" && variableNameString == "type") ||
+         (nodeName == "AsmExpression" && variableNameString == "type") ||
+         (nodeName == "AsmGenericSymbol" && variableNameString == "type") ||
+         (nodeName == "AsmElfSegmentTableEntry" &&
+          variableNameString == "type") ||
+         (nodeName == "AsmElfRelocEntry" && variableNameString == "type") ||
+         (nodeName == "AsmElfNoteEntry" && variableNameString == "type") ||
+         (nodeName == "AsmJvmConstantPoolEntry" &&
+          variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "SymbolTable" && variableNameString == "name") ||
+         (nodeName == "Attribute" && variableNameString == "name") ||
+         (nodeName == "Directory" && variableNameString == "name") ||
+         (nodeName == "Graph" && variableNameString == "name") ||
+         (nodeName == "GraphNode" && variableNameString == "name") ||
+         (nodeName == "GraphEdge" && variableNameString == "name") ||
+         (nodeName == "TemplateType" && variableNameString == "name") ||
+         (nodeName == "TypeDefault" && variableNameString == "name") ||
+         (nodeName == "TypeLabel" && variableNameString == "name") ||
+         (nodeName == "InitializedName" && variableNameString == "name") ||
+         (nodeName == "EnumDeclaration" && variableNameString == "name") ||
+         (nodeName == "TemplateDeclaration" && variableNameString == "name") ||
+         (nodeName == "UseStatement" && variableNameString == "name") ||
+         (nodeName == "NamespaceDeclarationStatement" &&
+          variableNameString == "name") ||
+         (nodeName == "InterfaceStatement" && variableNameString == "name") ||
+         (nodeName == "NamespaceAliasDeclarationStatement" &&
+          variableNameString == "name") ||
+         (nodeName == "TypedefDeclaration" && variableNameString == "name") ||
+         (nodeName == "ClassDeclaration" && variableNameString == "name") ||
+         (nodeName == "FunctionDeclaration" && variableNameString == "name") ||
+         (nodeName == "InquireStatement" && variableNameString == "name") ||
+         (nodeName == "OmpCriticalStatement" && variableNameString == "name") ||
+         (nodeName == "OmpDepobjStatement" && variableNameString == "name") ||
+         (nodeName == "EnumVal" && variableNameString == "name") ||
+         (nodeName == "IOItemExpression" && variableNameString == "name") ||
+         (nodeName == "AsmOp" && variableNameString == "name") ||
+         (nodeName == "UnknownArrayOrFunctionReference" &&
+          variableNameString == "name") ||
+         (nodeName == "TypeTraitBuiltinOperator" &&
+          variableNameString == "name")) {
+       returnResult = false;
 #if 0
          printf ("Exiting as a test! \n");
          ROSE_ABORT();
 #endif
-       }
+     }
 
      return returnResult;
    }
@@ -1253,70 +1268,76 @@ generate_override_keyword_for_set_functions( AstNodeClass & node, GrammarString 
   // unnecessary step and wasted effort.
 
   // Except in the root class for the virtual access function.
-     if ( (nodeName == "Pragma"                     && variableNameString == "startOfConstruct")   ||
-          (nodeName == "Pragma"                     && variableNameString == "endOfConstruct")     ||
-          (nodeName == "File"                       && variableNameString == "startOfConstruct")   ||
-          (nodeName == "File"                       && variableNameString == "endOfConstruct")     ||
-          (nodeName == "LocatedNode"                && variableNameString == "startOfConstruct")   ||
-          (nodeName == "LocatedNode"                && variableNameString == "endOfConstruct")     ||
-          (nodeName == "QualifiedName"              && variableNameString == "scope") ||
-          (nodeName == "InitializedName"            && variableNameString == "scope") ||
-          (nodeName == "TemplateParameter"          && variableNameString == "type")  ||
-          (nodeName == "TemplateArgument"           && variableNameString == "type")  ||
-          (nodeName == "JavaQualifiedType"          && variableNameString == "type")  ||
-          (nodeName == "EnumDeclaration"            && variableNameString == "type")  ||
-          (nodeName == "TypedefDeclaration"         && variableNameString == "type")  ||
-          (nodeName == "ClassDeclaration"           && variableNameString == "type")  ||
-          (nodeName == "FunctionDeclaration"        && variableNameString == "type")  ||
-          (nodeName == "FunctionTypeSymbol"         && variableNameString == "type")  ||
-          (nodeName == "DefaultSymbol"              && variableNameString == "type")  ||
-          (nodeName == "AsmExpression"              && variableNameString == "type")  ||
-          (nodeName == "AsmGenericSymbol"           && variableNameString == "type")  ||
-          (nodeName == "AsmElfSegmentTableEntry"    && variableNameString == "type")  ||
-          (nodeName == "TypeExpression"             && variableNameString == "type")  ||
-          (nodeName == "AsmElfRelocEntry"           && variableNameString == "type")  ||
-          (nodeName == "AsmElfNoteEntry"            && variableNameString == "type")  ||
-          (nodeName == "AsmJvmConstantPoolEntry"    && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "xxx"                        && variableNameString == "type")  ||
-          (nodeName == "SymbolTable"                && variableNameString == "name")  ||
-          (nodeName == "Attribute"                  && variableNameString == "name")  ||
-          (nodeName == "Directory"                  && variableNameString == "name")  ||
-          (nodeName == "Graph"                      && variableNameString == "name")  ||
-          (nodeName == "GraphNode"                  && variableNameString == "name")  ||
-          (nodeName == "GraphEdge"                  && variableNameString == "name")  ||
-          (nodeName == "TemplateType"               && variableNameString == "name")  ||
-          (nodeName == "TypeDefault"                && variableNameString == "name")  ||
-          (nodeName == "TypeLabel"                  && variableNameString == "name")  ||
-          (nodeName == "InitializedName"            && variableNameString == "name")  ||
-          (nodeName == "EnumDeclaration"            && variableNameString == "name")  ||
-          (nodeName == "TemplateDeclaration"        && variableNameString == "name")  ||
-          (nodeName == "UseStatement"               && variableNameString == "name")  ||
-          (nodeName == "NamespaceDeclarationStatement" && variableNameString == "name")  ||
-          (nodeName == "InterfaceStatement"         && variableNameString == "name")  ||
-          (nodeName == "NamespaceAliasDeclarationStatement" && variableNameString == "name")  ||
-          (nodeName == "TypedefDeclaration"         && variableNameString == "name")  ||
-          (nodeName == "ClassDeclaration"           && variableNameString == "name")  ||
-          (nodeName == "FunctionDeclaration"        && variableNameString == "name")  ||
-          (nodeName == "InquireStatement"           && variableNameString == "name")  ||
-          (nodeName == "OmpCriticalStatement"       && variableNameString == "name")  ||
-          (nodeName == "OmpDepobjStatement"         && variableNameString == "name")  ||
-          (nodeName == "EnumVal"                    && variableNameString == "name")  ||
-          (nodeName == "IOItemExpression"           && variableNameString == "name")  ||
-          (nodeName == "AsmOp"                      && variableNameString == "name")  ||
-          (nodeName == "UnknownArrayOrFunctionReference" && variableNameString == "name")  ||
-          (nodeName == "TypeTraitBuiltinOperator"   && variableNameString == "name")  ||
-          (nodeName == "FunctionTypeSymbol"         && variableNameString == "name")  )
-       {
-         returnResult = false;
+     if ((nodeName == "Pragma" && variableNameString == "startOfConstruct") ||
+         (nodeName == "Pragma" && variableNameString == "endOfConstruct") ||
+         (nodeName == "File" && variableNameString == "startOfConstruct") ||
+         (nodeName == "File" && variableNameString == "endOfConstruct") ||
+         (nodeName == "LocatedNode" &&
+          variableNameString == "startOfConstruct") ||
+         (nodeName == "LocatedNode" &&
+          variableNameString == "endOfConstruct") ||
+         (nodeName == "QualifiedName" && variableNameString == "scope") ||
+         (nodeName == "InitializedName" && variableNameString == "scope") ||
+         (nodeName == "TemplateParameter" && variableNameString == "type") ||
+         (nodeName == "TemplateArgument" && variableNameString == "type") ||
+         (nodeName == "EnumDeclaration" && variableNameString == "type") ||
+         (nodeName == "TypedefDeclaration" && variableNameString == "type") ||
+         (nodeName == "ClassDeclaration" && variableNameString == "type") ||
+         (nodeName == "FunctionDeclaration" && variableNameString == "type") ||
+         (nodeName == "FunctionTypeSymbol" && variableNameString == "type") ||
+         (nodeName == "DefaultSymbol" && variableNameString == "type") ||
+         (nodeName == "AsmExpression" && variableNameString == "type") ||
+         (nodeName == "AsmGenericSymbol" && variableNameString == "type") ||
+         (nodeName == "AsmElfSegmentTableEntry" &&
+          variableNameString == "type") ||
+         (nodeName == "TypeExpression" && variableNameString == "type") ||
+         (nodeName == "AsmElfRelocEntry" && variableNameString == "type") ||
+         (nodeName == "AsmElfNoteEntry" && variableNameString == "type") ||
+         (nodeName == "AsmJvmConstantPoolEntry" &&
+          variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "xxx" && variableNameString == "type") ||
+         (nodeName == "SymbolTable" && variableNameString == "name") ||
+         (nodeName == "Attribute" && variableNameString == "name") ||
+         (nodeName == "Directory" && variableNameString == "name") ||
+         (nodeName == "Graph" && variableNameString == "name") ||
+         (nodeName == "GraphNode" && variableNameString == "name") ||
+         (nodeName == "GraphEdge" && variableNameString == "name") ||
+         (nodeName == "TemplateType" && variableNameString == "name") ||
+         (nodeName == "TypeDefault" && variableNameString == "name") ||
+         (nodeName == "TypeLabel" && variableNameString == "name") ||
+         (nodeName == "InitializedName" && variableNameString == "name") ||
+         (nodeName == "EnumDeclaration" && variableNameString == "name") ||
+         (nodeName == "TemplateDeclaration" && variableNameString == "name") ||
+         (nodeName == "UseStatement" && variableNameString == "name") ||
+         (nodeName == "NamespaceDeclarationStatement" &&
+          variableNameString == "name") ||
+         (nodeName == "InterfaceStatement" && variableNameString == "name") ||
+         (nodeName == "NamespaceAliasDeclarationStatement" &&
+          variableNameString == "name") ||
+         (nodeName == "TypedefDeclaration" && variableNameString == "name") ||
+         (nodeName == "ClassDeclaration" && variableNameString == "name") ||
+         (nodeName == "FunctionDeclaration" && variableNameString == "name") ||
+         (nodeName == "InquireStatement" && variableNameString == "name") ||
+         (nodeName == "OmpCriticalStatement" && variableNameString == "name") ||
+         (nodeName == "OmpDepobjStatement" && variableNameString == "name") ||
+         (nodeName == "EnumVal" && variableNameString == "name") ||
+         (nodeName == "IOItemExpression" && variableNameString == "name") ||
+         (nodeName == "AsmOp" && variableNameString == "name") ||
+         (nodeName == "UnknownArrayOrFunctionReference" &&
+          variableNameString == "name") ||
+         (nodeName == "TypeTraitBuiltinOperator" &&
+          variableNameString == "name") ||
+         (nodeName == "FunctionTypeSymbol" && variableNameString == "name")) {
+       returnResult = false;
 #if 0
          printf ("Exiting as a test! \n");
          ROSE_ABORT();
 #endif
-       }
+     }
 
      return returnResult;
    }

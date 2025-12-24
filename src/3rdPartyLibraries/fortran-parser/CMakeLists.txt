@@ -1,4 +1,4 @@
-if(enable-fortran)
+if(enable-fortran AND enable-fortran-ofp)
   set(enable-ofp-version "20200704" CACHE STRING "version number for OFP")
 
   ########### install files ###############
