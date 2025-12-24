@@ -1718,10 +1718,12 @@ StripRoseOptions (std::vector<std::string>& argv)
   Cmdline::Fortran::Ofp::StripRoseOptions(argv);
 }// Cmdline::Fortran::StripRoseOptions
 
-std::string
-Rose::Cmdline::Fortran::Ofp::
-GetRoseClasspath ()
-{
+std::string Rose::Cmdline::Fortran::Ofp::GetRoseClasspath() {
+  return GetRoseClasspath(Cmdline::Fortran::Ofp::classpath_entries);
+}
+
+std::string Rose::Cmdline::Fortran::Ofp::GetRoseClasspath(
+    const std::list<std::string> &classpath_entries) {
   string classpath = "-Djava.class.path=";
 
   // CER (6/6/2011): Added support for OFP version 0.8.3 which requires antlr-3.3-complete.jar.
@@ -1747,7 +1749,7 @@ GetRoseClasspath ()
                    ofp_class_path, string("lib/") + ofp_jar_file_name) +
                ":";
 
-  for (const std::string &entry : Cmdline::Fortran::Ofp::classpath_entries) {
+  for (const std::string &entry : classpath_entries) {
     if (!entry.empty()) {
       classpath += entry;
       classpath += ":";
@@ -1885,6 +1887,15 @@ void Rose::Cmdline::Fortran::Ofp::ProcessClasspath(
     std::cout << "[INFO] Processing Fortran's OFP classpath options"
               << std::endl;
 
+  Cmdline::Fortran::Ofp::classpath_entries.clear();
+  std::list<std::string> project_classpath_entries =
+      project->get_Fortran_ofp_classpath();
+  if (!project_classpath_entries.empty()) {
+    Cmdline::Fortran::Ofp::classpath_entries.insert(
+        Cmdline::Fortran::Ofp::classpath_entries.end(),
+        project_classpath_entries.begin(), project_classpath_entries.end());
+  }
+
   std::string ofp_classpath = "";
 
   bool has_ofp_classpath =
@@ -1904,6 +1915,7 @@ void Rose::Cmdline::Fortran::Ofp::ProcessClasspath(
 
     project->set_Fortran_ofp_classpath(ofp_classpath_entries);
 
+    Cmdline::Fortran::Ofp::classpath_entries.clear();
     Cmdline::Fortran::Ofp::classpath_entries.insert(
         Cmdline::Fortran::Ofp::classpath_entries.end(),
         ofp_classpath_entries.begin(), ofp_classpath_entries.end());

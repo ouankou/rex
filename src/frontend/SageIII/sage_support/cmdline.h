@@ -107,6 +107,8 @@ namespace Cmdline {
   ROSE_DLL_API void StripRoseOptions(std::vector<std::string> &argv);
 
   ROSE_DLL_API std::string GetRoseClasspath();
+  ROSE_DLL_API std::string
+  GetRoseClasspath(const std::list<std::string> &classpath_entries);
 
   ROSE_DLL_API void Process(SgProject *project, std::vector<std::string> &argv);
 

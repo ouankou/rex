@@ -3682,7 +3682,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
       } // Terminates if (syntaxCheckInputCode == true)
 
       // Build the classpath list for Fortran OFP support.
-      string classpath = Rose::Cmdline::Fortran::Ofp::GetRoseClasspath();
+      string classpath = Rose::Cmdline::Fortran::Ofp::GetRoseClasspath(
+          get_project()->get_Fortran_ofp_classpath());
 
       // This is part of debugging output to call OFP and output the list of
       // parser actions that WOULD be called. printf
