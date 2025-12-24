@@ -89,16 +89,16 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                 else
                     break;
             }
-        } else if (current_arg.rfind("-isystem", 0) == 0) {
-          if (current_arg.size() > 8) {
-            sys_dirs_list.push_back(current_arg.substr(8));
+        } else if (current_arg == "-isystem") {
+          ++i;
+          if (i < argc) {
+            sys_dirs_list.push_back(argv[i]);
           } else {
-            ++i;
-            if (i < argc) {
-              sys_dirs_list.push_back(argv[i]);
-            } else {
-              break;
-            }
+            break;
+          }
+        } else if (current_arg.rfind("-isystem", 0) == 0) {
+          if (current_arg.size() > 8 && current_arg[8] != '-') {
+            sys_dirs_list.push_back(current_arg.substr(8));
           }
         } else if (current_arg.find("-D") == 0) {
           std::string define_value;

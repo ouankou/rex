@@ -4470,15 +4470,15 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
                 else
                     break;
             }
+        } else if (current_arg == "-isystem") {
+          ++i;
+          if (i < argv.size())
+            sys_dirs_list.push_back(argv[i]);
+          else
+            break;
         } else if (current_arg.rfind("-isystem", 0) == 0) {
-          if (current_arg.size() > 8) {
+          if (current_arg.size() > 8 && current_arg[8] != '-') {
             sys_dirs_list.push_back(current_arg.substr(8));
-          } else {
-            ++i;
-            if (i < argv.size())
-              sys_dirs_list.push_back(argv[i]);
-            else
-              break;
           }
         } else if (current_arg.find("-D") == 0) {
           if (current_arg.length() > 2) {
@@ -4490,6 +4490,13 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
             else
               break;
           }
+        } else if (current_arg == "-std") {
+          ++i;
+          if (i >= argv.size())
+            break;
+        } else if (current_arg.rfind("-std=", 0) == 0) {
+          // Standard selection is handled earlier during command-line
+          // processing.
         } else if (current_arg.find("-c") == 0) {
         } else if (current_arg.find("-o") == 0) {
           if (current_arg.length() == 2) {
@@ -4507,6 +4514,8 @@ SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<stri
         } else if (current_arg.find("--rex-omp-") == 0) {
         } else if (current_arg == "-rex:clang:continue-on-error") {
           clang_frontend_args.push_back(current_arg);
+        } else if (!current_arg.empty() && current_arg[0] == '-') {
+          // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
         } else {
           input_file = current_arg;
         }
