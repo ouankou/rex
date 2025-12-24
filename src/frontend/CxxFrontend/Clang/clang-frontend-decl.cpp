@@ -920,6 +920,12 @@ void ensure_decl_in_scope_child_list(
   }
 
   scope->append_statement(decl);
+  if (decl->get_parent() != scope) {
+    decl->set_parent(scope);
+  }
+  if (decl->get_scope() != scope) {
+    decl->set_scope(scope);
+  }
 }
 
 void suppress_unparse_output(SgLocatedNode *n) {
