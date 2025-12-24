@@ -271,7 +271,7 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
       } else {
         if (p_symbol_lookup_in_progress.find(parent_decl) ==
             p_symbol_lookup_in_progress.end()) {
-          parent_node = Traverse(parent_decl);
+          parent_node = TraverseOnDemand(parent_decl);
         }
       }
     }
@@ -488,7 +488,7 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
       // (avoids infinite recursion during template member resolution)
       if (p_symbol_lookup_in_progress.find((clang::NamedDecl *)parent_decl) ==
           p_symbol_lookup_in_progress.end()) {
-        parent_node = Traverse(parent_decl);
+        parent_node = TraverseOnDemand(parent_decl);
       }
     }
 
@@ -603,7 +603,7 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
         if (parent_node == NULL &&
             p_symbol_lookup_in_progress.find(parent_lookup) ==
                 p_symbol_lookup_in_progress.end()) {
-          parent_node = Traverse(parent_record);
+          parent_node = TraverseOnDemand(parent_record);
         }
 
         if (SgClassDeclaration *sg_parent_decl =
@@ -712,6 +712,14 @@ ClangToSageTranslator::resolveScopeFromDeclContext(clang::DeclContext *context,
       } else if (SgClassDefinition *class_def =
                      isSgClassDefinition(context_node)) {
         return class_def;
+      } else if (SgFunctionDefinition *fn_def =
+                     isSgFunctionDefinition(context_node)) {
+        return fn_def;
+      } else if (SgFunctionDeclaration *fn_decl =
+                     isSgFunctionDeclaration(context_node)) {
+        if (fn_decl->get_definition() != NULL) {
+          return fn_decl->get_definition();
+        }
       }
     }
 
@@ -785,6 +793,35 @@ void diagnose_null_scope(SgDeclarationStatement *ds, const char *context) {
               ds->class_name().c_str(), ds, context);
 }
 
+bool is_declaration_scope_context(const clang::DeclContext *context) {
+  if (context == NULL) {
+    return false;
+  }
+  return context->isFileContext() || context->isRecord() ||
+         context->isFunctionOrMethod();
+}
+
+bool scope_supports_statement_list(const SgScopeStatement *scope) {
+  if (scope == NULL) {
+    return false;
+  }
+  switch (scope->variantT()) {
+  case V_SgBasicBlock:
+  case V_SgCatchOptionStmt:
+  case V_SgDoWhileStmt:
+  case V_SgForStatement:
+  case V_SgRangeBasedForStatement:
+  case V_SgTemplateFunctionDefinition:
+  case V_SgFunctionDefinition:
+  case V_SgSwitchStatement:
+  case V_SgWhileStmt:
+  case V_SgFortranDo:
+    return true;
+  default:
+    return false;
+  }
+}
+
 void ensure_parent_and_scope(SgDeclarationStatement *ds,
                              const char *context = "ClangToSageTranslator") {
   if (ds == NULL)
@@ -809,6 +846,10 @@ bool is_decl_attached_to_scope_child_list(SgScopeStatement *scope,
   if (scope->containsOnlyDeclarations()) {
     const SgDeclarationStatementPtrList &decls = scope->getDeclarationList();
     return std::find(decls.begin(), decls.end(), decl) != decls.end();
+  }
+
+  if (!scope_supports_statement_list(scope)) {
+    return false;
   }
 
   const SgStatementPtrList &stmts = scope->getStatementList();
@@ -836,6 +877,10 @@ bool detach_decl_from_scope_child_list(SgDeclarationStatement *decl,
 
   if (scope->containsOnlyDeclarations()) {
     return erase_all(scope->getDeclarationList());
+  }
+
+  if (!scope_supports_statement_list(scope)) {
+    return false;
   }
 
   return erase_all(scope->getStatementList());
@@ -875,6 +920,12 @@ void ensure_decl_in_scope_child_list(
   }
 
   scope->append_statement(decl);
+  if (decl->get_parent() != scope) {
+    decl->set_parent(scope);
+  }
+  if (decl->get_scope() != scope) {
+    decl->set_scope(scope);
+  }
 }
 
 void suppress_unparse_output(SgLocatedNode *n) {
@@ -1349,6 +1400,29 @@ SgTemplateParameter *ClangToSageTranslator::translateTemplateParameter(
   return sg_param;
 }
 
+SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
+  if (decl == NULL) {
+    return NULL;
+  }
+
+  struct OnDemandGuard {
+    std::set<clang::Decl *> &set;
+    clang::Decl *decl;
+    bool inserted;
+    OnDemandGuard(std::set<clang::Decl *> &set, clang::Decl *decl)
+        : set(set), decl(decl), inserted(false) {
+      inserted = set.insert(decl).second;
+    }
+    ~OnDemandGuard() {
+      if (inserted) {
+        set.erase(decl);
+      }
+    }
+  } guard(p_decl_translation_on_demand, decl);
+
+  return Traverse(decl);
+}
+
 SgNode *ClangToSageTranslator::Traverse(clang::Decl *decl) {
   if (decl == NULL)
     return NULL;
@@ -1691,9 +1765,58 @@ SgNode *ClangToSageTranslator::Traverse(clang::Decl *decl) {
 
   ROSE_ASSERT(ret_status == false || result != NULL);
 
+  bool on_demand = p_decl_translation_on_demand.find(decl) !=
+                   p_decl_translation_on_demand.end();
+
   if (ret_status && result != NULL) {
     if (SgDeclarationStatement *ds = isSgDeclarationStatement(result)) {
       ensure_parent_and_scope(ds);
+
+      if (on_demand) {
+        const clang::DeclContext *lexical_ctx = decl->getLexicalDeclContext();
+        const clang::DeclContext *target_ctx = nullptr;
+        if (is_declaration_scope_context(lexical_ctx)) {
+          target_ctx = lexical_ctx;
+        } else if (is_declaration_scope_context(decl->getDeclContext())) {
+          target_ctx = decl->getDeclContext();
+        }
+
+        if (target_ctx != nullptr) {
+          SgNode *parent_node = ds->get_parent();
+          SgScopeStatement *parent_scope = isSgScopeStatement(parent_node);
+          clang::Decl *ctx_decl = llvm::dyn_cast<clang::Decl>(
+              const_cast<clang::DeclContext *>(target_ctx));
+          if (ctx_decl != NULL &&
+              p_decl_translation_map.find(ctx_decl) ==
+                  p_decl_translation_map.end() &&
+              p_decl_translation_in_progress.find(ctx_decl) ==
+                  p_decl_translation_in_progress.end()) {
+            if (!llvm::isa<clang::NamespaceDecl>(ctx_decl)) {
+              TraverseOnDemand(ctx_decl);
+            }
+          }
+
+          SgScopeStatement *target_scope = resolveScopeFromDeclContext(
+              const_cast<clang::DeclContext *>(target_ctx), NULL);
+          if (target_ctx->isRecord()) {
+            if (isSgClassDefinition(target_scope) == NULL &&
+                isSgTemplateInstantiationDefn(target_scope) == NULL &&
+                isSgTemplateClassDefinition(target_scope) == NULL) {
+              target_scope = NULL;
+            }
+          }
+          if (target_scope == NULL && target_ctx->isTranslationUnit()) {
+            target_scope = getGlobalScope();
+          }
+          if (target_scope != NULL) {
+            if (parent_scope != NULL && parent_scope != target_scope) {
+              detach_decl_from_scope_child_list(ds, parent_scope);
+            }
+            ensure_decl_in_scope_child_list(ds, target_scope,
+                                            "Traverse:decl-context");
+          }
+        }
+      }
     }
     p_decl_translation_map.insert(
         std::pair<clang::Decl *, SgNode *>(decl, result));
@@ -4670,7 +4793,7 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
           } else {
             // ROOT CAUSE FIX: Target not in cache, traverse it to build the
             // declaration
-            SgNode *tmp_node = Traverse(target_decl);
+            SgNode *tmp_node = TraverseOnDemand(target_decl);
             if (tmp_node != NULL) {
               sg_target_decl = isSgDeclarationStatement(tmp_node);
               if (sg_target_decl == NULL) {

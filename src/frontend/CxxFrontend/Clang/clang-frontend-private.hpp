@@ -382,6 +382,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // Recursion guard for decl translation to avoid re-entrant Traverse()
         // calls (e.g., when forcing translation of direct callees).
         std::set<clang::Decl *> p_decl_translation_in_progress;
+        // Track decls translated on-demand (e.g., during type lowering or
+        // symbol lookup) so we can repair scope attachments without duplicating
+        // normal traversal insertions.
+        std::set<clang::Decl *> p_decl_translation_on_demand;
 
         // Deferred translation queue for implicit function template
         // instantiations. These instantiations are discovered while traversing
@@ -529,12 +533,13 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         virtual SgNode * Traverse(clang::Stmt * stmt);
         virtual SgNode * Traverse(const clang::Type * type);
         virtual SgNode * TraverseForDeclContext(clang::DeclContext * decl_context);
+        virtual SgNode *TraverseOnDemand(clang::Decl *decl);
 
-  /* Visit methods */
-  /* 
-     Reference: https://clang.llvm.org/doxygen/classclang_1_1Decl.html 
-     Overall 84 decl AST nodes according as 04/24/2019
-  */
+        /* Visit methods */
+        /*
+           Reference: https://clang.llvm.org/doxygen/classclang_1_1Decl.html
+           Overall 84 decl AST nodes according as 04/24/2019
+        */
         virtual bool VisitDecl(clang::Decl * decl, SgNode ** node);
             virtual bool VisitAccessSpecDecl(clang::AccessSpecDecl * access_spec_decl, SgNode ** node);
             virtual bool VisitBlockDecl(clang::BlockDecl * block_decl, SgNode ** node);

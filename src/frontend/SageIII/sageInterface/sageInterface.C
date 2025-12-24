@@ -14243,23 +14243,20 @@ SgStatement* SageInterface::lastFrontEndSpecificStatement( SgGlobal* globalScope
   //TODO handle more side effect like SageBuilder::append_statement() does
   //Merge myStatementInsert()
   // insert  SageInterface::insertStatement()
-void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStmt, bool insertBefore, bool autoMovePreprocessingInfo /*= true */)
-   {
-     ROSE_ASSERT(targetStmt &&newStmt);
+   void
+   SageInterface::insertStatement(SgStatement *targetStmt, SgStatement *newStmt,
+                                  bool insertBefore,
+                                  bool autoMovePreprocessingInfo /*= true */) {
+     ROSE_ASSERT(targetStmt && newStmt);
      ROSE_ASSERT(targetStmt != newStmt); // should not share statement nodes!
 
- // Don't try to mutate statements that originate from compiler-generated/system headers.
- // GCC 14's libstdc++ exposes placeholder declarations that are not present in the
- // surrounding statement list; attempting to insert around them leaves orphan decls/refs
- // and trips scope assertions later in name qualification. We bail out early so the call
- // becomes a no-op rather than crashing when walking system headers.
-     if (Sg_File_Info* fi = targetStmt->get_file_info())
-        {
-          const std::string& fname = fi->get_filenameString();
-          if (fi->isCompilerGenerated() || fi->isFrontendSpecific() ||
-              fname.find("/usr/include/") != std::string::npos)
-             return;
-        }
+     // Don't try to mutate statements that originate from compiler-generated or
+     // frontend-specific nodes; they may not be safely owned by the surrounding
+     // scope.
+     if (Sg_File_Info *fi = targetStmt->get_file_info()) {
+       if (fi->isCompilerGenerated() || fi->isFrontendSpecific())
+         return;
+     }
 
      SgNode* parent = targetStmt->get_parent();
      if (parent == NULL)
@@ -14570,14 +14567,27 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
                                    p->set_body(newparent);
                                    newparent->set_parent(parent);
                                    insertStatement(targetStmt, newStmt,insertBefore);
-                                 }
-                               else
-                                 {
+                              } else if (SgDefaultOptionStmt *p =
+                                             isSgDefaultOptionStmt(parent)) {
+                                if (p->get_body() == targetStmt) {
+                                  SgBasicBlock *newparent =
+                                      buildBasicBlock(targetStmt);
+                                  p->set_body(newparent);
+                                  newparent->set_parent(parent);
+                                  insertStatement(targetStmt, newStmt,
+                                                  insertBefore);
+                                } else {
+                                  SgStatement *stmnt = isSgStatement(parent);
+                                  ROSE_ASSERT(stmnt != NULL);
+                                  stmnt->insert_statement(targetStmt, newStmt,
+                                                          insertBefore);
+                                }
+                              } else {
                                 // It appears that all of the recursive calls are untimately calling this location.
                                    SgStatement* stmnt = isSgStatement(parent);
                                    ROSE_ASSERT(stmnt != NULL);
                                    stmnt->insert_statement(targetStmt,newStmt,insertBefore);
-                                 }
+                              }
                             }
                        }
                   }
@@ -14602,7 +14612,6 @@ void SageInterface::insertStatement(SgStatement *targetStmt, SgStatement* newStm
      reportNodesMarkedAsModified(scope);
 #endif
    }
-
 
 void SageInterface::insertStatementList(SgStatement *targetStmt, const std::vector<SgStatement*>& newStmts, bool insertBefore)
    {

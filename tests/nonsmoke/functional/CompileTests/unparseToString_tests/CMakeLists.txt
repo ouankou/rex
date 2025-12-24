@@ -7,6 +7,8 @@ set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_
 
 set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code
                       -I${TESTCODE_DIR})
+set(rex_test2025_issue148_system_header_dir
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
 
 # This populates the list EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
@@ -33,9 +35,13 @@ if(REX_ENABLE_FAILING_TESTS)
 endif()
 
 foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
-  set(extra_frontend_flags "")
+  set(extra_frontend_flags)
   if (file_to_test IN_LIST REX_FRONTEND_ERROR_TESTS)
-    set(extra_frontend_flags -rex:clang:continue-on-error)
+    list(APPEND extra_frontend_flags -rex:clang:continue-on-error)
+  endif()
+  if (file_to_test STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
+    list(APPEND extra_frontend_flags
+      -isystem ${rex_test2025_issue148_system_header_dir})
   endif()
 
   add_test(
