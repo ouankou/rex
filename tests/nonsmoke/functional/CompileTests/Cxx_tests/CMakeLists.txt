@@ -7,6 +7,9 @@ include(Cxx_Failing_Tests.cmake)
 set(CXX_TESTCODES_TO_RUN ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${REX_FRONTEND_ERROR_TESTS})
+# Custom test uses -isystem to force system-header classification.
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN
+  rex_test2025_issue148_system_header_mutation.cpp)
 
 set(ROSE_FLAGS
   -w -rose:verbose 0

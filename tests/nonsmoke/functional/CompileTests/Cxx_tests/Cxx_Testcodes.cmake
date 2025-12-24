@@ -2127,7 +2127,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 
 set(REX_FRONTEND_ERROR_TESTS
   rex_test2025_cfe_error_exit_code.cpp
-  rex_test2025_issue148_system_header_mutation.cpp
   rex_test2025_issue99.cpp
 )
 
