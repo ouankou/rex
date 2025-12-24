@@ -473,7 +473,7 @@ endif()
 
 if(enable-fortran AND enable-fortran-ofp)
   set(enable-ofp-version "20200704" CACHE STRING "version number for OFP")
-  set($ENV{CLASSPATH} "${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar:${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/fortran-parser/OpenFortranParser-${enable-ofp-version}.jar")
+  set(ENV{CLASSPATH} "${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar:${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/fortran-parser/OpenFortranParser-${enable-ofp-version}.jar")
 endif()
 
 # To use Bison, set BISON_ROOT to the Bison installation prefix. To avoid Bison, use BISON_ROOT=no
