@@ -2403,7 +2403,8 @@ void changeAllBodiesToBlocks(SgNode* top, bool createEmptyBody = true);
 // The same as changeAllBodiesToBlocks(SgNode* top). Phased out.
 //void changeAllLoopBodiesToBlocks(SgNode* top);
 
-//! Make a single statement body to be a basic block. Its parent is if, while, catch, or upc_forall etc.
+//! Make a single statement body to be a basic block. Its parent is if, while,
+//! catch, etc.
 SgBasicBlock * makeSingleStatementBodyToBlock(SgStatement* singleStmt);
 
 #if 0
