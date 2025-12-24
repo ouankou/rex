@@ -608,17 +608,6 @@ if(enable-smaller-generated-files)
     SgUnsignedLongLongIntVal.C
     SgUnsignedLongVal.C
     SgUnsignedShortVal.C
-    SgUPC_AccessModifier.C
-    SgUpcBarrierStatement.C
-    SgUpcBlocksizeofExpression.C
-    SgUpcElemsizeofExpression.C
-    SgUpcFenceStatement.C
-    SgUpcForAllStatement.C
-    SgUpcLocalsizeofExpression.C
-    SgUpcMythread.C
-    SgUpcNotifyStatement.C
-    SgUpcThreads.C
-    SgUpcWaitStatement.C
     SgUserDefinedBinaryOp.C
     SgUserDefinedUnaryOp.C
     SgUseStatement.C

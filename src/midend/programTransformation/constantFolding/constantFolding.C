@@ -167,10 +167,6 @@ static int cf_get_int_value(SgValueExp * sg_value_exp)
     rtval = isSgIntVal(sg_value_exp)->get_value();
   else if (isSgShortVal(sg_value_exp))
     rtval = isSgShortVal(sg_value_exp)->get_value();
-  else if (isSgUpcMythread(sg_value_exp))
-    rtval = isSgUpcMythread(sg_value_exp)->get_value();
-  else if (isSgUpcThreads(sg_value_exp))
-    rtval = isSgUpcThreads(sg_value_exp)->get_value();
   else
   {
     cerr<<"error: wrong value exp type for cf_get_int_value():"<<sg_value_exp->class_name()<<endl;
@@ -573,23 +569,17 @@ static SgValueExp* evaluateConditionalExp(SgConditionalExp * cond_exp)
       case V_SgShortVal:
       case V_SgBoolValExp:
       case V_SgEnumVal:
-      case V_SgIntVal:
-      case V_SgUpcMythread:
-      case V_SgUpcThreads:
-        {
-          int v= cf_get_int_value(value_exp);
-          if (v)
-          {
-            if (value_exp_t) // set the value only if the true exp is a constant
-              result = value_exp_t;
-          }
-          else
-          {
-            if (value_exp_f)
-              result = value_exp_f;
-          }
-          break;
+      case V_SgIntVal: {
+        int v = cf_get_int_value(value_exp);
+        if (v) {
+          if (value_exp_t) // set the value only if the true exp is a constant
+            result = value_exp_t;
+        } else {
+          if (value_exp_f)
+            result = value_exp_f;
         }
+        break;
+      }
       default:
         {
           cout<<"evaluateConditionalExp(): unhandled value expression type of a conditional exp:"<<value_exp->class_name()<<endl;
@@ -911,7 +901,3 @@ ConstantUnFoldingTraversal::evaluateSynthesizedAttribute (
 
      return returnAttribute;
    }
-
-
-
-

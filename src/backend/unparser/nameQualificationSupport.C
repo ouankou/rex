@@ -664,14 +664,13 @@ NameQualificationTraversal::associatedDeclaration(SgScopeStatement* scope)
           case V_SgForAllStatement:
           case V_SgBasicBlock:
           case V_SgSwitchStatement:
-          case V_SgCatchOptionStmt:
-          case V_SgUpcForAllStatement:
-             {
-               return_declaration = NULL;
-               break;
-             }
+          case V_SgCatchOptionStmt: {
+            return_declaration = NULL;
+            break;
+          }
 
-       // Catch anything that migh have been missed (and exit so it can be identified and fixed).
+            // Catch anything that migh have been missed (and exit so it can be
+            // identified and fixed).
           default:
              {
             	 MLOG_WARN_C(MLOG_UNPARSER, "Default reached in NameQualificationTraversal::associatedDeclaration() scope = %s \n",scope->class_name().c_str());

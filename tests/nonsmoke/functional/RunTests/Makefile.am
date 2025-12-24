@@ -36,4 +36,4 @@ EXTRA_DIST = CMakeLists.txt inputtraverseCommonBlock.f
 check-local:
 	$(MAKE) $(generatedCodeExamples)
 clean-local:
-	rm -f *.o test*.C rose_*.c rose_*.C rose_*.f rose_*.cpp *.C.pdf *.c.pdf testfile525.cpp testfile626.cpp rose_*.upc abiStuffTestDone *.dot rose_*
+	rm -f *.o test*.C rose_*.c rose_*.C rose_*.f rose_*.cpp *.C.pdf *.c.pdf testfile525.cpp testfile626.cpp abiStuffTestDone *.dot rose_*

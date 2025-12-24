@@ -514,10 +514,6 @@ test2004_21.o: $(srcdir)/test2004_21.c $(TRANSLATOR_EXECUTABLE)
 #	gcc -c $(srcdir)/test2004_21.c
 	$(VALGRIND) $(TEST_TRANSLATOR) $(C_ONLY) -c $(srcdir)/test2004_21.c
 
-# Test for UPC example code
-test2004_22.o: $(srcdir)/test2004_22.C $(TRANSLATOR_EXECUTABLE)
-	$(TEST_TRANSLATOR) -rose:UPC -c $(srcdir)/test2004_22.C
-
 # Test of export keyword
 test2004_30.o: $(srcdir)/test2004_30.C $(TRANSLATOR_EXECUTABLE)
 	$(TEST_TRANSLATOR)   -c $(srcdir)/test2004_30.C
@@ -632,7 +628,6 @@ gconv_info_C99.o:
 #	@echo "ROSE Test Codes."
 #  Run this test explicitly since it has to be run using a specific rule and can't be lumped with the rest
 #	@$(MAKE) test2004_21.o
-#	@$(MAKE) test2004_22.o
 #	@$(MAKE) test2004_30.o
 #	@$(MAKE) test2004_41.o
 #	@$(MAKE) $(TEST_Objects)
@@ -641,18 +636,18 @@ $(TEST_Objects): $(TESTCODES)
 	$(TEST_TRANSLATOR) $(AM_CPPFLAGS) $(TESTCODE_INCLUDES) -c $(srcdir)/$(@:.o=.C)
 
 EXTRA_DIST = \
-     confdefs.h test2001_05.h  test2001_15.h  test2001_18A.h  test2001_18B.h \
-     test2003_08.h test2004_40.h test2005_26.h test2005_157.h test2005_158.h test2005_159.h \
-     test2005_160.h test2004_19.C test2004_21.c test2004_22.C test2005_56.C test2005_88.h test2005_133.h \
-     test2005_75.h foo.h test2005_168.c test2005_172.c test_CplusplusMacro_Cpp.C test_CplusplusMacro_C.C \
-     gconv_info.c stdio.c $(TESTCODES)
+	     confdefs.h test2001_05.h  test2001_15.h  test2001_18A.h  test2001_18B.h \
+	     test2003_08.h test2004_40.h test2005_26.h test2005_157.h test2005_158.h test2005_159.h \
+	     test2005_160.h test2004_19.C test2004_21.c test2005_56.C test2005_88.h test2005_133.h \
+	     test2005_75.h foo.h test2005_168.c test2005_172.c test_CplusplusMacro_Cpp.C test_CplusplusMacro_C.C \
+	     gconv_info.c stdio.c $(TESTCODES)
 
 clean-local:
 	rm -f *.o rose_*.C rose_*.c *.sage.C test2001_??.C.show *.dot *.ps \
               *.C.pdf *.C.edg.pdf *.pdf *.int.C core test2005_56 test2005_172
 	rm -rf ti_files *.ti *.et
 
-check-local: $(TRANSLATOR_EXECUTABLE) test2004_19.o test2004_21.o test2004_22.o test2005_56.o
+check-local: $(TRANSLATOR_EXECUTABLE) test2004_19.o test2004_21.o test2005_56.o
 	@$(MAKE) test2004_21.o
 	@$(MAKE) test2005_168.o
 	@$(MAKE) test2005_172.o
@@ -668,8 +663,6 @@ check-local: $(TRANSLATOR_EXECUTABLE) test2004_19.o test2004_21.o test2004_22.o 
 	@echo "*********************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/CompileTests/C++Code: make check rule complete (terminated normally) ******"
 	@echo "*********************************************************************************************"
-
-
 
 
 

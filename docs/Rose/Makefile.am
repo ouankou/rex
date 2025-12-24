@@ -289,7 +289,7 @@ ROSE_DemoGuide.pdf: $(latexFiles) $(latexDependences) ROSE_DemoGuide.tex
 
 # Liao, 10/21/2009, run external tests before making manual
 # I do this to avoid duplicated test/translator file in both tests and doc directories
-# for ROSE manual: it needs generated files from OpenMP and UPC test directories
+# for ROSE manual: it needs generated files from OpenMP test directories
 generated_ompLowering_files_for_manual = \
        $(top_builddir)/tests/nonsmoke/functional/roseTests/ompLoweringTests/rose_hello-1.c \
        $(top_builddir)/tests/nonsmoke/functional/roseTests/ompLoweringTests/rose_parallel-reduction.c \

@@ -54,13 +54,6 @@ Grammar::setUpExpressions ()
   // DQ (9/2/2014): Adding support for C++11 Lambda expressions.
      NEW_TERMINAL_MACRO (LambdaExp,      "LambdaExp",  "LAMBDA_EXP" );
 
-#if USE_UPC_IR_NODES
-  // DQ and Liao (6/10/2008): Added new IR nodes specific to UPC.
-     NEW_TERMINAL_MACRO (UpcLocalsizeofExpression,    "UpcLocalsizeofExpression",    "UPC_LOCAL_SIZEOF_EXPR" );
-     NEW_TERMINAL_MACRO (UpcBlocksizeofExpression,    "UpcBlocksizeofExpression",    "UPC_BLOCK_SIZEOF_EXPR" );
-     NEW_TERMINAL_MACRO (UpcElemsizeofExpression,     "UpcElemsizeofExpression",     "UPC_ELEM_SIZEOF_EXPR" );
-#endif
-
   // DQ (2/5/2004): EDG 3.3 now separates out vararg functions explicitly in the AST
   // (something I always wanted to see done), so we will do the same in SAGE.
   // This provides for the best possible vararg handling!
@@ -185,10 +178,6 @@ Grammar::setUpExpressions ()
 
   // DQ (11/28/2011): Adding support for template declarations in the AST.
      NEW_TERMINAL_MACRO (TemplateParameterVal,   "TemplateParameterVal",   "TEMPLATE_PARAMETER_VAL" );
-
-  // Liao 6/18/2008: Support UPC constant THREADS, MYTHREAD
-     NEW_TERMINAL_MACRO (UpcThreads,              "UpcThreads",                 "UPC_THREADS" );
-     NEW_TERMINAL_MACRO (UpcMythread,             "UpcMythread",                 "UPC_MYTHREAD" );
 
   // DQ (8/27/2006): Added support for complex values (We will use a ComplexVal to stand for a imaginary number as well).
      NEW_TERMINAL_MACRO (ComplexVal,             "ComplexVal",             "COMPLEX_VAL" );
@@ -411,14 +400,16 @@ Grammar::setUpExpressions ()
 
   // DQ (11/21/2017): This was removed in favor of using the SgLabelRefExp.
   // DQ (11/21/2017): Added support for label address value (see test2017_73.C).
-     NEW_NONTERMINAL_MACRO (ValueExp,
-          BoolValExp           | StringVal        | ShortVal               | CharVal         | UnsignedCharVal |
-          WcharVal             | UnsignedShortVal | IntVal                 | EnumVal         | UnsignedIntVal  |
-          LongIntVal           | LongLongIntVal   | UnsignedLongLongIntVal | UnsignedLongVal | FloatVal        |
-          DoubleVal            | LongDoubleVal    | ComplexVal             | UpcThreads      | UpcMythread     |
-          TemplateParameterVal | NullptrValExp    | Char16Val              | Char32Val       | Float80Val      |
-          Float128Val          | VoidVal       /* | LabelAddressVal */,
-          "ValueExp","ValueExpTag", false);
+     NEW_NONTERMINAL_MACRO(
+         ValueExp,
+         BoolValExp | StringVal | ShortVal | CharVal | UnsignedCharVal |
+             WcharVal | UnsignedShortVal | IntVal | EnumVal | UnsignedIntVal |
+             LongIntVal | LongLongIntVal | UnsignedLongLongIntVal |
+             UnsignedLongVal | FloatVal | DoubleVal | LongDoubleVal |
+             ComplexVal | TemplateParameterVal | NullptrValExp | Char16Val |
+             Char32Val | Float80Val | Float128Val |
+             VoidVal /* | LabelAddressVal */,
+         "ValueExp", "ValueExpTag", false);
 
      NEW_NONTERMINAL_MACRO (ExprListExp,
           ListExp  | TupleExp | MatrixExp,
@@ -440,31 +431,38 @@ Grammar::setUpExpressions ()
 
   // DQ (9/4/2013): Added compound literal support.
   // DQ (7/12/2013): Moved the TypeTraitBuiltinOperator to be derived from Expression.
-     NEW_NONTERMINAL_MACRO (Expression,
-          UnaryOp                  | BinaryOp                 | ExprListExp             | VarRefExp           | ClassNameRefExp          |
-          FunctionRefExp           | MemberFunctionRefExp     | ValueExp                | CallExpression      | SizeOfOp                 |
-          UpcLocalsizeofExpression | UpcBlocksizeofExpression | UpcElemsizeofExpression | SuperExp            |
-          TypeIdOp                 | ConditionalExp           | NewExp                  | DeleteExp           | ThisExp                  |
-          RefExp                   | Initializer              | VarArgStartOp           | VarArgOp            | VarArgEndOp              |
-          VarArgCopyOp             | VarArgStartOneOperandOp  | NullExpression          | VariantExpression   | SubscriptExpression      |
-          ColonShapeExp            | AsteriskShapeExp         | /*UseOnlyExpression     |*/ ImpliedDo         | IOItemExpression         |
-       /* UseRenameExpression      | */ StatementExpression   | AsmOp                   | LabelRefExp         | ActualArgumentExpression |
-          UnknownArrayOrFunctionReference               | PseudoDestructorRefExp | CAFCoExpression  |
-          CudaKernelExecConfig    |  /* TV (04/22/2010): CUDA support */
-          LambdaRefExp        | DictionaryExp           | KeyDatumPair             |
-          Comprehension       | ListComprehension       | SetComprehension         | DictionaryComprehension      | NaryOp |
-          StringConversion    | YieldExpression         | TemplateFunctionRefExp   | TemplateMemberFunctionRefExp | AlignOfOp |
-          RangeExp            | MagicColonExp           | //SK(08/20/2015): RangeExp and MagicColonExp for Matlab
-          TypeTraitBuiltinOperator | CompoundLiteralExp | TypeExpression |
-          ClassExp            | FunctionParameterRefExp | LambdaExp | NoexceptOp | NonrealRefExp |
-          FoldExpression | AwaitExpression | ChooseExpression,
-          "Expression", "ExpressionTag", false);
+     NEW_NONTERMINAL_MACRO(
+         Expression,
+         UnaryOp | BinaryOp | ExprListExp | VarRefExp | ClassNameRefExp |
+             FunctionRefExp | MemberFunctionRefExp | ValueExp | CallExpression |
+             SizeOfOp | SuperExp | TypeIdOp | ConditionalExp | NewExp |
+             DeleteExp | ThisExp | RefExp | Initializer | VarArgStartOp |
+             VarArgOp | VarArgEndOp | VarArgCopyOp | VarArgStartOneOperandOp |
+             NullExpression | VariantExpression | SubscriptExpression |
+             ColonShapeExp | AsteriskShapeExp |
+             /*UseOnlyExpression     |*/ ImpliedDo | IOItemExpression |
+             /* UseRenameExpression      | */ StatementExpression | AsmOp |
+             LabelRefExp | ActualArgumentExpression |
+             UnknownArrayOrFunctionReference | PseudoDestructorRefExp |
+             CAFCoExpression |
+             CudaKernelExecConfig | /* TV (04/22/2010): CUDA support */
+             LambdaRefExp | DictionaryExp | KeyDatumPair | Comprehension |
+             ListComprehension | SetComprehension | DictionaryComprehension |
+             NaryOp | StringConversion | YieldExpression |
+             TemplateFunctionRefExp | TemplateMemberFunctionRefExp | AlignOfOp |
+             RangeExp | MagicColonExp | // SK(08/20/2015): RangeExp and
+                                        // MagicColonExp for Matlab
+             TypeTraitBuiltinOperator | CompoundLiteralExp | TypeExpression |
+             ClassExp | FunctionParameterRefExp | LambdaExp | NoexceptOp |
+             NonrealRefExp | FoldExpression | AwaitExpression |
+             ChooseExpression,
+         "Expression", "ExpressionTag", false);
 
-  // ***********************************************************************
-  // ***********************************************************************
-  //                       Header Code Declaration
-  // ***********************************************************************
-  // ***********************************************************************
+     // ***********************************************************************
+     // ***********************************************************************
+     //                       Header Code Declaration
+     // ***********************************************************************
+     // ***********************************************************************
 
 #if 1
   // DQ (5/20/2004): Add need_paren to all expression objects so that we can trigger
@@ -575,35 +573,6 @@ Grammar::setUpExpressions ()
      Expression.setFunctionPrototype( "HEADER_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      Expression.setSubTreeFunctionPrototype ( "HEADER_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
   // Expression.excludeFunctionPrototype ( "HEADER_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-
-
-#if USE_UPC_IR_NODES
-  // DQ (2/12/2011): Added support for types to UPC specific sizeof operators.
-  // DQ and Liao (6/10/2008): Added new IR nodes specific to UPC.
-     UpcLocalsizeofExpression.setFunctionPrototype ( "HEADER_UPC_LOCAL_SIZEOF_EXPRESSION", "../Grammar/Expression.code" );
-     UpcLocalsizeofExpression.setDataPrototype ( "SgExpression*", "expression", "= NULL",
-            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     UpcLocalsizeofExpression.setDataPrototype ( "SgType*", "operand_type", "= NULL",
-            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     UpcLocalsizeofExpression.setDataPrototype ( "SgType*", "expression_type", "= NULL",
-            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     UpcBlocksizeofExpression.setFunctionPrototype ( "HEADER_UPC_BLOCK_SIZEOF_EXPRESSION", "../Grammar/Expression.code" );
-     UpcBlocksizeofExpression.setDataPrototype ( "SgExpression*", "expression", "= NULL",
-            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     UpcBlocksizeofExpression.setDataPrototype ( "SgType*", "operand_type", "= NULL",
-            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     UpcBlocksizeofExpression.setDataPrototype ( "SgType*", "expression_type", "= NULL",
-            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     UpcElemsizeofExpression.setFunctionPrototype  ( "HEADER_UPC_ELEM_SIZEOF_EXPRESSION",  "../Grammar/Expression.code" );
-     UpcElemsizeofExpression.setDataPrototype ( "SgExpression*", "expression", "= NULL",
-            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     UpcElemsizeofExpression.setDataPrototype ( "SgType*", "operand_type", "= NULL",
-            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     UpcElemsizeofExpression.setDataPrototype ( "SgType*", "expression_type", "= NULL",
-            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
 
   // DQ (1/14/2006): We should be using SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION instead of
   // SOURCE_POST_CONSTRUCTION_INITIALIZATION_USING_SET_TYPE since we don't want to have a set_type
@@ -852,9 +821,6 @@ Grammar::setUpExpressions ()
      StatementExpression.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      AsmOp.setFunctionSource               ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
 
-     UpcThreads.setFunctionSource          ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     UpcMythread.setFunctionSource         ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-
      UserDefinedUnaryOp.setFunctionSource  ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      UserDefinedBinaryOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
 
@@ -920,14 +886,9 @@ Grammar::setUpExpressions ()
      NoexceptOp.editSubstitute      ( "PRECEDENCE_VALUE", "16" );
 
   // DQ (7/24/2014): Added more general support for type expressions (required for C11 generic macro support.
-     TypeExpression.editSubstitute         ( "PRECEDENCE_VALUE", "16" );
-  // DQ (2/12/2011): Added support for UPC specific sizeof operators.
-     UpcLocalsizeofExpression.editSubstitute ( "PRECEDENCE_VALUE", "16" );
-     UpcBlocksizeofExpression.editSubstitute ( "PRECEDENCE_VALUE", "16" );
-     UpcElemsizeofExpression.editSubstitute  ( "PRECEDENCE_VALUE", "16" );
-
-  // DQ (1/26/2013): I think that this is an error (see test2013_42.C).
-  // TypeIdOp.editSubstitute        ( "PRECEDENCE_VALUE", "16" );
+     TypeExpression.editSubstitute("PRECEDENCE_VALUE", "16");
+     // DQ (1/26/2013): I think that this is an error (see test2013_42.C).
+     // TypeIdOp.editSubstitute        ( "PRECEDENCE_VALUE", "16" );
      TypeIdOp.editSubstitute        ( "PRECEDENCE_VALUE", "16" );
 
      ArrowExp.editSubstitute        ( "PRECEDENCE_VALUE", "16" );
@@ -1835,19 +1796,6 @@ Grammar::setUpExpressions ()
   // LabelAddressVal.setFunctionPrototype ("HEADER_LABEL_ADDRESS_VALUE_EXPRESSION", "../Grammar/Expression.code" );
   // LabelAddressVal.setDataPrototype ( "SgLabelStatement*", "label_statement", "= NULL",
   //                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-  // Liao 6/18/2008, UPC THREADS, MYTHREAD
-     UpcThreads.setFunctionPrototype ( "HEADER_UPC_THREADS_EXPRESSION", "../Grammar/Expression.code" );
-     UpcThreads.setDataPrototype ( "int", "value", "= 0",
-                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     UpcThreads.setDataPrototype ( "std::string", "valueString", "= \"\"",
-                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     UpcMythread.setFunctionPrototype ( "HEADER_UPC_MYTHREAD_EXPRESSION", "../Grammar/Expression.code" );
-     UpcMythread.setDataPrototype ( "int", "value", "= 0",
-                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     UpcMythread.setDataPrototype ( "std::string", "valueString", "= \"\"",
-                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      FunctionCallExp.setFunctionPrototype ( "HEADER_FUNCTION_CALL_EXPRESSION", "../Grammar/Expression.code" );
   // FunctionCallExp.editSubstitute       ( "LIST_FUNCTION_RETURN_TYPE", "void" );
@@ -3022,9 +2970,6 @@ Grammar::setUpExpressions ()
      DotStarOp.setFunctionSource ( "SOURCE_DOT_STAR_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      ArrowStarOp.setFunctionSource ( "SOURCE_ARROW_STAR_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
 
-     UpcThreads.setFunctionSource ( "SOURCE_UPC_THREADS_EXPRESSION","../Grammar/Expression.code" );
-     UpcMythread.setFunctionSource ( "SOURCE_UPC_MYTHREAD_EXPRESSION","../Grammar/Expression.code" );
-
      EqualityOp.setFunctionSource       ( "SOURCE_EQUALITY_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      LessThanOp.setFunctionSource       ( "SOURCE_LESS_THAN_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      GreaterThanOp.setFunctionSource    ( "SOURCE_GREATER_THAN_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
@@ -3079,11 +3024,6 @@ Grammar::setUpExpressions ()
 
   // DQ (7/24/2014): Added more general support for type expressions (required for C11 generic macro support.
      TypeExpression.setFunctionSource             ( "SOURCE_TYPE_EXPRESSION","../Grammar/Expression.code" );
-
-  // DQ (2/12/2011): Added support for UPC specific sizeof operators.
-     UpcLocalsizeofExpression.setFunctionSource ( "SOURCE_UPC_LOCAL_SIZEOF_EXPRESSION","../Grammar/Expression.code" );
-     UpcBlocksizeofExpression.setFunctionSource ( "SOURCE_UPC_BLOCK_SIZEOF_EXPRESSION","../Grammar/Expression.code" );
-     UpcElemsizeofExpression.setFunctionSource ( "SOURCE_UPC_ELEM_SIZEOF_EXPRESSION","../Grammar/Expression.code" );
 
      TypeIdOp.setFunctionSource ( "SOURCE_TYPE_ID_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      PointerDerefExp.setFunctionSource ( "SOURCE_POINTER_DEREFERENCE_EXPRESSION","../Grammar/Expression.code" );
@@ -3190,13 +3130,6 @@ Grammar::setUpExpressions ()
      //FMZ (2/6/2009): Added for CoArray Reference
      CAFCoExpression.setFunctionSource ( "SOURCE_CO_EXPRESSION", "../Grammar/Expression.code" );
 
-#if USE_UPC_IR_NODES
-  // DQ and Liao (6/10/2008): Added new IR nodes specific to UPC.
-     UpcLocalsizeofExpression.setFunctionSource ( "SOURCE_UPC_LOCAL_SIZEOF_EXPRESSION", "../Grammar/Expression.code" );
-     UpcBlocksizeofExpression.setFunctionSource ( "SOURCE_UPC_BLOCK_SIZEOF_EXPRESSION", "../Grammar/Expression.code" );
-     UpcElemsizeofExpression.setFunctionSource  ( "SOURCE_UPC_ELEM_SIZEOF_EXPRESSION",  "../Grammar/Expression.code" );
-#endif
-
      UserDefinedUnaryOp.setFunctionSource  ( "SOURCE_USER_DEFINED_UNARY_EXPRESSION",  "../Grammar/Expression.code" );
      UserDefinedBinaryOp.setFunctionSource ( "SOURCE_USER_DEFINED_BINARY_EXPRESSION", "../Grammar/Expression.code" );
 
@@ -3273,9 +3206,6 @@ Grammar::setUpExpressions ()
   // DQ (11/28/2011): Adding template declaration support to the AST.
   // TemplateParameterVal.setFunctionSource   ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
 
-     UpcThreads.setFunctionSource             ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
-     UpcMythread.setFunctionSource            ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
-
      BoolValExp.editSubstitute     ( "GENERIC_TYPE", "SgTypeBool" );
      NullptrValExp.editSubstitute  ( "GENERIC_TYPE", "SgTypeNullptr" );
      StringVal.editSubstitute      ( "GENERIC_TYPE", "SgTypeString" );
@@ -3327,9 +3257,6 @@ Grammar::setUpExpressions ()
   // DQ (11/28/2011): Adding template declaration support to the AST.
   // TemplateParameterVal.editSubstitute   ( "GENERIC_TYPE", "SgTemplateType" );
   // TemplateParameterVal.editSubstitute   ( "GENERIC_TYPE", "SgTypeInt" );
-
-     UpcThreads.editSubstitute             ( "GENERIC_TYPE", "SgTypeInt" );
-     UpcMythread.editSubstitute            ( "GENERIC_TYPE", "SgTypeInt" );
 
   // DQ (1/16/2006): This is not IR node specific code since we don't store the type explicitly
   // FunctionCallExp.setFunctionSource     ( "SOURCE_GET_TYPE_CALLING_GET_EXPRESSION_TYPE_EXPRESSION",

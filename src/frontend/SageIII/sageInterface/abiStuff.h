@@ -6,10 +6,7 @@
 #include <string>
 #include <iosfwd>
 
-//! Support for cross compilation or extended UPC support
-/*! UPC data type sizes depend on a specified runtime implementation,
- *  So we allow users to optionally provide customized sizes and alignments. 
- */
+//! Support for cross compilation or customized primitive type layouts.
 struct StructCustomizedSizes
  {
     // optional values like x86, x86-64, ia64, sparcv9, sparcv8 etc.
@@ -47,26 +44,6 @@ struct StructCustomizedSizes
     size_t sz_alignof_size_t;
     size_t sz_wchar;
     size_t sz_alignof_wchar;
-
-    //UPC specified sizes
-    size_t sz_shared_ptr; 
-    size_t sz_alignof_shared_ptr;
-    size_t sz_pshared_ptr; 
-    size_t sz_alignof_pshared_ptr;
-    size_t sz_mem_handle;
-    size_t sz_alignof_mem_handle;
-    size_t sz_reg_handle;
-    size_t sz_alignof_reg_handle;
-
-    size_t sz_alignof_dbl_1st;
-    size_t sz_alignof_int64_1st;
-    size_t sz_alignof_sharedptr_1st ;
-    size_t sz_alignof_psharedptr_1st ;
-    size_t sz_alignof_dbl_innerstruct;
-    size_t sz_alignof_int64_innerstruct;
-    size_t sz_alignof_sharedptr_innerstruct ;
-    size_t sz_alignof_psharedptr_innerstruct;
-    size_t sz_maxblocksz;
  };
 
 struct StructLayoutEntry {
@@ -192,7 +169,7 @@ class SystemPrimitiveTypeLayoutGenerator: public ChainableTypeLayoutGenerator {
   virtual StructLayoutInfo layoutType(SgType* t) const;
 };
 
-//! Layout generator for customized primitive types, mostly for UPC relying on Berkeley runtime library now
+//! Layout generator for customized primitive types.
 class ROSE_DLL_API CustomizedPrimitiveTypeLayoutGenerator: public ChainableTypeLayoutGenerator {
   public:
   CustomizedPrimitiveTypeLayoutGenerator(ChainableTypeLayoutGenerator* next,StructCustomizedSizes* custom_sizes)

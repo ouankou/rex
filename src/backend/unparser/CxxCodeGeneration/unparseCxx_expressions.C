@@ -152,10 +152,10 @@ Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression* expr, SgUnpars
           case UNSIGNED_LONG_LONG_INT_VAL: { unparseULongLongIntVal(expr, info); break; }
           case UNSIGNED_LONG_INT_VAL: { unparseULongIntVal(expr, info); break; }
           case FLOAT_VAL:             { unparseFloatVal(expr, info); break; }
-          case LONG_DOUBLE_VAL:       { unparseLongDoubleVal(expr, info); break; }
-       // Liao, 6/18/2008 , UPC identifiers 
-          case UPC_THREADS:           { unparseUpcThreads(expr, info); break; }
-          case UPC_MYTHREAD:          { unparseUpcMythread(expr, info); break; }
+          case LONG_DOUBLE_VAL: {
+            unparseLongDoubleVal(expr, info);
+            break;
+          }
           case FUNC_CALL:             { unparseFuncCall(expr, info); break; }
           case POINTST_OP:            { unparsePointStOp(expr, info); break; }
           case RECORD_REF:            { unparseRecRef(expr, info); break; }
@@ -184,12 +184,13 @@ Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression* expr, SgUnpars
           case UNARY_MINUS_OP:        { unparseUnaryMinusOp(expr, info); break; }
           case UNARY_ADD_OP:          { unparseUnaryAddOp(expr, info); break; }
 
-          case SIZEOF_OP:             { unparseSizeOfOp(expr, info); break; }
-          case UPC_LOCAL_SIZEOF_EXPR: { unparseUpcLocalSizeOfOp(expr, info); break; }
-          case UPC_BLOCK_SIZEOF_EXPR: { unparseUpcBlockSizeOfOp(expr, info); break; }
-          case UPC_ELEM_SIZEOF_EXPR:  { unparseUpcElemSizeOfOp(expr, info); break; }
+          case SIZEOF_OP: {
+            unparseSizeOfOp(expr, info);
+            break;
+          }
 
-       // DQ (6/20/2013): Added alignof operator to support C/C++ extensions (used in EDG 4.7).
+            // DQ (6/20/2013): Added alignof operator to support C/C++
+            // extensions (used in EDG 4.7).
           case ALIGNOF_OP:            { unparseAlignOfOp(expr, info); break; }
 
        // DQ (2/5/2015): Added missing C++11 support.
@@ -4715,25 +4716,6 @@ Unparse_ExprStmt::unparseComplexVal(SgExpression* expr, SgUnparse_Info& info)
      }
    }
 
-void 
-Unparse_ExprStmt::unparseUpcThreads(SgExpression* expr, SgUnparse_Info& info)
-   {
-     SgUpcThreads* upc_threads = isSgUpcThreads(expr);
-     ASSERT_not_null(upc_threads);
-
-     curprint ("THREADS ");
-   }
-
-void 
-Unparse_ExprStmt::unparseUpcMythread(SgExpression* expr, SgUnparse_Info& info)
-   {
-     SgUpcMythread* upc_mythread = isSgUpcMythread(expr);
-     ASSERT_not_null(upc_mythread);
-
-     curprint ("MYTHREAD ");
-   }
-
-
 void
 Unparse_ExprStmt::unparseTypeTraitBuiltinOperator(SgExpression* expr, SgUnparse_Info& info)
    {
@@ -6186,114 +6168,6 @@ Unparse_ExprStmt::unparseNoexceptOp(SgExpression* expr, SgUnparse_Info & info)
      unparseExpression(noexcept_op->get_operand_expr(), info);
 
      curprint(")");
-   }
-
-
-void
-Unparse_ExprStmt::unparseUpcLocalSizeOfOp(SgExpression* expr, SgUnparse_Info & info)
-   {
-     SgUpcLocalsizeofExpression* sizeof_op = isSgUpcLocalsizeofExpression(expr);
-     ASSERT_not_null(sizeof_op);
-
-     curprint ( "upc_localsizeof(");
-     if (sizeof_op->get_expression() != NULL)
-        {
-          ASSERT_not_null(sizeof_op->get_expression());
-          unparseExpression(sizeof_op->get_expression(), info);
-        }
-#if 1
-    // DQ (2/12/2011): Leave this here until I'm sure that we don't need to handle types.
-       else
-        {
-          ASSERT_not_null(sizeof_op->get_operand_type());
-          SgUnparse_Info info2(info);
-          info2.unset_SkipBaseType();
-
-          info2.set_SkipClassDefinition();
-
-#if 0
-          printf ("In unparseUpcLocalSizeOfOp(expr = %p): Added call to set_SkipEnumDefinition() for symetry with call to set_SkipClassDefinition() \n",expr);
-#endif
-       // DQ (9/9/2016): Added call to set_SkipEnumDefinition().
-          info2.set_SkipEnumDefinition();
-
-          info2.unset_isTypeFirstPart();
-          info2.unset_isTypeSecondPart();
-          unp->u_type->unparseType(sizeof_op->get_operand_type(), info2);
-        }
-#endif
-     curprint ( ")");
-   }
-
-void
-Unparse_ExprStmt::unparseUpcBlockSizeOfOp(SgExpression* expr, SgUnparse_Info & info)
-   {
-     SgUpcBlocksizeofExpression* sizeof_op = isSgUpcBlocksizeofExpression(expr);
-     ASSERT_not_null(sizeof_op);
-
-     curprint ( "upc_blocksizeof(");
-     if (sizeof_op->get_expression() != NULL)
-        {
-          ASSERT_not_null(sizeof_op->get_expression());
-          unparseExpression(sizeof_op->get_expression(), info);
-        }
-#if 1
-    // DQ (2/12/2011): Leave this here until I'm sure that we don't need to handle types.
-       else
-        {
-          ASSERT_not_null(sizeof_op->get_operand_type());
-          SgUnparse_Info info2(info);
-          info2.unset_SkipBaseType();
-
-          info2.set_SkipClassDefinition();
-
-#if 0
-          printf ("In unparseUpcBlockSizeOfOp(expr = %p): Added call to set_SkipEnumDefinition() for symetry with call to set_SkipClassDefinition() \n",expr);
-#endif
-       // DQ (9/9/2016): Added call to set_SkipEnumDefinition().
-          info2.set_SkipEnumDefinition();
-
-          info2.unset_isTypeFirstPart();
-          info2.unset_isTypeSecondPart();
-          unp->u_type->unparseType(sizeof_op->get_operand_type(), info2);
-        }
-#endif
-     curprint ( ")");
-   }
-
-void
-Unparse_ExprStmt::unparseUpcElemSizeOfOp(SgExpression* expr, SgUnparse_Info & info)
-   {
-     SgUpcElemsizeofExpression* sizeof_op = isSgUpcElemsizeofExpression(expr);
-     ASSERT_not_null(sizeof_op);
-
-     curprint ( "upc_elemsizeof(");
-     if (sizeof_op->get_expression() != NULL)
-        {
-          ASSERT_not_null(sizeof_op->get_expression());
-          unparseExpression(sizeof_op->get_expression(), info);
-        }
-#if 1
-    // DQ (2/12/2011): Leave this here until I'm sure that we don't need to handle types.
-       else
-        {
-          ASSERT_not_null(sizeof_op->get_operand_type());
-          SgUnparse_Info info2(info);
-          info2.unset_SkipBaseType();
-
-          info2.set_SkipClassDefinition();
-#if 0
-          printf ("In unparseUpcElemSizeOfOp(expr = %p): Added call to set_SkipEnumDefinition() for symetry with call to set_SkipClassDefinition() \n",expr);
-#endif
-       // DQ (9/9/2016): Added call to set_SkipEnumDefinition().
-          info2.set_SkipEnumDefinition();
-
-          info2.unset_isTypeFirstPart();
-          info2.unset_isTypeSecondPart();
-          unp->u_type->unparseType(sizeof_op->get_operand_type(), info2);
-        }
-#endif
-     curprint ( ")");
    }
 
 void Unparse_ExprStmt::unparseTypeIdOp(SgExpression* expr, SgUnparse_Info& info)

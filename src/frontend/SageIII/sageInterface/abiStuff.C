@@ -111,18 +111,6 @@ StructLayoutInfo NonpackedTypeLayoutGenerator::layoutType(SgType* t) const {
       layout.fields.clear();
       SgExpression* numElements = isSgArrayType(t)->get_index();
 
-      //Adjustment for UPC array like a[100*THREADS],treat it as a[100]
-      // Liao, 8/7/2008
-      if (isUpcArrayWithThreads(isSgArrayType(t)))
-      {
-        SgMultiplyOp* multiply = isSgMultiplyOp(isSgArrayType(t)->get_index());
-        ROSE_ASSERT(multiply);
-
-     // DQ (9/26/2011): Do constant folding if required.
-     // SageInterface::constantFolding(multiply);
-
-        numElements = multiply->get_lhs_operand();
-      }  
       SgValueExp* valuexpr = isSgValueExp(numElements);
       if (valuexpr == NULL) {
         cerr << "Error: trying to compute static size of an array with non-constant size" << endl;
@@ -361,35 +349,11 @@ StructLayoutInfo CustomizedPrimitiveTypeLayoutGenerator::layoutType(SgType* t) c
       break;
     }
     // extended types
-    case V_SgPointerType:  // UPC extension
-    {
-      // pointer to shared: phaseless or not
-      SgType * pointed_type = isSgPointerType(t)->get_base_type();
-      if(isSgModifierType(pointed_type))
-      {
-      if (isUpcSharedModifierType(isSgModifierType(pointed_type))){
-        if (isUpcPhaseLessSharedType(pointed_type))
-        {
-//cout<<"Found a pointer to  phaseless UPC shared type."<<endl;          
-          layout.size = custom_sizes->sz_pshared_ptr;
-          layout.alignment= custom_sizes->sz_alignof_pshared_ptr;
-        }
-        else
-        {
-//cout<<"Found a pointer to  phased UPC shared type."<<endl;          
-          layout.size = custom_sizes->sz_shared_ptr;
-          layout.alignment= custom_sizes->sz_alignof_shared_ptr;
-          ROSE_ASSERT(layout.alignment!=0);
-        }
-       }
-      }
-      else
-      {
-        layout.size = custom_sizes->sz_void_ptr; 
-        layout.alignment = custom_sizes->sz_alignof_void_ptr; 
-      }
+    case V_SgPointerType: {
+      layout.size = custom_sizes->sz_void_ptr;
+      layout.alignment = custom_sizes->sz_alignof_void_ptr;
       break;
-    } 
+    }
     case V_SgReferenceType: //{layout.size = 4; layout.alignment = 4; break;}
     {
       layout.size = custom_sizes->sz_reference;

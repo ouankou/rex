@@ -90,7 +90,7 @@ void RoseVisitor::visit ( SgNode* node)
 #if 0
   if (SgWhileStmt* sw = isSgWhileStmt(node))
   {
-    // Internal function, called by SageInterface::ensureBasicBlockAsBodyOfUpcForAll(SgUpcForAllStatement* fs) only.    
+    // Internal function, called by specialized SageInterface helpers only.
     //    ensureBasicBlock_aux (sw, &SgWhileStmt::get_body, &SgWhileStmt::set_body);
   }
 #endif
@@ -291,7 +291,6 @@ main ( int argc, char* argv[])
 
   is_OpenMP_language();
   is_CAF_language();
-  is_UPC_dynamic_threads();
   is_mixed_Fortran_and_C_language();
 
     SgFilePtrList file_list = project->get_files();
@@ -343,4 +342,3 @@ main ( int argc, char* argv[])
   moveVariableDeclaration (var_decl, fs);
   return backend(project);
 }
-

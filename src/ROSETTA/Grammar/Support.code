@@ -1315,61 +1315,6 @@ HEADER_FUNCTION_MODIFIER_START
 HEADER_FUNCTION_MODIFIER_END
 
 
-HEADER_UPC_ACCESS_MODIFIER_START
-
-       // UPC access specifiers (unspecified, shared, strict, relaxed)
-
-      /*! \brief UPC Access Modifiers (only one value can be specified)
-
-          Unified Parallel C modifiers (shared, strict, relaxed).
-
-          \internal Only one value can be specified (at least in C and C++)
-       */
-          enum upc_access_modifier_enum
-             {
-            // Bit values can support multiple values in a single enum type
-               e_unknown,       /*!< error value */
-               e_default,       /*!< default value */
-            // DQ and Liao (6/13/2008): "shared" can be used with "strict" and "relaxed" so it must be handled separately.
-            // e_upc_shared,    /*!< UPC shared */
-               e_upc_strict,    /*!< UPC strict */
-               e_upc_relaxed,   /*!< UPC relaxed */
-               e_last_modifier  /*!< last value (upper bound on range of values, used in error checking) */
-             };
-
-       // Copy constructor
-          $CLASSNAME ( const $CLASSNAME & X );
-
-       // Assignment Operator
-          $CLASSNAME & operator= ( const $CLASSNAME & X );
-
-          void post_construction_initialization() override;
-
-          bool isUnknown() const;
-          void setUnknown();
-
-          bool isDefault() const;
-          void setDefault();
-
-       // bool isUPC_Shared() const;
-       // void setUPC_Shared();
-
-          bool isUPC_Strict() const;
-          void setUPC_Strict();
-
-          bool isUPC_Relaxed() const;
-          void setUPC_Relaxed();
-
-          std::string displayString() const;
-          void display ( std::string label ) const;
-          friend std::ostream & operator<< ( std::ostream & os, const SgUPC_AccessModifier & m );
-          friend bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs);
-
-       // DQ (2/4/2006): Added mechanism to clear all bits
-          void reset();
-
-HEADER_UPC_ACCESS_MODIFIER_END
-
 // Rasmussen (4/4/2020): Added SgStructureModifier for Jovial tables
 HEADER_STRUCTURE_MODIFIER_START
 
@@ -1911,12 +1856,10 @@ HEADER_TYPE_MODIFIER_START
 
           void post_construction_initialization() override;
 
-          SgUPC_AccessModifier     & get_upcModifier();
           SgConstVolatileModifier  & get_constVolatileModifier();
           SgElaboratedTypeModifier & get_elaboratedTypeModifier();
 
        // RV (2/2/2006): Added 'const' versions of above member functions.
-          const SgUPC_AccessModifier     & get_upcModifier(void) const;
           const SgConstVolatileModifier  & get_constVolatileModifier(void) const;
           const SgElaboratedTypeModifier & get_elaboratedTypeModifier(void) const;
 
@@ -3280,91 +3223,6 @@ void SgFunctionModifier::reset()
 
 SOURCE_FUNCTION_MODIFIER_END
 
-SOURCE_UPC_ACCESS_MODIFIER_START
-// Copy constructor
-$CLASSNAME::$CLASSNAME ( const $CLASSNAME & X )
-   {
-     p_modifier = X.p_modifier;
-   }
-
-$CLASSNAME &
-$CLASSNAME::operator= ( const $CLASSNAME & X )
-   {
-     p_modifier = X.p_modifier;
-     return *this;
-   }
-
-void
-$CLASSNAME::post_construction_initialization()
-   {
-     p_modifier = e_default;
-   }
-
-bool $CLASSNAME::isUnknown() const { return p_modifier == e_unknown; }
-void $CLASSNAME::setUnknown()      { p_modifier = e_unknown; }
-
-bool $CLASSNAME::isDefault() const { return p_modifier == e_default; }
-void $CLASSNAME::setDefault()      { p_modifier = e_default; }
-
-// bool $CLASSNAME::isUPC_Shared() const { return p_modifier == e_upc_shared; }
-// void $CLASSNAME::setUPC_Shared()      { p_modifier = e_upc_shared; }
-
-bool $CLASSNAME::isUPC_Strict() const { return p_modifier == e_upc_strict; }
-void $CLASSNAME::setUPC_Strict()      { p_modifier = e_upc_strict; }
-
-bool $CLASSNAME::isUPC_Relaxed() const { return p_modifier == e_upc_relaxed; }
-void $CLASSNAME::setUPC_Relaxed()      { p_modifier = e_upc_relaxed; }
-
-string
-$CLASSNAME::displayString() const
-   {
-     std::string s = "$CLASSNAME(";
-     s += std::string("isUnknown() = ")     + std::string(isUnknown()     ? "true " : "false ");
-     s += std::string("isDefault() = ")     + std::string(isDefault()     ? "true " : "false ");
-  // s += std::string("isUPC_Shared() = ")  + std::string(isUPC_Shared()  ? "true " : "false ");
-     s += std::string("isUPC_Strict() = ")  + std::string(isUPC_Strict()  ? "true " : "false ");
-     s += std::string("isUPC_Relaxed() = ") + std::string(isUPC_Relaxed() ? "true " : "false ");
-
-  // DQ (6/13/2008): Added support for layout and shared use with "strict" or "relaxed"
-     s += std::string("get_isShared() = ")  + std::string(get_isShared() ? "true " : "false ");
-     s += std::string("get_layout() = ")  + Rose::StringUtility::numberToString(get_layout());
-
-     s += ")";
-     return s;
-   }
-
-void
-$CLASSNAME::display ( std::string label ) const
-   {
-  // DQ (6/25/2020): If we call display, then we mean for it to be displayed, not hidden.
-     printf ("In $CLASSNAME::display(%s) \n",label.c_str());
-     printf ("%s \n",displayString().c_str());
-   }
-
-std::ostream & operator<< ( std::ostream & os, const SgUPC_AccessModifier & m)
-   {
-      os << m.get_modifier();
-     return os;
-   }
-
-bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs)
-{
-  return
-         (lhs.isUnknown()     == rhs.isUnknown()    ) &&
-         (lhs.isDefault()     == rhs.isDefault()    ) &&
-         (lhs.isUPC_Strict()  == rhs.isUPC_Strict() ) &&
-         (lhs.isUPC_Relaxed() == rhs.isUPC_Relaxed()) &&
-       true;
-}
-
-// DQ (2/4/2006): Added mechamism to clear all bits
-void $CLASSNAME::reset()
-   {
-     setDefault();
-   }
-
-SOURCE_UPC_ACCESS_MODIFIER_END
-
 // Rasmussen (4/4/2020): Added SgStructureModifier for Jovial tables
 SOURCE_STRUCTURE_MODIFIER_START
 
@@ -3854,7 +3712,6 @@ SgTypeModifier::SgTypeModifier ( const SgTypeModifier & X )
    {
      p_modifierVector         = X.p_modifierVector;
      p_constVolatileModifier  = X.p_constVolatileModifier;
-     p_upcModifier            = X.p_upcModifier;
      p_elaboratedTypeModifier = X.p_elaboratedTypeModifier;
    }
 
@@ -3863,7 +3720,6 @@ SgTypeModifier::operator= ( const SgTypeModifier & X )
    {
      p_modifierVector         = X.p_modifierVector;
      p_constVolatileModifier  = X.p_constVolatileModifier;
-     p_upcModifier            = X.p_upcModifier;
      p_elaboratedTypeModifier = X.p_elaboratedTypeModifier;
      return *this;
    }
@@ -4098,7 +3954,6 @@ $CLASSNAME::displayString() const
      s += std::string("address_space_value = ")        + Rose::StringUtility::numberToString((int)p_address_space_value)        + " ";
      s += std::string("vector_size = ")                + Rose::StringUtility::numberToString((int)p_vector_size)                + " ";
      s += std::string("   ")                           + get_constVolatileModifier().displayString()                            + " ";
-     s += std::string("   ")                           + get_upcModifier().displayString()                                      + " ";
      s += std::string("   ")                           + get_structureModifier().displayString()                                + " ";
      s += std::string("   ")                           + get_elaboratedTypeModifier().displayString();
      s += ")";
@@ -4143,7 +3998,6 @@ bool SgTypeModifier::isIdentity() const
 bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs)
    {
      return
-          (lhs.get_upcModifier()            == rhs.get_upcModifier()           ) &&
           (lhs.get_structureModifier()      == rhs.get_structureModifier()     ) &&
           (lhs.get_constVolatileModifier()  == rhs.get_constVolatileModifier() ) &&
           (lhs.get_elaboratedTypeModifier() == rhs.get_elaboratedTypeModifier()) &&
@@ -4197,13 +4051,6 @@ $CLASSNAME::get_constVolatileModifier ()
      return p_constVolatileModifier;
    }
 
-SgUPC_AccessModifier &
-$CLASSNAME::get_upcModifier ()
-   {
-     ROSE_ASSERT (this != NULL);
-     return p_upcModifier;
-   }
-
 SgStructureModifier &
 $CLASSNAME::get_structureModifier ()
    {
@@ -4228,7 +4075,6 @@ void $CLASSNAME::reset()
      setDefault();
 
      get_constVolatileModifier().reset();
-     get_upcModifier().reset();
      get_structureModifier().reset();
      get_elaboratedTypeModifier().reset();
    }
@@ -4239,14 +4085,6 @@ $CLASSNAME::get_constVolatileModifier (void) const
    {
      ROSE_ASSERT (this != NULL);
      return p_constVolatileModifier;
-   }
-
-// RV (2/2/2006): Created this 'const' version of the member function.
-const SgUPC_AccessModifier &
-$CLASSNAME::get_upcModifier (void) const
-   {
-     ROSE_ASSERT (this != NULL);
-     return p_upcModifier;
    }
 
 const SgStructureModifier &
@@ -6124,14 +5962,12 @@ public:
                e_c11_standard,
                e_c14_standard,
                e_c18_standard,
-               e_upc_standard,
                e_cxx98_standard,
                e_cxx03_standard,
                e_cxx11_standard,
                e_cxx14_standard,
                e_cxx17_standard,
                e_cxx20_standard,
-               e_upcxx_standard,
                e_f77_standard,
                e_f90_standard,
                e_f95_standard,
@@ -6188,9 +6024,6 @@ public:
           bool get_C18_gnu_only (void) const;
           void set_C18_gnu_only (void);
 
-          bool get_UPC_only (void) const;
-          void set_UPC_only (void);
-
           bool get_Cxx98_only (void) const;
           void set_Cxx98_only (void);
 
@@ -6226,9 +6059,6 @@ public:
 
           bool get_Cxx20_gnu_only (void) const;
           void set_Cxx20_gnu_only (void);
-
-          bool get_UPCxx_only (void) const;
-          void set_UPCxx_only (void);
 
           bool get_F77_only     (void) const;
           void set_F77_only     (void);
@@ -16001,7 +15831,6 @@ SgFile::initialization()
 
   // DQ (7/13/2004): Not previously initialized!
      p_C_only                  = false;
-     p_upc_threads             = 0;
 
      p_Cxx_only                = false;
 
@@ -16313,14 +16142,12 @@ std::string SgFile::display_standard(enum standard_enum e_std)
           case e_c11_standard: s = "e_c11_standard"; break;
           case e_c14_standard: s = "e_c14_standard"; break;
           case e_c18_standard: s = "e_c18_standard"; break;
-          case e_upc_standard: s = "e_upc_standard"; break;
           case e_cxx98_standard: s = "e_cxx98_standard"; break;
           case e_cxx03_standard: s = "e_cxx03_standard"; break;
           case e_cxx11_standard: s = "e_cxx11_standard"; break;
           case e_cxx14_standard: s = "e_cxx14_standard"; break;
           case e_cxx17_standard: s = "e_cxx17_standard"; break;
           case e_cxx20_standard: s = "e_cxx20_standard"; break;
-          case e_upcxx_standard: s = "e_upcxx_standard"; break;
           case e_f77_standard: s = "e_f77_standard"; break;
           case e_f90_standard: s = "e_f90_standard"; break;
           case e_f95_standard: s = "e_f95_standard"; break;
@@ -16378,9 +16205,6 @@ void SgFile::set_C18_only (void) { set_C_only(true); set_Cxx_only(false); p_stan
 bool SgFile::get_C18_gnu_only (void) const { return p_standard == e_c18_standard && p_gnu_standard; }
 void SgFile::set_C18_gnu_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c18_standard; p_gnu_standard = true; }
 
-bool SgFile::get_UPC_only (void) const { return p_standard == e_upc_standard; }
-void SgFile::set_UPC_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_upc_standard; }
-
 bool SgFile::get_Cxx98_only (void) const { return p_standard == e_cxx98_standard; }
 void SgFile::set_Cxx98_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx98_standard; }
 
@@ -16416,9 +16240,6 @@ void SgFile::set_Cxx20_only (void) { set_C_only(false); set_Cxx_only(true); p_st
 
 bool SgFile::get_Cxx20_gnu_only (void) const { return p_standard == e_cxx20_standard && p_gnu_standard; }
 void SgFile::set_Cxx20_gnu_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx20_standard; p_gnu_standard = true; }
-
-bool SgFile::get_UPCxx_only (void) const { return p_standard == e_upcxx_standard; }
-void SgFile::set_UPCxx_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_upcxx_standard; }
 
 bool SgFile::get_F77_only     (void) const { return p_standard == e_f77_standard; }
 void SgFile::set_F77_only     (void) { set_Fortran_only(true); p_standard = e_f77_standard; }
@@ -16778,7 +16599,6 @@ SgFile::display ( const std::string & label ) const
      printf ("     p_output_warnings                           = %s \n",(p_output_warnings == true) ? "true" : "false");
 
      printf ("     p_C_only()                                  = %s \n",(p_C_only == true)   ? "true" : "false");
-     printf ("     p_upc_threads                               = %s (value=%d) \n",  (p_upc_threads > 1) ? "true" : "false",p_upc_threads);
 
   // DQ (3/28/2013): Added support to specify C89 support, so that default can be C99 support (same as EDG3x branch).
      printf ("     p_Cxx_only()                                = %s \n",(p_Cxx_only == true) ? "true" : "false");
@@ -16938,8 +16758,6 @@ X root
 X verbose
 X output_warnings
 X C_only
-X UPC_only
-X upc_threads
 X C99_only
 X Cxx_only
 X Fortran_only

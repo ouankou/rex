@@ -20,9 +20,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildTemplateParameter()
    buildTemplateParameterVal()
 
-   buildUpcThreads()
-   buildUpcMyThread()
-
 // Is this Java or Python?
    buildSuperExp()
    buildClassExp()
@@ -178,8 +175,6 @@ Additional functions to test (specific to sageBuilder.C):
 // This might be an internal support function (not a part of SageBuilder namespace)
    generate_type_list()
 
-   buildUpcBlockStarType()
-
    buildImaginaryType()
    buildTupleType()
    buildRangeExp()
@@ -259,7 +254,6 @@ Additional functions to test (specific to sageBuilder.C):
 
 
    
-
 
 
 

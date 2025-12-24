@@ -568,14 +568,6 @@ bool isPointerToNonConstType(SgType* type)
     size_t result=1; 
     SgExpression * indexExp =  t->get_index();
 
-    //strip off THREADS for UPC array with a dimension like dim*THREADS
-    if (isUpcArrayWithThreads(t))
-    {
-      SgMultiplyOp* multiply = isSgMultiplyOp(indexExp);
-      ROSE_ASSERT(multiply);
-      indexExp = multiply->get_lhs_operand();
-    }
-
     // assume dimension default to 1 if not specified ,such as a[] 
     if ((indexExp == NULL) || isSgNullExpression(indexExp)) 
       result = 1;
@@ -1154,178 +1146,6 @@ bool isCopyConstructible(SgType* type)
     }
   }
 
-  bool isUpcSharedModifierType (SgModifierType* mod_type)
-  {
-    ROSE_ASSERT(mod_type);
-    if (mod_type->get_typeModifier().get_upcModifier().get_isShared())
-      return true;
-    else 
-      return false;
-  }
-
-  bool isUpcSharedArrayType (SgArrayType* array_type)
-  {
-    bool result = false;
-    ROSE_ASSERT(array_type);
-    SgType* base_type=getArrayElementType(array_type); 
-    if (isSgModifierType(base_type))
-      result = isUpcSharedModifierType(isSgModifierType(base_type));
-    return result;
-  }
-
-  bool isUpcStrictSharedModifierType(SgModifierType* mod_type)
-  {
-
-    ROSE_ASSERT(isUpcSharedModifierType(mod_type));
-    bool result = false;
-    result = mod_type->get_typeModifier().get_upcModifier().isUPC_Strict();
-    return result;
-  }
-
-  //! Get the block size of a UPC shared type, including Modifier types and array of modifier types (shared arrays)
-  size_t getUpcSharedBlockSize(SgType* t)
-  {
-    SgModifierType * mod_type=NULL;  
-    bool isUpc = isUpcSharedType(t,&mod_type);
-    ROSE_ASSERT(isUpc);
-    return getUpcSharedBlockSize(mod_type);
-  }
-
-  size_t getUpcSharedBlockSize(SgModifierType* mod_type)
-  {
-    ROSE_ASSERT(isUpcSharedModifierType(mod_type));
-
-    int result =  mod_type->get_typeModifier().get_upcModifier().get_layout();
-    if (result == -1 ) // unspecified block size is treated as size 1
-      result = 1;
-    return result;
-  }
-
-  //! Check if a type is a UPC shared type, including shared array, shared pointers etc.
-  bool isUpcSharedType(SgType* t, SgModifierType ** mod_type_out/* = NULL*/)
-  {
-    return (hasUpcSharedType(t,mod_type_out) && !isUpcPrivateToSharedType(t));
-  }
-
-  //! Has a UPC shared type?
-  bool hasUpcSharedType(SgType* sg_type,SgModifierType ** mod_type_out/*=NULL*/)
-  {
-    ROSE_ASSERT(sg_type);
-    bool result = false;
-
-    if (isSgModifierType(sg_type))
-    {
-      SgModifierType * mod_type = isSgModifierType(sg_type);
-      if (isUpcSharedModifierType(mod_type))
-      {  
-        if (mod_type_out) *mod_type_out = mod_type;
-        result = true;
-      }  
-      else 
-        result = hasUpcSharedType( (isSgModifierType(sg_type))->get_base_type(), mod_type_out);
-    }  
-    else if (isSgPointerType(sg_type))
-      result = hasUpcSharedType( (isSgPointerType(sg_type))->get_base_type(),mod_type_out );
-    else if (isSgReferenceType(sg_type))
-      result = hasUpcSharedType( (isSgReferenceType(sg_type))->get_base_type(),mod_type_out );
-    else if (isSgArrayType(sg_type))
-      result = hasUpcSharedType( (isSgArrayType(sg_type))->get_base_type(),mod_type_out );
-    else if (isSgTypedefType(sg_type))
-      result = hasUpcSharedType( (isSgTypedefType(sg_type))->get_base_type(), mod_type_out);
-
-    if ((result == false) &&(mod_type_out))  *mod_type_out = NULL;
-    return result;
-  } //hasUpcSharedType
-
-  //! Is UPC private-to-shared type? Judge the order of SgPointer and SgUPC_AccessModifier
-  bool isUpcPrivateToSharedType(SgType* t)
-  {
-    bool check = hasUpcSharedType(t);
-    if (check==false) return false;
-    bool pointerFirst = false;
-    SgType* currentType = t;
-
-    while (true) 
-    {
-      if (isSgModifierType(currentType))
-      {
-        SgModifierType * mod_type = isSgModifierType(currentType);
-        if (mod_type->get_typeModifier().get_upcModifier().get_isShared())
-          break; //Reaches SgUPC_AccessModifier,exit the while loop
-        else 
-          currentType = isSgModifierType(currentType)->get_base_type();
-      } // if SgModifierType
-      else if (isSgPointerType(currentType))
-      {
-        pointerFirst = true; // reach pointer before reaching UPC modifier!
-        currentType = isSgPointerType(currentType)->get_base_type();
-      } // if Pointer
-      else if (isSgReferenceType(currentType))
-        currentType = isSgReferenceType(currentType)->get_base_type();
-      else if (isSgArrayType(currentType))
-        currentType =  isSgArrayType(currentType)->get_base_type();
-      else if (isSgTypedefType(currentType))
-        currentType =  isSgTypedefType(currentType)->get_base_type();
-    } // while
-
-    return pointerFirst;
-  }// isUpcPrivateToSharedType()
-
-  //! Phase-less means block size ==1, or 0, or unspecified(-1). 
-  bool isUpcPhaseLessSharedType (SgType* t)
-  {
-    SgModifierType * mod_type_out;
-    int block_size;
-
-    bool check = hasUpcSharedType(t,&mod_type_out);
-    //ROSE_ASSERT(hasUpcSharedType(t,mod)); // avoid side effect for assertion!!
-    if (check==false) 
-      return false;
-    else
-      ROSE_ASSERT(check&&mod_type_out); 
-    block_size =  mod_type_out->get_typeModifier().get_upcModifier().get_layout();
-    // cout<<"block size is "<<block_size<<endl;
-    if ((block_size==1)||(block_size == -1)|| (block_size == 0))
-      return true;
-    else 
-      return false;
-  } // isUpcPhaseLessSharedType
-
-  //! Is a UPC array with dimension of X*THREADS
-  /*!
-   * EDG-SAGE connection ensures that UPC array using THREADS dimension 
-   *  has an index expression of type SgMultiplyOp
-   * and operands (X and SgUpcThreads)
-   * TODO multi dimensional arrays
-   */
-  bool isUpcArrayWithThreads(SgArrayType* t)
-  {
-    ROSE_ASSERT(t!=NULL);
-    bool result = false;
-    SgExpression * exp = t->get_index();
-    SgMultiplyOp* multiply = isSgMultiplyOp(exp);
-
-  // DQ (7/22/2014): Fixed to remove compiler warning.
-  // if (multiply)
-     if (multiply != NULL)
-        {
-          if (isSgUpcThreads(multiply->get_rhs_operand()))
-             {
-               result = true;
-             }
-            else
-             {
-            // DQ (9/26/2011): Added else case to handle static compilation of UPC threads to be integer values.
-               if (isSgIntVal(multiply->get_rhs_operand()))
-                  {
-                    result = true;
-                  }
-             }
-       }
-
-    return result;  
-  }
-
   SgType* getFirstVarType(SgVariableDeclaration* decl)
   {
     ROSE_ASSERT(decl);
@@ -1358,8 +1178,7 @@ bool isCopyConstructible(SgType* type)
         size_t element_count = getArrayElementCount(isSgArrayType(type));
         stringstream ss;
         ss<<element_count;
-        string len=ss.str();
-        if (isUpcArrayWithThreads(isSgArrayType(type))) len = len+"H";
+        string len = ss.str();
         result = "A" + len + "_" + mangleType(isSgArrayType(type)->get_base_type());
       }  
       else
@@ -1489,9 +1308,9 @@ bool isCopyConstructible(SgType* type)
   //! <CV-qualifiers> ::= [r] [V] [K]   # restrict (C99), volatile, const
   // the order of handling const, volatile, and restric matters
   // Quote of the specification:
-  // "In cases where multiple order-insensitive qualifiers are present, 
-  // they should be ordered 'K' (closest to the base type), 'V', 'r', and 'U' (farthest from the base type)"
-  // also UPC shared type
+  // "In cases where multiple order-insensitive qualifiers are present,
+  // they should be ordered 'K' (closest to the base type), 'V', 'r', and 'U'
+  // (farthest from the base type)"
   string mangleModifierType(SgModifierType* type)
   {
     string result;
@@ -1501,17 +1320,6 @@ bool isCopyConstructible(SgType* type)
       result = "V" + result;
     if (isRestrictType(type))
       result = "r" + result;
-    if (isUpcSharedModifierType(type))
-    {
-      size_t blocksize = getUpcSharedBlockSize(type);
-      stringstream ss;
-      ss << blocksize;
-      result = ss.str() + "_" + result;
-      if (isUpcStrictSharedModifierType(type))
-        result = "S" + result;
-      else
-        result = "R" + result;
-    }
     return result + mangleType(type->get_base_type());  
   }
 

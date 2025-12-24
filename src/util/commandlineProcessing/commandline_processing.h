@@ -93,12 +93,9 @@ namespace CommandlineProcessing
 
           ROSE_UTIL_API bool isCFileNameSuffix ( const std::string & suffix );
 
-       // Liao (6/6/2008): Added support for UPC file suffix name    
-          ROSE_UTIL_API bool isUPCFileNameSuffix ( const std::string & suffix );
+          ROSE_UTIL_API bool isCppFileNameSuffix(const std::string &suffix);
 
-          ROSE_UTIL_API bool isCppFileNameSuffix ( const std::string & suffix );
-
-       // DQ (8/7/2007): Added support for Fortran file suffix names.
+          // DQ (8/7/2007): Added support for Fortran file suffix names.
           ROSE_UTIL_API bool isFortranFileNameSuffix ( const std::string & suffix );
 
        // DQ (5/18/2008): Support to marking when C preprocessing is required for 

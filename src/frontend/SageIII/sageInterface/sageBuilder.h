@@ -335,26 +335,6 @@ buildTemplateClassType(SgTemplateClassDeclaration* template_decl, Rose_STL_Conta
   */
 ROSE_DLL_API SgType* buildOpaqueType(std::string const type_name, SgScopeStatement * scope);
 
-// DQ (7/29/2010): Changed return type from SgType to SgModifierType for a number of the functions below.
-//! Build a UPC strict type
-ROSE_DLL_API SgModifierType* buildUpcStrictType(SgType *base_type = NULL);
-
-//! Build a UPC relaxed type
-ROSE_DLL_API SgModifierType* buildUpcRelaxedType(SgType *base_type = NULL);
-
-//! Build a UPC shared type
-ROSE_DLL_API SgModifierType* buildUpcSharedType(SgType *base_type = NULL, long layout = -1);
-// SgModifierType* buildUpcSharedType(SgType *base_type = NULL);
-
-//! Build a UPC shared[] type
-ROSE_DLL_API SgModifierType* buildUpcBlockIndefiniteType(SgType *base_type = NULL);
-
-//! Build a UPC shared[*] type
-ROSE_DLL_API SgModifierType* buildUpcBlockStarType(SgType *base_type = NULL);
-
-//! Build a UPC shared[n] type
-ROSE_DLL_API SgModifierType* buildUpcBlockNumberType(SgType *base_type, long block_factor);
-
 //! Build a complex type
 ROSE_DLL_API SgTypeComplex* buildComplexType(SgType *base_type = NULL);
 
@@ -530,14 +510,6 @@ ROSE_DLL_API SgNonrealDecl * buildNonrealDecl(const SgName & name, SgDeclaration
 
 //! Build a reference to the non-real declaration of a member of a non-real class
 ROSE_DLL_API SgNonrealRefExp * buildNonrealRefExp_nfi(SgNonrealSymbol * sym);
-
-//! Build UPC THREADS (integer expression)
-ROSE_DLL_API SgUpcThreads* buildUpcThreads();
-ROSE_DLL_API SgUpcThreads* buildUpcThreads_nfi();
-
-//! Build UPC  MYTHREAD (integer expression)
-ROSE_DLL_API SgUpcMythread* buildUpcMythread();
-ROSE_DLL_API SgUpcMythread* buildUpcMythread_nfi();
 
 //! Build this pointer
 ROSE_DLL_API SgThisExp* buildThisExp(SgSymbol* sym);
@@ -1283,24 +1255,6 @@ ROSE_DLL_API SgRangeBasedForStatement* buildRangeBasedForStatement_nfi(
 // EDG 4.8 handled the do-while statement differently (more similar to a block scope than before in EDG 4.7 (i.e. with an end-of-construct statement).
 // So we need an builder function that can use the existing SgDoWhileStatement scope already on the stack.
 ROSE_DLL_API void buildDoWhileStatement_nfi(SgDoWhileStmt* result, SgStatement * body, SgStatement * condition);
-
-//! Build a UPC forall statement
-ROSE_DLL_API SgUpcForAllStatement * buildUpcForAllStatement_nfi(SgStatement* initialize_stmt, SgStatement * test, SgExpression * increment, SgExpression* affinity, SgStatement * loop_body);
-ROSE_DLL_API SgUpcForAllStatement * buildUpcForAllStatement_nfi(SgForInitStatement * init_stmt, SgStatement * test, SgExpression * increment, SgExpression* affinity, SgStatement * loop_body);
-
-// DQ (3/3/2013): Added UPC specific build functions.
-//! Build a UPC notify statement
-ROSE_DLL_API SgUpcNotifyStatement* buildUpcNotifyStatement_nfi(SgExpression* exp);
-
-//! Build a UPC wait statement
-ROSE_DLL_API SgUpcWaitStatement* buildUpcWaitStatement_nfi(SgExpression* exp);
-
-//! Build a UPC barrier statement
-ROSE_DLL_API SgUpcBarrierStatement* buildUpcBarrierStatement_nfi(SgExpression* exp);
-
-//! Build a UPC fence statement
-ROSE_DLL_API SgUpcFenceStatement* buildUpcFenceStatement_nfi();
-
 
 //! Build while statement
 ROSE_DLL_API SgWhileStmt * buildWhileStmt(SgStatement *  condition, SgStatement *body, SgStatement *else_body = NULL);

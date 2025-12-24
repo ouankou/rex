@@ -264,15 +264,6 @@ Grammar::setUpStatements ()
           "ImageControlStatement", "IMAGE_CONTROL_STATEMENT", false);
 #endif
 
-#if USE_UPC_IR_NODES
-  // DQ and Liao (6/10/2008): Added new IR nodes specific to UPC.
-     NEW_TERMINAL_MACRO (UpcNotifyStatement,    "UpcNotifyStatement",    "UPC_NOTIFY_STMT" );
-     NEW_TERMINAL_MACRO (UpcWaitStatement,      "UpcWaitStatement",      "UPC_WAIT_STMT" );
-     NEW_TERMINAL_MACRO (UpcBarrierStatement,   "UpcBarrierStatement",   "UPC_BARRIER_STMT" );
-     NEW_TERMINAL_MACRO (UpcFenceStatement,     "UpcFenceStatement",     "UPC_FENCE_STMT" );
-     NEW_TERMINAL_MACRO (UpcForAllStatement,    "UpcForAllStatement",    "UPC_FORALL_STMT" );
-#endif
-
 // Common OpenMP nodes for both C/C++ and Fortran, Liao, 5/29/2009
 #if USE_OMP_IR_NODES
      // define terminals and non-terminals  and their hierarchy
@@ -455,17 +446,20 @@ Grammar::setUpStatements ()
   // Note that the associate statement is really a scope, with its own declarations of variables declared by reference to
   // other variables or expressions.  They are only l-values if and only if the rhs is a l-value (I think).
   // Rasmussen (10/22/2018): Added JovialForThenStatement
-     NEW_NONTERMINAL_MACRO (ScopeStatement,
-          Global                       | BasicBlock           | IfStmt                    | ForStatement       | FunctionDefinition |
-          ClassDefinition              | WhileStmt            | DoWhileStmt               | SwitchStatement    | CatchOptionStmt    |
-          NamespaceDefinitionStatement | BlockDataStatement   | AssociateStatement        | FortranDo          | ForAllStatement    |
-          UpcForAllStatement           | CAFWithTeamStatement |
-          FunctionParameterScope       | DeclarationScope     | RangeBasedForStatement
-     /* | TemplateInstantiationDefn */ ,
-          "ScopeStatement","SCOPE_STMT", false);
+     NEW_NONTERMINAL_MACRO(
+         ScopeStatement,
+         Global | BasicBlock | IfStmt | ForStatement | FunctionDefinition |
+             ClassDefinition | WhileStmt | DoWhileStmt | SwitchStatement |
+             CatchOptionStmt | NamespaceDefinitionStatement |
+             BlockDataStatement | AssociateStatement | FortranDo |
+             ForAllStatement | CAFWithTeamStatement | FunctionParameterScope |
+             DeclarationScope | RangeBasedForStatement
+         /* | TemplateInstantiationDefn */,
+         "ScopeStatement", "SCOPE_STMT", false);
 
-  // DQ (3/22/2004): Added to support template member functions (removed MemberFunctionDeclaration as AstNodeClass)
-  // DQ (12/21/2011): New design...
+     // DQ (3/22/2004): Added to support template member functions (removed
+     // MemberFunctionDeclaration as AstNodeClass) DQ (12/21/2011): New
+     // design...
      NEW_NONTERMINAL_MACRO (MemberFunctionDeclaration, TemplateMemberFunctionDeclaration | TemplateInstantiationMemberFunctionDecl,"MemberFunctionDeclaration","MFUNC_DECL_STMT", true);
 
   // DQ (3/20/2007): ProgramHeaderStatement and ProcedureHeaderStatement are derived from FunctionDeclaration
@@ -557,34 +551,39 @@ Grammar::setUpStatements ()
 
   // Rasmussen (9/20/2018): Added ImageControlStatement
   //           (7/11/2020): Changed StopOrPauseStatement to ProcessControlStatement to allow more variants
-     NEW_NONTERMINAL_MACRO (Statement,
-             ScopeStatement            | FunctionTypeTable      | DeclarationStatement            | ExprStatement         |
-             LabelStatement            | CaseOptionStmt         | TryStmt                         | DefaultOptionStmt     |
-             BreakStmt                 | ContinueStmt           | ReturnStmt                      | GotoStatement         |
-             SpawnStmt                 | NullStatement          | VariantStatement                | ForInitStatement      |
-             CatchStatementSeq         | ProcessControlStatement| IOStatement                     |
-             WhereStatement            | ElseWhereStatement     | NullifyStatement                | ArithmeticIfStatement |
-             AssignStatement           | ComputedGotoStatement  | AssignedGotoStatement           |
-          /* FortranDo                 | */ AllocateStatement   | DeallocateStatement             | UpcNotifyStatement    |
-             UpcWaitStatement          | UpcBarrierStatement    | UpcFenceStatement               |
-             SequenceStatement         | WithStatement          | PassStatement                   |
-             AssertStmt                | ExecStatement          | OmpExecStatement                |
-	         ImageControlStatement /* | JavaPackageDeclaration */,
-             "Statement","StatementTag", false);
+     NEW_NONTERMINAL_MACRO(
+         Statement,
+         ScopeStatement | FunctionTypeTable | DeclarationStatement |
+             ExprStatement | LabelStatement | CaseOptionStmt | TryStmt |
+             DefaultOptionStmt | BreakStmt | ContinueStmt | ReturnStmt |
+             GotoStatement | SpawnStmt | NullStatement | VariantStatement |
+             ForInitStatement | CatchStatementSeq | ProcessControlStatement |
+             IOStatement | WhereStatement | ElseWhereStatement |
+             NullifyStatement | ArithmeticIfStatement | AssignStatement |
+             ComputedGotoStatement | AssignedGotoStatement |
+             /* FortranDo                 | */ AllocateStatement |
+             DeallocateStatement | SequenceStatement | WithStatement |
+             PassStatement | AssertStmt | ExecStatement | OmpExecStatement |
+             ImageControlStatement /* | JavaPackageDeclaration */,
+         "Statement", "StatementTag", false);
 
-  // DQ (11/24/2007): These have been moved to be declarations, so they can appear where only declaration statements are allowed
-  // InterfaceStatement   | ModuleStatement        | UseStatement                    | ContainsStatement     |
-  // DQ (11/24/2007): These are derived from IOControlStatement and are not directly derived from SgStatement
-  // InputOutputStatement | OpenStatement          | CloseStatement                  | InquireStatement      | IOFileControlStmt |
+     // DQ (11/24/2007): These have been moved to be declarations, so they can
+     // appear where only declaration statements are allowed InterfaceStatement
+     // | ModuleStatement        | UseStatement                    |
+     // ContainsStatement     | DQ (11/24/2007): These are derived from
+     // IOControlStatement and are not directly derived from SgStatement
+     // InputOutputStatement | OpenStatement          | CloseStatement |
+     // InquireStatement      | IOFileControlStmt |
 
-  // ***********************************************************************
-  // ***********************************************************************
-  //                       Header Code Declaration
-  // ***********************************************************************
-  // ***********************************************************************
+     // ***********************************************************************
+     // ***********************************************************************
+     //                       Header Code Declaration
+     // ***********************************************************************
+     // ***********************************************************************
 
-  // Statement.setSubTreeFunctionPrototype ( "HEADER", "../Grammar/sageCommon.code" );
-  // Statement.excludeFunctionPrototype    ( "HEADER", "../Grammar/sageCommon.code" );
+     // Statement.setSubTreeFunctionPrototype ( "HEADER",
+     // "../Grammar/sageCommon.code" ); Statement.excludeFunctionPrototype    (
+     // "HEADER", "../Grammar/sageCommon.code" );
 
      Statement.setFunctionPrototype     ("HEADER", "../Grammar/Statement.code" );
 
@@ -933,27 +932,6 @@ Grammar::setUpStatements ()
                                          NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   // DQ (12/4/2004): Now we automate the generation of the destructors
   // ForInitStatement.setAutomaticGenerationOfDestructor(false);
-
-
-  // DQ and Liao (6/11/2008): Added support for UPC forall IR node.
-     UpcForAllStatement.setFunctionPrototype ( "HEADER_UPC_FORALL_STATEMENT", "../Grammar/Statement.code" );
-     UpcForAllStatement.editSubstitute       ( "HEADER_LIST_DECLARATIONS", "HEADER_LIST_DECLARATIONS", "../Grammar/Statement.code" );
-     UpcForAllStatement.editSubstitute      ( "LIST_DATA_TYPE", "SgStatementPtrList" );
-     UpcForAllStatement.editSubstitute      ( "LIST_NAME", "init_stmt" );
-     UpcForAllStatement.editSubstitute      ( "LIST_FUNCTION_RETURN_TYPE", "void" );
-     UpcForAllStatement.editSubstitute      ( "LIST_FUNCTION_NAME", "init_stmt" );
-     UpcForAllStatement.editSubstitute      ( "LIST_ELEMENT_DATA_TYPE", "SgStatement*" );
-     UpcForAllStatement.setDataPrototype ( "SgForInitStatement*", "for_init_stmt", "= NULL",
-                                      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
-     UpcForAllStatement.setDataPrototype ( "SgStatement*", "test", "= NULL",
-                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     UpcForAllStatement.setDataPrototype ( "SgExpression*", "increment", "= NULL",
-                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
-     UpcForAllStatement.setDataPrototype ( "SgExpression*", "affinity", "= NULL",
-                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
-     UpcForAllStatement.setDataPrototype ( "SgStatement*", "loop_body",        "= NULL",
-                                     CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
 
   // DQ (3/25/2018): Adding Range-based For statement support (previously missed in C++11 support).
      RangeBasedForStatement.setFunctionPrototype ( "HEADER_RANGE_BASED_FOR_STATEMENT", "../Grammar/Statement.code" );
@@ -3721,24 +3699,6 @@ Grammar::setUpStatements ()
                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
 
-#if USE_UPC_IR_NODES
-  // UpcNotifyStatement, UpcWaitStatement, UpcBarrierStatement, UpcFenceStatement, UpcForAllStatement
-
-     UpcNotifyStatement.setFunctionPrototype ( "HEADER_UPC_NOTIFY_STATEMENT", "../Grammar/Statement.code" );
-     UpcNotifyStatement.setDataPrototype     ( "SgExpression*", "notify_expression", "= NULL",
-                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     UpcWaitStatement.setFunctionPrototype ( "HEADER_UPC_WAIT_STATEMENT", "../Grammar/Statement.code" );
-     UpcWaitStatement.setDataPrototype     ( "SgExpression*", "wait_expression", "= NULL",
-                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     UpcBarrierStatement.setFunctionPrototype ( "HEADER_UPC_BARRIER_STATEMENT", "../Grammar/Statement.code" );
-     UpcBarrierStatement.setDataPrototype     ( "SgExpression*", "barrier_expression", "= NULL",
-                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     UpcFenceStatement.setFunctionPrototype ( "HEADER_UPC_FENCE_STATEMENT", "../Grammar/Statement.code" );
-#endif
-
 #if 0
   // Support for comments within the AST (it would be nice to use a string as a data member)
   // CommentStatement.setFunctionPrototype ( "HEADER_COMMENT_STATEMENT", "Grammar/Statement.code" );
@@ -3916,18 +3876,6 @@ Grammar::setUpStatements ()
 
   // DQ (3/25/2018): Adding Range-based For statement support (previously missed in C++11 support).
      RangeBasedForStatement.setFunctionSource         ( "SOURCE_RANGE_BASED_FOR_STATEMENT", "../Grammar/Statement.code" );
-
-
-#if USE_UPC_IR_NODES
-  // UpcNotifyStatement, UpcWaitStatement, UpcBarrierStatement, UpcFenceStatement, UpcForAllStatement
-
-     UpcNotifyStatement.setFunctionSource  ( "SOURCE_UPC_NOTIFY_STATEMENT", "../Grammar/Statement.code" );
-     UpcWaitStatement.setFunctionSource    ( "SOURCE_UPC_WAIT_STATEMENT", "../Grammar/Statement.code" );
-     UpcBarrierStatement.setFunctionSource ( "SOURCE_UPC_BARRIER_STATEMENT", "../Grammar/Statement.code" );
-     UpcFenceStatement.setFunctionSource   ( "SOURCE_UPC_FENCE_STATEMENT", "../Grammar/Statement.code" );
-     UpcForAllStatement.setFunctionSource   ( "SOURCE_UPC_FORALL_STATEMENT", "../Grammar/Statement.code" );
-     UpcForAllStatement.editSubstitute       ( "get_body", "get_loop_body" );
-#endif
 
   // DQ (7/25/2014): Adding support for C11 static assertions.
      StaticAssertionDeclaration.setFunctionSource  ( "SOURCE_STATIC_ASSERTION_DECLARATION", "../Grammar/Statement.code" );

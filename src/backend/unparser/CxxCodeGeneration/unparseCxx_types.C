@@ -4007,33 +4007,22 @@ Unparse_Type::unparseRestrictKeyword()
         #endif
      #endif
 
-  // Liao 6/11/2008, Preserve the original "restrict" for UPC
-  // regardless types of the backend compiler
-     if (SageInterface::is_UPC_language() == true )
-        {
-       // DQ (12/12/2012): We need the white space before and after the keyword (fails for cherokee-util.c).
-          returnString = " restrict ";
-        }
-       else
-        {
-          if ( usingGcc )
-             {
-            // GNU uses a string variation on the C99 spelling of the "restrict" keyword
-            // DQ (12/12/2012): We need the white space before and after the keyword.
+           if (usingGcc) {
+             // GNU uses a string variation on the C99 spelling of the
+             // "restrict" keyword DQ (12/12/2012): We need the white space
+             // before and after the keyword.
 #if 0
-               printf ("Using GNU form of restrict keyword! \n");
+          printf ("Using GNU form of restrict keyword! \n");
 #endif
-               returnString = " __restrict__ ";
-             }
-            else
-             {
-            // DQ (12/12/2012): We need the white space before and after the keyword.
+             returnString = " __restrict__ ";
+           } else {
+             // DQ (12/12/2012): We need the white space before and after the
+             // keyword.
 #if 0
-               printf ("Using non-GNU form of restrict keyword! \n");
+          printf ("Using non-GNU form of restrict keyword! \n");
 #endif
-               returnString = " restrict ";
-             }
-        }
+             returnString = " restrict ";
+           }
 
      return returnString;
    }
@@ -4147,41 +4136,6 @@ void Unparse_Type::unparseModifierType(SgType* type, SgUnparse_Info& info)
        // Support for near and far pointers (a microsoft extension)
        // xxx_near        // near pointer
        // xxx_far         // far pointer
-
-       // Support for UPC
-       // Liao, 6/11/2008. Enable faithful unparsing for .upc files
-          if (mod_type->get_typeModifier().get_upcModifier().isUPC_Strict())
-             { curprint ("strict "); }
-          if (mod_type->get_typeModifier().get_upcModifier().isUPC_Relaxed())
-             { curprint ("relaxed "); }
-
-          if (mod_type->get_typeModifier().get_upcModifier().get_isShared() == true)
-             {
-               long block_size = mod_type->get_typeModifier().get_upcModifier().get_layout();
-
-               if (block_size == 0) // block size empty
-                  {
-                    curprint ("shared[] ") ;
-                  }
-               else if (block_size == -1) // block size omitted
-                  {
-                    curprint ("shared ") ;
-                  }
-               else if (block_size == -2) // block size is *
-                  {
-                    curprint ("shared[*] ") ;
-                  }
-               else
-                  {
-                    ROSE_ASSERT(block_size > 0);
-
-                    stringstream ss;
-
-                    ss << block_size;
-
-                    curprint ("shared[" + ss.str() + "] ");
-                  }
-             }
 
        // Print the base type unless it has been printed up front
           if (!btype_first)

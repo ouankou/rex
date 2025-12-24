@@ -107,11 +107,11 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
       fi
    fi
 
-   error_code=$?
-   AC_MSG_NOTICE([error_code = "$error_code"])
-   if test $error_code != 0; then
-        AC_MSG_FAILURE([error copying upc.h header file: nonzero exit code returned to caller error_code = "$error_code"])
-   fi
+	   error_code=$?
+	   AC_MSG_NOTICE([error_code = "$error_code"])
+	   if test $error_code != 0; then
+	        AC_MSG_FAILURE([error copying compiler-specific header files: nonzero exit code returned to caller error_code = "$error_code"])
+	   fi
 
    if test "x$BACKEND_CXX_COMPILER_VENDOR" = "xclang"; then
       cp ${srcdir}/config/rose_specific_clang_atomic ./include-staging/${compilerName}_HEADERS/atomic
@@ -263,11 +263,11 @@ AC_DEFUN([GENERATE_BACKEND_C_COMPILER_SPECIFIC_HEADERS],
       fi
    fi
 
-   error_code=$?
-   AC_MSG_NOTICE([error_code = "$error_code"])
-   if test $error_code != 0; then
-        AC_MSG_FAILURE([in copying of upc.h header file: nonzero exit code returned to caller error_code = "$error_code"])
-   fi
+	   error_code=$?
+	   AC_MSG_NOTICE([error_code = "$error_code"])
+	   if test $error_code != 0; then
+	        AC_MSG_FAILURE([in copying compiler-specific header files: nonzero exit code returned to caller error_code = "$error_code"])
+	   fi
 ])
 
 
@@ -356,4 +356,3 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
      sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_required_macros_and_functions.h"
    fi
 ])
-

@@ -75,19 +75,18 @@ bool usesClangFrontend(SgNode* node)
              {
                if (SgSourceFile* sourceFile = isSgSourceFile(&(project->get_file(i))))
                   {
-                    if (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-                        sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
-                        sourceFile->get_OpenCL_only())
-                         return true;
+                 if (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+                     sourceFile->get_Cuda_only() ||
+                     sourceFile->get_OpenCL_only())
+                   return true;
                   }
              }
         }
        else if (SgSourceFile* sourceFile = isSgSourceFile(node))
         {
           if (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-              sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
-              sourceFile->get_OpenCL_only())
-               return true;
+              sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only())
+            return true;
         }
 
      return false;

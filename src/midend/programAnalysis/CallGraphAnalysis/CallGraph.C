@@ -136,11 +136,6 @@ bool typeEquality(SgModifierType* type1, SgModifierType* type2)
   if( typeModifier1.get_modifierVector () != typeModifier2.get_modifierVector ()   )
     types_are_equal = false;
 
-  if( typeModifier1.get_upcModifier().get_modifier () !=
-      typeModifier2.get_upcModifier().get_modifier ()
-    )
-    types_are_equal = false;
-
   if( typeModifier1.get_constVolatileModifier().get_modifier () !=
       typeModifier2.get_constVolatileModifier().get_modifier ()
     )

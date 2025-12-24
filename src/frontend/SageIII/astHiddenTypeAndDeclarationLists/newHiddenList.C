@@ -253,14 +253,13 @@ HiddenListTraversal::associatedDeclaration(SgScopeStatement* scope)
           case V_SgForAllStatement:
           case V_SgBasicBlock:
           case V_SgSwitchStatement:
-          case V_SgCatchOptionStmt:
-          case V_SgUpcForAllStatement:
-             {
-               return_declaration = NULL;
-               break;
-             }
+          case V_SgCatchOptionStmt: {
+            return_declaration = NULL;
+            break;
+          }
 
-       // Catch anything that migh have been missed (and exit so it can be identified and fixed).
+            // Catch anything that migh have been missed (and exit so it can be
+            // identified and fixed).
           default:
              {
                printf ("Default reached in HiddenListTraversal::associatedDeclaration() scope = %s \n",scope->class_name().c_str());
@@ -4314,5 +4313,4 @@ HiddenListTraversal::setNameQualificationSupport(SgScopeStatement* scope, const 
      ROSE_ASSERT(qualifierString.find("::::") == string::npos);
 
      return qualifierString;
-   }
-
+}
