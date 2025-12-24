@@ -267,7 +267,6 @@ Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression* expr, SgUnpars
        // DQ (7/24/2014): Added more general support for type expressions (required for C11 generic macro support.
           case FUNCTION_PARAMETER_REF_EXP:  { unparseFunctionParameterRefExpression(expr, info); break; }
 
-       // DQ (4/27/2014): This case appears in a snippet test code (testJava3a) as a result 
        // of something added to support the new shared memory DSL.  Not clear what this is,
        // I will ignore it for the moment as part of debugging this larger issue.
           case LAMBDA_EXP:  { unparseLambdaExpression(expr, info); break; }

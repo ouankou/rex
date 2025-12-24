@@ -53,40 +53,56 @@
 
 
 //--------------------------------------------------------------------------------------------------------------------
-/** Tree is the base class of a general tree where each node can have a variable number of child nodes.  All
-    algorithms that operate on abstract trees should use this base class for maximum portability.
+/** Tree is the base class of a general tree where each node can have a variable
+   number of child nodes.  All algorithms that operate on abstract trees should
+   use this base class for maximum portability.
 
-    Nodes and edges must be unique, meaning, a node or object cannot be added to the tree more than once.  The root
-    node cannot be deleted if there are other nodes or edges remaining in the tree.  Finally, no node can have more
-    than one incoming (parent) edge.  Edges and nodes are identified by their pointer values (Tree::Edge* and
-    Tree::Node*).  An node is allowed to point to an empty edge since this comes handy in many situations where the
-    order of outgoing edges matters.  Such an edge must be inserted using add_empty_edge method.
+    Nodes and edges must be unique, meaning, a node or object cannot be added to
+   the tree more than once.  The root node cannot be deleted if there are other
+   nodes or edges remaining in the tree.  Finally, no node can have more than
+   one incoming (parent) edge.  Edges and nodes are identified by their pointer
+   values (Tree::Edge* and Tree::Node*).  An node is allowed to point to an
+   empty edge since this comes handy in many situations where the order of
+   outgoing edges matters.  Such an edge must be inserted using add_empty_edge
+   method.
 
-    Following exceptions are thrown by the class (all are subclasses of Exception):
+    Following exceptions are thrown by the class (all are subclasses of
+   Exception):
 
-    1.  Tree::EmptyEdge                      -- attempt to add, or remove, an empty edge (null pointer)
+    1.  Tree::EmptyEdge                      -- attempt to add, or remove, an
+   empty edge (null pointer)
 
-    2.  Tree::DuplicateEdge                  -- attempt to add an edge more than once
+    2.  Tree::DuplicateEdge                  -- attempt to add an edge more than
+   once
 
-    3.  Tree::NonexistentEdge                -- attempt to remove an edge that does not belong to the tree
+    3.  Tree::NonexistentEdge                -- attempt to remove an edge that
+   does not belong to the tree
 
-    4.  Tree::EdgeInUse                      -- attempt to add an edge that is already a part of another tree
+    4.  Tree::EdgeInUse                      -- attempt to add an edge that is
+   already a part of another tree
 
-    5.  Tree::SecondParent                   -- attempt to add a second incoming edge to a node
+    5.  Tree::SecondParent                   -- attempt to add a second incoming
+   edge to a node
 
-    6.  Tree::EmptyNode                      -- attempt to add, or remove, an empty node (null pointer)
+    6.  Tree::EmptyNode                      -- attempt to add, or remove, an
+   empty node (null pointer)
 
-    7.  Tree::DuplicateNode                  -- attempt to add a node more than once
+    7.  Tree::DuplicateNode                  -- attempt to add a node more than
+   once
 
-    8.  Tree::NonexistentNode                -- attempt to remove a node that does not belong to the tree
+    8.  Tree::NonexistentNode                -- attempt to remove a node that
+   does not belong to the tree
 
-    9.  Tree::NodeInUse                      -- attempt to add a node that is already a part of another tree
+    9.  Tree::NodeInUse                      -- attempt to add a node that is
+   already a part of another tree
 
-    10. Tree::DeletingRootOfNonSingletonTree -- attempt to delete the root node when tree has more nodes & edges
+    10. Tree::DeletingRootOfNonSingletonTree -- attempt to delete the root node
+   when tree has more nodes & edges
 
-    NOTE ON friend CLASSES: Many classes (especially Tree::Node and Tree::Edge) have many friend classes.  This is
-    *not* a kludge.  It is simulating "package" visiblity in Java.  We want a limited public interface to Node and
-    Edge and yet give more permissions to methods within the Graph class.  */
+    NOTE ON friend CLASSES: Many classes (especially Tree::Node and Tree::Edge)
+   have many friend classes.  This is *not* a kludge.  It is simulating
+   package-style visibility. We want a limited public interface to Node and Edge
+   and yet give more permissions to methods within the Graph class.  */
 //--------------------------------------------------------------------------------------------------------------------
 class Tree {
  public:

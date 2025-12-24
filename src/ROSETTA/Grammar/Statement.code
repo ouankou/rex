@@ -4866,7 +4866,7 @@ SgScopeStatement::insert_symbol ( const SgName& n, SgSymbol* s )
          SgGlobal * globalScopeAcrossFiles = project->get_globalScopeAcrossFiles();
          assert(globalScopeAcrossFiles != NULL);
 
-         // DQ (2/28/2015): they can be the same for snippet injection and for some java support.
+         // DQ (2/28/2015): They can be the same for snippet injection and some tooling.
          if (global_scope != globalScopeAcrossFiles) {
            SgSymbolTable * symtab = globalScopeAcrossFiles->get_symbol_table();
            ROSE_ASSERT(symtab != NULL);

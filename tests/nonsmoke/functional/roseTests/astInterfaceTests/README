@@ -20,7 +20,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildTemplateParameter()
    buildTemplateParameterVal()
 
-// Is this Java or Python?
    buildSuperExp()
    buildClassExp()
    buildClassExp_nfi()
@@ -59,9 +58,6 @@ Additional functions to test (specific to sageBuilder.C):
    
    buildMembershipOp()
    buildNonMembershipOp()
-
-   buildJavaUnsignedRShiftAssignOp()
-   buildJavaUnsignedRShiftOp()
 
    buildScopeOp()
 
@@ -232,12 +228,6 @@ Additional functions to test (specific to sageBuilder.C):
 // Code from Peter
    buildClassTemplateType()
 
-   buildJavaMarkerAnnotation()
-   buildJavaMemberValuePair()
-   buildJavaSingleMemberAnnotation()
-   buildJavaNormalAnnotation()
-   buildJavaNormalAnnotation()
-
 
 
 
@@ -254,7 +244,6 @@ Additional functions to test (specific to sageBuilder.C):
 
 
    
-
 
 
 

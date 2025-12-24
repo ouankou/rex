@@ -246,7 +246,6 @@ void $CLASSNAME::operator delete(void *Pointer, size_t Size)
 // This is part of work to reduce the size of the Cxx_Grammar.h file for MSVS. 
 // DQ (4/5/2007): This is not the correct operator that we want, but appears to be required to compile ROSE with ROSE.
 // Also, note comment below from Robb (copied from the Common.code file).
-/* RPM (2009-06-03): Apparently this must all be on one line for configuration "--with-javaport"; reverting r5427 */
 //
 // Matzke (2018-02-16): We don't need to provide both operator delete(void*) and operator delete(void*,size_t) because the C++
 // runtime calls exactly one of them (whichever is defined). Futhermore, the Boost serialization library assumes that classes

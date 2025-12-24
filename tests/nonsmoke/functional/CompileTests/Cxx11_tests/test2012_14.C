@@ -28,9 +28,10 @@ public:
 
 // C++11 provides solutions to all of these problems.
 
-// C++11 allows constructors to call other peer constructors (known as delegation). This allows constructors 
-// to utilize another constructor's behavior with a minimum of added code. Examples of other languages similar 
-// to C++ that provide delegation are Java, C#, and D.
+// C++11 allows constructors to call other peer constructors (known as
+// delegation). This allows constructors to utilize another constructor's
+// behavior with a minimum of added code. Examples of other languages similar to
+// C++ that provide delegation are C# and D.
 
 // This syntax is as follows:
 

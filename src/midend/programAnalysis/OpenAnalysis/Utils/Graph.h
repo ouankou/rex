@@ -48,19 +48,24 @@
 
 //--------------------------------------------------------------------------------------------------------------------
 // Graph
-/** Graph is the base class for a general undirected graph (Graph) that is in turn derived from BaseGraph.  Algorithms
-    that operate upon abstract undirected graphs should, normally, use only this base Graph class for maximum
-    portability.
-    
-    No extra restrictions are placed on nodes and edges in addition to those imposed by BaseGraph.  This means that
-    self-edges, and multiple edges between two nodes, are allowed.
+/** Graph is the base class for a general undirected graph (Graph) that is in
+   turn derived from BaseGraph.  Algorithms that operate upon abstract
+   undirected graphs should, normally, use only this base Graph class for
+   maximum portability.
 
-    An undirected graph, Graph, extends BaseGraph by adding DFS and BFS iterators, as well as iterators to enumerate
-    neighboring nodes and incident edges for a node.
+    No extra restrictions are placed on nodes and edges in addition to those
+   imposed by BaseGraph.  This means that self-edges, and multiple edges between
+   two nodes, are allowed.
 
-    NOTE ON friend CLASSES: Many classes (especially Graph, Graph::Node, and Graph::Edge) have many friend classes.
-    This is *not* a kludge.  It is simulating "package" visiblity in Java.  We want a limited public interface to Node
-    and Edge and yet give more permissions to methods within the Graph class.  */
+    An undirected graph, Graph, extends BaseGraph by adding DFS and BFS
+   iterators, as well as iterators to enumerate neighboring nodes and incident
+   edges for a node.
+
+    NOTE ON friend CLASSES: Many classes (especially Graph, Graph::Node, and
+   Graph::Edge) have many friend classes. This is *not* a kludge.  It is
+   simulating package-style visibility. We want a limited public interface to
+   Node and Edge and yet give more permissions to methods within the Graph
+   class.  */
 //--------------------------------------------------------------------------------------------------------------------
 class Graph : public BaseGraph {
 public:

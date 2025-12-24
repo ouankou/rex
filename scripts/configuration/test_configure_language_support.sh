@@ -34,7 +34,6 @@ echo "Running configure tests in sandbox: ${TESTDIR}"
 #  -  C++
 #  -  Cuda
 #  -  Fortran
-#  -  Java
 #  -  PHP
 #  -  OpenCL
 #
@@ -48,7 +47,6 @@ echo "Running configure tests in sandbox: ${TESTDIR}"
 #-  C++
 #-  Cuda
 #-  Fortran
-#-  Java
 #-  PHP
 #-  OpenCL
 
@@ -105,7 +103,6 @@ source ${SCRIPT_DIR}/test_configure_c_support.unit
 source ${SCRIPT_DIR}/test_configure_cxx_support.unit
 source ${SCRIPT_DIR}/test_configure_cuda_support.unit
 source ${SCRIPT_DIR}/test_configure_fortran_support.unit
-source ${SCRIPT_DIR}/test_configure_java_support.unit
 source ${SCRIPT_DIR}/test_configure_php_support.unit
 source ${SCRIPT_DIR}/test_configure_opencl_support.unit
 

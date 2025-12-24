@@ -11,7 +11,7 @@
  *       Function types
  *       Opaque types
  *       XXX
- *       What about Java types? They should be covered as well..?
+ *       What about other language-specific types? They should be covered too.
  *       Fortran types..?
  *       Python types...?
  */
@@ -414,5 +414,3 @@ TEST_F(CleanFunctionTypeTableFixture, VoidXIntIntAndVoidXIntConstIntUnequal){
   delete paramList;
   delete paramList2;
 }
-
-

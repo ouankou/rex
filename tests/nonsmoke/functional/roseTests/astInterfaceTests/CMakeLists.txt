@@ -53,7 +53,6 @@ set(noinst_programs
   insertAfterUsingCommaOp
   deepCopy
   fixVariableReferences
-  buildJavaPackage
   getArrayElementType
   interfaceFunctionCoverage
   buildTemplateClass
@@ -284,12 +283,6 @@ foreach(test ${comment_relocation_tests})
     COMMAND removeStatementCommentRelocation ${TEST_CXXFLAGS} -rex:clang:continue-on-error -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/${test}.C
   )
 endforeach()
-
-# buildJavaPackage test (doesn't produce output source files)
-add_test(
-  NAME astInterface_buildJavaPackage
-  COMMAND buildJavaPackage ${TEST_CXXFLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/inputbuildJavaPackage.C
-)
 
 # templateQualification test - exercises template qualification correctness.
 # Tests that:

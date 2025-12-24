@@ -449,9 +449,7 @@ void Rose::KeepGoing::generate_reports(SgProject* project,
       if (file->get_frontendErrorCode())
         ss << "\t Frontend Error Code:" << file->get_frontendErrorCode() ;
       if (file->get_midendErrorCode())
-        ss << "\t Midend Error Code:" << file->get_midendErrorCode() ;
-      if (file->get_javacErrorCode())    
-        ss << "\t JAVA Error Code:"<< file->get_javacErrorCode(); 
+        ss << "\t Midend Error Code:" << file->get_midendErrorCode();
       if (file->get_unparserErrorCode())   
         ss << "\t Unparser Error Code:"<< file->get_unparserErrorCode();
       if (file->get_backendCompilerErrorCode())   

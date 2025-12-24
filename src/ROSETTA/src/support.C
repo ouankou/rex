@@ -327,7 +327,7 @@ Grammar::setUpSupport ()
      TypeTable.setDataPrototype    ( "SgSymbolTable*","type_table","= NULL",
                                                      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
 
-  // DQ (3/29/2014): data member to force search of base classes (for Java).
+     // DQ (3/29/2014): data member to force search of base classes.
      SymbolTable.setDataPrototype("static bool","force_search_of_base_classes","= false",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
@@ -1760,12 +1760,6 @@ Grammar::setUpSupport ()
   Project.setDataPrototype("int", "frontendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-  Project.setDataPrototype("int", "javacErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-  Project.setDataPrototype("int", "ecjErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
   Project.setDataPrototype("int", "midendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -1775,13 +1769,11 @@ Grammar::setUpSupport ()
      Project.setDataPrototype("int","backendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     File.setDataPrototype("int","frontendErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype("int","javacErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype("int","ecjErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  //Liao 4/26/2017, enable exception/signal handling of midend processing of each file
+     File.setDataPrototype("int", "frontendErrorCode", "= 0",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
+     // Liao 4/26/2017, enable exception/signal handling of midend processing of
+     // each file
      File.setDataPrototype("int","midendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      File.setDataPrototype("int","unparserErrorCode", "= 0",
@@ -2015,8 +2007,8 @@ Grammar::setUpSupport ()
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
 
-  // DQ (6/12/2013): Added Java support for a global scope spanning files. Might be
-  // useful in the future for multiple file handling in other languages.
+     // DQ (6/12/2013): Added support for a global scope spanning files. Might
+     // be useful in the future for multiple file handling in other languages.
      Project.setDataPrototype("SgGlobal*", "globalScopeAcrossFiles", "= NULL",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
 

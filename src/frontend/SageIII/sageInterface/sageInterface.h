@@ -6,7 +6,7 @@
 #include <utility>
 
 #include "nodeQuery.h"        //for querySubTree
-#include "rosePublicConfig.h" // for ROSE_BUILD_JAVA_LANGUAGE_SUPPORT
+#include "rosePublicConfig.h"
 
 #if 0   // FMZ(07/07/2010): the argument "nextErrorCode" should be call-by-reference
 SgFile* determineFileType ( std::vector<std::string> argv, int nextErrorCode, SgProject* project );
@@ -192,7 +192,6 @@ ROSE_DLL_API std::string getTemplateParameterKeyword(SgTemplateParameter* param)
    ROSE_DLL_API SgEnumSymbol*      lookupEnumSymbolInParentScopes     (const SgName & name, SgScopeStatement *currentScope = NULL);
    ROSE_DLL_API SgNamespaceSymbol* lookupNamespaceSymbolInParentScopes(const SgName & name, SgScopeStatement *currentScope = NULL);
 
-// DQ (7/17/2011): Added function from cxx branch that I need here for the Java support.
 // SgClassSymbol* lookupClassSymbolInParentScopes (const SgName &  name, SgScopeStatement *cscope);
 
    /*! \brief set_name of symbol in symbol table.

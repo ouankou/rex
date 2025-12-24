@@ -88,10 +88,6 @@ hiddenTypeAndDeclarationListTests:
    includes tests specific to where type elaboration is required. Many more name qualification
    and type elaboration tests are a part of the Cxx_tests directory test codes.
 
-Java_tests:
-   This is a collection of different versions of Java tests.  More extensive Java
-   testing is done outside of these tests (whole applications).
-
 mergeAST_tests:
    This tests the AST merge mechanism that is an atomic operation in ROSE and supports
    whole program analysis (acorss many files).

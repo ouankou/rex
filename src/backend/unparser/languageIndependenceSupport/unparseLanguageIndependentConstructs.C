@@ -12789,13 +12789,12 @@ UnparseLanguageIndependentConstructs::requiresParentheses(SgExpression* expr, Sg
           case DOUBLE_VAL:
           case LONG_DOUBLE_VAL:
           case AGGREGATE_INIT:
-          case SUPER_NODE: // charles4:  This case needed for Java only.
-             {
+          case SUPER_NODE: {
 #if DEBUG_PARENTHESIS_PLACEMENT
                printf ("     case statements return false \n");
 #endif
                return false;
-             }
+          }
 
           default:
              {

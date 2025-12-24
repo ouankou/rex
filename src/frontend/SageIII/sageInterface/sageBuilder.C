@@ -8562,12 +8562,13 @@ SageBuilder::buildFunctionCallExp(SgFunctionSymbol* sym,
           parameters = buildExprListExp();
      ROSE_ASSERT (parameters != NULL);
 
-  // DQ (8/21/2011): We want to preserve the support for member functions to be built as SgMemberFunctionRefExp.
-  // This is important for the Java support and the C++ support else we will be lowering all mmember function calls
-  // to function calls which will be a proble for eht analysis of object oriented languages.
-  // SgFunctionRefExp* func_ref = buildFunctionRefExp(sym);
-  // SgFunctionCallExp * func_call_expr = new SgFunctionCallExp(func_ref,parameters,func_ref->get_type());
-  // func_ref->set_parent(func_call_expr);
+     // DQ (8/21/2011): Preserve member functions as SgMemberFunctionRefExp.
+     // This is important for object-oriented languages; otherwise member calls
+     // get lowered to free function calls and lose structure.
+     // SgFunctionRefExp* func_ref = buildFunctionRefExp(sym);
+     // SgFunctionCallExp * func_call_expr = new
+     // SgFunctionCallExp(func_ref,parameters,func_ref->get_type());
+     // func_ref->set_parent(func_call_expr);
      SgFunctionCallExp * func_call_expr = NULL;
      SgMemberFunctionSymbol* memberFunctionSymbol = isSgMemberFunctionSymbol(sym);
      if (memberFunctionSymbol != NULL)
@@ -8843,10 +8844,10 @@ SageBuilder::buildAssignStatement_ast_translate(SgExpression* lhs,SgExpression* 
   SgExprStatement* exp = new SgExprStatement(assignOp);
   ROSE_ASSERT(exp);
 
-// DQ (8/16/2011): Modified to avoid recursive call to reset source position information
-// (this version is required for the Java support where we have set source code position
-// information on the lhs and rhs and we don't want it to be reset as a transformation.
-// some child nodes are transparently generated, using recursive setting is safer
+  // DQ (8/16/2011): Modified to avoid recursive call to reset source position
+  // information when source positions are already set on the lhs and rhs. Some
+  // child nodes are transparently generated, so using recursive setting is
+  // safer.
   setOneSourcePositionForTransformation(exp);
   assignOp->set_parent(exp);
   return exp;
@@ -10157,23 +10158,23 @@ SgTryStmt* SageBuilder::buildTryStmt(SgStatement* body,
      return try_stmt;
    }
 
+   // charles4 09/16/2011
+   //! Build a try statement
+   SgTryStmt *SageBuilder::buildTryStmt(SgBasicBlock *try_body,
+                                        SgBasicBlock *finally_body) {
+     //
+     // charles4 09/23/2011 - Note that when an SgTryStmt is allocated, its
+     // constructor preallocates a SgCatchStementSeq for the field
+     // p_catch_statement_sequence_root. So, although the method
+     // set_catch_statement_seq_root(catch_statement_sequence) is available, it
+     // should not be used to set the catch_statement_sequence_root as that
+     // would leave the one that was allocated by the constructor dangling!
+     //
+     ROSE_ASSERT(try_body != NULL);
+     SgTryStmt *try_stmt = new SgTryStmt(try_body);
+     try_body->set_parent(try_stmt);
 
-// charles4 09/16/2011
-//! Build a try statement (used for Java)
-SgTryStmt *SageBuilder::buildTryStmt(SgBasicBlock *try_body, SgBasicBlock *finally_body)
-   {
-    //
-    // charles4 09/23/2011 - Note that when an SgTryStmt is allocated, its constructor
-    // preallocates a SgCatchStementSeq for the field p_catch_statement_sequence_root.
-    // So, although the method set_catch_statement_seq_root(catch_statement_sequence) is
-    // available, it should not be used to set the catch_statement_sequence_root as that
-    // would leave the one that was allocated by the constructor dangling!
-    //
-    ROSE_ASSERT(try_body != NULL);
-    SgTryStmt* try_stmt = new SgTryStmt(try_body);
-    try_body -> set_parent(try_stmt);
-
-  // DQ (11/3/2012): Added setting default source position info.
+     // DQ (11/3/2012): Added setting default source position info.
      setSourcePosition(try_stmt);
 
     if (finally_body) {
@@ -10182,7 +10183,7 @@ SgTryStmt *SageBuilder::buildTryStmt(SgBasicBlock *try_body, SgBasicBlock *final
    }
 
     return try_stmt;
-}
+   }
 
 // charles4 09/16/2011
 // ! Build an initial sequence of Catch blocks containing 0 or 1 element.
@@ -13566,9 +13567,6 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
             // ROSE_ASSERT(existingType == NULL);
 #endif
 
-#if DEBUG_CLASS_DECLARATION
-               printf ("In SageBuilder::buildClassDeclaration_nfi(): kind == SgClassDeclaration::e_java_parameter = %s \n",(kind == SgClassDeclaration::e_java_parameter) ? "true" : "false");
-#endif
                SgClassType *class_type = (SgClassType *) SgClassType::createType(nondefdecl);
 #if DEBUG_CLASS_DECLARATION
                printf ("In SageBuilder::buildClassDeclaration_nfi(): nondefdecl->get_type() == NULL: building a new class_type = %p = %s \n",class_type,class_type->class_name().c_str());
@@ -16067,27 +16065,13 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
 #endif
 
 #if 0
-  // DQ (3/4/2014): This fix is only for Java and for C will cause a second SgFile to be redundently added to the file list.
-  // For now I will provide a temporary fix and check is this is for a Java project so that we can continue. But the longer
-  // term fix would be to make the semantics for Java the same as that of C/C++ (or the other way around, whatever is the
-  // cleaner semantics.
-  // This just adds the new file to the list of files stored internally (note: this sets the parent of the newFile).
-  // TOO1 (2/28/2014): This is definitely required for Java (ECJ frontend), though C passes without it (I think only
-  //                   by luck :-).
-  //                   The ECJ frontend uses the SgProject internally (via a global SgProject*). Therefore, the
-  //                   SgProject must contain this newly created SgFile, otherwise ECJ won't be able to find it.
-  // project->set_file ( *result );
-     if (project->get_Java_only() == true)
-        {
-       // DQ (3/4/2014): For now we want to output a message and clean this up afterward (likely in the Java language support).
-          printf ("WARNING: Java specific action to add new file to SgProject (using set_file()) (more uniform language handling symantics would avoid this problem) \n");
-          project->set_file ( *result );
-        }
+  // Legacy path retained for historical context.
 #else
-  // DQ (3/6/2014): The code below adresses the specific bug faced in the use of the outliner (so we use it directly).
-  // This code was moved ahead of the call to "result->runFrontend(nextErrorCode);" because in the case of Java
-  // the file must be set to be a part of the SgProject before calling the runFrontend() function.
-  // project->set_file ( *result );
+     // DQ (3/6/2014): The code below addresses a specific outliner issue.
+     // This code was moved ahead of the call to
+     // "result->runFrontend(nextErrorCode);" because the file must be set to be
+     // a part of the SgProject before calling runFrontend(). project->set_file
+     // ( *result );
 
      result->set_parent(project);
 
@@ -16095,11 +16079,10 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
      printf ("In SageBuilder::buildFile(): Outliner::use_dlopen = %s \n",Outliner::use_dlopen ? "true" : "false");
 #endif
 
-  // DQ (3/5/2014): I need to check with Liao to understand this part of the code better.
-  // I think that the default value for Outliner::use_dlopen is false, so that when the
-  // Java support is used the true branch is taken.  However, if might be the we need
-  // to support the outliner using the code below and so this would be a bug for the
-  // outliner.
+     // DQ (3/5/2014): I need to check with Liao to understand this part of the
+     // code better. I think that the default value for Outliner::use_dlopen is
+     // false. If we need to support the outliner using the code below and this
+     // is wrong, it would be a bug for the outliner.
      if (!Outliner::use_dlopen)
         {
 #if 0
@@ -16151,9 +16134,10 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
   // SageInterface::collectModifiedLocatedNodes() has previously been implemented and used for debugging.
      std::set<SgLocatedNode*> modifiedNodeSet = collectModifiedLocatedNodes(project);
 
-  // DQ (3/6/2014): For Java, this function can only be called AFTER the SgFile has been added to the file list in the SgProject.
-  // For C/C++ it does not appear to matter if the call is made before the SgFile has been added to the file list in the SgProject.
-  // DQ (6/14/2013): Since we seperated the construction of the SgFile IR nodes from the invocation of the frontend, we have to call the frontend explicitly.
+     // DQ (3/6/2014): This function should be called after the SgFile has been
+     // added to the file list in the SgProject. DQ (6/14/2013): Since we
+     // seperated the construction of the SgFile IR nodes from the invocation of
+     // the frontend, we have to call the frontend explicitly.
      result->runFrontend(nextErrorCode);
 
 #if 0
@@ -17443,12 +17427,15 @@ SageBuilder::getTargetFileTypeSupport(SgType* snippet_type, SgScopeStatement* ta
                          SgClassSymbol* classSymbolInTargetAST = lookupClassSymbolInParentScopes(classDeclaration->get_name(),targetScope);
                          if (classSymbolInTargetAST == NULL)
                             {
-                           // For Java or C++ this could be a name qualified type and so we need a better mechanism
-                           // to identify it thorugh it's parent scopes. Build a list of parent scope back to the
-                           // global scope and then traverse the list backwards to identify each scope in the target
-                           // AST's global scope until we each the associated declaration in the target AST.
+                           // For C++ this could be a name qualified type and so
+                           // we need a better mechanism to identify it thorugh
+                           // it's parent scopes. Build a list of parent scope
+                           // back to the global scope and then traverse the
+                           // list backwards to identify each scope in the
+                           // target AST's global scope until we each the
+                           // associated declaration in the target AST.
 #if 0
-                              printf ("This is likely a name qualified scope (which can't be seen in a simple traversal of the parent scope (case of C++ or Java) \n");
+                              printf ("This is likely a name qualified scope (which can't be seen in a simple traversal of the parent scope in C++) \n");
                               printf ("   --- Looking for target AST match for class name = %s \n",classDeclaration->get_name().str());
 #endif
                               SgSymbol* symbol = findAssociatedSymbolInTargetAST(classDeclaration,targetScope);
@@ -17622,12 +17609,15 @@ SageBuilder::getTargetFileType(SgType* snippet_type, SgScopeStatement* targetSco
                          SgClassSymbol* classSymbolInTargetAST = lookupClassSymbolInParentScopes(classDeclaration->get_name(),targetScope);
                          if (classSymbolInTargetAST == NULL)
                             {
-                           // For Java or C++ this could be a name qualified type and so we need a better mechanism
-                           // to identify it thorugh it's parent scopes. Build a list of parent scope back to the
-                           // global scope and then traverse the list backwards to identify each scope in the target
-                           // AST's global scope until we each the associated declaration in the target AST.
+                           // For C++ this could be a name qualified type and so
+                           // we need a better mechanism to identify it thorugh
+                           // it's parent scopes. Build a list of parent scope
+                           // back to the global scope and then traverse the
+                           // list backwards to identify each scope in the
+                           // target AST's global scope until we each the
+                           // associated declaration in the target AST.
 #if 0
-                              printf ("This is likely a name qualified scope (which can't be seen in a simple traversal of the parent scope (case of C++ or Java) \n");
+                              printf ("This is likely a name qualified scope (which can't be seen in a simple traversal of the parent scope in C++) \n");
                               printf ("   --- Looking for target AST match for class name = %s \n",classDeclaration->get_name().str());
 #endif
                               SgSymbol* symbol = findAssociatedSymbolInTargetAST(classDeclaration,targetScope);
@@ -17934,9 +17924,10 @@ SageBuilder::errorCheckingTargetAST (SgNode* node_copy, SgNode* node_original, S
           SgDeclarationStatement* firstNondefiningDeclaration_copy     = declarationStatement_copy->get_firstNondefiningDeclaration();
           SgDeclarationStatement* firstNondefiningDeclaration_original = declarationStatement_original->get_firstNondefiningDeclaration();
 
-       // DQ (3/17/2014): Bugfix, we want to use the firstNondefiningDeclaration_copy instead of firstNondefiningDeclaration_original.
-       // DQ (3/10/2014): We want to allow for NULL return values from getEnclosingFileNode() for Java classes that are in java.lang (for example).
-       // SgFile* snippetFile = getEnclosingFileNode(firstNondefiningDeclaration_original);
+          // DQ (3/17/2014): Bugfix, we want to use the
+          // firstNondefiningDeclaration_copy instead of
+          // firstNondefiningDeclaration_original. SgFile* snippetFile =
+          // getEnclosingFileNode(firstNondefiningDeclaration_original);
           SgFile* snippetFile = getEnclosingFileNode(firstNondefiningDeclaration_copy);
           if (snippetFile != NULL && snippetFile != targetFile)
              {
@@ -18210,7 +18201,6 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
        // Check the firstnondefiningDeclaration and definingDeclaration
           SgDeclarationStatement* firstNondefiningDeclaration_original = declarationStatement_original->get_firstNondefiningDeclaration();
 
-       // DQ (3/10/2014): We want to allow for NULL return values from getEnclosingFileNode() for Java classes that are in java.lang (for example).
           SgFile* snippetFile = getEnclosingFileNode(firstNondefiningDeclaration_original);
           if (snippetFile != NULL && snippetFile != targetFile)
              {
@@ -18711,8 +18701,10 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
 #if DEBUG_FUNCTION_DECLARATION
                     printf ("Warning: case V_SgFunctionDeclaration: functionSymbol_original not in target file \n");
 #endif
-                 // DQ (3/13/2014): Handle the case of a member function seperately (I think this can't appear in Java, only in C++).
-                 // ROSE_ASSERT(isSgMemberFunctionSymbol(symbol_copy) == NULL);
+                    // DQ (3/13/2014): Handle the case of a member function
+                    // separately.
+                    // ROSE_ASSERT(isSgMemberFunctionSymbol(symbol_copy) ==
+                    // NULL);
                     ROSE_ASSERT(isSgMemberFunctionSymbol(symbol_original) == NULL);
 
                  // printf ("case SgFunctionDeclaration: part 2: Calling functionDeclaration_copy->search_for_symbol_from_symbol_table() \n");
@@ -19493,7 +19485,7 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
             // if (SageInterface::getEnclosingFileNode(memberFunctionSymbol) != targetFile)
                if (getEnclosingFileNode(memberFunctionSymbol_copy) != targetFile)
                   {
-                 // Not implemented (initial work is focused on C, then Java, then C++.
+                 // Not implemented (initial work is focused on C, then C++).
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
                     printf ("Warning: case V_SgMemberFunctionRefExp: memberFunctionSymbol_copy not in target file (find member function = %s) \n",memberFunctionSymbol_copy->get_name().str());
 #endif
@@ -19507,9 +19499,11 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
                          printf ("Error: The associated memberFunction_copy = %s should have been found in a parent scope of the target AST \n",memberFunctionSymbol_copy->get_name().str());
 #endif
-                      // DQ (3/10/2014): This is important for member functions in Java and C++.
+                         // DQ (3/10/2014): This is important for member
+                         // functions in C++.
 
-                      // If could be that the symbol is in the local scope of the snippet AST.
+                         // If could be that the symbol is in the local scope of
+                         // the snippet AST.
                          SgStatement* enclosingStatement_original = SageInterface::getEnclosingStatement(memberFunctionRefExp_original);
                          ROSE_ASSERT(enclosingStatement_original != NULL);
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
@@ -19531,7 +19525,10 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
                          if (memberFunctionSymbolInTargetAST == NULL)
                             {
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
-                              printf ("Backup and look for the associated class and then look for the member function in the class (assume non-friend function or Java member function) \n");
+                           printf(
+                               "Backup and look for the associated class and "
+                               "then look for the member function in the class "
+                               "(assume non-friend member function) \n");
 #endif
                            // Check for the case of a record reference (member function of class declaration).
                               SgExpression* parentExpression = isSgExpression(memberFunctionRefExp_copy->get_parent());
@@ -19544,13 +19541,17 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
                               SgFunctionCallExp* functionCallExp = isSgFunctionCallExp(parentExpression);
                               if (functionCallExp != NULL)
                                  {
-                                // Note that this is a Java specific organization of the SgMemberFunctionRefExp and the SgFunctionCallExp.
-                                // We might want to make this more uniform between C++ and Java later.
-                                   handle_as_java = true;
+                                // Note that this is a language-specific
+                                // organization of the SgMemberFunctionRefExp
+                                // and the SgFunctionCallExp.
+                                handle_as_java = true;
 
-                                   SgExpression* parentOfFunctionCallExpression = isSgExpression(functionCallExp->get_parent());
+                                SgExpression *parentOfFunctionCallExpression =
+                                    isSgExpression(
+                                        functionCallExp->get_parent());
 
-                                   ROSE_ASSERT(parentOfFunctionCallExpression != NULL);
+                                ROSE_ASSERT(parentOfFunctionCallExpression !=
+                                            NULL);
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
                                    printf ("parentOfFunctionCallExpression = %p = %s \n",parentOfFunctionCallExpression,parentOfFunctionCallExpression->class_name().c_str());
 #endif
@@ -19571,11 +19572,15 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
                                    SgExpression* lhs = parentBinaryOp->get_lhs_operand();
                                    ROSE_ASSERT(lhs != NULL);
 
-                                // This will be true for C++, but not Java (a little odd).
+                                   // This will be true for C++, but not for all
+                                   // languages.
                                    if (handle_as_java == true)
                                       {
-                                     // The rhs is the SgFunctionCallExp for Java.
-                                        ROSE_ASSERT(parentBinaryOp->get_rhs_operand() == functionCallExp);
+                                     // The rhs is the SgFunctionCallExp in this
+                                     // case.
+                                     ROSE_ASSERT(
+                                         parentBinaryOp->get_rhs_operand() ==
+                                         functionCallExp);
                                       }
                                      else
                                       {
@@ -19587,7 +19592,6 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
 #endif
                                    SgVarRefExp* varRefExp = isSgVarRefExp(lhs);
 
-                                // DQ (3/15/2014): This can be a SgJavaTypeExpression (see testJava3a).
                                 // ROSE_ASSERT(varRefExp != NULL);
                                    if (varRefExp != NULL)
                                       {
@@ -19675,7 +19679,8 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
                                      // I think we want the copy.
                                         otherPossibleScope_original = classDefinition;
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
-                                        classDefinition->get_symbol_table()->print("Java classDefinition");
+                                        classDefinition->get_symbol_table()
+                                            ->print("classDefinition");
 #endif
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
                                         SgClassDeclaration* associated_classDeclaration = classDefinition->get_declaration();
@@ -19724,7 +19729,6 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
                break;
              }
 
-       // DQ (3/19/2014): Just found this case in a few of the CWE Java snippet tests.
           case V_SgCatchStatementSeq:
              {
             // DQ (3/19/2014): Note sure that we need to handle this specific case.
@@ -19736,7 +19740,6 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
                break;
              }
 
-       // DQ (3/19/2014): Just found this case in a few of the CWE Java snippet tests.
           case V_SgCatchOptionStmt:
              {
             // DQ (3/19/2014): Note sure that we need to handle this specific case.
@@ -19844,15 +19847,16 @@ SageBuilder::fixupCopyOfAstFromSeparateFileInNewTargetAst(SgStatement *insertion
      ROSE_ASSERT(toInsert != NULL);
      ROSE_ASSERT(original_before_copy != NULL);
 
-  // DQ (3/30/2014): Turn this on to support finding symbols in base classes (in Java).
-  // Will be turned off at the base of this function (since we only only want to use it for the AST fixup, currently).
+     // DQ (3/30/2014): Turn this on to support finding symbols in base classes.
+     // Will be turned off at the base of this function (since we only only want
+     // to use it for the AST fixup, currently).
      SgSymbolTable::set_force_search_of_base_classes(true);
 
   // DQ (3/4/2014): Switch to using the SageInterface function.
   // SgFile* targetFile = SageInterface::getEnclosingFileNode(insertionPoint);
      SgFile* targetFile = getEnclosingFileNode(insertionPoint);
 
-  // For Java support this might be NULL, if the insertion point was in global scope.
+     // This might be NULL if the insertion point is in global scope.
      ROSE_ASSERT(targetFile != NULL);
 
   // SgFile* snippetFile_of_copy = SageInterface::getEnclosingFileNode(toInsert);

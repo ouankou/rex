@@ -57,7 +57,6 @@ jobs:
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
-          # Fortran OFP uses the JVM via JNI.
           openjdk-17-jdk \
           python3-dev
 

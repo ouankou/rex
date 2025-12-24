@@ -323,12 +323,14 @@ FixupAstSymbolTablesToSupportAliasedSymbols::isDefinedThroughPrivateBaseClass ( 
      return returnValue;
    }
 
-
-// DQ (8/23/2011): Made this a static function so that I could call it from the Java support.
-void
-FixupAstSymbolTablesToSupportAliasedSymbols::injectSymbolsFromReferencedScopeIntoCurrentScope ( 
-   SgScopeStatement* referencedScope, SgScopeStatement* currentScope, SgNode* causalNode, SgAccessModifier::access_modifier_enum accessLevel, bool calledFromUsingDirective )
-   {
+   // DQ (8/23/2011): Made this a static function so that it can be called in
+   // additional contexts.
+   void FixupAstSymbolTablesToSupportAliasedSymbols::
+       injectSymbolsFromReferencedScopeIntoCurrentScope(
+           SgScopeStatement *referencedScope, SgScopeStatement *currentScope,
+           SgNode *causalNode,
+           SgAccessModifier::access_modifier_enum accessLevel,
+           bool calledFromUsingDirective) {
      ROSE_ASSERT(referencedScope != NULL);
      ROSE_ASSERT(currentScope    != NULL);
 
@@ -1235,8 +1237,6 @@ FixupAstSymbolTablesToSupportAliasedSymbols::injectSymbolsFromReferencedScopeInt
 #endif
    }
 
-
-
 void
 FixupAstSymbolTablesToSupportAliasedSymbols::visit ( SgNode* node )
    {
@@ -1466,32 +1466,4 @@ FixupAstSymbolTablesToSupportAliasedSymbols::visit ( SgNode* node )
 #if ALIAS_SYMBOL_DEBUGGING
      printf ("Leaving FixupAstSymbolTablesToSupportAliasedSymbols::visit() (preorder AST traversal) node = %p = %s \n",node,node->class_name().c_str());
 #endif
-   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}

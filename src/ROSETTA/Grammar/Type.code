@@ -2360,7 +2360,7 @@ SgType::getCurrentScope()
        // Fortran state stack from tests run earlier in the parent Fortran test directory.
        // WARNING, the following relies on short circuiting and emptyFortranStateStack() == false
        // must be checked before emptyFortranScopeStack() == false.
-       // Apparently Java is also examining the Fortran stack! [CR 2019-7-18].
+       // Apparently another frontend is also examining the Fortran stack! [CR 2019-7-18].
           if (SageInterface::is_Fortran_language() && emptyFortranStateStack() == false && emptyFortranScopeStack() == false)
              {
             // Fortran AST being generated
@@ -2468,8 +2468,8 @@ bool SgType::hasExplicitType()
   // can review this if it is important.
 
   // This function returns true only if this is either a SgPointerType, SgReferenceType, SgPointerMemberType,
-  // SgJavaParameterizedType, SgJavaWildcardType, SgModifierType, SgQualifiedNameType, SgFunctionType,
-  // SgMemberFunctionType, SgArrayType, SgTypeComplex, or SgTypeImaginary.
+  // SgModifierType, SgQualifiedNameType, SgFunctionType, SgMemberFunctionType, SgArrayType,
+  // SgTypeComplex, or SgTypeImaginary.
 
      bool returnValue = false;
 

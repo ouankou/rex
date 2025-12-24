@@ -1,8 +1,8 @@
 // Range-based for-loop
-// In C++03, iterating over the elements of a list requires a lot of code. Other languages have implemented 
-// support for syntactic sugar that allow the programmer to write a simple \u201cforeach\u201d statement that 
-// automatically traverses items in a list. One of those languages is the Java programming language, which 
-// received support for what has been defined as enhanced for loops in Java 5.0.[9]
+// In C++03, iterating over the elements of a list requires a lot of code. Other
+// languages have implemented support for syntactic sugar that allow the
+// programmer to write a simple \u201cforeach\u201d statement that automatically
+// traverses items in a list.
 
 // C++11 added a similar feature. The statement for allows for easy iteration over a list of elements:
 

@@ -360,7 +360,6 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
          // namespaces
          Rose::Cmdline::Unparser::OptionRequiresArgument(argument) ||
          Rose::Cmdline::Fortran::OptionRequiresArgument(argument) ||
-         // Rose::Cmdline::Java::OptionRequiresArgument(argument) ||
 
          // negara1 (08/16/2011)
          argument == "-rose:unparseHeaderFilesRootFolder" ||
@@ -373,7 +372,7 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
          argument == "-annot" || argument == "-bs" ||
          isOptionTakingThirdParameter(argument) ||
 
-         // DQ (9/30/2008): Added support for java class specification required
+         // DQ (9/30/2008): Added support for JVM class specification required
          // for Fortran use of OFP.
          argument == "--class" ||
 
@@ -1956,7 +1955,7 @@ ProcessEnableRemoteDebugging (SgProject* project, std::vector<std::string>& argv
 bool Rose::Cmdline::Gnu::OptionRequiresArgument(const std::string &option) {
   return option == "--param" || // --param variable=value
          false;
-} // Cmdline:Java:::OptionRequiresArgument
+} // Rose::Cmdline::Gnu::OptionRequiresArgument
 
 void
 Rose::Cmdline::Gnu::
@@ -4581,8 +4580,9 @@ findIndexForFirstIncludeDirectiveInArgumentList(vector<string> & argv, string fi
 vector<string>
 SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameIndex, const string& compilerName )
    {
-  // This function assembles the commandline that will be passed to the backend (vendor) C++/C, Fortran, or Java compiler
-  // (using the new generated source code from the ROSE unparser).
+  // This function assembles the commandline that will be passed to the backend
+  // (vendor) C/C++ or Fortran compiler (using the new generated source code
+  // from the ROSE unparser).
 
   // DQ (4/21/2006): I think we can now assert this!
      ROSE_ASSERT(fileNameIndex == 0);
@@ -4677,7 +4677,6 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
      printf ("   --- get_F2003_only()          = %s \n",(get_F2003_only() == true) ? "true" : "false");
      printf ("   --- get_F2008_only()          = %s \n",(get_F2008_only() == true) ? "true" : "false");
      printf ("   --- get_CoArrayFortran_only() = %s \n",(get_CoArrayFortran_only() == true) ? "true" : "false");
-     printf ("   --- get_Java_only()           = %s \n",(get_Java_only() == true) ? "true" : "false");
 #endif
 
   // For now let's enforce this, for internal testing, but translators will fail for this assertion in the future.
@@ -5921,7 +5920,6 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
      printf ("In buildCompilerCommandLineOptions: test 3: compilerNameString = \n%s\n",CommandlineProcessing::generateStringFromArgList(compilerNameString,false,false).c_str());
 #endif
 
-  // DQ (4/2/2011): Java does not have -I as an accepted option.
      if (get_C_only() || get_Cxx_only())
         {
        // DQ (12/8/2004): Add -Ipath option so that source file's directory will be searched for any
@@ -6068,11 +6066,7 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
 #if DEBUG_COMPILER_COMMAND_LINE
           printf ("In buildCompilerCommandLineOptions: objectNameSpecified = %s objectFileName = %s \n",objectNameSpecified ? "true" : "false",objectFileName.c_str());
 #endif
-       // DQ (4/2/2011): Java does not have -o as an accepted option, though the "-d <dir>" can be used to specify where class files are put.
-       // Currently we explicitly output "-d ." so that generated class files will be put into the current directory (build tree), but this
-       // is not standard semantics for Java (though it makes the Java support in ROSE consistent with other languages supported in ROSE).
-          if (get_C_only() || get_Cxx_only() || get_Fortran_only())
-             {
+          if (get_C_only() || get_Cxx_only() || get_Fortran_only()) {
             // DQ (7/14/2004): Suggested fix from Andreas, make the object file name explicit
                if (objectNameSpecified == false)
                   {
@@ -6194,7 +6188,7 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
 #endif
                        }
                }
-             }
+          }
         }
        else
         {

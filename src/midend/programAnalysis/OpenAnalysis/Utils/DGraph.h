@@ -49,19 +49,24 @@
 
 //--------------------------------------------------------------------------------------------------------------------
 // DGraph
-/** DGraph is the base class for a general directed graph (DGraph) that is in turn derived from BaseGraph.  Algorithms
-    that operate upon abstract directed graphs should, normally, use only this base DGraph class for maximum
+/** DGraph is the base class for a general directed graph (DGraph) that is in
+   turn derived from BaseGraph.  Algorithms that operate upon abstract directed
+   graphs should, normally, use only this base DGraph class for maximum
     portability.
 
-    No extra restrictions are placed on nodes and edges in addition to those imposed by BaseGraph.  This means that
-    self-edges, and multiple edges between two nodes, are allowed.
+    No extra restrictions are placed on nodes and edges in addition to those
+   imposed by BaseGraph.  This means that self-edges, and multiple edges between
+   two nodes, are allowed.
 
-    A directed graph, DGraph, extends BaseGraph by adding DFS and BFS iterators, as well as iterators to enumerate
-    source nodes, sink nodes, incoming edges, and outgoing edges for a node.
+    A directed graph, DGraph, extends BaseGraph by adding DFS and BFS iterators,
+   as well as iterators to enumerate source nodes, sink nodes, incoming edges,
+   and outgoing edges for a node.
 
-    NOTE ON friend CLASSES: Many classes (especially DGraph, DGraph::Node, and DGraph::Edge) have many friend classes.
-    This is *not* a kludge.  It is simulating "package" visiblity in Java.  We want a limited public interface to Node
-    and Edge and yet give more permissions to methods within the Graph class.  */
+    NOTE ON friend CLASSES: Many classes (especially DGraph, DGraph::Node, and
+   DGraph::Edge) have many friend classes. This is *not* a kludge.  It is
+   simulating package-style visibility. We want a limited public interface to
+   Node and Edge and yet give more permissions to methods within the Graph
+   class.  */
 //--------------------------------------------------------------------------------------------------------------------
 class DGraph : public BaseGraph {
 public:

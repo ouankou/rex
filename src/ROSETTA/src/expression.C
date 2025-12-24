@@ -46,9 +46,9 @@ Grammar::setUpExpressions ()
   // DQ (2/4/2015): Added C++11 noexcept operator.
      NEW_TERMINAL_MACRO (NoexceptOp,                   "NoexceptOp",                   "NOEXCEPT_OP" );
 
-  // DQ (7/24/2014): C11 Generic macros requires additional IR support.  This IR node is likely to be
-  // similar to the SgJavaTypeExpression node and it might be that that IR node could be eliminated in
-  // favor of this newer (more language independent) IR node.
+     // DQ (7/24/2014): C11 Generic macros requires additional IR support.  This
+     // IR node is likely to be favor of this newer (more language independent)
+     // IR node.
      NEW_TERMINAL_MACRO (TypeExpression, "TypeExpression", "TYPE_EXPRESSION");
 
   // DQ (9/2/2014): Adding support for C++11 Lambda expressions.

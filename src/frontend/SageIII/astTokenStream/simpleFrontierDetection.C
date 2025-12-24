@@ -531,7 +531,7 @@ simpleFrontierDetectionForTokenStreamMapping ( SgSourceFile* sourceFile )
 #endif
 
 #if 0
-  // DQ (11/20/2013): Test using support for multiple files for Java testing.
+  // DQ (11/20/2013): Test using support for multiple files.
   // Output an optional graph of the AST (just the tree, when active)
   // generateDOT ( *project );
   // SgProject* project = isSgProject(sourceFile->get_project());

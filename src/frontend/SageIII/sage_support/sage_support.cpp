@@ -1148,9 +1148,8 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
         }
 
 #if 0
-  // DQ (6/12/2013): I think this is required to support having all of the SgSourceFile
-  // IR nodes pre-built as part of the new Java support required to be better performance
-  // in the Java frontend AST translation.
+  // DQ (6/12/2013): This is required to support having all of the SgSourceFile
+  // IR nodes pre-built for improved frontend performance.
      printf ("***************************************************************************************************************************************************************************** \n");
      printf ("***************************************************************************************************************************************************************************** \n");
      printf ("Disabling the call to the frontend so that we can setup the SgSourceFile IR nodes once at the start and then call the frontend on each of them as we process all of the files \n");
@@ -1238,10 +1237,8 @@ SgFile::runFrontend(int & nextErrorCode)
     ROSE_ASSERT(nextErrorCode <= 3);
 }
 
-
-// DQ (10/20/2010): Note that Java support can be enabled just because Java internal support was found on the
-// current platform.  But we only want to inialize the JVM server if we require Fortran or Java language support.
-// So use the explicit macros defined in rose_config header file for this level of control.
+// DQ (10/20/2010): Only initialize the JVM server when Fortran OFP support is
+// enabled.
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 namespace Rose {
 namespace Frontend {
@@ -1320,8 +1317,8 @@ SgProject::parse(const vector<string>& argv)
 
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 
-                    //Rose::Frontend::Fortran::Ofp::jserver_init(); //jserver_init is not defined since it does not need, thus of this call.
-                    //Rose::Frontend::Java::Ecj::jserver_init();
+                 // Rose::Frontend::Fortran::Ofp::jserver_init(); //jserver_init
+                 // is not defined since it does not need, thus of this call.
 #endif
                     errorCode = parse();
                   }
@@ -1401,8 +1398,9 @@ SgSourceFile::SgSourceFile ( vector<string> & argv , SgProject* project )
   // DQ (6/15/2011): Added scope to hold unhandled declarations (see test2011_80.C).
      set_temp_holding_scope(nullptr);
 
-  // This constructor actually makes the call to EDG/OFP/ECJ to build the AST (via callFrontEnd()).
-  // printf ("In SgSourceFile::SgSourceFile(): Calling doSetupForConstructor() \n");
+     // This constructor makes the frontend call to build the AST (via
+     // callFrontEnd()). printf ("In SgSourceFile::SgSourceFile(): Calling
+     // doSetupForConstructor() \n");
      doSetupForConstructor(argv,  project);
     }
 
@@ -1575,10 +1573,11 @@ SgProject::parse()
      Rose_STL_Container<string>::iterator nameIterator = p_sourceFileNameList.begin();
      unsigned int i = 0;
 
-  // The goal in this version of the code is to seperate the construction of the SgFile objects
-  // from the invocation of the frontend on each of the SgFile objects.  In general this allows
-  // the compilation to reference the other SgFile objects on an as needed basis as part of running
-  // the frontend.  This is important for the optimization of Java.
+     // The goal in this version of the code is to seperate the construction of
+     // the SgFile objects from the invocation of the frontend on each of the
+     // SgFile objects.  In general this allows the compilation to reference the
+     // other SgFile objects on an as needed basis as part of running the
+     // frontend.
      std::vector<SgFile*> vectorOfFiles;
      while (nameIterator != p_sourceFileNameList.end())
         {
@@ -2148,16 +2147,13 @@ SgFile::generate_C_preprocessor_intermediate_filename( string sourceFilename )
 
 
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-// This is the "C" function implemented in:
-//    ROSE/src/frontend/OpenFortranParser_SAGE_Connection/openFortranParser_main.c
-// This function calls the Java JVM to load the Java implemented parser (written
-// using ANTLR, a parser generator).
-int openFortranParser_main(int argc, char **argv );
+   // This is the "C" function implemented in:
+   //    ROSE/src/frontend/OpenFortranParser_SAGE_Connection/openFortranParser_main.c
+   // This function calls the JVM to load the OFP parser (written using ANTLR).
+   int openFortranParser_main(int argc, char **argv);
 #endif
 
-int
-SgFile::callFrontEnd()
-   {
+   int SgFile::callFrontEnd() {
      if (SgProject::get_verbose() > 0)
         {
           std::cout << "[INFO] [SgFile::callFrontEnd]" << std::endl;
@@ -2401,8 +2397,6 @@ SgFile::callFrontEnd()
   // return the error code associated with the call to the C++ Front-end
      return frontendErrorLevel;
    }
-
-
 
 void
 SgFile::secondaryPassOverSourceFile()
@@ -3225,19 +3219,21 @@ int
 SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputCommandLine )
    {
   // Rasmussen (1/24/2022): Transitioning to using Flang as the Fortran parser.
-  // The variable ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION will be defined at configuration
-  // but not ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT.  Unfortunately the latter variable is
-  // too tightly coupled with Java usage at the moment. The Flang parser doesn't require Java.
-     if (get_experimental_flang_frontend() == true) {
-       int status{-1};
-       int flangArgc{0};
-       char** flangArgv{nullptr};
+  // The variable ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION will be defined at
+  // configuration but not ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT.  Unfortunately
+  // the latter variable is too tightly coupled with JVM usage at the moment.
+  // The Flang parser doesn't require the JVM.
+  if (get_experimental_flang_frontend() == true) {
+    int status{-1};
+    int flangArgc{0};
+    char **flangArgv{nullptr};
 
-       vector<string> flangCommandLine;
-       flangCommandLine.push_back("f18");
-       flangCommandLine.push_back("-fexternal-builder");
-       flangCommandLine.push_back(get_sourceFileNameWithPath());
-       CommandlineProcessing::generateArgcArgvFromList(flangCommandLine, flangArgc, flangArgv);
+    vector<string> flangCommandLine;
+    flangCommandLine.push_back("f18");
+    flangCommandLine.push_back("-fexternal-builder");
+    flangCommandLine.push_back(get_sourceFileNameWithPath());
+    CommandlineProcessing::generateArgcArgvFromList(flangCommandLine, flangArgc,
+                                                    flangArgv);
 
     // SG (7/9/2015) In case of a mixed language project, force case sensitivity here.
        SageBuilder::symbol_table_case_insensitive_semantics = true;
@@ -3250,7 +3246,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                      "error: ROSE was not configured to support the Fortran Flang frontend.");
 #endif
        return status;
-     }
+  }
 
 #if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT)
   // This is how we pass the pointer to the SgFile created in ROSE before the Open
@@ -3283,8 +3279,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
      extern SgSourceFile* OpenFortranParser_globalFilePointer;
 
-  // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the stack will
-  // be empty when processing Java language support (not Fortran).
+     // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the
+     // stack is empty before running the OFP frontend.
      FortranParserState* currStks = new FortranParserState();
 
   // printf ("######################### Inside of SgSourceFile::build_Fortran_AST() ############################ \n");
@@ -3926,9 +3922,11 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
      char** openFortranParser_argv = nullptr;
      CommandlineProcessing::generateArgcArgvFromList(frontEndCommandLine,openFortranParser_argc,openFortranParser_argv);
 
-  // DQ (8/19/2007): Setup the global pointer used to pass the SgFile to which the Open Fortran Parser
-  // should attach the AST.  This is a bit ugly, but the parser interface only takes a commandline so it
-  // would be more ackward to pass a pointer to a C++ object through the commandline or the Java interface.
+     // DQ (8/19/2007): Setup the global pointer used to pass the SgFile to
+     // which the Open Fortran Parser should attach the AST.  This is a bit
+     // ugly, but the parser interface only takes a commandline so it would be
+     // more ackward to pass a pointer to a C++ object through the commandline
+     // or the JVM interface.
      OpenFortranParser_globalFilePointer = const_cast<SgSourceFile*>(this);
      ASSERT_not_null(OpenFortranParser_globalFilePointer);
 
@@ -3960,9 +3958,10 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
           printf ("Calling openFortranParser_main(): OpenFortranParser_globalFilePointer = %p \n",OpenFortranParser_globalFilePointer);
 
 #if USE_ROSE_SSL_SUPPORT
-  // The use of the JVM required to support Java is a problem when linking to the SSL library (either -lssl or -lcrypto)
-  // this may be fixed in Java version 6, but this is a hope, it has not been tested.  Java version 6 does
-  // appear to fix the problem with zlib (we think) and this appears to be a similar problem).
+     // The use of the JVM required for OFP is a problem when linking to the SSL
+     // library (either -lssl or -lcrypto). This may be fixed in JVM version 6,
+     // but it has not been tested. JVM version 6 appears to fix the problem
+     // with zlib (we think) and this appears to be a similar problem).
      int frontendErrorLevel = 1;
 
      printf ("********************************************************************************************** \n");
@@ -4113,13 +4112,12 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
   // printf ("######################### Leaving SgSourceFile::build_Fortran_AST() ############################ \n");
 
+        // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the
+        // stack is empty before running the OFP frontend.
+        delete currStks;
+        currStks = nullptr;
 
-  // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the stack will
-  // be empty when processing Java language support (not Fortran).
-     delete  currStks;
-     currStks = nullptr;
-
-     return frontendErrorLevel;
+        return frontendErrorLevel;
 #else
      fprintf(stderr, "Fortran parser not supported \n");
      ROSE_ABORT();
@@ -4747,12 +4745,11 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
         }
 #endif
 
-     ROSE_ASSERT (get_unparse_output_filename().empty() == false); // TODO: may need to add condition:  "&& (! get_Java_only())"  here
+        ROSE_ASSERT(get_unparse_output_filename().empty() == false);
 
-  // Now call the compiler that rose is replacing
-  // if (get_useBackendOnly() == false)
-     if ( SgProject::get_verbose() >= 1 )
-        {
+        // Now call the compiler that rose is replacing
+        // if (get_useBackendOnly() == false)
+        if (SgProject::get_verbose() >= 1) {
           printf ("Now call the backend (vendor's) compiler compilerNameOrig = %s for file = %s \n",compilerNameOrig.c_str(),get_unparse_output_filename().c_str());
         }
 
@@ -5213,10 +5210,9 @@ SgProject::compileOutput()
 #endif
        // case 3: linking at the project level
 
-       // DQ (1/9/2017): Only proceed with linking step if the compilation step finished without error.
-       // DQ (30/8/2017): Note that Csharp does not use linking the same way that C/C++ does (as I understand it).
-       // if (! (get_Java_only() || get_Python_only() || get_X10_only()) )
-       // if (! (get_Java_only() || get_Python_only() || get_X10_only() || get_Csharp_only() ) )
+          // DQ (1/9/2017): Only proceed with linking step if the compilation
+          // step finished without error. DQ (30/8/2017): Note that Csharp does
+          // not use linking the same way that C/C++ does (as I understand it).
           if (errorCode == 0)
              {
 

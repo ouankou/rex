@@ -16,7 +16,7 @@ CMake Error at CMakeLists.txt:357 (message):
   Fortran analysis currently requires the JVM-based Open Fortran Parser (OFP). Set -Denable-fortran-ofp=ON or disable Fortran.
 ```
 
-**Root Cause**: The Fortran frontend uses OpenFortranParser (OFP), which is implemented in Java.
+**Root Cause**: The Fortran frontend uses OpenFortranParser (OFP), which is JVM-based.
 
 **Solution**: Modified `build-rex.sh` to enable Fortran and OFP explicitly:
 - Line 78: Changed `-Denable-fortran=OFF` to `-Denable-fortran=ON`
@@ -202,7 +202,7 @@ Array addition results:
 
 REX uses the **OpenFortranParser (OFP)** for Fortran support:
 - Located in: `src/frontend/OpenFortranParser_SAGE_Connection/`
-- Written in Java (hence the JVM dependency)
+- JVM-based (hence the JVM dependency)
 - Separate from C/C++ Clang frontend
 - Should NOT be affected by AstPostProcessing issues that affect Clang frontend
 

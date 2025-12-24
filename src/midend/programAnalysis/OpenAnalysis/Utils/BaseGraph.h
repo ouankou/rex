@@ -60,34 +60,51 @@ namespace std {
 }
 //--------------------------------------------------------------------------------------------------------------------
 // BaseGraph
-/** BaseGraph is the abstract base class (the "interface") for a general graph.  It defines graph properties common to
-    directed and undirected graphs.  It leaves out some loose ends in the interface:
-    1. A node has no notion of incident edges or neighboring nodes because the number of kinds of incident edges or
-       neighboring nodes is dependent upon the graph being directed or undirected.
-    2. For the same reason, the method delete(node) cannot delete any incident edges.  Therefore the directed or
-       undirected graph *must* override it with a more complete version.  Similarly, the method delete(edge) cannot
-       delete the edge from the list(s) of the nodes involved.
-    3. In an analogous manner, the method add(edge) must be overridden with a more complete version that adds the edge
-       into the records of the nodes involved, if needed.
+/** BaseGraph is the abstract base class (the "interface") for a general graph.
+   It defines graph properties common to directed and undirected graphs.  It
+   leaves out some loose ends in the interface:
+    1. A node has no notion of incident edges or neighboring nodes because the
+   number of kinds of incident edges or neighboring nodes is dependent upon the
+   graph being directed or undirected.
+    2. For the same reason, the method delete(node) cannot delete any incident
+   edges.  Therefore the directed or undirected graph *must* override it with a
+   more complete version.  Similarly, the method delete(edge) cannot delete the
+   edge from the list(s) of the nodes involved.
+    3. In an analogous manner, the method add(edge) must be overridden with a
+   more complete version that adds the edge into the records of the nodes
+   involved, if needed.
 
-    The only restriction on nodes and edges is that they should be unique objects, meaning, an edge or a node cannot
-    be shared between two graphs.  A node or edge can also not be inserted twice.  Nodes and edges are identified by
-    their pointer values (BaseGraph::Node* and BaseGraph::Edge*).
+    The only restriction on nodes and edges is that they should be unique
+   objects, meaning, an edge or a node cannot be shared between two graphs.  A
+   node or edge can also not be inserted twice.  Nodes and edges are identified
+   by their pointer values (BaseGraph::Node* and BaseGraph::Edge*).
 
-    Following exceptions are thrown by the class (all are subclasses of Exception):
-    1. BaseGraph::EmptyEdge                       -- attempt to add, or remove, an empty edge (null pointer)
-    2. BaseGraph::DuplicateEdge                   -- attempt to add an edge more than once
-    3. BaseGraph::NonexistentEdge                 -- attempt to remove an edge that does not belong to the graph
-    4. BaseGraph::EdgeInUse                       -- attempt to add an edge that is already a part of another graph
-    5. BaseGraph::EmptyNode                       -- attempt to add, or remove, an empty node (null pointer)
-    6. BaseGraph::DuplicateNode                   -- attempt to add a node more than once
-    7. BaseGraph::NonexistentNode                 -- attempt to remove a node that does not belong to the graph
-    8. BaseGraph::NodeInUse                       -- attempt to add a node that is already a part of another graph
-    9. BaseGraph::DeletingRootOfNonSingletonGraph -- attempt to delete the root node when graph has more nodes & edges
-    
-    NOTE ON friend CLASSES: Many classes (especially BaseGraph, BaseGraph::Node and BaseGraph::Edge) have many friend
-    classes.  This is *not* a kludge.  It is simulating "package" visiblity in Java.  We want a limited public
-    interface to Node and Edge and yet give more permissions to methods within the BaseGraph class.  */
+    Following exceptions are thrown by the class (all are subclasses of
+   Exception):
+    1. BaseGraph::EmptyEdge                       -- attempt to add, or remove,
+   an empty edge (null pointer)
+    2. BaseGraph::DuplicateEdge                   -- attempt to add an edge more
+   than once
+    3. BaseGraph::NonexistentEdge                 -- attempt to remove an edge
+   that does not belong to the graph
+    4. BaseGraph::EdgeInUse                       -- attempt to add an edge that
+   is already a part of another graph
+    5. BaseGraph::EmptyNode                       -- attempt to add, or remove,
+   an empty node (null pointer)
+    6. BaseGraph::DuplicateNode                   -- attempt to add a node more
+   than once
+    7. BaseGraph::NonexistentNode                 -- attempt to remove a node
+   that does not belong to the graph
+    8. BaseGraph::NodeInUse                       -- attempt to add a node that
+   is already a part of another graph
+    9. BaseGraph::DeletingRootOfNonSingletonGraph -- attempt to delete the root
+   node when graph has more nodes & edges
+
+    NOTE ON friend CLASSES: Many classes (especially BaseGraph, BaseGraph::Node
+   and BaseGraph::Edge) have many friend classes.  This is *not* a kludge.  It
+   is simulating package-style visibility. We want a limited public interface to
+   Node and Edge and yet give more permissions to methods within the BaseGraph
+   class.  */
 //--------------------------------------------------------------------------------------------------------------------
 class BaseGraph {
 public:

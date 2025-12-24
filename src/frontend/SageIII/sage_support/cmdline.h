@@ -51,7 +51,7 @@ namespace Cmdline {
    *
    *  For example,
    *
-   *      -rose:java:classpath "/some/class/path"
+   *      -rose:fortran:ofp:classpath "/some/class/path"
    *
    *      becomes
    *
@@ -124,7 +124,7 @@ namespace Cmdline {
                                      std::vector<std::string> &argv);
 
   /** -rose:fortran:ofp:enable_remote_debugging
-   *  Enable remote debugging of the Java Virtual Machine (JVM).
+   *  Enable remote debugging of the OFP JVM.
    */
   ROSE_DLL_API void
   ProcessEnableRemoteDebugging(SgProject *project,

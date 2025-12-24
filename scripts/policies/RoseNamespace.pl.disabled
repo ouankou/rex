@@ -201,7 +201,7 @@ my @policies = (
 	header has been included indirectly. For instance, the user might
 	include <Rose/BinaryAnalysis/Disassembler.h> and then check whether
 	ROSE_BinaryAnalysis_Disassembler_Jvm_H is defined in order to determine
-	if this version of ROSE supports analysis of Java class files. The
+	if this version of ROSE supports that capability. The
 	reason for "ROSE" being allcaps is because we have a separate policy
 	that states that all ROSE-related C preprocessor symbols begin with
 	"ROSE_".'
