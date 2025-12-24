@@ -712,6 +712,14 @@ ClangToSageTranslator::resolveScopeFromDeclContext(clang::DeclContext *context,
       } else if (SgClassDefinition *class_def =
                      isSgClassDefinition(context_node)) {
         return class_def;
+      } else if (SgFunctionDefinition *fn_def =
+                     isSgFunctionDefinition(context_node)) {
+        return fn_def;
+      } else if (SgFunctionDeclaration *fn_decl =
+                     isSgFunctionDeclaration(context_node)) {
+        if (fn_decl->get_definition() != NULL) {
+          return fn_decl->get_definition();
+        }
       }
     }
 
@@ -789,7 +797,8 @@ bool is_declaration_scope_context(const clang::DeclContext *context) {
   if (context == NULL) {
     return false;
   }
-  return context->isFileContext() || context->isRecord();
+  return context->isFileContext() || context->isRecord() ||
+         context->isFunctionOrMethod();
 }
 
 bool scope_supports_statement_list(const SgScopeStatement *scope) {
