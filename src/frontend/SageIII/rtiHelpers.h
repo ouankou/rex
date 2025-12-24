@@ -270,10 +270,6 @@ static std::string toStringForRTI(const SgAccessModifier& m) {
   return m.displayString();
 }
 
-static std::string toStringForRTI(const SgUPC_AccessModifier& m) {
-  return m.displayString();
-}
-
 static std::string toStringForRTI(const SgConstVolatileModifier& m) {
   return m.displayString();
 }

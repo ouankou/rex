@@ -906,26 +906,6 @@ CommandlineProcessing::isCoArrayFortranFileNameSuffix ( const std::string & suff
      return returnValue;
    }
 
-//Liao, 6/6/2008 Support for UPC
-bool
-CommandlineProcessing::isUPCFileNameSuffix ( const std::string & suffix )
-   {
-     bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a UNIXish project.
-
-#if(CASE_SENSITIVE_SYSTEM == 1)
-     if ( suffix == "upc")
-#else//It is a case insensitive system
-     if ( suffix == "upc" )
-#endif
-        {
-          returnValue = true;
-        }
-
-     return returnValue;
-   }
-
 // TV (05/17/2010) Support for CUDA
 bool
 CommandlineProcessing::isCudaFileNameSuffix ( const std::string & suffix )
@@ -1012,9 +992,6 @@ CommandlineProcessing::initSourceFileSuffixList ( )
        // FMZ 5/28/2008
           validSourceFileSuffixes.push_back(".rmod");
 
-       // Liao (6/6/2008)  Support for UPC
-          validSourceFileSuffixes.push_back(".upc");
-
        // TV (05/17/2010) Support for CUDA
           validSourceFileSuffixes.push_back(".cu");
 
@@ -1053,8 +1030,6 @@ CommandlineProcessing::initSourceFileSuffixList ( )
 
        // FMZ 5/28/2008
           validSourceFileSuffixes.push_back(".rmod");
-
-          validSourceFileSuffixes.push_back(".upc");
 
        // TV (05/17/2010) Support for CUDA
           validSourceFileSuffixes.push_back(".cu");

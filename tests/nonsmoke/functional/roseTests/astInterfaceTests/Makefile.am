@@ -19,20 +19,19 @@ bin_PROGRAMS = loopInterchange loopUnrolling loopTiling loopCollapsingDirective 
 #moveDeclarationToInnermostScope is moved to rose/tools/
 
 #not for installation
-noinst_PROGRAMS = \
-    buildFunctionDeclaration buildNondefiningFunction \
-    findMain buildVariableDeclaration buildAssignmentStmt \
-    buildFunctionCalls buildPragmaDeclaration attachComment \
-    insertHeader buildExpression buildStructDeclaration \
-    lookupNamedType buildFile movePreprocessingInfo buildIfStmt \
-    buildCpreprocessorDefineDeclaration instrumentEndOfFunction \
-    isUpcSharedType isUpcPhaseLessSharedType buildLabelStatement \
-    buildSizeOfOp abiStuffTest abiStuffTestUPC buildNullStatement \
-    buildForStmt canonicalLoop loopNormalization collectReadWriteVariables \
-    typeTraits livenessAnalysis buildProcedureHeaderStatement replaceMacroCalls \
-    getDependentDecls buildStructDeclaration2 buildTypedefDeclaration \
-    deepDelete insertStatementBeforeFunction removeStatementCommentRelocation \
-    generateUniqueName annotateExpressionsWithUniqueNames buildExternalStatement \
+	noinst_PROGRAMS = \
+	    buildFunctionDeclaration buildNondefiningFunction \
+	    findMain buildVariableDeclaration buildAssignmentStmt \
+	    buildFunctionCalls buildPragmaDeclaration attachComment \
+	    insertHeader buildExpression buildStructDeclaration \
+	    lookupNamedType buildFile movePreprocessingInfo buildIfStmt \
+	    buildCpreprocessorDefineDeclaration instrumentEndOfFunction \
+	    buildLabelStatement buildSizeOfOp abiStuffTest buildNullStatement \
+	    buildForStmt canonicalLoop loopNormalization collectReadWriteVariables \
+	    typeTraits livenessAnalysis buildProcedureHeaderStatement replaceMacroCalls \
+	    getDependentDecls buildStructDeclaration2 buildTypedefDeclaration \
+	    deepDelete insertStatementBeforeFunction removeStatementCommentRelocation \
+	    generateUniqueName annotateExpressionsWithUniqueNames buildExternalStatement \
     buildCommonBlock doLoopNormalization buildLabelStatement2 replaceWithPattern \
     insertBeforeUsingCommaOp insertAfterUsingCommaOp deepCopy fixVariableReferences \
     buildJavaPackage \
@@ -64,16 +63,13 @@ buildTemplateClass_SOURCES               = buildTemplateClass.C
 lookupNamedType_SOURCES                  = lookupNamedType.C           
 buildFile_SOURCES                        = buildFile.C           
 movePreprocessingInfo_SOURCES            = movePreprocessingInfo.C
-buildIfStmt_SOURCES                      = buildIfStmt.C
-buildCpreprocessorDefineDeclaration_SOURCES = buildCpreprocessorDefineDeclaration.C
-instrumentEndOfFunction_SOURCES          = instrumentEndOfFunction.C
-isUpcSharedType_SOURCES                  = isUpcSharedType.C
-isUpcPhaseLessSharedType_SOURCES         = isUpcPhaseLessSharedType.C
-buildLabelStatement_SOURCES              = buildLabelStatement.C
-buildSizeOfOp_SOURCES                    = buildSizeOfOp.C
-abiStuffTest_SOURCES                     = abiStuffTest.C
-abiStuffTestUPC_SOURCES                  = abiStuffTestUPC.C
-buildNullStatement_SOURCES               = buildNullStatement.C
+	buildIfStmt_SOURCES                      = buildIfStmt.C
+	buildCpreprocessorDefineDeclaration_SOURCES = buildCpreprocessorDefineDeclaration.C
+	instrumentEndOfFunction_SOURCES          = instrumentEndOfFunction.C
+	buildLabelStatement_SOURCES              = buildLabelStatement.C
+	buildSizeOfOp_SOURCES                    = buildSizeOfOp.C
+	abiStuffTest_SOURCES                     = abiStuffTest.C
+	buildNullStatement_SOURCES               = buildNullStatement.C
 buildForStmt_SOURCES                     = buildForStmt.C
 canonicalLoop_SOURCES                    = canonicalLoop.C
 loopNormalization_SOURCES                = loopNormalization.C 
@@ -111,10 +107,10 @@ LDADD =  $(ROSE_LIBS)
 # TODO: handle side effects when deleting AST nodes
 #failing_generatedCodeExamples = rose_inputdeepDelete.C 
 
-generatedCodeExamples = \
-  rose_inputfixVariableReferences.C \
-  rose_inputBlank1.C \
-  rose_inputBlank2.C \
+	generatedCodeExamples = \
+	  rose_inputfixVariableReferences.C \
+	  rose_inputBlank1.C \
+	  rose_inputBlank2.C \
   rose_inputfindMain.C \
   rose_inputbuildVariableDeclaration.C \
   rose_inputbuildAssignmentStmt.C \
@@ -130,16 +126,13 @@ generatedCodeExamples = \
   rose_inputbuildFile.C \
   rose_inputMovePreprocessingInfo.C \
   rose_inputbuildIfStmt.C \
-  rose_inputbuildCpreprocessorDefineDeclaration.C \
-  rose_inputinstrumentEndOfFunction.C \
-  rose_inputisUpcSharedType.upc \
-  rose_inputisUpcPhaseLessSharedType.upc \
-  rose_inputbuildLabelStatement.C \
-  rose_inputbuildSizeOfOp.C \
-  abiStuffTest.passed \
-  abiStuffTestUPC.passed \
-  rose_inputbuildNullStatement.C \
-  rose_inputbuildForStmt.C \
+	  rose_inputbuildCpreprocessorDefineDeclaration.C \
+	  rose_inputinstrumentEndOfFunction.C \
+	  rose_inputbuildLabelStatement.C \
+	  rose_inputbuildSizeOfOp.C \
+	  abiStuffTest.passed \
+	  rose_inputbuildNullStatement.C \
+	  rose_inputbuildForStmt.C \
   rose_inputcanonicalLoop.C \
   rose_inputcollectReadWriteVariables.C \
   rose_inputtypeTraits.C \
@@ -305,40 +298,19 @@ rose_inputLookupNamedType.C: inputLookupNamedType.C lookupNamedType
 		FLAGS="$(TEST_CXXFLAGS)" \
 		INPUT=$(abspath $<) \
 		$(srcdir)/astInterface.conf $@.passed
-rose_inputMovePreprocessingInfo.C: inputMovePreprocessingInfo.C movePreprocessingInfo
-	@$(RTH_RUN) \
-		EXE="$$(pwd)/movePreprocessingInfo$(EXEEXT)" \
-		FLAGS="$(TEST_CXXFLAGS)" \
-		INPUT=$(abspath $<) \
-		$(srcdir)/astInterface.conf $@.passed
+	rose_inputMovePreprocessingInfo.C: inputMovePreprocessingInfo.C movePreprocessingInfo
+		@$(RTH_RUN) \
+			EXE="$$(pwd)/movePreprocessingInfo$(EXEEXT)" \
+			FLAGS="$(TEST_CXXFLAGS)" \
+			INPUT=$(abspath $<) \
+			$(srcdir)/astInterface.conf $@.passed
 
-# Like group1, except for target extension and extra FLAGS
-rose_inputisUpcSharedType.upc: inputisUpcSharedType.upc isUpcSharedType
-	@$(RTH_RUN) \
-		EXE="$$(pwd)/isUpcSharedType$(EXEEXT)" \
-		FLAGS="$(TEST_CXXFLAGS) -rose:skipfinalCompileStep -rose:upc_threads 1" \
-		INPUT=$(abspath $<) \
-		$(srcdir)/astInterface.conf $@.passed
-rose_inputisUpcPhaseLessSharedType.upc: inputisUpcPhaseLessSharedType.upc isUpcPhaseLessSharedType
-	@$(RTH_RUN) \
-		EXE="$$(pwd)/isUpcPhaseLessSharedType$(EXEEXT)" \
-		FLAGS="$(TEST_CXXFLAGS) -rose:skipfinalCompileStep -rose:upc_threads 1" \
-		INPUT=$(abspath $<) \
-		$(srcdir)/astInterface.conf $@.passed
-
-# Doesn't produce a C file
-abiStuffTest.passed: inputAbiStuffTest.c abiStuffTest
-	@$(RTH_RUN) \
-		USE_SUBDIR=yes \
-		CMD="$$(pwd)/abiStuffTest$(EXEEXT) $(abspath $<)" \
-		$(TEST_EXIT_STATUS) $@
-
-# Doesn't produce a C file
-abiStuffTestUPC.passed: inputAbiStuffTestUPC.upc abiStuffTestUPC
-	@$(RTH_RUN) \
-		USE_SUBDIR=yes \
-		CMD="$$(pwd)/abiStuffTestUPC$(EXEEXT) $(TEST_CXXFLAGS) -rose:upc_threads 1 -c $(abspath $<)" \
-		$(TEST_EXIT_STATUS) $@
+	# Doesn't produce a C file
+	abiStuffTest.passed: inputAbiStuffTest.c abiStuffTest
+		@$(RTH_RUN) \
+			USE_SUBDIR=yes \
+			CMD="$$(pwd)/abiStuffTest$(EXEEXT) $(abspath $<)" \
+			$(TEST_EXIT_STATUS) $@
 
 
 if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
@@ -554,17 +526,16 @@ buildJavaPackage.passed: inputbuildJavaPackage.C buildJavaPackage
 		CMD="$$(pwd)/buildJavaPackage$(EXEEXT) $(TEST_CXXFLAGS) -I$(abs_srcdir) -c $(abspath $<)"  \
 		$(TEST_EXIT_STATUS) $@
 
-# MUST keep this up-to-date!!
-EXTRA_DIST = astInterface.conf inputBlank1.C inputBlank2.C inputfindMain.C inputbuildVariableDeclaration.C	\
-       inputbuildAssignmentStmt.C inputbuildFunctionCalls.C inputbuildFunctionCalls.h				\
-       inputbuildPragmaDeclaration.c inputAttachComment.C inputInsertHeader.C					\
-       inputbuildExpression.C inputbuildStructDeclaration.C inputLookupNamedType.C				\
-       inputbuildFile.C inputMovePreprocessingInfo.C inputbuildIfStmt.C						\
-       inputbuildCpreprocessorDefineDeclaration.C inputinstrumentEndOfFunction.C				\
-       inputisUpcSharedType.upc inputisUpcPhaseLessSharedType.upc inputbuildLabelStatement.C			\
-       inputbuildSizeOfOp.C inputAbiStuffTest.c inputAbiStuffTestUPC.upc					\
-       inputbuildNullStatement.C inputbuildForStmt.C inputcanonicalLoop.C					\
-       inputloopNormalization.C inputcollectReadWriteVariables.C inputtypeTraits.C				\
+	# MUST keep this up-to-date!!
+	EXTRA_DIST = astInterface.conf inputBlank1.C inputBlank2.C inputfindMain.C inputbuildVariableDeclaration.C	\
+	       inputbuildAssignmentStmt.C inputbuildFunctionCalls.C inputbuildFunctionCalls.h				\
+	       inputbuildPragmaDeclaration.c inputAttachComment.C inputInsertHeader.C					\
+	       inputbuildExpression.C inputbuildStructDeclaration.C inputLookupNamedType.C				\
+	       inputbuildFile.C inputMovePreprocessingInfo.C inputbuildIfStmt.C						\
+	       inputbuildCpreprocessorDefineDeclaration.C inputinstrumentEndOfFunction.C				\
+	       inputbuildLabelStatement.C inputbuildSizeOfOp.C inputAbiStuffTest.c					\
+	       inputbuildNullStatement.C inputbuildForStmt.C inputcanonicalLoop.C					\
+	       inputloopNormalization.C inputcollectReadWriteVariables.C inputtypeTraits.C				\
        inputlivenessAnalysis.C inputbuildProcedureHeaderStatement.f inputreplaceMacroCalls.C			\
        inputloopUnrolling.C inputgetDependentDecls.C					\
        inputloopInterchange.C inputloopTiling.C inputbuildStructDeclaration2.C					\

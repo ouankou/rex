@@ -278,8 +278,6 @@ namespace Rose
   // SgFile objects across all SgProject objects.
      extern bool is_C_language;
      extern bool is_OpenMP_language;
-     extern bool is_UPC_language;
-     extern bool is_UPC_dynamic_threads;
      extern bool is_C99_language;
      extern bool is_Cxx_language;
      extern bool is_Fortran_language;

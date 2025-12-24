@@ -3412,7 +3412,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
              bool useRawTokenOutput = false;
              if (sourceFile != NULL && file->get_unparse_tokens() == false &&
                  (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-                  sourceFile->get_UPC_only() || sourceFile->get_Cuda_only() ||
+                  sourceFile->get_Cuda_only() ||
                   sourceFile->get_OpenCL_only())) {
                if (fileHasRelevantModifications(sourceFile) == false) {
                  ROSEAttributesListContainerPtr filePreprocInfo =

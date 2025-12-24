@@ -126,17 +126,17 @@ SgElaboratedTypeModifier.C            SgLongDoubleVal.C                       Sg
 SgElseDirectiveStatement.C            SgLongIntVal.C                          SgQualifiedNameType.C                        SgUnsignedLongLongIntVal.C \
 SgElseifDirectiveStatement.C          SgLongLongIntVal.C                      SgReadStatement.C                            SgUnsignedLongVal.C \
 SgElseWhereStatement.C                SgLshiftAssignOp.C                      SgRealPartOp.C                               SgUnsignedShortVal.C \
-SgEmptyDirectiveStatement.C           SgLshiftOp.C                            SgReferenceType.C                            SgUPC_AccessModifier.C \
-SgEndfileStatement.C                  SgMemberFunctionDeclaration.C           SgRefExp.C                                   SgUpcBarrierStatement.C \
-SgEndifDirectiveStatement.C           SgMemberFunctionRefExp.C                SgRenamePair.C                               SgUpcBlocksizeof.C \
-SgEntryStatement.C                    SgMemberFunctionSymbol.C                SgRenameSymbol.C                             SgUpcElemsizeof.C \
-SgEnumDeclaration.C                   SgMemberFunctionType.C                  SgReturnStmt.C                               SgUpcFenceStatement.C \
-SgEnumFieldSymbol.C                   SgMinusAssignOp.C                       SgRewindStatement.C                          SgUpcForAllStatement.C \
-SgEnumSymbol.C                        SgMinusMinusOp.C                        SgRshiftAssignOp.C                           SgUpcLocalsizeof.C \
-SgEnumType.C                          SgMinusOp.C                             SgRshiftOp.C                                 SgUpcMythread.C \
-SgEnumVal.C                           SgModAssignOp.C                         SgScopeOp.C                                  SgUpcNotifyStatement.C \
-SgEqualityOp.C                        SgModifier.C                            SgScopeStatement.C                           SgUpcThreads.C \
-SgEquivalenceStatement.C              SgModifierNodes.C                       SgSequenceStatement.C                        SgUpcWaitStatement.C \
+SgEmptyDirectiveStatement.C           SgLshiftOp.C                            SgReferenceType.C \
+SgEndfileStatement.C                  SgMemberFunctionDeclaration.C           SgRefExp.C \
+SgEndifDirectiveStatement.C           SgMemberFunctionRefExp.C                SgRenamePair.C \
+SgEntryStatement.C                    SgMemberFunctionSymbol.C                SgRenameSymbol.C \
+SgEnumDeclaration.C                   SgMemberFunctionType.C                  SgReturnStmt.C \
+SgEnumFieldSymbol.C                   SgMinusAssignOp.C                       SgRewindStatement.C \
+SgEnumSymbol.C                        SgMinusMinusOp.C                        SgRshiftAssignOp.C \
+SgEnumType.C                          SgMinusOp.C                             SgRshiftOp.C \
+SgEnumVal.C                           SgModAssignOp.C                         SgScopeOp.C \
+SgEqualityOp.C                        SgModifier.C                            SgScopeStatement.C \
+SgEquivalenceStatement.C              SgModifierNodes.C                       SgSequenceStatement.C \
 SgAssignedGotoStatement.C                  SgErrorDirectiveStatement.C           SgModifierType.C                        SgShortVal.C                                 SgUserDefinedBinaryOp.C \
 SgAssignInitializer.C                      SgExponentiationOp.C                  SgModOp.C                               SgSizeOfOp.C                                 SgUserDefinedUnaryOp.C \
 SgAssignOp.C                               SgExpression.C                        SgModuleStatement.C                     SgSourceFile.C                               SgUseStatement.C \
@@ -164,7 +164,6 @@ SgCaseOptionStmt.C                         SgFunctionDefinition.C               
 SgOmpForStatement.C \
 SgCastExp.C                                SgFunctionModifier.C                  SgOmpClauseBodyStatement.C              SgTemplateInstantiationFunctionDecl.C        SgHeaderFileBody.C \
 SgOmpExecStatement
-
 
 
 

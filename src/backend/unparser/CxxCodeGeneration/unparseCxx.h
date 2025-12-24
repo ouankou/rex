@@ -214,12 +214,9 @@ class Unparse_ExprStmt : public UnparseLanguageIndependentConstructs
           virtual void unparseULongIntVal             (SgExpression* expr, SgUnparse_Info& info); 
           virtual void unparseFloatVal                (SgExpression* expr, SgUnparse_Info& info); 
        // virtual void unparseDoubleVal               (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseLongDoubleVal           (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseComplexVal              (SgExpression* expr, SgUnparse_Info& info);
-        // Liao, 6/18/2008  UPC support
-          virtual void unparseUpcThreads              (SgExpression* expr, SgUnparse_Info& info);     
-          virtual void unparseUpcMythread             (SgExpression* expr, SgUnparse_Info& info);     
-
+          virtual void unparseLongDoubleVal           (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseComplexVal(SgExpression *expr,
+                                         SgUnparse_Info &info);
           virtual void unparseFuncCall                (SgExpression* expr, SgUnparse_Info& info);  
           virtual void unparsePointStOp               (SgExpression* expr, SgUnparse_Info& info);  
           virtual void unparseRecRef                  (SgExpression* expr, SgUnparse_Info& info);  
@@ -265,12 +262,7 @@ class Unparse_ExprStmt : public UnparseLanguageIndependentConstructs
           virtual void unparseAlignOfOp               (SgExpression* expr, SgUnparse_Info& info);  
 
        // DQ (2/5/2015): Added missing C++11 support.
-          virtual void unparseNoexceptOp              (SgExpression* expr, SgUnparse_Info& info);  
-
-       // DQ (2/12/2011): Added support for UPC specific sizeof operators.
-          virtual void unparseUpcLocalSizeOfOp        (SgExpression* expr, SgUnparse_Info& info);
-          virtual void unparseUpcBlockSizeOfOp        (SgExpression* expr, SgUnparse_Info& info);
-          virtual void unparseUpcElemSizeOfOp         (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseNoexceptOp              (SgExpression* expr, SgUnparse_Info& info);
 
           virtual void unparseTypeIdOp                (SgExpression* expr, SgUnparse_Info& info);  
           virtual void unparseNotOp                   (SgExpression* expr, SgUnparse_Info& info);  
@@ -485,37 +477,41 @@ class Unparse_ExprStmt : public UnparseLanguageIndependentConstructs
 #if USE_OLD_MECHANISM_OF_HANDLING_PREPROCESSING_INFO
           void getDirectives ( char* sourceFilename );
 #endif
-//#if UPC_EXTENSIONS_ALLOWED
-//#if USE_UPC_IR_NODES
-       // Liao, 6/13/2008, support UPC nodes
-          virtual void unparseUpcNotifyStatement  (SgStatement* stmt, SgUnparse_Info& info);
-          virtual void unparseUpcWaitStatement    (SgStatement* stmt, SgUnparse_Info& info);
-          virtual void unparseUpcBarrierStatement (SgStatement* stmt, SgUnparse_Info& info);
-          virtual void unparseUpcFenceStatement   (SgStatement* stmt, SgUnparse_Info& info);
-          virtual void unparseUpcForAllStatement  (SgStatement* stmt, SgUnparse_Info& info);
-//#endif       
-       // Liao 5/31/2009, OpenMP nodes
-         virtual void unparseOmpPrefix                     (SgUnparse_Info& info); 
-//       virtual void unparseOmpDefaultClause(SgOmpDefaultClause* clause, SgUnparse_Info& info);
-//       virtual void unparseOmpScheduleClause(SgOmpScheduleClause* clause, SgUnparse_Info& info);
-//       virtual void unparseOmpVariablesClause(SgOmpVariablesClause* clause, SgUnparse_Info& info);
-//       virtual void unparseOmpExpressionClause(SgOmpExpressionClause* clause, SgUnparse_Info& info);
-//       virtual void unparseOmpClause(SgOmpClause* clause, SgUnparse_Info& info);
-//       virtual void unparseOmpParallelStatement (SgStatement* stmt, SgUnparse_Info& info);
-//       virtual void unparseOmpBodyStatement(SgOmpBodyStatement* stmt, SgUnparse_Info& info);
-//       virtual void unparseOmpThreadprivateStatement(SgOmpThreadprivateStatement* stmt, SgUnparse_Info& info);
-//       virtual void unparseOmpFlushStatement(SgOmpFlushStatement* stmt, SgUnparse_Info& info);
-//       virtual void unparseOmpBarrierStatement(SgOmpBarrierStatement* stmt, SgUnparse_Info& info);
-//       virtual void unparseOmpTaskwaitStatement(SgOmpTaskwaitStatement* stmt, SgUnparse_Info& info);
+          // Liao 5/31/2009, OpenMP nodes
+          virtual void unparseOmpPrefix(SgUnparse_Info &info);
+          //       virtual void unparseOmpDefaultClause(SgOmpDefaultClause*
+          //       clause, SgUnparse_Info& info); virtual void
+          //       unparseOmpScheduleClause(SgOmpScheduleClause* clause,
+          //       SgUnparse_Info& info); virtual void
+          //       unparseOmpVariablesClause(SgOmpVariablesClause* clause,
+          //       SgUnparse_Info& info); virtual void
+          //       unparseOmpExpressionClause(SgOmpExpressionClause* clause,
+          //       SgUnparse_Info& info); virtual void
+          //       unparseOmpClause(SgOmpClause* clause, SgUnparse_Info& info);
+          //       virtual void unparseOmpParallelStatement (SgStatement* stmt,
+          //       SgUnparse_Info& info); virtual void
+          //       unparseOmpBodyStatement(SgOmpBodyStatement* stmt,
+          //       SgUnparse_Info& info); virtual void
+          //       unparseOmpThreadprivateStatement(SgOmpThreadprivateStatement*
+          //       stmt, SgUnparse_Info& info); virtual void
+          //       unparseOmpFlushStatement(SgOmpFlushStatement* stmt,
+          //       SgUnparse_Info& info); virtual void
+          //       unparseOmpBarrierStatement(SgOmpBarrierStatement* stmt,
+          //       SgUnparse_Info& info); virtual void
+          //       unparseOmpTaskwaitStatement(SgOmpTaskwaitStatement* stmt,
+          //       SgUnparse_Info& info);
 
-         virtual void unparseOmpForStatement (SgStatement* stmt, SgUnparse_Info& info);
-         virtual void unparseOmpForSimdStatement      (SgStatement* stmt, SgUnparse_Info& info);
-         virtual void unparseOmpBeginDirectiveClauses (SgStatement* stmt, SgUnparse_Info& info);
-       // DQ (8/13/2007): This should go into the Unparser class
-      //! begin the unparser (unparser.C)
-       // void run_unparser();
-       
-       // TV (05/06/2010): SgCudaKernelCallExp
+          virtual void unparseOmpForStatement(SgStatement *stmt,
+                                              SgUnparse_Info &info);
+          virtual void unparseOmpForSimdStatement(SgStatement *stmt,
+                                                  SgUnparse_Info &info);
+          virtual void unparseOmpBeginDirectiveClauses(SgStatement *stmt,
+                                                       SgUnparse_Info &info);
+          // DQ (8/13/2007): This should go into the Unparser class
+          //! begin the unparser (unparser.C)
+          // void run_unparser();
+
+          // TV (05/06/2010): SgCudaKernelCallExp
           virtual void unparseCudaKernelCall(SgExpression* expr, SgUnparse_Info& info);
 
        // DQ (7/21/2012): New IR node (only seen in C++11 so far).

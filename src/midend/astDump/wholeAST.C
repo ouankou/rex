@@ -1914,52 +1914,24 @@ CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode* node)
 
 #if 1
           SgModifierType* mod_type = isSgModifierType(node);
-          if (mod_type != NULL)
-             {
-               if (mod_type->get_typeModifier().get_upcModifier().get_isShared() == true)
-                  {
-                    long block_size = mod_type->get_typeModifier().get_upcModifier().get_layout();
+          if (mod_type != NULL) {
+            if (mod_type->get_typeModifier()
+                    .get_constVolatileModifier()
+                    .isConst() == true) {
+              labelWithSourceCode += string("\\n const ");
+            }
 
-                    labelWithSourceCode += string("UPC: ");
-
-                    if (block_size == 0) // block size empty
-                       {
-                      // curprint ("shared[] ") ;
-                         labelWithSourceCode += string("shared[] ");
-                       }
-                    else if (block_size == -1) // block size omitted
-                       {
-                      // curprint ("shared ") ;
-                         labelWithSourceCode += string("shared ");
-                       }
-                    else if (block_size == -2) // block size is *
-                       {
-                      // curprint ("shared[*] ") ;
-                         labelWithSourceCode += string("shared[*] ");
-                       }
-                    else
-                       {
-                         ROSE_ASSERT(block_size > 0);
-                         stringstream ss;
-                         ss << block_size;
-
-                      // curprint ("shared["+ss.str()+"] ") ;
-                         labelWithSourceCode += string("shared["+ss.str()+"] ");
-                       }
-                  }
-
-               if (mod_type->get_typeModifier().get_constVolatileModifier().isConst() == true)
-                  {
-                    labelWithSourceCode += string("\\n const ");
-                  }
-
-               if (mod_type->get_typeModifier().get_elaboratedTypeModifier().get_modifier() != SgElaboratedTypeModifier::e_default)
-                  {
-                    stringstream ss;
-                    ss << mod_type->get_typeModifier().get_elaboratedTypeModifier().get_modifier();
-                    labelWithSourceCode += string("\\n type modifier enum value = "+ss.str()+" ");
-                  }
-             }
+            if (mod_type->get_typeModifier()
+                    .get_elaboratedTypeModifier()
+                    .get_modifier() != SgElaboratedTypeModifier::e_default) {
+              stringstream ss;
+              ss << mod_type->get_typeModifier()
+                        .get_elaboratedTypeModifier()
+                        .get_modifier();
+              labelWithSourceCode +=
+                  string("\\n type modifier enum value = " + ss.str() + " ");
+            }
+          }
 
        // DQ (4/22/2014): Added to make the formatting of the type information better in the graph node.
           labelWithSourceCode += string("\\n   ");

@@ -997,48 +997,6 @@ std::vector<CFGEdge> SgForAllStatement::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgUpcForAllStatement::cfgIndexForEnd() const
-   {
-     printf ("Sorry not implemented, need CFG support for UPC forall IR node \n");
-     ROSE_ABORT();
-  // return doForallCfgIndexForEnd(this);
-   }
-
-bool SgUpcForAllStatement::cfgIsIndexInteresting(unsigned int idx) const
-   {
-     printf ("Sorry not implemented, need CFG support for UPC forall IR node \n");
-     ROSE_ABORT();
-  // return doForallCfgIsIndexInteresting(this, idx);
-   }
-
-unsigned int SgUpcForAllStatement::cfgFindChildIndex(SgNode* n)
-   {
-     printf ("Sorry not implemented, need CFG support for UPC forall IR node \n");
-     ROSE_ABORT();
-  // return doForallCfgFindChildIndex(this, n);
-   }
-
-unsigned int SgUpcForAllStatement::cfgFindNextChildIndex(SgNode* n)
-   {
-     printf ("Sorry not implemented, need CFG support for UPC forall IR node \n");
-     ROSE_ABORT();
-  // return doForallCfgFindNextChildIndex(this, n);
-   }
-
-std::vector<CFGEdge> SgUpcForAllStatement::cfgOutEdges(unsigned int idx)
-   {
-     printf ("Sorry not implemented, need CFG support for UPC forall IR node \n");
-     ROSE_ABORT();
-  // return doForallCfgOutEdges(this, idx);
-   }
-
-std::vector<CFGEdge> SgUpcForAllStatement::cfgInEdges(unsigned int idx)
-   {
-     printf ("Sorry not implemented, need CFG support for UPC forall IR node \n");
-     ROSE_ABORT();
-  // return doForallCfgInEdges(this, idx);
-   }
-
 unsigned int
 SgFunctionDeclaration::cfgIndexForEnd() const {
   return 0;

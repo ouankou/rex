@@ -62,7 +62,6 @@ SgModifier : SgModifierNodes()
  | SgStorageModifier()
  | SgAccessModifier()
  | SgFunctionModifier()
- | SgUPC_AccessModifier()
  | SgSpecialFunctionModifier()
  | SgElaboratedTypeModifier()
  | SgLinkageModifier()
@@ -298,4 +297,3 @@ ROSETTA. Several other versions of the grammar can be generated as
 well, such as eliminating nested tree nodes by introducing auxiliary
 non-terminals, introducing base types as non-terminals etc. Additionally from
 that grammar we can also generate grammars that can be used with yacc/bison, Coco, and other attribute grammar tools, as well as tree grammar based tools such as burg (requires a transformation to a binary tree).
-

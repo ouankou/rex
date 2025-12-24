@@ -29,12 +29,9 @@ set(noinst_programs
   buildIfStmt
   buildCpreprocessorDefineDeclaration
   instrumentEndOfFunction
-  isUpcSharedType
-  isUpcPhaseLessSharedType
   buildLabelStatement
   buildSizeOfOp
   abiStuffTest
-  abiStuffTestUPC
   buildNullStatement
   buildForStmt
   canonicalLoop
@@ -192,31 +189,11 @@ add_test(
   COMMAND movePreprocessingInfo ${TEST_CXXFLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/inputMovePreprocessingInfo.C
 )
 
-# UPC tests - DISABLED: UPC language not fully supported with Clang frontend
-# The Clang frontend does not recognize .upc files and UPC language extensions
-# TODO: Re-enable when UPC support is added to Clang frontend
-# Note: These require -rose:skipfinalCompileStep -rose:upc_threads 1
-# add_test(
-#   NAME astInterface_isUpcSharedType
-#   COMMAND isUpcSharedType ${TEST_CXXFLAGS} -rose:skipfinalCompileStep -rose:upc_threads 1 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputisUpcSharedType.upc
-# )
-#
-# add_test(
-#   NAME astInterface_isUpcPhaseLessSharedType
-#   COMMAND isUpcPhaseLessSharedType ${TEST_CXXFLAGS} -rose:skipfinalCompileStep -rose:upc_threads 1 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputisUpcPhaseLessSharedType.upc
-# )
-
 # abiStuffTest (doesn't produce C file)
 add_test(
   NAME astInterface_abiStuffTest
   COMMAND abiStuffTest -rex:clang:continue-on-error ${CMAKE_CURRENT_SOURCE_DIR}/inputAbiStuffTest.c
 )
-
-# abiStuffTestUPC - DISABLED: UPC language not fully supported with Clang frontend
-# add_test(
-#   NAME astInterface_abiStuffTestUPC
-#   COMMAND abiStuffTestUPC ${TEST_CXXFLAGS} -rose:upc_threads 1 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputAbiStuffTestUPC.upc
-# )
 
 # deepDelete test (doesn't create output file)
 add_test(

@@ -146,10 +146,6 @@ UnparseHeadersTests:
 unparseToString_tests:
    This directory tests the ability to unparse and AST subtree to a string.
 
-UPC_tests:
-   this directory contains test code specific to UPC to support analysis and
-   transformations of UPC applications.
-
 virtualCFG_tests:
    This direcotry uses tests codes to test the virtual Control Flow Graph (CFG) 
    in ROSE.

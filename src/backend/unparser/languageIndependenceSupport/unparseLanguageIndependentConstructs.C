@@ -11963,7 +11963,6 @@ UnparseLanguageIndependentConstructs::getPrecedence(SgExpression* expr)
           case V_SgNotOp:            // return 15;
           case V_SgPointerDerefExp:
           case V_SgAddressOfOp:
-          case V_SgUpcLocalsizeofExpression:   // \pp 03/03/11
           case V_SgSizeOfOp:         // return 15;
 
        // DQ (6/20/2013): Added support for __alignof__ operator.
@@ -12195,9 +12194,6 @@ UnparseLanguageIndependentConstructs::getPrecedence(SgExpression* expr)
           case V_SgCAFCoExpression:        // return 16;
                                      precedence_value = 16; break;
 
-       // Liao, 7/15/2009, UPC nodes
-          case V_SgUpcThreads:             // return 0;
-          case V_SgUpcMythread:            // return 0;
           case V_SgNullExpression:         // return 0;
        // TV (04/26/2010): CUDA nodes
           case V_SgCudaKernelExecConfig:   // return 0;

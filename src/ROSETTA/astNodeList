@@ -617,7 +617,6 @@ SgTypedefDeclaration
 SgTypedefSeq
 SgTypedefSymbol
 SgTypedefType
-SgUPC_AccessModifier
 SgUnaryAddOp
 SgUnaryOp
 SgUndefDirectiveStatement
@@ -631,16 +630,6 @@ SgUnsignedIntVal
 SgUnsignedLongLongIntVal
 SgUnsignedLongVal
 SgUnsignedShortVal
-SgUpcBarrierStatement
-SgUpcBlocksizeofExpression
-SgUpcElemsizeofExpression
-SgUpcFenceStatement
-SgUpcForAllStatement
-SgUpcLocalsizeofExpression
-SgUpcMythread
-SgUpcNotifyStatement
-SgUpcThreads
-SgUpcWaitStatement
 SgUseStatement
 SgUserDefinedBinaryOp
 SgUserDefinedUnaryOp

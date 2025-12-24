@@ -175,13 +175,11 @@ std::map<std::string, SgIncludeFile*> Rose::includeFileMapForUnparsing;
 // DQ (11/25/2020): These are the boolean variables that are computed in the function compute_language_kind()
 // and inlined via the SageInterface::is_<language kind>_language() functions.  See more details comment in
 // the header file.
-bool Rose::is_C_language          = false;
-bool Rose::is_OpenMP_language     = false;
-bool Rose::is_UPC_language        = false;
-bool Rose::is_UPC_dynamic_threads = false;
-bool Rose::is_C99_language        = false;
-bool Rose::is_Cxx_language        = false;
-bool Rose::is_Fortran_language    = false;
+bool Rose::is_C_language = false;
+bool Rose::is_OpenMP_language = false;
+bool Rose::is_C99_language = false;
+bool Rose::is_Cxx_language = false;
+bool Rose::is_Fortran_language = false;
 bool Rose::is_Cuda_language       = false;
 bool Rose::is_OpenCL_language     = false;
 

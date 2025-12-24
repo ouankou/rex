@@ -4325,8 +4325,6 @@ TestLValues::visit ( SgNode* node )
                         case V_SgDoubleVal:
                         case V_SgLongDoubleVal:
                         case V_SgComplexVal:
-                        case V_SgUpcThreads:
-                        case V_SgUpcMythread:
                         case V_SgUnaryOp:
                         case V_SgBinaryOp:
                         case V_SgExprListExp:
@@ -4366,9 +4364,6 @@ TestLValues::visit ( SgNode* node )
                         case V_SgClassNameRefExp:
                         case V_SgValueExp:
                         case V_SgSizeOfOp:
-                        case V_SgUpcLocalsizeofExpression:
-                        case V_SgUpcBlocksizeofExpression:
-                        case V_SgUpcElemsizeofExpression:
                         case V_SgNewExp:
                         case V_SgDeleteExp:
                         case V_SgThisExp:
@@ -6247,13 +6242,11 @@ TestForReferencesToDeletedNodes::visit ( SgNode* node )
                     printf ("Error in AST consistancy detect_dangling_pointers test for file %s: Found a child = %p = %s child name = %s of node = %p = %s that was previously deleted \n",filename.c_str(),child,child->class_name().c_str(),v[i].second.c_str(),node,node->class_name().c_str());
                   }
 
-            // DQ (9/26/2011): This fails for the projects/UpcTranslation upc_shared_2.upc file...figure this out once we see what elase might file.
-            // Other fialing tests include:
-            //    projects/backstroke/tests/expNormalizationTest/test2006_74.C
-            //    projects/backstroke/tests/expNormalizationTest/test2006_87.C
-            // Large percentage of Fortran tests fail this test!
-               if (detect_dangling_pointers > 1)
-                  {
+                  // DQ (9/26/2011): Other failing tests include:
+                  //    projects/backstroke/tests/expNormalizationTest/test2006_74.C
+                  //    projects/backstroke/tests/expNormalizationTest/test2006_87.C
+                  // Large percentage of Fortran tests fail this test!
+                  if (detect_dangling_pointers > 1) {
                     ROSE_ASSERT( (child == NULL) || (child != NULL && child->variantT() != V_SgNode) );
                   }
              }

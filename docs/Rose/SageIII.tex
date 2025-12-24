@@ -54,7 +54,7 @@ For example, ROSE adds:
     \item Fast binary AST File I\/O.
     \item An AST merge mechanism for supporting whole program analysis
           (across hundreds of files).
-    \item Complete language support for C, C99, UPC, C++, Fortran 66, Fortran 77, 
+    \item Complete language support for C, C99, C++, Fortran 66, Fortran 77, 
           Fortran 90/95, and Fortran 2003.
     \item AST visualizations (program visualization for debugging).
     \item ROSE User Manual and ROSE Tutorial Documentation.
@@ -1892,10 +1892,10 @@ a complete list use any translator build using ROSE with the option {\tt --help}
      All other options are passed to the back-end compiler with no processing.
 
 
-\section{How to Control Language Specific Modes: C++, C, C99, UPC}
+\section{How to Control Language Specific Modes: C++, C, C99}
 
    ROSE supports a number of different modes internally (within ROSE and the SAGE III
-IR).  There are four modes supported:
+IR).  There are three modes supported:
 \begin{enumerate}
    \item C++ mode. \\
         This mode is used when compiling all files when no command line options are specified.
@@ -1912,13 +1912,6 @@ IR).  There are four modes supported:
    Note that in ANSI C99, flexible array structures can not be data members of 
    other structures. See test2005\_189.c for an example.
 
-   \item UPC mode. \\
-        This is the mode used when compiling with UPC specific modifiers; use
-        {\tt -rose:UPC}. The generated code does not 
-        support calls to a UPC runtime system at present, so this is just the 
-        mode required to support building the translator for C or C++ which would
-        introduce the transformations required to call a UPC runtime system (such
-        as has been done for OpenMP by Liao from University of Houston).
 \end{enumerate}
 
   Most of the time the C++ mode is sufficient for compiling either C or C++ 
@@ -1960,7 +1953,6 @@ low level handling of the AST.  Significant new work is being done
 to simplify the direct construction of the AST.  This work is not
 available yet.  It is not discussed in this draft of the manual.
 }
-
 
 
 

@@ -434,12 +434,6 @@ HEADER_MODIFIER_TYPE_START
           bool isVolatile() const ;
       //! Tests for declaration as restrict
           bool isRestrict() const ;
-      //! Tests for declaration as UPC shared
-          bool isUPC_Shared() const ;
-      //! Tests for declaration as UPC strict
-          bool isUPC_Strict() const ;
-      //! Tests for declaration as UPC relaxed
-          bool isUPC_Relaxed() const ;
 #endif
        /*! */
 
@@ -476,12 +470,6 @@ HEADER_MODIFIER_TYPE_START
           void setConst();
           void unsetVolatile();
           void setVolatile();
-          void unsetUPC_Shared();
-          void setUPC_Shared();
-          void unsetUPC_Strict();
-          void setUPC_Strict();
-          void unsetUPC_Relaxed();
-          void setUPC_Relaxed();
 #endif
 
 #if 0
@@ -512,9 +500,6 @@ HEADER_MODIFIER_TYPE_START
                m_sync     = 0x04, //!< not use by ROSE
                m_const    = 0x08, //!< const modifier
                m_restrict = 0x10,//!< support for restrict keyword (specifies non-aliased pointers)
-               m_shared   = 0x20, //!< UPC shared modifier
-               m_strict   = 0x40, //!< UPC strict modifier
-               m_relaxed  = 0x80, //!< UPC relaxed modifier
              };
 
        //! mask bits on
@@ -530,10 +515,6 @@ HEADER_MODIFIER_TYPE_START
           bool isVolatile() const;
           bool isRestrict() const;
 
-       // UPC specific
-          bool isShared() const;
-          bool isStrict() const;
-          bool isRelaxed() const;
 
       //! Set/unset functions for specific modifiers
           void unsetSync();
@@ -545,13 +526,6 @@ HEADER_MODIFIER_TYPE_START
           void unsetRestrict();
           void setRestrict();
 
-       // UPC specific
-          void unsetShared();
-          void setShared();
-          void unsetStrict();
-          void setStrict();
-          void unsetRelaxed();
-          void setRelaxed();
 
       //! Get whole bit field fr modifier set
           unsigned int bitfield(void);
@@ -569,10 +543,7 @@ HEADER_MODIFIER_TYPE_START
                e_unaligned   =   0x008,   // Microsoft __unaligned qualifier
                e_near        =   0x010,   // near
                e_far         =   0x020,   // far
-               e_upc_shared  =   0x040,   // UPC shared
-               e_upc_strict  =   0x080,   // UPC strict
-               e_upc_relaxed =   0x100,   // UPC relaxed
-               e_last_type_modifier = 0x200
+               e_last_type_modifier = 0x040
              };
 
        // DQ (4/6/2004): Added to provide uniform support for storage modifiers
@@ -647,18 +618,6 @@ HEADER_MODIFIER_TYPE_START
           void setFar();
           void unsetFar();
 #endif
-          int isUPC_Shared() const;
-          void setUPC_Shared();
-          void unsetUPC_Shared();
-
-          int isUPC_Strict() const;
-          void setUPC_Strict();
-          void unsetUPC_Strict();
-
-          int isUPC_Relaxed() const;
-          void setUPC_Relaxed();
-          void unsetUPC_Relaxed();
-
       //! Storage Modifier Support
           int isUnknownStorage() const;
           void setUnknownStorage();
@@ -1554,9 +1513,6 @@ SgType::get_parent() const
 bool SgType::isConst() const       { return false; }
 bool SgType::isVolatile() const    { return false; }
 bool SgType::isRestrict() const    { return false; }
-bool SgType::isUPC_Shared() const  { return false; }
-bool SgType::isUPC_Strict() const  { return false; }
-bool SgType::isUPC_Relaxed() const { return false; }
 #endif
 
 #if 0
@@ -4527,28 +4483,19 @@ SgModifierType::setGlobal()
 
 #if 0
 // Access the function at the lower level typeModifier, storageModifier, or accessModifier objects
-bool $CLASSNAME::isRestrict() const    { return p_typeModifier.isRestrict(); }
-bool $CLASSNAME::isConst() const       { return p_typeModifier.get_constVolatileModifier().isConst(); }
-bool $CLASSNAME::isVolatile() const    { return p_typeModifier.get_constVolatileModifier().isVolatile(); }
-bool $CLASSNAME::isUPC_Shared() const  { return p_typeModifier.get_upcModifier().isUPC_Shared(); }
-bool $CLASSNAME::isUPC_Strict() const  { return p_typeModifier.get_upcModifier().isUPC_Strict(); }
-bool $CLASSNAME::isUPC_Relaxed() const { return p_typeModifier.get_upcModifier().isUPC_Relaxed(); }
+	bool $CLASSNAME::isRestrict() const    { return p_typeModifier.isRestrict(); }
+	bool $CLASSNAME::isConst() const       { return p_typeModifier.get_constVolatileModifier().isConst(); }
+	bool $CLASSNAME::isVolatile() const    { return p_typeModifier.get_constVolatileModifier().isVolatile(); }
 
-void $CLASSNAME::unsetRestrict()    { p_typeModifier.unsetRestrict(); }
-void $CLASSNAME::setRestrict()      { p_typeModifier.setRestrict(); }
+	void $CLASSNAME::unsetRestrict()    { p_typeModifier.unsetRestrict(); }
+	void $CLASSNAME::setRestrict()      { p_typeModifier.setRestrict(); }
 #endif
 
 #if 0
-void $CLASSNAME::unsetConst()       { p_typeModifier.get_constVolatileModifier().unsetConst(); }
-void $CLASSNAME::setConst()         { p_typeModifier.get_constVolatileModifier().setConst();   }
-void $CLASSNAME::unsetVolatile()    { p_typeModifier.get_constVolatileModifier().unsetVolatile(); }
-void $CLASSNAME::setVolatile()      { p_typeModifier.get_constVolatileModifier().setVolatile();   }
-void $CLASSNAME::unsetUPC_Shared()  { p_typeModifier.get_upcModifier().unsetUPC_Shared(); }
-void $CLASSNAME::setUPC_Shared()    { p_typeModifier.get_upcModifier().setUPC_Shared(); }
-void $CLASSNAME::unsetUPC_Strict()  { p_typeModifier.get_upcModifier().unsetUPC_Strict(); }
-void $CLASSNAME::setUPC_Strict()    { p_typeModifier.get_upcModifier().setUPC_Strict(); }
-void $CLASSNAME::unsetUPC_Relaxed() { p_typeModifier.get_upcModifier().unsetUPC_Relaxed(); }
-void $CLASSNAME::setUPC_Relaxed()   { p_typeModifier.get_upcModifier().setUPC_Relaxed(); }
+	void $CLASSNAME::unsetConst()       { p_typeModifier.get_constVolatileModifier().unsetConst(); }
+	void $CLASSNAME::setConst()         { p_typeModifier.get_constVolatileModifier().setConst();   }
+	void $CLASSNAME::unsetVolatile()    { p_typeModifier.get_constVolatileModifier().unsetVolatile(); }
+	void $CLASSNAME::setVolatile()      { p_typeModifier.get_constVolatileModifier().setVolatile();   }
 #endif
 
 #if 0
@@ -4593,7 +4540,6 @@ SgModifierType::get_mangled (void) const
 
      const SgTypeModifier &          type_mod = get_typeModifier();
      const SgConstVolatileModifier & cv_mod   = type_mod.get_constVolatileModifier();
-     const SgUPC_AccessModifier &    upc_mod  = type_mod.get_upcModifier();
 
      // PP (02/17/22) Add aliased information to mangled name
      if (type_mod.isAliased())   mangled_name << "A";
@@ -4605,26 +4551,6 @@ SgModifierType::get_mangled (void) const
   // if (isSync())        mangled_name << "SYN";
   // if (isGlobal())      mangled_name << "GLB";
      if (type_mod.isRestrict())    mangled_name << "RST";
-  // if (upc_mod.isUPC_Shared())  mangled_name << "SHD";
-
-  // PP make mangled name depend on blocksize
-     if (upc_mod.get_isShared())
-        {
-          mangled_name << "SHD";
-
-          std::stringstream sstr;
-          long              blocksize = upc_mod.get_layout();
-          ROSE_ASSERT(blocksize >= -2);
-
-       // \pp just add the blocksize as string to the mangled name.
-       //     The TypeTable implementation needs to differentiate types
-       //     with different shared blocksize.
-          sstr << blocksize;
-          mangled_name << sstr.str();
-        }
-
-     if (upc_mod.isUPC_Strict())  mangled_name << "STR";
-     if (upc_mod.isUPC_Relaxed()) mangled_name << "RLX";
 
      mangled_name << get_base_type()->get_mangled().str();
 
@@ -4640,12 +4566,9 @@ SgModifierType::get_mangled(SgUnparse_Info& info)
      if (get_typeModifier().get_constVolatileModifier().isConst())    tmp << "C";
      if (get_typeModifier().get_constVolatileModifier().isVolatile()) tmp << "V";
   // DQ (4/22/2004): Removed support for CC++
-  // if (isSync())        tmp << "SYN";
-  // if (isGlobal())      tmp << "GLB";
-     if (get_typeModifier().isRestrict())                             tmp << "RST";
-     if (get_typeModifier().get_upcModifier().isUPC_Shared())         tmp << "SHD";
-     if (get_typeModifier().get_upcModifier().isUPC_Strict())         tmp << "STR";
-     if (get_typeModifier().get_upcModifier().isUPC_Relaxed())        tmp << "RLX";
+     // if (isSync())        tmp << "SYN";
+     // if (isGlobal())      tmp << "GLB";
+        if (get_typeModifier().isRestrict())                             tmp << "RST";
 
      tmp << get_base_type()->get_mangled(info).str();
 

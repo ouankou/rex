@@ -768,12 +768,6 @@ HEADER_COMPLEX_VALUE_EXPRESSION_END
 // HEADER_LABEL_ADDRESS_VALUE_EXPRESSION_START
 // HEADER_LABEL_ADDRESS_VALUE_EXPRESSION_END
 
-HEADER_UPC_THREADS_EXPRESSION_START
-HEADER_UPC_THREADS_EXPRESSION_END
-
-HEADER_UPC_MYTHREAD_EXPRESSION_START
-HEADER_UPC_MYTHREAD_EXPRESSION_END
-
 HEADER_YIELD_EXPRESSION_START
 HEADER_YIELD_EXPRESSION_END
 
@@ -847,10 +841,6 @@ HEADER_ARROW_EXPRESSION_START
        // get lvalue
           virtual bool isLValue() const override;
           virtual bool isChildUsedAsLValue(const SgExpression* child) const override; // INTERNAL Recursively call up the chain to answer the child
-
-       // DQ (7/16/2014): Shared types from expressions in UPC have some expected symantics that are not a matter of returning the result of get_type().
-       // This function supports the get_type() function.
-          SgType* checkForSharedTypeAndReturnSharedType( SgType* possibleReturnType ) const;
 
 HEADER_ARROW_EXPRESSION_END
 
@@ -1207,10 +1197,6 @@ HEADER_ADDRESS_OF_OPERATOR_START
        // get lvalue
           virtual bool isLValue() const override;
           virtual bool isChildUsedAsLValue(const SgExpression* child) const override; // INTERNAL Recursively call up the chain to answer the child
-
-       // DQ (7/16/2014): Shared types from expressions in UPC have some expected symantics that are not a matter of returning the result of get_type().
-       // This function supports the get_type() function.
-          SgType* checkForSharedTypeAndReturnSharedType( SgType* possibleReturnType ) const;
 
 HEADER_ADDRESS_OF_OPERATOR_END
 
@@ -1895,24 +1881,6 @@ HEADER_DESIGNATED_INITIALIZER_START
 #endif
 
 HEADER_DESIGNATED_INITIALIZER_END
-
-HEADER_UPC_LOCAL_SIZEOF_EXPRESSION_START
-//        virtual unsigned int cfgIndexForEnd() const;
-//        virtual std::vector<VirtualCFG::CFGEdge> cfgOutEdges(unsigned int index);
-//        virtual std::vector<VirtualCFG::CFGEdge> cfgInEdges(unsigned int index);
-HEADER_UPC_LOCAL_SIZEOF_EXPRESSION_END
-
-HEADER_UPC_BLOCK_SIZEOF_EXPRESSION_START
-//        virtual unsigned int cfgIndexForEnd() const;
-//        virtual std::vector<VirtualCFG::CFGEdge> cfgOutEdges(unsigned int index);
-//        virtual std::vector<VirtualCFG::CFGEdge> cfgInEdges(unsigned int index);
-HEADER_UPC_BLOCK_SIZEOF_EXPRESSION_END
-
-HEADER_UPC_ELEM_SIZEOF_EXPRESSION_START
-//        virtual unsigned int cfgIndexForEnd() const;
-//        virtual std::vector<VirtualCFG::CFGEdge> cfgOutEdges(unsigned int index);
-//        virtual std::vector<VirtualCFG::CFGEdge> cfgInEdges(unsigned int index);
-HEADER_UPC_ELEM_SIZEOF_EXPRESSION_END
 
 HEADER_USER_DEFINED_UNARY_EXPRESSION_START
           SgType* get_type() const override;
@@ -2637,8 +2605,6 @@ SgExpression::hasExplicitType()
 
      bool returnValue = false;
 
-  // Need to add: SgUpcLocalsizeofExpression, SgUpcBlocksizeofExpression, SgUpcElemsizeofExpression.
-
   // DQ (11/10/2014): Added support for SgFunctionParameterRefExp node to store the type explicitly.
 
      if ( isSgTemplateParameterVal(this) != NULL     || isSgComplexVal(this)    != NULL            || isSgSizeOfOp(this) != NULL                 ||
@@ -2646,7 +2612,6 @@ SgExpression::hasExplicitType()
           isSgVarArgStartOp(this) != NULL            || isSgVarArgStartOneOperandOp(this) != NULL  || isSgVarArgOp(this)  != NULL                ||
           isSgVarArgEndOp(this) != NULL              || isSgVarArgCopyOp(this) != NULL             || isSgNewExp(this)  != NULL                  ||
           isSgRefExp(this) != NULL                   || isSgAggregateInitializer(this) != NULL     || isSgCompoundInitializer(this)  != NULL     ||
-          isSgUpcLocalsizeofExpression(this) != NULL || isSgUpcBlocksizeofExpression(this) != NULL || isSgUpcElemsizeofExpression(this)  != NULL ||
        // isSgConstructorInitializer(this) != NULL   || isSgAssignInitializer(this) != NULL        || isSgPseudoDestructorRefExp(this)  != NULL  ||
           isSgConstructorInitializer(this) != NULL   || isSgPseudoDestructorRefExp(this)  != NULL  || isSgFunctionParameterRefExp(this) != NULL )
         {
@@ -2788,30 +2753,6 @@ SgExpression::set_explicitly_stored_type( SgType* type )
                SgPseudoDestructorRefExp* exp = isSgPseudoDestructorRefExp(this);
                ROSE_ASSERT(exp != NULL);
                exp->set_object_type(type);
-               break;
-             }
-
-           case V_SgUpcLocalsizeofExpression:
-             {
-               SgUpcLocalsizeofExpression* exp = isSgUpcLocalsizeofExpression(this);
-               ROSE_ASSERT(exp != NULL);
-               exp->set_operand_type(type);
-               break;
-             }
-
-           case V_SgUpcBlocksizeofExpression:
-             {
-               SgUpcBlocksizeofExpression* exp = isSgUpcBlocksizeofExpression(this);
-               ROSE_ASSERT(exp != NULL);
-               exp->set_operand_type(type);
-               break;
-             }
-
-           case V_SgUpcElemsizeofExpression:
-             {
-               SgUpcElemsizeofExpression* exp = isSgUpcElemsizeofExpression(this);
-               ROSE_ASSERT(exp != NULL);
-               exp->set_operand_type(type);
                break;
              }
 
@@ -4890,14 +4831,6 @@ SOURCE_COMPLEX_VALUE_EXPRESSION_END
 // SOURCE_LABEL_ADDRESS_VALUE_EXPRESSION_START
 // SOURCE_LABEL_ADDRESS_VALUE_EXPRESSION_END
 
-SOURCE_UPC_THREADS_EXPRESSION_START
-SOURCE_UPC_THREADS_EXPRESSION_END
-
-
-SOURCE_UPC_MYTHREAD_EXPRESSION_START
-SOURCE_UPC_MYTHREAD_EXPRESSION_END
-
-
 SOURCE_YIELD_EXPRESSION_START
 SOURCE_YIELD_EXPRESSION_END
 
@@ -5162,75 +5095,12 @@ SgArrowExp::get_type() const
      printf ("SgArrowExp::get_type(): get the type of the rhs operand returnType = %p = %s \n",returnType,returnType->class_name().c_str());
 #endif
 
-  // DQ (7/16/2014): In the case of UPC shared type for the lhs_operand, we need to return a type that is marked as
-  // shared (even if the type on the rhs_operand is non-shared) (see UPC_tests/test2014_56.c for an example).
-     returnType = checkForSharedTypeAndReturnSharedType(returnType);
-
 #if 0
      printf ("Leaving SgArrowExp::get_type(): returnType->get_mangled() = %s \n",returnType->get_mangled().str());
 #endif
 
      return returnType;
    }
-
-
-SgType*
-SgArrowExp::checkForSharedTypeAndReturnSharedType( SgType* possibleReturnType ) const
-   {
-  // DQ (7/16/2014): In the case of UPC shared type for the lhs_operand, we need to return a type that is marked as
-  // shared (even if the type on the rhs_operand is non-shared) (see UPC_tests/test2014_56.c for an example).
-
-     SgType* returnType = possibleReturnType;
-
-     ROSE_ASSERT(get_lhs_operand()->get_type() != NULL);
-     SgModifierType* mod_type = isSgModifierType(get_lhs_operand()->get_type());
-     if (mod_type != NULL)
-        {
-#if 0
-          printf ("In SgArrowExp::checkForSharedTypeAndReturnSharedType(): (mod_type != NULL): get_lhs_operand()->get_type() = %p = %s \n",get_lhs_operand()->get_type(),get_lhs_operand()->get_type()->class_name().c_str());
-#endif
-          if (mod_type->get_typeModifier().get_upcModifier().get_isShared() == true)
-             {
-#if 0
-               printf ("In SgArrowExp::checkForSharedTypeAndReturnSharedType(): Detected a UPC shared lhs type in the evaluation of the type for SgArrowExp expression (need to return a type same as rhs type, but marked as shared) \n");
-#endif
-               returnType = SageBuilder::buildUpcSharedType(returnType);
-             }
-        }
-       else
-        {
-#if 0
-          printf ("In SgArrowExp::checkForSharedTypeAndReturnSharedType(): (mod_type == NULL): get_lhs_operand()->get_type() = %p = %s \n",get_lhs_operand()->get_type(),get_lhs_operand()->get_type()->class_name().c_str());
-#endif
-          SgPointerType* pointerType = isSgPointerType(get_lhs_operand()->get_type());
-          if (pointerType != NULL)
-             {
-#if 0
-               printf ("In SgArrowExp::checkForSharedTypeAndReturnSharedType(): Detected pointer type: pointerType = %p \n",pointerType);
-#endif
-               SgType* base_type = pointerType->get_base_type();
-               SgModifierType* modifier_type = isSgModifierType(base_type);
-               while (modifier_type != NULL && modifier_type->get_typeModifier().get_upcModifier().get_isShared() == false)
-                  {
-#if 0
-                    printf ("In SgArrowExp::checkForSharedTypeAndReturnSharedType(): SgPointerType: SgModifierType type: (loop): Detected a SgModifierType \n");
-#endif
-                    modifier_type = isSgModifierType(modifier_type->get_base_type());
-                  }
-               if (modifier_type != NULL && modifier_type->get_typeModifier().get_upcModifier().get_isShared() == true)
-                  {
-#if 0
-                    printf ("In SgArrowExp::checkForSharedTypeAndReturnSharedType(): SgPointerType: SgModifierType type: Detected a UPC shared lhs type in the evaluation of the type for SgArrowExp expression (need to return a type same as rhs type, but marked as shared) \n");
-#endif
-                    returnType = SageBuilder::buildUpcSharedType(returnType);
-                  }
-             }
-        }
-
-     return returnType;
-   }
-
-
 
 SOURCE_ARROW_EXPRESSION_END
 
@@ -6340,7 +6210,7 @@ SgPointerDerefExp::get_type() const
 #if 0
                printf ("In SgPointerDerefExp::get_type(): SgPointerType: BEFORE stripType(): returnType = %p = %s \n",returnType,returnType->class_name().c_str());
 #endif
-            // DQ (6/11/2014): We also need to take any associated SgModifierType node chains used to modity the SgPointerType (e.g. defining const or UPC shared type attributes).
+            // DQ (6/11/2014): We also need to take any associated SgModifierType node chains used to modify the SgPointerType (e.g. const qualifiers).
                returnType = returnType->stripType (SgType::STRIP_MODIFIER_TYPE);
 #if 0
                printf ("In SgPointerDerefExp::get_type(): SgPointerType: AFTER stripType(): returnType = %p = %s \n",returnType,returnType->class_name().c_str());
@@ -6502,10 +6372,6 @@ SgAddressOfOp::get_type() const
         {
           SgClassType* classType = classDefinition->get_declaration()->get_type();
           returnType = SgPointerMemberType::createType(baseType,classType);
-#if 0
-       // DQ (7/16/2014): Make this a warning for the moment.
-          printf ("Warning: In SgAddressOfOp::get_type(): checkForSharedTypeAndReturnSharedType() not supported for generation of SgPointerMemberType \n");
-#endif
         }
        else
         {
@@ -6517,75 +6383,11 @@ SgAddressOfOp::get_type() const
        // TV (11/13/2018): Added r-value reference handling
           returnType = SgPointerType::createType(baseType->stripType(SgType::STRIP_REFERENCE_TYPE|SgType::STRIP_RVALUE_REFERENCE_TYPE));
 
-       // DQ (7/16/2014): In the case of UPC shared type for the lhs_operand, we need to return a type that is marked as
-       // shared (even if the type on the rhs_operand is non-shared) (see UPC_tests/test2014_56.c for an example).
-          returnType = checkForSharedTypeAndReturnSharedType(returnType);
         }
 
    //  ROSE_ASSERT(returnType != NULL);
      return returnType;
    }
-
-
-// DQ (7/16/2014): Shared types from expressions in UPC have some expected symantics that are not a matter of returning the result of get_type().
-// This function supports the get_type() function.
-SgType*
-SgAddressOfOp::checkForSharedTypeAndReturnSharedType( SgType* possibleReturnType ) const
-   {
-  // DQ (7/16/2014): In the case of UPC shared type for the lhs_operand, we need to return a type that is marked as
-  // shared (even if the type on the rhs_operand is non-shared) (see UPC_tests/test2014_56.c for an example).
-
-     SgType* returnType = possibleReturnType;
-
-     ROSE_ASSERT(get_operand()->get_type() != NULL);
-     SgModifierType* mod_type = isSgModifierType(get_operand()->get_type());
-     if (mod_type != NULL)
-        {
-#if 0
-          printf ("In SgAddressOfOp::checkForSharedTypeAndReturnSharedType(): (mod_type != NULL): get_operand()->get_type() = %p = %s \n",get_operand()->get_type(),get_operand()->get_type()->class_name().c_str());
-#endif
-          if (mod_type->get_typeModifier().get_upcModifier().get_isShared() == true)
-             {
-#if 0
-               printf ("In SgAddressOfOp::checkForSharedTypeAndReturnSharedType(): Detected a UPC shared lhs type in the evaluation of the type for SgAddressOf expression (need to return a type same as rhs type, but marked as shared) \n");
-#endif
-               returnType = SageBuilder::buildUpcSharedType(possibleReturnType);
-             }
-        }
-       else
-        {
-#if 0
-          printf ("In SgAddressOfOp::checkForSharedTypeAndReturnSharedType(): (mod_type == NULL): get_operand()->get_type() = %p = %s \n",get_operand()->get_type(),get_operand()->get_type()->class_name().c_str());
-#endif
-          SgPointerType* pointerType = isSgPointerType(get_operand()->get_type());
-          if (pointerType != NULL)
-             {
-#if 0
-               printf ("In SgAddressOfOp::checkForSharedTypeAndReturnSharedType(): Detected pointer type: pointerType = %p \n",pointerType);
-#endif
-               SgType* base_type = pointerType->get_base_type();
-               SgModifierType* modifier_type = isSgModifierType(base_type);
-               while (modifier_type != NULL && modifier_type->get_typeModifier().get_upcModifier().get_isShared() == false)
-                  {
-#if 0
-                    printf ("In SgAddressOfOp::checkForSharedTypeAndReturnSharedType(): SgPointerType: SgModifierType type: (loop): Detected a SgModifierType \n");
-#endif
-                    modifier_type = isSgModifierType(modifier_type->get_base_type());
-                  }
-               if (modifier_type != NULL && modifier_type->get_typeModifier().get_upcModifier().get_isShared() == true)
-                  {
-#if 0
-                    printf ("In SgAddressOfOp::checkForSharedTypeAndReturnSharedType(): SgPointerType: SgModifierType type: Detected a UPC shared lhs type in the evaluation of the type for SgAddressOf expression (need to return a type same as rhs type, but marked as shared) \n");
-#endif
-                    returnType = SageBuilder::buildUpcSharedType(possibleReturnType);
-                  }
-             }
-        }
-
-     return returnType;
-   }
-
-
 
 SOURCE_ADDRESS_OF_OPERATOR_EXPRESSION_END
 
@@ -7061,7 +6863,7 @@ SgPntrArrRefExp::get_type() const
 #if 0
                printf ("In SgPntrArrRefExp::get_type(): SgPointerType: BEFORE stripType(): returnType = %p = %s \n",returnType,returnType->class_name().c_str());
 #endif
-            // DQ (6/11/2014): We also need to take any associated SgModifierType node chains used to modity the SgPointerType (e.g. defining const or UPC shared type attributes).
+            // DQ (6/11/2014): We also need to take any associated SgModifierType node chains used to modify the SgPointerType (e.g. const qualifiers).
                returnType = returnType->stripType (SgType::STRIP_MODIFIER_TYPE);
 #if 0
                printf ("In SgPntrArrRefExp::get_type(): SgPointerType: AFTER stripType(): returnType = %p = %s \n",returnType,returnType->class_name().c_str());
@@ -9620,119 +9422,6 @@ SgDesignatedInitializer::get_next(int& n) const
    }
 
 SOURCE_DESIGNATED_INITIALIZER_END
-
-
-SOURCE_UPC_LOCAL_SIZEOF_EXPRESSION_START
-void
-SgUpcLocalsizeofExpression::post_construction_initialization()
-   {
-   }
-
-// DQ (2/12/2011): Copied this version from SgSizeOfOp::get_type().
-SgType*
-$CLASSNAME::get_type() const
-   {
-  // This function returns an unsigned integer representing the size of type
-  // (the unsigned int should match size_t, which may or may not be defined).
-
-     ROSE_ASSERT(p_expression != NULL || p_operand_type != NULL);
-
-#if 0
-     printf ("In $CLASSNAME::get_type() \n");
-#endif
-
-     SgType* returnType = SgTypeUnsignedInt::createType();
-
-     ROSE_ASSERT(returnType != NULL);
-     return returnType;
-   }
-
-#if 0
-SgType*
-$CLASSNAME::get_type() const
-   {
-     SgType* returnType = get_expression()->get_type();
-     ROSE_ASSERT(returnType != NULL);
-     return returnType;
-   }
-#endif
-
-SOURCE_UPC_LOCAL_SIZEOF_EXPRESSION_END
-
-
-SOURCE_UPC_BLOCK_SIZEOF_EXPRESSION_START
-void
-SgUpcBlocksizeofExpression::post_construction_initialization()
-   {
-   }
-
-// DQ (2/12/2011): Copied this version from SgSizeOfOp::get_type().
-SgType*
-$CLASSNAME::get_type() const
-   {
-  // This function returns an unsigned integer representing the size of type
-  // (the unsigned int should match size_t, which may or may not be defined).
-
-     ROSE_ASSERT(p_expression != NULL || p_operand_type != NULL);
-
-#if 0
-     printf ("In $CLASSNAME::get_type() \n");
-#endif
-
-     SgType* returnType = SgTypeUnsignedInt::createType();
-
-     ROSE_ASSERT(returnType != NULL);
-     return returnType;
-   }
-
-#if 0
-SgType*
-$CLASSNAME::get_type() const
-   {
-     SgType* returnType = get_expression()->get_type();
-     ROSE_ASSERT(returnType != NULL);
-     return returnType;
-   }
-#endif
-
-SOURCE_UPC_BLOCK_SIZEOF_EXPRESSION_END
-
-SOURCE_UPC_ELEM_SIZEOF_EXPRESSION_START
-void
-SgUpcElemsizeofExpression::post_construction_initialization()
-   {
-   }
-
-// DQ (2/12/2011): Copied this version from SgSizeOfOp::get_type().
-SgType*
-$CLASSNAME::get_type() const
-   {
-  // This function returns an unsigned integer representing the size of type
-  // (the unsigned int should match size_t, which may or may not be defined).
-
-     ROSE_ASSERT(p_expression != NULL || p_operand_type != NULL);
-
-#if 0
-     printf ("In $CLASSNAME::get_type() \n");
-#endif
-
-     SgType* returnType = SgTypeUnsignedInt::createType();
-
-     ROSE_ASSERT(returnType != NULL);
-     return returnType;
-   }
-
-#if 0
-SgType*
-$CLASSNAME::get_type() const
-   {
-     SgType* returnType = get_expression()->get_type();
-     ROSE_ASSERT(returnType != NULL);
-     return returnType;
-   }
-#endif
-
-SOURCE_UPC_ELEM_SIZEOF_EXPRESSION_END
 
 
 SOURCE_USER_DEFINED_UNARY_EXPRESSION_START

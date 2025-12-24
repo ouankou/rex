@@ -165,36 +165,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType27){
 //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType28) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType29) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType30) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType31) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType32) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex33) {
   SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildIntType());
   ASSERT_EQ(isNull(p), false);
@@ -248,36 +218,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType41){
 //  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildLongType());
 //  ASSERT_EQ(isNull(p), false);
 //  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType42) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType43) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType44) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType45) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType46) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex47) {
@@ -335,36 +275,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType55){
 //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType56) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType57) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType58) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType59) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType60) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex61) {
   SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
@@ -418,36 +328,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType69){
 //  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildShortType());
 //  ASSERT_EQ(isNull(p), false);
 //  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType70) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType71) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType72) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType73) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType74) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex75) {
@@ -506,37 +386,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType83){
 //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType84) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildSigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType85) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildSigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType86) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildSigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType87) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(
-                        SageBuilder::buildSigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType88) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildSigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex89) {
   SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
@@ -590,36 +439,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType97){
 //  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildSignedIntType());
 //  ASSERT_EQ(isNull(p), false);
 //  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType98) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildSignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType99) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildSignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType100) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildSignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType101) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildSignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType102) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildSignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex103) {
@@ -678,36 +497,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType111){
 //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType112) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildSignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType113) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildSignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType114) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildSignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType115) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildSignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType116) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildSignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex117) {
   SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
@@ -762,37 +551,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType125){
 //  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildSignedLongLongType());
 //  ASSERT_EQ(isNull(p), false);
 //  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType126) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildSignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType127) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildSignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType128) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildSignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType129) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(
-                        SageBuilder::buildSignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType130) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildSignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex131) {
@@ -851,36 +609,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType139){
 //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType140) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildSignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType141) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildSignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType142) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildSignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType143) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildSignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType144) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildSignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex145) {
   SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
@@ -935,38 +663,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType153){
 //  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsigned128bitIntegerType());
 //  ASSERT_EQ(isNull(p), false);
 //  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType154) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildUnsigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType155) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildUnsigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType156) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildUnsigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType157) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(
-                        SageBuilder::buildUnsigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType158) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(
-                        SageBuilder::buildUnsigned128bitIntegerType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex159) {
@@ -1025,36 +721,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType167){
 //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType168) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildUnsignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType169) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildUnsignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType170) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildUnsignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType171) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildUnsignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType172) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildUnsignedIntType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex173) {
   SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
@@ -1109,36 +775,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType181){
 //  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongType());
 //  ASSERT_EQ(isNull(p), false);
 //  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType182) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildUnsignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType183) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildUnsignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType184) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildUnsignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType185) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildUnsignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType186) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildUnsignedLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex187) {
@@ -1197,37 +833,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType195){
 //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType196) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildUnsignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType197) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildUnsignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType198) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildUnsignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType199) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(
-                        SageBuilder::buildUnsignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType200) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildUnsignedLongLongType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex201) {
   SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
@@ -1282,36 +887,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType209){
 //  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsignedShortType());
 //  ASSERT_EQ(isNull(p), false);
 //  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType210) {
-  SgModifierType *p = SageBuilder::buildUpcStrictType(SageBuilder::buildUnsignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType211) {
-  SgModifierType *p = SageBuilder::buildUpcRelaxedType(SageBuilder::buildUnsignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType212) {
-  SgModifierType *p = SageBuilder::buildUpcSharedType(SageBuilder::buildUnsignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType213) {
-  SgModifierType *p = SageBuilder::buildUpcBlockIndefiniteType(SageBuilder::buildUnsignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
-}
-
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType214) {
-  SgModifierType *p = SageBuilder::buildUpcBlockStarType(SageBuilder::buildUnsignedShortType());
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex215) {

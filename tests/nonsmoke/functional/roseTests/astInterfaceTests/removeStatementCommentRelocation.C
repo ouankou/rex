@@ -34,16 +34,14 @@ main (int argc, char *argv[])
           SgName functionName = functionDelcaration->get_name();
 
 #if 1
-       // DQ (9/19/2010): Turn this off so that I can checkin UPC/UPC++ work.
           if (functionName == "removeThisFunctionToTestAttachedInfoBeforeStatement")
              {
                SageInterface::removeStatement(functionDelcaration);
              }
 #endif
 #if 1
-       // DQ (9/19/2010): Turn this off so that I can checkin UPC/UPC++ work.
-          if (functionName == "removeThisFunctionToTestAttachedInfoAfterStatement")
-             {
+             if (functionName ==
+                 "removeThisFunctionToTestAttachedInfoAfterStatement") {
                SageInterface::removeStatement(functionDelcaration);
              }
 #endif

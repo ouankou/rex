@@ -103,8 +103,6 @@ ROSE also recognize:
  * -std=c++
  * -std=gnu++
  * -std=fortran
- * -std=upc
- * -std=upcxx
 
 #### Proposed?
 
