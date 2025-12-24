@@ -270,13 +270,6 @@ SgValueExp::get_constant_folded_value_as_string() const
                break;
              }
 
-        // \pp (03/15/2011): Added case
-          case V_SgUpcThreads:
-             {
-               s = "_upc_threads_";
-               break;
-             }
-
        // DQ (9/24/2011): Added support for complex values to be output as strings.
           case V_SgComplexVal:
              {
@@ -1022,10 +1015,8 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
                        }
                       else
                        {
-                      // Liao, 6/6/2008, Assume AST with UPC will be unparsed using the C unparser
-                         if ( ( CommandlineProcessing::isCFileNameSuffix(filenameExtension)   == true ) ||
-                              ( CommandlineProcessing::isUPCFileNameSuffix(filenameExtension) == true ) )
-                            {
+                         if (CommandlineProcessing::isCFileNameSuffix(
+                                 filenameExtension) == true) {
                            // file = new SgSourceFile ( argv,  project );
                               SgSourceFile* sourceFile = new SgSourceFile ( argv,  project );
                               file = sourceFile;
@@ -1044,78 +1035,78 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
                            // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
                               Rose::is_C_language = true;
 
-                           // Liao 6/6/2008  Set the newly introduced p_UPC_only flag.
-                              if (CommandlineProcessing::isUPCFileNameSuffix(filenameExtension) == true)
-                                 {
-                                   file->set_UPC_only();
-
-                                // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
-                                   Rose::is_UPC_language = true;
-                                 }
-                               else
-                                 {
-                                   file->set_C89_gnu_only();
+                              file->set_C89_gnu_only();
 #if 0
-                                   printf ("In determineFileType(): Setting the default mode for detected C file to C89 (generated code will use: -std=gnu89 option) \n");
+                              printf ("In determineFileType(): Setting the default mode for detected C file to C89 (generated code will use: -std=gnu89 option) \n");
 #endif
-                                 }
 
-                           // DQ (12/23/2008): This is the eariliest point where the global scope can be set.
-                           // Note that file->get_requires_C_preprocessor() should be false.
+                              // DQ (12/23/2008): This is the eariliest point
+                              // where the global scope can be set. Note that
+                              // file->get_requires_C_preprocessor() should be
+                              // false.
                               ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
                               sourceFile->initializeGlobalScope();
-                            }
-                           else
-                            {
-                              if ( CommandlineProcessing::isCudaFileNameSuffix(filenameExtension) == true )
-                                 {
-                                   SgSourceFile* sourceFile = new SgSourceFile ( argv,  project );
-                                   file = sourceFile;
+                         } else {
+                           if (CommandlineProcessing::isCudaFileNameSuffix(
+                                   filenameExtension) == true) {
+                             SgSourceFile *sourceFile =
+                                 new SgSourceFile(argv, project);
+                             file = sourceFile;
 
-                                   file->set_outputLanguage(SgFile::e_Cxx_language);
+                             file->set_outputLanguage(SgFile::e_Cxx_language);
 
-                                // DQ (29/8/2017): Set the input language as well.
-                                   file->set_inputLanguage(SgFile::e_Cxx_language);
+                             // DQ (29/8/2017): Set the input language as well.
+                             file->set_inputLanguage(SgFile::e_Cxx_language);
 
-                                   file->set_Cuda_only(true);
+                             file->set_Cuda_only(true);
 
-                                // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
-                                   Rose::is_Cuda_language = true;
+                             // DQ (11/25/2020): Add support to set this as a
+                             // specific language kind file (there is at least
+                             // one language kind file processed by ROSE).
+                             Rose::is_Cuda_language = true;
 
-                                // DQ (12/23/2008): This is the eariliest point where the global scope can be set.
-                                // Note that file->get_requires_C_preprocessor() should be false.
-                                   ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
-                                   sourceFile->initializeGlobalScope();
+                             // DQ (12/23/2008): This is the eariliest point
+                             // where the global scope can be set. Note that
+                             // file->get_requires_C_preprocessor() should be
+                             // false.
+                             ROSE_ASSERT(file->get_requires_C_preprocessor() ==
+                                         false);
+                             sourceFile->initializeGlobalScope();
 #if 0
                                    printf ("In determineFileType(): Processing as a CUDA file \n");
 #endif
-                                 }
-                                else if ( CommandlineProcessing::isOpenCLFileNameSuffix(filenameExtension) == true )
-                                 {
-                                   SgSourceFile* sourceFile = new SgSourceFile ( argv,  project );
-                                   file = sourceFile;
-                                   file->set_OpenCL_only(true);
+                           } else if (CommandlineProcessing::
+                                          isOpenCLFileNameSuffix(
+                                              filenameExtension) == true) {
+                             SgSourceFile *sourceFile =
+                                 new SgSourceFile(argv, project);
+                             file = sourceFile;
+                             file->set_OpenCL_only(true);
 
-                                // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
-                                   Rose::is_OpenCL_language = true;
+                             // DQ (11/25/2020): Add support to set this as a
+                             // specific language kind file (there is at least
+                             // one language kind file processed by ROSE).
+                             Rose::is_OpenCL_language = true;
 
-                                // DQ (12/23/2008): This is the eariliest point where the global scope can be set.
-                                // Note that file->get_requires_C_preprocessor() should be false.
-                                   ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
-                                   sourceFile->initializeGlobalScope();
-                                 }
-                              else
-                               {
-                                   file = new SgUnknownFile ( argv,  project );
+                             // DQ (12/23/2008): This is the eariliest point
+                             // where the global scope can be set. Note that
+                             // file->get_requires_C_preprocessor() should be
+                             // false.
+                             ROSE_ASSERT(file->get_requires_C_preprocessor() ==
+                                         false);
+                             sourceFile->initializeGlobalScope();
+                           } else {
+                             file = new SgUnknownFile(argv, project);
 
-                                // This should have already been setup!
-                                // file->initializeSourcePosition();
+                             // This should have already been setup!
+                             // file->initializeSourcePosition();
 
-                                   ASSERT_not_null(file->get_parent());
-                                   ROSE_ASSERT(file->get_parent() == project);
+                             ASSERT_not_null(file->get_parent());
+                             ROSE_ASSERT(file->get_parent() == project);
 
-                                // If all else fails, then output the type of file and exit.
-                                   file->set_sourceFileTypeIsUnknown(true);
+                             // If all else fails, then output the type of file
+                             // and exit.
+                             file->set_sourceFileTypeIsUnknown(true);
 
 #if 0
                                    printf ("@@@@@@@@@@@@@@ Set requires_C_preprocessor to false (test 3) \n");
@@ -1129,8 +1120,8 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
                                 // outputTypeOfFileAndExit(sourceFilename);
                                    printf ("Warning: This is an unknown file type, not being processed by ROSE: sourceFilename = %s \n",sourceFilename.c_str());
                                    outputTypeOfFileAndExit(sourceFilename);
-                                 }
-                            }
+                           }
+                         }
                        }
                   }
 

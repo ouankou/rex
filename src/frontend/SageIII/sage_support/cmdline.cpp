@@ -383,10 +383,6 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
          argument == "-MF" || argument == "-MT" || argument == "-MQ" ||
          argument == "-outputdir" || // FMZ (12/22/1009) added for caf compiler
 
-         // DQ (9/19/2010): UPC support for upc_threads to define the "THREADS"
-         // variable.
-         argument == "-rose:upc_threads" ||
-
          // DQ (9/26/2011): Added support for detection of dangling pointers
          // within translators built using ROSE.
          argument ==
@@ -1794,8 +1790,8 @@ StripRoseOptions (std::vector<std::string>& argv)
   // TOO1 (2/13/2014): Skip ALL ROSE-specific OFP options;
   //                   at this stage, we only have
   //                   "-rose:fortran:ofp:jvm_options" and
-  //                   "-rose:fortran:ofp:classpath", and these are only
-  //                   intended for the OFP frontend's JVM.
+  //                   "-rose:fortran:ofp:classpath", and these are only inteded
+  //                   for the OFP frontend's JVM.
   for (std::string ofp_option : ofp_options) {
     if (SgProject::get_verbose() > 1) {
       std::cout << "[INFO] "
@@ -1960,7 +1956,7 @@ ProcessEnableRemoteDebugging (SgProject* project, std::vector<std::string>& argv
 bool Rose::Cmdline::Gnu::OptionRequiresArgument(const std::string &option) {
   return option == "--param" || // --param variable=value
          false;
-} // Cmdline:Gnu:::OptionRequiresArgument
+} // Cmdline:Java:::OptionRequiresArgument
 
 void
 Rose::Cmdline::Gnu::
@@ -2806,13 +2802,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           set_C14_gnu_only();
         }
 
-        if (CommandlineProcessing::isOption(argv, "-rose:", "(UPC|UPC_only)",
-                                            true)) {
-          printf ("WARNING: Command line option -rose:UPC is deprecated!\n");
-
-          set_UPC_only();
-        }
-
      // Parsing ROSE's C++ dialect specification
 
      if ( CommandlineProcessing::isOption(argv,"-rose:","(Cxx|Cxx_only)",true) == true )
@@ -2835,13 +2824,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           printf ("WARNING: Command line option -rose:Cxx14 is deprecated!\n");
 
           set_Cxx14_gnu_only();
-        }
-
-     if (CommandlineProcessing::isOption(argv,"-rose:","(UPCxx|UPCxx_only)",true))
-        {
-          printf ("WARNING: Command line option -rose:UPCxx is deprecated!\n");
-
-          set_UPCxx_only();
         }
 
      // Parsing ROSE's Fortran dialect specification
@@ -2952,12 +2934,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           } else if ( argv[i] == "-std=gnu++" ) {
             set_Cxx_only(true);
             set_gnu_standard();
-
-          } else if ( argv[i] == "-std=upc" ) {
-            set_UPC_only();
-
-          } else if ( argv[i] == "-std=upcxx" ) {
-            set_UPCxx_only();
 
           } else if ( argv[i] == "-std=fortran" ) {
             set_Fortran_only(true);
@@ -3097,9 +3073,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
             }
             break;
           }
-          case e_upc_standard: {
-            break; // TODO
-          }
           case e_cxx98_standard:
           case e_cxx03_standard:
           case e_cxx11_standard:
@@ -3107,9 +3080,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
           case e_cxx17_standard:
           case e_cxx20_standard: {
             break; // NOP
-          }
-          case e_upcxx_standard: {
-            break; // TODO
           }
           case e_f77_standard: {
             if (get_sourceFileUsesFortran77FileExtension() == false) {
@@ -3197,15 +3167,19 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
          case e_c99_standard:   { printf ("C99 mode ON \n");         break; }
          case e_c11_standard:   { printf ("C11 mode ON \n");         break; }
          case e_c14_standard:   { printf ("C14 mode ON \n");         break; }
-         case e_c18_standard:   { printf ("C18 mode ON \n");         break; }
-         case e_upc_standard:   { printf ("UPC mode ON \n");         break; }
+         case e_c18_standard: {
+           printf("C18 mode ON \n");
+           break;
+         }
          case e_cxx98_standard: { printf ("C++98 mode ON \n");       break; }
          case e_cxx03_standard: { printf ("C++03 mode ON \n");       break; }
          case e_cxx11_standard: { printf ("C++11 mode ON \n");       break; }
          case e_cxx14_standard: { printf ("C++14 mode ON \n");       break; }
          case e_cxx17_standard: { printf ("C++17 mode ON \n");       break; }
-         case e_cxx20_standard: { printf ("C++20 mode ON \n");       break; }
-         case e_upcxx_standard: { printf ("UPCxx mode ON \n");       break; }
+         case e_cxx20_standard: {
+           printf("C++20 mode ON \n");
+           break;
+         }
          case e_f77_standard:   { printf ("Fortran77 mode ON \n");   break; }
          case e_f90_standard:   { printf ("Fortran90 mode ON \n");   break; }
          case e_f95_standard:   { printf ("Fortran95 mode ON \n");   break; }
@@ -3221,21 +3195,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
 
    // END parsing standard specifications for C/C++/Fortran (ROSE-1529)
    ////////////////////////////////////////////////////////////////////////
-
-     // remove -rose:upc_threads n
-     int integerOptionForUPCThreads = 0;
-     bool hasRoseUpcThreads = CommandlineProcessing::isOptionWithParameter(
-         argv, "-rose:", "(upc_threads)", integerOptionForUPCThreads, true);
-
-     if (hasRoseUpcThreads) {
-       // set ROSE SgFile::upc_threads value, done for ROSE
-          set_upc_threads(integerOptionForUPCThreads);
-          if ( SgProject::get_verbose() >= 1 )
-               printf ("upc_threads is set to %d\n",integerOptionForUPCThreads);
-
-       // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
-          Rose::is_UPC_dynamic_threads = true;
-     }
 
 #if 0
      printf ("After part 2 detection of Intel compiler: get_C_only()   = %s \n",get_C_only() ? "true" : "false");
@@ -4348,9 +4307,11 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
 
   // TV (11/20/2018): ROSE-1529: removed non-standard standard selection
   // Rasmussen (11/17/2018): ROSE-1584: separated "++" into single characters [+][+] for regex handling.
-     optionCount = sla(argv, "-std=", "($)", "(c|c[+][+]|gnu|gnu[+][+]|fortran|upc|upcxx)",1);
+     optionCount =
+         sla(argv, "-std=", "($)", "(c|c[+][+]|gnu|gnu[+][+]|fortran)", 1);
 
-  // DQ (12/9/2016): Eliminating a warning that we want to be an error: -Werror=unused-but-set-variable.
+     // DQ (12/9/2016): Eliminating a warning that we want to be an error:
+     // -Werror=unused-but-set-variable.
      ROSE_ASSERT(optionCount >= 0);
 
   // DQ (10/26/2019): Remove outliner options.
@@ -4778,9 +4739,6 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
                          break;
                        }
 
-                 // DQ (12/23/2021): UPC tests need to use the C compiler.
-                    case e_upc_standard:
-
                     case e_c89_standard:
                     case e_c90_standard:
                     case e_c99_standard:
@@ -5024,32 +4982,13 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
        case e_f18_standard: {
          break; // FIXME Does the Fortran frontend support -std option?
        }
-
-       // DQ (1/10/2019): Added supporting case for UPC.
-          case e_upc_standard:
-             {
-#if 0
-               printf ("Case of UPC not supported in -std option mechanism \n");
-#endif
-               break;
-             }
-
-       // DQ (1/10/2019): Added supporting case for UPC++.
-          case e_upcxx_standard:
-             {
-#if 0
-               printf ("Case of UPC++ not supported in -std option mechanism \n");
-#endif
-               break;
-             }
-
-       // DQ (1/10/2019): Please add a default for your switch.
-       // Plus there is no such thing as C17 (it is C18, as I recall).
-          default:
-             {
-               printf ("Unhandled case in switch: get_standard() = %d = %s \n",get_standard(),display_standard(get_standard()).c_str());
-               ROSE_ABORT();
-             }
+         // DQ (1/10/2019): Please add a default for your switch.
+         // Plus there is no such thing as C17 (it is C18, as I recall).
+       default: {
+         printf("Unhandled case in switch: get_standard() = %d = %s \n",
+                get_standard(), display_standard(get_standard()).c_str());
+         ROSE_ABORT();
+       }
      }
 
   // printf ("compilerName       = %s \n",compilerName);

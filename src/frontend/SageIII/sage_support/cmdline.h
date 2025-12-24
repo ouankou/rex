@@ -51,11 +51,11 @@ namespace Cmdline {
    *
    *  For example,
    *
-   *      -rose:fortran:ofp:classpath "/some/class/path"
+   *      -rose:java:classpath "/some/class/path"
    *
    *      becomes
    *
-   *      -ofp:classpath "/some/class/path"
+   *      -classpath "/some/class/path"
    *
    *  Whereas, this ROSE-only option is completely removed:
    *
@@ -107,6 +107,7 @@ namespace Cmdline {
   ROSE_DLL_API void StripRoseOptions(std::vector<std::string> &argv);
 
   ROSE_DLL_API std::string GetRoseClasspath();
+
   ROSE_DLL_API std::string
   GetRoseClasspath(const std::list<std::string> &classpath_entries);
 
