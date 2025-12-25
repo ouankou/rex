@@ -394,17 +394,14 @@ class ReplaceExtendibleParam : public SymbolicVisitor {
                  u.last_arg().GetTypeName() == "int") {
         int index = 0;
         if (!ParseIntStrict(curext, index)) {
-          cerr << "Error: expecting integer const instead of " << curext
-               << endl;
-          ROSE_ABORT();
+          throw ReadError("Error: expecting integer const instead of " +
+                          curext);
         }
         assert(index >= extlb && index <= extub);
         result.push_back(parList[parstart + index - extlb]);
       } else {
-        cerr << "Error: expecting integer const instead of ";
-        u.last_arg().Dump();
-        cerr << endl;
-        ROSE_ABORT();
+        throw ReadError("Error: expecting integer const instead of " +
+                        u.last_arg().toString());
       }
     } else if (buf == "repeat") {
       assert(u.NumOfArgs() == 4);
@@ -415,14 +412,12 @@ class ReplaceExtendibleParam : public SymbolicVisitor {
       ++i;
       const std::string lb_text = (*i).toString();
       if (!ParseIntStrict(lb_text, lb)) {
-        cerr << "Error: expecting integer const instead of " << lb_text << endl;
-        ROSE_ABORT();
+        throw ReadError("Error: expecting integer const instead of " + lb_text);
       }
       ++i;
       const std::string ub_text = (*i).toString();
       if (!ParseIntStrict(ub_text, ub)) {
-        cerr << "Error: expecting integer const instead of " << ub_text << endl;
-        ROSE_ABORT();
+        throw ReadError("Error: expecting integer const instead of " + ub_text);
       }
       SymbolicVal cur = *(++i);
       for (int j = lb; j <= ub; ++j) {
