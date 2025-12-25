@@ -14,7 +14,7 @@ void pt_accept_cont()
 
 when compiling the attached code in C99 and C mode I get the following error:
 lt-identityTranslator:
-/home/andreas/REPOSITORY-SRC/ROSE/June-14a-2007/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:16991:
+/home/andreas/REPOSITORY-SRC/ROSE/June-14a-2007/NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:16991:
 SgExprListExp* sage_gen_argument_list(an_expr_node*, a_type*, int,
 DataRequiredForComputationOfSourcePostionInformation&): Assertion sourcePositionData.ok() == true failed.
 Aborted (core dumped) 

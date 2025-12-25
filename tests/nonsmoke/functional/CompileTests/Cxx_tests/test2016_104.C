@@ -1,25 +1,25 @@
-# 1 "/home/quinlan1/ROSE/git_rose_upgrade_to_edg_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 1 "/home/quinlan1/ROSE/git_rose_upgrade_to_frontend_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 325 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 325 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 346 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 346 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 368 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 368 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 387 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 387 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 421 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 421 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 451 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 451 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 490 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 490 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 506 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 506 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 531 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 531 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
 long long          __builtin_bswap64(long long __X);
 void               __builtin_ia32_fxsave(void *__P);
@@ -27,30 +27,30 @@ void               __builtin_ia32_fxrstor(void *__P);
 void               __builtin_ia32_fxsave64(void *__P);
 void               __builtin_ia32_fxrstor64(void *__P);
 
-# 699 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 699 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 1153 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 1153 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 2736 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 2736 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 3101 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 3101 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 3126 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
+# 3126 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/rose_required_macros_and_functions.h"
 
-# 1 "/home/quinlan1/ROSE/git_rose_upgrade_to_edg_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
+# 1 "/home/quinlan1/ROSE/git_rose_upgrade_to_frontend_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 105 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 105 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 113 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 113 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 128 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 128 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 140 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 140 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
 namespace std {
 typedef long unsigned int size_t;
@@ -66,23 +66,23 @@ inline namespace __cxx11 __attribute__((__abi_tag__("cxx11"))) {}
 namespace __gnu_cxx {
 inline namespace __cxx11 __attribute__((__abi_tag__("cxx11"))) {}
 } // namespace __gnu_cxx
-# 236 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 236 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 284 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 284 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 336 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 336 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 354 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 354 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 362 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 362 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 414 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 414 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 451 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 451 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 479 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 479 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/os_defines.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/os_defines.h"
 
 # 1 "/usr/include/features.h"
 
@@ -108,7 +108,7 @@ inline namespace __cxx11 __attribute__((__abi_tag__("cxx11"))) {}
 
 # 371 "/usr/include/features.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs/sys/cdefs.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs/sys/cdefs.h"
 
 # 1 "/usr/include/sys/cdefs.h"
 
@@ -148,7 +148,7 @@ inline namespace __cxx11 __attribute__((__abi_tag__("cxx11"))) {}
 
 # 425 "/usr/include/sys/cdefs.h"
 
-# 21 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs/sys/cdefs.h"
+# 21 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs/sys/cdefs.h"
 
 # 376 "/usr/include/features.h"
 
@@ -159,26 +159,26 @@ inline namespace __cxx11 __attribute__((__abi_tag__("cxx11"))) {}
 # 11 "/usr/include/gnu/stubs.h"
 # 400 "/usr/include/features.h"
 
-# 40 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/os_defines.h"
+# 40 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/os_defines.h"
 
-# 496 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 496 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/cpu_defines.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/cpu_defines.h"
 
-# 499 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 499 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 534 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 534 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 591 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
+# 591 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++config.h"
 
-# 60 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/functexcept.h"
+# 60 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/functexcept.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_defines.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_defines.h"
 
-# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_defines.h"
+# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_defines.h"
 
-# 41 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/functexcept.h"
+# 41 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/functexcept.h"
 
 namespace std {
 
@@ -221,8 +221,8 @@ void __throw_bad_function_call() __attribute__((__noreturn__));
 
 } // namespace std
 
-# 61 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/cpp_type_traits.h"
+# 61 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/cpp_type_traits.h"
 
 extern "C++" {
 
@@ -344,7 +344,7 @@ template <> struct __is_integer<unsigned long long> {
   typedef __true_type __type;
 };
 
-# 259 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/cpp_type_traits.h"
+# 259 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/cpp_type_traits.h"
 
 template <> struct __is_integer<__int128> {
   enum { __value = 1 };
@@ -354,7 +354,7 @@ template <> struct __is_integer<unsigned __int128> {
   enum { __value = 1 };
   typedef __true_type __type;
 };
-# 272 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/cpp_type_traits.h"
+# 272 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/cpp_type_traits.h"
 
 template <typename _Tp> struct __is_floating {
   enum { __value = 0 };
@@ -441,8 +441,8 @@ template <typename _Iterator> inline _Iterator __miter_base(_Iterator __it) {
 } // namespace std
 }
 
-# 62 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/type_traits.h"
+# 62 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/type_traits.h"
 
 extern "C++" {
 
@@ -590,8 +590,8 @@ struct __promote_4 {
 } // namespace __gnu_cxx
 }
 
-# 63 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/numeric_traits.h"
+# 63 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/numeric_traits.h"
 
 namespace __gnu_cxx {
 
@@ -661,16 +661,16 @@ struct __numeric_traits
 
 } // namespace __gnu_cxx
 
-# 64 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_pair.h"
+# 64 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_pair.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/concept_check.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/concept_check.h"
 
-# 80 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/concept_check.h"
+# 80 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/concept_check.h"
 
-# 35 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
+# 35 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
 
 namespace std {
 
@@ -681,7 +681,7 @@ template <typename _Tp> inline _Tp *__addressof(_Tp &__r) noexcept {
 
 } // namespace std
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
 
 namespace std {
 typedef short unsigned int uint_least16_t;
@@ -739,7 +739,7 @@ struct __and_<_B1, _B2, _B3, _Bn...>
 template <typename _Pp>
 struct __not_ : public integral_constant<bool, !_Pp::value> {};
 
-# 176 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
+# 176 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
 
 template <typename _Tp> struct __success_type {
   typedef _Tp type;
@@ -794,7 +794,7 @@ template <> struct __is_integral_helper<__int128> : public true_type {};
 
 template <>
 struct __is_integral_helper<unsigned __int128> : public true_type {};
-# 312 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
+# 312 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
 
 template <typename _Tp>
 struct is_integral
@@ -1777,7 +1777,7 @@ template <> struct __make_unsigned<wchar_t> : __make_unsigned<int>{};
 template <> struct __make_unsigned<__int128> {
   typedef unsigned __int128 __type;
 };
-# 1772 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
+# 1772 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
 
 template <typename _Tp, bool _IsInt = is_integral<_Tp>::value,
           bool _IsEnum = is_enum<_Tp>::value>
@@ -1844,7 +1844,7 @@ template <> struct __make_signed<char32_t> : __make_signed<uint_least32_t>{};
 template <> struct __make_signed<unsigned __int128> {
   typedef __int128 __type;
 };
-# 1891 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
+# 1891 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
 
 template <typename _Tp, bool _IsInt = is_integral<_Tp>::value,
           bool _IsEnum = is_enum<_Tp>::value>
@@ -2350,7 +2350,7 @@ template <template <typename...> class _Default,
           template <typename...> class _Op, typename... _Args>
 using __detected_or_t_ = __detected_or_t<_Default<_Args...>, _Op, _Args...>;
 
-# 2589 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
+# 2589 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/type_traits"
 
 template <typename _Tp> struct __is_swappable;
 
@@ -2410,7 +2410,7 @@ struct __is_nothrow_swappable : public __is_nothrow_swappable_impl<_Tp>::type {
 
 } // namespace std
 
-# 58 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
+# 58 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
 
 namespace std {
 
@@ -2459,7 +2459,7 @@ inline _Tp __exchange(_Tp &__obj, _Up &&__new_val) {
 
 } // namespace std
 
-# 158 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
+# 158 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/move.h"
 
 namespace std {
 
@@ -2493,7 +2493,7 @@ inline
 
 } // namespace std
 
-# 60 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_pair.h"
+# 60 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_pair.h"
 
 namespace std {
 
@@ -2772,11 +2772,11 @@ make_pair(_T1 &&__x, _T2 &&__y) {
   typedef pair<__ds_type1, __ds_type2> __pair_type;
   return __pair_type(std::forward<_T1>(__x), std::forward<_T2>(__y));
 }
-# 438 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_pair.h"
+# 438 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_pair.h"
 } // namespace std
 
-# 65 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_types.h"
+# 65 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_types.h"
 
 namespace std {
 
@@ -2824,7 +2824,7 @@ struct __iterator_traits<
 
 template <typename _Iterator>
 struct iterator_traits : public __iterator_traits<_Iterator> {};
-# 175 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_types.h"
+# 175 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_types.h"
 
 template <typename _Tp> struct iterator_traits<_Tp *> {
   typedef random_access_iterator_tag iterator_category;
@@ -2848,7 +2848,7 @@ __iterator_category(const _Iter &) {
   return typename iterator_traits<_Iter>::iterator_category();
 }
 
-# 228 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_types.h"
+# 228 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_types.h"
 
 template <typename _InIter>
 using _RequireInputIter = typename enable_if<
@@ -2857,14 +2857,14 @@ using _RequireInputIter = typename enable_if<
 
 } // namespace std
 
-# 66 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_funcs.h"
+# 66 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_funcs.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/assertions.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/assertions.h"
 
-# 51 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/assertions.h"
+# 51 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/assertions.h"
 
-# 66 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_funcs.h"
+# 66 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator_base_funcs.h"
 
 namespace std {
 
@@ -2960,10 +2960,10 @@ inline _BidirectionalIterator prev(
 
 } // namespace std
 
-# 67 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
+# 67 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/ptr_traits.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/ptr_traits.h"
 
 namespace std {
 
@@ -3052,7 +3052,7 @@ using __ptr_rebind = typename pointer_traits<_Ptr>::template rebind<_Tp>;
 
 } // namespace std
 
-# 67 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
+# 67 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
 
 namespace std {
 
@@ -3269,7 +3269,7 @@ public:
   explicit back_insert_iterator(_Container &__x)
       : container(std::__addressof(__x)) {}
 
-# 476 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
+# 476 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
   back_insert_iterator &
   operator=(const typename _Container::value_type &__value) {
     container->push_back(__value);
@@ -3305,7 +3305,7 @@ public:
   explicit front_insert_iterator(_Container &__x)
       : container(std::__addressof(__x)) {}
 
-# 567 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
+# 567 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
   front_insert_iterator &
   operator=(const typename _Container::value_type &__value) {
     container->push_front(__value);
@@ -3342,7 +3342,7 @@ public:
   insert_iterator(_Container &__x, typename _Container::iterator __i)
       : container(std::__addressof(__x)), iter(__i) {}
 
-# 679 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
+# 679 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
   insert_iterator &operator=(const typename _Container::value_type &__value) {
     iter = container->insert(iter, __value);
     ++iter;
@@ -3781,10 +3781,10 @@ auto __miter_base(move_iterator<_Iterator> __it)
 
 } // namespace std
 
-# 1250 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
+# 1250 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_iterator.h"
 
-# 68 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
+# 68 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
 
 namespace std {
 namespace __debug {}
@@ -3794,14 +3794,14 @@ namespace __gnu_debug {
 using namespace std::__debug;
 }
 
-# 82 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
+# 82 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
 
-# 94 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
+# 94 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
 
-# 141 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
+# 141 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/debug/debug.h"
 
-# 70 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/predefined_ops.h"
+# 70 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/predefined_ops.h"
 
 namespace __gnu_cxx {
 namespace __ops {
@@ -4024,16 +4024,16 @@ inline _Iter_negate<_Predicate> __negate(_Iter_pred<_Predicate> __pred) {
 } // namespace __ops
 } // namespace __gnu_cxx
 
-# 72 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 72 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
 
 namespace std {
 
-# 107 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 107 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
 
 template <typename _ForwardIterator1, typename _ForwardIterator2>
 inline void iter_swap(_ForwardIterator1 __a, _ForwardIterator2 __b) {
 
-# 148 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
+# 148 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_algobase.h"
   swap(*__a, *__b);
 }
 
@@ -4731,24 +4731,24 @@ mismatch(_InputIterator1 __first1, _InputIterator1 __last1,
 
 } // namespace std
 
-# 61 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocator.h"
+# 61 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocator.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++allocator.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++allocator.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/new_allocator.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/new_allocator.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/new"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/new"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
 
 #pragma GCC visibility push(default)
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/atomic_lockfree_defines.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/atomic_lockfree_defines.h"
 
-# 60 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/atomic_lockfree_defines.h"
+# 60 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/atomic_lockfree_defines.h"
 
-# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
+# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
 
 extern "C++" {
 
@@ -4802,7 +4802,7 @@ void __verbose_terminate_handler();
 
 #pragma GCC visibility pop
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_ptr.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_ptr.h"
 
 #pragma GCC visibility push(default)
 
@@ -4849,7 +4849,7 @@ public:
     __o._M_exception_object = 0;
   }
 
-# 112 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_ptr.h"
+# 112 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_ptr.h"
 
   exception_ptr &operator=(const exception_ptr &) noexcept;
 
@@ -4862,7 +4862,7 @@ public:
 
   void swap(exception_ptr &) noexcept;
 
-# 138 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_ptr.h"
+# 138 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/exception_ptr.h"
 
   explicit operator bool() const { return _M_exception_object; }
 
@@ -4906,8 +4906,8 @@ template <typename _Ex> exception_ptr copy_exception(_Ex __ex) noexcept {
 
 #pragma GCC visibility pop
 
-# 171 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/nested_exception.h"
+# 171 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/nested_exception.h"
 
 #pragma GCC visibility push(default)
 
@@ -5002,9 +5002,9 @@ template <typename _Ex> inline void rethrow_if_nested(const _Ex &__ex) {
 
 #pragma GCC visibility pop
 
-# 172 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
+# 172 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/exception"
 
-# 41 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/new"
+# 41 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/new"
 
 #pragma GCC visibility push(default)
 
@@ -5078,7 +5078,7 @@ inline void operator delete[](void *, void *) noexcept {}
 
 #pragma GCC visibility pop
 
-# 34 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/new_allocator.h"
+# 34 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/new_allocator.h"
 
 namespace __gnu_cxx {
 
@@ -5135,7 +5135,7 @@ public:
   }
 
   template <typename _Up> void destroy(_Up *__p) { __p->~_Up(); }
-# 135 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/new_allocator.h"
+# 135 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/new_allocator.h"
 };
 
 template <typename _Tp>
@@ -5150,15 +5150,15 @@ inline bool operator!=(const new_allocator<_Tp> &, const new_allocator<_Tp> &) {
 
 } // namespace __gnu_cxx
 
-# 34 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++allocator.h"
+# 34 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs6/bits/c++allocator.h"
 
 namespace std {
 
 template <typename _Tp> using __allocator_base = __gnu_cxx::new_allocator<_Tp>;
 }
 
-# 47 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocator.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/memoryfwd.h"
+# 47 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocator.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/memoryfwd.h"
 
 namespace std {
 
@@ -5170,7 +5170,7 @@ template <typename, typename> struct uses_allocator;
 
 } // namespace std
 
-# 48 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocator.h"
+# 48 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocator.h"
 
 namespace std {
 
@@ -5289,10 +5289,10 @@ template <typename _Tp> struct __shrink_to_fit_aux<_Tp, true> {
 
 } // namespace std
 
-# 62 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/range_access.h"
+# 62 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/range_access.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/initializer_list"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/initializer_list"
 
 #pragma GCC visibility push(default)
 
@@ -5337,7 +5337,7 @@ constexpr const _Tp *end(initializer_list<_Tp> __ils) noexcept {
 
 #pragma GCC visibility pop
 
-# 37 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/range_access.h"
+# 37 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/range_access.h"
 namespace std {
 
 template <typename _Container>
@@ -5441,15 +5441,15 @@ inline auto crend(const _Container &__cont) -> decltype(std::rend(__cont)) {
   return std::rend(__cont);
 }
 
-# 318 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/range_access.h"
+# 318 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/range_access.h"
 } // namespace std
 
-# 63 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 63 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/alloc_traits.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/alloc_traits.h"
 
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/alloc_traits.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/alloc_traits.h"
 
 namespace std {
 
@@ -5983,7 +5983,7 @@ protected:
 
   } // namespace std
 
-# 37 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/alloc_traits.h"
+# 37 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/alloc_traits.h"
 
   namespace __gnu_cxx {
 
@@ -6056,15 +6056,15 @@ protected:
     template<typename _Tp>
       struct rebind
       { typedef typename _Base_type::template rebind_alloc<_Tp> other; };
-# 158 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/alloc_traits.h"
+# 158 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/alloc_traits.h"
   };
 
   } // namespace __gnu_cxx
 
-# 61 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocated_ptr.h"
+# 61 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocated_ptr.h"
 
-# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocated_ptr.h"
+# 39 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/allocated_ptr.h"
 
   namespace std {
 
@@ -6117,8 +6117,8 @@ protected:
 
   } // namespace std
 
-# 64 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/aligned_buffer.h"
+# 64 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/ext/aligned_buffer.h"
 
   namespace __gnu_cxx {
 
@@ -6195,7 +6195,7 @@ protected:
 
     } // namespace __gnu_cxx
 
-# 65 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 65 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
     namespace std {
     namespace __detail {
@@ -6481,7 +6481,7 @@ namespace __cxx11 {
 
       
       size_t _M_node_count() const { return *_M_impl._M_node._M_valptr(); }
-# 380 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 380 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       typename _Node_alloc_traits::pointer
       _M_get_node()
@@ -6642,7 +6642,7 @@ namespace __cxx11 {
       using _Base::_M_get_node;
       using _Base::_M_get_Node_allocator;
 
-# 564 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 564 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
       template<typename... _Args>
         _Node*
         _M_create_node(_Args&&... __args)
@@ -6704,7 +6704,7 @@ namespace __cxx11 {
 	   const allocator_type& __a = allocator_type())
       : _Base(_Node_alloc_type(__a))
       { _M_fill_initialize(__n, __value); }
-# 640 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 640 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       list(const list& __x)
       : _Base(_Node_alloc_traits::
@@ -6767,7 +6767,7 @@ namespace __cxx11 {
 	     const allocator_type& __a = allocator_type())
 	: _Base(_Node_alloc_type(__a))
         { _M_initialize_dispatch(__first, __last, __false_type()); }
-# 720 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 720 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       list&
       operator=(const list& __x);
@@ -6838,7 +6838,7 @@ namespace __cxx11 {
         void
         assign(_InputIterator __first, _InputIterator __last)
         { _M_assign_dispatch(__first, __last, __false_type()); }
-# 815 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 815 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       void
       assign(initializer_list<value_type> __l)
@@ -7004,7 +7004,7 @@ namespace __cxx11 {
  
       void
       resize(size_type __new_size, const value_type& __x);
-# 1002 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1002 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       reference
       front() noexcept
@@ -7154,7 +7154,7 @@ namespace __cxx11 {
  
       iterator
       insert(const_iterator __position, const value_type& __x);
-# 1171 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1171 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       iterator
       insert(const_iterator __position, value_type&& __x)
@@ -7197,14 +7197,14 @@ namespace __cxx11 {
  
       iterator
       insert(const_iterator __position, size_type __n, const value_type& __x);
-# 1245 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1245 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       template<typename _InputIterator,
 	       typename = std::_RequireInputIter<_InputIterator>>
 	iterator
 	insert(const_iterator __position, _InputIterator __first,
 	       _InputIterator __last);
-# 1290 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1290 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
 
       iterator
 
@@ -7317,7 +7317,7 @@ namespace __cxx11 {
 
       void splice(const_iterator __position, list &&__x,
                   const_iterator __i) noexcept
-# 1442 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1442 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
       {
         iterator __j = __i._M_const_cast();
         ++__j;
@@ -7340,7 +7340,7 @@ namespace __cxx11 {
 
       void splice(const_iterator __position, list &&__x, const_iterator __first,
                   const_iterator __last) noexcept
-# 1508 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1508 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
       {
         if (__first != __last) {
           if (this != std::__addressof(__x))
@@ -7573,7 +7573,7 @@ namespace __cxx11 {
       _M_transfer(iterator __position, iterator __first, iterator __last)
       { __position._M_node->_M_transfer(__first._M_node, __last._M_node); }
 
-# 1766 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
+# 1766 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/stl_list.h"
       template <typename... _Args>
       void _M_insert(iterator __position, _Args &&...__args) {
         _Node *__tmp = _M_create_node(std::forward<_Args>(__args)...);
@@ -7766,8 +7766,8 @@ namespace __cxx11 {
 
     } // namespace std
 
-# 64 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
-# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/list.tcc"
+# 64 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
+# 1 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/list.tcc"
 
     namespace std {
 
@@ -7954,7 +7954,7 @@ namespace __cxx11 {
       else
         erase(__i, end());
     }
-# 263 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/list.tcc"
+# 263 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/bits/list.tcc"
 
     template <typename _Tp, typename _Alloc>
     list<_Tp, _Alloc> &list<_Tp, _Alloc>::operator=(const list &__x) {
@@ -8248,6 +8248,6 @@ namespace __cxx11 {
 
       } // namespace std
 
-# 65 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
+# 65 "/home/quinlan1/ROSE/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND412-LIB_1_60-dq-development-rc/include-staging/g++_HEADERS/hdrs5/list"
 
-# 2 "/home/quinlan1/ROSE/git_rose_upgrade_to_edg_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"
+# 2 "/home/quinlan1/ROSE/git_rose_upgrade_to_frontend_411/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2016_102.C"

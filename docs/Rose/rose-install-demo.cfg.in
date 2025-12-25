@@ -662,7 +662,7 @@ WARN_LOGFILE           =
 # NOTE: If your file isn't being picked up by doxygen, then perhaps it's listed
 #       in the EXCLUDE variable below.
 
-# NOTE: Do not add EDG source files to this list or else source code may leak
+# NOTE: Do not add legacy frontend source files to this list or else source code may leak
 #       into the documentation.
 
 # NOTE: The order of the files/directories listed here is generally the same order
@@ -747,8 +747,7 @@ EXCLUDE_SYMBOLS        =
 # directories that contain example code fragments that are included (see
 # the \include command).
 
-EXAMPLE_PATH           = @top_srcdir@/tutorial \
-                         @top_srcdir@/src/util/Sawyer/docs/examples
+EXAMPLE_PATH           = @top_srcdir@/tutorial
 
 # If the value of the EXAMPLE_PATH tag contains directories, you can use the
 # EXAMPLE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp

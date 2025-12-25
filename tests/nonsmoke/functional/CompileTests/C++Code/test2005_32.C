@@ -62,18 +62,22 @@ class Y
    {
      public:
 #endif
-       // This is allowed by GNU but not by EDG
-       // static const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       // This is allowed by GNU but not by legacy frontend
+       // static const double pi = 3.141592653589793238462643383279; // Pi to 30
+       // places
 
-       // This is allowed by EDG, but not by g++ (g++ needs constant to be static)
-       // const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       // This is allowed by legacy frontend, but not by g++ (g++ needs constant
+       // to be static) const double pi = 3.141592653589793238462643383279; //
+       // Pi to 30 places
 
-       // Code that will compile with EDG
+       // Code that will compile with legacy frontend
        // const double pi = 3.141592653589793238462643383279; // Pi to 30 places
        // Code that we should generate so that we can compile with g++
-       // static const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       // static const double pi = 3.141592653589793238462643383279; // Pi to 30
+       // places
 
-          STORAGE const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       STORAGE const double pi =
+           3.141592653589793238462643383279; // Pi to 30 places
    };
 
 
@@ -89,8 +93,9 @@ void foo()
      double var3  = gamma;
      int    var4  = integerConst;
 
-  // Access via static qualifier works fine but access via data member filed generates error: "x->3;"
-  // The fix (to EDG/Sage translation) was to make these generate the same code (as it should be)
+     // Access via static qualifier works fine but access via data member filed
+     // generates error: "x->3;" The fix (to legacy frontend/Sage translation)
+     // was to make these generate the same code (as it should be)
      int    var5  = X::maxIntValue;
      int    var6  = x.maxIntValue;
 

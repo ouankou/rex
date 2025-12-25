@@ -1,5 +1,8 @@
 // This causes an error (and might be a bug):
-// preprocessor: /home/dquinlan/ROSE/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:752: SgName sage_gen_unqualified_name(a_source_correspondence*, an_il_entry_kind): Assertion `templateDeclaration != __null' failed.
+// preprocessor:
+// /home/dquinlan/ROSE/NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:752:
+// SgName sage_gen_unqualified_name(a_source_correspondence*, an_il_entry_kind):
+// Assertion `templateDeclaration != __null' failed.
 
 namespace std
 {

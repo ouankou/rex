@@ -216,7 +216,7 @@ else
 if ROSE_USING_GCC_VERSION_LATER_10_1
       # skip these codes when using GNU 10.1 (testing)
 else
-      # DQ (7/23/2020): These are failing code for EDG 6.0 and GNU 10.1 (debugging this).
+      # DQ (7/23/2020): These are failing code for legacy frontend 6.0 and GNU 10.1 (debugging this).
 #     EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
 endif
     # The test codes fail CLANG 10.0

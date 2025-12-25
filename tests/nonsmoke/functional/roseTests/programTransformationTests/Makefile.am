@@ -126,7 +126,7 @@ EXTRA_DIST += inputCode_constantFoldingTransformation.C inputCode_constantFoldin
 cf_1.passed: $(srcdir)/inputCode_constantFoldingTransformation.C $(TEST_EXIT_STATUS) constantFoldingTest 
 	@$(RTH_RUN) CMD="./constantFoldingTest -c $<" $(TEST_EXIT_STATUS) $@
 
-# Liao, 6/27/2009. This test cannot really test what I want. The EDG frontend will do the constant folding (mysteriously to me). 
+# Liao, 6/27/2009. This test cannot really test what I want. The legacy frontend frontend will do the constant folding (mysteriously to me). 
 # Only translator-introduced constant expressions will be optimized by ROSE.
 cf_2.passed: $(srcdir)/inputCode_constantFoldingTransformation.C $(TEST_EXIT_STATUS) constantFoldingTest2
 	@$(RTH_RUN) CMD="./constantFoldingTest2 -c $< -rose:output rose_inputCode_constantFoldingTransformation_1.C" \

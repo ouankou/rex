@@ -10,8 +10,8 @@ bin_PROGRAMS = statements
 statements_SOURCES = statements.C
 
 # DQ (8/14/2004) Developer's Note:
-# This permits the use of the pair of libraries -lrose -ledg OR the longer 
-# list of libraries (the later option is much faster for development work).
+# This permits the use of the short ROSE library list or the longer
+# list of libraries (the latter option is much faster for development work).
 LDADD = $(ROSE_SEPARATE_LIBS)
 
 # Turn on GNU Coverage Tool (gcov)
@@ -573,7 +573,7 @@ TESTCODES_REQUIRED_TO_PASS += \
    test2006_79.C \
    test2006_124.C 
 
-# Using EDG 4.12 or later (independent of the compiler).
+# Using legacy frontend 4.12 or later (independent of the compiler).
 OLD_TESTCODES_REQUIRED_TO_PASS = \
    test2004_77.C \
    test2004_143.C \
@@ -693,9 +693,9 @@ $(TEST_Objects): statements
 # DQ (11/11/2012): Example command-line to run tview on generated file in current directory.
 # Must be in the source directory and this there is no absolute path to the build_dir so this 
 # test is not really easy to make.  Not really important, maybe we can think about this later.
-# java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
+# java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
 # test:
-#	cd $(top_srcdir)/src/roseIndependentSupport/tview; pwd; ls; java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
+#	cd $(top_srcdir)/src/roseIndependentSupport/tview; pwd; ls; java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
 #	cd $(top_srcdir)/src/roseIndependentSupport/tview; pwd; ls; java tview $(top_builddir)/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
 
 check-local:

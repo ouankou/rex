@@ -1,9 +1,9 @@
-//URK: 08/01/06
-//This program tests the identity translator for special values
-//The identity translator does not work on some of these special functions.
+// URK: 08/01/06
+// This program tests the identity translator for special values
+// The identity translator does not work on some of these special functions.
 //
-//A solution is to pass from EDG to SAGE.
-//Yet to figure out a way to do it cleanly.
+// A solution is to pass from legacy frontend to SAGE.
+// Yet to figure out a way to do it cleanly.
 //
 #include <stdio.h>
 float func_float(float a)

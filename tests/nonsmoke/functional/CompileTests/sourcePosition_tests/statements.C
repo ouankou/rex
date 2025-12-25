@@ -121,7 +121,8 @@ nodeColor( SgStatement* statement )
                     returnString = "lightred";
                     break;
 
-            // DQ (11/11/2012): Added support for newer IR nodes in edg4x work.
+                    // DQ (11/11/2012): Added support for newer IR nodes in
+                    // legacy_frontend work.
                case V_SgTemplateMemberFunctionDeclaration:
                case V_SgTemplateClassDeclaration:
                case V_SgTemplateFunctionDeclaration:
@@ -169,7 +170,8 @@ nodeColor( SgStatement* statement )
                     returnString = "black";
                     break;
 
-            // DQ (11/11/2012): Added support for newer IR nodes in edg4x work.
+                    // DQ (11/11/2012): Added support for newer IR nodes in
+                    // legacy_frontend work.
                case V_SgTemplateClassDefinition:
                case V_SgTemplateFunctionDefinition:
                     returnString = "red";
@@ -386,7 +388,8 @@ nodeColor( SgExpression* expression )
                     returnString = "black";
                     break;
 
-            // DQ (11/11/2012): Added support for newer IR nodes in edg4x work.
+                    // DQ (11/11/2012): Added support for newer IR nodes in
+                    // legacy_frontend work.
                case V_SgTemplateParameterVal:
                     returnString = "red";
                     break;
@@ -432,7 +435,8 @@ nodeColor( SgExpression* expression )
                     returnString = "brown";
                     break;
 
-            // DQ (1/23/2013): Added support for newer IR nodes in edg4x work.
+                    // DQ (1/23/2013): Added support for newer IR nodes in
+                    // legacy_frontend work.
                case V_SgTemplateMemberFunctionRefExp:
                case V_SgTemplateFunctionRefExp:
                case V_SgNonrealRefExp:

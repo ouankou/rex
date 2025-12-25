@@ -14,7 +14,7 @@ class X
    };
 
 #if 0
-// This is OK to run through EDG, but g++ can't resolve which function this is a specialization for!
+// This is OK to run through legacy frontend, but g++ can't resolve which function this is a specialization for!
 template <>
 inline X < int > ::X(int t) : t(t)
 {

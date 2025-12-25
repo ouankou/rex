@@ -119,11 +119,11 @@ AstDOTGeneration::evaluateInheritedAttribute(SgNode* node, DOTInheritedAttribute
      // We put macros and functions required for GNU compatability in the file:
      //    rose_required_macros_and_functions.h
      // and we want to avoid generating nodes for these within visualizations of
-     // the AST. Once EDG supports these functions (we have collected the onese
-     // missed by EDG here) this file will not be required.  We could filter on
-     // declaration first to avoid lots of string comparision.  Or use a static
-     // pointer to save the first fileInfo from
-     // "rose_required_macros_and_functions.h" and then use the
+     // the AST. Once legacy frontend supports these functions (we have
+     // collected the onese missed by legacy frontend here) this file will not
+     // be required.  We could filter on declaration first to avoid lots of
+     // string comparision.  Or use a static pointer to save the first fileInfo
+     // from "rose_required_macros_and_functions.h" and then use the
      // Sg_File_Info::sameFile() function (this reduces to an integer
      // comparision internally).
      Sg_File_Info* fileInfo = node->get_file_info();
@@ -441,18 +441,37 @@ AstDOTGeneration::evaluateSynthesizedAttribute(SgNode* node, DOTInheritedAttribu
                nodelabel += string("\\n variableDeclarationContainsBaseTypeDefiningDeclaration = ") + (variableDeclaration->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ? "true " : "false ");
              }
 
-       // DQ (11/26/2015): Adding friend specification to support debugging test2012_59.C
-       // (multiple function definitions for the same function due to EDG template function normalizations).
-          nodelabel += string("\\n isFriend = ") + (genericDeclaration->get_declarationModifier().isFriend() ? "true " : "false ");
+             // DQ (11/26/2015): Adding friend specification to support
+             // debugging test2012_59.C (multiple function definitions for the
+             // same function due to legacy frontend template function
+             // normalizations).
+             nodelabel +=
+                 string("\\n isFriend = ") +
+                 (genericDeclaration->get_declarationModifier().isFriend()
+                      ? "true "
+                      : "false ");
 
-       // DQ (4/2/2020): Need to add more detail to the graph output so that we can debug Cxx_tests/test2020_02.C.
-          nodelabel += string("\\n isExtern = ") + (genericDeclaration->get_declarationModifier().get_storageModifier().isExtern() ? "true " : "false ");
+             // DQ (4/2/2020): Need to add more detail to the graph output so
+             // that we can debug Cxx_tests/test2020_02.C.
+             nodelabel += string("\\n isExtern = ") +
+                          (genericDeclaration->get_declarationModifier()
+                                   .get_storageModifier()
+                                   .isExtern()
+                               ? "true "
+                               : "false ");
 
-       // DQ (10/18/2020): Add the reference to the defining and non-defining declarations. Debugging outlining into seperate file.
-          nodelabel += string("\\n firstNondefiningDeclaration = ") + StringUtility::numberToString(genericDeclaration->get_firstNondefiningDeclaration());
-          nodelabel += string("\\n definingDeclaration = ") + StringUtility::numberToString(genericDeclaration->get_definingDeclaration());
+             // DQ (10/18/2020): Add the reference to the defining and
+             // non-defining declarations. Debugging outlining into seperate
+             // file.
+             nodelabel +=
+                 string("\\n firstNondefiningDeclaration = ") +
+                 StringUtility::numberToString(
+                     genericDeclaration->get_firstNondefiningDeclaration());
+             nodelabel += string("\\n definingDeclaration = ") +
+                          StringUtility::numberToString(
+                              genericDeclaration->get_definingDeclaration());
 
-          nodelabel += string("\\n") + name;
+             nodelabel += string("\\n") + name;
         }
 
 #if 0
@@ -964,7 +983,9 @@ sourcePositionInformation (SgNode* node)
                     ss += "compiler generated\\n";
                     hasSpecialMode = true;
 
-                 // DQ (9/7/2016): Add output of raw source position to check on EDG normalized ctor pre-initialization list in templates.
+                    // DQ (9/7/2016): Add output of raw source position to check
+                    // on legacy frontend normalized ctor pre-initialization
+                    // list in templates.
                     ss += generateFileLineColumnString(locatedNode->get_startOfConstruct());
                     ss += generateFileLineColumnString(locatedNode->get_endOfConstruct());
                   }

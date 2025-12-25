@@ -28,7 +28,10 @@ struct Struct_1 {
 
 // produces this error:
 // identityTranslator[9216] 1.23522s Rose[FATAL]: assertion failed:
-// identityTranslator[9216] 1.23535s Rose[FATAL]:   /g/g17/charles/code/ROSE/rose-master-0.9.13.8/src/frontend/CxxFrontend/EDG/edgRose/edgRose.C:18987
-// identityTranslator[9216] 1.23541s Rose[FATAL]:   SgExpression *EDG_ROSE_Translation::convert_constant_template_parameter(a_constant *)
-// identityTranslator[9216] 1.23546s Rose[FATAL]:   required: edg_scope != __null
-
+// identityTranslator[9216] 1.23535s Rose[FATAL]:
+// /g/g17/charles/code/ROSE/rose-master-0.9.13.8/src/frontend/CxxFrontend/legacy
+// frontend/frontend_bridge/frontend_bridge.C:18987
+// identityTranslator[9216] 1.23541s Rose[FATAL]:   SgExpression
+// *Frontend_Translation::convert_constant_template_parameter(a_constant *)
+// identityTranslator[9216] 1.23546s Rose[FATAL]:   required: frontend_scope !=
+// __null

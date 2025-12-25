@@ -209,11 +209,6 @@ linearize_subtree( SgNode* node )
      LinearizeAST myTraversal;
 
   // Call the traversal starting at the sageProject node of the AST
-     myTraversal.traverse(node,inheritedAttribute);
-  // if(VERBOSE_MESSAGES_OF_WAVE==true)
-  //      myTraversal.printVector(myTraversal.inorder);
+     myTraversal.traverse(node, inheritedAttribute);
      return myTraversal.get_linearization();
-   }
-
-
-
+}

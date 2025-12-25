@@ -1,6 +1,7 @@
-// This test code is representative of autoconf tests 
+// This test code is representative of autoconf tests
 // the use of #line 42 "filename" was a problem for rose preprocessors
-// because EDG sets the internal filename pointers to NULL in this case.
+// because legacy frontend sets the internal filename pointers to NULL in this
+// case.
 
 // Because the line numbers will be wrong the unparsed file will not have 
 // code and comments in the correct order!

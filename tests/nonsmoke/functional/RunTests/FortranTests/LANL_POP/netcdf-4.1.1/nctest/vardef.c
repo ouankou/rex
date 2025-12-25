@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/nctest/vardef.c,v 1.18 2009/10/28 18:30:50 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/nctest/vardef.c,v 1.18 2009/10/28 18:30:50
+ *dmh Exp $
  *********************************************************************/
 
 #include <config.h>

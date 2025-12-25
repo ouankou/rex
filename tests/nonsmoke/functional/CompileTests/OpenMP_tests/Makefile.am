@@ -15,7 +15,6 @@ AM_CPPFLAGS = $(ROSE_INCLUDES)
 AM_LDFLAGS = $(ROSE_RPATHS)
 LDADD    = $(ROSE_LIBS)
 
-# put macroCalls.c here since it requires -rose:wave, which causes seg fault on 64-bit machine
 TESTCODE_CURRENTLY_FAILING = \
 	ompfor7.c \
 	macroCalls.c \
@@ -400,7 +399,7 @@ REX_C_TESTCODES_REQUIRED_TO_PASS = \
 	threadProcessor.c \
 	upperCase.c \
 	variables.c
-# frontend: EDG to SAGE connection bug
+# frontend: legacy frontend to SAGE connection bug
 #	while-task.c
 
 # removed experimental test cases
@@ -505,7 +504,7 @@ endif
 # we only care about unparsing for ACC input, not the object file generation
 C_OMP_ACC_TEST_Unparsed = $(addprefix rose_,${REX_C_OMP_ACC_TESTCODES_REQUIRED_TO_PASS})
 
-ROSE_FLAGS = -rose:openmp:ast_only  -w -rose:verbose 0  #-rose:wave
+ROSE_FLAGS = -rose:openmp:ast_only  -w -rose:verbose 0
 # used to find omp.h, added it as one of  rose headers
 TESTCODE_INCLUDES = -I$(top_srcdir)/src/frontend/SageIII
 
@@ -603,5 +602,4 @@ check-local: conditional-check-local
 clean-local:
 	rm -f *.o rose_*.* *.out
 	rm -rf QMTest
-
 

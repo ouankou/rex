@@ -38,7 +38,7 @@ foo ( MDI_double_Prototype_0 Operation_Array_Data )
                                X_Descriptor,
                                Mask_Descriptor);
 
-  // This causes an error in the EDG/Sage III translation
+     // This causes an error in the legacy frontend/Sage III translation
      Operation_Array_Data ( Temp_Array_Data,
                                X_Array_Data,
                                Mask_Array_Data,

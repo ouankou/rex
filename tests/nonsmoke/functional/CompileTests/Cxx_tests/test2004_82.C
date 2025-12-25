@@ -27,11 +27,10 @@ template <> int ClassWithoutFunctionDefinition<int>::getNumberOfDimensions();
 // Explicit Template Specialization of function
 template <> int ClassWithoutFunctionDefinition<int>::getNumberOfDimensions() { return 3; }
 
+// DQ (4/9/2005): I fixed this while debugging the GNU extensions added to
+// legacy frontend and ROSE
 
-
-// DQ (4/9/2005): I fixed this while debugging the GNU extensions added to EDG and ROSE
-
-// set SKIP_ERROR to 0 to demonstrate error in EDG. 
+// set SKIP_ERROR to 0 to demonstrate error in legacy frontend.
 #define SKIP_ERROR 0
 #if SKIP_ERROR
 // DQ (9/12/2004): With this commented out an error is generated where 

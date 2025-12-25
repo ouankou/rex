@@ -255,12 +255,7 @@ void nodeTraversal::visit(SgNode* n)
     }
 }
 
-int main( int argc, char * argv[] ){
-  //Not using Sawyer-based commandline processing anymore
-  //Sawyer::CommandLine::ParserResult cmdline = parseCommandLine(argc, argv);
-  //std::vector<std::string> positionalArgs = cmdline.unparsedArgs();
-  //positionalArgs.insert(positionalArgs.begin(), argv[0]);
-  //SgProject* project = frontend(positionalArgs);
+int main(int argc, char *argv[]) {
   if (argc == 2) { //--help
 	  std::string helpflag ("--help");
 	  if (helpflag.compare(argv[1]) == 0) {

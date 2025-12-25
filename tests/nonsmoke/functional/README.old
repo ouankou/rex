@@ -31,8 +31,8 @@ Different ROSE Translators (for testing different levels of infrastructure):
 
    (partial test) testParser.C:
       This translator only tests the ability to parse the input application.
-   For C/C++ it runs the EDG frontend over the application (this includes the CPP
-   preprocessing step, and EDG's semantic analysis).  For Fortran this translator
+   For C/C++ it runs the legacy frontend frontend over the application (this includes the CPP
+   preprocessing step, and legacy frontend's semantic analysis).  For Fortran this translator
    runs only the CPP preprocessing step, the semantic analysis, and the parser
    (OFP) over the application.  Thus this is a test of the smallest subset of the
    base level ROSE infrastructure.

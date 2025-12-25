@@ -3,7 +3,8 @@
 #include <unistd.h>
 #include <string.h>
 
-#if ( defined(__clang__) == 0 && (__GNUC_MINOR__ < 4) && !defined(LIE_ABOUT_GNU_VERSION_TO_EDG) )
+#if (defined(__clang__) == 0 && (__GNUC_MINOR__ < 4) &&                        \
+     !defined(LIE_ABOUT_GNU_VERSION_TO_FRONTEND))
 #pragma STDC FENV_ACCESS ON
 #endif
 

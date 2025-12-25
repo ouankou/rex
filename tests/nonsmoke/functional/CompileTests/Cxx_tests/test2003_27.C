@@ -1,7 +1,7 @@
-/* This program generates an error in EDG/SAGE connection
+/* This program generates an error in legacy frontend/SAGE connection
 
-s->kind = template (kind = 51) iek_last = 52 
-Error: case not implemented in generateFileInfo ( a_source_sequence_entry_ptr s) 
+s->kind = template (kind = 51) iek_last = 52
+Error: case not implemented in generateFileInfo ( a_source_sequence_entry_ptr s)
 
 NOTE: Since these templates are not instantiated anywhere, no code is produced
       from this file within the unparsing phase.

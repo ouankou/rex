@@ -1,12 +1,13 @@
 /*
 // This file supports the new parse tree support in ROSE.
 // specifically this is a "Concrete Syntax Augmented AST"
-// Because the ROSE IR is close to that of the C/C++/Fortran 
+// Because the ROSE IR is close to that of the C/C++/Fortran
 // grammar the parse tree can be derived from the token stream
 // and the AST.  The principal representation of the CSA AST
 // is a map using the IR nodes of the AST as keys into the map
-// and the map elements being a data structure (TokenStreamSequenceToNodeMapping)
-// containing three pairs of indexes representing the subsequence 
+// and the map elements being a data structure
+(TokenStreamSequenceToNodeMapping)
+// containing three pairs of indexes representing the subsequence
 // of tokens for the leading tokens (often white space), the token
 // subsequence for the AST IR node (including its subtree), and
 // the trailing token subsequence (often white space).
@@ -27,18 +28,20 @@
 // (so much for ASCI art).
 //
 
-// We have a number of ways that we expect could be a problem for this 
+// We have a number of ways that we expect could be a problem for this
 // token stream mapping (possible failure modes):
 //   1) Toky() macro to write code (not working yet)
 //   2) Token pasting operator ## (WORKS)
-//   3) Use equivalent of generated binary as a test for generate source code 
-//      that is equivalent to the input file up to the use of new lines and other 
-//      white space (THIS IS NOT A GREAT TEST (unless the filename of the generated 
+//   3) Use equivalent of generated binary as a test for generate source code
+//      that is equivalent to the input file up to the use of new lines and
+other
+//      white space (THIS IS NOT A GREAT TEST (unless the filename of the
+generated
 //      code is made the same)).
 //   4) Use multiple variable names in the same variable declaration (FIXED).
 //
 // Each of these are being addressed before moving this code into ROSE,
-// merging it with the Wave support, and modifying the unparser to 
+// merging it with the preprocessing support, and modifying the unparser to
 // use the token stream support.
 */
 

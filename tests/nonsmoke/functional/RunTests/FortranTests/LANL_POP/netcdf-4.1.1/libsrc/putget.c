@@ -8304,24 +8304,23 @@ RENAME(get_varm_text)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -8492,24 +8491,23 @@ RENAME(get_varm_uchar)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -8679,24 +8677,23 @@ RENAME(get_varm_schar)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -8866,24 +8863,23 @@ RENAME(get_varm_short)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -9053,24 +9049,23 @@ RENAME(get_varm_int)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -9240,24 +9235,23 @@ RENAME(get_varm_long)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -9427,24 +9421,23 @@ RENAME(get_varm_float)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -9614,24 +9607,23 @@ RENAME(get_varm_double)(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -9807,24 +9799,23 @@ nc_put_varm_text(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -9990,24 +9981,23 @@ nc_put_varm_uchar(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -10172,24 +10162,23 @@ nc_put_varm_schar(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -10354,24 +10343,23 @@ nc_put_varm_short(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -10536,24 +10524,23 @@ nc_put_varm_int(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -10718,24 +10705,23 @@ nc_put_varm_long(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -10900,24 +10886,23 @@ nc_put_varm_float(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);
@@ -11082,24 +11067,23 @@ nc_put_varm_double(int ncid, int varid,
 				&& (status == NC_NOERR || lstatus != NC_ERANGE))
 				status = lstatus;
 
-			/*
-			 * The following code permutes through the variable s
-			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
-			 * called "odometer code".
-			 */
-			idim = maxidim;
-		carry:
-			value += mymap[idim];
-			mystart[idim] += mystride[idim];
-			if (mystart[idim] == stop[idim])
-			{
-				mystart[idim] = start[idim];
-				value -= length[idim];
-				if (--idim < 0)
-					break; /* normal return */
-				goto carry;
-			}
+                        /*
+                         * The following code permutes through the variable s
+                         * external start-index space and it s internal address
+                         * space.  At the center, this algorithm is commonly
+                         * called "odometer code".
+                         */
+                        idim = maxidim;
+                carry:
+                  value += mymap[idim];
+                  mystart[idim] += mystride[idim];
+                  if (mystart[idim] == stop[idim]) {
+                    mystart[idim] = start[idim];
+                    value -= length[idim];
+                    if (--idim < 0)
+                      break; /* normal return */
+                    goto carry;
+                  }
 		} /* I/O loop */
 	done:
 		free(mystart);

@@ -1,8 +1,10 @@
 // Test of new gnu 3.x header files with ROSE
 
 // this test code demonstrates an error:
-// preprocessor: /home/dquinlan/ROSE/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:18121: SgFunctionDeclaration* sage_gen_routine_decl(int, a_boolean*): Assertion `curr_source_sequence_entry != __null' failed.
-
+// preprocessor:
+// /home/dquinlan/ROSE/NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:18121:
+// SgFunctionDeclaration* sage_gen_routine_decl(int, a_boolean*): Assertion
+// `curr_source_sequence_entry != __null' failed.
 
 // namespace std {
 

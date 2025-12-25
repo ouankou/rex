@@ -57,11 +57,12 @@
 
 #include "Constants.h"                             // defines things like Rose::UNLIMITED, Rose::INVALID_INDEX, etc.
 
-// DQ (11/12/2011): This is support to reduce the size of ROSE so that I can manage development on my laptop.
-// This option defines a subset of ROSE as required to support wotk on the new EDG front-end.
-// This is defined here becasuse it is not enough to define it in the rose_config.h
-// because that can't be read early enough to effect what header files are included.
-// #define ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
+// DQ (11/12/2011): This is support to reduce the size of ROSE so that I can
+// manage development on my laptop. This option defines a subset of ROSE as
+// required to support work on the legacy frontend. This is defined here
+// becasuse it is not enough to define it in the rose_config.h because that
+// can't be read early enough to effect what header files are included. #define
+// ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 
 #include "fileoffsetbits.h"
 #include "rosedll.h"
@@ -114,11 +115,13 @@
 #include <cstring>
 #include <unistd.h>
 
-// DQ (8/25/2014): Added logic to isTemplateDeclaration(a_routine_ptr) to force isTemplateDeclaration 
-// in ROSE/EDG connection to be false where the topScopeStack() is a template class instantaition scope.
+// DQ (8/25/2014): Added logic to isTemplateDeclaration(a_routine_ptr) to force
+// isTemplateDeclaration in the legacy frontend connection to be false where the
+// topScopeStack() is a template class instantaition scope.
 #define ENFORCE_NO_FUNCTION_TEMPLATE_DECLARATIONS_IN_TEMPLATE_CLASS_INSTANTIATIONS 0
 
-// DQ (9/24/2004): Try again to remove use of set parent side effect in EDG/Sage III connection! This works!!!
+// DQ (9/24/2004): Try again to remove use of set parent side effect in the
+// legacy frontend/Sage III connection! This works!!!
 #define REMOVE_SET_PARENT_FUNCTION
 
 // DQ (6/12/2007): Force checking for valid pointers to IR nodes being overwritten.
@@ -126,11 +129,11 @@
 // DQ (6/12/2007): Force assertion test to fail such cases caught when DEBUG_SAGE_ACCESS_FUNCTIONS == 1, else just report error.
 #define DEBUG_SAGE_ACCESS_FUNCTIONS_ASSERTION 0
 
-// DQ (10/12/2004): Remove the resetTemplateName() from use within the EDG/Sage connection
-// because it will (where required) force calls to generate the qualified name which
-// requires the parent pointer to have already been set.  Since we defer the 
-// setting of the parent pointers until post processing of the Sage III AST.
-// It is now called within the AstFixup.C.
+// DQ (10/12/2004): Remove the resetTemplateName() from use within the legacy
+// frontend/Sage connection because it will (where required) force calls to
+// generate the qualified name which requires the parent pointer to have already
+// been set.  Since we defer the setting of the parent pointers until post
+// processing of the Sage III AST. It is now called within the AstFixup.C.
 #define USE_RESET_TEMPLATE_NAME false
 
 // The ROSE_DEPRECATED marker unconditionally marks a function or variable as deprecated and will produce a warning if
@@ -362,13 +365,14 @@
 // attachPreprocessingInfo.C
 #define USE_OLD_MECHANISM_OF_HANDLING_PREPROCESSING_INFO 0
 
-// DQ (9/1/2006): It is currently an error to normalize the source file names stored 
-// in the SgProject IR node to be absolute paths if they didn't originally appear 
-// that way on the commandline.  We have partial support for this but it is a bug
-// at the moment to use this.  However, we do now (work by Andreas) normalize the
-// source file name when input to EDG so that all Sg_File_Info objects store an
-// absolute path (unless modified using a #line directive, see test2004_60.C as an 
-// example).  The current work is an incremental solution.
+// DQ (9/1/2006): It is currently an error to normalize the source file names
+// stored in the SgProject IR node to be absolute paths if they didn't
+// originally appear that way on the commandline.  We have partial support for
+// this but it is a bug at the moment to use this.  However, we do now (work by
+// Andreas) normalize the source file name when input to the legacy frontend so
+// that all Sg_File_Info objects store an absolute path (unless modified using a
+// #line directive, see test2004_60.C as an example).  The current work is an
+// incremental solution.
 #define USE_ABSOLUTE_PATHS_IN_SOURCE_FILE_LIST 0
 
 // DQ (7/6/2005): Added to support performance analysis of ROSE.

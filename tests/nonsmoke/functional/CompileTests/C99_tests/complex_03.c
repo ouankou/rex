@@ -22,14 +22,15 @@ int main (void)
      _Complex float a_complex_value = 0.0;
 
 #ifndef __INTEL_COMPILER
-  // This is now to specify imaginary numbers in EDG, not supported in GNU, so
-  // the code generation using GNU as a backend drops the "_Imaginary" prefix.
+     // This is now to specify imaginary numbers in legacy frontend, not
+     // supported in GNU, so the code generation using GNU as a backend drops
+     // the "_Imaginary" prefix.
      __imag__ float           c99_imaginary = 0.0;
-     _Imaginary float       x_edg_imaginary = 0.0;
-     _Imaginary double      y_edg_imaginary = 0.0;
-     _Imaginary long double z_edg_imaginary = 0.0;
+     _Imaginary float x_imaginary = 0.0;
+     _Imaginary double y_imaginary = 0.0;
+     _Imaginary long double z_imaginary = 0.0;
 
-     a_complex_value = 4.0 + x_edg_imaginary;
+     a_complex_value = 4.0 + x_imaginary;
 #endif
    }
 

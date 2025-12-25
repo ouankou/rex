@@ -1,4 +1,5 @@
-// This is a modified version of test2001_10.C used for debugging details of the EDG 4.3 support in ROSE.
+// This is a modified version of test2001_10.C used for debugging details of the
+// legacy frontend 4.3 support in ROSE.
 
 /*
    Constructor call not unparsed correctly
@@ -28,8 +29,9 @@ class A
           A (double* dataPtr, Domain X);
 #endif
 
-// EDG 4.3 version of ROSE does not handle the const well...
-//        A operator()();
+          // legacy frontend 4.3 version of ROSE does not handle the const
+          // well...
+          //        A operator()();
           A operator()() const;
    };
 
@@ -52,10 +54,9 @@ A::A (double* dataPtr, Domain X)
 #endif
 
 #if 1
-// EDG 4.3 version of ROSE does not handle the const well...
-// A A::operator()()
-A A::operator()() const
-   {
+   // legacy frontend 4.3 version of ROSE does not handle the const well...
+   // A A::operator()()
+   A A::operator()() const {
      int i = 999;
      double* xPtr = 0x0000;
      return A(xPtr,2);

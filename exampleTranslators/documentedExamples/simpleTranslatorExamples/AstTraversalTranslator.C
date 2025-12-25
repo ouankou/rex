@@ -46,54 +46,46 @@ main( int argc, char * argv[] )
 
   // Build the project object which we will fill up with multiple files and use as a
   // handle for all processing of the AST(s) associated with one or more source files.
-     int EDG_FrontEndErrorCode = 0;
-     SgProject* sageProject = new SgProject(argc,argv,EDG_FrontEndErrorCode); 
+        int frontendErrorCode = 0;
+        SgProject *sageProject = new SgProject(argc, argv, frontendErrorCode);
 
-  // Warnings from EDG processing are OK but not errors
-     ROSE_ASSERT (EDG_FrontEndErrorCode <= 3);
+        // Warnings from legacy frontend processing are OK but not errors
+        ROSE_ASSERT(frontendErrorCode <= 3);
 
-     cout << "EDG/SAGE Processing DONE! (manipulate with ROSE ...) " << endl;
+        cout << "legacy frontend/SAGE Processing DONE! (manipulate with ROSE "
+                "...) "
+             << endl;
 
-  // Output the source code file (as represented by the SAGE AST) as a PDF file (with bookmarks)
-     AstPDFGeneration pdftest;
-     pdftest.generateInputFiles(sageProject);
+        // Output the source code file (as represented by the SAGE AST) as a PDF
+        // file (with bookmarks)
+        AstPDFGeneration pdftest;
+        pdftest.generateInputFiles(sageProject);
 
-  // Build the inherited attribute
-     MyInheritedAttribute inheritedAttribute;
+        // Build the inherited attribute
+        MyInheritedAttribute inheritedAttribute;
 
-  // The traversal uses the AST rewrite mechanism which requires the SgProject object to retrive the
-  // command line for compilation of the intermeditate files (from strings to AST fragments) before
-  // patching them into the application's AST.
-     MyTraversal myTraversal(*sageProject);
+        // The traversal uses the AST rewrite mechanism which requires the
+        // SgProject object to retrive the command line for compilation of the
+        // intermeditate files (from strings to AST fragments) before patching
+        // them into the application's AST.
+        MyTraversal myTraversal(*sageProject);
 
-  // Call the traversal starting at the sageProject node of the AST
-     myTraversal.traverseInputFiles(sageProject,inheritedAttribute);
+        // Call the traversal starting at the sageProject node of the AST
+        myTraversal.traverseInputFiles(sageProject, inheritedAttribute);
 
-  // Generate the final C++ source code from the potentially modified SAGE AST
-     sageProject->unparse();
+        // Generate the final C++ source code from the potentially modified SAGE
+        // AST
+        sageProject->unparse();
 
-     cout << "Generation of final source code (unparsing) DONE! (compile ...) " << endl;
+        cout << "Generation of final source code (unparsing) DONE! (compile "
+                "...) "
+             << endl;
 
-  // What remains is to run the specified compiler (typically the C++ compiler) using 
-  // the generated output file (unparsed and transformed application code) to generate
-  // an object file.
-     int finalCombinedExitStatus = sageProject->compileOutput();
-     printf ("Program Compiled Normally (exit status = %d)! \n\n\n\n",finalCombinedExitStatus);
-     return finalCombinedExitStatus;
-   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        // What remains is to run the specified compiler (typically the C++
+        // compiler) using the generated output file (unparsed and transformed
+        // application code) to generate an object file.
+        int finalCombinedExitStatus = sageProject->compileOutput();
+        printf("Program Compiled Normally (exit status = %d)! \n\n\n\n",
+               finalCombinedExitStatus);
+        return finalCombinedExitStatus;
+}

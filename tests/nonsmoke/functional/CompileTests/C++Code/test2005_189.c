@@ -5,11 +5,12 @@
 
 // Details of C, ANSI C, C99, ANSI C99, C++ modes are in the ROSE User Manual appendix.
 
-// The trick to making this code compile is to not use the -rose:C_only 
-// or -rose:C99_only flags.  These commandline flags trigger the strict ANSI modes
-// of C and C99, respectively.  Within the strict C or C99 modes the 
+// The trick to making this code compile is to not use the -rose:C_only
+// or -rose:C99_only flags.  These commandline flags trigger the strict ANSI
+// modes of C and C99, respectively.  Within the strict C or C99 modes the
 // structure containing the flexible array can not be use as a data member.
-// See EDG manual "C99 Features Available in Other Modes" for more details.
+// See legacy frontend manual "C99 Features Available in Other Modes" for more
+// details.
 
 // #undef __flexarr
 // #define __flexarr	[1]
@@ -18,10 +19,10 @@
 #if 0
 // This code appears in /usr/include/cdef.h and resets the
 // value of "__flexarr" to be "[]", since __GNUC_PREREQ (2,97)
-// is true (as part of g++ support in ROSE via EDG).  We can't
+// is true (as part of g++ support in ROSE via legacy frontend).  We can't
 // control the use of the /usr/include/cdef.h header file since
 // it is not a part of the gnu header files that we copy and 
-// modify slightly to make work with EDG as part of ROSE.
+// modify slightly to make work with legacy frontend as part of ROSE.
 
 /* Support for flexible arrays. */
 #if __GNUC_PREREQ (2,97)

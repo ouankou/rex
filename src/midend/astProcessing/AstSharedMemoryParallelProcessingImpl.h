@@ -206,10 +206,12 @@ void
 AstSharedMemoryParallelTopDownBottomUpProcessing<I, S>::set_numberOfThreads(size_t threads)
 {
 #if !USE_ROSE
-// DQ (11/3/2011): EDG compilains about this (but GNU allowed it, I think that EDG might be correct
-// since it is a private variable.  But since we are only trying to compile ROSE with ROSE (using the
-// new EDG 4.3 front-end as a tests) we can just skip this case for now.
-    numberOfThreads = threads;
+  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
+  // I think that legacy frontend might be correct since it is a private
+  // variable.  But since we are only trying to compile ROSE with ROSE (using
+  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
+  // case for now.
+  numberOfThreads = threads;
 #endif
 }
 
@@ -218,10 +220,12 @@ void
 AstSharedMemoryParallelTopDownBottomUpProcessing<I, S>::set_synchronizationWindowSize(size_t windowSize)
 {
 #if !USE_ROSE
-// DQ (11/3/2011): EDG compilains about this (but GNU allowed it, I think that EDG might be correct
-// since it is a private variable.  But since we are only trying to compile ROSE with ROSE (using the
-// new EDG 4.3 front-end as a tests) we can just skip this case for now.
-    synchronizationWindowSize = windowSize;
+  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
+  // I think that legacy frontend might be correct since it is a private
+  // variable.  But since we are only trying to compile ROSE with ROSE (using
+  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
+  // case for now.
+  synchronizationWindowSize = windowSize;
 #endif
 }
 
@@ -401,10 +405,12 @@ void
 AstSharedMemoryParallelTopDownProcessing<I>::set_numberOfThreads(size_t threads)
 {
 #if !USE_ROSE
-// DQ (11/3/2011): EDG compilains about this (but GNU allowed it, I think that EDG might be correct
-// since it is a private variable.  But since we are only trying to compile ROSE with ROSE (using the
-// new EDG 4.3 front-end as a tests) we can just skip this case for now.
-    numberOfThreads = threads;
+  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
+  // I think that legacy frontend might be correct since it is a private
+  // variable.  But since we are only trying to compile ROSE with ROSE (using
+  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
+  // case for now.
+  numberOfThreads = threads;
 #endif
 }
 
@@ -413,10 +419,12 @@ void
 AstSharedMemoryParallelTopDownProcessing<I>::set_synchronizationWindowSize(size_t windowSize)
 {
 #if !USE_ROSE
-// DQ (11/3/2011): EDG compilains about this (but GNU allowed it, I think that EDG might be correct
-// since it is a private variable.  But since we are only trying to compile ROSE with ROSE (using the
-// new EDG 4.3 front-end as a tests) we can just skip this case for now.
-    synchronizationWindowSize = windowSize;
+  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
+  // I think that legacy frontend might be correct since it is a private
+  // variable.  But since we are only trying to compile ROSE with ROSE (using
+  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
+  // case for now.
+  synchronizationWindowSize = windowSize;
 #endif
 }
 
@@ -588,10 +596,12 @@ void
 AstSharedMemoryParallelBottomUpProcessing<S>::set_numberOfThreads(size_t threads)
 {
 #if !USE_ROSE
-// DQ (11/3/2011): EDG compilains about this (but GNU allowed it, I think that EDG might be correct
-// since it is a private variable.  But since we are only trying to compile ROSE with ROSE (using the
-// new EDG 4.3 front-end as a tests) we can just skip this case for now.
-    numberOfThreads = threads;
+  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
+  // I think that legacy frontend might be correct since it is a private
+  // variable.  But since we are only trying to compile ROSE with ROSE (using
+  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
+  // case for now.
+  numberOfThreads = threads;
 #endif
 }
 
@@ -600,10 +610,12 @@ void
 AstSharedMemoryParallelBottomUpProcessing<S>::set_synchronizationWindowSize(size_t windowSize)
 {
 #if !USE_ROSE
-// DQ (11/3/2011): EDG compilains about this (but GNU allowed it, I think that EDG might be correct
-// since it is a private variable.  But since we are only trying to compile ROSE with ROSE (using the
-// new EDG 4.3 front-end as a tests) we can just skip this case for now.
-    synchronizationWindowSize = windowSize;
+  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
+  // I think that legacy frontend might be correct since it is a private
+  // variable.  But since we are only trying to compile ROSE with ROSE (using
+  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
+  // case for now.
+  synchronizationWindowSize = windowSize;
 #endif
 }
 

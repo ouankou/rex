@@ -124,7 +124,7 @@ roseDirectoryMap.pdf: Makefile
 roseSrcDirectoryMap.png: Makefile
 #	$(top_srcdir)/scripts/lsdot $(top_srcdir) --format=ps --exclude='CVS\|\.svn\|autom4te.cache\|developersScratchSpace\|testDoxygen\|ckpt\|compass' --basename -o=roseDirectoryMap.ps;
 #	$(top_srcdir)/scripts/lsdot $(top_srcdir) --format=ps --exclude='\.git\|acmacros\|autom4te.cache\|docs\|libltdl\|scripts' --basename -o=roseDirectoryMap.ps;
-	$(top_srcdir)/scripts/lsdot $(top_srcdir)/src --format=png --exclude='3rdPartyLibraries\|ROSETTA\|EDG_4.4\|EDG_4.7\|EDG_4.8' --basename -o=roseSrcDirectoryMap.png;
+	$(top_srcdir)/scripts/lsdot $(top_srcdir)/src --format=png --exclude='3rdPartyLibraries\|ROSETTA' --basename -o=roseSrcDirectoryMap.png;
 #	convert -geometry 5000 roseDirectoryMap.ps roseDirectoryMap.pdf
 #	w=`grep '^%%BoundingBox: [0-9]' roseDirectoryMap.ps | awk '{print $$4*10;}'` ; \
 #	h=`grep '^%%BoundingBox: [0-9]' roseDirectoryMap.ps | awk '{print $$5*10;}'` ; \
@@ -181,7 +181,7 @@ html-local: $(RoseDoxygenDocumentation) $(PACKAGE_NAME)-$(PACKAGE_VERSION)-HTML-
 footer.html: footer.html.in
 leftmenu.html: leftmenu.html.in
 
-# Liao, 2014/1/10, comment out $(HASKELLPORT_APIDOCS) to migrate to EDG 4.7 based rose
+# Liao, 2014/1/10, comment out $(HASKELLPORT_APIDOCS) to migrate to legacy frontend 4.7 based rose
 make-web-pages: $(RoseDoxygenDocumentation) $(PACKAGE_NAME)-$(PACKAGE_VERSION)-UserManual.pdf ROSE_InstallationInstructions.pdf ROSE_Exam.pdf ROSE_DeveloperInstructions.pdf ROSE_DemoGuide.pdf footer.html leftmenu.html $(COMPASS_MANUAL) $(AUTOTUNING_MANUAL) RoseQtDoc
 	cd Tutorial; $(MAKE) make-web-pages
 	mkdir -p ROSE_WebPages
@@ -213,18 +213,6 @@ make-web-pages: $(RoseDoxygenDocumentation) $(PACKAGE_NAME)-$(PACKAGE_VERSION)-U
 copyWebPages: make-web-pages
 	cd ROSE_WebPages; chmod -R a+rx *; rsync -avz * liaoch@dtn01.nersc.gov:/project/projectdirs/rosecompiler/www.rosecompiler.org
 #	scp $(PACKAGE_NAME)-$(PACKAGE_VERSION)-HTML-Docs.tar.gz quinlan1@cmg-1.llnl.gov:/green_dev/www/casc/rose
-
-# Liao 12/7/2009, we mirror the content of the internal 
-# /nfs/casc/overture/ROSE/git/ROSE_EDG_Binaries
-# to a public http://www.rosecompiler.org/edg_binaries/
-EDG_BINARY_STASH_PATH=/nfs/casc/overture/ROSE/git/ROSE_EDG_Binaries
-# *.tar.gz within rsync is essential to only synchronize .tar.gz files.
-# scripts/hudson/checkEDGBinaryFiles.sh untars all .tar.gz and grep for EDG files, it returns an error code 
-# if any EDG source files are found
-syncEDGBinaries:
-	test -d ${EDG_BINARY_STASH_PATH} && $(top_srcdir)/scripts/hudson/checkEDGBinaryFiles.sh && \
-	rsync -avz /nfs/casc/overture/ROSE/git/ROSE_EDG_Binaries/*.tar.gz -e ssh liaoch@web-dev.nersc.gov:/www/host/rosecompiler/edg_binaries \
-	|| echo "${EDG_BINARY_STASH_PATH} does not exist, this rule can only run from within LLNL! "
 
 copyWebPagesPanas: make-web-pages
 	cd ROSE_WebPages; rsync -avz * panas2@web-dev.nersc.gov:/www/host/rosecompiler

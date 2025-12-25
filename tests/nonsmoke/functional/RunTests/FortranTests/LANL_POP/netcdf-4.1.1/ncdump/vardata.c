@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncdump/vardata.c,v 1.47 2010/02/04 16:49:13 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncdump/vardata.c,v 1.47 2010/02/04 16:49:13
+ *russ Exp $
  *********************************************************************/
 
 #include <config.h>

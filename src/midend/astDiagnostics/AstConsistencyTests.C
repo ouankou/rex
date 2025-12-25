@@ -1104,7 +1104,6 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                          break;
                        }
 
-                 // TV (04/16/2019): used to be casses guarded by ROSE_USE_EDG_VERSION_4
                     case V_SgIntVal:
                     case V_SgFunctionCallExp:
                     case V_SgConstructorInitializer:
@@ -1176,10 +1175,12 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
 
                     case V_SgPartialFunctionType:
                        {
-                      // This case is only present in the new EDG/Sage interface (demonstrated by gzip.c)
-                         break;
+                      // This case is only present in the new legacy
+                      // frontend/Sage interface (demonstrated by gzip.c)
+                      break;
                        }
-                 // TV: these cases were guarded with EDG 4 condition (date from EDG 3)
+                         // TV: these cases were guarded with legacy frontend 4
+                         // condition (date from legacy frontend 3)
                     case V_SgTypeInt:
                     case V_SgTemplateType:
                     case V_SgClassType:
@@ -1503,54 +1504,55 @@ TestAstNullPointers::visitWithAstNodePointersList(SgNode* node, AstNodePointersL
         }
    }
 
+   /*! \page AstProperties AST Properties (Consistency Tests)
 
-/*! \page AstProperties AST Properties (Consistency Tests)
+   \section section5 Template Properties
 
-\section section5 Template Properties
+       Template within SAGE III are tested to verify specific properties:
+        - SgTemplateInstantiationDecl
+           -# get_name() returns a valid C++ string object
+           -# get_templateName() returns a valid C++ string object
+           -# get_templateDeclaration() returns a valid pointer
+           -# All template declarations within template instantiations are never
+   marked as compiler generated.
+        - SgTemplateInstantiationFunctionDecl
+           -# get_name() returns a valid C++ string object
+           -# get_templateName() can have an empty string \n
+              This should be fixed at some point.
+           -# get_templateDeclaration() returns a valid pointer
+           -# All template declarations within template instantiations are never
+   marked as compiler generated.
+        - SgTemplateInstantiationMemberFunctionDecl
+           -# get_name() returns a valid C++ string object
+           -# get_templateName() can have an empty string \n
+              This should be fixed at some point.
+           -# get_templateDeclaration() returns a valid pointer
+           -# Template declarations within template instantiations can be
+   compiler generated. \n Member functions of templated classes that are
+   declared in the class are represented outside the class as template
+   specializations and are marked as compiler generated.
+        - SgClassDefinition
+        - SgTemplateInstantiationDefn \n
+            Base classes within class definitions and template instatiation
+   definitions are searched and verified to have properly reset template names
+   (from original legacy frontend names, see
+            \ref resetTemplateNameTest ).
+        - All possible template instantiations \n
+           -# These are tested to verify that get_specialization() returns a
+   non-default value to verify that some catagory of template specialization has
+   been specified (values verified to have been reset from the defaults).
+           -# contain a valid pointer to a template declaration.
+        - All non-template instantiations
+           -# Are maked with default value
+   SgClassDeclaration::e_no_specialization.
 
-    Template within SAGE III are tested to verify specific properties:
-     - SgTemplateInstantiationDecl
-        -# get_name() returns a valid C++ string object
-        -# get_templateName() returns a valid C++ string object
-        -# get_templateDeclaration() returns a valid pointer
-        -# All template declarations within template instantiations are never marked as compiler generated.
-     - SgTemplateInstantiationFunctionDecl
-        -# get_name() returns a valid C++ string object
-        -# get_templateName() can have an empty string \n
-           This should be fixed at some point.
-        -# get_templateDeclaration() returns a valid pointer
-        -# All template declarations within template instantiations are never marked as compiler generated.
-     - SgTemplateInstantiationMemberFunctionDecl
-        -# get_name() returns a valid C++ string object
-        -# get_templateName() can have an empty string \n
-           This should be fixed at some point.
-        -# get_templateDeclaration() returns a valid pointer
-        -# Template declarations within template instantiations can be compiler generated. \n
-           Member functions of templated classes that are declared in the class are represented
-           outside the class as template specializations and are marked as compiler generated.
-     - SgClassDefinition
-     - SgTemplateInstantiationDefn \n
-         Base classes within class definitions and template instatiation definitions are searched
-         and verified to have properly reset template names (from original EDG names, see
-         \ref resetTemplateNameTest ).
-     - All possible template instantiations \n
-        -# These are tested to verify that get_specialization() returns a non-default value to verify that
-           some catagory of template specialization has been specified (values verified to have been reset
-           from the defaults).
-        -# contain a valid pointer to a template declaration.
-     - All non-template instantiations
-        -# Are maked with default value SgClassDeclaration::e_no_specialization.
+   */
 
-*/
+   void TestAstTemplateProperties::visit(SgNode *astNode) {
+     // DQ (3/31/2004): Added to support templates
+     // This function tests properties on the new template specific IR nodes
 
-
-void
-TestAstTemplateProperties::visit ( SgNode* astNode )
-   {
-  // DQ (3/31/2004): Added to support templates
-  // This function tests properties on the new template specific IR nodes
-
-  // printf ("astNode = %s \n",astNode->sage_class_name());
+     // printf ("astNode = %s \n",astNode->sage_class_name());
 
 #if 0
      SgNode * parent = astNode->get_parent();
@@ -1600,8 +1602,11 @@ TestAstTemplateProperties::visit ( SgNode* astNode )
             // DQ (5/8/2004): templateName() removed
             // ROSE_ASSERT (s->get_templateName().str() != NULL);
 
-            // DQ (4/30/2012): Allow this test to pass for test2012_58.C (condition relaxed as part of new EDG support).
-            // It might be that the function template does not exist but that the class template containing the function template is available.
+               // DQ (4/30/2012): Allow this test to pass for test2012_58.C
+               // (condition relaxed as part of new legacy frontend support). It
+               // might be that the function template does not exist but that
+               // the class template containing the function template is
+               // available.
                if (s->get_templateDeclaration() == NULL) {
                }
              // ROSE_ASSERT (s->get_templateDeclaration() != NULL);
@@ -1627,13 +1632,11 @@ TestAstTemplateProperties::visit ( SgNode* astNode )
             // ROSE_ASSERT (s->get_templateName().str() != NULL);
 
             // DQ (5/3/2012): Allow this for now, but make it a warning.
-               if (s->get_templateDeclaration() == NULL)
-                  {
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
+               if (s->get_templateDeclaration() == NULL) {
 #if 0
-                    printf ("WARNING: case V_SgTemplateInstantiationMemberFunctionDecl: templateDeclaration == NULL (some templates are unavailable in EDG). \n");
+                    printf ("WARNING: case V_SgTemplateInstantiationMemberFunctionDecl: templateDeclaration == NULL (some templates are unavailable in legacy frontend). \n");
 #endif
-                  }
+               }
             // ROSE_ASSERT (s->get_templateDeclaration() != NULL);
 
             // explicit specializations in the source code should not be marked as compiler generated
@@ -1799,7 +1802,6 @@ TestAstTemplateProperties::visit ( SgNode* astNode )
         }
    }
 
-
 void
 TestAstCompilerGeneratedNodes::visit ( SgNode* node )
    {
@@ -1833,28 +1835,30 @@ TestAstCompilerGeneratedNodes::visit ( SgNode* node )
         }
    }
 
-/*! \page AstProperties AST Properties (Consistency Tests)
+   /*! \page AstProperties AST Properties (Consistency Tests)
 
-\section section4 Mangle Name Properties
+   \section section4 Mangle Name Properties
 
-    Mangled names within SAGE III follow specific rules and are tested:
-     -# May be used as variable names in C and C++ \n
-        This implies that they follow all the rules regarding variable naming within C and C++ (not repeated here).
-     -# There are no EDG generated name fragements from template instantiation \n
-        EDG internally generates unique names (e.g "foo____L1042") for template instatiations, we convert all such
-        names and use the new names of the form "foo<int>" before name mangling.  Through name mangling, longer
-        names are generated of the form "foo__tas_int__tae", from which the original template names and arguments
-        can be recognised ("<" -> "__tas" and ">" -> "__tae", for template argument start (tas) and template
-        argument end (tae).
+       Mangled names within SAGE III follow specific rules and are tested:
+        -# May be used as variable names in C and C++ \n
+           This implies that they follow all the rules regarding variable naming
+   within C and C++ (not repeated here).
+        -# There are no legacy frontend generated name fragements from template
+   instantiation \n legacy frontend internally generates unique names (e.g
+   "foo____L1042") for template instatiations, we convert all such names and use
+   the new names of the form "foo<int>" before name mangling.  Through name
+   mangling, longer names are generated of the form "foo__tas_int__tae", from
+   which the original template names and arguments can be recognised ("<" ->
+   "__tas" and ">" -> "__tae", for template argument start (tas) and template
+           argument end (tae).
 
-*/
+   */
 
-void
-TestAstForProperlyMangledNames::visit ( SgNode* node )
-   {
-  // DQ (4/27/2005): Added to verify properties of mangled names (no <>, etc.).
+   void TestAstForProperlyMangledNames::visit(SgNode *node) {
+     // DQ (4/27/2005): Added to verify properties of mangled names (no <>,
+     // etc.).
 
-  // printf ("node = %s \n",node->sage_class_name());
+     // printf ("node = %s \n",node->sage_class_name());
 
      string mangledName;
 
@@ -2056,8 +2060,8 @@ void
 TestAstForUniqueStatementsInScopes::visit ( SgNode* node )
    {
   // DQ (3/31/2004): Added to locate scopes that have redundent statements.
-  // This could happen either because of a bug in the EDG/SAGE connection,
-  // or as a result of using the rewrite mechanism inappropriately.
+  // This could happen either because of a bug in the legacy frontend/SAGE
+  // connection, or as a result of using the rewrite mechanism inappropriately.
 
   // printf ("node = %s \n",node->sage_class_name());
 
@@ -4838,7 +4842,6 @@ TestParentPointersInMemoryPool::visit(SgNode* node)
                     if (parent == NULL)
                        {
 // DQ (5/25/2013): Commented out for now, too much output spew.
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if 0
                          printf ("Warning: detected SgTemplateParameter without parent set properly at %p = %s parent is currently NULL \n",support,support->class_name().c_str());
 #endif
@@ -5349,7 +5352,6 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
                             {
                            // DQ (3/6/2007): This is somwthing to investigate.
 // DQ (5/25/2013): Commented out for now, too much output spew.
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if 0
                               printf ("SgTemplateArgument is not in parent's child list, node: %p = %s = %s parent: %p = %s = %s \n",
                                    node,node->class_name().c_str(),SageInterface::get_name(node).c_str(),parent,parent->class_name().c_str(),SageInterface::get_name(parent).c_str());
@@ -5360,9 +5362,11 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
                             }
                            else
                             {
-                           // DQ (8/19/2014): Since these are shared (by design, so that the symbol table use is optimal) it is less important to warn about these.
-                           // DQ (3/6/2007): This is always a case we want to warn about!
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
+                              // DQ (8/19/2014): Since these are shared (by
+                              // design, so that the symbol table use is
+                              // optimal) it is less important to warn about
+                              // these. DQ (3/6/2007): This is always a case we
+                              // want to warn about!
 #if 0
                               printf ("SgTemplateArgument is not in parent's child list, node: %p = %s = %s parent: %p = %s = %s \n",
                                    node,node->class_name().c_str(),SageInterface::get_name(node).c_str(),parent,parent->class_name().c_str(),SageInterface::get_name(parent).c_str());

@@ -6,9 +6,8 @@ if USING_GNU_COMPILER
 SUBDIRS = \
    testOutputFileOption \
    testHeaderFileOutput testFileNamesAndExtensions testGnuOptions \
-   testWave \
    testNostdincOption \
-   preinclude_tests tokenStream_tests testIncludeOptions
+   preinclude_tests testIncludeOptions
 
 # TOO (2/16/2011): Errors with Thrifty (GCC 3.4.4) backend compiler. We can gradually
 # enable these tests at a later stage if necessary.

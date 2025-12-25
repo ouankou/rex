@@ -340,10 +340,12 @@ Grammar::setUpSymbols ()
      TemplateClassSymbol.setFunctionSource  ( "SOURCE_SHORT_GET_NAME", "../Grammar/Symbol.code" );
      NonrealSymbol.setFunctionSource        ( "SOURCE_SHORT_GET_NAME", "../Grammar/Symbol.code" );
 
-  // DQ (3/11/2004): Force name of templateSymbol to be the template string (at least until we can get
-  // to the point in the processing were we have access to the realy template name within EDG (then it
-  // might be good to reset the name from the whole template text string.
-  // TemplateSymbol.setFunctionSource       ( "SOURCE_SHORT_EMPTY_GET_NAME", "../Grammar/Symbol.code" );
+     // DQ (3/11/2004): Force name of templateSymbol to be the template string
+     // (at least until we can get to the point in the processing were we have
+     // access to the realy template name within legacy frontend (then it might
+     // be good to reset the name from the whole template text string.
+     // TemplateSymbol.setFunctionSource       ( "SOURCE_SHORT_EMPTY_GET_NAME",
+     // "../Grammar/Symbol.code" );
      TemplateSymbol.setFunctionSource       ( "SOURCE_SHORT_GET_NAME", "../Grammar/Symbol.code" );
   // TemplateInstantiationSymbol.setFunctionSource( "SOURCE_SHORT_GET_NAME", "../Grammar/Symbol.code" );
 

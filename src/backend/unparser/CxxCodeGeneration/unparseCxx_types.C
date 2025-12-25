@@ -3614,8 +3614,10 @@ Unparse_Type::unparseTypedefType(SgType* type, SgUnparse_Info& info)
 #if 0
           printf ("typedef_type->get_declaration() = %p = %s \n",typedef_type->get_declaration(),typedef_type->get_declaration()->sage_class_name());
 #endif
-       // DQ (10/17/2004): This assertion forced me to set the parents of typedef in the EDG/Sage connection code
-       // since I could not figure out why it was not being set in the post processing which sets parents.
+          // DQ (10/17/2004): This assertion forced me to set the parents of
+          // typedef in the legacy frontend/Sage connection code since I could
+          // not figure out why it was not being set in the post processing
+          // which sets parents.
           ASSERT_not_null(typedef_type->get_declaration()->get_parent());
 
 #if 0

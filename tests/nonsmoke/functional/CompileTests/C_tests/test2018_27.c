@@ -25,16 +25,16 @@ struct X
 // #define __builtin_va_arg(v,type) rose__builtin_va_arg(v,sizeof(type))
 // #define __builtin_va_arg builtin_va_arg
 
-// Since we can't turn on the builtin function (conflicts with EDG C++11 constexpr protytypes)
-// we need to define this in a way that we can recognize it and transform it back to a builtin
-// function.  Alternatively, we could selectively turn on the EDG support for only a few builtin
-// functions.
-// #define __builtin_va_arg(v,__type) ({__type __builtin_va_arg_variable; __builtin_va_arg_variable;})
+   // Since we can't turn on the builtin function (conflicts with legacy
+   // frontend C++11 constexpr protytypes) we need to define this in a way that
+   // we can recognize it and transform it back to a builtin function.
+   // Alternatively, we could selectively turn on the legacy frontend support
+   // for only a few builtin functions. #define __builtin_va_arg(v,__type)
+   // ({__type __builtin_va_arg_variable; __builtin_va_arg_variable;})
 
-// X x;
+   // X x;
 
-void foobar(int i, ...)
-   {
+   void foobar(int i, ...) {
      va_list ap;
      __builtin_va_start(ap,i);
 
@@ -43,4 +43,3 @@ void foobar(int i, ...)
 
  // iequals(35, ivalue(__builtin_va_arg(ap,X).f(-1)), ivalue(x.f(-1)));
    }
-

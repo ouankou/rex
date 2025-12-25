@@ -112,10 +112,9 @@ The namespace contains a main function `RunUnitTests` which is used to actually 
 Each unit test provides a local logging object to trace status:
 
 ```C++
-  Sawyer::Message::Stream tlog(mlog[TRACE] << "Starting BuildNullptrTypeTests");
+  auto tlog = mlog[TRACE] << "Starting BuildNullptrTypeTests";
 
   ...
 
   tlog << "... Done.\n";
 ```
-

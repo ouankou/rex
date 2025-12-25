@@ -120,7 +120,7 @@ It is a hold over from support for CC++ which is not supported in SAGE III anymo
 It is not used anywhere within SAGE III and I don't know why it is there.
 
 \todo Need to find an example of where SgClassNameRefExp is used.  It is build in
-the EDG/Sage III translation, but not in a way that it is obvious that it is
+the legacy frontend/Sage III translation, but not in a way that it is obvious that it is
 still used within Sage III.  So this may have to be removed at a latr date.
 
 \todo To support Fortran parser we need an IR node which will represent the

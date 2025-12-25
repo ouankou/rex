@@ -65,7 +65,7 @@ namespace std __attribute__ ((__visibility__ ("default")))
     { };
 
 #if 0
-  // This is allowed in GNU 4.9.2 (but not in EDG).
+  // This is allowed in GNU 4.9.2 (but not in legacy frontend).
   template<typename _B1>
     struct __and_<_B1>
     : public _B1

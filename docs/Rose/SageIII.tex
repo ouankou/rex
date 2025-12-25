@@ -19,7 +19,7 @@ object-oriented IRs).
      SAGE++ was the first version of SAGE and it provided
 support for C, a subset of C++ (C++ evolved quite a bit early on
 and was a moving target), and F90. SAGE II introduced the use
-of the EDG front-end, and dropped the handling of Fortran, 
+of the legacy frontend front-end, and dropped the handling of Fortran, 
 but its work was incomplete.
 
 \subsection{Difference Between SAGE II and SAGE III}
@@ -31,11 +31,11 @@ details were addressed in the work on SAGE II as part of its
 preparation for use within ROSE.  We are very thankful to the 
 initial developers of SAGE II for all their work.  Sage III
 hopefully fulfills on a number of the goals behind their work.
-SAGE III continues to use the EDG frontend and has updated
-the versions of EDG in use (over SAGE II) and separated
-out the EDG work so that the connection of SAGE III to EDG
+SAGE III continues to use the legacy frontend frontend and has updated
+the versions of legacy frontend in use (over SAGE II) and separated
+out the legacy frontend work so that the connection of SAGE III to legacy frontend
 is easier to maintain and update in the future with new versions 
-of EDG.
+of legacy frontend.
 
 \subsection{Differences Between SAGE III and ROSE}
    ROSE uses SAGE III internally and adds numerous, more sophisticated mechanisms.
@@ -66,7 +66,7 @@ For example, ROSE adds:
 \section {Comments Handling}
 
     Comments are placed into the SAGE III AST using a separate pass over the source file.
-EDG does not preserve comments at this time, and we felt it was important to preserve them
+legacy frontend does not preserve comments at this time, and we felt it was important to preserve them
 within the unparsed (generated) output of the source-to-source mechanism that ROSE defines.
 Comment processing can also be addressed using the AST Rewrite Mechanism, though
 the order of how the comments appear in the code is determined by the order of 
@@ -96,7 +96,7 @@ this subject may be open to minor changes in future releases of ROSE.
 extension.  Of course, some people describe this a bit differently,
 but {\tt \#pragma} is not interpreted by {\tt CPP}, and it {\it {\bf is}} interpreted by the compiler.
 And it has a specific semantics since it is part of the language grammar.
-The EDG documentation refers to them as pragma declarations, so they should be 
+The legacy frontend documentation refers to them as pragma declarations, so they should be 
 treated that way. This also is why they only really work in the grammar if 
 they are declarations (since they are only permitted were common declarations 
 are permitted and no where else).
@@ -220,9 +220,9 @@ the AST and permit maximum information assumed to be required for any transforma
 No transformation occurs on the template declaration unless it's done explicitly by 
 the user (this is difficult since the text string representing the template is not
 formed into an AST that we can traverse).  Note that this is a result of a design
-decision on the part of EDG to provide this as a default behavior and our decision 
+decision on the part of legacy frontend to provide this as a default behavior and our decision 
 to use it.  More recent work to get the template as an AST is underway, using some 
-of the options in EDG to support this.  This later work is not robust enough to be 
+of the options in legacy frontend to support this.  This later work is not robust enough to be 
 the default in ROSE without a bit more work.
 
 \subsection{C++ Constructs That Can Be Made Into Templates}
@@ -319,7 +319,7 @@ As a result, only a few declarations contain template specific information
 %                    {\tt SgTemplateInstantiationDecl}, {\tt SgTemplateInstantiationFunctionDecl},
 %                    {\tt SgTemplateInstantiationMemberFunctionDecl}, or a template member data
 %                    (though I have not seen code that demonstrates this and which
-%                    compiles with either EDG or GNU g++).  No other declaration is 
+%                    compiles with either legacy frontend or GNU g++).  No other declaration is 
 %                    permitted (or makes sense).
 %         \end{itemize}
 \end{itemize}
@@ -592,13 +592,13 @@ transformations on templates can be supported.  And I am learning as I go :-).
                      member functions, and 
                      static data members
                      are instantiated (on the next pass through the prelinker). The process should 
-                     involve a call to the EDG function:
+                     involve a call to the legacy frontend function:
                      \begin{itemize}
                           \item {\tt void set\_instantiation\_required\_for\_template\_class\_members (a\_type\_ptr class\_type)}
                      \end{itemize}
 
                    % I am not currently sure how to make this happen, but it should involve the 
-                   % *.ti files (I guess), and might require a modification to the EDG prelink
+                   % *.ti files (I guess), and might require a modification to the legacy frontend prelink
                    % mechanism, if it is not as simple as just generating the mangled
                    % member function names and placing them in the *.ti file (which might
                    % be all there is to it).
@@ -628,15 +628,15 @@ ROSE controls automatic template instantiation using the option
 
 
 \commentout{
-\subsection{Problems with the EDG/ROSE Template Instantiation Approach}
+\subsection{Problems with the legacy frontend/ROSE Template Instantiation Approach}
 
-    First lets mention that EDG does a great job and that the problems that
+    First lets mention that legacy frontend does a great job and that the problems that
 we have within template instantiation in ROSE are a result of trying to
-convert template instantiations in EDG to be formal template specializations 
+convert template instantiations in legacy frontend to be formal template specializations 
 in ROSE.  This approach presents a better user interface and is substantially 
-different to what EDG provides.
+different to what legacy frontend provides.
 
-    For member functions EDG adds to the EDG AST the instantiations of the member functions
+    For member functions legacy frontend adds to the legacy frontend AST the instantiations of the member functions
 that are required at the end of the file.  Note that it does not declare the functions
 before hand except in the instantiated class (which ROSE suppresses the output of so that
 the template can be used instead and template specializations added).  Since we convert
@@ -661,7 +661,7 @@ We need at least a couple of template instantiation modes:
 \begin{enumerate}
    \item Transformations on templates \\
          default should be to present an AST without the capability to transform
-         templates.  However, due to EDG dropping the inline member function template
+         templates.  However, due to legacy frontend dropping the inline member function template
          definitions we would have to compromise and still present the member functions
          of templated classes as specializations.  Later, perhaps we can fix this.
 
@@ -672,12 +672,12 @@ We need at least a couple of template instantiation modes:
          code then we could perhaps use it as a text string, but we would have to get it
          after macro expansion for safety and even then it could be a problem. In general
          if all templates are instantiated a link time then we have fewer problems.
-   \item used (same as EDG) \\
+   \item used (same as legacy frontend) \\
          Output all instantiations that are used, this would cause link time problems with
          multiply defined symbols.
    \item all (output all template instantiations). \\
          Assume everything is transformed and output all template instantiations.
-   \item local (same as EDG) \\
+   \item local (same as legacy frontend) \\
          Output only those template instantiations used and do so as static functions.         
 \end{enumerate}
 }
@@ -732,7 +732,7 @@ compiler).
 contain the instantiations (as specializations) that must be seen by the prelinker to 
 trigger the template instantiation mechanism to stop trying to instantiate the template
 instantiation (as a class instead of as a specialization).  If we proces the original input file
-then we would trigger the mechanism (in the EDG front-end) for the front-end to ask for a template to be
+then we would trigger the mechanism (in the legacy frontend front-end) for the front-end to ask for a template to be
 instantiated to satisfy what only an instantiation or a specialization could satisfy.
 When a template instantiation is requested, only an instantiation (class with mangled name)
 or a template specialization will satisfy it. 
@@ -774,7 +774,7 @@ present the approach using template instantiation at link time (prelinking).
 
 
 After compilation, before prelinking invokes any recompilation passes,
-the EDG front-end generates a {\em template instantiation} file (file.ti).
+the legacy frontend front-end generates a {\em template instantiation} file (file.ti).
 which contains the following information:
 
 {\indent
@@ -790,7 +790,7 @@ the directory where to do the compilation, and file to compile to generate that 
 The symbols represent possible templates that {\em could} be instantiated (if requested 
 in the template {\em instantiation request} file (rose\_file.ii), discussed in more 
 detail below).  ROSE generates a new {\em template instantiation} file (rose\_file.ti),
-and deletes the {\em template instantiation} file generated by EDG (file.ti).  Thus ROSE
+and deletes the {\em template instantiation} file generated by legacy frontend (file.ti).  Thus ROSE
 is consistant is using the {\em rose\_} prefix for all ROSE generated files.  With
 the information in the {\em template instantiation} file (rose\_file.ti), for each source
 file in a project consisting of multiple files, we are ready to prelink.  At this point
@@ -826,7 +826,7 @@ translators build using ROSE (see bool SgFile::isPrelinkPhase()).
 \end{enumerate}
 
 The template {\em instantiation request} file (rose\_file.ii) is built by the prelinker 
-to communicate to the EDG front-end what templates should be instantiated during the 
+to communicate to the legacy frontend front-end what templates should be instantiated during the 
 recompilation of each file.  Only the files containing the template declaration
 (the first one if it could be more than one) are recompiled.  An example template 
 {\em instantiation request} file (rose\_file.ii) appears as:
@@ -847,7 +847,7 @@ foo__tm__2_i__FiZ1Z_v
 \end{enumerate}
 
   The prelinker builds each requested symbol (template instantiation) by recompiling
-the file associated with that symbol and the EDG front-end then reads the template 
+the file associated with that symbol and the legacy frontend front-end then reads the template 
 {\em instantiation request} file (rose\_file.ii) and instantiates the template
 in the AST as required.  ROSE translates the instantiated template in the AST into
 a template specialization and generates the template specialization in the 
@@ -929,8 +929,8 @@ templates which are always generated as required).
          ultimately be permitted to be controlled by the user.
 \end{enumerate}
 
-Note that EDG also uses a {\em definition list file}  I am unclear what its significance
-is in the template instantiation process (it is however documented in the EDG manual).
+Note that legacy frontend also uses a {\em definition list file}  I am unclear what its significance
+is in the template instantiation process (it is however documented in the legacy frontend manual).
 }
 
 
@@ -948,11 +948,11 @@ bugs in g++:
  % \item throw modifiers taking parameters (check on this detail). This is now fixed and
  %       should not be an issue.
    \item static const data members defined in the class definition (floats only)
-         EDG accepts static and g++ supports const, and neither accepts what the other
+         legacy frontend accepts static and g++ supports const, and neither accepts what the other
          considers correct. ROSE generates code specific for the back-end and so the
          back-end must be specified in when running {\tt configure} for ROSE.  We
-         don't currently support EDG as a back-end, though we support Intel C++ as a
-         back-end and they use EDG, so this should work.
+         don't currently support legacy frontend as a back-end, though we support Intel C++ as a
+         back-end and they use legacy frontend, so this should work.
          \fixme{verify the details here.}
  % \item are there any others ...
 \end{enumerate}
@@ -1043,7 +1043,7 @@ code.  Original formatting, use of C preprocessor directives
 (e.g. {\tt \#include<file.h>}), and comments are preserved within the AST and output 
 in the generate code.   However, there can be minor differences between the input 
 source code and the code that is generated from ROSE translators. In all cases this 
-difference is due to normalizations internally within the EDG front-end.  Current 
+difference is due to normalizations internally within the legacy frontend front-end.  Current 
 normalizations include:
 
 \begin{enumerate}
@@ -1055,14 +1055,14 @@ normalizations include:
    % This is not fixed in ROSE and all member functions are represented identically
    % to there position inside of outside of their class within ROSE.
    %  \item Member functions defined within a class. \\
-   %  Although this could be changed within EDG, we currently use EDG with
+   %  Although this could be changed within legacy frontend, we currently use legacy frontend with
    %  a (default) internal setting which defines all member functions outside
    %  of the class declaration of which they are a member.  This normalization makes
    %  little different and is only syntactic.  Note that this in now optional for
-   %  non-template classes.  The default must be changed in EDG for this to work
+   %  non-template classes.  The default must be changed in legacy frontend for this to work
    %  differently. The file is host\_envir.h and the macro
    %  FRIEND\_AND\_MEMBER\_DEFINITIONS\_MAY\_BE\_MOVED\_OUT\_OF\_CLASS should be set to FALSE.
-   %  Clearly, access to the EDG source code is required for this.  The default within ROSE
+   %  Clearly, access to the legacy frontend source code is required for this.  The default within ROSE
    %  is FALSE, changed from previous versions of ROSE (prior to 0.8.3b and earlier).
 
      \item Variable declarations are normalized to separated declarations. \\
@@ -1092,7 +1092,7 @@ normalizations include:
      high priority (and may be more desirable than the alternative).
 
      \item Typedef template arguments are expressed in terms of their base type \\
-     This is not something that we can fix or change. EDG simply represents 
+     This is not something that we can fix or change. legacy frontend simply represents 
      at least some and maybe all template arguments with their types normalized 
      to strip away all typedefs.  Fixing this would allow 
      generation of code that is easier to verify visually.  This may receive 
@@ -1101,7 +1101,7 @@ normalizations include:
      \item Comments within templates. \\
      Comments within templates are ignored and not reproduced in the generated
      source code.  This is because the template code is held in the AST as a string
-     generated by EDG, and EDG ignores the comments.  We currently output the comments 
+     generated by legacy frontend, and legacy frontend ignores the comments.  We currently output the comments 
      at either the top or bottom of the template declaration.  Later then the template
      declaration is represented as an AST, the comments will be folded into place where
      they belong.
@@ -1149,15 +1149,15 @@ normalizations include:
 }}
 
      \item C++ style cast are normalized to C style casts. \\
-     EDG appears to normalize all C++ style cases to C style casts. We are
+     legacy frontend appears to normalize all C++ style cases to C style casts. We are
      working on the analysis to backout where C style casts could in fact
      be C++ style casts of a specific classification: const\_cast, static\_cast,
      dynamic\_cast,and reinterpret\_cast.
 
      \item Floating-point literal normalization \\
-     Floating-point literals are internally represented in EDG as float, double, or long
+     Floating-point literals are internally represented in legacy frontend as float, double, or long
      double (dependent on the type), thus the exact string representing the floating point
-     literal is lost.  We have modified EDG to save the string representation (from the
+     literal is lost.  We have modified legacy frontend to save the string representation (from the
      token stream) the floating-point literal, this work is recent and handles all the
      different ways that floating point literals can be expressed (even including
      hexidecimal representation of floating point literals).  The value as a float, double,
@@ -1335,7 +1335,7 @@ normalizations include:
 }}
 
      \item Array indexing represented as pointer arithmetic. \\
-           Array indexing is translated by EDG into pointer arithmetic.  It
+           Array indexing is translated by legacy frontend into pointer arithmetic.  It
     is not clear if this specific sort of AST normalization is desirable.
      Code such as:
 {\indent
@@ -1387,9 +1387,9 @@ void foo()
 
 
 \item Unnamed typedefs of enums are normalized to enums. \\
-     EDG appears to normalize unnamed typedefs to be enums, and the information about the 
+     legacy frontend appears to normalize unnamed typedefs to be enums, and the information about the 
      origin as an unnamed typedef is lost.  Since there appears to be no difference in the
-     EDG AST, ROSE is unable to recover when the {\em typedef} keyword was used.  This is not
+     legacy frontend AST, ROSE is unable to recover when the {\em typedef} keyword was used.  This is not
      a real problem and the semantics of the application is the same.  Without
      the name of the typedef, the typedef type can't be referenced except through its tag
      name.  However, since there are subtle ways in which the tag name is not a type name in
@@ -1427,7 +1427,7 @@ void foo()
 }}
      ROSE will normalize this to explicit packing pragmas for each structure (translating
      the {\em pack(push,n)} and {\em pack(pop)} to explicit values (using {\em pack(n)}).
-     The reasons this is done is because this is that EDG stores the packing alignment
+     The reasons this is done is because this is that legacy frontend stores the packing alignment
      values directly with the data structure and does not represent the
      pragma explicitly.
      Generated code using ROSE thus only uses {\em \#pragma pack(n)} and 
@@ -1586,7 +1586,7 @@ void foo() {
 
   Notice that not all expressions are normalized, and that the cases 
 which are normalized vs. those which are not is very subtle. This 
-normalization appears to be a result of the internal working of EDG 
+normalization appears to be a result of the internal working of legacy frontend 
 and not the Sage III IR.  This test code can be found in {\tt test2006\_95.C}.
 
 \end{enumerate}
@@ -1597,10 +1597,10 @@ and not the Sage III IR.  This test code can be found in {\tt test2006\_95.C}.
     Philosophically, I don't think much of language extensions. we don't add any, 
 we don't think we should add any, and we would not trust ourselves to add them correctly.
 That having been said, there are a few C++ extensions that are introduced by
-EDG (only one that I know of) and a fair number by g++.  Because in many cases these features 
+legacy frontend (only one that I know of) and a fair number by g++.  Because in many cases these features 
 are implemented differently, we find them all worth avoiding.  However,
 some applications use them, so we are somewhat forced to support them and handle the 
-differences between how they are supported within both the EDG front-end and the
+differences between how they are supported within both the legacy frontend front-end and the
 back-end compiler (most often GNU g++).  We list specific non-standard features of
 C++ that we are forced to handle (because applications we compile mistakenly use them).
 
@@ -1618,22 +1618,22 @@ refers to code such as:
                static const bool booleanValueConstant = true; // Legal C++ code
                static const char charValueConstant    = '\0'; // Legal C++ code
 
-            // Illegal C++ code (non-standard, does not compile with EDG, but does with g++)
+            // Illegal C++ code (non-standard, does not compile with legacy frontend, but does with g++)
                static const double doubleValueConstant1 = 3.14; 
-            // Illegal C++ code (non-standard, but compiles with EDG, and does not with g++)
+            // Illegal C++ code (non-standard, but compiles with legacy frontend, and does not with g++)
                const double doubleValueConstant2 = 3.14; 
         };
 \end{verbatim}
 }}
            and it applies to integer-based types only (why such types are special while float
            and double are not, I don't know). However, {\tt double} is somewhat supported 
-           as a non-standard extension by both EDG and GNU g++ (though in different ways).
+           as a non-standard extension by both legacy frontend and GNU g++ (though in different ways).
            This is a little corner of C++ which is truly obscure, but shows up in some
-           large applications at LLNL.  Since the code that works with EDG does not work
+           large applications at LLNL.  Since the code that works with legacy frontend does not work
            with GNU g++ (and vice versa),
-           there is no common ground.  So we assume that the code will compile using EDG
+           there is no common ground.  So we assume that the code will compile using legacy frontend
            (we have no choice) and then generate code that will compile with GNU g++.
-           This means that we generate C++ code that can't be compiled with EDG, but this 
+           This means that we generate C++ code that can't be compiled with legacy frontend, but this 
            is the mess that application developers get themselves into when they use
            non-standard features.
 
@@ -1651,15 +1651,15 @@ refers to code such as:
     the header files from the target back-end compiler is somewhat messy, but fully
     automated.  There are several steps, including translation and matching the values of
     the target compiler's predefined macros, to build a set of header files that can be
-    used by ROSE (by the EDG front-end) from those used by the target back-end.
+    used by ROSE (by the legacy frontend front-end) from those used by the target back-end.
     The details are handled automatically, and need not be a concern for users of ROSE.
   % This section permits us to document some of this work for a more complete internal
   % reference.
-    We use the {\tt --preinclude} mechanism in EDG to force a specific generated header file 
+    We use the {\tt --preinclude} mechanism in legacy frontend to force a specific generated header file 
     to be read ahead of any ROSE system header files (translated from the back-end system
     header files by the ROSE {\tt configure} mechanism).  This head file contains
     all the back-end specific macros definitions. The file name is:
-    {\tt rose\_edg\_required\_macros\_and\_functions.h} and is placed in the install
+    {\tt rose\_required\_macros\_and\_functions.h} and is placed in the install
     tree ({\tt <prefix>/include/<back-end compiler name>\_HEADERS/}.
 
 \commentout{
@@ -1681,11 +1681,11 @@ refers to code such as:
     independent as possible).  But copying and modifying the target compiler's header
     files we are in a position of being guite dependent upon specific version numbers of
     back-end compilers already).}  For greatest possible safety, most predefined macros are
-    given their definition withn the specificaiton of the commandline internally to EDG
-    (not really a commandline, but a string handed to the EDG front-end withi a function
+    given their definition withn the specificaiton of the commandline internally to legacy frontend
+    (not really a commandline, but a string handed to the legacy frontend front-end withi a function
     call interface).
 
-    The full commandline internally required to EDG to make it emulate g++ is:
+    The full commandline internally required to legacy frontend to make it emulate g++ is:
     $ -D\_\_GNUG\_\_=\$BACK-END\_GCC\_MAJOR -D\_\_GNUC\_\_=\$BACK-END\_GCC\_MAJOR
     -D\_\_GNUC_MINOR\_\_=\$BACK-END\_GCC\_MINOR -D\_\_GNUC\_PATCHLEVEL\_\_=\$BACK-END\_GCC\_PATCHLEVEL 
     -D\_GNU\_SOURCE -D\_\_extension\_\_= -D\_\_const=const -D\_\_attribute\_\_(arg)= -D\_\_restrict= 
@@ -1695,7 +1695,7 @@ refers to code such as:
     \begin{enumerate}
         \item {tt \_\_flexarr} must be redefined since it is done incorrectly in
         /usr/include/sys/cdefs.h.  It is defined first as {\tt\_\_flexarr[]}, but it should be
-        {\tt \_\_flexarr[1]} to compile properly with EDG.
+        {\tt \_\_flexarr[1]} to compile properly with legacy frontend.
 
         \item {\tt \_\_GNUC\_\_} for GNU must be defined.
 
@@ -1725,7 +1725,7 @@ refers to code such as:
         best option here).
 
         \item {\tt \_GLIBCXX\_HAVE\_STDINT\_H} and {\tt \_GLIBCXX\_EXTERN\_TEMPLATE=0}
-        must be defined to avoid code which uses GNU extensions and would not compile with EDG
+        must be defined to avoid code which uses GNU extensions and would not compile with legacy frontend
         (not legal C++ code).
 
         \item The following are defined in the ROSE/config/rose-g++-headerfilefixup.h: \\
@@ -1748,7 +1748,7 @@ For example, enums have to have their definition in their declaration; there is 
 forward declarations of enums in C or C++.\footnote{This is in spite of the fact that they
     are implemented in many compilers. They are not part of the C or C++ language, so 
 they are not implemented in ROSE.  They are, however, one of the most common language
-extensions to C and C++ compilers (even certain standard following front-ends such as EDG).}
+extensions to C and C++ compilers (even certain standard following front-ends such as legacy frontend).}
 
 A class declaration, in C++, can have a forward declaration (even repeated forward declarations)
 before the declaration that contains the class definition (the {\tt \{\}} part).  Thus 
@@ -1805,7 +1805,7 @@ required to a declaration (so that the same first declaration can be shared)
 and within the unparser (most importantly to output the definition where it
 appeared in the original code).
 
-   These pointers are initialized in the EDG/Sage interface code and are in a few cases
+   These pointers are initialized in the legacy frontend/Sage interface code and are in a few cases
 (redundant forward declarations where only the first one is given a proper reference to
 the defining declaration), fixed-up in the ROSE/src/frontend/SageIII/AstFixes.C (AST fix-up
 phase). They are handy in transformations since they simplify how one can find a
@@ -1818,7 +1818,7 @@ are used to specify the location of the construct within the {\em space of names
 (we have avoided calling the {\em space of names} the {\tt namespace}, since that
 is a specific C++ construct) presented by the C++ program.
 
-     Note that none of the {\tt get\_mangled()} functions are called within the EDG/Sage 
+     Note that none of the {\tt get\_mangled()} functions are called within the legacy frontend/Sage 
 translation (I think).  At least none are called directly!
 
    IR nodes that contain a {\tt get\_qualified\_name()} member function are:
@@ -1928,7 +1928,7 @@ sometimes C program files that use a non *.c suffix cannot be handled by the
 names, etc.  In order to compile these C language programs their files must use 
 a *.c (lower case {\em c}) as a filename extension (suffix).  This is a frontend
 issue related to the front-end parsing and the language rules that are selected
-(seemingly independent of the options specified to EDG and based partly on the
+(seemingly independent of the options specified to legacy frontend and based partly on the
 filename suffix).  Fortunately most C language programs already use the lower
 case {\em c}) as a filename extension (suffix).  Test code {\tt test2006\_110.c}
 demonstrates an example where the {\em *.c} suffix is required.
@@ -1953,7 +1953,6 @@ low level handling of the AST.  Significant new work is being done
 to simplify the direct construction of the AST.  This work is not
 available yet.  It is not discussed in this draft of the manual.
 }
-
 
 
 

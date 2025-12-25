@@ -124,8 +124,8 @@ for (vector<SgDeclarationStatement*>::const_iterator iter = nodevec.begin(); ite
 4. **movePreprocessingInfo** ❌ Symbol table + preprocessing info
 5. **livenessAnalysis** ❌ Virtual CFG construction
 6. **deepDelete** ❌ AST structure/deletion
-7. **insertBeforeUsingCommaOp** ❌ Different AST structure than EDG
-8. **insertAfterUsingCommaOp** ❌ Different AST structure than EDG
+7. **insertBeforeUsingCommaOp** ❌ Different AST structure than legacy frontend
+8. **insertAfterUsingCommaOp** ❌ Different AST structure than legacy frontend
 
 ---
 
@@ -216,8 +216,8 @@ ctest --output-on-failure
 ### Adding Fixes
 1. **Mark all fixes**: Use `// FIX (Clang frontend):` comment prefix
 2. **Explain reasoning**: Include root cause and impact in comments
-3. **Preserve EDG behavior**: Don't break EDG frontend compatibility
-4. **Test both frontends**: Verify fixes work with `-edg` and `-clang` modes
+3. **Preserve Clang frontend behavior**: Don't break Clang-based analysis paths
+4. **Test the frontend**: Verify fixes work with `-clang` mode
 
 ### Debugging Code
 - Use `#if 0 ... #endif` for debug printf statements
@@ -234,7 +234,7 @@ ctest --output-on-failure
 2. **Template Handling**: Symbol table incomplete
 3. **Preprocessing Info**: Unparser doesn't output attached directives
 4. **OpenMP/OpenACC**: Directive parsing works, but AST integration incomplete
-5. **Source-to-Source Fidelity**: Lower than EDG for complex transformations
+5. **Source-to-Source Fidelity**: Lower than legacy frontend for complex transformations
 
 ---
 

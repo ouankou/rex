@@ -31,24 +31,6 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
 // void attachPreprocessingInfo(SgSourceFile *sageFile);
 void attachPreprocessingInfo(SgSourceFile *sageFile, const std::string & new_filename = "");
 
-
-#if 0
-// DQ (12/16/2008): comment out while I debug the non-wave support.
-
-// AS (012006) Added the function
-//     void attachPreprocessingInfo(SgFile *sageFile,  std::map<string,ROSEAttributesList*>*);
-// to support reintroductions of macros and fetching of preprocessor directive using Wave. 
-// This function does not in itself rely on Wave, but simply takes the same arguement as 
-// 'attachPreprocessingInfo(SgFile *sageFile)', but adds an argument std::map<string,ROSEAttributesList*>* 
-// which is a map of a pair (filename,list of attributes in that file). The two functions will perform 
-// the same tasks in all ways but the way they find the preprocessor directives. In addition to that
-// the mechanism here opens up for reintroduction of unexpanded macros into the AST without
-// changing the implementation at all. This relies on some external mechanism, that be the 
-// Wave preprocessor or some other, to find the preprocessor directives and the unexpanded 
-// macros.
-void attachPreprocessingInfo(SgSourceFile *sageFile,  std::map<std::string,ROSEAttributesList*>*);
-#endif
-
 #endif
 
 // EOF

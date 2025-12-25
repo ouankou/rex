@@ -1,4 +1,4 @@
-// Example of C11 atomic use (not yet supported in EDG).
+// Example of C11 atomic use (not yet supported in legacy frontend).
 #if __GNUC__ == 4 && __GNUC_MINOR__ >= 8 || __GNUC__ > 4
 
 // This is ony required for testing when we short circuit the ROSE builtin header files (compiler defines).

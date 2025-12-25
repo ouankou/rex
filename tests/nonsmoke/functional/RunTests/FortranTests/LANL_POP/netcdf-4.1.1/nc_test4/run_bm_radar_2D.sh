@@ -22,7 +22,7 @@ do
     let file_num=$file_num+1
     if ! test -f $TMP/$file; then
 	echo "getting file: $file"
-	cp -f /upc/share/testdata/nssl/mosaic2d_nc/tile${t}/$d1.netcdf.gz $TMP
+	cp -f /shared/testdata/nssl/mosaic2d_nc/tile${t}/$d1.netcdf.gz $TMP
 	gunzip -f $TMP/$d1.netcdf.gz
 	cp $d1.netcdf $TMP/$file
     fi

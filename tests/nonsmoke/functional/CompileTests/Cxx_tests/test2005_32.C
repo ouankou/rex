@@ -62,23 +62,27 @@ class Y
    {
      public:
 #endif
-       // This is allowed by GNU but not by EDG
-       // static const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       // This is allowed by GNU but not by legacy frontend
+       // static const double pi = 3.141592653589793238462643383279; // Pi to 30
+       // places
 
-       // This is allowed by EDG, but not by g++ (g++ needs constant to be static)
-       // const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       // This is allowed by legacy frontend, but not by g++ (g++ needs constant
+       // to be static) const double pi = 3.141592653589793238462643383279; //
+       // Pi to 30 places
 
-       // Code that will compile with EDG
+       // Code that will compile with legacy frontend
        // const double pi = 3.141592653589793238462643383279; // Pi to 30 places
        // Code that we should generate so that we can compile with g++
-       // static const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       // static const double pi = 3.141592653589793238462643383279; // Pi to 30
+       // places
 #ifdef USE_ROSE
-       // DQ (3/23/2014): When ROSE is using EDG 4.7 we can specify const double pi = 3.141...
-       // but when we use EDG 4.8, we have to follow GNU more closely.
-       // STORAGE const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+       // DQ (3/23/2014): When ROSE is using legacy frontend 4.7 we can specify
+       // const double pi = 3.141... but when we use legacy frontend 4.8, we
+       // have to follow GNU more closely. STORAGE const double pi
+       // = 3.141592653589793238462643383279; // Pi to 30 places
 
-       // Version for when ROSE is using EDG 4.8.
-          double pi;
+       // Version for when ROSE is using legacy frontend 4.8.
+       double pi;
 #else
           double pi; // = 3.141592653589793238462643383279; // Pi to 30 places
 #endif
@@ -101,8 +105,9 @@ void foo()
      double var3  = gamma;
      int    var4  = integerConst;
 
-  // Access via static qualifier works fine but access via data member filed generates error: "x->3;"
-  // The fix (to EDG/Sage translation) was to make these generate the same code (as it should be)
+     // Access via static qualifier works fine but access via data member filed
+     // generates error: "x->3;" The fix (to legacy frontend/Sage translation)
+     // was to make these generate the same code (as it should be)
      int    var5  = X::maxIntValue;
      int    var6  = x.maxIntValue;
 
@@ -117,10 +122,10 @@ void foo()
   // Since we are close this is likely worth fixing.
      Y y,*yptr;
 #ifdef USE_ROSE
-  // This is the version that works for ROSE EDG 4.7 and before, but with EDG 4.8...
-  // double var11 = Y::pi;     // This works
+     // This is the version that works for ROSE legacy frontend 4.7 and before,
+     // but with legacy frontend 4.8... double var11 = Y::pi;     // This works
 
-  // Version for when ROSE is using EDG 4.8.
+     // Version for when ROSE is using legacy frontend 4.8.
      double var11 = y.pi;     // This works
 #else
      double var11 = y.pi;     // This works

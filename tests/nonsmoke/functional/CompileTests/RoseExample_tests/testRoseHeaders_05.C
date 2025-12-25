@@ -14,11 +14,12 @@
 #ifndef SAGE3_CLASSES_BASIC__H
 #define SAGE3_CLASSES_BASIC__H
 
-// DQ (11/12/2011): This is support to reduce the size of ROSE so that I can manage development on my laptop.
-// This option defines a subset of ROSE as required to support wotk on the new EDG front-end.
-// This is defined here becasuse it is not enough to define it in the rose_config.h
-// because that can't be read early enough to effect what header files are included.
-// #define ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
+// DQ (11/12/2011): This is support to reduce the size of ROSE so that I can
+// manage development on my laptop. This option defines a subset of ROSE as
+// required to support wotk on the new legacy frontend front-end. This is
+// defined here becasuse it is not enough to define it in the rose_config.h
+// because that can't be read early enough to effect what header files are
+// included. #define ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 
 // Much of ROSE's binary support uses the intX_t and uintX_t types (where X is a bit width), so we need to have the stdc printf
 // format macros defined for portability.  We do that here because it needs to be done before <inttypes.h> is included for the
@@ -79,7 +80,8 @@
 #include <algorithm>
 #include <fstream>
 
-// DQ (9/24/2004): Try again to remove use of set parent side effect in EDG/Sage III connection! This works!!!
+// DQ (9/24/2004): Try again to remove use of set parent side effect in legacy
+// frontend/Sage III connection! This works!!!
 #define REMOVE_SET_PARENT_FUNCTION
 
 // DQ (6/12/2007): Force checking for valid pointers to IR nodes being overwritten.
@@ -87,11 +89,11 @@
 // DQ (6/12/2007): Force assertion test to fail such cases caught when DEBUG_SAGE_ACCESS_FUNCTIONS == 1, else just report error.
 #define DEBUG_SAGE_ACCESS_FUNCTIONS_ASSERTION 0
 
-// DQ (10/12/2004): Remove the resetTemplateName() from use within the EDG/Sage connection
-// because it will (where required) force calls to generate the qualified name which
-// requires the parent pointer to have already been set.  Since we defer the 
-// setting of the parent pointers until post processing of the Sage III AST.
-// It is now called within the AstFixup.C.
+// DQ (10/12/2004): Remove the resetTemplateName() from use within the legacy
+// frontend/Sage connection because it will (where required) force calls to
+// generate the qualified name which requires the parent pointer to have already
+// been set.  Since we defer the setting of the parent pointers until post
+// processing of the Sage III AST. It is now called within the AstFixup.C.
 #define USE_RESET_TEMPLATE_NAME false
 
 #if 0
@@ -106,7 +108,8 @@
 #define ROSE_DEPRECATED_FUNCTION __attribute__ ((deprecated))
 #define ROSE_DEPRECATED_VARIABLE __attribute__ ((deprecated))
 #else
-// DQ (9/8/2004): Allow these to get turned of to simplify debugging while we have not yet removed their use.
+// DQ (9/8/2004): Allow these to get turned of to simplify debugging while we
+// have not yet removed their use.
 #define ROSE_DEPRECATED_FUNCTION 
 #define ROSE_DEPRECATED_VARIABLE 
 #endif
@@ -283,7 +286,7 @@ namespace Exec { namespace ELF { class ElfFileHeader; }; };
 // in the SgProject IR node to be absolute paths if they didn't originally appear 
 // that way on the commandline.  We have partial support for this but it is a bug
 // at the moment to use this.  However, we do now (work by Andreas) normalize the
-// source file name when input to EDG so that all Sg_File_Info objects store an
+// source file name when input to legacy frontend so that all Sg_File_Info objects store an
 // absolute path (unless modified using a #line directive, see test2004_60.C as an 
 // example).  The current work is an incremental solution.
 #define USE_ABSOLUTE_PATHS_IN_SOURCE_FILE_LIST 0

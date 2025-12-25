@@ -45,7 +45,8 @@ $ gcc test.c
 
 stonea@vega ~/tmp
 $ rosec test.c
-rosec: /s/bach/e/proj/oadev/ROSE/rose-0.8.10a/ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:19530:
+rosec:
+/s/bach/e/proj/oadev/ROSE/rose-0.8.10a/ROSE/src/frontend/legacy_frontend/sage_gen_be.C:19530:
 SgExpression* sage_gen_expr(an_expr_node*, a_boolean,
 DataRequiredForComputationOfSourcePostionInformation*): Assertion
 `operand_1->kind == (an_expr_node_kind)enk_variable_address' failed.
@@ -54,7 +55,6 @@ Aborted
 Thanks,
 -Andy Stone
 */
-
 
 #include <stdio.h>
 #include <stdarg.h>

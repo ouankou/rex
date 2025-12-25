@@ -27,7 +27,7 @@ variable
 
 The loop body is already a SgBasicBlock
 identityTranslator:
-../../../../NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:1991:
+../../../../NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:1991:
 SgExpression* sage_gen_routine_name(an_expr_node*): Assertion
 `originalTemplate->text != __null' failed.
 Aborted
@@ -40,7 +40,6 @@ Thanks
 Andreas
 
 */
-
 
 template <class T>
 class PtrSetWrap  

@@ -6,11 +6,13 @@ class TestClassArgument
    {
      public:
           T xyz;
-       // This is a SgTemplateInstantiationMemberFunction in ROSE using EDG 3.3, so we should 
-       // preserve this (also is currently in the AST this way).
-       // However, by default these template instantiations are not output as specializations.
-       // A larger change to ROSE would be that there is an opportunity to have this be a member 
-       // function of the template class, instead of a template member function.
+          // This is a SgTemplateInstantiationMemberFunction in ROSE using
+          // legacy frontend 3.3, so we should preserve this (also is currently
+          // in the AST this way). However, by default these template
+          // instantiations are not output as specializations. A larger change
+          // to ROSE would be that there is an opportunity to have this be a
+          // member function of the template class, instead of a template member
+          // function.
           T foo();
    };
 

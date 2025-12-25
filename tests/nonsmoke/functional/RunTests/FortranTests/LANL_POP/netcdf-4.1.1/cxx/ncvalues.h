@@ -4,7 +4,8 @@
  *
  *   Purpose:	interface for classes of typed arrays for netCDF
  *
- *   $Header: /upc/share/CVS/netcdf-3/cxx/ncvalues.h,v 1.7 2006/07/26 21:12:06 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/cxx/ncvalues.h,v 1.7 2006/07/26 21:12:06 russ
+ *Exp $
  *********************************************************************/
 
 #ifndef Ncvalues_def

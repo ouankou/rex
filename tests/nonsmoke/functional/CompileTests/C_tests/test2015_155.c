@@ -13,12 +13,13 @@ static void bios_putchar ( int character )
 
   /* Print character with attribute */
 
-  /* DQ (5/24/2015): EDG reports error for this asm statement: 
-     " error: register "bp" has a fixed purpose and may not be clobbered in an asm statement"
-   */
+     /* DQ (5/24/2015): legacy frontend reports error for this asm statement:
+        " error: register "bp" has a fixed purpose and may not be clobbered in
+        an asm statement"
+      */
 
-// In the Xen source code these failing cases are commented out (this is an EDG issue).
-// #ifndef USE_ROSE
+     // In the Xen source code these failing cases are commented out (this is an
+     // legacy frontend issue). #ifndef USE_ROSE
      __asm__ __volatile__ ( REAL_CODE ( "sti\n\t"
 					   /* Skip non-printable characters */
 					   "cmpb $0x20, %%al\n\t"

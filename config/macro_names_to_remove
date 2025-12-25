@@ -5,9 +5,7 @@ __GNUC_PATCHLEVEL__
 __cplusplus
 __DATE__
 __TIME__
-__EDG__
 __GXX_WEAK__
-__EDG_VERSION__
 _WCHAR_T
 __NO_STRING_INLINES
 __STDC_HOSTED__

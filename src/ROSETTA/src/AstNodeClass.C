@@ -622,12 +622,14 @@ AstNodeClass::getBaseName () const
 void
 AstNodeClass::addGrammarPrefixToName()
    {
-  // In this function we prefix the grammar's name to the names of all terminals and nonterminals
-  // This allows them to have unique names in the global namespace (allowing us to have multiple
-  // grammars in use (each built from the same base level C++ grammar (using the new version of SAGE).
-  // However we don't want to modify the names of the tags unless they are a part of a higher level 
-  // grammar.  This is done to preserve the names already used in SAGE (and in the EDG/SAGE interface 
-  // code) which we don't want to change.
+  // In this function we prefix the grammar's name to the names of all terminals
+  // and nonterminals This allows them to have unique names in the global
+  // namespace (allowing us to have multiple grammars in use (each built from
+  // the same base level C++ grammar (using the new version of SAGE). However we
+  // don't want to modify the names of the tags unless they are a part of a
+  // higher level grammar.  This is done to preserve the names already used in
+  // SAGE (and in the legacy frontend/SAGE interface code) which we don't want
+  // to change.
 
   // To match the names used in SAGE the base level grammar will use "Sg" as its name
 

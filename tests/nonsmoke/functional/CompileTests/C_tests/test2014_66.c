@@ -18,12 +18,6 @@ void foo()
 
 // DQ (8/28/2015): Modified this to detect backend use (required for ROSE when compiled using the Intel compiler).
 /* ROSE MODIFICATION: undefine the self-referential macro: sa_handler */
-// #ifdef USE_ROSE
-//   #ifndef __EDG__
-//     #undef sa_handler
-//     #undef sa_sigaction
-//   #endif
-// #endif
 #if defined(USE_ROSE_BACKEND)
    #undef sa_handler
    #undef sa_sigaction

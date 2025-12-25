@@ -8499,7 +8499,7 @@ EOF16
          |                   then
          |                      if [ "X\${debugging}" != "X0" ]
          |                      then
-         |                         echo "checkForCompilerVersion:    ...case C (ancient EDG C compiler, 3-part)" >&2
+         |                         echo "checkForCompilerVersion:    ...case C (ancient legacy frontend C compiler, 3-part)" >&2
          |                         echo "checkForCompilerVersion:       match was [\${match}]" >&2
          |                      fi
          |                      echo "\${theBasename} \${match}"
@@ -8508,7 +8508,7 @@ EOF16
          |                   then
          |                      if [ "X\${debugging}" != "X0" ]
          |                      then
-         |                         echo "checkForCompilerVersion:    ...case D (ancient EDG C compiler, 2-part)" >&2
+         |                         echo "checkForCompilerVersion:    ...case D (ancient legacy frontend C compiler, 2-part)" >&2
          |                         echo "checkForCompilerVersion:       match was [\${match}]" >&2
          |                      fi
          |                      echo "\${theBasename} \${match}"
@@ -8672,7 +8672,7 @@ EOF16
          |                   then
          |                      if [ "X\${debugging}" != "X0" ]
          |                      then
-         |                         echo "checkForCompilerVersion:    ...case C (ancient EDG C++ compiler, 3-part)" >&2
+         |                         echo "checkForCompilerVersion:    ...case C (ancient legacy frontend C++ compiler, 3-part)" >&2
          |                         echo "checkForCompilerVersion:       match was [\${match}]" >&2
          |                      fi
          |                      echo "\${theBasename} \${match}"
@@ -8681,7 +8681,7 @@ EOF16
          |                   then
          |                      if [ "X\${debugging}" != "X0" ]
          |                      then
-         |                         echo "checkForCompilerVersion:    ...case D (ancient EDG C++ compiler, 2-part)" >&2
+         |                         echo "checkForCompilerVersion:    ...case D (ancient legacy frontend C++ compiler, 2-part)" >&2
          |                         echo "checkForCompilerVersion:       match was [\${match}]" >&2
          |                      fi
          |                      echo "\${theBasename} \${match}"

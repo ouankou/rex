@@ -1,9 +1,9 @@
 
-// test for _Pragma in global scope (this fails if in all caps in EDG)
-// _Pragma ( "STDC CX_LIMITED_RANGE OFF" );
+// test for _Pragma in global scope (this fails if in all caps in legacy
+// frontend) _Pragma ( "STDC CX_LIMITED_RANGE OFF" );
 _Pragma ( "STDC CX_LIMITED_RANGE off" );
 
-// This works in EDG (but is a warning (unrecognized STDC pragma)
+// This works in legacy frontend (but is a warning (unrecognized STDC pragma)
 _Pragma ( "STDC cx_limited_range OFF" );
 
 // This works as well

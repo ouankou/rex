@@ -15,7 +15,7 @@ struct S2 {
   unsigned z : 1;
 };
 
-// edg and icc both say this is 8 ...
+// legacy frontend and icc both say this is 8 ...
 int arr2[sizeof(S2)==8? +1 : -1];
 
 

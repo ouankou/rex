@@ -20,8 +20,8 @@ FixupTemplateInstantiations::visit (SgNode* node)
    {
      ROSE_ASSERT(node != NULL);
 
-  // Take care of marking the whole subtree of any declarations
-  // that the EDG/Sage connection marked as compiler generated.
+     // Take care of marking the whole subtree of any declarations
+     // that the legacy frontend/Sage connection marked as compiler generated.
      SgDeclarationStatement* declaration = isSgDeclarationStatement(node);
 
   // DQ (1/18/2014): Testcode test2012_75.c demonstrates why we need to force the function 
@@ -40,10 +40,13 @@ FixupTemplateInstantiations::visit (SgNode* node)
              }           
           ROSE_ASSERT(declaration->get_file_info() != NULL);
 
-       // DQ (6/17/2005): compiler generated does not imply that it will be output by the unparser (anymore)
-       // Some declarations are marked as compiler generated in the EDG/Sage III translation, but the whole 
-       // subtree is never marked at that point.  This step marks the whole subtree as compiler generated 
-       // when just the declaration is detected as having been marked in the EDG/Sage III translation.
+          // DQ (6/17/2005): compiler generated does not imply that it will be
+          // output by the unparser (anymore) Some declarations are marked as
+          // compiler generated in the legacy frontend/Sage III translation, but
+          // the whole subtree is never marked at that point.  This step marks
+          // the whole subtree as compiler generated when just the declaration
+          // is detected as having been marked in the legacy frontend/Sage III
+          // translation.
           if (declaration->get_file_info()->isCompilerGenerated() == true)
              {
 #if 0
@@ -56,7 +59,8 @@ FixupTemplateInstantiations::visit (SgNode* node)
             // ROSE_ASSERT(isSgTemplateDeclaration(node) == NULL);
                if (isSgTemplateDeclaration(node) == NULL)
                   {
-                 // Mark the whole declaration as compiler generated since we could not do so in the EDG/Sage III translation
+                 // Mark the whole declaration as compiler generated since we
+                 // could not do so in the legacy frontend/Sage III translation
 #if 0
                     printf ("In FixupTemplateInstantiations::visit(): Calling markAsCompilerGenerated: declaration = %p = %s \n",declaration,declaration->class_name().c_str());
 #endif
@@ -72,7 +76,7 @@ FixupTemplateInstantiations::visit (SgNode* node)
      SgTemplateInstantiationDecl* classDeclaration = isSgTemplateInstantiationDecl(node);
      if (classDeclaration != NULL)
         {
-       // DQ (6/8/2005): This is now handled directly in the EDG/Sage III translation.
+       // DQ (6/8/2005): This is now handled directly in the legacy frontend/Sage III translation.
        // Not all classes should be marked as compiler generated (e.g. explicit 
        // specializations appearing in the source code (or in header files)).
 
@@ -83,7 +87,7 @@ FixupTemplateInstantiations::visit (SgNode* node)
        // markAsCompilerGenerated(classDeclaration);
 
        // DQ (6/10/2005): Fixup the children of the classDeclaration which is marked as compiler 
-       // generated buy the EDG/Sage connection!
+       // generated buy the legacy frontend/Sage connection!
 
        // printf ("Calling isFirstUseInSourceFile \n");
           SgSourceFile* file = SageInterface::getEnclosingSourceFile(node);
@@ -96,7 +100,7 @@ FixupTemplateInstantiations::visit (SgNode* node)
              {
             // This might already be marked (check!)
             // ROSE_ASSERT ( classDeclaration->get_file_info()->isCompilerGenerated() == true );
-            // The EDG/Sage connection only marks the class declaration as compiler generated and 
+            // The legacy frontend/Sage connection only marks the class declaration as compiler generated and 
             // does not have the mechanism in place at that point to mark all children in the declaration 
             // as compiler generated.
                markForOutputInCodeGeneration(classDeclaration);
@@ -106,7 +110,7 @@ FixupTemplateInstantiations::visit (SgNode* node)
              }
             else
              {
-            // The EDG/Sage connect makes all instantiated templates to be compiler generated
+            // The legacy frontend/Sage connect makes all instantiated templates to be compiler generated
 
             // DQ (12/21/2006): Mark this uniformally using the SgLoctedNode member function.
             // classDeclaration->get_file_info()->unsetCompilerGenerated();
@@ -117,7 +121,7 @@ FixupTemplateInstantiations::visit (SgNode* node)
 #if 0
           if (classDeclaration->get_file_info()->isCompilerGenerated() == true)
              {
-            // The EDG/Sage connection only marks the class declaration as compiler generated and 
+            // The legacy frontend/Sage connection only marks the class declaration as compiler generated and 
             // does not have the mechanism in place at that point to mark all children in the declaration 
             // as compiler generated.
                markForOutputInCodeGeneration(classDeclaration);

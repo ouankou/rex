@@ -1,4 +1,5 @@
-// DQ (6/20/2013): Use of what translates into case enk_alignof in convert_expression() in EDG 4.7.
+// DQ (6/20/2013): Use of what translates into case enk_alignof in
+// convert_expression() in legacy frontend 4.7.
 
 // Determine the alignment of a type at compile time.
 #if defined __GNUC__

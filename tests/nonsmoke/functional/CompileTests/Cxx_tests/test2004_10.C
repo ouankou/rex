@@ -1,4 +1,4 @@
-// This code demonstrates a bug in the EDG/SAGE connection's 
+// This code demonstrates a bug in the legacy frontend/SAGE connection's
 // handling of "Zero initialization", as in "A()" when A has no constructor
 
 // Andreas thinks it is a problem when there is a defined constructor as well.

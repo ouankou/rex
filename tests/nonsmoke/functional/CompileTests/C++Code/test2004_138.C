@@ -44,20 +44,20 @@ namespace A
 
 // template <typename T> class A::X::Zone{};
 
-// DQ: GNU g++ requires that the specialization occur inside of namespace "A"
-// Not true for EDG.  It appears that g++ ignores the namespace qualifier!
-namespace A
-   {
-  // Required syntax for g++ 3.4.3 compiler (also works for g++ 3.3.2)
-     template < typename T > class A::X<T>::Zone {};
+   // DQ: GNU g++ requires that the specialization occur inside of namespace "A"
+   // Not true for legacy frontend.  It appears that g++ ignores the namespace
+   // qualifier!
+   namespace A {
+   // Required syntax for g++ 3.4.3 compiler (also works for g++ 3.3.2)
+   template <typename T> class A::X<T>::Zone {};
 
 #ifdef __GNUC_PREREQ
-#if (__GNUC_PREREQ(3,4) == 0)
-  // Works for g++ 3.3.2 compiler but not g++ 3.4.3
-     class A::X<int>::Zone{};
+#if (__GNUC_PREREQ(3, 4) == 0)
+   // Works for g++ 3.3.2 compiler but not g++ 3.4.3
+   class A::X<int>::Zone {};
 #endif
 #endif
-   }
+   } // namespace A
 
 // template <typename T> class A::Zone{};
 

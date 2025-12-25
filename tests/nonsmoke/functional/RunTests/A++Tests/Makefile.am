@@ -79,6 +79,6 @@ check-local: conditional-check-local
 
 clean-local:
 	rm -f core *.o rose_*.C *.sage.C *.show test2001_??.C.show \
-              *.C.pdf *.C.edg.pdf *.int.C rose_directives_list.txt
+              *.C.pdf *.int.C rose_directives_list.txt
 	rm -rf ti_files
 

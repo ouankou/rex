@@ -38,7 +38,7 @@ $ rosec -rose:C_only test.c
  static int gVar;
             ^
 
-Errors in EDG Processing: (edg_errorLevel > 3)
+Errors in legacy frontend Processing: (frontend_errorLevel > 3)
 Aborted
 
 

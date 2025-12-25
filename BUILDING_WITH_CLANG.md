@@ -6,7 +6,7 @@ REX targets Linux only; non-Linux builds are unsupported.
 
 ## Overview
 
-REX has transitioned from the proprietary EDG frontend to an experimental Clang/LLVM-based frontend. This new frontend supports:
+REX has transitioned from the proprietary legacy frontend frontend to an experimental Clang/LLVM-based frontend. This new frontend supports:
 - **C language analysis** (primary focus)
 - **LLVM 20.x** or later
 - **CMake-only build system** (Autotools deprecated)

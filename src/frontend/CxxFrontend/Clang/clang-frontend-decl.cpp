@@ -8017,7 +8017,7 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
     return false;
   }
 
-  // Create file info for global scope (following EDG pattern)
+  // Create file info for global scope (following legacy pattern)
   // Use the source file's filename and line 0
   std::string sourceFilename;
   if (p_sage_source_file != nullptr &&
@@ -8029,7 +8029,7 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
   }
   Sg_File_Info *globalScopeFileInfo = new Sg_File_Info(sourceFilename, 0, 0);
 
-  // Pass file info to SgGlobal constructor (like EDG does)
+  // Pass file info to SgGlobal constructor (like the legacy frontend does)
   *node = p_global_scope = new SgGlobal(globalScopeFileInfo);
 
   // Set up parent relationship immediately so symbol insertion can access the

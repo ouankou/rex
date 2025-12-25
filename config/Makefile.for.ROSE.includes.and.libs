@@ -36,7 +36,6 @@ endif
 AM_CXXFLAGS = -std=c++17
 
 # This is properly handled by automake even when specified in an include file
-EDG_LIBS = @EDG_LIBS@
 
 RT_LIBS = @RT_LIBS@
 
@@ -209,9 +208,6 @@ ROSE_INCLUDES = -I$(top_builddir) -I$(top_builddir)/src $(ROSE_INCLUDES_WITHOUT_
 #     $(ROSE_WINE_INCLUDES)
 
 # New way using two libraries
-# ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.a $(top_builddir)/src/libedg.a
-# ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.so $(top_builddir)/src/libedg.so
-# ROSE_LIBS_WITH_PATH = $(libdir)/librose.so $(libdir)/libedg.so
 # ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.la
 # ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.la $(JAVA_JVM_LIB)
 # JJW 7/25/2008: This should probably just be the same as ROSE_LIBS

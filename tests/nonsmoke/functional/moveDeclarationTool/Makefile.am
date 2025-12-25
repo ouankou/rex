@@ -264,7 +264,7 @@ MOVE_DECLS_TESTCODES_WITH_TOKEN_UNPARSING_FULLY_SUPPORTED  = \
   inputmoveDeclarationToInnermostScope_test2015_168.C
 
 
-# DQ (4/10/2021): Failing tests (only for EDG 6.x).
+# DQ (4/10/2021): Failing tests (only for legacy frontend 6.x).
 # The variable declaration is moved into the case statement instead of being put at the top of the switch body.
 #  inputmoveDeclarationToInnermostScope_test2015_93.C 
 
@@ -402,21 +402,21 @@ $(MOVE_MERGE_DECLS_NO_VAR_NORM_TESTCODES_FULLY_SUPPORTED_RESULTS): $(srcdir)/$(@
 check-local:
 if USING_GNU_COMPILER
 if ROSE_USING_GCC_VERSION_LATER_4_8
-	@echo "moveDeclarationTool tests require configuration with either EDG version 4.9 and GNU version 4.8 or backend compiler or EDG 4.12 and 4.8 or any later GNU compiler."
-	@echo "moveDeclarationTool tests using EDG 4.12 and any supported backend compiler are allowed."
+	@echo "moveDeclarationTool tests require configuration with either legacy frontend version 4.9 and GNU version 4.8 or backend compiler or legacy frontend 4.12 and 4.8 or any later GNU compiler."
+	@echo "moveDeclarationTool tests using legacy frontend 4.12 and any supported backend compiler are allowed."
 	@$(MAKE) $(move_diff_check)
 endif # ROSE_USING_GCC_VERSION_LATER_4_8
 else
 if USING_CLANG_COMPILER
 # Exclude this list of files in the case of CLANG compiler.
 	@echo "USING_CLANG_COMPILER == true"
-	@echo "moveDeclarationTool tests using EDG 4.12: Clang backend compiler using EDG 4.12 frontend."
+	@echo "moveDeclarationTool tests using legacy frontend 4.12: Clang backend compiler using legacy frontend 4.12 frontend."
 else # NOT USING_CLANG_COMPILER
 	@echo "USING_CLANG_COMPILER == false"
 if USING_INTEL_COMPILER
 # Exclude this list of files in the case of Intel compiler.
 	@echo "USING_INTEL_COMPILER == true"
-	@echo "moveDeclarationTool tests using EDG 4.12 Intel backend compiler are allowed."
+	@echo "moveDeclarationTool tests using legacy frontend 4.12 Intel backend compiler are allowed."
 else # NOT USING_INTEL_COMPILER
 # This is an unknown compiler.
 	@echo "USING_INTEL_COMPILER == false"

@@ -2401,10 +2401,13 @@ globalUnparseToString_OpenMPSafe ( const SgNode* astNode, const SgTemplateArgume
             }
 #endif
 
-       // DQ (6/27/2007): If we unparse a type then we can't find the enclosing statement, so
-       // assume it is SgGlobal. But how do we find a SgGlobal IR node to use?  So we have to
-       // leave it NULL and hand this case downstream!
-       // TV (05/24/2018): in the case of template arguments the statement's parent might not have been set (template argument are unparsed to qualify names for lookup when translating from EDG to SAGE)
+          // DQ (6/27/2007): If we unparse a type then we can't find the
+          // enclosing statement, so assume it is SgGlobal. But how do we find a
+          // SgGlobal IR node to use?  So we have to leave it NULL and hand this
+          // case downstream! TV (05/24/2018): in the case of template arguments
+          // the statement's parent might not have been set (template argument
+          // are unparsed to qualify names for lookup when translating from the
+          // legacy frontend to SAGE)
           SgScopeStatement* scope = isSgScopeStatement(stmt);
           if (scope == NULL && stmt != NULL) {
             scope = stmt->get_scope();
@@ -2438,8 +2441,8 @@ globalUnparseToString_OpenMPSafe ( const SgNode* astNode, const SgTemplateArgume
                inheritedAttributeInfo.set_current_scope(scope);
 #else
 
-// DQ (5/25/2013): Commented out this message (too much output spew for test codes, debugging test2013_191.C).
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
+// DQ (5/25/2013): Commented out this message (too much output spew for test
+// codes, debugging test2013_191.C).
 #if 0
                printf ("Skipping set of inheritedAttributeInfo.set_current_scope(scope); for SgTemplateArgument \n");
 #endif
@@ -3415,7 +3418,8 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
               Rose::FileSystem::Path fullOutputName = Rose::FileSystem::makeAbsolute(outputFilename);
               UnparseFormatHelp::PostOutputCallback::Args args(file, fullOutputName);
               //unparseHelp->postOutputCallbacks.apply(true, args);
-	      MLOG_FATAL_CXX(MLOG_UNPARSER) << "Need callback mechanisms that were supported by Sawyer before\n";
+              MLOG_FATAL_CXX(MLOG_UNPARSER)
+                  << "Need callback mechanisms for post-output hooks\n";
           }
 
        // DQ (3/19/2014): If -rose:noclobber_if_different_output, then test the generated file against the original file.

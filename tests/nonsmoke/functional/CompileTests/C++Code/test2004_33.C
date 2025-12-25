@@ -24,7 +24,7 @@ namespace Y
 
 #if 0
   // g++ error: must specify declaration in X_long_name explicitly (e.g. using X_long_name::x)
-  // EDG accepts this correctly (examle in Stroustrup's book)
+  // legacy frontend accepts this correctly (examle in Stroustrup's book)
      using namespace X_long_name;
 #endif
 

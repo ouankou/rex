@@ -5,7 +5,7 @@ please be aware of that. Compiling the code:
 
 I get the following error message:
 identityTranslator:
-../../../../NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_il_to_str.C:2395:
+../../../../NEW_ROSE/src/frontend/legacy_frontend/sage_il_to_str.C:2395:
 SgType* sage_form_type_first_part(a_type*, int, int, unsigned int, int,
 an_il_to_str_output_control_block*, SgClassDefinition*,
 SgDeclarationStatement*&): Assertion another == false failed.

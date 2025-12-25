@@ -15,7 +15,8 @@ struct S {
 int main(int argc, char** argv) {
   struct S x = {
     .b = 3.14,
-#if 0 // EDG doesn't produce the correct AST for these (not a ROSE issue)
+#if 0 // legacy frontend doesn't produce the correct AST for these (not a ROSE
+      // issue)
     .c.w = 8,
     .c.x = 7,
 #endif

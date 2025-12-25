@@ -2,36 +2,39 @@
 #include "sage3basic.h"
 #include "fixupSourcePositionInformation.h"
 /*
-   This file constains the code to fixup the source position information in the AST.
-   By default we store the information that we gather from EDG, however this information
-   is incomplete and misses a number of details that are important within ROSE.
-   Incomplete aspects include (likely because EDG is not trying to support source-to-source 
-   details):
-      1) namespaces lack the postion information about the location of the keyword ("namespace").
-      2) constants are often missing source postion information (when not constant folded).
-         Constant folded constants are of course not in the source code and so are marked
-         as compiler generated within ROSE.
-      3) paramter lists (i.e. positions of "(" and ")")
-      4) the location of the ";" is often unavialable (or not properly extracted from EDG, 
-         since I think it might be present in come cases).
+   This file constains the code to fixup the source position information in the
+   AST. By default we store the information that we gather from legacy frontend,
+   however this information is incomplete and misses a number of details that
+   are important within ROSE. Incomplete aspects include (likely because legacy
+   frontend is not trying to support source-to-source details): 1) namespaces
+   lack the postion information about the location of the keyword ("namespace").
+      2) constants are often missing source postion information (when not
+   constant folded). Constant folded constants are of course not in the source
+   code and so are marked as compiler generated within ROSE. 3) paramter lists
+   (i.e. positions of "(" and ")") 4) the location of the ";" is often
+   unavialable (or not properly extracted from legacy frontend, since I think it
+   might be present in come cases).
 
-   These details aside, EDG is in general extremely good about saving source position information
-   (and in great detail, more detail that we require in ROSE).
+   These details aside, legacy frontend is in general extremely good about
+   saving source position information (and in great detail, more detail that we
+   require in ROSE).
 
-   However, in ROSE we want the start and end of each expression and statement (at least the statements).
-   To get this information we have built a traversal which uses synthesized attributes to compute the
-   farthest ending position of any part of a subtree represented by a statement and we use that for
-   the end of the statement (the same is done for the start of a statement, though this is in general
-   already correct).
+   However, in ROSE we want the start and end of each expression and statement
+   (at least the statements). To get this information we have built a traversal
+   which uses synthesized attributes to compute the farthest ending position of
+   any part of a subtree represented by a statement and we use that for the end
+   of the statement (the same is done for the start of a statement, though this
+   is in general already correct).
 
-   For expressions this approach would cause the location of operators to be lost, so we still have to 
-   address this.
+   For expressions this approach would cause the location of operators to be
+   lost, so we still have to address this.
 
    Suggestions for better handling of source positoon information in ROSE:
-      1) A number of declarations consist of multiple parts and when we store only the start and end 
-         of the construct we miss the positions of the different parts.  EDG separates out the positions
-         of the identifier, any specifiers, and the declarator or enum value.  We could save this 
-         information at the cost of adding to the memory requirements of the AST.
+      1) A number of declarations consist of multiple parts and when we store
+   only the start and end of the construct we miss the positions of the
+   different parts.  legacy frontend separates out the positions of the
+   identifier, any specifiers, and the declarator or enum value.  We could save
+   this information at the cost of adding to the memory requirements of the AST.
 
  */
 
@@ -446,11 +449,15 @@ FixupSourcePositionInformation::processChildSynthesizedAttributes
      Sg_File_Info* subTreeStartingPosition = NULL;
      Sg_File_Info* subTreeEndingPosition   = NULL;
 
-  // DQ (1/6/2007): Leave SgBasicBlock IR nodes alone so that we can contain errors in the source possition to a scope.
-  // else a wrong source position can change the source position of statements very far away from the location of the 
-  // actual problem (see test2007_02.C).  We actually trust the position from EDG which we use for setting the SgBasicBlock
-  // so skip modifiying it since it is likely an error to do so.  Later we want to trap locations where the source position 
-  // of SgBasicBlocks might be reset because that will help us locate errors in the source positions of other IR nodes.
+     // DQ (1/6/2007): Leave SgBasicBlock IR nodes alone so that we can contain
+     // errors in the source possition to a scope. else a wrong source position
+     // can change the source position of statements very far away from the
+     // location of the actual problem (see test2007_02.C).  We actually trust
+     // the position from legacy frontend which we use for setting the
+     // SgBasicBlock so skip modifiying it since it is likely an error to do so.
+     // Later we want to trap locations where the source position of
+     // SgBasicBlocks might be reset because that will help us locate errors in
+     // the source positions of other IR nodes.
      SgBasicBlock* block = isSgBasicBlock(returnAttribute.associatedNode);
      if (block != NULL)
         {

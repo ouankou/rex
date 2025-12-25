@@ -863,8 +863,10 @@ Unparse_ExprStmt::unparseOneElemConInit(SgConstructorInitializer* con_init, SgUn
 #endif
           if (con_init->get_declaration())
              {
-            // DQ (11/12/2004)  Use the qualified name always (since get_need_qualifier() does
-            //                  not appear to get set correctly (perhaps within EDG as before)
+            // DQ (11/12/2004)  Use the qualified name always (since
+            // get_need_qualifier() does
+            //                  not appear to get set correctly (perhaps within
+            //                  legacy frontend as before)
 #if 0
                if(con_init->get_need_qualifier()) 
                     nm = con_init->get_declaration()->get_qualified_name();
@@ -917,8 +919,10 @@ Unparse_ExprStmt::unparseOneElemConInit(SgConstructorInitializer* con_init, SgUn
 #endif
                if(con_init->get_class_decl())
                   {
-                 // DQ (11/12/2004)  Use the qualified name always (since get_need_qualifier() does
-                 //                  not appear to get set correctly (perhaps within EDG as before)
+                 // DQ (11/12/2004)  Use the qualified name always (since
+                 // get_need_qualifier() does
+                 //                  not appear to get set correctly (perhaps
+                 //                  within legacy frontend as before)
 #if 0
                     if(con_init->get_need_qualifier()) 
                          nm = con_init->get_class_decl()->get_qualified_name();
@@ -2710,15 +2714,18 @@ Unparse_ExprStmt::unparseUsingDeclarationStatement (SgStatement* stmt, SgUnparse
             // DQ (6/11/2011): Added support for new template IR nodes.
                case V_SgTemplateDeclaration:
                   {
-                 // DQ (9/12/2004): This function outputs the default template name which is not correct, we need 
-                 // to get more information out of EDG about the template name if we are to get this correct in 
-                 // the future.  This could (and likely will) cause generated code to not compile, but I will 
-                 // worry about that after we can compile Kull.
-                    SgTemplateDeclaration* templateDeclaration = isSgTemplateDeclaration(declarationStatement);
-                    ASSERT_not_null(templateDeclaration);
-                    SgName templateName = templateDeclaration->get_name();
-                    curprint (templateName.str());
-                    break;
+                 // DQ (9/12/2004): This function outputs the default template
+                 // name which is not correct, we need to get more information
+                 // out of legacy frontend about the template name if we are to
+                 // get this correct in the future.  This could (and likely
+                 // will) cause generated code to not compile, but I will worry
+                 // about that after we can compile Kull.
+                 SgTemplateDeclaration *templateDeclaration =
+                     isSgTemplateDeclaration(declarationStatement);
+                 ASSERT_not_null(templateDeclaration);
+                 SgName templateName = templateDeclaration->get_name();
+                 curprint(templateName.str());
+                 break;
                   }
 
             // DQ (5/22/2007): Added support for enum types in using declaration (test2007_50.C).
@@ -2956,14 +2963,16 @@ Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt (SgStatement* stmt, SgUnp
        // If the template has been transformed then we have to output the special version 
        // of the template as a template specialization.
 
-       // If a class template has been modified then we need to make sure that all the 
-       //      static data members, and 
-       //      member functions 
-       // are instantiated (on the next pass through the prelinker). The process should 
-       // involve a call to the EDG function:
-       //      static void set_instantiation_required_for_template_class_members (a_type_ptr class_type)
-       // I am not currently sure how to make this happen, but it should involve the *.ti 
-       // files (I guess).
+       // If a class template has been modified then we need to make sure that
+       // all the
+       //      static data members, and
+       //      member functions
+       // are instantiated (on the next pass through the prelinker). The process
+       // should involve a call to the legacy frontend function:
+       //      static void set_instantiation_required_for_template_class_members
+       //      (a_type_ptr class_type)
+       // I am not currently sure how to make this happen, but it should involve
+       // the *.ti files (I guess).
 #if 0
           printf ("In unparseTemplateInstantiationDeclStmt(): Calling unparseClassDeclStmt to unparse the SgTemplateInstantiationDecl \n");
 #endif
@@ -3067,7 +3076,8 @@ Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt (SgStatement* stmt, SgUnp
           SgNamespaceDefinitionStatement* namespaceDefinition = isSgNamespaceDefinitionStatement(classDeclaration->get_scope());
           bool locatedInNamespace = (namespaceDefinition != NULL);
 
-       // DQ (8/2/2012): Set this to be always false for the new EDG 4.x work (see test2004_112.C).
+          // DQ (8/2/2012): Set this to be always false for the new legacy
+          // frontend 4.x work (see test2004_112.C).
 #if 0
           printf ("In unparseTemplateInstantiationDeclStmt(): Setting locatedInNamespace (work around from 2005) to false \n");
 #endif
@@ -3340,9 +3350,12 @@ void
 Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt (SgStatement* stmt, SgUnparse_Info& info)
    {
   // Rules for output of member templates functions:
-  //  1) When we unparse the template declaration as a string EDG removes the member 
-  //     function definitions so we are forced to output all template member functions.
-  //  2) If the member function is specified outside of the class then we don't have to
+  //  1) When we unparse the template declaration as a string legacy frontend
+  //  removes the member
+  //     function definitions so we are forced to output all template member
+  //     functions.
+  //  2) If the member function is specified outside of the class then we don't
+  //  have to
   //     explicitly output the instantiation.
 
   // DQ (3/24/2004): New function to support templates
@@ -3368,11 +3381,12 @@ Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt (SgStatemen
      curprint("/* Output in curprint in Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt() */");
 #endif
 
-  // DQ (6/1/2005): Use this case when PROTOTYPE_INSTANTIATIONS_IN_IL is to true in EDG's host_envir.h
-     bool outputMemberFunctionTemplateInstantiation = false;
-     if ( isTransformed (templateInstantiationMemberFunctionDeclaration) == true )
-        {
-       // Always output the template member function declaration if they are transformed.
+  // DQ (6/1/2005): Use this case when PROTOTYPE_INSTANTIATIONS_IN_IL is to true
+  // in legacy frontend's host_envir.h
+  bool outputMemberFunctionTemplateInstantiation = false;
+  if (isTransformed(templateInstantiationMemberFunctionDeclaration) == true) {
+    // Always output the template member function declaration if they are
+    // transformed.
 #if 0
           printf ("templateInstantiationMemberFunctionDeclaration has been transformed \n");
 #endif
@@ -3409,21 +3423,21 @@ Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt (SgStatemen
                curprint (" /* function has no definition, so skip output */ ");
 #endif
              }
-        }
-       else
-        {
-       // Also output the template member function declaration the template declaration appears in the source file.
-          string currentFileName = getFileName();
+  } else {
+    // Also output the template member function declaration the template
+    // declaration appears in the source file.
+    string currentFileName = getFileName();
 
-          if (templateInstantiationMemberFunctionDeclaration->get_templateDeclaration() == NULL)
-             {
-            // DQ (4/6/2014): This happens when a member function template in embedded in a class
-            // template and thus there is not an associated template for the member function separate
-            // from the class declaration.  It is not rare for many system template libraries (e.g. iostream).
+    if (templateInstantiationMemberFunctionDeclaration
+            ->get_templateDeclaration() == NULL) {
+      // DQ (4/6/2014): This happens when a member function template in embedded
+      // in a class template and thus there is not an associated template for
+      // the member function separate from the class declaration.  It is not
+      // rare for many system template libraries (e.g. iostream).
 #if 0
                printf (" I think that this can happen (see test2005_139.C) \n");
 #endif
-             }
+    }
 #if 0
           ASSERT_not_null(templateInstantiationMemberFunctionDeclaration->get_templateDeclaration());
           ASSERT_not_null(templateInstantiationMemberFunctionDeclaration->get_templateDeclaration()->get_file_info());
@@ -3472,7 +3486,7 @@ Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt (SgStatemen
                printf ("   isSpecialization() = %s \n",templateInstantiationMemberFunctionDeclaration->isSpecialization() ? "true" : "false");
 #endif
              }
-        }
+  }
 
 #if 0
      printf ("Inside of unparseTemplateInstantiationMemberFunctionDeclStmt(): outputMemberFunctionTemplateInstantiation = %s \n",outputMemberFunctionTemplateInstantiation ? "true" : "false");
@@ -7050,9 +7064,10 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                     curprint(" volatile");
                   }
 
-            // DQ (12/11/2012): Added support for restrict (in EDG 4.x we want this to be more uniform with "const" and "volatile" modifier handling.
-               if (mftype->isRestrictFunc())
-                  {
+                  // DQ (12/11/2012): Added support for restrict (in legacy
+                  // frontend 4.x we want this to be more uniform with "const"
+                  // and "volatile" modifier handling.
+                  if (mftype->isRestrictFunc()) {
 #if 0
                     printf ("In unparseMFuncDeclStmt: unparse restrict keyword from specification in SgMemberFunctionType \n");
 #endif
@@ -7237,7 +7252,9 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 #if 1
                          bool outputParenthesis = true;
 
-                      // DQ (7/21/2012): I think this setting is new for the NEW EDG support (and would allow use to later remove this data member).
+                         // DQ (7/21/2012): I think this setting is new for the
+                         // NEW legacy frontend support (and would allow use to
+                         // later remove this data member).
                          SgConstructorInitializer* constructorInitializer = isSgConstructorInitializer(initializer);
                          if (constructorInitializer != NULL)
                             {
@@ -7321,9 +7338,10 @@ Unparse_ExprStmt::unparseTrailingFunctionModifiers(SgMemberFunctionDeclaration* 
                curprint(" volatile");
              }
 
-       // DQ (12/11/2012): Added support for restrict (in EDG 4.x we want this to be more uniform with "const" and "volatile" modifier handling.
-          if (mftype->isRestrictFunc())
-             {
+             // DQ (12/11/2012): Added support for restrict (in legacy
+             // frontend 4.x we want this to be more uniform with "const" and
+             // "volatile" modifier handling.
+             if (mftype->isRestrictFunc()) {
 #if 0
                printf ("In unparseTrailingFunctionModifiers: unparse restrict keyword from specification in SgMemberFunctionType \n");
 #endif
@@ -8060,51 +8078,51 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                     printf ("In unparseVarDeclStmt(): is_C_Compiler = %s is_Cxx_Compiler = %s \n",is_C_Compiler ? "true" : "false",is_Cxx_Compiler ? "true" : "false");
 #endif
 #endif
-                 // DQ (5/24/2015): I think I menat to say that For C we need to use the EDG 4.9 frontend (?).
-                 // For C we need to use the GNU 4.9 compiler.
-                 // Now check the version of the identified GNU g++ compiler.
-                    if ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 && BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER >= 9) || (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4))
-                        {
-                      // DQ (7/25/2014): Adding C11 thread local support.
-                      // if (vardecl_stmt->get_is_thread_local() == true)
+                 // DQ (5/24/2015): I think I menat to say that For C we need to
+                 // use the legacy frontend 4.9 frontend (?). For C we need to
+                 // use the GNU 4.9 compiler. Now check the version of the
+                 // identified GNU g++ compiler.
+                 if ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 &&
+                      BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER >= 9) ||
+                     (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4)) {
+                   // DQ (7/25/2014): Adding C11 thread local support.
+                   // if (vardecl_stmt->get_is_thread_local() == true)
 #if 0
-                         printf ("In unparseVarDeclStmt(): GNU or EDG? 4.9 or greater: vardecl_stmt->get_is_thread_local() = %s \n",vardecl_stmt->get_is_thread_local() ? "true" : "false");
+                         printf ("In unparseVarDeclStmt(): GNU or legacy frontend? 4.9 or greater: vardecl_stmt->get_is_thread_local() = %s \n",vardecl_stmt->get_is_thread_local() ? "true" : "false");
 #endif
                          if (is_C_Compiler == true && vardecl_stmt->get_is_thread_local() == true)
                             {
                               curprint("_Thread_local ");
                             }
+                 } else {
+                   // For C++ we can use the GNU 4.8 compiler.
+                   if ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 &&
+                        BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER >= 8) ||
+                       (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4)) {
+                     // DQ (8/13/2014): Adding C++11 thread local support.
+                     if (is_Cxx_Compiler == true &&
+                         vardecl_stmt->get_is_thread_local() == true) {
+                       curprint("thread_local ");
+                     } else {
+                       // DQ (5/24/2015): Added this case to support the C
+                       // language work even when using the GNU 4.8 compiler.
+                       if (is_C_Compiler == true &&
+                           vardecl_stmt->get_is_thread_local() == true) {
+                         // curprint("_Thread_local ");
+                         curprint("__thread ");
                        }
-                      else
-                       {
-                      // For C++ we can use the GNU 4.8 compiler.
-                         if ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 && BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER >= 8) || (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4))
-                            {
-                           // DQ (8/13/2014): Adding C++11 thread local support.
-                              if (is_Cxx_Compiler == true && vardecl_stmt->get_is_thread_local() == true)
-                                 {
-                                   curprint("thread_local ");
-                                 }
-                                else
-                                 {
-                                // DQ (5/24/2015): Added this case to support the C language work even when using the GNU 4.8 compiler.
-                                   if (is_C_Compiler == true && vardecl_stmt->get_is_thread_local() == true)
-                                      {
-                                     // curprint("_Thread_local ");
-                                        curprint("__thread ");
-                                      }
-                                 }
-                            }
-                           else
-                            {
-                           // DQ (5/24/2015): Adding support for GNU __thread keyword (thread local support for older versions of C).
-                           // For older compilers we use the __thread modifier.  This may also we what is required for non-C11 support.
-                              if (is_C_Compiler == true && vardecl_stmt->get_is_thread_local() == true)
-                                 {
-                                   curprint("__thread ");
-                                 }
-                            }
-                       }
+                     }
+                   } else {
+                     // DQ (5/24/2015): Adding support for GNU __thread keyword
+                     // (thread local support for older versions of C). For
+                     // older compilers we use the __thread modifier.  This may
+                     // also we what is required for non-C11 support.
+                     if (is_C_Compiler == true &&
+                         vardecl_stmt->get_is_thread_local() == true) {
+                       curprint("__thread ");
+                     }
+                   }
+                 }
                   }
                  else
                   {
@@ -8573,7 +8591,7 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                        }
 
                  // DQ (1/25/2009): If we are not using the Assembly Register codes then we might be using the string 
-                 // mechanism (stored in SgInitializedName::p_register_name_string). The new EDG/Sage interface can
+                 // mechanism (stored in SgInitializedName::p_register_name_string). The new legacy frontend/Sage interface can
                  // support the use of either Assembly Register codes or raw strings.
                     if (decl_item->get_register_name_string().empty() == false)
                        {
@@ -8655,11 +8673,14 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                          curprint ( string("\")"));
                        }
 
-                 // DQ (1/25/2009): If we are not using the Assembly Register codes then we might be using the string 
-                 // mechanism (stored in SgInitializedName::p_register_name_string). The new EDG/Sage interface can
-                 // support the use of either Assembly Register codes or raw strings.
-                    if (decl_item->get_register_name_string().empty() == false)
-                       {
+                       // DQ (1/25/2009): If we are not using the Assembly
+                       // Register codes then we might be using the string
+                       // mechanism (stored in
+                       // SgInitializedName::p_register_name_string). The new
+                       // legacy frontend/Sage interface can support the use of
+                       // either Assembly Register codes or raw strings.
+                       if (decl_item->get_register_name_string().empty() ==
+                           false) {
 #if 0
                          printf ("In unparseVarDeclStmt(): Output asm register name \n");
 #endif
@@ -8958,12 +8979,14 @@ Unparse_ExprStmt::unparseVarDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
        // Currently each variable declaration contains only a single variable!
           p++;
 
-       // DQ (7/16/2012): In the newer version of EDG 4.3 support this is no longer always true.
-       // DQ (11/28/2004): Within the current design this is always true. Since we normalize 
-       // multiple variable declarations into single variable declarations.
-       // ROSE_ASSERT (p == vardecl_stmt->get_variables().end());
+          // DQ (7/16/2012): In the newer version of legacy frontend 4.3 support
+          // this is no longer always true. DQ (11/28/2004): Within the current
+          // design this is always true. Since we normalize multiple variable
+          // declarations into single variable declarations. ROSE_ASSERT (p ==
+          // vardecl_stmt->get_variables().end());
 
-       // DQ (11/28/2004): This this is always false within the current design.
+          // DQ (11/28/2004): This this is always false within the current
+          // design.
           if (p != vardecl_stmt->get_variables().end())
              {
                if (!ninfo.inArgList())
@@ -10400,11 +10423,12 @@ void Unparse_ExprStmt::unparseLabelStmt(SgStatement* stmt, SgUnparse_Info& info)
   // DQ (10/20/2005): Unparse an empty statement with each label
   // curprint ( string(" /* empty statement */ ;";
 
-  // DQ (3/18/2006): I don't think we need this and if we do then we need an example of where we need it.
-  // test2005_164.C demonstrates that we need the ";" if the label is the last statment in the block.
-  // EDG is more accepting and does not require a ";" for a label appearing at the end of the block,
-  // but g++ is particular on this subtle point.  So we should make the unparser figure this out.
-  // curprint ( string(" ;";
+     // DQ (3/18/2006): I don't think we need this and if we do then we need an
+     // example of where we need it. test2005_164.C demonstrates that we need
+     // the ";" if the label is the last statment in the block. legacy frontend
+     // is more accepting and does not require a ";" for a label appearing at
+     // the end of the block, but g++ is particular on this subtle point.  So we
+     // should make the unparser figure this out. curprint ( string(" ;";
 
 #if 0
   // DQ (10/28/2012): Added debugging code for test2012_100.c.
@@ -10551,19 +10575,26 @@ void Unparse_ExprStmt::unparseLabelStmt(SgStatement* stmt, SgUnparse_Info& info)
           label_stmt->get_statement(),label_stmt->get_statement() != NULL ? label_stmt->get_statement()->class_name().c_str() : "null");
 #endif
 
-  // DQ (1/14/2013): However, we want it to be unparsed by the function unparsing the statement list (typically SgBasicBlock) instead of here.
-  // The statement associated with the SgLabelStatement was not previously being inserted into the list of the current scope and this is a 
-  // problem for the data flow analysis (bug reported by Robb).  Also we don't want to have a mechanism for hidding statements behind 
-  // SgLabelStatements in general, so it makes more sense (and is consistant with ROSE based on EDG 3.3) to not unparse the associated 
-  // statement here.  Even though we do not correctly reference the label's associated statement correctly in this version of ROSE based on EDG 4.x).
+        // DQ (1/14/2013): However, we want it to be unparsed by the function
+        // unparsing the statement list (typically SgBasicBlock) instead of
+        // here. The statement associated with the SgLabelStatement was not
+        // previously being inserted into the list of the current scope and this
+        // is a problem for the data flow analysis (bug reported by Robb).  Also
+        // we don't want to have a mechanism for hidding statements behind
+        // SgLabelStatements in general, so it makes more sense (and is
+        // consistant with ROSE based on legacy frontend 3.3) to not unparse the
+        // associated statement here.  Even though we do not correctly reference
+        // the label's associated statement correctly in this version of ROSE
+        // based on legacy frontend 4.x).
 
 #if 1
-  // DQ (1/6/2018): Turn this back on since we handled labels as compound statements now, at
-  // least where they are processed in switch statements (which will have to be made uniform).
-  // DQ (10/27/2012): Unparse the associated statement to the label.
-  // Note that in the edg33 version of ROSE this was always a SgNullStatement, this is corrected in the design with the edg4x work.
-     if (label_stmt->get_statement() != NULL)
-        {
+        // DQ (1/6/2018): Turn this back on since we handled labels as compound
+        // statements now, at least where they are processed in switch
+        // statements (which will have to be made uniform). DQ (10/27/2012):
+        // Unparse the associated statement to the label. Note that in the
+        // legacy_frontend version of ROSE this was always a SgNullStatement,
+        // this is corrected in the design with the legacy_frontend work.
+        if (label_stmt->get_statement() != NULL) {
 #if 0
           printf ("Calling unparseStatement() stmt = %p = %s \n",label_stmt->get_statement(),label_stmt->get_statement()->class_name().c_str());
 #endif
@@ -11316,7 +11347,7 @@ Unparse_ExprStmt::unparseAsmStmt(SgStatement* stmt, SgUnparse_Info& info)
         }
 
 #if 0
-  // DQ (2/4/2014): Note that test2012_175.c demonstrates where EDG causes the IR node in ROSE to be marked 
+  // DQ (2/4/2014): Note that test2012_175.c demonstrates where legacy frontend causes the IR node in ROSE to be marked 
   // as volatile and it causes an error in the generated code.
 
   // DQ (7/23/2006): Added support for volatile as modifier.
@@ -12192,7 +12223,7 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
        // types in the generated code which masks errors we want to trap).
           if (SageInterface::is_Cxx_language() == true)
              {
-            // BUG: Currently we can't do this because the information in EDG is unavailable as to 
+            // BUG: Currently we can't do this because the information in legacy frontend is unavailable as to 
             // when the class specifier is used. So we have to always output it in the generated code.
             // At worst this appears to only mask errors in the name qualification of base types for 
             // typedefs. Eventually we want to fix this.
@@ -12463,21 +12494,23 @@ Unparse_ExprStmt::unparseTypeDefStmt(SgStatement* stmt, SgUnparse_Info& info)
 void
 Unparse_ExprStmt::unparseTemplateDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
    {
-  // This function is called for the processing of template declarations (SgTemplateDeclaration).
-  // However a newer design as of 11/19/2011 is using separate derived classes (IR nodes) from
-  // SgTemplateDeclaration to represent SgTemplateClassDeclaration (and template functions, 
-  // template member functions, etc).  This work is part of the processing of the template
-  // declarations into their own AST (different from the EDG 3.3 template support).
+  // This function is called for the processing of template declarations
+  // (SgTemplateDeclaration). However a newer design as of 11/19/2011 is using
+  // separate derived classes (IR nodes) from SgTemplateDeclaration to represent
+  // SgTemplateClassDeclaration (and template functions, template member
+  // functions, etc).  This work is part of the processing of the template
+  // declarations into their own AST (different from the legacy frontend 3.3
+  // template support).
 
-     SgTemplateDeclaration* template_stmt = isSgTemplateDeclaration(stmt);
-     ASSERT_not_null(template_stmt);
+  SgTemplateDeclaration *template_stmt = isSgTemplateDeclaration(stmt);
+  ASSERT_not_null(template_stmt);
 
   // printf ("In unparseTemplateDeclStmt(template_stmt = %p) \n",template_stmt);
   // template_stmt->get_declarationModifier().display("In unparseTemplateDeclStmt()");
 
-  // DQ (11/20/2011): Detect derived classes that should not be used in the new EDG 4.x support in ROSE.
-     if (isSgTemplateClassDeclaration(stmt) != NULL)
-        {
+  // DQ (11/20/2011): Detect derived classes that should not be used in the new
+  // legacy frontend 4.x support in ROSE.
+  if (isSgTemplateClassDeclaration(stmt) != NULL) {
 #if 0
           printf ("Note: Using the saved template declaration as a string to output the template declaration (AST for the template declaration is also now available in the AST) \n");
 #endif
@@ -12485,7 +12518,7 @@ Unparse_ExprStmt::unparseTemplateDeclStmt(SgStatement* stmt, SgUnparse_Info& inf
           printf ("Exiting in unparseTemplateDeclStmt() \n");
           ROSE_ABORT();
 #endif
-        }
+  }
 
   // SgUnparse_Info ninfo(info);
 
@@ -12551,9 +12584,12 @@ Unparse_ExprStmt::unparseTemplateDeclStmt(SgStatement* stmt, SgUnparse_Info& inf
                  // It is not clear to me why the names are missing, though perhaps they have not been computed yet 
                  // (until the templated clas is instantiated)!
 
-                 // DQ (11/27/2011): Uncommented for debugging new EDG 4.x connection.
-                    printf ("Warning: templateString name is empty in Unparse_ExprStmt::unparseTemplateDeclStmt() \n");
-                    printf ("     template_stmt->get_template_kind() = %d \n",template_stmt->get_template_kind());
+                 // DQ (11/27/2011): Uncommented for debugging new legacy
+                 // frontend 4.x connection.
+                 printf("Warning: templateString name is empty in "
+                        "Unparse_ExprStmt::unparseTemplateDeclStmt() \n");
+                 printf("     template_stmt->get_template_kind() = %d \n",
+                        template_stmt->get_template_kind());
                   }
             // ROSE_ASSERT(templateString.empty() == false);
 

@@ -125,11 +125,13 @@ FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(SgStat
                       // associated strings used to initialize the variable.
                          if (expressionFilename == "compilerGenerated")
                             {
-                           // This is the more complicated case, since we need to read the include file to check 
-                           // if the initializers are present. At present, this is a known issue for initializers 
-                           // that are strings, because EDG fails to provide source position information for 
-                           // string constants.
-                              SgStringVal* stringValue = isSgStringVal(expression);
+                           // This is the more complicated case, since we need
+                           // to read the include file to check if the
+                           // initializers are present. At present, this is a
+                           // known issue for initializers that are strings,
+                           // because legacy frontend fails to provide source
+                           // position information for string constants.
+                           SgStringVal *stringValue = isSgStringVal(expression);
 
                            // string value_as_string = stringValue.value();
                               SgValueExp* valueExpression = isSgValueExp(expression);

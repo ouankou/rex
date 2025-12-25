@@ -1,4 +1,5 @@
-// DQ (7/21/2020): Module support appears to not be available in EDG 6.0.
+// DQ (7/21/2020): Module support appears to not be available in legacy
+// frontend 6.0.
 
 // main.cpp
 // import helloworld;  // import declaration

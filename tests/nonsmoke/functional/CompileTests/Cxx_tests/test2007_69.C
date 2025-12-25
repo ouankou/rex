@@ -18,7 +18,7 @@ line 9: error:
           __builtin_offsetof (PRJob, links);
                                      ^
 
-Errors in EDG Processing: (edg_errorLevel > 3)
+Errors in legacy frontend Processing: (frontend_errorLevel > 3)
 Aborted (core dumped) 
 
 #endif

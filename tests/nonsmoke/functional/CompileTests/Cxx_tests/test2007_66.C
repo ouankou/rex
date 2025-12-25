@@ -9,6 +9,8 @@ that this was the way they did
 it, but it is actually part of the sigaction.h system header file so
 this is a problem I do not know how we should solve. It hits the heart
 of our macro handling and I can only see Wave as a solution to this.
+of our macro handling and I can only see token-stream based preprocessing as a
+solution to this.
 
 Andreas 
 
@@ -28,7 +30,5 @@ struct sigaction
 void _PR_UnixInit(void)
 {
    struct sigaction sigact;
-    sigact.sa_handler;
-
+   sigact.sa_handler;
 }
-

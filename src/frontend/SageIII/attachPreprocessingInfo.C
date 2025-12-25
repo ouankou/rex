@@ -45,52 +45,19 @@ findNodes(SgNode* astNode)
    }
 #endif
 
-#if 0
-// DQ (12/16/2008): comment out while I debug the non-wave support.
-
-// AS (011306) Support for Wave preprocessor
-void
-attachPreprocessingInfo(SgSourceFile *sageFilePtr, std::map<std::string,ROSEAttributesList*>* attrMap)
-   {
-  // DQ (7/6/2005): Introduce tracking of performance of ROSE.
-     TimingPerformance timer ("AST Comment Processing (using Wave, inner part):");
-
-  // Dummy attribute
-     AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh;
-  // AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh(NULL);
-
-  // Make sure that the argument is not a NULL pointer
-     ROSE_ASSERT(sageFilePtr);
-
-  // DQ (12/16/2008): comment out while I debug the non-wave support.
-#if 0
-  // Create tree traversal object for attaching the preprocessing information (using Wave)
-     AttachPreprocessingInfoTreeTrav tt(attrMap);
-
-  // Run tree traversal on specified source file
-     tt.traverseWithinFile(sageFilePtr,inh);
-#else
-     printf ("Wave support not implemented in new support for CPP directives and comment handling. \n");
-     ROSE_ABORT();
-#endif
-   }
-#endif
-
-
 // DQ (5/4/2020): Added directly here because it is required for this function.
 typedef std::map<int, ROSEAttributesList*> AttributeMapType;
 
-
-// DQ (12/3/2020): We sometimes want to read a file twice, and gather the comments 
-// and CPP directives twice, but the second time the file is read it is read so that 
-// it can build a file with a different name. So we need to specify the name of the
-// file that we want the comments and CPP directives to eventually be attached to 
-// and not the one from which they were take.  This technique is used to support
-// building a second file to be a dynamic library within the codeSegregation tool.
-// DQ (4/5/2006): Older version not using Wave preprocessor
-// This is the function to be called from the main function
-// DQ: Now called by the SgFile constructor body (I think)
-// void attachPreprocessingInfo(SgSourceFile *sageFilePtr)
+// DQ (12/3/2020): We sometimes want to read a file twice, and gather the
+// comments and CPP directives twice, but the second time the file is read it is
+// read so that it can build a file with a different name. So we need to specify
+// the name of the file that we want the comments and CPP directives to
+// eventually be attached to and not the one from which they were take.  This
+// technique is used to support building a second file to be a dynamic library
+// within the codeSegregation tool. DQ (4/5/2006): Older version not using the
+// current preprocessing pipeline. This is the function to be called from the
+// main function DQ: Now called by the SgFile constructor body (I think) void
+// attachPreprocessingInfo(SgSourceFile *sageFilePtr)
 void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_filename )
    {
      ROSE_ASSERT(sageFilePtr != NULL);
@@ -151,10 +118,7 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
   // ROSE_ASSERT(sageFilePtr->get_unparse_output_filename() != "");
 #endif
 
-  // ROSEAttributesList* headerAttributes = getListOfAttributes(fileNameId);
-  // bool use_Wave = false;
-  // ROSEAttributesList* commentAndCppDirectiveList = buildCommentAndCppDirectiveList(use_Wave, Sg_File_Info::getFilenameFromID(currentFileNameId) );
-  // ROSEAttributesList* commentAndCppDirectiveList = buildCommentAndCppDirectiveList(use_Wave, sageFilePtr->getFileName() );
+     // ROSEAttributesList* headerAttributes = getListOfAttributes(fileNameId);
      string filename = sageFilePtr->get_sourceFileNameWithPath();
      ROSEAttributesList* commentAndCppDirectiveList = NULL;
 
@@ -251,9 +215,9 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
 
 #ifndef  CXX_IS_ROSE_CODE_GENERATION
   // DQ (7/6/2005): Introduce tracking of performance of ROSE.
-     TimingPerformance timer_2 ("AST Comment and CPP Directive Processing (not using Wave):");
+     TimingPerformance timer_2("AST Comment and CPP Directive Processing:");
 
-  // Dummy attribute (nothing is done here since this is an empty class)
+     // Dummy attribute (nothing is done here since this is an empty class)
      AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh;
 
   // DQ (4/19/2006): Now supporting either the collection or ALL comments and CPP directives 

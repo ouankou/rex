@@ -644,7 +644,6 @@ src/frontend/CxxFrontend/Clang/
 - AST structure: `docs/Rose/ROSE_UserManual/ROSE-UserManual.pdf`
 
 ### ROSE Source Code Examples
-- EDG frontend: `src/frontend/CxxFrontend/EDG/edgRose/edgRoseTemplate.C`
 - Template post-processing: `src/frontend/SageIII/astPostProcessing/fixupTemplateInstantiations.C`
 
 ### Clang Documentation
@@ -664,4 +663,4 @@ Once template instantiation support is complete:
 
 Implementing template instantiation support is a significant undertaking but will dramatically improve REX's C++ support. The phased approach outlined here provides a clear path from current opaque types to proper template infrastructure, with testable milestones at each phase.
 
-**Key Insight**: Rather than trying to replicate EDG's full template analysis, we leverage Clang's instantiated templates and create just enough ROSE infrastructure to represent them correctly in the AST and symbol table.
+**Key Insight**: Rather than trying to replicate legacy frontend's full template analysis, we leverage Clang's instantiated templates and create just enough ROSE infrastructure to represent them correctly in the AST and symbol table.

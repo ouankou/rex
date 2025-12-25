@@ -52,12 +52,10 @@ class ROSE_DLL_API UnparseFormatHelp
              };
              virtual bool operator()(bool chain, const Args&) { return chain; }
          };
-             
-      // User-defined callbacks invoked immediately after output file is created.
-      // yanyh15: 2023-01-19 need a callback mechanisms when this becomes the need
-       //  Sawyer::Callbacks<PostOutputCallback*> postOutputCallbacks;
-   };
 
+         // User-defined callbacks invoked immediately after output file is
+         // created. yanyh15: 2023-01-19 need a callback mechanisms when this
+         // becomes the need
+};
 
 #endif
-

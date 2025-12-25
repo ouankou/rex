@@ -375,13 +375,17 @@ ProcessMemberFunctionTemplateDeclarations ( set<SgDeclarationStatement*> setOfRe
             // We only want to fixup template details in the current file, since we only unparse the current file.
                if (filenameOfTemplateDeclaration == currentFilename)
                   {
-                 // This template declaration is in the current file so let the vendor compiler instantiate it, 
-                 // there are a few rules here:
-                 //    1) if it is a specialization then we should output it (since it is used), or
-                 //    2) if it is defined in the class and the class is a templated class then 
-                 //       EDG will not list the source for the member function in the class template
-                 //       declaration (independent of the setting og TEMPLATES_IN_IL within EDG.
-                    bool isSpecialization = memberFunctionInstantiation->isSpecialization();
+                 // This template declaration is in the current file so let the
+                 // vendor compiler instantiate it, there are a few rules here:
+                 //    1) if it is a specialization then we should output it
+                 //    (since it is used), or 2) if it is defined in the class
+                 //    and the class is a templated class then
+                 //       legacy frontend will not list the source for the
+                 //       member function in the class template declaration
+                 //       (independent of the setting og TEMPLATES_IN_IL within
+                 //       legacy frontend.
+                 bool isSpecialization =
+                     memberFunctionInstantiation->isSpecialization();
 
                  // DQ (5/2/2012): Although I included that case for handling "isDefinedInClass"
                  // below, I think it should always be false for this handling of specializations.
@@ -439,17 +443,23 @@ ProcessMemberFunctionTemplateDeclarations ( set<SgDeclarationStatement*> setOfRe
 #endif
                          if (templateDeclarationIsDeclaredInClass == true)
                             {
-                           // If it is not a specialization it might have been that the template declaration 
-                           // appeared in the class in which case EDG has deleted the defining template 
-                           // declaration and we only have the opportunity to output the generated template 
-                           // instantiation (not a specialization, but a simple instantiation of the member 
-                           // function).  In this case we have to mark the defining template instantiation 
-                           // for output and if the instantiation of the class is not output we have to 
-                           // output a member function prototype for the instantiated member function (since 
-                           // it will be output at the end of the file (as an inlined function)).  I'm not
-                           // clear if it is an issue that as an inlined function it is used (referenced)
-                           // before it is defined (but it seems to work just fine, at least with some older 
-                           // versions of the g++ compiler).
+                           // If it is not a specialization it might have been
+                           // that the template declaration appeared in the
+                           // class in which case legacy frontend has deleted
+                           // the defining template declaration and we only have
+                           // the opportunity to output the generated template
+                           // instantiation (not a specialization, but a simple
+                           // instantiation of the member function).  In this
+                           // case we have to mark the defining template
+                           // instantiation for output and if the instantiation
+                           // of the class is not output we have to output a
+                           // member function prototype for the instantiated
+                           // member function (since it will be output at the
+                           // end of the file (as an inlined function)).  I'm
+                           // not clear if it is an issue that as an inlined
+                           // function it is used (referenced) before it is
+                           // defined (but it seems to work just fine, at least
+                           // with some older versions of the g++ compiler).
 #if 0
                               printf ("Found special case of template defined in class and not output in class template definition (mark it for output) \n");
                               printf ("     member function qualified name = %s \n",memberFunctionInstantiation->get_qualified_name().str());
@@ -995,30 +1005,40 @@ markTemplateInstantiationsForOutput( SgNode* node )
   // just explicit template instantiations.
 
   // This function has multiple phases:
-  //    1) Locate all template instantiations that are referenced in the source file.
-  //    2) Iterate over the list of instantiatied member functions
+  //    1) Locate all template instantiations that are referenced in the source
+  //    file. 2) Iterate over the list of instantiatied member functions
   //          a) if it is a specialization then mark it for output
-  //          b) if the associated template definition appears in the source file then
-  //                1. if it is defined in the class then mark the instantiation for output
-  //                        EDG does not include the definition of member function in the string
-  //                        representing the template definition.
-  //                2. if it is not defined in the class then don't output the instantiation.
+  //          b) if the associated template definition appears in the source
+  //          file then
+  //                1. if it is defined in the class then mark the instantiation
+  //                for output
+  //                        legacy frontend does not include the definition of
+  //                        member function in the string representing the
+  //                        template definition.
+  //                2. if it is not defined in the class then don't output the
+  //                instantiation.
   //              FOR G++ 3.3.x
-  //                3. Build a prototype for the member function and insert it into the correct 
+  //                3. Build a prototype for the member function and insert it
+  //                into the correct
   //                   scope (global scope should work).
   //              FOR G++ 3.4.x and likely 4.x (also works for 3.3.x)
-  //                4. Move the definition to appear after the class instantiation's definition
+  //                4. Move the definition to appear after the class
+  //                instantiation's definition
   //    3) Iterate over the template function instantiations
   //          a) if it is a specialization then mark it for output
-  //          b) if the associated template definition appears in the source file then 
+  //          b) if the associated template definition appears in the source
+  //          file then
   //             do NOT mark it for output.
   //    4) Iterate over the template class instantiations
   //          a) if it is a specialization then mark it for output
-  //          b) if the associated template definition appears in the source file then 
+  //          b) if the associated template definition appears in the source
+  //          file then
   //             do NOT mark it for output.
-  //          c) if a member function (or friend function) of the class template instantiation 
-  //             is marked for output but the class template instantiation is not then copy the 
-  //             member function's declaration and insert it after the class template instantiation.
+  //          c) if a member function (or friend function) of the class template
+  //          instantiation
+  //             is marked for output but the class template instantiation is
+  //             not then copy the member function's declaration and insert it
+  //             after the class template instantiation.
 
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
      TimingPerformance timer ("Mark template instantiations for output:");
@@ -1480,12 +1500,22 @@ MarkTemplateInstantiationsForOutputSupport::evaluateSynthesizedAttribute (
                                                   SgConstructorInitializer* constructorInitializer = isSgConstructorInitializer(initializer);
                                                   constructor = constructorInitializer->get_declaration();
 
-                                               // DQ (8/13/2005): KULL/src/utilities/Snapshot.cc demonstates this problem.
-                                               // This need not be a valid point since the constructor might not explicitly be 
-                                               // defined in the class or the SgConstructorInitializer may be used in a way such 
-                                               // that EDG does not resolve the member function or even the class (if only the 
-                                               // arugments are relavant).
-                                               // ROSE_ASSERT(constructor != NULL);
+                                                  // DQ (8/13/2005):
+                                                  // KULL/src/utilities/Snapshot.cc
+                                                  // demonstates this problem.
+                                                  // This need not be a valid
+                                                  // point since the constructor
+                                                  // might not explicitly be
+                                                  // defined in the class or the
+                                                  // SgConstructorInitializer
+                                                  // may be used in a way such
+                                                  // that legacy frontend does
+                                                  // not resolve the member
+                                                  // function or even the class
+                                                  // (if only the arugments are
+                                                  // relavant).
+                                                  // ROSE_ASSERT(constructor !=
+                                                  // NULL);
                                                   break;
                                                 }
 

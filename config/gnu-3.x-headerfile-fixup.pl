@@ -36,7 +36,7 @@ while ($lineNumber <= $#lineArray)
 
    # JJW 6-11-2008: This is not likely to be necessary anymore
    if (0) {
-   # DQ (7/24/2006): Modified macros to avoid overflow.  These macros causes warning which were annoying (EDG complained, but gnu did not)
+   # DQ (7/24/2006): Modified macros to avoid overflow.  These macros causes warning which were annoying (legacy frontend complained, but gnu did not)
    # This works for gnu 3.3.2 header files, but should be portable
      if ($line =~ /  \(__glibcpp_signed \(T\) \? \(T\)1 \<\< __glibcpp_digits \(T\) \: \(T\)0\)/)
         {
@@ -52,7 +52,7 @@ while ($lineNumber <= $#lineArray)
           $lineHasBeenOutput = 1;
         }
 
-   # DQ (7/24/2006): Modified macros to avoid overflow.  These macros causes warning which were annoying (EDG complained, but gnu did not)
+   # DQ (7/24/2006): Modified macros to avoid overflow.  These macros causes warning which were annoying (legacy frontend complained, but gnu did not)
    # This works for gnu 3.3.2 header files, but should be portable
      if ($line =~ /  \(__glibcpp_signed \(T\) \? \(\(T\)1 \<\< __glibcpp_digits \(T\)\) - 1 \: \~\(T\)0\)/)
         {

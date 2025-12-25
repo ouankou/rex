@@ -1,11 +1,11 @@
 /*
 Hi Rose users,
-   The currently used version of EDG (3.3) fails to compile the following code:
-saying error: no appropriate operator delete is visible
-The above code is correct, though, and EDG 4.0 accepts it, as does g++.
-The fact that EDG 3.3 rejects it causes some problems when parsing
-the Wave preprocessor. Minor ones, because explicitly calling f->~foo (); and
-then foo::operator delete works. Depending on how severe you consider this
+   The currently used version of legacy frontend (3.3) fails to compile the
+following code: saying error: no appropriate operator delete is visible The
+above code is correct, though, and legacy frontend 4.0 accepts it, as does g++.
+The fact that legacy frontend 3.3 rejects it causes some problems when parsing
+the preprocessing pipeline. Minor ones, because explicitly calling f->~foo ();
+and then foo::operator delete works. Depending on how severe you consider this
 failure, it might be a good time to upgrade.
 
 Regards,

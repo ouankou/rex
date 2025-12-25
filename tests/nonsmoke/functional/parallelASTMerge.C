@@ -10,8 +10,8 @@
 
 #include <iostream>
 
-#include <Sawyer/Stopwatch.h>
 #include <algorithm>
+#include <chrono>
 #include <climits>
 #include <filesystem>
 #include <fstream>
@@ -222,11 +222,13 @@ int main ( int argc, char * argv[] )
     //ofstream ifs("timer.txt");
     for (int i = 1; i < 6; i += 1)
     {
-        Sawyer::Stopwatch t;
-        string output = "output" + std::to_string(i);
-        output = "output" + std::to_string(i) + ".txt";
-        MergeAstFiles(fileNames, output, i);
-        cout << i << " : " << t << endl;
+      auto start = std::chrono::steady_clock::now();
+      string output = "output" + std::to_string(i);
+      output = "output" + std::to_string(i) + ".txt";
+      MergeAstFiles(fileNames, output, i);
+      auto elapsed = std::chrono::steady_clock::now() - start;
+      std::chrono::duration<double> seconds = elapsed;
+      cout << i << " : " << seconds.count() << "s" << endl;
     }
 
     return 0;

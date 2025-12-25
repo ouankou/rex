@@ -27,12 +27,11 @@
 #include "astPostProcessing/resetParentPointers.h"
 // DQ (3/31/2012): Is this going to be an issue for C++11 use with ROSE?
 
-
-
-// DQ (2/17/2013): This is a operation on the global AST that we don't need to do too often
-// depending on the grainularity sought for the debugging information.  It is done on the
-// whole AST once after construction (in edgRose.C), but is not needed more than that
-// since it is a performance issue.
+// DQ (2/17/2013): This is a operation on the global AST that we don't need to
+// do too often depending on the grainularity sought for the debugging
+// information.  It is done on the whole AST once after construction in the
+// frontend conversion, but is not needed more than that since it is a
+// performance issue.
 #define BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS 0
 #define BUILDER_MAKE_REDUNDANT_CALLS_TO_SYMBOL_TABLE_LOOKUP 0
 
@@ -1116,10 +1115,12 @@ SageBuilder::testTemplateArgumentParents( SgDeclarationStatement* decl )
                     printf ("  --- decl->get_firstNondefiningDeclaration() = %p = %s \n",decl->get_firstNondefiningDeclaration(),decl->get_firstNondefiningDeclaration()->class_name().c_str());
                   }
 #endif
-            // DQ (1/30/2013): Commented this test out so that we could reuse SgTemplateArguments and
-            // assure that the mapping from EDG a_template_arg_ptr's to SgTemplateArgument's was 1-to-1.
-            // It is not clear if we can relax this constraint in the future.
-            // ROSE_ASSERT(parent == decl->get_firstNondefiningDeclaration());
+               // DQ (1/30/2013): Commented this test out so that we could reuse
+               // SgTemplateArguments and assure that the mapping from legacy
+               // frontend a_template_arg_ptr's to SgTemplateArgument's was
+               // 1-to-1. It is not clear if we can relax this constraint in the
+               // future. ROSE_ASSERT(parent ==
+               // decl->get_firstNondefiningDeclaration());
 
                i++;
              }
@@ -1654,10 +1655,13 @@ SageBuilder::buildVariableDeclaration_nfi (const SgName & name, SgType* type, Sg
             // DQ (6/26/2019): Added assertion.
                ROSE_ASSERT(reuseTheAssociatedVariableDeclaration == false);
 
-            // DQ (6/27/2019): If the SgInitializedName was generated from the convert_variable_use() function in the
-            // EDG/ROSE translation, then where was not associated SgVariableDeclaration built (an inconsistancy).
-            // So we want to check for the parent being a scope statement (e.g. SgIfStmt or other statement that can
-            // accept a conditional expression where in C++ it can alternatively declare a variable.
+               // DQ (6/27/2019): If the SgInitializedName was generated from
+               // the convert_variable_use() function in the legacy
+               // frontend/ROSE translation, then where was not associated
+               // SgVariableDeclaration built (an inconsistancy). So we want to
+               // check for the parent being a scope statement (e.g. SgIfStmt or
+               // other statement that can accept a conditional expression where
+               // in C++ it can alternatively declare a variable.
                if (associatedVariableDeclaration == NULL)
                   {
                     ROSE_ASSERT(initializedName->get_parent() != NULL);
@@ -2999,12 +3003,14 @@ SageBuilder::buildMemberFunctionType(SgType* return_type, SgFunctionParameterTyp
 SgMemberFunctionType*
 SageBuilder::buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList* typeList, SgScopeStatement * struct_name, unsigned int mfunc_specifier, unsigned int ref_qualifiers)
    {
-  // This function has to first build a version of the SgMemberFunctionType so that it can generate a mangled name.
-  // If the mangled name can be use to lookup a SgMemberFunctionType then the "just built" SgMemberFunctionType
-  // is deleted and the one from the global function type table is returned.  This fixes a lot of subtle C++
-  // specific issues with the build interface and it's use with the newer EDG 4.3 connection to ROSE.
+  // This function has to first build a version of the SgMemberFunctionType so
+  // that it can generate a mangled name. If the mangled name can be use to
+  // lookup a SgMemberFunctionType then the "just built" SgMemberFunctionType is
+  // deleted and the one from the global function type table is returned.  This
+  // fixes a lot of subtle C++ specific issues with the build interface and it's
+  // use with the newer legacy frontend 4.3 connection to ROSE.
 
-     ROSE_ASSERT(return_type != NULL);
+  ROSE_ASSERT(return_type != NULL);
 
   // SgMemberFunctionType (SgType *return_type=NULL, bool has_ellipses=true, SgClassDefinition *struct_name=NULL, unsigned int mfunc_specifier=0)
   // SgMemberFunctionType * funcType = new SgMemberFunctionType(return_type, false);
@@ -3250,8 +3256,12 @@ checkThatNoTemplateInstantiationIsDeclaredInTemplateDefinitionScope ( SgDeclarat
             // DQ (8/25/2014): Un-Commented out to revert to previous working state.
             // DQ (8/25/2014): Allow non-template functions in a template class declaration (see test2014_161.C).
 #if !ENFORCE_NO_FUNCTION_TEMPLATE_DECLARATIONS_IN_TEMPLATE_CLASS_INSTANTIATIONS
-            // printf ("In checkThatNoTemplateInstantiationIsDeclaredInTemplateDefinitionScope(): This is the wrong scope that is associated with this function (because EDG uses a single pointeer for a scope that maps to two different scopes in ROSE (and the scope_cache is not reset) \n");
-            // ROSE_ASSERT(isSgTemplateClassDefinition(scope) == NULL);
+      // printf ("In
+      // checkThatNoTemplateInstantiationIsDeclaredInTemplateDefinitionScope():
+      // This is the wrong scope that is associated with this function (because
+      // legacy frontend uses a single pointeer for a scope that maps to two
+      // different scopes in ROSE (and the scope_cache is not reset) \n");
+      // ROSE_ASSERT(isSgTemplateClassDefinition(scope) == NULL);
 #endif
              }
   } else {
@@ -4288,9 +4298,10 @@ checkThatNoTemplateInstantiationIsDeclaredInTemplateDefinitionScope ( SgDeclarat
           func->get_declarationModifier().get_typeModifier().setRestrict();
         }
 
-  // DQ (8/19/2013): Added assertion that is tested and which fails for test_3 of the RoseExample_tests directory (in edgRose.C).
-  // This fails for everything.... not sure why...
-  // ROSE_ASSERT(func->get_symbol_from_symbol_table() != NULL);
+        // DQ (8/19/2013): Added assertion that is tested and which fails for
+        // test_3 of the RoseExample_tests directory. This fails for
+        // everything.... not sure why...
+        // ROSE_ASSERT(func->get_symbol_from_symbol_table() != NULL);
 
 #if 0
      printf ("In buildNondefiningFunctionDeclaration_T(): XXX_name = %s (calling unsetNodesMarkedAsModified()) \n", XXX_name.str());
@@ -6011,7 +6022,8 @@ SageBuilder::setTemplateNameInTemplateInstantiations( SgFunctionDeclaration* fun
 SgFunctionDeclaration*
 SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return_type, SgFunctionParameterList* parameter_list, SgScopeStatement* scope, bool forceFreeFunctionScope)
    {
-  // DQ (11/12/2012): Note that this function is not used in the AST construction in the EDG/ROSE interface.
+  // DQ (11/12/2012): Note that this function is not used in the AST
+  // construction in the legacy frontend/ROSE interface.
 
   // DQ (8/23/2013): Added assertions.
      ROSE_ASSERT(return_type != NULL);
@@ -9199,31 +9211,32 @@ SageBuilder::buildRangeBasedForStatement_nfi(
 void
 SageBuilder::buildDoWhileStatement_nfi(SgDoWhileStmt* result, SgStatement * body, SgStatement * condition)
    {
-  // DQ (3/22/2014): This function has been built to support reusing an existing SgDoWhileStatement
-  // that may have been built and pushed onto the stack as part of a top-down construction of the AST.
-  // It is required in the EDG 4.8 useage because of a change from EDG 4.7 to 4.8 in how blocks are
-  // handled (end-of-construct entries).
+  // DQ (3/22/2014): This function has been built to support reusing an existing
+  // SgDoWhileStatement that may have been built and pushed onto the stack as
+  // part of a top-down construction of the AST. It is required in the legacy
+  // frontend 4.8 useage because of a change from legacy frontend 4.7 to 4.8 in
+  // how blocks are handled (end-of-construct entries).
 
-     ROSE_ASSERT(result    != NULL);
-     ROSE_ASSERT(body      != NULL);
-     ROSE_ASSERT(condition != NULL);
+  ROSE_ASSERT(result != NULL);
+  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(condition != NULL);
 
-     ROSE_ASSERT(result->get_body()      == NULL);
-     ROSE_ASSERT(result->get_condition() == NULL);
+  ROSE_ASSERT(result->get_body() == NULL);
+  ROSE_ASSERT(result->get_condition() == NULL);
 
-     result->set_body(body);
-     result->set_condition(condition);
+  result->set_body(body);
+  result->set_condition(condition);
 
-     body->set_parent(result);
-     condition->set_parent(result);
+  body->set_parent(result);
+  condition->set_parent(result);
 
-     setOneSourcePositionNull(result);
+  setOneSourcePositionNull(result);
 
-     ROSE_ASSERT(result->get_body()      != NULL);
-     ROSE_ASSERT(result->get_condition() != NULL);
+  ROSE_ASSERT(result->get_body() != NULL);
+  ROSE_ASSERT(result->get_condition() != NULL);
 
-     ROSE_ASSERT(result->get_body()->get_parent()      == result);
-     ROSE_ASSERT(result->get_condition()->get_parent() == result);
+  ROSE_ASSERT(result->get_body()->get_parent() == result);
+  ROSE_ASSERT(result->get_condition()->get_parent() == result);
 
 #if 0
      printf ("Exiting at the base of SageBuilder::buildDoWhileStatement_nfi() \n");
@@ -11199,7 +11212,7 @@ SageBuilder::buildNondefiningClassDeclaration_nfi(const SgName& XXX_name, SgClas
 
 #define DEBUG_NONDEFINING_CLASS_DECLARATION 0
 
-  // DQ (11/26/2011): Debugging EDG 3.3 use of templateArguments.
+     // DQ (11/26/2011): Debugging legacy frontend 3.3 use of templateArguments.
 #if DEBUG_NONDEFINING_CLASS_DECLARATION
      printf ("Building a SgClassDeclaration: buildNondefiningClassDeclaration_nfi() nameWithoutTemplateArguments = %s buildTemplateInstantiation = %s \n",nameWithoutTemplateArguments.str(),buildTemplateInstantiation ? "true:" : "false");
      printf ("   --- scope = %p = %s \n",scope,(scope != NULL) ? scope->class_name().c_str() : "null");
@@ -11899,7 +11912,8 @@ SageBuilder::buildClassDeclarationStatement_nfi(const SgName & name, SgClassDecl
           ROSE_ASSERT (nondefdecl->get_startOfConstruct() != NULL);
 
 #if BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS
-       // DQ (5/2/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
+          // DQ (5/2/2012): After legacy frontend/ROSE translation, there should
+          // be no IR nodes marked as transformations.
           if (SourcePositionClassificationMode != e_sourcePositionTransformation)
              {
                detectTransformations(nondefdecl);
@@ -11984,9 +11998,10 @@ SageBuilder::buildClassDeclarationStatement_nfi(const SgName & name, SgClassDecl
   // DQ (9/4/2012): Added assertion.
      ROSE_ASSERT (defdecl->get_type() == nondefdecl->get_type());
 
-  // I don't think this is always a forward declaration (e.g. if it is not used in a prototype).
-  // Checking the olded EDG/ROSE interface it appears that it is always marked forward (unless
-  // used in a defining declaration).
+     // I don't think this is always a forward declaration (e.g. if it is not
+     // used in a prototype). Checking the olded legacy frontend/ROSE interface
+     // it appears that it is always marked forward (unless used in a defining
+     // declaration).
      nondefdecl->setForward();
 
      if (scope != NULL)  // put into fixStructDeclaration() or alike later on
@@ -12287,9 +12302,10 @@ SageBuilder::buildNamespaceDeclaration_nfi(const SgName& name, bool unnamednames
   // nondefdecl->set_definingDeclaration(defdecl);
      defdecl->set_firstNondefiningDeclaration(nondefdecl);
 
-  // I don't think this is always a forward declaration (e.g. if it is not used in a prototype).
-  // Checking the olded EDG/ROSE interface it appears that it is always marked forward (unless
-  // used in a defining declaration).
+     // I don't think this is always a forward declaration (e.g. if it is not
+     // used in a prototype). Checking the olded legacy frontend/ROSE interface
+     // it appears that it is always marked forward (unless used in a defining
+     // declaration).
      nondefdecl->setForward();
 
      if (scope != NULL)  // put into fixStructDeclaration() or alike later on
@@ -12812,7 +12828,8 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
           testTemplateArgumentParents(nondefdecl);
 
 #if BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS
-       // DQ (5/2/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
+          // DQ (5/2/2012): After legacy frontend/ROSE translation, there should
+          // be no IR nodes marked as transformations.
           detectTransformations(nondefdecl);
 #endif
 
@@ -12891,8 +12908,9 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
                printf ("In buildClassDeclaration_nfi(): nondefdecl->get_name() = %s nondefdecl->get_templateName() = %s \n",nondefdecl->get_name().str(),isSgTemplateInstantiationDecl(nondefdecl)->get_templateName().str());
 #endif
 #if BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS
-            // DQ (5/2/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
-            // detectTransformations(nondefdecl);
+               // DQ (5/2/2012): After legacy frontend/ROSE translation, there
+               // should be no IR nodes marked as transformations.
+               // detectTransformations(nondefdecl);
 #endif
             // DQ (6/6/2012): Set the first non-defining declaration to be itself.
             // nondefdecl->set_firstNondefiningDeclaration(nondefdecl);
@@ -12958,10 +12976,12 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
             // ROSE_ASSERT(isSgTemplateInstantiationDecl(nondefdecl)->get_templateName().getString().find('>') != string::npos);
 
 #if BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS
-            // DQ (5/2/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
-            // detectTransformations(nondefdecl);
+               // DQ (5/2/2012): After legacy frontend/ROSE translation, there
+               // should be no IR nodes marked as transformations.
+               // detectTransformations(nondefdecl);
 #endif
-            // DQ (7/25/2017): This will be true, but it might not be what we want since it can be caught as an error in the code below.
+               // DQ (7/25/2017): This will be true, but it might not be what we
+               // want since it can be caught as an error in the code below.
                ROSE_ASSERT(nondefdecl->get_file_info() == NULL);
              }
             else
@@ -12984,8 +13004,9 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
                ROSE_ASSERT(nameWithoutTemplateArguments == nameWithTemplateArguments);
 
 #if BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS
-            // DQ (5/2/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
-            // detectTransformations(nondefdecl);
+               // DQ (5/2/2012): After legacy frontend/ROSE translation, there
+               // should be no IR nodes marked as transformations.
+               // detectTransformations(nondefdecl);
 #endif
             // DQ (9/16/2012): Set the firstNondefiningDeclaration because this is the one branch left were it
             // was not set (required in the true branch so that we could set the template parameters).
@@ -13144,7 +13165,8 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
           ROSE_ASSERT (nondefdecl->get_startOfConstruct() != NULL);
 
 #if BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS
-       // DQ (5/2/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
+          // DQ (5/2/2012): After legacy frontend/ROSE translation, there should
+          // be no IR nodes marked as transformations.
           if (SourcePositionClassificationMode != e_sourcePositionTransformation)
              {
                detectTransformations(nondefdecl);
@@ -13226,7 +13248,7 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
   // SgClassDefinition* classDef = buildClassDefinition();
      SgClassDefinition* classDef = buildClassDefinition(NULL,buildTemplateInstantiation);
 
-  // DQ (11/26/2011): Debugging EDG 3.3 use of templateArguments.
+     // DQ (11/26/2011): Debugging legacy frontend 3.3 use of templateArguments.
 #if 0
      printf ("Building a SgClassDeclaration: buildClassDeclaration_nfi() buildTemplateInstantiation = %s \n",buildTemplateInstantiation ? "true:" : "false");
 #endif
@@ -13536,9 +13558,10 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
   // DQ (9/4/2012): Added assertion.
      ROSE_ASSERT (defdecl->get_type() == nondefdecl->get_type());
 
-  // I don't think this is always a forward declaration (e.g. if it is not used in a prototype).
-  // Checking the olded EDG/ROSE interface it appears that it is always marked forward (unless
-  // used in a defining declaration).
+     // I don't think this is always a forward declaration (e.g. if it is not
+     // used in a prototype). Checking the olded legacy frontend/ROSE interface
+     // it appears that it is always marked forward (unless used in a defining
+     // declaration).
      nondefdecl->setForward();
 
      if (scope != NULL)  // put into fixStructDeclaration() or alike later on
@@ -13626,7 +13649,8 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
      ROSE_ASSERT(temp_firstNondefiningDeclaration->get_name() == temp_definingDeclaration->get_name());
      ROSE_ASSERT(temp_firstNondefiningDeclaration->get_type() == temp_definingDeclaration->get_type());
 
-  // DQ (3/7/2015): Only in EDG 4.7 does the defining declaration not have a valid templateDeclaration pointer (sometimes).
+     // DQ (3/7/2015): Only in legacy frontend 4.7 does the defining declaration
+     // not have a valid templateDeclaration pointer (sometimes).
      SgTemplateInstantiationDecl* nondefiningDeclaration = isSgTemplateInstantiationDecl(defdecl->get_firstNondefiningDeclaration());
      SgTemplateInstantiationDecl* definingDeclaration    = isSgTemplateInstantiationDecl(defdecl->get_definingDeclaration());
      if (definingDeclaration != NULL && nondefiningDeclaration != NULL)
@@ -13645,9 +13669,9 @@ SageBuilder::buildClassDeclaration_nfi(const SgName& XXX_name, SgClassDeclaratio
        // ROSE_ASSERT(definingDeclaration->get_templateDeclaration() != NULL);
         }
 
-  // DQ (3/7/2015): Only in EDG 4.7 does the defining declaration not have a valid templateDeclaration pointer (sometimes).
-     if (definingDeclaration != NULL)
-        {
+        // DQ (3/7/2015): Only in legacy frontend 4.7 does the defining
+        // declaration not have a valid templateDeclaration pointer (sometimes).
+        if (definingDeclaration != NULL) {
           if (definingDeclaration->get_templateDeclaration() == NULL)
              {
 #if 0
@@ -14053,9 +14077,10 @@ SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(const SgName& XXX_name
      ROSE_ASSERT(nondefdecl->get_type() != NULL);
 #endif
 
-  // I don't think this is always a forward declaration (e.g. if it is not used in a prototype).
-  // Checking the olded EDG/ROSE interface it appears that it is always marked forward (unless
-  // used in a defining declaration).
+     // I don't think this is always a forward declaration (e.g. if it is not
+     // used in a prototype). Checking the olded legacy frontend/ROSE interface
+     // it appears that it is always marked forward (unless used in a defining
+     // declaration).
      nondefdecl->setForward();
 
      if (scope != NULL)  // put into fixStructDeclaration() or alike later on
@@ -14456,9 +14481,10 @@ SageBuilder::buildTemplateClassDeclaration_nfi(const SgName& XXX_name, SgClassDe
 #endif
 #endif
 
-  // I don't think this is always a forward declaration (e.g. if it is not used in a prototype).
-  // Checking the olded EDG/ROSE interface it appears that it is always marked forward (unless
-  // used in a defining declaration).
+     // I don't think this is always a forward declaration (e.g. if it is not
+     // used in a prototype). Checking the olded legacy frontend/ROSE interface
+     // it appears that it is always marked forward (unless used in a defining
+     // declaration).
      nondefdecl->setForward();
 
 #if 0
@@ -14872,7 +14898,7 @@ SageBuilder::buildNonrealBaseClass ( SgNonrealDecl* nrdecl, SgClassDefinition* c
 
 #if 0
 // This function would be more complex that I want to support at present since the mapping of
-// edg modifier values to ROSE modifier values is offset and backwards (reversed in numerical order).
+// Frontend modifier values to ROSE modifier values are offset and backwards (reversed in numerical order).
 SgAccessModifier
 SageBuilder::buildAccessModifier ( unsigned int access )
    {

@@ -59,34 +59,39 @@ class ConstantFoldingTraversal
              ConstantFoldingInheritedAttribute inheritedAttribute,
              SubTreeSynthesizedAttributes synthesizedAttributeList );
    };
-//! This is the external interface of constant folding:
-//It relies on the EDG frontend to do constant folding by default. 
-// The original source code pass trough EDG will have all constant fold already  (not know how)
-// Only new constant folding opportunities introduced by custom transformations will be 
-// actually handled by this function itself.
-// Note: It will fold children nodes of the input node to some constants, 
-// not folding the input node itself. 
-ROSE_DLL_API void constantFoldingOptimization(SgNode* n, bool internalTestingAgainstFrontend = false);
+   //! This is the external interface of constant folding:
+   // It relies on the legacy frontend frontend to do constant folding by
+   // default.
+   //  The original source code pass trough legacy frontend will have all
+   //  constant fold already  (not know how) Only new constant folding
+   //  opportunities introduced by custom transformations will be actually
+   //  handled by this function itself. Note: It will fold children nodes of the
+   //  input node to some constants, not folding the input node itself.
+   ROSE_DLL_API void
+   constantFoldingOptimization(SgNode *n,
+                               bool internalTestingAgainstFrontend = false);
 
-// DQ (6/13/2015): Added support to return the constant valued expression.
-ROSE_DLL_API SgValueExp* returnConstantFoldedValueExpression(SgNode* n, bool internalTestingAgainstFrontend = false);
+   // DQ (6/13/2015): Added support to return the constant valued expression.
+   ROSE_DLL_API SgValueExp *returnConstantFoldedValueExpression(
+       SgNode *n, bool internalTestingAgainstFrontend = false);
 
-// ***************************************************************************
-// Constant un-folding is implemented here as a test to verify the correctness 
-// of the constant folding.
-//    As an example: "int x = 3;" is transformed to be "int x = 1 + 2;"
-// This transformation permits automated testing of the constant folding.
-// ***************************************************************************
+   // ***************************************************************************
+   // Constant un-folding is implemented here as a test to verify the
+   // correctness of the constant folding.
+   //    As an example: "int x = 3;" is transformed to be "int x = 1 + 2;"
+   // This transformation permits automated testing of the constant folding.
+   // ***************************************************************************
 
-// Build a synthesized attribute for the tree traversal to unfold constants so that we can test the constant folding
-class ConstantUnFoldingSynthesizedAttribute
-   {
-     public:
-          SgExpression* newExp;
+   // Build a synthesized attribute for the tree traversal to unfold constants
+   // so that we can test the constant folding
+   class ConstantUnFoldingSynthesizedAttribute {
+   public:
+     SgExpression *newExp;
 
-          ConstantUnFoldingSynthesizedAttribute() : newExp(NULL) {};
-          ConstantUnFoldingSynthesizedAttribute ( const ConstantUnFoldingSynthesizedAttribute & X )
-             : newExp(X.newExp) {};
+     ConstantUnFoldingSynthesizedAttribute() : newExp(NULL) {};
+     ConstantUnFoldingSynthesizedAttribute(
+         const ConstantUnFoldingSynthesizedAttribute &X)
+         : newExp(X.newExp) {};
    };
 
 class ConstantUnFoldingTraversal

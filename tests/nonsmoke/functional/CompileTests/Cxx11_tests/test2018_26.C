@@ -7,7 +7,7 @@ struct char_traits
    };
 
 #if 0
-// Specialization allows GNU to to compile test code, but fails for EDG.
+// Specialization allows GNU to to compile test code, but fails for legacy frontend.
 template<> struct char_traits <unsigned int>
    {
      typedef unsigned int int_type;
@@ -15,9 +15,9 @@ template<> struct char_traits <unsigned int>
 #endif
 
 #if 1
-// Specialization allows GNU to to compile test code, but fails for EDG.
-template<> struct char_traits <unsigned int>
-   {
+   // Specialization allows GNU to to compile test code, but fails for legacy
+   // frontend.
+   template <> struct char_traits<unsigned int> {
      typedef unsigned int int_type;
    };
 #endif

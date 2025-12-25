@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/libncdap3/ncdap3.c,v 1.82 2010/04/02 23:18:41 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/ncdap3.c,v 1.82 2010/04/02 23:18:41
+ *dmh Exp $
  *********************************************************************/
 #include "config.h"
 #include "ncdap3.h"

@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, University Corporation for Atmospheric Research
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncdump/vardata.h,v 1.7 2007/10/08 02:47:57 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncdump/vardata.h,v 1.7 2007/10/08 02:47:57
+ *russ Exp $
  *********************************************************************/
 
 extern char *progname;		/* for error messages */

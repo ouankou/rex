@@ -29,7 +29,7 @@ foo()
        // ":" in string does not work in ROSE, this is the bug
 
        // DQ (1/6/2009): Trying alternative instruction name /tmp/ccIrj7o3.s:28: Error: bad register name `%1'
-  // Note that this does not appear to work properly when EDG is compiled with RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == TRUE
+  // Note that this does not appear to work properly when legacy frontend is compiled with RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == TRUE
   // asm("nop" : "=r" (position) : "r" (number));
   // asm("bsrl %1, %0" : : "=r" (position), "r" (number)); // result with RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == TRUE
   // asm("bsrl %1, %0" : "=r" (position) : "r" (number)); 

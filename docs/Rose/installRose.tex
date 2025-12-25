@@ -41,11 +41,11 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_hardware.html
 %% required.
 
 %% % Irrelevant details.
-%% %The ROSE C/C++ frontend, EDG (software from the Edison Design Group),
+%% %The ROSE C/C++ frontend, legacy frontend (software from the Edison Design Group),
 %% %is released as source code or binary; all other language support in
-%% %ROSE is fully released as source code. EDG has addressed portability
+%% %ROSE is fully released as source code. legacy frontend has addressed portability
 %% %issues for their C++ frontend and it is available on nearly all
-%% %platforms (see {\tt www.EDG.com} for details); so EDG is not a barrier
+%% %platforms (see {\tt www.legacy frontend.com} for details); so legacy frontend is not a barrier
 %% %to portability for us.
 %% 
 %% If you have a specific requirement for ROSE to be ported to a target platform
@@ -70,22 +70,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %% %than 3.3.x are not supported within the ROSE project, but in some cases they might work 
 %% %(g++ 3.2.x is likely to work, but g++ 2.96 will not work).
 %% 
-%% %   ROSE users may either obtain a free research license from EDG and hence ROSE with EDG source code,
-%% %or alternatively, obtain ROSE that contains a binary version of the EDG work.
-%% %The latter is limited to specific platforms and versions of compilers. See EDG (www.edg.com) for details 
-%% %and limitations on how their software may be used. There is more information in the 
-%% %ROSE Manual (see chapter {\em Getting Started}
-%% %section {\em Getting a Version of the EDG License for Research Use}).
-%% 
-%% \commentout{
-%%    We suggest that ROSE users obtain a free research license from EDG until we 
-%% regularly distribute binary versions of the libedg.so library (their software).
-%% Email us for details on our distributions of ROSE that contain a binary version
-%% of the EDG work (and that completely hide the EDG interface). These are limited
-%% to specific platforms and versions of compilers. See EDG (www.edg.com) for details 
-%% and limitations on how their software may be used.
-%% }
-
 %% %{\bf Required Software:} \\
 %% %  The following software is required in order to build and use ROSE 
 %% %(see note about Mac OS X as well):
@@ -119,13 +103,13 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%        \item {\bf External Development Version: subversion} \\
 %%        It is available from the SciDAC Outreach Center's subversion repository:
 %%        \htmladdnormallink{https://outreach.scidac.gov/projects/rose}{https://outreach.scidac.gov/projects/rose/}.
-%%        It contains only a subset of ROSE (excluding the EDG part essentially) of the internal developer version. 
+%%        It contains only a subset of ROSE (excluding the legacy frontend part essentially) of the internal developer version. 
 %%        We are trying to gradually phase out the subversion repository to
 %%        facilitate merging external contributions.
 %% 
 %%        \item {\bf Internal Development Version: git repositories} \\
 %%        Internally, we maintain two git repositories internally, one for ROSE and the
-%%        other for EDG source code. The EDG repository is linked to the ROSE
+%%        other for legacy frontend source code. The legacy frontend repository is linked to the ROSE
 %%        repository as a git submodule. 
 %%        The details of getting and building this version are located in the
 %%        Developer Guide. %\ref{gettingStarted:DeveloperInstructions}.
@@ -137,7 +121,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%       % automake, Doxygen, LaTeX, {\it etc}.
 %%      \end{itemize}
 %%     % ROSE is delivered as either a development version (svn) or as a distribution for
-%%     % users. The (typical) user version comes either with EDG source or binary distribution.
+%%     % users. The (typical) user version comes either with legacy frontend source or binary distribution.
 %% 
 %%   \item {\bf git}: Required if you work with development versions of ROSE
 %%   using git repositories.
@@ -147,8 +131,8 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %% 
 %%   \item {\bf wget}: Required for all external distribution/development
 %%   versions. \\
-%%   Only the internal git development version has access to EDG source code.
-%%   For all other cases,  wget is used to automatically download prebuilt EDG binaries matching
+%%   Only the internal git development version has access to legacy frontend source code.
+%%   For all other cases,  wget is used to automatically download prebuilt legacy frontend binaries matching
 %%   your platform, if the configure script detects that your platform is supported. 
 %% 
 %%    \item {\bf g++} : version 4.0.x to 4.4.x (Support for GCC 4.5 and higher
@@ -251,7 +235,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %% \commentout{ % Liao 2/16/2011. I merged necessary Mac information into the
 %% %list above
 %% \paragraph{Mac OS X Support:}
-%%    It has been reported that our binary version of EDG requires Mac OS X v10.5
+%%    It has been reported that our binary version of legacy frontend requires Mac OS X v10.5
 %% (which might make sense because we build it using Mac OS X v10.5.6).  More
 %% specifically there are unresolved references during linking ROSE applications with
 %% Mac OS X v10.4.11; the solution is to upgrade your Mac OS.  Note that Mac OS X 
@@ -739,7 +723,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %% as in:
 %% \begin{verbatim}
 %%      g++ -I{\<install dir\>/include} -o executable executable.C 
-%%          -L{\<install dir\>/lib} -lrose -ledg -lm $(RT_LIBS)
+%%          -L{\<install dir\>/lib} -lrose -lm $(RT_LIBS)
 %% \end{verbatim}
 %% % $ reset emacs highlighting
 %% 
@@ -930,11 +914,11 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %% 
 %% \subsubsection{Mac OS X}
 %%    Mac OS X does not appear to come with wget and it should be installed
-%% separately so that ROSE can find and download it's required EDG 
+%% separately so that ROSE can find and download it's required legacy frontend 
 %% binaries from the web (ROSE web site).
 %% 
 %% \paragraph{Mac OS X v10.5, Leopard}
-%%    We only build EDG binaries for the default GNU 4.0 compiler.
+%%    We only build legacy frontend binaries for the default GNU 4.0 compiler.
 
 \paragraph{Mac OS X v10.6, Snow Leopard}
    The non-standard STL hashmap implementation in Mac OS X v10.6 is broken and so ROSE
@@ -967,7 +951,7 @@ Under Windows ROSE uses CMake. This is a project that is currently under develop
 of November 2010 we are able to compile and link the src directory. We are also able to 
 run example programs that link against librose and execute the frontend and backend.
 {\em However, this is an internal capability and not available externally yet since we don't
-distribute the Windows generated EDG binaries that would be required.  Also the
+distribute the Windows generated legacy frontend binaries that would be required.  Also the
 current support for Windows is still incomplete, ROSE does not yet pass its internal
 tests under Windows.}
 

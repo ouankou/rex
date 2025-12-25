@@ -24,8 +24,9 @@ main(int argc, char *argv[]) {
     	args.erase(args.begin());
     }
 
-    //NOTE: command line processing was changed and Sawyer-based cmd processing is removed
-    //However, this fix has not yet tested.
+    // NOTE: command line processing was changed and the prior cmd processing is
+    // removed
+    // However, this fix has not yet tested.
 
     // Expand the "+SOMETHING+" escapes in all arguments.
     typedef std::map<std::string, std::string> Translations;

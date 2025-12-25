@@ -6,7 +6,7 @@ void x(){
 }
 gives the following error:
 identityTranslator:
-/home/saebjornsen1/ROSE-October/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_il_to_str.C:5863:
+/home/saebjornsen1/ROSE-October/NEW_ROSE/src/frontend/legacy_frontend/sage_il_to_str.C:5863:
 SgExpression* sage_form_address_constant(a_constant*, int, int,
 an_il_to_str_output_control_block*, Sg_File_Info*): Assertion fileInfo->ok() failed.
 #endif

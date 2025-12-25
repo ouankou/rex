@@ -1,6 +1,6 @@
-// This example demonstrates that three function symbols are being built for the 
-// min function (likely because we don't store them in the EDG AST in a consistant 
-// way.  To see this use "make test_small_single".
+// This example demonstrates that three function symbols are being built for the
+// min function (likely because we don't store them in the legacy frontend AST
+// in a consistant way.  To see this use "make test_small_single".
 
 namespace std
    {

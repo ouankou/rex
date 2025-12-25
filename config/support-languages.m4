@@ -298,7 +298,6 @@ elif test $count_of_languages_to_support = 1 ; then
     enable_tutorial_directory=no
 
     # This allows testing this mechanism to set configure options from within the configure script...
-    # enable_edg_version=4.5
   fi
 
   #

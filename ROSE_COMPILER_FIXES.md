@@ -4,7 +4,7 @@ This document records the issues encountered while getting `rose-compiler` to wo
 
 ## Summary
 
-The REX compiler has transitioned from the proprietary EDG frontend to an experimental Clang/LLVM 20 frontend for C language analysis. This document tracks all compilation and runtime issues encountered and their resolutions.
+The REX compiler has transitioned from the proprietary legacy frontend frontend to an experimental Clang/LLVM 20 frontend for C language analysis. This document tracks all compilation and runtime issues encountered and their resolutions.
 
 **Status**: ✅ **All critical issues resolved!** The Clang frontend now successfully compiles C programs and generates correct output.
 
@@ -200,7 +200,7 @@ GDB stack trace revealed crash in token-based unparsing:
 1. **Backend Unparser Behavior**:
    - ROSE's unparser can operate in two modes: token-based (uses original tokens) or AST-based (regenerates from AST)
    - The unparser unconditionally calls `get_tokenSubsequenceMap()` even when no tokens exist
-   - This is expected behavior for the EDG frontend which always populates token maps
+   - This is expected behavior for the legacy frontend frontend which always populates token maps
 
 2. **get_tokenSubsequenceMap() Implementation** (from `Cxx_Grammar.C:24283-24303`):
    ```cpp
@@ -584,7 +584,7 @@ int main()
 **Benefits**:
 - Preserve original formatting, comments, and whitespace
 - Better source-to-source transformation fidelity
-- Match EDG frontend behavior
+- Match legacy frontend frontend behavior
 
 **Implementation Notes**:
 - Clang provides token stream via `Lexer` and `Preprocessor`
@@ -613,7 +613,7 @@ int main()
 
 ## Notes for Future Developers
 
-1. **Backend Compatibility**: The backend unparser is designed for EDG frontend behavior
+1. **Backend Compatibility**: The backend unparser is designed for legacy frontend frontend behavior
    - Always initialize tokenSubsequenceMap (even if empty) in `clang_main()`
    - Do NOT modify backend code - fix compatibility issues in frontend
    - Backend expects valid map reference from `get_tokenSubsequenceMap()`

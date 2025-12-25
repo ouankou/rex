@@ -1,6 +1,6 @@
 // Example C11 code: simple example to start things off (testing command line option: -rose:c11)
 
-// Note that this feature requires EDG 4.8 or greater:
+// Note that this feature requires legacy frontend 4.8 or greater:
 #include<stdalign.h>
 
 // DQ (1/18/2017): Fixed position of alignment keyword.

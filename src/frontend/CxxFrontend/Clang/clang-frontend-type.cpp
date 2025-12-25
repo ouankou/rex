@@ -2682,7 +2682,8 @@ bool ClangToSageTranslator::VisitElaboratedType(
   //   - Store qualifier info as attributes on the type
   //   - Handle qualification during unparsing only
   //
-  // For now, we just desugar to the named type (same as EDG frontend behavior).
+  // For now, we just desugar to the named type (same as legacy frontend
+  // behavior).
 
   *node = type;
 

@@ -7,7 +7,7 @@ File List:
 * Flex scanner:   omplexer.ll (omplexer.cc )
   Bison parser:   ompparser.yy (ompparser.cc, ompparser.h)
 
-  Moved to src/frontend/CxxFrontend/EDG_SAGE_Connection
+  Moved to src/frontend/SageIII/ompparser
 
 * test parser:    parseOmp.C 
 
@@ -15,6 +15,5 @@ Please avoid to use file names which differ from each other only by suffix.
 
 By Liao, 9/19/2008
 Latest modified: 10/28/2008
-
 
 

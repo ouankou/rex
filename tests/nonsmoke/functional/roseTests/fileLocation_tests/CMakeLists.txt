@@ -39,8 +39,8 @@ install(TARGETS fileLocation DESTINATION bin)
 #fileLocation_SOURCES = fileLocation.C
 #
 ## DQ (8/14/2004) Developer's Note:
-## This permits the use of the pair of libraries -lrose -ledg OR the longer 
-## list of libraries (the later option is much faster for development work).
+## This permits the use of the short ROSE library list or the longer
+## list of libraries (the latter option is much faster for development work).
 #
 ## Turn on GNU Coverage Tool (gcov)
 ## CXX += -fprofile-arcs -ftest-coverage

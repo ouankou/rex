@@ -203,9 +203,12 @@ FixupFunctionDefaultArguments::FixupFunctionDefaultArguments(SgSourceFile* file)
 FixupFunctionDefaultArgumentsInheritedAttribute
 FixupFunctionDefaultArguments::evaluateInheritedAttribute ( SgNode* node, FixupFunctionDefaultArgumentsInheritedAttribute inheritedAttribute )
    {
-  // This function generates a data structure of function declarations using default arguments so that we can determine the function declaration 
-  // that is closest to the default argument and thus the function that should be the ONLY function declaration to specify the default arguments.
-  // This is a post-processing phase because this information must be reconstructed, because EDG loses this information in its AST.
+  // This function generates a data structure of function declarations using
+  // default arguments so that we can determine the function declaration that is
+  // closest to the default argument and thus the function that should be the
+  // ONLY function declaration to specify the default arguments. This is a
+  // post-processing phase because this information must be reconstructed,
+  // because legacy frontend loses this information in its AST.
 
   // I think that our design does not need inherited attributes, but this might change.
      FixupFunctionDefaultArgumentsInheritedAttribute returnValue;

@@ -17,12 +17,12 @@ void SimpleItoa()
   // But should be unparsed as: string a = basic_string< char > ::basic_string (x,x);
      string a = string(x,x);
 
-  // This is an error in EDG as well.
-  // string b = basic_string< char > ::basic_string<char*> (x,x);
-  // string b = basic_string<char*>(x,x);
-  // string b = basic_string(x,x);
+     // This is an error in legacy frontend as well.
+     // string b = basic_string< char > ::basic_string<char*> (x,x);
+     // string b = basic_string<char*>(x,x);
+     // string b = basic_string(x,x);
 
-  // These work in EDG:
-  // string b = basic_string<char>(x,x);
-  // string c = basic_string< char > ::basic_string<char> (x,x);
+     // These work in legacy frontend:
+     // string b = basic_string<char>(x,x);
+     // string c = basic_string< char > ::basic_string<char> (x,x);
    }

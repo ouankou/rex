@@ -9,7 +9,7 @@ char* __builtin_strpbrk(const char*, const char*);
 char* __builtin_strrchr(const char*, int);
 char* __builtin_strstr(const char*, const char*);
 
-/* DQ (4/9/2005): This must be defined on the EDG commandline since this header file is not always read! */
+/* DQ (4/9/2005): This must be defined on the legacy frontend commandline since this header file is not always read! */
 /* bool __builtin_expect(bool,bool); */
 
 char* __builtin_alloca(int);
@@ -130,7 +130,7 @@ int  __exchange_and_add(_Atomic_word *,int);
 
 /* DQ (6/4/2005): Need to compile g++ 3.4 header files used in test201_11.C 
    It appears sufficent to specify these here instead of in ROSE/config/compiler-defs.m4
-   (the command line to EDG) 
+   (the command line to legacy frontend) 
  */
 #define __FLT_HAS_INFINITY__ 1
 #define __DBL_HAS_INFINITY__ 1

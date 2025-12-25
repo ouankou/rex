@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen3/escapes.c,v 1.2 1997/03/19 23:15:09 davis Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen3/escapes.c,v 1.2 1997/03/19 23:15:09
+ *davis Exp $
  *********************************************************************/
 
 #include <stdlib.h>

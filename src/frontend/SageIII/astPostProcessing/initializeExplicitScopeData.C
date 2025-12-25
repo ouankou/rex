@@ -253,9 +253,11 @@ InitializeExplicitScopes::visit ( SgNode *node)
 #endif
                     classDeclaration->set_scope(parentScope);
 
-                 // DQ (8/28/2006): In some rare cases the scope is left unset in the EDG/SageIII translation 
-                 // and we are forced to set the scope here, when this is done we have to reset the fixupScope 
-                 // flag to mark it as having been done! See test2006_124.C for an example of this.
+                    // DQ (8/28/2006): In some rare cases the scope is left
+                    // unset in the legacy frontend/SageIII translation and we
+                    // are forced to set the scope here, when this is done we
+                    // have to reset the fixupScope flag to mark it as having
+                    // been done! See test2006_124.C for an example of this.
                     classDeclaration->set_fixupScope(false);
                   }
                ROSE_ASSERT(classDeclaration->get_scope() != NULL);

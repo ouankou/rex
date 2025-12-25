@@ -12,7 +12,8 @@ template class CloseDescriptor< SymbolicValDescriptor, '{', '}'>;
 // DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not compile using ROSE).
 #ifndef USE_ROSE
 
-// DQ (1/9/2010): This is a problem for the Intel icpc compiler (which uses EDG same as ROSE).
+// DQ (1/9/2010): This is a problem for the Intel icpc compiler (which uses
+// legacy frontend same as ROSE).
 #ifndef __INTEL_COMPILER
 template bool CloseDescriptor< SymbolicValDescriptor, '{', '}'>::read(istream&);
 #endif

@@ -14,7 +14,7 @@ d1=20070803-2300
 echo "howdy!"
 ls $TMP/${d1}-2d.nc3
 if ! test -f $TMP/${d1}-2d.nc3; then
-    cp /upc/share/testdata/nssl/mosaic2d_nc/tile1/$d1.netcdf $TMP/$d1-2d.nc3
+    cp /shared/testdata/nssl/mosaic2d_nc/tile1/$d1.netcdf $TMP/$d1-2d.nc3
 fi
 
 # Copy the 2D rarar file into a netCDF-4 version, with various
@@ -46,7 +46,7 @@ exit 0
 # Get local copy of the radar 3D file.
 d1=20070803-2300
 if ! test -f $TMP/${d1}-3d.nc3; then
-    cp /upc/share/testdata/nssl/mosaic3d_nc/tile1/20070803-2300.netcdf $TMP/${d1}-3d.nc3
+    cp /shared/testdata/nssl/mosaic3d_nc/tile1/20070803-2300.netcdf $TMP/${d1}-3d.nc3
 fi
 
 # Test diferent compressions, with and without shuffle.

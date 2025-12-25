@@ -3,10 +3,12 @@
 // Skip version 4.x gnu compilers
 #if ( __GNUC__ == 3 )
 
-// ROSE can not appear to detect this pragma (seemingly ignored by EDG)
-#pragma 
+// ROSE can not appear to detect this pragma (seemingly ignored by legacy
+// frontend)
+#pragma
 
-// ROSE can not appear to detect this pragma (seemingly ignored by EDG)
+// ROSE can not appear to detect this pragma (seemingly ignored by legacy
+// frontend)
 #pragma 0
 
 // ROSE can correctly recognize this pragma (since it includes a single character string)
@@ -30,8 +32,8 @@
 // A made up pragma (correctly processed as a string based pragma by ROSE)
 #pragma help
 
-// Test IBM specific nopack option (ignored by GNU, and fails in EDG)
-// #pragma pack(nopack)
+// Test IBM specific nopack option (ignored by GNU, and fails in legacy
+// frontend) #pragma pack(nopack)
 
 // A packing pragma used for a variable declaration
 #pragma pack(16)
@@ -71,7 +73,8 @@ struct
 #pragma pack()
 bType4;
 
-// Meaningless since there is nothing to apply the packing pragma to (ignored by EDG internally)!
+// Meaningless since there is nothing to apply the packing pragma to (ignored by
+// legacy frontend internally)!
 #pragma pack(1)
 
 #pragma pack(4)

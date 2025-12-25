@@ -1,7 +1,7 @@
 
 // Example from Andreas, showing use of struct within a variable declaration
 // "struct {} x;" might be a simpler example. But the example from Andreas is
-// typical of what appears in the EDG AST.
+// typical of what appears in the legacy frontend AST.
 struct var21
    {
      struct iceland 

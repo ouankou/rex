@@ -77,7 +77,7 @@ if(enable-smaller-generated-files)
   endif()
   
   # define a custom command to call the code generator and generate source/header files
-  # Generate the edg-sage connection using ROSETTA
+  # Generate the Sage III grammar using ROSETTA
   add_custom_command(
     OUTPUT ${ROSETTA_HEADERS} ${ROSETTA_SRC} 
     # depend on the code generator and input files
@@ -93,7 +93,7 @@ else()
   endif()
 
   # define a custom command to call the code generator and generate source/header files
-  # Generate the edg-sage connection using ROSETTA
+  # Generate the Sage III grammar using ROSETTA
   add_custom_command(
     OUTPUT ${ROSETTA_HEADERS} ${ROSETTA_SRC} 
     # depend on the code generator and input files

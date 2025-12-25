@@ -23,7 +23,7 @@ void test_redef(int format);
 #define DIM2_NAME "TimeInMonths"
 #define DIM2_LEN 15
 #define VAR1_NAME "HuckFinn"
-#define VAR2_NAME "TomSawyer"
+#define VAR2_NAME "TomTaylor"
 #define VAR3_NAME "Jim"
 
 int
@@ -523,7 +523,6 @@ test_redef(int format)
    else if (ret) ERR;
 	 
    if (uchar_in != uchar_out) ERR;
-   if (nc_close(ncid)) ERR;      
+   if (nc_close(ncid))
+     ERR;
 }
-
-

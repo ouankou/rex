@@ -1239,12 +1239,14 @@ getPropertiesForSgFunctionCallExp(SgFunctionCallExp* sgFunCallExp,
 
         case V_SgPointerDerefExp: {
             SgPointerDerefExp *exp = isSgPointerDerefExp(functionExp);
-            // If the thing pointed to is ultimately a SgFunctionRefExp then we can figure out the exact function that's being
-            // pointed to just by following the pointers to the SgFunctionRefExp.  EDG3 never generated this kind of AST
-            // because it removed the extraneous SgPointerDerefExp nodes.  I.e., for input like this:
+            // If the thing pointed to is ultimately a SgFunctionRefExp then we
+            // can figure out the exact function that's being pointed to just by
+            // following the pointers to the SgFunctionRefExp.  Some frontends
+            // never generated this kind of AST because it removed the
+            // extraneous SgPointerDerefExp nodes.  I.e., for input like this:
             //   void g() { (********g)(); }
-            // EDG3's AST would not have any SgFunctionRefExp nodes, but EDG4 leaves all of them there.
-            // [Robb Matzke 2012-12-28]
+            // Some frontend ASTs would not have any SgFunctionRefExp nodes,
+            // while others leave all of them there. [Robb Matzke 2012-12-28]
             SgFunctionRefExp *fref = NULL;
             while (exp && !fref) {
                 fref = isSgFunctionRefExp(exp->get_operand_i());

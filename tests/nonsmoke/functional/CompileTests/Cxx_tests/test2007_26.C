@@ -20,8 +20,9 @@ public:
    B() {} ;
    virtual ~B()
       {
-     // Notice that the return is dropped in ROSE (maybe in EDG, since it is a normalization consistant with the standard).
-        return ; 
+     // Notice that the return is dropped in ROSE (maybe in legacy frontend,
+     // since it is a normalization consistant with the standard).
+     return;
       } ;
 } ;
 

@@ -291,7 +291,7 @@ if (isSgNullExpression(expr)) {
 - Add SFINAE support (6-8 hours)
 
 **Estimated Total Effort:** 30-45 hours
-**Expected Outcome:** Full C++ template support matching EDG capabilities
+**Expected Outcome:** Full C++ template support matching legacy frontend capabilities
 
 ## Code Locations
 
@@ -396,7 +396,7 @@ if (p_decl_translation_map.find(decl) != p_decl_translation_map.end()) {
 | P3 | Parameter lists | 1-2 hours | LOW - Cosmetic |
 | P4 | Unparser | 2-4 hours | MEDIUM - Output quality |
 | P5 | Backend compile | 2-4 hours | LOW - Nice to have |
-| P6 | Full templates | 30-45 hours | CRITICAL - EDG parity |
+| P6 | Full templates | 30-45 hours | CRITICAL - legacy frontend parity |
 
 **Quick Wins (P1-P3):** 7-14 hours → 90% improvement
 **Complete Solution (P1-P5):** 11-22 hours → Tests pass cleanly
@@ -467,6 +467,6 @@ As of October 2025, the Clang frontend has made **significant progress**:
 ✅ **Error Handling**: Robust recovery from parse errors
 ⚠️ **Remaining Work**: Header paths and template completion needed
 
-**Current Status**: The Clang frontend is **functional for basic C++ and ready for header path fixes**. With P1-P3 fixes (7-14 hours), tests will pass cleanly. With P6 (additional 30-45 hours), full template support will match EDG capabilities.
+**Current Status**: The Clang frontend is **functional for basic C++ and ready for header path fixes**. With P1-P3 fixes (7-14 hours), tests will pass cleanly. With P6 (additional 30-45 hours), full template support will match legacy frontend capabilities.
 
 **Recommendation**: The frontend is **ready for the next phase of development**. Priority should be given to P1 (header paths) as it will unlock the remaining functionality with minimal effort.

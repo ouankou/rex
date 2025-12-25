@@ -595,8 +595,9 @@ Grammar::setUpSupport ()
      BaseClass.setDataPrototype               ( "SgClassDeclaration*", "base_class", "= NULL",
                                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
 
-  // DQ (6/21/2005): This is used in the EDG/Sage interface when the SgBaseClass constructor is called
-  // modified to be a boolean type instead of unsigned.
+     // DQ (6/21/2005): This is used in the legacy frontend/Sage interface when
+     // the SgBaseClass constructor is called modified to be a boolean type
+     // instead of unsigned.
      BaseClass.setDataPrototype               ( "bool", "isDirectBaseClass", "= false",
                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -984,10 +985,11 @@ Grammar::setUpSupport ()
      IncludeFile.setDataPrototype ( "SgStatement*", "lastStatement", " = NULL",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
-
-  // DQ (9/18/2018): We can likely eliminate this IR node now that we store the include file tree directly
-  // (though this one is computed from the EDG/ROSE translation instead of from the CPP include directives).
-  // DQ (9/15/2018): Adding support for report on header file handling (for unparsing).
+     // DQ (9/18/2018): We can likely eliminate this IR node now that we store
+     // the include file tree directly (though this one is computed from the
+     // legacy frontend/ROSE translation instead of from the CPP include
+     // directives). DQ (9/15/2018): Adding support for report on header file
+     // handling (for unparsing).
      HeaderFileReport.setFunctionPrototype ( "HEADER_HEADER_FILE_REPORT", "../Grammar/Support.code");
 
      HeaderFileReport.setDataPrototype ( "SgSourceFile*", "source_file", " = NULL",
@@ -1076,10 +1078,11 @@ Grammar::setUpSupport ()
   // Liao, 1/30/2014: Support for FAIL-SAFE resilience pragma
      File.setDataPrototype         ( "bool", "failsafe", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (12/11/2007): Adds support for parser to output the parser rules to be called. For Fortran
-  // support in ROSE this corresponds to the "--dump" option in the Open Fortran Parser (OFP).
-  // There is no corresponding action with EDG for the C and C++ support in ROSE, so for C/C++
-  // this option has no effect.
+     // DQ (12/11/2007): Adds support for parser to output the parser rules to
+     // be called. For Fortran support in ROSE this corresponds to the "--dump"
+     // option in the Open Fortran Parser (OFP). There is no corresponding
+     // action with legacy frontend for the C and C++ support in ROSE, so for
+     // C/C++ this option has no effect.
      File.setDataPrototype         ( "bool", "output_parser_actions", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      File.setDataPrototype         ( "bool", "exit_after_parser", "= false",
@@ -1100,8 +1103,10 @@ Grammar::setUpSupport ()
   // File.setDataPrototype         ( "bool", "skip_rose", "= false",
   //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/1/2011): Added support to just run the EDG front-end without translation of the EDG AST to the ROSE AST.
-  // This is helpful in evaluating the EDG frontend within the move to EDG 4.3 and later versions (update for C++ robustness).
+     // DQ (11/1/2011): Added support to just run the legacy frontend front-end
+     // without translation of the legacy frontend AST to the ROSE AST. This is
+     // helpful in evaluating the legacy frontend frontend within the move to
+     // legacy frontend 4.3 and later versions (update for C++ robustness).
 
      File.setDataPrototype         ( "bool", "skip_transformation", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1185,7 +1190,7 @@ Grammar::setUpSupport ()
      File.setDataPrototype("bool","compileOnly", "= false",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/13/2004): Added to support to save Edg command line
+     // DQ (2/13/2004): Added to support saving the frontend command line
      File.setDataPrototype("std::string","savedFrontendCommandLine", "= \"\"",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1379,8 +1384,9 @@ Grammar::setUpSupport ()
      File.setDataPrototype ("bool", "unparse_using_leading_and_trailing_token_mappings", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // Liao (12/15/2016): Unparse template from its AST.
-  // By default, the original string stored by EDG is used to output template AST
+     // Liao (12/15/2016): Unparse template from its AST.
+     // By default, the original string stored by legacy frontend is used to
+     // output template AST
      File.setDataPrototype ("bool", "unparse_template_ast", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1401,12 +1407,13 @@ Grammar::setUpSupport ()
      File.setDataPrototype("bool", "optimization", "= false",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (12/11/2015): Use the token stream to improve source position information.
-  // Some source position information is unavailable in EDG, e.g. the end of most
-  // secondary declarations, for loop initialization statements, etc.  This is part
-  // of a currently experimental mechanism to improve the source positon information
-  // in the AST using local searches of the token stream as a part of the token stream
-  // mapping to the AST (as used in the token-based unparsing).
+     // DQ (12/11/2015): Use the token stream to improve source position
+     // information. Some source position information is unavailable in legacy
+     // frontend, e.g. the end of most secondary declarations, for loop
+     // initialization statements, etc.  This is part of a currently
+     // experimental mechanism to improve the source positon information in the
+     // AST using local searches of the token stream as a part of the token
+     // stream mapping to the AST (as used in the token-based unparsing).
      File.setDataPrototype ("bool", "use_token_stream_to_improve_source_position_info", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1934,7 +1941,8 @@ Grammar::setUpSupport ()
      Project.setDataPrototype("std::string", "unparseHeaderFilesRootFolder", "= \"\"",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/18/2011): Added support for specification of frontend constant folding (only supported in C/C++ using EDG).
+     // DQ (9/18/2011): Added support for specification of frontend constant
+     // folding (only supported in C/C++ using legacy frontend).
      Project.setDataPrototype("bool", "frontendConstantFolding", "= false",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -2103,8 +2111,9 @@ Specifiers that can have only one value (implemented with a protected enum varia
      StorageModifier.setDataPrototype("SgStorageModifier::storage_modifier_enum", "modifier","= SgStorageModifier::e_unknown",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (12/1/2007): Added support for gnu extension "__thread" (will be available in EDG version > 3.3)
-  // But added to support use by Gouchun Shi (UIUC).  Code generation support also added in unparser.
+     // DQ (12/1/2007): Added support for gnu extension "__thread" (will be
+     // available in legacy frontend version > 3.3) But added to support use by
+     // Gouchun Shi (UIUC).  Code generation support also added in unparser.
      StorageModifier.setDataPrototype("bool", "thread_local_storage","= false",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -2191,9 +2200,11 @@ Specifiers that can have only one value (implemented with a protected enum varia
      TypeModifier.setDataPrototype("int", "gnu_attribute_alignment", "= -1",
                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/3/2009): This is used for funtion types only. I reserve values less than zero (-1 implies that
-  // this was not set, default value). Note that the standard might require this to be unsigned, but I
-  // would like to avoid the EDG tick of shifting the value by one to reserve zero to be the default.
+     // DQ (1/3/2009): This is used for funtion types only. I reserve values
+     // less than zero (-1 implies that this was not set, default value). Note
+     // that the standard might require this to be unsigned, but I would like to
+     // avoid the legacy frontend tick of shifting the value by one to reserve
+     // zero to be the default.
      TypeModifier.setDataPrototype("long", "gnu_attribute_sentinel", "= -1",
                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -2359,12 +2370,15 @@ Specifiers that can have only one value (implemented with a protected enum varia
      TemplateArgument.setDataPrototype     ( "SgType*", "type", "= NULL",
                                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/27/2016): Adding an optional (and more suitable reference to a type alias that can be unparsed).
-  // This type was evaluated to no reference internal private types that are marked as private access.  Due
-  // to a normalization by EDG, we can sometimes have teamplate arguments referencing types that would result
-  // in an error with newer compilers (e.g. GNU 6.1) if they were unparsed in the generated code.  This pointer
-  // is available as an alternative type that can be unparsed (used by the unparser, and the name qualification).
-  // This type does not have any priviate access typedefs contained within it.
+     // DQ (11/27/2016): Adding an optional (and more suitable reference to a
+     // type alias that can be unparsed). This type was evaluated to no
+     // reference internal private types that are marked as private access.  Due
+     // to a normalization by legacy frontend, we can sometimes have teamplate
+     // arguments referencing types that would result in an error with newer
+     // compilers (e.g. GNU 6.1) if they were unparsed in the generated code.
+     // This pointer is available as an alternative type that can be unparsed
+     // (used by the unparser, and the name qualification). This type does not
+     // have any priviate access typedefs contained within it.
      TemplateArgument.setDataPrototype     ( "SgType*", "unparsable_type_alias", "= NULL",
                                                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 

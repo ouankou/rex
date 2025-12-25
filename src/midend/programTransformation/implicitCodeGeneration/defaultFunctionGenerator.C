@@ -3035,9 +3035,9 @@ SgClassDefinition *getClassDefinition(SgType *objType)
 #if 0
       ROSE_ASSERT(objClsDefDeclStmt != NULL);
 #else
-      // I have encountered template instantations where the definingDeclaration is null
-      // but the definition is set correctly.  TODO: fix the EDG->SAGE conversion and
-      // maybe add a test to astDiagnostica
+      // I have encountered template instantations where the definingDeclaration
+      // is null but the definition is set correctly.  TODO: fix the legacy
+      // frontend->SAGE conversion and maybe add a test to astDiagnostica
       if (objClsDefDeclStmt == NULL)
          {
            objClsDefDeclStmt = objClsDecl;
@@ -3064,15 +3064,18 @@ SgClassDefinition *getClassDefinition(SgType *objType)
       return objClsDef;
    }
 
-// XXX: This function exists only because some class definitions (mainly template
-// instantiations) are not found during a normal traversal of the AST.  To be
-// replaced with findDefaultFunctionDeclaration when:
-//
-//  - The translator for classes operates on memory pools rather than the AST, or
-//  - EDG->SAGE connection is fixed to attach these instantiations to AST (ideal)
-SgMemberFunctionDeclaration *DefaultFunctionGenerator::findOrGenerateDefaultFunctionDeclaration(
-                defaultEnumFunctionType enumFunctionType, SgClassDefinition* parentClassDef1)
-   {
+   // XXX: This function exists only because some class definitions (mainly
+   // template instantiations) are not found during a normal traversal of the
+   // AST.  To be replaced with findDefaultFunctionDeclaration when:
+   //
+   //  - The translator for classes operates on memory pools rather than the
+   //  AST, or
+   //  - legacy frontend->SAGE connection is fixed to attach these
+   //  instantiations to AST (ideal)
+   SgMemberFunctionDeclaration *
+   DefaultFunctionGenerator::findOrGenerateDefaultFunctionDeclaration(
+       defaultEnumFunctionType enumFunctionType,
+       SgClassDefinition *parentClassDef1) {
      SgMemberFunctionDeclaration *fnDecl = findDefaultFunctionDeclaration(enumFunctionType,
                      parentClassDef1);
      if (fnDecl)

@@ -36,10 +36,10 @@ void callee(ptr_to_array4_of_ptr_to_cint param);
 
 void caller()
 {
-  // EDG accepts with warning, GCC rejects, my understanding
+  // legacy frontend accepts with warning, GCC rejects, my understanding
   // of cppstd is it is not allowed, even though it would be
   // const-safe
-  //ERROR(1): callee((ptr_to_array4_of_ptr_to_int)0);
+  // ERROR(1): callee((ptr_to_array4_of_ptr_to_int)0);
 }
 
 

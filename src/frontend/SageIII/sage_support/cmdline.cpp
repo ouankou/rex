@@ -56,13 +56,15 @@ makeSysIncludeList(const Rose_STL_Container<string>& dirs, Rose_STL_Container<st
     string fullPath = (*i)[0] == '/' ? *i : (includeBase + "/" + *i);
 
 #if 1
-       // DQ (11/8/2011): We want to exclude the /usr/include directory since it will be search automatically by EDG.
-       // If we include it here it will become part of the -sys_include directories and that will cause it to
-       // be searched before the -I<directory> options (which is incorrect).
-          if ( SgProject::get_verbose() > 1 )
-             {
-                printf ("In makeSysIncludeList(): Building commandline: --sys_include %s fullPath = %s \n",(*i).c_str(),fullPath.c_str());
-             }
+    // DQ (11/8/2011): We want to exclude the /usr/include directory since it
+    // will be search automatically by legacy frontend. If we include it here it
+    // will become part of the -sys_include directories and that will cause it
+    // to be searched before the -I<directory> options (which is incorrect).
+    if (SgProject::get_verbose() > 1) {
+      printf("In makeSysIncludeList(): Building commandline: --sys_include %s "
+             "fullPath = %s \n",
+             (*i).c_str(), fullPath.c_str());
+    }
 
           if (*i == "/usr/include")
              {
@@ -308,10 +310,12 @@ CommandlineProcessing::isValidFileWithExecutableFileSuffixes ( string name )
      bool result = false;
   // printf ("In CommandlineProcessing::isOptionTakingFileName(): argument = %s \n",argument.c_str());
 
-  // List any rose options that take source filenames here, so that they can avoid
-  // being confused with the source file name that is to be read by EDG and translated.
+     // List any rose options that take source filenames here, so that they can
+     // avoid being confused with the source file name that is to be read by
+     // legacy frontend and translated.
 
-  // DQ (1/6/2008): Added another test for a rose option that takes a filename
+     // DQ (1/6/2008): Added another test for a rose option that takes a
+     // filename
      if (argument == "-o" ||   // Used to specify output file to compiler
          argument == "-opt" || // Used in loopProcessor
          // DQ (1/13/2009): This option should only have a single leading "-",
@@ -339,7 +343,7 @@ CommandlineProcessing::isValidFileWithExecutableFileSuffixes ( string name )
          argument == "-rose:backendCompileFormat" ||
          argument == "-rose:outputFormat" ||
 #if 0
-       // DQ (1/21/2017): Moved to be an option that has three parameters (rose option, edg option, and edg option's parameter).
+       // DQ (1/21/2017): Moved to be an option that has three parameters (rose option, frontend option, and frontend option's parameter).
 
 #endif
          argument == "-rose:generateSourcePositionCodes" ||
@@ -608,19 +612,23 @@ static void split_string(std::string const & str, T & res, char sep = ',', F & f
 void
 SgProject::processCommandLine(const vector<string>& input_argv)
    {
-  // This functions only copies the command line and extracts information from the
-  // command line which is useful at the SgProject level (other information useful
-  // at the SgFile level is not extracted).
-  // Specifically:
+  // This functions only copies the command line and extracts information from
+  // the command line which is useful at the SgProject level (other information
+  // useful at the SgFile level is not extracted). Specifically:
   //      1) --help is processed (along with -help, to be friendly)
-  //      2) -o <filename> is processed (since both the compilation and the linking
-  //         phases must know the output file name and it makes sense to process that once).
-  //      3) Lists of files and libraries are processed (sense they too are required in
-  //         both compilation and linking).  (e.g. -l<libname>, -L <directory>, <libname>.a,
-  //         <filename>.C, <filename>.c, -I<directory name>, <filename>.h
-  // NOTE: there is no side-effect to argc and argv.  Thus the original ROSE translator can
-  // see all options.  Any ROSE or EDG specific options can be striped by calling the
-  // appropriate functions to strip them out.
+  //      2) -o <filename> is processed (since both the compilation and the
+  //      linking
+  //         phases must know the output file name and it makes sense to process
+  //         that once).
+  //      3) Lists of files and libraries are processed (sense they too are
+  //      required in
+  //         both compilation and linking).  (e.g. -l<libname>, -L <directory>,
+  //         <libname>.a, <filename>.C, <filename>.c, -I<directory name>,
+  //         <filename>.h
+  // NOTE: there is no side-effect to argc and argv.  Thus the original ROSE
+  // translator can see all options.  Any ROSE or legacy frontend specific
+  // options can be striped by calling the appropriate functions to strip them
+  // out.
 
   // This function now makes an internal copy of the command line parameters to
   // allow the originals to remain unmodified (SLA modifies the command line).
@@ -2850,11 +2858,14 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
 #endif
             set_Cxx_only(true);
 #if 1
-         // DQ (12/23/2021): This is where it might be an issue for the C++ initializers in the unit-test application code.
-         // DQ (12/23/2021): Isolating the fixes to try again.
-         // DQ (12/22/2021): If we are suggesting this is using the C++ modes, then we have to treat it as a C++ file.
-         // And so it can't also be a C files (else --c and --c99 options to EDG could be added, which will cause
-         // the EDG error: "Command-line error: language modes specified are incompatible"  So turn C_only mode off.
+            // DQ (12/23/2021): This is where it might be an issue for the C++
+            // initializers in the unit-test application code. DQ (12/23/2021):
+            // Isolating the fixes to try again. DQ (12/22/2021): If we are
+            // suggesting this is using the C++ modes, then we have to treat it
+            // as a C++ file. And so it can't also be a C files (else --c and
+            // --c99 options to legacy frontend could be added, which will cause
+            // the legacy frontend error: "Command-line error: language modes
+            // specified are incompatible"  So turn C_only mode off.
             set_C_only(false);
 
          // DQ (12/22/2021): Set the language standard to avoid it being c99, c++11 is a reasonable default for now.
@@ -3853,9 +3864,10 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
   //
      if ( CommandlineProcessing::isOption(argv,"-","(H)",true) == true )
         {
-       // DQ (1/23/2018): Note, we can call the backend compiler using -H or call edg with -H.
-       // This option will call the backend compiler with -H, if we want to call edg with -H
-       // then we use  as the option to ROSE.
+       // DQ (1/23/2018): Note, we can call the backend compiler using -H or
+       // call the frontend with -H. This option will call the backend compiler
+       // with -H, if we want to call the frontend with -H then we use  as the
+       // option to ROSE.
 #if 0
           printf ("option -H found (just run backend compiler with -H to call CPP) \n");
 #endif
@@ -3895,12 +3907,12 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
         }
 
 #if 1
-  //
-  // We have processed all rose supported command line options.
-  // Anything left in argv now should be a typo or option for either EDG or the C or C++ compiler.
-  //
-     if ( get_verbose() > 1 )
-        {
+        //
+        // We have processed all rose supported command line options.
+        // Anything left in argv now should be a typo or option for either
+        // legacy frontend or the C or C++ compiler.
+        //
+        if (get_verbose() > 1) {
           cout << "The remaining non-rose options will be passed onto either the parser/front-end or the backend (vendor) the compiler: " << endl;
           for (unsigned int i = 1; i < argv.size(); i++)
                   {
@@ -4330,77 +4342,76 @@ SgFile::processBackendSpecificCommandLineOptions ( const vector<string>& argvOri
 
 void
 SgFile::build_CLANG_CommandLine ( vector<string> & inputCommandLine, vector<string> & argv, int fileNameIndex ) {
-    // It filters Rose and Edg specific parameters and fixes the pathes.
+  // It filters ROSE and frontend-specific parameters and fixes the paths.
 
-    std::vector<std::string> inc_dirs_list;
-    std::vector<std::string> define_list;
-    std::vector<std::string> clang_frontend_args;
-    std::vector<std::string> sys_dirs_list;
-    std::string input_file;
+  std::vector<std::string> inc_dirs_list;
+  std::vector<std::string> define_list;
+  std::vector<std::string> clang_frontend_args;
+  std::vector<std::string> sys_dirs_list;
+  std::string input_file;
 
-    for (size_t i = 0; i < argv.size(); i++) {
-        std::string current_arg(argv[i]);
-        if (current_arg.find("-I") == 0) {
-            if (current_arg.length() > 2) {
-                inc_dirs_list.push_back(current_arg.substr(2));
-            }
-            else {
-                i++;
-                if (i < argv.size())
-                    inc_dirs_list.push_back(current_arg);
-                else
-                    break;
-            }
-        } else if (current_arg == "-isystem") {
-          ++i;
-          if (i < argv.size())
-            sys_dirs_list.push_back(argv[i]);
-          else
-            break;
-        } else if (current_arg.rfind("-isystem", 0) == 0) {
-          if (current_arg.size() > 8 && current_arg[8] != '-') {
-            sys_dirs_list.push_back(current_arg.substr(8));
-          }
-        } else if (current_arg.find("-D") == 0) {
-          if (current_arg.length() > 2) {
-            define_list.push_back(current_arg.substr(2));
-          } else {
-            i++;
-            if (i < argv.size())
-              define_list.push_back(argv[i]);
-            else
-              break;
-          }
-        } else if (current_arg == "-std") {
-          ++i;
-          if (i >= argv.size())
-            break;
-        } else if (current_arg.rfind("-std=", 0) == 0) {
-          // Standard selection is handled earlier during command-line
-          // processing.
-        } else if (current_arg.find("-c") == 0) {
-        } else if (current_arg.find("-o") == 0) {
-          if (current_arg.length() == 2) {
-            i++;
-            if (i >= argv.size())
-              break;
-          }
-        } else if (current_arg.find("-rose") == 0) {
-        }
-        // Filter out OpenMP flags - REX captures pragmas as plain text, not via
-        // Clang
-        else if (current_arg == "-fopenmp" ||
-                 current_arg.rfind("-fopenmp=", 0) == 0 ||
-                 current_arg == "-fopenmp-simd") {
-        } else if (current_arg.find("--rex-omp-") == 0) {
-        } else if (current_arg == "-rex:clang:continue-on-error") {
-          clang_frontend_args.push_back(current_arg);
-        } else if (!current_arg.empty() && current_arg[0] == '-') {
-          // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
-        } else {
-          input_file = current_arg;
-        }
+  for (size_t i = 0; i < argv.size(); i++) {
+    std::string current_arg(argv[i]);
+    if (current_arg.find("-I") == 0) {
+      if (current_arg.length() > 2) {
+        inc_dirs_list.push_back(current_arg.substr(2));
+      } else {
+        i++;
+        if (i < argv.size())
+          inc_dirs_list.push_back(current_arg);
+        else
+          break;
+      }
+    } else if (current_arg == "-isystem") {
+      ++i;
+      if (i < argv.size())
+        sys_dirs_list.push_back(argv[i]);
+      else
+        break;
+    } else if (current_arg.rfind("-isystem", 0) == 0) {
+      if (current_arg.size() > 8 && current_arg[8] != '-') {
+        sys_dirs_list.push_back(current_arg.substr(8));
+      }
+    } else if (current_arg.find("-D") == 0) {
+      if (current_arg.length() > 2) {
+        define_list.push_back(current_arg.substr(2));
+      } else {
+        i++;
+        if (i < argv.size())
+          define_list.push_back(argv[i]);
+        else
+          break;
+      }
+    } else if (current_arg == "-std") {
+      ++i;
+      if (i >= argv.size())
+        break;
+    } else if (current_arg.rfind("-std=", 0) == 0) {
+      // Standard selection is handled earlier during command-line
+      // processing.
+    } else if (current_arg.find("-c") == 0) {
+    } else if (current_arg.find("-o") == 0) {
+      if (current_arg.length() == 2) {
+        i++;
+        if (i >= argv.size())
+          break;
+      }
+    } else if (current_arg.find("-rose") == 0) {
     }
+    // Filter out OpenMP flags - REX captures pragmas as plain text, not via
+    // Clang
+    else if (current_arg == "-fopenmp" ||
+             current_arg.rfind("-fopenmp=", 0) == 0 ||
+             current_arg == "-fopenmp-simd") {
+    } else if (current_arg.find("--rex-omp-") == 0) {
+    } else if (current_arg == "-rex:clang:continue-on-error") {
+      clang_frontend_args.push_back(current_arg);
+    } else if (!current_arg.empty() && current_arg[0] == '-') {
+      // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
+    } else {
+      input_file = current_arg;
+    }
+  }
 
     std::vector<std::string>::iterator it_str;
     for (it_str = define_list.begin(); it_str != define_list.end(); it_str++)
@@ -5425,12 +5436,14 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
   // ROSE_ASSERT(false);
 #endif
 
-  // DQ (3/6/2017): Adding support to read the ROSE options data structure to trigger suppression of warnings.
-  // printf ("In build_EDG_CommandLine(): get_output_warnings() = %s \n",get_output_warnings() ? "true" : "false");
+     // DQ (3/6/2017): Adding support to read the ROSE options data structure to
+     // trigger suppression of warnings. printf ("In
+     // build_frontend_command_line(): get_output_warnings() = %s
+     // \n",get_output_warnings() ? "true" : "false");
      if (Rose::global_options.get_backend_warnings())
         {
-       // The EDG default is to output warnings (so we need not do anything to adjust the command line).
-       // set_output_warnings(true);
+       // The legacy frontend default is to output warnings (so we need not do
+       // anything to adjust the command line). set_output_warnings(true);
         }
        else
         {

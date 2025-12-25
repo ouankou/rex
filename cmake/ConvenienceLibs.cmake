@@ -101,29 +101,6 @@ set(dominance_STAT_SRCS
 
 # src/frontend/OpenFortranParser_SAGE_Connection/Makefile.am: roseFortran
 
-# src/frontend/CxxFrontend/Makefile.am: roseEDG
-
-# src/frontend/CxxFrontend/EDG_3.3/edgFrontEndWithoutSage/Makefile.am: edg33WithoutSage
-
-set(edg33WithoutSage_STAT_SRCS
-)
-
-# src/frontend/CxxFrontend/EDG_3.3/src/Makefile.am: edg33
-
-# src/frontend/CxxFrontend/EDG_3.3/util/Makefile.am: edgutil
-
-set(edgutil_STAT_SRCS
-)
-
-# src/frontend/CxxFrontend/EDG_SAGE_Connection/Makefile.am: sage
-
-# src/frontend/CxxFrontend/EDG_SAGE_Connection/Makefile.am: sage
-
-set(sage_STAT_SRCS
-)
-
-# src/frontend/CxxFrontend/EDG_SAGE_Connection/Makefile.am: newsage
-
 # src/3rdPartyLibraries/MSTL/Makefile.am: mstl
 
 # src/util/graphs/Makefile.am: graphs
@@ -131,4 +108,3 @@ set(sage_STAT_SRCS
 # src/util/commandlineProcessing/Makefile.am: RoseCommandlineUtil
 
 # src/util/support/Makefile.am: support
-

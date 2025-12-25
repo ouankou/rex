@@ -98,7 +98,7 @@ process_headers()
 #          ;;
          "c++config.h" )
            # JJW (10/29/2007): In GCC 4.2, the system header files use the visibility
-           # attribute which EDG 3.3 does not support.  A #define can be changed to turn
+           # attribute which legacy frontend 3.3 does not support.  A #define can be changed to turn
            # that feature off, though.  Also, the built-in synchronization functions in
            # new versions of GCC are not yet supported in ROSE, so turn them off too.
            [ -n "$VERBOSE" ] && echo "Processing c++config header file (removing use of visibility attribute) at $targetName"
@@ -225,7 +225,7 @@ if [ "x$language" = "xc" -o "x$language" = "xc++" ]; then
 
        [ -n "$VERBOSE" ] && echo "In create system headers: this is processing C or C++: language = $language"
 
-     # DQ (1/14/2007): To work with Wave we supress the __STDC_HOSTED__ macro
+     # DQ (1/14/2007): Suppress __STDC_HOSTED__ to keep generated headers consistent.
        tmpFile="`mktemp -t roseconfigtempXXXXXXXXXX`"
        "$1" -E -dM -x $language /dev/null | grep -F -v -w -f "$roseHome/config/macro_names_to_remove" > "$tmpFile"
 
@@ -240,7 +240,7 @@ if [ "x$language" = "xc" -o "x$language" = "xc++" ]; then
 	   echo "******************************************************"
        fi
 
-     # DQ (12/13/2016): Added edits specific to Intel defines for floating point values that EDG reports and not in range.
+     # DQ (12/13/2016): Added edits specific to Intel defines for floating point values that legacy frontend reports and not in range.
      # This is thus far not reproducable except on non RZ systems using the Intel v16 compiler. We are editing:
      #    #define __DBL_DENORM_MIN__ 4.9406564584124654e-324 
      # to be:
@@ -423,7 +423,7 @@ else
     # DQ (6/27/2006): Copy a ROSE specific version of cdefs.h to $target_parent_dir/sys so that the "__flexarr" macro
     # can be redefined so that Red Hat 7.3 will not require variable length arrays in definition of "struct __gconv_info
     # __cd;" in "/usr/include/_G_config.h".  This is a common problem since C does not support this (gnu does however as
-    # an extension).  This is a problem for EDG and we fix it this way.
+    # an extension).  This is a problem for legacy frontend and we fix it this way.
     cp "$rose_src_cdefs_h" "$rose_bld_cdefs_h" || exit 1
 fi
 
@@ -443,7 +443,7 @@ fi
 
 # if [ is_C_compiler = "yes" ]
 
-# Pei-Hung (03/08/2021) EDG can handle _Complex_I properly as tested with EDG5.  rose_specific_complex.h is no longer needed.
+# Pei-Hung (03/08/2021) legacy frontend can handle _Complex_I properly as tested with FRONTEND5.  rose_specific_complex.h is no longer needed.
 # if [ "x$language" = "xc" ]
 # then
 #     [ -n "$VERBOSE" ] && echo "We are handling C compiler specific details, so copy the ROSE specific fix for complex.h to $system_headers_directory" >&2

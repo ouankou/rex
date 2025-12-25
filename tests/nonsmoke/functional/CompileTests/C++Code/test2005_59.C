@@ -1,8 +1,8 @@
 // void foo (struct X *ptr);
 
-// enum values; forward enum declarations are not allowed in C or C++ (and not supported in ROSE, though they work in EDG)
-// void foobar ( values v);
-// enum values { a,b,c };
+// enum values; forward enum declarations are not allowed in C or C++ (and not
+// supported in ROSE, though they work in legacy frontend) void foobar ( values
+// v); enum values { a,b,c };
 
 // Here the defining and nodefining declarations should be the same
 // void foo() {};

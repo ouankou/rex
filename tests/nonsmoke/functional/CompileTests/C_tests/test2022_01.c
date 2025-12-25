@@ -1,5 +1,5 @@
 // New test as a variant of test2004_126.c for ClangFE support.
-// This is to show if declared_in_function_prototype in EDG is set. 
+// This is to show if declared_in_function_prototype in legacy frontend is set.
 
 enum x{FALSE, TRUE} ;
 

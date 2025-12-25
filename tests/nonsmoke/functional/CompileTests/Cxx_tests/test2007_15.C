@@ -30,12 +30,12 @@ void foobar()
   // This would be an error if it used global qualification
      typedef C x6_type;
 
-  // Note that if the class specifier "class" or "struct" is used here 
-  // then the class is built in the typedef and it is valid code. In 
-  // this case the "class" keyword is required. Since we can't determine
-  // if the class specifier is required (not set properly in EDG) we
-  // have to always output the class specifier.  This can mark errors
-  // in name qualification.
+     // Note that if the class specifier "class" or "struct" is used here
+     // then the class is built in the typedef and it is valid code. In
+     // this case the "class" keyword is required. Since we can't determine
+     // if the class specifier is required (not set properly in legacy frontend)
+     // we have to always output the class specifier.  This can mark errors in
+     // name qualification.
      typedef class D x7_type;
 
      typedef struct { int x; } y;

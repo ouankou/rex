@@ -4,9 +4,11 @@
 #define DEMO_BUG 1
 
 #if BUG
-// I think this may be incorrect code (non-conforming with respect to the standard) that requires a reference.
-// The reason is that va_copy can't use "args" as a source (second arg) in the copy to the destiniation (first arg).
-// This is enforced in EDG, but not in GNU or Intel (which makes it a difficult case to make).
+// I think this may be incorrect code (non-conforming with respect to the
+// standard) that requires a reference. The reason is that va_copy can't use
+// "args" as a source (second arg) in the copy to the destiniation (first arg).
+// This is enforced in legacy frontend, but not in GNU or Intel (which makes it
+// a difficult case to make).
 #if DEMO_BUG
 void foobar ( std::va_list args)
 #else

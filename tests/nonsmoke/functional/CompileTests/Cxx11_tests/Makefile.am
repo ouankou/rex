@@ -904,10 +904,10 @@ TESTCODE_CURRENTLY_FAILING = \
 # NOTE: Best examples of current issue are: test2019_50.C and test2019_52.C
 
 # NOTE: test2019_34.C, test2019_37.C, and test2019_38.C don't compile with at least some versions of GNU g++ (e.g. version 5.1) but will 
-# compile with EDG and ROSE now.  And the generated code is correct,
+# compile with legacy frontend and ROSE now.  And the generated code is correct,
 # NOTE: test2019_15.C fails for the GNU 4.8.5, but passes for everything else (or at least later versions of gnu, versions 5.1 and later).
 
-# NOTE: test2012_10.C works on with GNU 5.1, but not GNU 6.1 (something different in the header files, not handled by EDG 4.12).
+# NOTE: test2012_10.C works on with GNU 5.1, but not GNU 6.1 (something different in the header files, not handled by legacy frontend 4.12).
 # Priority to fix: test2014_85.C, test2015_11.C, test2016_41.C, test2017_17.C
 
 # NP 4/23/21 Test test2016_40.C fails when given -std=c++14 flag but will pass when given the -std=c++11 flag.
@@ -994,8 +994,8 @@ if USING_CLANG_COMPILER
         rose-1380.C \
         test2012_07.C 
 
-    # DQ (9/19/2020) These are not handled by GNU (using both EDG 5.0 or EDG 6.0), but work with Clang.
-    # Basically, EDG handles the code, but the generated code is only handled by Clang and not GNU.
+    # DQ (9/19/2020) These are not handled by GNU (using both legacy frontend 5.0 or legacy frontend 6.0), but work with Clang.
+    # Basically, legacy frontend handles the code, but the generated code is only handled by Clang and not GNU.
       TESTCODES_REQUIRED_TO_PASS += \
    test2019_247.C \
    test2019_248.C \
@@ -1024,8 +1024,8 @@ if ROSE_USING_GCC_VERSION_LATER_10_1
          test2020_69.C \
          test2020_70.C 
 else
-      # DQ (7/23/2020): These are failing code for EDG 6.0 and GNU 10.1 (debugging this).
-      # DQ (9/19/2020): test2020_69.C and test2020_70.C fail for GNU 10 only (pass for EDG 6 using GNU 6.1)
+      # DQ (7/23/2020): These are failing code for legacy frontend 6.0 and GNU 10.1 (debugging this).
+      # DQ (9/19/2020): test2020_69.C and test2020_70.C fail for GNU 10 only (pass for legacy frontend 6 using GNU 6.1)
       TESTCODES_REQUIRED_TO_PASS += \
          rose-1973.C \
    test2012_07.C \
@@ -1279,15 +1279,15 @@ EXTRA_DIST = $(TESTCODES_REQUIRED_TO_PASS) $(TESTCODE_CURRENTLY_FAILING)
 check-local:
 if USING_GNU_COMPILER
 if ROSE_USING_GCC_VERSION_LATER_4_8
-	@echo "C++11 tests require configuration with either EDG version 4.9 and GNU version 4.8 or backend compiler or EDG 4.12 and 4.8 or any later GNU compiler."
-	@echo "C++11 tests using EDG 4.12 and any supported backend compiler are allowed."
+	@echo "C++11 tests require configuration with either legacy frontend version 4.9 and GNU version 4.8 or backend compiler or legacy frontend 4.12 and 4.8 or any later GNU compiler."
+	@echo "C++11 tests using legacy frontend 4.12 and any supported backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Source_passed)
 endif # ROSE_USING_GCC_VERSION_LATER_4_8
 else
 if USING_CLANG_COMPILER
 # Exclude this list of files in the case of CLANG compiler.
 	@echo "USING_CLANG_COMPILER == true"
-	@echo "C++11 tests not allowed with EDG 4.9: Clang backend compiler using EDG 4.12 or greater frontend."
+	@echo "C++11 tests not allowed with legacy frontend 4.9: Clang backend compiler using legacy frontend 4.12 or greater frontend."
 # DQ (3/22/2020): Builtins are now mostly supported, allowing tests so that we can debug Mac support during COVID-19 work at home.
 # DQ (2/21/2017): Too many failing files due to builtin functions that are missing.
 #	@$(MAKE) $(PASSING_TEST_Objects)
@@ -1297,7 +1297,7 @@ else # NOT USING_CLANG_COMPILER
 if USING_INTEL_COMPILER
 # Exclude this list of files in the case of Intel compiler.
 	@echo "USING_INTEL_COMPILER == true"
-	@echo "C++11 tests using EDG 4.12 Intel backend compiler are allowed."
+	@echo "C++11 tests using legacy frontend 4.12 Intel backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Source_passed)
 else # NOT USING_INTEL_COMPILER
 # This is an unknown compiler.

@@ -55,9 +55,7 @@ typedef enum MLOG_LEVEL{
 //logging subjects, which are one word names
 #define MLOG_INIT		"INIT"
 #define MLOG_MISC		"MISC"
-#define MLOG_DRIVER		"DRIVER"
-#define MLOG_EDG			"EDG"
-#define MLOG_EDG2SAGE		"EDG2SAGE"
+#define MLOG_DRIVER "DRIVER"
 #define MLOG_OFP			"OFP"
 #define MLOG_OFP2SAGE		"OFP2SAGE"
 #define MLOG_OMPPARSER		"OMPPARSER"

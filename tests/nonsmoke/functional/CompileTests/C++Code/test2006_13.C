@@ -24,7 +24,7 @@ test.C", line 12: error: incomplete type is not allowed"
   struct __gconv_step_data __data [];
                            ^
 
-Errors in EDG Processing!
+Errors in legacy frontend Processing!
 /home/saebjornsen1/links/gcc3.3.3: line 4: 11076 Aborted                
 /export/0/tmp.saebjornsen1/BUILDS/ROSE-January-6a/gcc3.3.3/exampleTranslators/documentedExamples/simpleTranslatorExamples/identityTranslator
 -rose:C_only $@

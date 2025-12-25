@@ -14,8 +14,9 @@
 #define __builtin_va_start va_start
 void va_start(__builtin_va_list __builtin__x, void* __builtin__y);
 
-// DQ (4/12/2005): This is a bizzar EDG bug which I have not figured out (except to verify that it is present).
-// Bug: EDG will ignore this declaration following the declaration of 
+// DQ (4/12/2005): This is a bizzar legacy frontend bug which I have not figured
+// out (except to verify that it is present). Bug: legacy frontend will ignore
+// this declaration following the declaration of
 //      either "void __builtin_va_start(__builtin_va_list &, void*);" or
 //      "void va_start(__builtin_va_list &, void*);"
 // int _April_12_2005 = 0;

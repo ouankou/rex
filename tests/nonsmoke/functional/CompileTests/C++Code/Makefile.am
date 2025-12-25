@@ -479,7 +479,7 @@ TEST_Objects = ${TESTCODES:.C=.o}
 # Restrict to level 6 testing for the moment
 # ROSE_FLAGS = -rose:skip_transformation
 
-# Suppress all warnings (in EDG: --no_warnings) (in g++: -w) 
+# Suppress all warnings (in legacy frontend: --no_warnings) (in g++: -w) 
 ROSE_FLAGS =  -w
 
 ROSE_VERBOSE = -rose:verbose 0
@@ -630,7 +630,7 @@ EXTRA_DIST = \
 
 clean-local:
 	rm -f *.o rose_*.C rose_*.c *.sage.C test2001_??.C.show *.dot *.ps \
-              *.C.pdf *.C.edg.pdf *.pdf *.int.C core test2005_56 test2005_172
+              *.C.pdf *.pdf *.int.C core test2005_56 test2005_172
 	rm -rf ti_files *.ti *.et
 
 check-local: $(TRANSLATOR_EXECUTABLE) test2004_19.o test2004_21.o test2005_56.o

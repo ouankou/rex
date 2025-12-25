@@ -9,7 +9,7 @@ static void gen_asm_decl(void)
 }
 
 gives the following error:
-"../../../../ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C", line 6:
+"../../../../ROSE/src/frontend/legacy_frontend/sage_gen_be.C", line 6:
 error:
           argument of type "const char *" is incompatible with parameter of
           type "char *"

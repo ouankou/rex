@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/main.c,v 1.26 2010/04/04 19:39:52 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/main.c,v 1.26 2010/04/04 19:39:52 dmh
+ *Exp $
  *********************************************************************/
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>

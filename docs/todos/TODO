@@ -9,10 +9,10 @@ written assignments and disclaimers.
 June 27, 2008 Clean up the ROSE source tree for the public release
 SciDAC repository: 
   ROSE (core)
-  EDG Binaries
+  legacy frontend Binaries
   Open Fortran Parser jar file
 Local repository:
-  EDG source
+  legacy frontend source
   Testsuite: 
     POP, 
     OMP tests, 
@@ -68,7 +68,7 @@ DONE * Need to build Sage II in such a way that we can better maintain it
        and make it portable.
 
 DONE (see below) * Need a way to display the AST (currently we can print out the AST associated with the sage representation)
-  but we have no mechanism to print out what is in the EDG representation.  This would be helpful.
+  but we have no mechanism to print out what is in the legacy frontend representation.  This would be helpful.
 
 * Need to consider the requirements of the SGI FORTRAN 95 open source front-end.
   I have read the WHIRL Intermediate Language Specification and this appears to be possible.
@@ -128,11 +128,11 @@ DONE (see below) * Need a way to display the AST (currently we can print out the
   and could be folded into the SvPablo (a AST viewer?).
 
   The current mechanism uses PDF Bookmarks to display the hierarchy.  Mechanisms
-  are implemented to display both the EDG and SAGE ASTs.  The implementation is still
+  are implemented to display both the legacy frontend and SAGE ASTs.  The implementation is still
   incomplete and should be filled in by anyone who wants to learn about the ASTs.
-  The EDG AST is traversed by scope instead of by source_sequence_list entry. We
-  really need both since the future connection of EDG to SAGE should likely be done
-  using a source_sequence_list entry traversal of the EDG AST!
+  The legacy frontend AST is traversed by scope instead of by source_sequence_list entry. We
+  really need both since the future connection of legacy frontend to SAGE should likely be done
+  using a source_sequence_list entry traversal of the legacy frontend AST!
 
 * The currently implemented mechanism for handling the use of extern "C" surrounding 
   a #include<filename> directive is limited to one #include directive per 
@@ -153,7 +153,7 @@ DONE (see below) * Need a way to display the AST (currently we can print out the
 * Currently the column position can be fooled by tabs (which are counted as a 
   three columns).  To fix this we should first make a pass (it can be optional)
   over the source code to expand out all tabs (to some user defined value).
-  Then we can process the code through the EDG front-end and get more reliable
+  Then we can process the code through the legacy frontend front-end and get more reliable
   column data for statements and expressions.  This will permit us to do a more
   accurate job in the unparsing. This is not a high priority at the moment.
   I have verified that TABS in ROSE are currently interpreted to be 3 spaces
@@ -172,18 +172,18 @@ DONE (see below) * Need a way to display the AST (currently we can print out the
   visualize the graph (seems to work well for even large graphs in Doxygen).
 
 * Our ROSE unparser writes directly to an output stream. I have noticed that other
-  unparsers used a separate structure with several function pointers (e.g. EDG).  
+  unparsers used a separate structure with several function pointers (e.g. legacy frontend).  
   Is this better than what we do currently?  It might be that we could improve our 
   unparser by putting the output string into the unparser class (then again I think 
   this is exactly what we do).  So maybe there is nothing to improve here?
 
-* DONE: EDG records the location of "{" and "}" associated with statement blocks.
+* DONE: legacy frontend records the location of "{" and "}" associated with statement blocks.
   This could permit a more accurate positioning of comments in the unparsing phase.
   This is not a high priority.
 
 * It appears that the strings used to define template declarations might already be in the
-  EDG AST so we would not require Danny Thorne's modification of EDG to save them explicitly.
-  Need to finish the PDF display of the EDG AST to figure this out.
+  legacy frontend AST so we would not require Danny Thorne's modification of legacy frontend to save them explicitly.
+  Need to finish the PDF display of the legacy frontend AST to figure this out.
 
 * DONE: The implementation of SAGE mixes the use of definitions with declarations in ways
   that makes the code confusing.  For example a SgTypedefDeclaration has a tag TYPEDEF_STMT.
@@ -207,34 +207,18 @@ DONE (see below) * Need a way to display the AST (currently we can print out the
        unparsed C++ code:
             extern void foo (int );
 
-* Erin Parker's try_catch_test.C fails to pass EDG and SAGE II.  The fix to EDG is to 
-  enable the exceptions_enabled in EDG/src/cmd_line.h, and the error is in SAGE II.
+* Erin Parker's try_catch_test.C fails to pass legacy frontend and SAGE II.  The fix to legacy frontend is to 
+  enable the exceptions_enabled in legacy frontend/src/cmd_line.h, and the error is in SAGE II.
   Within the implementation of the SgTryStmt::replace_statement(SgStatement *o, SgStatement *n)
   there is a message:
           printf ("ERROR: STL us not fixed in code -- exiting in SgTryStmt::replace_statement \n");
           abort();
   These STL iterators have to be put into place in about 5 places in the AST Restructuring Tools source.
 
-  I have modified the defaults for EDG so that EDG now accpects exception handling code. Then I modified
+  I have modified the defaults for legacy frontend so that legacy frontend now accpects exception handling code. Then I modified
   the C++ grammar to correctly build the AST.  The remaining problem is that the unparser does not 
   generate the correct code.  This remains as work left to do. dqDevelopmentDirectory/test2001_29.C 
   demonstrates the error.
-
-* DONE Support of multiple invocations of the SgFile
-  EDG has a problem when EDG_MAIN is called more than once.  The problem is that the command line
-  processing fails.  To best fix so far for this problem has been to return from the top of the
-  EDG proc_command_line(int argc, char *argv[]) function when the value of option_descriptions_used
-  is greater than 0 (which seems to indicate that it is part of the second invocation instead of the
-  first (it is initialized to 0 as a static file scope variable).  To change the primary source
-  filename I have modified EDG cmd_line.c to set the primary fine name to a global variable
-  that I have defined above the proc_command_line function in cmd_line.c.  This variable is
-  then set by the code in specification.C. As a result the command line can not be changed
-  after the first invocation, except to change the primary source file.  This seems to be 
-  a good enough fix since we can assume that we only want to change the source file name between 
-  invocations.  However, it does mean that the command line (except for the source file name)
-  is ignored after the first invocation of the SgFile constructor (which is called by the SgProject
-  constructor).
-
 
 * Transformations:
   ** Need to define interfaces for transformations.
@@ -336,7 +320,7 @@ TODO: Retargetable Compiler Support (work by Bobby):
      Bobby added files: compiler-defs.m4, create_system_headers, and dirincludes to the ROSE/config directory
      and modified the ROSE/ROSETTA/Grammar/Support.code file to add an optional compiler name to the 
      SgProject::compileOutput function and modified the construction of the -D list of options handed to 
-     the EDG frontend to take the list from the macros defined in the config.h file.
+     the legacy frontend frontend to take the list from the macros defined in the config.h file.
 
 * KCC currently fails to compile ROSE on both SUN and Linux (this used to work on the SUN so it should be to much work to fix).
   Both platforms have the same problem (an STL problem).  Also, Bobby reports that the configure scripts report the size
@@ -344,9 +328,9 @@ TODO: Retargetable Compiler Support (work by Bobby):
   looked checked.  LATER checks have confirmed that if KCC is used as the C compiler then the AC_SIZEOF_TYPE macro returns zero,
   but if the default C compiler is used then the size of all tyes appear to be correct.  So don't use KCC as the C compiler!
 
-* EDG seems to have a problem being compiled with the g++ compiler on the SUN. The problem is nto that it will not
-  compile (it will), but that the executable built will not run.  Some sort of crash when it starts to use the EDG front-end.
-  Not clear is this is fixable, since we don't want to work on the EDG front-end, so we will see.  Debugging this
+* legacy frontend seems to have a problem being compiled with the g++ compiler on the SUN. The problem is nto that it will not
+  compile (it will), but that the executable built will not run.  Some sort of crash when it starts to use the legacy frontend front-end.
+  Not clear is this is fixable, since we don't want to work on the legacy frontend front-end, so we will see.  Debugging this
   might be a job for purify or Insure.
 
 * Currently the create_system_headers shell script can take an optional parameter to specify the source directory of the target
@@ -356,7 +340,7 @@ TODO: Retargetable Compiler Support (work by Bobby):
 
 * In the compiler-defs.m4 shell script the compiler should have it's possible path stripped off using "compilerName=`basename $1`"
 
-* ROSE/EDG/configure.in calls GET_COMPILER_SPECIFIC_DEFINES and so it sets the -D options and the compiler name, it might be that
+* ROSE/legacy frontend/configure.in calls GET_COMPILER_SPECIFIC_DEFINES and so it sets the -D options and the compiler name, it might be that
   only the compiler name is really needed.
 
 * ROSE/configure.in includes a line "rm -rf '$(CXX_TEMPLATE_REPOSITORY_PATH)'" to remove the template directory that is built
@@ -381,7 +365,7 @@ END of TODO section specific to Retargetable Compiler Support
 
 DONE * Put in the AC macro call to make sure that version 2.52 or higher of autoconf is used
 
-* Change config.h (all four of them) to edg_config.h, sage_config.h, rosetta_config.h, and rose_config.h
+* Change config.h (all four of them) to frontend_config.h, sage_config.h, rosetta_config.h, and rose_config.h
 
 DONE * Call AC_CONFIG_SUBDIR multiple times dependent upon conditionals instead of just once.
 
@@ -515,7 +499,7 @@ SAGE work:
 Types of graphs:
   1) Data Structure Graphs
         * Data structure visualization in support of automated Dump/Restart code generation
-        * Diff of two data structures (useful for EDG updates)
+        * Diff of two data structures (useful for legacy frontend updates)
         * Data Stucture Dependence Graph
                Given two data structures A and B, A is dependent on B iff data
                used from data structure B is used to define data in data structure A.
@@ -726,7 +710,7 @@ Whirl IR elements have a place to map to within SAGE III.  Since there are simil
 to the f90 support in Sage++, these should represent a close to complete set
 of required IR nodes.  And of course as Beata pointd out SAGE now starts to
 come full circle on it's original implementation (but hopefuly more robust
-this time with leaveraging connections to EDG for C and c++ and leveraging a 
+this time with leaveraging connections to legacy frontend for C and c++ and leveraging a 
 connection to Open64 for FORTRAN 90).
 
 
@@ -1075,7 +1059,7 @@ by unparsing the header files with the application code. Talk to Andreas.
 
 
 ********************************************************************************
-* (12/19/2003) Current errors with new version of EDG (v3.3)
+* (12/19/2003) Current errors with new version of legacy frontend (v3.3)
 ********************************************************************************
 
 * empty file with coments loose the comments when unparsed
@@ -1124,25 +1108,7 @@ across copy constructor calls had to be maintained (something like that).
 DONE: Specify where to get DOT (GraphViz) and Doxygen software used in ROSE 
 developers (added where to find MySQL as well).
 
-      Add mechanism to pass command line options to the EDG frontend.
-Something like -edg:<option name> which would be read and passed on to
-the EDG command line as -<option name>.  User should consult EDG documentation
-for current list of EDG options.  Those EDG options that effect the fron-end will
-make a difference, but any options that effect the EDG C++ code generating backend
-will not (since ROSE implements it's own code generating C++ backend; EDG's is 
-not used).
-
-  
-
-
-
-
-
-
-
-
-
-
+ 
 
 
 

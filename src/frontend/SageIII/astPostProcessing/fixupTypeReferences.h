@@ -8,12 +8,11 @@
 // this pos-processing pass fixes up all of these references (which
 // are easy to find by design).  However, it leave the SgModifierType
 // IR nodes in the AST (which is a bit inelegant).  this may be fixed
-// up later to be mroe refined.  Initially this is an effort to test 
+// up later to be mroe refined.  Initially this is an effort to test
 // this solution as a way to get past what appears to be a fundamental
-// problem in the use of the new EDG within ROSE.  There might be 
-// other solutions as well.  Some are elaborated upon in the comments 
-// in edgRose.C in the function convert_type() in case tk_typeref.
-
+// problem in the use of the frontend within ROSE.  There might be
+// other solutions as well.  Some are elaborated upon in the frontend
+// conversion comments.
 
 class FixupTypeReferencesOnMemoryPool
 // : public SgSimpleProcessing

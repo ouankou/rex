@@ -3,7 +3,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/genlib.h,v 1.18 2010/04/04 19:39:48 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/genlib.h,v 1.18 2010/04/04 19:39:48 dmh
+ *Exp $
  *********************************************************************/
 #include <stdlib.h>
 #include <limits.h>

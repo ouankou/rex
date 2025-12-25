@@ -98,12 +98,16 @@ RemoveInitializedNamePtr::evaluateInheritedAttribute (
             // DQ (11/28/2003): Added conditional test so that appies only if the mfdnode->get_definition() != NULL
                if (mfdnode->get_definition() != NULL)
                   {
-                 // DQ (9/24/2004): Make this test also dependent upon (mfdnode->get_definition()->get_parent() != NULL)
-                 // This is part of a attempt to remove the use of parents in the EDG/Sage interface (so that they will 
-                 // only be set in postprocessing (AST Fixup).
-                 // ROSE_ASSERT(mfdnode->get_definition()->get_parent() != NULL);
-                 // if ( mfdnode->get_definition()->get_parent() != node /* cut off in class */
-                 //      && !(mfdnode->get_parent()->variantT() == V_SgGlobal) /* but do not cut off at nodes ref.to by SgGlobal */)
+                 // DQ (9/24/2004): Make this test also dependent upon
+                 // (mfdnode->get_definition()->get_parent() != NULL) This is
+                 // part of a attempt to remove the use of parents in the legacy
+                 // frontend/Sage interface (so that they will only be set in
+                 // postprocessing (AST Fixup).
+                 // ROSE_ASSERT(mfdnode->get_definition()->get_parent() !=
+                 // NULL); if ( mfdnode->get_definition()->get_parent() != node
+                 // /* cut off in class */
+                 //      && !(mfdnode->get_parent()->variantT() == V_SgGlobal)
+                 //      /* but do not cut off at nodes ref.to by SgGlobal */)
 
                  // DQ (9/13/2011): Reported as possible NULL value in static analysis of ROSE code.
                     if (mfdnode->get_definition()->get_parent() != NULL) {
@@ -115,8 +119,10 @@ RemoveInitializedNamePtr::evaluateInheritedAttribute (
                              ROSE_ASSERT(mfdnode->get_definition()->get_parent() == node);
                              ROSE_ASSERT(parentNode->variantT() != V_SgGlobal);
 
-                          // DQ (12/5/2003): This case is now an error and should no longer be required.  The
-                          // fix was made in the EDG/SAGE interface code so to test that fix we make it an error here.
+                             // DQ (12/5/2003): This case is now an error and
+                             // should no longer be required.  The fix was made
+                             // in the legacy frontend/SAGE interface code so to
+                             // test that fix we make it an error here.
                              printf ("In AstFixes.C: Eliminated this fix of the AST (now an error, fix is not required) \n");
                              ROSE_ABORT ();
 
@@ -268,7 +274,7 @@ RemoveInitializedNamePtr::evaluateInheritedAttribute (
              {
                if (!dynamic_cast<SgProject*>(locNode) && !dynamic_cast<SgFile*>(locNode) )
                   {
-                 // only SgProject and SgFile can be root nodes after EDG->SAGE translation
+                 // only SgProject and SgFile can be root nodes after legacy frontend->SAGE translation
                          ROSE_ABORT();
                   }
              }
@@ -364,10 +370,12 @@ RemoveInitializedNamePtr::evaluateInheritedAttribute (
 // void subTemporaryAstFixes(SgNode* node) 
 void removeInitializedNamePtr(SgNode* node) 
    {
-  // DQ (9/12/2004): This function was updateded some time ago to only test for the conditions
-  // that used to be fixed.  An error is now reported if the condition is found and execution 
-  // terminates. The conditions previously fixed here are not fixed in the EDG AST.
-  // Different fixups developed by Markus to correct problems in the EDG/SAGE connection
+  // DQ (9/12/2004): This function was updateded some time ago to only test for
+  // the conditions that used to be fixed.  An error is now reported if the
+  // condition is found and execution terminates. The conditions previously
+  // fixed here are not fixed in the legacy frontend AST. Different fixups
+  // developed by Markus to correct problems in the legacy frontend/SAGE
+  // connection
 
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
      TimingPerformance timer ("SubTemporaryAstFixes:");
@@ -418,7 +426,7 @@ visitWithAstNodePointersList ( SgNode* node, AstNodePointersList l )
              {
             // This is a bug. All SgNewExp* nodes should have a constructor_args list, only some don't.
             // We FIX this bug by allocating an empty list.
-            // This bug should eventually be fixed in the EDG-to-SAGE translation
+            // This bug should eventually be fixed in the legacy frontend-to-SAGE translation
                newexp->set_constructor_args(new SgConstructorInitializer(node->get_startOfConstruct()));
             // NOTE: all data, except startOfConstruct, is null in this dummy object:
             // Constructor: SgConstructorInitializer ( Sg_File_Info* startOfConstruct, SgMemberFunctionDeclaration* declaration = NULL, SgExprListExp* args = NULL, SgClassDeclaration* class_decl = NULL, int need_paren = 0, int need_name = 0, int need_qualifier = 0 ); 

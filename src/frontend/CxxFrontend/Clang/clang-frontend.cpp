@@ -20,17 +20,20 @@ extern bool roseInstallPrefix(std::string&);
 
 int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
- // CLANG FRONTEND FIX: Enable template unparsing from AST
- // The Clang frontend doesn't save template strings like EDG did, so we must
- // unparse templates from the AST instead of from saved strings.
- // This ensures template declarations like "template <class T>" are output correctly.
- sageFile.set_unparse_template_ast(true);
- // Use token-based unparsing for Clang to preserve exact source text.
- sageFile.set_unparse_tokens(true);
+  // CLANG FRONTEND FIX: Enable template unparsing from AST
+  // The Clang frontend doesn't save template strings like the legacy frontend
+  // did, so we must unparse templates from the AST instead of from saved
+  // strings. This ensures template declarations like "template <class T>" are
+  // output correctly.
+  sageFile.set_unparse_template_ast(true);
+  // Use token-based unparsing for Clang to preserve exact source text.
+  sageFile.set_unparse_tokens(true);
 
- // printf ("sageFile.get_clang_il_to_graphviz() = %s \n",sageFile.get_clang_il_to_graphviz() ? "true" : "false");
+  // printf ("sageFile.get_clang_il_to_graphviz() = %s
+  // \n",sageFile.get_clang_il_to_graphviz() ? "true" : "false");
 
- // DQ (11/27/2020): Use the -rose:clang_il_to_graphviz option to comntrol the use of the Clang Dot generator.
+  // DQ (11/27/2020): Use the -rose:clang_il_to_graphviz option to comntrol the
+  // use of the Clang Dot generator.
 #if EXIT_AFTER_BUILDING_DOT_FILE
     if (true)
 #else
@@ -268,7 +271,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     std::string builtin_header_root;
     if (in_install_tree) {
         const std::string include_root = install_prefix + "/include/";
-        compiler_header_root = include_root + "edg/";
+        compiler_header_root = include_root;
         builtin_header_root = include_root + "clang/";
     } else {
         compiler_header_root = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
@@ -1019,7 +1022,7 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
 
           // CFE FIX: If operatorPosition was already created by
           // setSourcePositionToDefault, we need to update it to match the real
-          // source location (like EDG does)
+          // source location (like the legacy frontend does)
           SgExpression* expr = isSgExpression(located_node);
           if (expr != NULL && expr->get_operatorPosition() != NULL)
              {

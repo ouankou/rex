@@ -92,7 +92,8 @@ AttachPreprocessingInfoTreeTrav::~AttachPreprocessingInfoTreeTrav() {
     //do nothing
 }
 
-// DQ (11/30/2008): Refactored this code out of the simpler function to isolate the Wave specific handling.
+// DQ (11/30/2008): Refactored this code out of the simpler function to isolate
+// token stream handling.
 
 // AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav( SgSourceFile* file, bool includeDirectivesAndCommentsFromAllFiles )
 AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav(
@@ -1502,7 +1503,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
             // objects (so that we can test the function: collectPreprocessorDirectivesAndCommentsForAST()).
             // returnListOfAttributes = getPreprocessorDirectives( Sg_File_Info::getFilenameFromID(currentFileNameId) );
 #if 0
-               printf ("Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream:  fileNameForDirectivesAndComments = %s \n",
+               printf ("Calling lex-based mechanism for collecting CPP directives, comments, and token stream:  fileNameForDirectivesAndComments = %s \n",
                     fileNameForDirectivesAndComments.c_str());
 #endif
 
@@ -1510,7 +1511,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
             // CPP directives from this file and only do so later if we discover that we have to unparse this file.
                returnListOfAttributes = getPreprocessorDirectives(fileNameForDirectivesAndComments);
 #if 0
-               printf ("DONE: Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream \n");
+               printf ("DONE: Calling lex-based mechanism for collecting CPP directives, comments, and token stream \n");
 #endif
 #endif
 #if 0
@@ -1524,13 +1525,13 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
                   {
 #if 0
                     printf ("Found returnListOfAttributes == NULL, calling getPreprocessorDirectives() \n");
-                    printf ("Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream \n");
+                    printf ("Calling lex-based mechanism for collecting CPP directives, comments, and token stream \n");
 #endif
 #ifdef ROSE_BUILD_CPP_LANGUAGE_SUPPORT
                     returnListOfAttributes = getPreprocessorDirectives(fileNameForDirectivesAndComments);
 #endif
 #if 0
-                    printf ("DONE: Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream \n");
+                    printf ("DONE: Calling lex-based mechanism for collecting CPP directives, comments, and token stream \n");
 #endif
 #if 0
                     printf ("########################################################### \n");
@@ -3604,7 +3605,6 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
 #if 0
                          printf ("Processing case: V_SgInitializedName \n");
 #endif
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if 0
                          printf ("In AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(): Added new support for preprocessing info to be added after the SgInitializedName. \n");
 #endif

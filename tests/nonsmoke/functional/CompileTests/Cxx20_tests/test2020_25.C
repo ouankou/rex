@@ -7,7 +7,7 @@ void f3() {
                                // is not mutable and x is an lvalue
         decltype(r) r1 = y1;   // r1 has type float& (transformation not considered)
 
-     // DQ (7/21/2020): This appears to be an error in EDG 6.0.
+        // DQ (7/21/2020): This appears to be an error in legacy frontend 6.0.
         decltype((r)) r2 = y2; // r2 has type float const&
     };
 }

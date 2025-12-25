@@ -1,6 +1,6 @@
 // here is a funny one:
 // f1 returns a pointer to a function member f2 which returns an integer
-// EDG doesn't parse it
+// legacy frontend doesn't parse it
 
 class A;
 

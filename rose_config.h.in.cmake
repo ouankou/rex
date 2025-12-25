@@ -261,7 +261,7 @@
 /* Name of backend X10 compiler, including path */
 #define BACKEND_X10_COMPILER_NAME_WITH_PATH "${BACKEND_X10_COMPILER_NAME_WITH_PATH}"
 
-/* REX: EDG-specific consistency tests removed - not applicable to Clang frontend */
+/* REX: legacy frontend-specific consistency tests removed - not applicable to Clang frontend */
 
 /* Include path for backend C++ compiler. */
 #cmakedefine CXX_INCLUDE_STRING @CXX_INCLUDE_STRING@
@@ -472,7 +472,7 @@
 /* Runtime shared library path environment variable (Linux: LD_LIBRARY_PATH). */
 #define ROSE_SHLIBPATH_VAR "${ROSE_SHLIBPATH_VAR}"
 
-/* REX: EDG frontend has been removed - Clang/LLVM is now the only frontend.
+/* REX: legacy frontend frontend has been removed - Clang/LLVM is now the only frontend.
  * This macro is always defined when C/C++ support is enabled for backward compatibility. */
 #cmakedefine ROSE_USE_CLANG_FRONTEND
 
@@ -480,7 +480,7 @@
 //AS Don't know what to do with this
 #undef ROSE_USE_VALGRIND
 
-/* REX: SAGE_TRANSFORM - legacy EDG setting, kept for backwards compatibility */
+/* REX: SAGE_TRANSFORM - legacy legacy frontend setting, kept for backwards compatibility */
 //AS Need configure flag to control this variable
 #define SAGE_TRANSFORM 1
 
@@ -533,7 +533,7 @@
 //AS Don't know what to do with this
 //#undef USE_ROSE_DWARF_SUPPORT
 
-/* REX: EDG Union/Struct debugging support removed - not applicable to Clang frontend */
+/* REX: legacy frontend Union/Struct debugging support removed - not applicable to Clang frontend */
 
 /* Use of GCC OpenMP in ROSE. */
 //AS Don't know what to do with this
@@ -612,7 +612,7 @@
 #define ROSE_OFP_MINOR_VERSION_NUMBER 8
 #define ROSE_OFP_PATCH_VERSION_NUMBER 3
 
-/* REX: EDG version numbers and BINARY_EDG removed - Clang/LLVM is now the only frontend */
+/* REX: legacy frontend version numbers removed - Clang/LLVM is now the only frontend */
 
 /* Defined if we're building using CMake */
 #cmakedefine USE_CMAKE

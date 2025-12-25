@@ -441,7 +441,7 @@ C99_TESTCODES_REQUIRED_TO_PASS = \
      test2006_143.c \
      test2008_01.c
 
-# DQ (10/13/2012): Failing for new EDG 4x work.
+# DQ (10/13/2012): Failing for new legacy frontend 4x work.
 # complex_03.c 
 
 # Configure-time automake conditional

@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/libncdap3/dispatch3.h,v 1.9 2009/11/29 00:16:26 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/dispatch3.h,v 1.9 2009/11/29
+ *00:16:26 dmh Exp $
  *********************************************************************/
 #ifndef DISPATCH_H
 #define DISPATCH_H 1

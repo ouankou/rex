@@ -112,11 +112,10 @@ int main ( int argc, char * argv[] )
         }
 
      SgProject sageProject (argc,argv);
-     int EDG_FrontEndErrorCode = sageProject.get_frontendErrorCode();
-     
-  // Warnings from EDG processing are OK but not errors
-     ROSE_ASSERT (EDG_FrontEndErrorCode <= 3);
+     int frontendErrorCode = sageProject.get_frontendErrorCode();
 
+     // Warnings from legacy frontend processing are OK but not errors
+     ROSE_ASSERT(frontendErrorCode <= 3);
 
      bool succ = TestCopyRepl( sageProject );
      if (succ)
@@ -125,5 +124,4 @@ int main ( int argc, char * argv[] )
          cerr << "failed test \n";
 
      return !succ;
-   }
-
+}

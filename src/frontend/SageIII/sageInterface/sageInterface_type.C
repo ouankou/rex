@@ -1170,7 +1170,7 @@ bool isCopyConstructible(SgType* type)
         result = 'P' + mangleType(isSgPointerType(type)->get_base_type());
       else if (isSgReferenceType(type))  
         result = 'R' + mangleType(isSgPointerType(type)->get_base_type());
-      //rvalue reference is not yet supported in EDG/ROSE/GCC  
+      // rvalue reference is not yet supported in legacy frontend/ROSE/GCC
       else if (isSgTypedefType(type))
         result = mangleType(isSgTypedefType(type)->get_base_type());
       else if (isSgArrayType(type))  

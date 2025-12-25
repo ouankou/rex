@@ -2716,8 +2716,9 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                          break;
                        }
 
-
-                 // DQ (8/13/2013): I think that this case should not appear, since SgTemplateDeclaration is a part of pre-EDG4x work.
+                         // DQ (8/13/2013): I think that this case should not
+                         // appear, since SgTemplateDeclaration is a part of
+                         // older work.
                     case V_SgTemplateDeclaration:
                        {
                          SgTemplateDeclaration* templateDeclaration = isSgTemplateDeclaration(declaration);
@@ -3422,7 +3423,7 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                             }
 
 #if 0
-                      // DQ (8/21/2012): This is better fixed by another method that elimiated a redundant SgBasicBlock that was being generated (in edgRose.C).
+                      // DQ (8/21/2012): This is better fixed by another method that elimiated a redundant SgBasicBlock that was being generated.
                       // DQ (8/20/2012): Check that we have the correct symbol.
                          if (variableSymbol != NULL)
                             {
@@ -6357,7 +6358,7 @@ NameQualificationTraversal::traverseTemplatedFunction(SgFunctionRefExp* function
                MLOG_WARN_C(MLOG_UNPARSER, "Error: function names should not be this long... functionNameString          = \n%s \n",functionNameString.c_str());
 #endif
 #if 0
-            // DQ (2/9/2017): Debugging if this should be failing on GNU 4.9.3 with EDG 4.12 on tests/CompileTests/RoseExample_tests/testRoseHeaders_01.C
+            // DQ (2/9/2017): Debugging if this should be failing on GNU 4.9.3 with legacy frontend 4.12 on tests/CompileTests/RoseExample_tests/testRoseHeaders_01.C
             // This also might be caused by the new support for template arguments which prevents private/protected types from being used where a public alias is available.
                ROSE_ABORT();
 #endif
@@ -6577,7 +6578,7 @@ NameQualificationTraversal::traverseTemplatedClass(SgBaseClass* baseClass, SgNod
                MLOG_WARN_C(MLOG_UNPARSER, "Error: class names should not be this long... classNameString          = \n%s \n",classNameString.c_str());
 #endif
 #if 0
-            // DQ (2/9/2017): Debugging if this should be failing on GNU 4.9.3 with EDG 4.12 on tests/CompileTests/RoseExample_tests/testRoseHeaders_01.C
+            // DQ (2/9/2017): Debugging if this should be failing on GNU 4.9.3 with legacy frontend 4.12 on tests/CompileTests/RoseExample_tests/testRoseHeaders_01.C
             // This also might be caused by the new support for template arguments which prevents private/protected types from being used where a public alias is available.
                ROSE_ABORT();
 #endif
@@ -7655,7 +7656,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
 #if 0
        // DQ (3/5/2012): I think this is OK, since the SgTemplateClassDefinition is derived from the SgClassDefinition,
        // that case below will work well. This example is demonstrated in test2012_10.C.
-       // DQ (11/20/2011): Debugging new use of SgTemplateClassDefinition (only used in new version of EDG 4.x support).
+       // DQ (11/20/2011): Debugging new use of SgTemplateClassDefinition (only used in new version of legacy frontend 4.x support).
           MLOG_WARN_C(MLOG_UNPARSER, "Name qualification of SgTemplateClassDefinition = %p not implemented, OK (no special handling is required, we be processed as a SgClassDefinition) (need and example to debug this case) \n",templateClassDefinition);
 #endif
 
@@ -9715,7 +9716,9 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                               MLOG_WARN_C(MLOG_UNPARSER, "Test for special case of SgInitializedName used in SgCtorInitializerList: functionDeclaration = %p \n",functionDeclaration);
 #endif
-                           // DQ (2/2/2019): This is non-null for all but EDG 5.0, so this is debugging support.
+                              // DQ (2/2/2019): This is non-null for all but
+                              // legacy frontend 5.0, so this is debugging
+                              // support.
                               if (functionDeclaration == NULL)
                                  {
 #if DEBUG_INITIALIZED_NAME
@@ -9724,7 +9727,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                                    MLOG_WARN_C(MLOG_UNPARSER, "############################################################################################################################### \n");
 #endif
 #if 0
-                                // DQ (2/2/2019): Adding debugging code to better understand this case demonstrated for EDG 5.0 on Cxx11_tests/test2019_55.C.
+                                // DQ (2/2/2019): Adding debugging code to better understand this case demonstrated for legacy frontend 5.0 on Cxx11_tests/test2019_55.C.
                                    SgExpression* initialzerExpression = initializedName->get_initptr();
                                    MLOG_WARN_C(MLOG_UNPARSER, "initialzerExpression               = %p = %s \n",initialzerExpression,initialzerExpression->class_name().c_str());
                                    MLOG_WARN_C(MLOG_UNPARSER, "constructorInitializer             = %p = %s \n",constructorInitializer,constructorInitializer->class_name().c_str());
@@ -9749,10 +9752,10 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
 
                                    MLOG_WARN_C(MLOG_UNPARSER, "initializedName->get_name() = %s \n",initializedName->get_name().str());
                                    MLOG_WARN_C(MLOG_UNPARSER, "initializedName->get_name() = %s \n",initializedName->get_name().str());
-                                   MLOG_WARN_C(MLOG_UNPARSER, "functionDeclaration == NULL: (EDG 5.0 issue): constructorInitializer->get_declaration() = %p \n",constructorInitializer->get_declaration());
+                                   MLOG_WARN_C(MLOG_UNPARSER, "functionDeclaration == NULL: (legacy frontend 5.0 issue): constructorInitializer->get_declaration() = %p \n",constructorInitializer->get_declaration());
                                    if (constructorInitializer->get_declaration() != NULL)
                                       {
-                                        MLOG_WARN_C(MLOG_UNPARSER, "functionDeclaration == NULL: (EDG 5.0 issue): constructorInitializer->get_declaration() = %p = %s \n",
+                                        MLOG_WARN_C(MLOG_UNPARSER, "functionDeclaration == NULL: (legacy frontend 5.0 issue): constructorInitializer->get_declaration() = %p = %s \n",
                                              constructorInitializer->get_declaration(),constructorInitializer->get_declaration()->class_name().c_str());
                                       }
                                    initializedName->get_file_info()->display("initializedName");
@@ -9760,7 +9763,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                                  }
                                 else
                                  {
-                                // DQ (2/2/2019): Original code. Works for all but EDG 5.0.
+                                   // DQ (2/2/2019): Original code. Works for
+                                   // all but legacy frontend 5.0.
                                    SgName functionName = functionDeclaration->get_name();
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_INITIALIZED_NAME
@@ -10828,7 +10832,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
           if (currentStatement == NULL)
              {
 #if 0
-               MLOG_WARN_C(MLOG_UNPARSER, "In name qualification: case SgTemplateInstantiationDirectiveStatement: Using backup mechanism to generate current statement (because EDG 4.8 shared template instantiations) \n");
+               MLOG_WARN_C(MLOG_UNPARSER, "In name qualification: case SgTemplateInstantiationDirectiveStatement: Using backup mechanism to generate current statement (because legacy frontend 4.8 shared template instantiations) \n");
 #endif
                currentStatement = templateInstantiationDirectiveStatement;
              }
@@ -12002,8 +12006,9 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
             // SgTemplateInstantiationFunctionDecl IR nodes.  This is required to support test codes such as test2013_188.C.
                SgStatement* currentStatement = SageInterface::getEnclosingStatement(memberFunctionRefExp);
 
-            // DQ (4/15/2019): This fails for EDG 5.0 only, on Cxx_tests/test2004_149.C (as a result of recent work Sunday afternoon).
-            // ASSERT_not_null(currentStatement);
+               // DQ (4/15/2019): This fails for legacy frontend 5.0 only, on
+               // Cxx_tests/test2004_149.C (as a result of recent work Sunday
+               // afternoon). ASSERT_not_null(currentStatement);
                if (currentStatement != NULL)
                   {
                SgScopeStatement* currentScope = currentStatement->get_scope();
@@ -15391,7 +15396,7 @@ NameQualificationTraversal::setNameQualification(SgFunctionRefExp* functionRefEx
                     MLOG_WARN_C(MLOG_UNPARSER, "WARNING: allow global name qualification if required since function is defined outside of the class \n");
 #endif
                  // DQ (11/26/2015): See test2012_59.C for an example of where this is required to be turned off.
-                 // In this case it is associated with a case of multiple defining declarations due to EDG template function normalization.
+                 // In this case it is associated with a case of multiple defining declarations due to legacy frontend template function normalization.
                     outputGlobalQualification = false;
                     qualifier = "";
                   }
@@ -15639,11 +15644,13 @@ NameQualificationTraversal::setNameQualification(SgConstructorInitializer* const
         }
        else
         {
-       // DQ (2/12/2012): Fixing support where the name qualification must be rewritten where it is used in a different context.
-       // this appears to be a common requirement.  This case appears to not have been a problem before but is now with the
-       // new EDG 4.3 support.  This has been added because of the requirements of that support.
+          // DQ (2/12/2012): Fixing support where the name qualification must be
+          // rewritten where it is used in a different context. this appears to
+          // be a common requirement.  This case appears to not have been a
+          // problem before but is now with the new legacy frontend 4.3 support.
+          // This has been added because of the requirements of that support.
 
-       // If it already existes then overwrite the existing information.
+          // If it already existes then overwrite the existing information.
           std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(constructorInitializer);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
@@ -15850,18 +15857,25 @@ NameQualificationTraversal::setNameQualification ( SgFunctionDeclaration* functi
        // Or maybe the problem is that there is some other function parameter lis that we need to consult.
 
        // DQ (9/7/2014): Better:
-       // A better solution would be to make sure that we generate type in the EDG/ROSE translation using the template
-       // function's paramter list associated with the first non-defining declaration (instead of the one being generated
-       // as part of building the defining declaration (which is using the same a_routine_ptr as that used to build the
-       // template instantiation.  As a result we a mixing the types in the defining template declaration with that of the
-       // defining template instantiation (which is always wrong).  So the simple solution is to just use the types from
-       // the non-defining template member or non-member function declaration.  The same should apply to the function
-       // return type.  This is the simplest solution to date.
+       // A better solution would be to make sure that we generate type in the
+       // legacy frontend/ROSE translation using the template function's
+       // paramter list associated with the first non-defining declaration
+       // (instead of the one being generated as part of building the defining
+       // declaration (which is using the same a_routine_ptr as that used to
+       // build the template instantiation.  As a result we a mixing the types
+       // in the defining template declaration with that of the defining
+       // template instantiation (which is always wrong).  So the simple
+       // solution is to just use the types from the non-defining template
+       // member or non-member function declaration.  The same should apply to
+       // the function return type.  This is the simplest solution to date.
 
-       // DQ (9/8/2014): The best solution was to translate the defining non-template function declarations when we saw them
-       // as defining declarations, but only put the non-defining declaration into the class template (to match the normalization
-       // done by EDG) and then attach the defining template declaration ahead of the first associated template instantiation.
-       // This appears to work well and will soon be evaluated for further tests.
+       // DQ (9/8/2014): The best solution was to translate the defining
+       // non-template function declarations when we saw them as defining
+       // declarations, but only put the non-defining declaration into the class
+       // template (to match the normalization done by legacy frontend) and then
+       // attach the defining template declaration ahead of the first associated
+       // template instantiation. This appears to work well and will soon be
+       // evaluated for further tests.
 #if 0
           MLOG_WARN_C(MLOG_UNPARSER, "WARNING: technical problem with function paramter types of template functions (should maybe not be template instantiations) \n");
 #endif
@@ -16388,7 +16402,6 @@ NameQualificationTraversal::setNameQualificationOnType(SgInitializedName* initia
   // if (skipGlobalQualification == true)
   // if (skipGlobalQualification == true && qualifier == "::")
      if (skipGlobalQualification == true && outputNameQualification == false) {
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
           MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::setNameQualification(SgInitializedName* initializedName): skipGlobalQualification has caused global qualification to be ignored \n");
 #endif
@@ -16403,7 +16416,7 @@ NameQualificationTraversal::setNameQualificationOnType(SgInitializedName* initia
           MLOG_WARN_C(MLOG_UNPARSER, "Exiting as a test! \n");
           ROSE_ABORT();
 #endif
-  }
+     }
 
      initializedName->set_global_qualification_required_for_type(outputGlobalQualification);
      initializedName->set_name_qualification_length_for_type(outputNameQualificationLength);
@@ -16467,9 +16480,7 @@ NameQualificationTraversal::setNameQualificationOnName(SgInitializedName* initia
 
   // DQ (8/4/2012): In rare cases we have to eliminate qualification only if it is going to be global qualification.
   // if (skipGlobalQualification == true && qualifier == "::")
-     if (skipGlobalQualification == true)
-        {
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
+     if (skipGlobalQualification == true) {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
           MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::setNameQualificationOnName(SgInitializedName* initializedName): skipGlobalQualification has caused global qualification to be ignored \n");
 #endif
@@ -16484,7 +16495,7 @@ NameQualificationTraversal::setNameQualificationOnName(SgInitializedName* initia
           MLOG_WARN_C(MLOG_UNPARSER, "Exiting as a test! \n");
           ROSE_ABORT();
 #endif
-        }
+     }
 
 #if 0
   // Old version of code
@@ -17662,10 +17673,12 @@ NameQualificationTraversal::setNameQualificationSupport(SgScopeStatement* scope,
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                MLOG_WARN_C(MLOG_UNPARSER, "Before test for __anonymous_ un-named scopes: scope_name = %s \n",scope_name.c_str());
 #endif
-            // DQ (4/6/2013): Test this scope name for that of n un-named scope so that we can avoid name qualification
-            // using an internally generated scope name.
-            // Note that the pointer is from an EDG object (e.g. a_type_ptr), so we can't reproduce it in ROSE.
-            // This might be something to fix if we want to be able to reproduce it.
+               // DQ (4/6/2013): Test this scope name for that of n un-named
+               // scope so that we can avoid name qualification using an
+               // internally generated scope name. Note that the pointer is from
+               // an legacy frontend object (e.g. a_type_ptr), so we can't
+               // reproduce it in ROSE. This might be something to fix if we
+               // want to be able to reproduce it.
                if (scope_name.substr(0,14) == "__anonymous_0x")
                   {
                  // DQ (4/6/2013): Added test (this would be better to added to the AST consistancy tests).
@@ -17983,14 +17996,12 @@ NameQualificationTraversal::setNameQualificationSupport(SgScopeStatement* scope,
 
   // DQ (6/23/2011): Never generate a qualified name from a pointer value.
   // This is a bug in the inlining support where the symbol tables are not setup just right.
-     if (qualifierString.substr(0,2) == "0x")
-        {
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
+     if (qualifierString.substr(0, 2) == "0x") {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
           MLOG_WARN_C(MLOG_UNPARSER, "WARNING: Detected qualified name generated from pointer value 0x..., reset to empty string (inlining does not fixup symbol tables) \n");
 #endif
           qualifierString = "";
-        }
+     }
      ROSE_ASSERT(qualifierString.substr(0,2) != "0x");
 
 #if 0

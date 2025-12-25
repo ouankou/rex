@@ -21,8 +21,8 @@ int main (int argc, char *argv[])
   ROSE_ASSERT (globalScope);
 
   // build a struct without any scope information (no longer supported!)
-  // Bottom up creation of a struct is no longer supported due to latest EDG 4.4 work
-  // Liao 11/27/2012
+  // Bottom up creation of a struct is no longer supported due to latest legacy
+  // frontend 4.4 work Liao 11/27/2012
   SgClassDeclaration * decl2 = buildStructDeclaration("bar",globalScope);
   ROSE_ASSERT (decl2);
 

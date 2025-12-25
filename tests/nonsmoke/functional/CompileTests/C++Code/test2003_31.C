@@ -12,16 +12,16 @@ parse tree between the SgAssignOp and the SgFunctionCallExp.
         I found this in the context of code that uses strcmp()
 as follows:  result = !strcmp(s1,s2);
 
-        I really can't tell if this is an EDG bug or a ROSE
+        I really can't tell if this is an legacy frontend bug or a ROSE
 bug.
 
 thanks
 chadd
 
 DQ: Verified problem
-   For 
+   For
          x = !foo(1);
-   What is generated in the AST is equivalent to:  
+   What is generated in the AST is equivalent to:
          x = !(foo(1) != 0);
    And what is unparsed is:
          x = !(foo(1) != 0);

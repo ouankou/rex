@@ -1,8 +1,8 @@
 #if 0
-This is a problem arising from the fact that ROSE (EDG) and gcc triggers
+This is a problem arising from the fact that ROSE (legacy frontend) and gcc triggers
 the generation of different files. In the following example the
 preprocessing token 'isdef' is defined in the GCC preprocessor and NOT
-DEFINED in the EDG preprocessor. This is no problem when ROSE or GCC
+DEFINED in the legacy frontend preprocessor. This is no problem when ROSE or GCC
 parses it, but when the ROSE GCC backend tries to compile the output from
 ROSE it gives the error specified below because ROSE has expanded an
 macro.

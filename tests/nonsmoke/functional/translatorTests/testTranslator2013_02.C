@@ -1,5 +1,5 @@
-// This test code demonstrates a warning that will not happen in the 
-// construction of the AST from the EDG/ROSE translation.
+// This test code demonstrates a warning that will not happen in the
+// construction of the AST from the legacy frontend/ROSE translation.
 
 // The warning is that the non-defining and defining declaration will 
 // not have the same scope.  This happens because the class "rebind"

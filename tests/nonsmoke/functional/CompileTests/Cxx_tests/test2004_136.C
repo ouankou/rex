@@ -35,5 +35,5 @@ namespace Y
 // Can be defined in the global scope using a fully qualified name
 int Y::X::z = 0;
 
-// Definition for extern variable in class nested in namespace (g++ accepts this, but EDG does not!)
-// int Y::X::a = 0;
+// Definition for extern variable in class nested in namespace (g++ accepts
+// this, but legacy frontend does not!) int Y::X::a = 0;

@@ -18,7 +18,7 @@ template<template<class T, class U> class V> class B
 #if 0
 int main()
    {
-  // DQ: This does not work in EDG, I don't know why!
+  // DQ: This does not work in legacy frontend, I don't know why!
   // cout << typeid(c.i.x).name() << endl;
   // cout << typeid(c.j.x).name() << endl;
    }

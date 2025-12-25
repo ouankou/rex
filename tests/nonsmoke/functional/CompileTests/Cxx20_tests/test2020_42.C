@@ -1,4 +1,4 @@
-// DQ (7/21/2020): This does not appear to be supported in EDG 6.0.
+// DQ (7/21/2020): This does not appear to be supported in legacy frontend 6.0.
 
 // #include<socket.h>
 

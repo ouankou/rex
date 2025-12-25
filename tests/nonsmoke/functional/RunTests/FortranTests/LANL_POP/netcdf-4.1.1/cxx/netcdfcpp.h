@@ -4,7 +4,8 @@
  *
  *   Purpose:   C++ class interface for netCDF
  *
- *   $Header: /upc/share/CVS/netcdf-3/cxx/netcdfcpp.h,v 1.15 2009/03/10 15:20:54 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/cxx/netcdfcpp.h,v 1.15 2009/03/10 15:20:54
+ *russ Exp $
  *********************************************************************/
 
 #ifndef NETCDF_HH

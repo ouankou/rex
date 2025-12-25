@@ -72,4 +72,4 @@ initializedsym_list.h", line 427: error: no
 
 commenting the constructor in initializedsym_list.h out then leads to an
 Assertion failure
-Assertion failed: sym, file /nfs/globus1/tmp/MEI/nPROJ_CC/CCplusplus-top/edg/src/sage_gen_be.C, line 2014
+Assertion failed: sym, file /nfs/globus1/tmp/MEI/nPROJ_CC/CCplusplus-top/legacy_frontend/src/sage_gen_be.C, line 2014

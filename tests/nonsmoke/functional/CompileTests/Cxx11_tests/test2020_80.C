@@ -1,6 +1,7 @@
 // ROSE-2505 (Tristan)
 
-// NOTE: this fails in EDG 5.0, and needs to be tested in EDG 6.0.
+// NOTE: this fails in legacy frontend 5.0, and needs to be tested in legacy
+// frontend 6.0.
 
 template <typename t_type2>
 class Class1 {

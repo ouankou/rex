@@ -16,8 +16,9 @@ struct ABC
 #pragma pragma test 7;
 
 #pragma pragma test 8
-int foo()
-// DQ (10/15/2013): Ignore this pragma (fails for token mapping, put into wrong position by EDG): #pragma pragma test 9
+   int foo()
+   // DQ (10/15/2013): Ignore this pragma (fails for token mapping, put into
+   // wrong position by legacy frontend): #pragma pragma test 9
    {
 #pragma pragma test 10
 #pragma pragma test 11

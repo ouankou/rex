@@ -250,8 +250,8 @@ roseomp_SOURCES = roseomp.C
 roseompacc_SOURCES = roseompacc.C # a relaxed version without consistency checking for fast prototyping
 
 # this flag is used for the long list of CXX test files
-TEST_FLAGS = $(TEST_INCLUDES) -rose:openmp:lowering -g  #-rose:verbose 2 # #-rose:wave 
-ACC_TEST_FLAGS = $(TEST_INCLUDES) -rose:openmp:lowering -g  #-rose:openmp:nodde #-rose:verbose 2 # #-rose:wave 
+TEST_FLAGS = $(TEST_INCLUDES) -rose:openmp:lowering -g  #-rose:verbose 2
+ACC_TEST_FLAGS = $(TEST_INCLUDES) -rose:openmp:lowering -g  #-rose:openmp:nodde #-rose:verbose 2
 
 # We only include test codes required to compile here.
 # Runnable codes are handled separatedly, 
@@ -539,6 +539,5 @@ clean-local:
 EXTRA_DIST = ROSEXOMPReference
 
 CLEANFILES = 
-
 
 

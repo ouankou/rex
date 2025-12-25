@@ -229,8 +229,8 @@ void AstPostProcessing (SgNode* node)
      printf ("saved_functionDeclaration nondefiningDeclaration = %p \n",nondefiningDeclaration);
      printf ("saved_functionDeclaration definingDeclaration    = %p \n",definingDeclaration);
 
-     saved_functionDeclaration->get_startOfConstruct()->display("AstPostProcessing: saved_functionDeclaration source position of the first non-defining declaration that was modified by EDG: START: debug");
-     saved_functionDeclaration->get_endOfConstruct()  ->display("AstPostProcessing: saved_functionDeclaration source position of the first non-defining declaration that was modified by EDG: END: debug");
+     saved_functionDeclaration->get_startOfConstruct()->display("AstPostProcessing: saved_functionDeclaration source position of the first non-defining declaration that was modified by legacy frontend: START: debug");
+     saved_functionDeclaration->get_endOfConstruct()  ->display("AstPostProcessing: saved_functionDeclaration source position of the first non-defining declaration that was modified by legacy frontend: END: debug");
 #endif
 
   // DQ (3/17/2007): Clear the static globalMangledNameMap, likely this is not enough and the mangled name map 
@@ -279,8 +279,9 @@ void postProcessingSupport (SgNode* node)
      bool noPostprocessing =
                              (SageInterface::is_Fortran_language() == true);
 
-  // If this is C or C++ then we are using the new EDG translation and using fewer 
-  // fixups should be required, some are still required.
+     // If this is C or C++ then we are using the new legacy frontend
+     // translation and using fewer fixups should be required, some are still
+     // required.
      if (noPostprocessing == false)
         {
        // Skip memory-pool traversal of nodes that are not reachable from this AST root.
@@ -319,9 +320,11 @@ void postProcessingSupport (SgNode* node)
           TestAstForCyclesInTypedefs::test();
 #endif
 
-       // DQ (5/1/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
-       // Liao 11/21/2012. AstPostProcessing() is called within both Frontend and Midend
-       // so we have to detect the mode first before asserting no transformation generated file info objects
+          // DQ (5/1/2012): After legacy frontend/ROSE translation, there should
+          // be no IR nodes marked as transformations. Liao 11/21/2012.
+          // AstPostProcessing() is called within both Frontend and Midend so we
+          // have to detect the mode first before asserting no transformation
+          // generated file info objects
           if (SageBuilder::SourcePositionClassificationMode != SageBuilder::e_sourcePositionTransformation)
              {
                detectTransformations(node);
@@ -338,7 +341,7 @@ void postProcessingSupport (SgNode* node)
              }
 
 #if 0
-       // DQ (10/27/2015): This has been moved to the EDG/ROSE connection (called before memory management of EDG is done).
+       // DQ (10/27/2015): This has been moved to the legacy frontend/ROSE connection (called before memory management of legacy frontend is done).
        // DQ (8/12/2012): reset all of the type references (to intermediately generated types).
           fixupTypeReferences();
 #endif
@@ -453,9 +456,12 @@ void postProcessingSupport (SgNode* node)
                printf ("Calling fixupAstDeclarationScope() \n");
              }
 
-       // DQ (6/11/2013): This corrects where EDG can set the scope of a friend declaration to be different from the defining declaration.
-       // We need it to be a rule in ROSE that the scope of the declarations are consistant between defining and all non-defining declaration).
-          fixupAstDeclarationScope(node);
+             // DQ (6/11/2013): This corrects where legacy frontend can set the
+             // scope of a friend declaration to be different from the defining
+             // declaration. We need it to be a rule in ROSE that the scope of
+             // the declarations are consistant between defining and all
+             // non-defining declaration).
+             fixupAstDeclarationScope(node);
 
 #if DEBUG_TYPEDEF_CYCLES
           printf ("Calling TestAstForCyclesInTypedefs() \n");
@@ -467,14 +473,14 @@ void postProcessingSupport (SgNode* node)
                printf ("Calling fixupAstSymbolTables() \n");
              }
 
-       // Fixup the symbol tables (in each scope) and the global function type 
-       // symbol table. This is less important for C, but required for C++.
-       // But since the new EDG interface has to handle C and C++ we don't
-       // setup the global function type table there to be uniform.
-          fixupAstSymbolTables(node);
+             // Fixup the symbol tables (in each scope) and the global function
+             // type symbol table. This is less important for C, but required
+             // for C++. But since the new legacy frontend interface has to
+             // handle C and C++ we don't setup the global function type table
+             // there to be uniform.
+             fixupAstSymbolTables(node);
 
-          if (SgProject::get_verbose() > 1)
-             {
+             if (SgProject::get_verbose() > 1) {
                printf ("Calling fixupAstSymbolTablesToSupportAliasedSymbols() \n");
              }
 
@@ -501,13 +507,16 @@ void postProcessingSupport (SgNode* node)
           ROSE_ABORT();
 #endif
 
-       // **********************************************************************
-       // DQ (4/29/2012): Added some of the template fixup support for EDG 4.3 work.
-       // DQ (6/21/2005): This function now only marks the subtrees of all appropriate declarations as compiler generated.
-       // DQ (5/27/2005): mark all template instantiations (which we generate as template specializations) as compiler generated.
-       // This is required to make them pass the unparser and the phase where comments are attached.  Some fixup of filenames
-       // and line numbers might also be required.
-          fixupTemplateInstantiations(node);
+             // **********************************************************************
+             // DQ (4/29/2012): Added some of the template fixup support for
+             // legacy frontend 4.3 work. DQ (6/21/2005): This function now only
+             // marks the subtrees of all appropriate declarations as compiler
+             // generated. DQ (5/27/2005): mark all template instantiations
+             // (which we generate as template specializations) as compiler
+             // generated. This is required to make them pass the unparser and
+             // the phase where comments are attached.  Some fixup of filenames
+             // and line numbers might also be required.
+             fixupTemplateInstantiations(node);
 
 #if 0
        // DQ (4/26/2013): Debugging code.
@@ -532,22 +541,25 @@ void postProcessingSupport (SgNode* node)
                printf ("Calling markTemplateInstantiationsForOutput() \n");
              }
 
-       // DQ (6/21/2005): This function marks template declarations for output by the unparser (it is part of a 
-       // fixed point iteration over the AST to force find all templates that are required (EDG at the moment 
-       // outputs only though template functions that are required, but this function solves the more general 
-       // problem of instantiation of both function and member function templates (and static data, later)).
-          markTemplateInstantiationsForOutput(node);
+             // DQ (6/21/2005): This function marks template declarations for
+             // output by the unparser (it is part of a fixed point iteration
+             // over the AST to force find all templates that are required
+             // (legacy frontend at the moment outputs only though template
+             // functions that are required, but this function solves the more
+             // general problem of instantiation of both function and member
+             // function templates (and static data, later)).
+             markTemplateInstantiationsForOutput(node);
 
-          if (SgProject::get_verbose() > 1)
-             {
+             if (SgProject::get_verbose() > 1) {
                printf ("Calling fixupFriendTemplateDeclarations() \n");
              }
 
        // DQ (10/21/2007): Friend template functions were previously not properly marked which caused their generated template 
        // symbols to be added to the wrong symbol tables.  This is a cause of numerous symbol table problems.
           fixupFriendTemplateDeclarations();
-       // DQ (4/29/2012): End of new template fixup support for EDG 4.3 work.
-       // **********************************************************************
+          // DQ (4/29/2012): End of new template fixup support for legacy
+          // frontend 4.3 work.
+          // **********************************************************************
 
           if (SgProject::get_verbose() > 1)
              {
@@ -693,11 +705,13 @@ void postProcessingSupport (SgNode* node)
                printf ("Calling detectTransformations() \n");
              }
 
-       // DQ (5/2/2012): After EDG/ROSE translation, there should be no IR nodes marked as transformations.
-       // Liao 11/21/2012. AstPostProcessing() is called within both Frontend and Midend
-       // so we have to detect the mode first before asserting no transformation generated file info objects
-          if (SageBuilder::SourcePositionClassificationMode != SageBuilder::e_sourcePositionTransformation)
-             {
+             // DQ (5/2/2012): After legacy frontend/ROSE translation, there
+             // should be no IR nodes marked as transformations. Liao
+             // 11/21/2012. AstPostProcessing() is called within both Frontend
+             // and Midend so we have to detect the mode first before asserting
+             // no transformation generated file info objects
+             if (SageBuilder::SourcePositionClassificationMode !=
+                 SageBuilder::e_sourcePositionTransformation) {
                detectTransformations(node);
              }
 
@@ -860,8 +874,9 @@ void postProcessingSupport (SgNode* node)
        // DQ (4/19/2005): fixup all definingDeclaration and NondefiningDeclaration pointers in SgDeclarationStatement IR nodes
        // fixupDeclarations(node);
 
-       // DQ (5/20/2005): make the non-defining (forward) declarations added by EDG for static template 
-       // specializations added under the "--instantiation local" option match the defining declarations.
+          // DQ (5/20/2005): make the non-defining (forward) declarations added
+          // by legacy frontend for static template specializations added under
+          // the "--instantiation local" option match the defining declarations.
           fixupStorageAccessOfForwardTemplateDeclarations(node);
 
 
@@ -878,10 +893,13 @@ void postProcessingSupport (SgNode* node)
        // be searched for uses of (references to) instantiated template functions and member functions.
           markTemplateSpecializationsForOutput(node);
 
-       // DQ (6/21/2005): This function marks template declarations for output by the unparser (it is part of a 
-       // fixed point iteration over the AST to force find all templates that are required (EDG at the moment 
-       // outputs only though template functions that are required, but this function solves the more general 
-       // problem of instantiation of both function and member function templates (and static data, later)).
+          // DQ (6/21/2005): This function marks template declarations for
+          // output by the unparser (it is part of a fixed point iteration over
+          // the AST to force find all templates that are required (legacy
+          // frontend at the moment outputs only though template functions that
+          // are required, but this function solves the more general problem of
+          // instantiation of both function and member function templates (and
+          // static data, later)).
           markTemplateInstantiationsForOutput(node);
 
        // DQ (3/17/2007): This should be empty
@@ -965,13 +983,16 @@ void postProcessingSupport (SgNode* node)
        // DQ (1/19/2008): This can be called at nearly any point in the ast fixup.
           markLhsValues(node);
 
-       // REX: EDG-specific __PRETTY_FUNCTION__ fixup not needed for Clang
-       // DQ (2/21/2010): EDG had a trick where it replaced "__PRETTY_FUNCTION__" variable
-       // references with variables named after the containing function. This fixup normalized
-       // the names back to "__PRETTY_FUNCTION__" for compatibility with GNU preprocessor output.
-       // Clang handles __PRETTY_FUNCTION__ natively, so this fixup is not needed.
+          // REX: legacy frontend-specific __PRETTY_FUNCTION__ fixup not needed
+          // for Clang DQ (2/21/2010): legacy frontend had a trick where it
+          // replaced "__PRETTY_FUNCTION__" variable references with variables
+          // named after the containing function. This fixup normalized the
+          // names back to "__PRETTY_FUNCTION__" for compatibility with GNU
+          // preprocessor output. Clang handles __PRETTY_FUNCTION__ natively, so
+          // this fixup is not needed.
 
-       // DQ (11/24/2007): Support for Fortran resolution of array vs. function references.
+          // DQ (11/24/2007): Support for Fortran resolution of array vs.
+          // function references.
           if (SageInterface::is_Fortran_language() == true)
              {
             // I think this is not used since I can always figure out if something is an 

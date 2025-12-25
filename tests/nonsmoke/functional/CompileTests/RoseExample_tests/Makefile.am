@@ -147,7 +147,7 @@ test3_O2: $(srcdir)/testRoseHeaders_03.C $(TEST_TRANSLATOR)
 test3_O3: $(srcdir)/testRoseHeaders_03.C $(TEST_TRANSLATOR)
 	../../testTranslator $(ROSE_FLAGS) -O3 -rose:verbose 0 -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/testRoseHeaders_03.C
 
-# This tests compiling: Cxx_Grammar.C: fails "ROSE_ASSERT (kind == iek_statement);" in edgRose.C:20798
+# This tests compiling: Cxx_Grammar.C: fails "ROSE_ASSERT (kind == iek_statement);" in frontend_bridge.C:20798
 test4: $(srcdir)/testRoseHeaders_04.C $(TEST_TRANSLATOR)
 	../../testTranslator $(ROSE_FLAGS) -rose:verbose 0 -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/testRoseHeaders_04.C
 
@@ -176,16 +176,16 @@ buildCompiledFile_6:
 	g++ -E -DUSE_ROSE -D_GLIBCXX__PTHREADS=1 -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/testRoseHeaders_06.C > $(srcdir)/testRoseHeaders_06_combined.C
 
 deltaDebug_3:
-	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_3 /home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test3.C
+	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_3 /home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test3.C
 
 deltaDebug_4:
-	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_4 /home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test4.C
+	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_4 /home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test4.C
 
 deltaDebug_5:
-	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_5 /home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test5.C
+	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_5 /home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test5.C
 
 deltaDebug_6:
-	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_6 /home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test6.C
+	delta -in_place -suffix=.C -test=/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/deltaDebuggingScript_6 /home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/RoseExample_tests/test6.C
 
 HPCRUN    = ~dquinlan/ROSE/HPCToolKit_2/HPCToolkit/hpctoolkit-install/bin/hpcrun
 HPCSTRUCT = ~dquinlan/ROSE/HPCToolKit_2/HPCToolkit/hpctoolkit-install/bin/hpcstruct
@@ -193,7 +193,7 @@ HPCPROF   = ~dquinlan/ROSE/HPCToolKit_2/HPCToolkit/hpctoolkit-install/bin/hpcpro
 
 hpctoolkit-test2: ../../testGraphGeneration
 	ls -l $(HPCRUN)
-	export LD_LIBRARY_PATH=/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-edg4x-rc-nodebug-optimized-enable-assembly-semantics/src:${LD_LIBRARY_PATH}
+	export LD_LIBRARY_PATH=/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-legacy_frontend-rc-nodebug-optimized-enable-assembly-semantics/src:${LD_LIBRARY_PATH}
 	echo ${LD_LIBRARY_PATH}
 	$(HPCRUN) -e REALTIME -o MEASURE_ASSERT ../../.libs/testGraphGeneration $(ROSE_FLAGS) -rose:verbose 2 -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/testRoseHeaders_02.C
 	$(HPCSTRUCT) ../../.libs/testGraphGeneration
@@ -249,22 +249,22 @@ EXTRA_DIST = $(TESTCODES)
 check-local:
 	@echo "Tests of ROSE example translators (compiling ROSE using ROSE)."
 if USING_GNU_COMPILER
-	@echo "ROSE source tests: tests require configuration with either EDG version 4.9 and GNU version 4.8 or backend compiler or EDG 4.12 or any later GNU compiler."
-	@echo "ROSE source tests: tests using EDG 4.12 and any supported backend compiler are allowed."
+	@echo "ROSE source tests: tests require configuration with either legacy frontend version 4.9 and GNU version 4.8 or backend compiler or legacy frontend 4.12 or any later GNU compiler."
+	@echo "ROSE source tests: tests using legacy frontend 4.12 and any supported backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Sources)
 else
 	@echo "USING_GNU_COMPILER == false"
 if USING_CLANG_COMPILER
 # Exclude this list of files in the case of CLANG compiler.
 	@echo "USING_CLANG_COMPILER == true"
-	@echo "ROSE source tests: tests using EDG 4.9: Clang backend compiler using EDG 4.12 frontend (skipping all tests)."
+	@echo "ROSE source tests: tests using legacy frontend 4.9: Clang backend compiler using legacy frontend 4.12 frontend (skipping all tests)."
 #	@$(MAKE) $(PASSING_TEST_Sources)
 else # NOT USING_CLANG_COMPILER
 	@echo "USING_CLANG_COMPILER == false"
 if USING_INTEL_COMPILER
 # Exclude this list of files in the case of Intel compiler.
 	@echo "USING_INTEL_COMPILER == true"
-	@echo "ROSE source tests: tests using EDG 4.12 Intel backend compiler are allowed."
+	@echo "ROSE source tests: tests using legacy frontend 4.12 Intel backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Sources)
 else # NOT USING_INTEL_COMPILER
 # This is an unknown compiler.

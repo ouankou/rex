@@ -5,7 +5,7 @@
 
 ## Executive Summary
 
-Successfully enabled the REX/ROSE Clang frontend to generate C++ code from files using standard library headers (`<array>`, `<numeric>`, `<cmath>`, `<initializer_list>`). This represents a major milestone in REX's transition from the EDG frontend to the experimental Clang/LLVM 20 frontend.
+Successfully enabled the REX/ROSE Clang frontend to generate C++ code from files using standard library headers (`<array>`, `<numeric>`, `<cmath>`, `<initializer_list>`). This represents a major milestone in REX's transition from the legacy frontend frontend to the experimental Clang/LLVM 20 frontend.
 
 **Key Achievement**: Eliminated the `frontend_failed` exception and implemented support for critical C++ template-dependent expression types, enabling code generation for the first time.
 

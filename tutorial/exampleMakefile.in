@@ -53,7 +53,7 @@ all: $(executableFiles)
 # and smaller than linking to static libraries).  Dynamic linking requires the 
 # use of the "-L$(ROSE_LIB_DIR) -Wl,-rpath" syntax if the LD_LIBRARY_PATH is not
 # modified to use ROSE_LIB_DIR.  We provide two example of this; one using only
-# the "-lrose -ledg" libraries, and one using the many separate ROSE libraries.
+# the "-lrose" library, and one using the many separate ROSE libraries.
 $(executableFiles):
 #	g++ -I$(ROSE_INCLUDE_DIR) -o $@ $(ROSE_SOURCE_DIR)/$@.C -L$(ROSE_LIB_DIR) -Wl,-rpath $(ROSE_LIB_DIR) $(ROSE_LIBS)
 #	g++ -I$(ROSE_INCLUDE_DIR) -o $@ $(ROSE_SOURCE_DIR)/$@.C $(ROSE_LIBS)

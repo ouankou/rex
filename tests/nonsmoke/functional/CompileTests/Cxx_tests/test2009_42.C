@@ -64,9 +64,11 @@ void foo()
 // DQ (2/20/2010): This is a error for g++ 4.x compilers (at least g++ 4.2).
 #if (__GNUC__ >= 3)
 #else
-  // In g++ 4.2.x this will force the use of the copy constructor which is private.
-  // However in EDG this is allowed and will use the assignment initializer (a different constructor).
-     for (IntStack::Iter z = (&x) ; !z.end() ; z.next());
+  // In g++ 4.2.x this will force the use of the copy constructor which is
+  // private. However in legacy frontend this is allowed and will use the
+  // assignment initializer (a different constructor).
+  for (IntStack::Iter z = (&x); !z.end(); z.next())
+    ;
 #endif
 
   // return 0;

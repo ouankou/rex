@@ -27,10 +27,10 @@ int main()
     func_long_long(simple_long1);
     */
 
-    //char c3 = l'c';
-    //the following kind is not allowed
-    //neither in gcc nor in EDG
-    //char c3 = l'c';
+    // char c3 = l'c';
+    // the following kind is not allowed
+    // neither in gcc nor in legacy frontend
+    // char c3 = l'c';
 
     printf("Hello\n");
     return 0;

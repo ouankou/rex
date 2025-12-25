@@ -3456,27 +3456,31 @@ SgExpression::cfgIsIndexInteresting(unsigned int idx) const {
 unsigned int
 SgExpression::cfgFindChildIndex(SgNode* n) {
 
-// DQ (10/12/2012): Debugging the CFG with the new EDG 4.x C11/C++11 work.
-   ROSE_ASSERT(this != NULL);
+  // DQ (10/12/2012): Debugging the CFG with the new legacy frontend 4.x
+  // C11/C++11 work.
+  ROSE_ASSERT(this != NULL);
 
-// DQ (10/12/2012): Debugging the CFG with the new EDG 4.x C11/C++11 work.
-   if (isSgBoolValExp(this) != NULL)
-      {
-        SgBoolValExp* value = isSgBoolValExp(this);
-        printf ("value->get_value() = %s \n",value->get_value() ? "true" : "false");
-        ROSE_ASSERT(value->get_originalExpressionTree() == NULL);
+  // DQ (10/12/2012): Debugging the CFG with the new legacy frontend 4.x
+  // C11/C++11 work.
+  if (isSgBoolValExp(this) != NULL) {
+    SgBoolValExp *value = isSgBoolValExp(this);
+    printf("value->get_value() = %s \n", value->get_value() ? "true" : "false");
+    ROSE_ASSERT(value->get_originalExpressionTree() == NULL);
 
-        this->get_startOfConstruct()->display("SgExpression::cfgFindChildIndex() should never have a SgBoolValExp at this point: debug");
+    this->get_startOfConstruct()->display(
+        "SgExpression::cfgFindChildIndex() should never have a SgBoolValExp at "
+        "this point: debug");
 
-        SgNode* parent = this->get_parent();
-        while (parent != NULL)
-           {
-             if (parent->get_file_info() != NULL)
-                  parent->get_file_info()->display("SgExpression::cfgFindChildIndex() parent: should never have a SgBoolValExp at this point: debug");
+    SgNode *parent = this->get_parent();
+    while (parent != NULL) {
+      if (parent->get_file_info() != NULL)
+        parent->get_file_info()->display(
+            "SgExpression::cfgFindChildIndex() parent: should never have a "
+            "SgBoolValExp at this point: debug");
 
-             parent = parent->get_parent();
-           }
-      }
+      parent = parent->get_parent();
+    }
+  }
 
     // Default -- overridden in some cases
     size_t idx = this->get_childIndex(n);

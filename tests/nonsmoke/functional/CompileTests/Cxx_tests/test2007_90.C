@@ -38,12 +38,11 @@ class nsString
 I get the following error:
 
 lt-identityTranslator:
-/home/andreas/REPOSITORY-SRC/ROSE/June-25a-Unsafe/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:27605:
+/home/andreas/REPOSITORY-SRC/ROSE/June-25a-Unsafe/NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:27605:
 SgStatement* sage_gen_statement(a_statement*): Assertion `sageStmt !=
 __null' failed.
 
 */
-
 
 template <class T>
 inline

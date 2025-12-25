@@ -16,6 +16,12 @@ set(rex_test2025_issue148_system_header_dir
 set(ROSE_FLAGS
    -w -rose:verbose 0 )
 
+function(rex_lock_test_for_input test_name input_file)
+  get_filename_component(lock_base ${input_file} NAME_WE)
+  set_tests_properties(${test_name}
+    PROPERTIES RESOURCE_LOCK "rose_output_${lock_base}")
+endfunction()
+
 # This populates the list EXAMPLE_TESTCODES_REQUIRED_TO_PASS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
@@ -30,6 +36,7 @@ if(REX_ENABLE_FAILING_TESTS)
       COMMAND testVirtualCFG ${ROSE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+    rex_lock_test_for_input(testVirtualCFG_CXX_failing_${file_to_test} ${file_to_test})
     set_tests_properties(testVirtualCFG_CXX_failing_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST_FAILING)
   endforeach()
 endif()
@@ -48,6 +55,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_VIRTUAL_CFG})
     COMMAND testVirtualCFG ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+  rex_lock_test_for_input(testVirtualCFG_CXX_${file_to_test} ${file_to_test})
   set_tests_properties(testVirtualCFG_CXX_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
 endforeach()
 

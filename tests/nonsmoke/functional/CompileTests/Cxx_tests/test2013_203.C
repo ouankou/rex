@@ -11,9 +11,10 @@ class DescriptorBuilder
   // Note also that since OptionInterpreter is nested in DescriptorBuilder, any private or protected data
   // is accessible without the requirement of a friend declaration.
 
-  // DQ (6/10/2013): Ths scope of this non-defining declaration is not correct (set incorrectly to the outer scope).
-  // EDG reports the scope of the secondary declaration to be the namespace protobuf!!!
-     friend class OptionInterpreter;
+  // DQ (6/10/2013): Ths scope of this non-defining declaration is not correct
+  // (set incorrectly to the outer scope). legacy frontend reports the scope of
+  // the secondary declaration to be the namespace protobuf!!!
+  friend class OptionInterpreter;
   // friend class protobuf::alt_OptionInterpreter;
   // friend class ::alt_OptionInterpreter;
 

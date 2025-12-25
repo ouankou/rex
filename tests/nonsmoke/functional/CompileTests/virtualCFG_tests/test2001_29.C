@@ -1,5 +1,5 @@
-// This code by Erin Parker demonstrates a bug in EDG and SAGE II.
-// In EDG the exception handling in not turned on.
+// This code by Erin Parker demonstrates a bug in legacy frontend and SAGE II.
+// In legacy frontend the exception handling in not turned on.
 // And in SAGE II there is some STL code that is not implemented
 // (part of the move to using STL in SAGE).  It should be a simple fix.
 

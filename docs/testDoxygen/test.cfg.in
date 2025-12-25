@@ -364,18 +364,6 @@ WARN_LOGFILE           =
 # directories like "/usr/src/myproject". Separate the files or directories 
 # with spaces.
 
-# OLD_INPUT                  = @top_srcdir@/src/frontend/EDG/EDG_3.3 \
-#                         @top_srcdir@ \
-#                         @top_pwd@ \
-#                         @top_srcdir@/src/midend/astProcessing \
-#                         @top_srcdir@/src/midend/astQuery \
-#                         @top_srcdir@/src \
-#                         @top_srcdir@/src/backend/unparser \
-#                         @top_srcdir@/src/util \
-#                         @top_srcdir@/docs \
-#                         @DOXYGEN_ADDED_DIRECTORY_1@ \
-#                         @DOXYGEN_ADDED_DIRECTORY_2@
-
 INPUT                  = @srcdir@ \
                          @top_srcdir@ \
                          @top_pwd@ \

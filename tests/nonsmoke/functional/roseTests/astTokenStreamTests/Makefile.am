@@ -9,14 +9,6 @@ AM_LDFLAGS = $(ROSE_RPATHS)
 
 
 #------------------------------------------------------------------------------------------------------------------------
-# Scope matching
-bin_PROGRAMS += testScopeMatching
-testScopeMatching_SOURCES = testScopeMatching.C  
-testScopeMatching_LDADD = $(ROSE_LIBS)
-
-# NOTE: testScopeMatching was apparently never tested.
-
-#------------------------------------------------------------------------------------------------------------------------
 # Linearization
 bin_PROGRAMS += testLinearization
 testLinearization_SOURCES = testLinearization.C  
@@ -327,13 +319,6 @@ TESTCODES_REQUIRED_TO_PASS = \
      test2010_11.c \
      test2010_14.c \
      constants.c
-
-# if ROSE_USE_EDG_VERSION_5_0 && !ROSE_USE_EDG_VERSION_6_0
-# if ROSE_USE_EDG_VERSION_5_0
-# TESTCODES_REQUIRED_TO_PASS += \
-#      test2012_15.c \
-#      test2012_16.c 
-# endif
 
 print_list:
 	@echo "Output value of TESTCODES_REQUIRED_TO_PASS: "

@@ -412,7 +412,7 @@ if(enable-smaller-generated-files)
   get_target_property(META_EXE_LOC CxxGrammarMetaProgram LOCATION) 
 
   # define a custom command to call the code generator and generate source/header files
-  # Generate the edg-sage connection using ROSETTA
+  # Generate the Sage III grammar using ROSETTA
   add_custom_command(
     OUTPUT ${libgeneratedIR_SRC}
     # depend on the code generator and input files

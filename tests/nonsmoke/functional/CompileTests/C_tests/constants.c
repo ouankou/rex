@@ -21,10 +21,10 @@ void foo()
      a_complex_value = 1.0 * an_i;
      a_complex_value = 0.0 + 1.0 * _Complex_I;
 
-  // EDG does not recognize the "i" suffix.
-  // const double _Complex a_complex_value = 3.0f + 4.0fi;
+     // legacy frontend does not recognize the "i" suffix.
+     // const double _Complex a_complex_value = 3.0f + 4.0fi;
 
-  // Note that FP_NAN and FP_INFINITE are C99 specific
+     // Note that FP_NAN and FP_INFINITE are C99 specific
 
 #ifdef __GNUC__
 // TOO (2/14/11): thrifty compiler (gcc 3.4.4) does not

@@ -70,15 +70,15 @@ if ROSE_WITH_LIBHARU
 endif
 
 # Phase 0 tests code:
-# This is a test of the EDG and OFP parser support. No significant part of ROSE is generated.
+# This is a test of the legacy frontend and OFP parser support. No significant part of ROSE is generated.
 # A bit of the infrastructure of ROSE is tested that sets up work to build the ROSE AST, etc.
 # This test only works with C/C++ and Fortran.  Not clear what it means for the binary,
 # which has its own options for skipping different phases.
 testParser_SOURCES = testParser.C
 
-# This test code just calls the EDG frontend and then compiles the
+# This test code just calls the legacy frontend frontend and then compiles the
 # original source file using the backend specified to ROSE.  This is
-# useful in evaluating the newer EDG frontend against test codes.
+# useful in evaluating the newer legacy frontend frontend against test codes.
 testFrontEnd_SOURCES = testFrontEnd.C
 
 # Phase 1 tests code:

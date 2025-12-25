@@ -10,6 +10,7 @@ void foo()
 
      typedef int* intPointer;
 
-  // DQ (10/16/2016): Failes in EDG 4.11 (wrong number of operands).
+     // DQ (10/16/2016): Failes in legacy frontend 4.11 (wrong number of
+     // operands).
      iptr.intPointer::~intPointer();
    }

@@ -4,7 +4,8 @@
  *
  *   Purpose:	implementation of classes of typed arrays for netCDF
  *
- *   $Header: /upc/share/CVS/netcdf-3/cxx/ncvalues.cpp,v 1.12 2008/03/05 16:45:32 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/cxx/ncvalues.cpp,v 1.12 2008/03/05 16:45:32
+ *russ Exp $
  *********************************************************************/
 
 #include <config.h>

@@ -17,9 +17,10 @@ void pt_accept_cont()
 I get the following output:
 
 lt-identityTranslator:
-/home/andreas/REPOSITORY-SRC/ROSE/June-29a-Unsafe/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:17166:
+/home/andreas/REPOSITORY-SRC/ROSE/June-29a-Unsafe/NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:17166:
 SgExprListExp* sage_gen_argument_list(an_expr_node*, a_type*, int,
-DataRequiredForComputationOfSourcePostionInformation&): Assertion theArg == __null failed. 
+DataRequiredForComputationOfSourcePostionInformation&): Assertion theArg ==
+__null failed.
 */
 
 typedef union {

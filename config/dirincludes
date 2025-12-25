@@ -26,8 +26,8 @@ else
      do
        if [ -d "$fName" ]
        then
-         #AS(2/21/07) Changed dirincludes so that edg sees them as
-         #system includes and not normal includes. This is important for
+        #AS(2/21/07) Changed dirincludes so the frontend sees them as
+        #system includes and not normal includes. This is important for
          #correct include order (system include directories should be
          #processed after all other directories) and for the handling
          #of the -nostdinc++ and -nostdinc options.

@@ -73,14 +73,16 @@ Function::Function(SgFunctionDefinition* sample)
 
 Function::Function(SgFunctionCallExp* funcCall)
 {
-    // EDG3 removes all SgPointerDerefExp nodes from an expression like this:
-    //    void f() { (****f)(); }
-    // but EDG4 leaves them in the AST.  Therefore we need to handle the case when the thing ultimately pointed to by the
-    // SgPointerDerefExp nodes is a SgFunctionRefExp. The SgFunctionCallExp::getAssociatedFunctionSymbol() will take care of
-    // this case and some others. [Robb Matzke 2012-12-28]
-    SgFunctionSymbol *fsym = funcCall->getAssociatedFunctionSymbol();
-    assert(fsym!=NULL);
-    init(fsym->get_declaration());
+  // Some frontends remove all SgPointerDerefExp nodes from an expression like
+  // this:
+  //    void f() { (****f)(); }
+  // but others leave them in the AST.  Therefore we need to handle the case
+  // when the thing ultimately pointed to by the SgPointerDerefExp nodes is a
+  // SgFunctionRefExp. The SgFunctionCallExp::getAssociatedFunctionSymbol() will
+  // take care of this case and some others. [Robb Matzke 2012-12-28]
+  SgFunctionSymbol *fsym = funcCall->getAssociatedFunctionSymbol();
+  assert(fsym != NULL);
+  init(fsym->get_declaration());
 }
 
 void Function::init(SgFunctionDeclaration* sample)
@@ -415,10 +417,11 @@ TraverseCallGraph::TraverseCallGraph(SgIncidenceDirectedGraph* graph)
                 ROSE_ASSERT(isSgFunctionDeclaration(n));
                 assert(!isSgTemplateFunctionDeclaration(n));
                 CGFunction func(isSgFunctionDeclaration(n), graph);
-                
-                // Skip functions that are compiler generated. Beware that under edg4x, an instantiated function template or
-                // member function template is compiler generated even when the template from whence it came is not compiler
-                // generated.
+
+                // Skip functions that are compiler generated. Beware that under
+                // some frontends, an instantiated function template or member
+                // function template is compiler generated even when the
+                // template from whence it came is not compiler generated.
                 if (!n->get_file_info()->isCompilerGenerated()) {
                     functions.insert(func);
                 } else if (isSgTemplateInstantiationFunctionDecl(n)) {

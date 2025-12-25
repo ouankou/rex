@@ -7,19 +7,15 @@ class DEF
           T foo ();
    };
 
-// This template will generate a mapping from an EDG IR node in both the defining and non-defining template maps.
-// this is because it is first entered into the non-defining map when the prototype is processed and then entered
-// into defining map when "T DEF<T>::foo()" is processed.
+   // This template will generate a mapping from an legacy frontend IR node in
+   // both the defining and non-defining template maps. this is because it is
+   // first entered into the non-defining map when the prototype is processed
+   // and then entered into defining map when "T DEF<T>::foo()" is processed.
 
-template<class T>
-T DEF<T>::foo ()
-   { 
-     return xyz;
-   }
+   template <class T> T DEF<T>::foo() { return xyz; }
 
 #if 1
-int main()
-   {
+   int main() {
      DEF<int> object2;
   // object2.xyz = 8;
   // object2.xyz = object2.foo();

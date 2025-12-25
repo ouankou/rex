@@ -7,7 +7,7 @@
 # endif
 #endif
 
-// Note that EDG will ignore the __fallthrough__ attribute 
+// Note that legacy frontend will ignore the __fallthrough__ attribute
 // (and it has not useful semantic meaning either).
 int u8_uctomb_aux (int *s, int uc, int n) {
   int count;

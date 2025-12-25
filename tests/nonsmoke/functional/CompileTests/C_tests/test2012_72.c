@@ -1,7 +1,9 @@
-// # 1 "/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/C_tests/test2012_71.c"
+// # 1
+// "/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/C_tests/test2012_71.c"
 // # 1 "<built-in>"
 // # 1 "<command-line>"
-// # 1 "/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/C_tests/test2012_71.c"
+// # 1
+// "/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/C_tests/test2012_71.c"
 // # 1 "/usr/include/sys/wait.h" 1 3 4
 // # 27 "/usr/include/sys/wait.h" 3 4
 // # 1 "/usr/include/features.h" 1 3 4
@@ -13,8 +15,6 @@
 // # 330 "/usr/include/features.h" 2 3 4
 // # 352 "/usr/include/features.h" 3 4
 // # 1 "/usr/include/gnu/stubs.h" 1 3 4
-
-
 
 // # 1 "/usr/include/bits/wordsize.h" 1 3 4
 // # 5 "/usr/include/gnu/stubs.h" 2 3 4
@@ -1208,10 +1208,9 @@ struct rusage;
 extern __pid_t wait4 (__pid_t __pid, __WAIT_STATUS __stat_loc, int __options,
         struct rusage *__usage) __attribute__ ((__nothrow__));
 
-
-
-
-// # 2 "/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/C_tests/test2012_71.c" 2
+// # 2
+// "/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/C_tests/test2012_71.c"
+// 2
 
 static void
 child_cleanup(int signo __attribute__((unused)))

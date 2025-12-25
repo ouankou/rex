@@ -24,7 +24,7 @@ BoolAttribute *>(BoolAttribute *, BoolAttribute *, BoolAttribute *,
 __false_type);
                            ^
 
-Errors in EDG Processing!
+Errors in legacy frontend Processing!
 /home/saebjornsen1/links/rose-rose-compile/g++3.3.3: line 4: 31082 Aborted
 
 Andreas

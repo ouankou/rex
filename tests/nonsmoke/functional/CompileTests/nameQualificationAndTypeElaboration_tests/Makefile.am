@@ -81,7 +81,7 @@ PERFORMANCE_REPORT_OPTION = -rose:compilationPerformanceFile $(top_builddir)/Cxx
 
 #ROSE_FLAGS = -rose:verbose 2  
 #ROSE_FLAGS = -rose:verbose 2   $(PERFORMANCE_REPORT_OPTION)
-# Suppress all warnings (in EDG: --no_warnings) (in g++: -w)
+# Suppress all warnings (in legacy frontend: --no_warnings) (in g++: -w)
 ROSE_FLAGS =  -w -rose:verbose 0 $(PERFORMANCE_REPORT_OPTION)
 
 ## Include the path to A++ and the transformation specification

@@ -7,9 +7,9 @@ using namespace std;
 
 FixupTypeReferencesOnMemoryPool::~FixupTypeReferencesOnMemoryPool() {}
 
-// REX: Clang frontend doesn't require type reference fixup like EDG did
-// This was originally a workaround for EDG type reference issues
-// For now, keeping as no-op for compatibility
+// REX: Clang frontend doesn't require type reference fixup like legacy frontend
+// did This was originally a workaround for legacy frontend type reference
+// issues For now, keeping as no-op for compatibility
 void FixupTypeReferencesOnMemoryPool::visit(SgNode* node) {
     (void)node;  // Suppress unused parameter warning
 }

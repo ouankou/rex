@@ -19,11 +19,6 @@ if AXXPXX_SPECIFIC_TESTS
 else
 	@echo "Automake conditional AXXPXX_SPECIFIC_TESTS: NOT defined"
 endif
-if BINARY_EDG_TARBALL_ENABLED
-	@echo "Automake conditional BINARY_EDG_TARBALL_ENABLED: DEFINED"
-else
-	@echo "Automake conditional BINARY_EDG_TARBALL_ENABLED: NOT defined"
-endif
 if CONVENIENCE_LTDL
 	@echo "Automake conditional CONVENIENCE_LTDL: DEFINED"
 else
@@ -138,11 +133,6 @@ if ROSE_BUILD_TUTORIAL_DIRECTORY_SUPPORT
 	@echo "Automake conditional ROSE_BUILD_TUTORIAL_DIRECTORY_SUPPORT: DEFINED"
 else
 	@echo "Automake conditional ROSE_BUILD_TUTORIAL_DIRECTORY_SUPPORT: NOT defined"
-endif
-if ROSE_HAS_EDG_SOURCE
-	@echo "Automake conditional ROSE_HAS_EDG_SOURCE: DEFINED"
-else
-	@echo "Automake conditional ROSE_HAS_EDG_SOURCE: NOT defined"
 endif
 if ROSE_MPI
 	@echo "Automake conditional ROSE_MPI: DEFINED"

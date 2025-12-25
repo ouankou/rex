@@ -70,7 +70,7 @@ void lookup_named_symbols (SgGlobal* globalScope, const SgName & name)
         }
 
 #if 0
-  // DQ (8/21/2013): This function does not make since any more because the latest branch of ROSE (EDG4x) redesigns the template handling).
+  // DQ (8/21/2013): This function does not make since any more because the latest branch of ROSE (FRONTEND4x) redesigns the template handling).
      SgTemplateSymbol* templateSymbol = globalScope->lookup_template_symbol(name);
      while (templateSymbol != NULL)
         {
@@ -174,7 +174,7 @@ lookup_all_symbols(SgGlobal* globalScope)
         }
 
 #if 0
-  // DQ (8/21/2013): This function does not make since any more because the latest branch of ROSE (EDG4x) redesigns the template handling).
+  // DQ (8/21/2013): This function does not make since any more because the latest branch of ROSE (FRONTEND4x) redesigns the template handling).
      SgTemplateSymbol* templateSymbol = globalScope->first_template_symbol();
      while (templateSymbol != NULL)
         {

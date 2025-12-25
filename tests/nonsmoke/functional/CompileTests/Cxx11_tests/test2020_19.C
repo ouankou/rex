@@ -25,8 +25,8 @@ void foobar()
                i0;
                break;
           case A::enum1:
-            // GNU requires an expression here, but EDG does not.
-               break;
+            // GNU requires an expression here, but legacy frontend does not.
+            break;
         }
 
      switch (i1)
@@ -35,8 +35,8 @@ void foobar()
                i1;
                break;
           case A::enum0:
-            // GNU requires an expression here, but EDG does not.
-               break;
+            // GNU requires an expression here, but legacy frontend does not.
+            break;
         }
 
      switch (i0)
@@ -45,8 +45,8 @@ void foobar()
                i0;
                break;
           case foo(1):
-            // GNU requires an expression here, but EDG does not.
-               break;
+            // GNU requires an expression here, but legacy frontend does not.
+            break;
         }
 
      switch (i1)
@@ -55,8 +55,8 @@ void foobar()
                i1;
                break;
           case foo(0):
-            // GNU requires an expression here, but EDG does not.
-               break;
+            // GNU requires an expression here, but legacy frontend does not.
+            break;
         }
    }
 

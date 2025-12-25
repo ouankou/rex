@@ -15,9 +15,10 @@ class _Rb_tree
        // typedef int     iterator_rb_tree;
 
      public:
-       // This is the first point at which the "pair<iterator_rb_tree, bool >" type is built, so it is reused from here within EDG.
+       // This is the first point at which the "pair<iterator_rb_tree, bool >"
+       // type is built, so it is reused from here within legacy frontend.
        // pair<iterator_rb_tree, bool > _M_insert_unique();
-          pair<iterator_rb_tree > _M_insert_unique();
+       pair<iterator_rb_tree> _M_insert_unique();
    };
 
 template <typename _Key>
@@ -38,8 +39,9 @@ class map
 void foobar() 
    {
   // Error unparses as:
-  // pair< _Rb_tree< map< int > ::key_type > ::iterator_rb_tree  , bool  > insert_result;
-  // Note that EDG is the source of the normalization: through the typedef for "iterator_map".
-  // pair<map<int>::iterator_map, bool > insert_result; 
-     pair<map<int>::iterator_map > insert_result; 
+  // pair< _Rb_tree< map< int > ::key_type > ::iterator_rb_tree  , bool  >
+  // insert_result; Note that legacy frontend is the source of the
+  // normalization: through the typedef for "iterator_map".
+  // pair<map<int>::iterator_map, bool > insert_result;
+  pair<map<int>::iterator_map> insert_result;
    }

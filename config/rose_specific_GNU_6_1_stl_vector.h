@@ -453,10 +453,11 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
           _Alloc_traits::_S_propagate_on_move_assign()
           || _Alloc_traits::_S_always_equal();
 
-     /* EDG 4.12 has an internal error on this line of this header file.
-        _M_move_assign(std::move(__x), __bool_constant<__move_storage>()); */
+        /* legacy frontend 4.12 has an internal error on this line of this
+           header file. _M_move_assign(std::move(__x),
+           __bool_constant<__move_storage>()); */
 
-	return *this;
+        return *this;
       }
 
       /**

@@ -378,8 +378,9 @@ ResetParentPointers::resetParentPointersInType (SgType* typeNode, SgNode* previo
                     if (classDefinition->get_parent() == NULL) {
 // DQ (11/28/2009): fatal error C1017: invalid integer constant expression
 #if PRINT_SIDE_EFFECT_WARNINGS || DEBUG_PARENT_INITIALIZATION
-        printf("Note: It would be better to set the parent of the class "
-               "definition in the EDG/Sage connection (I think) \n");
+        printf(
+            "Note: It would be better to set the parent of the class "
+            "definition in the legacy frontend/Sage connection (I think) \n");
 #endif
                          if (classDeclaration->get_definingDeclaration() != NULL)
                               classDefinition->set_parent(classDeclaration->get_definingDeclaration());
@@ -609,7 +610,9 @@ ResetParentPointers::resetParentPointersInTemplateArgumentList ( const SgTemplat
                                  }
                                 else
                                  {
-                                   printf ("WARNING: In new EDG 4.x support I want to allow some paraents to be NULL. \n");
+                                   printf("WARNING: In new legacy frontend 4.x "
+                                          "support I want to allow some "
+                                          "paraents to be NULL. \n");
                                  }
                             }
 
@@ -1080,9 +1083,11 @@ ResetParentPointers::evaluateInheritedAttribute (
                   {
                  // DQ (10/21/2004): This is relaxed to allow setting of parent pointers from manually constructed code!
 #if STRICT_ERROR_CHECKING
-                 // Only SgProject and SgFile can be root nodes after EDG->SAGE translation
-                    printf ("Warning: only SgProject and SgFile can be root nodes after EDG->SAGE translation \n");
-                    ROSE_ABORT();
+                 // Only SgProject and SgFile can be root nodes after legacy
+                 // frontend->SAGE translation
+                 printf("Warning: only SgProject and SgFile can be root nodes "
+                        "after legacy frontend->SAGE translation \n");
+                 ROSE_ABORT();
 #endif
                   }
              }
@@ -1135,12 +1140,13 @@ ResetParentPointers::evaluateInheritedAttribute (
                     SgDeclarationStatement* templateDeclaration = templateInstantiation->get_templateDeclaration();
                     if (templateDeclaration == NULL) {
                     }
-                 // DQ (5/3/2012): commented out for the new EDG 4.3 support.
-                 // ROSE_ASSERT(templateDeclaration != NULL);
+                    // DQ (5/3/2012): commented out for the new legacy
+                    // frontend 4.3 support. ROSE_ASSERT(templateDeclaration !=
+                    // NULL);
 
 #if 0
                  // DQ (8/18/2005): There is too much variablity in how this is set,
-                 // it is better to have it be set in the EDG/Sage III translation!
+                 // it is better to have it be set in the legacy frontend/Sage III translation!
                     printf ("##### AST Fixup: Calling resetParentPointersInDeclaration for templateDeclaration = %p = %s using parent = %p = %s \n",
                          templateDeclaration,templateDeclaration->class_name().c_str(),
                          inheritedAttribute.parentNode,inheritedAttribute.parentNode->class_name().c_str());
@@ -2431,7 +2437,10 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                            // Make the parent the same for both the defining and nondefining declarations
                               if (nondefiningDeclaration->get_parent() == NULL)
                                  {
-                                // This happens in the case where a member function is used before it is declared (a case where the parent was not set in the EDG/SageIII translation).
+                                // This happens in the case where a member
+                                // function is used before it is declared (a
+                                // case where the parent was not set in the
+                                // legacy frontend/SageIII translation).
 #if PRINT_DEVELOPER_WARNINGS
                                    printf ("Setting the nondefiningDeclaration->get_parent() == NULL using definingDeclaration->get_parent() = %p \n",definingDeclaration->get_parent());
 #endif

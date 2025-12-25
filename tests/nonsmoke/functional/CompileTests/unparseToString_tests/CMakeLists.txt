@@ -17,6 +17,12 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
 set(CXX_TESTCODES_TO_UNPARSE ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM CXX_TESTCODES_TO_UNPARSE ${TESTCODE_CURRENTLY_FAILING})
 
+function(rex_lock_test_for_input test_name input_file)
+  get_filename_component(lock_base ${input_file} NAME_WE)
+  set_tests_properties(${test_name}
+    PROPERTIES RESOURCE_LOCK "rose_output_${lock_base}")
+endfunction()
+
 if(REX_ENABLE_FAILING_TESTS)
   foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
     add_test(
@@ -27,6 +33,9 @@ if(REX_ENABLE_FAILING_TESTS)
       NAME ua_failing_${file_to_test}
       COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
               -c ${TESTCODE_DIR}/${file_to_test})
+
+    rex_lock_test_for_input(ut_failing_${file_to_test} ${file_to_test})
+    rex_lock_test_for_input(ua_failing_${file_to_test} ${file_to_test})
 
     set_tests_properties(ua_failing_${file_to_test}
       PROPERTIES DEPENDS ut_failing_${file_to_test} 
@@ -52,6 +61,9 @@ foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
     NAME ua_${file_to_test}
     COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES} ${extra_frontend_flags}
             -c ${TESTCODE_DIR}/${file_to_test})
+
+  rex_lock_test_for_input(ut_${file_to_test} ${file_to_test})
+  rex_lock_test_for_input(ua_${file_to_test} ${file_to_test})
 
   set_tests_properties(ua_${file_to_test}
     PROPERTIES DEPENDS ut_${file_to_test} 

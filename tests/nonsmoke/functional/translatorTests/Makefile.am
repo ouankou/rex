@@ -206,7 +206,7 @@ check-cxx:
 endif
 
 # DQ (3/3/2017): Note that this directory of tests are only run for C/C++ langauge support is enabled.
-# Liao, 1/13/2014, these two tests are not tested by EDG 3 based ROSE, comment out for now
+# Liao, 1/13/2014, these two tests are not tested by legacy frontend 3 based ROSE, comment out for now
 #	parameter.o 
 #	protected.o
 if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
@@ -218,15 +218,15 @@ endif
 check-local:
 if USING_GNU_COMPILER
 if ROSE_USING_GCC_VERSION_LATER_4_8
-	@echo "Translator tests require configuration with either EDG version 4.9 and GNU version 4.8 or backend compiler or EDG 4.12 and 4.8 or any later GNU compiler."
-	@echo "Translator tests using EDG 4.12 and any supported backend compiler are allowed."
+	@echo "Translator tests require configuration with either legacy frontend version 4.9 and GNU version 4.8 or backend compiler or legacy frontend 4.12 and 4.8 or any later GNU compiler."
+	@echo "Translator tests using legacy frontend 4.12 and any supported backend compiler are allowed."
 	@$(MAKE) check-cxx check-fortran
 endif # ROSE_USING_GCC_VERSION_LATER_4_8
 else
 if USING_CLANG_COMPILER
 # Exclude this list of files in the case of CLANG compiler.
 	@echo "USING_CLANG_COMPILER == true"
-	@echo "Translator tests using EDG 4.9: Clang backend compiler using EDG 4.12 frontend."
+	@echo "Translator tests using legacy frontend 4.9: Clang backend compiler using legacy frontend 4.12 frontend."
 	@$(MAKE) check-cxx check-fortran
 # DQ (2/28/2017): Skip these files with Clang for now and come back to them later (when we understand the limits of portability better).
 #	@$(MAKE) $(PASSING_TEST_Objects)
@@ -235,7 +235,7 @@ else # NOT USING_CLANG_COMPILER
 if USING_INTEL_COMPILER
 # Exclude this list of files in the case of Intel compiler.
 	@echo "USING_INTEL_COMPILER == true"
-	@echo "Translator tests using EDG 4.12 Intel backend compiler are allowed."
+	@echo "Translator tests using legacy frontend 4.12 Intel backend compiler are allowed."
 	@$(MAKE) check-cxx check-fortran
 else # NOT USING_INTEL_COMPILER
 # This is an unknown compiler.

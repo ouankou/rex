@@ -240,9 +240,11 @@ SageInterface::DeclarationSets::addDeclaration(SgDeclarationStatement* decl)
                     // SgTemplateInstantiationFunctionDecl IR nodes.
                     bool ignore_error = (isSgFunctionParameterList(decl) != NULL);
 
-                 // DQ (4/17/2014): This is required for the EDG version 4.8 and I don't know why.
-                 // Currently the priority is to pass our existing tests.
-                 // An idea is that this is sharing introduced as a result of the use of default parameters.
+                    // DQ (4/17/2014): This is required for the legacy frontend
+                    // version 4.8 and I don't know why. Currently the priority
+                    // is to pass our existing tests. An idea is that this is
+                    // sharing introduced as a result of the use of default
+                    // parameters.
 
 // DQ (2/5/2015): Comment out this constraint to make this a more general test
 // to try out a new solution for the GNU 4.8.1 compiler. This works well! #if
@@ -327,8 +329,10 @@ SageInterface::DeclarationSets::addDeclaration(SgDeclarationStatement* decl)
                          firstNondefiningDeclaration->get_file_info()->display("declarationMap.find(firstNondefiningDeclaration) != declarationMap.end(): firstNondefiningDeclaration: debug");
                          decl->get_file_info()->display("declarationMap.find(firstNondefiningDeclaration) != declarationMap.end(): decl: debug");
 #endif
-                      // DQ (2/5/2015): This is a problem for EDG 4.9 code using the GNU 4.8.1 compiler
-                      // and maybe related to C++11 support (commented out assertion as a test).
+                         // DQ (2/5/2015): This is a problem for legacy
+                         // frontend 4.9 code using the GNU 4.8.1 compiler and
+                         // maybe related to C++11 support (commented out
+                         // assertion as a test).
 #if 0
                          printf ("In SageInterface::DeclarationSets::addDeclaration(): Can not ignore this error \n");
                          ROSE_ABORT();
@@ -3373,11 +3377,12 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
 void
 SageInterface::outputGlobalFunctionTypeSymbolTable()
    {
-  // DQ (6/27/2005): This function outputs the global table of function type symbols
-  // it is built during the EDG/Sage translation phase, and it built initially with
-  // the EDG names of all instantiated templates.  At a later phase (incomplete at
-  // the moment) the AST fixup rebuilds the table to use the modified template names
-  // (that is mangled names built from the modified template names used in Sage III).
+  // DQ (6/27/2005): This function outputs the global table of function type
+  // symbols it is built during the legacy frontend/Sage translation phase, and
+  // it built initially with the legacy frontend names of all instantiated
+  // templates.  At a later phase (incomplete at the moment) the AST fixup
+  // rebuilds the table to use the modified template names (that is mangled
+  // names built from the modified template names used in Sage III).
 
   // DQ (1/31/2006): Modified to build all types in the memory pools
   // extern SgFunctionTypeTable Sgfunc_type_table;
@@ -5709,8 +5714,9 @@ SageInterface::addMangledNameToCache( SgNode* astNode, const std::string & oldMa
   // DQ (3/27/2012): Use this as a mechanism to limit the I/O but still output a warning infrequently.
      static unsigned long counter = 0;
 
-  // DQ (3/27/2012): Use this as a mechanism to limit the I/O but still output a warning infrequently.
-  // This supports debugging the new EDG 4.x interface...
+     // DQ (3/27/2012): Use this as a mechanism to limit the I/O but still
+     // output a warning infrequently. This supports debugging the new legacy
+     // frontend 4.x interface...
      if (counter++ % 500 == 0)
         {
           printf ("WARNING: In SageInterface::addMangledNameToCache(): Using longer forms of mangled names (can cause some function names with embedded special characters to fail; test2004_141.C) \n");
@@ -6816,12 +6822,13 @@ SageInterface::setSourcePositionToDefault( T* node )
    {
   // This is a templated function because SgPragma is not yet derived from SgLocatedNode.
 
-  // DQ (2/17/2013): This function is called a lot, so it might be a performance issue.
-  // All IR nodes built by the Build Interface are assighed source position information
-  // using this function and then reset afterward as we use information within EDG to
-  // reset the source position information.  Ideally, the EDG/ROSE connection would
-  // use NULL pointers as the behavior for the front-end mode.  We can move to that
-  // later to maek the source position handling more efficient.
+  // DQ (2/17/2013): This function is called a lot, so it might be a performance
+  // issue. All IR nodes built by the Build Interface are assighed source
+  // position information using this function and then reset afterward as we use
+  // information within legacy frontend to reset the source position
+  // information.  Ideally, the legacy frontend/ROSE connection would use NULL
+  // pointers as the behavior for the front-end mode.  We can move to that later
+  // to maek the source position handling more efficient.
 
   // DQ (1/24/2009): It might be that this function is only called from the Fortran support.
 
@@ -6887,26 +6894,30 @@ SageInterface::setSourcePositionToDefault( T* node )
           ROSE_ASSERT(node->get_endOfConstruct() != NULL && node->get_startOfConstruct() != NULL);
         }
 
-  // DQ (11/2/2012): This is an important fix to support the new EDG 4.x branch.
-  // Note that because the unparser will use the function isFromAnotherFile() in the unparsing
-  // of expressions, specifically: SgAggregateInitializer, SgCompoundInitializer, and anything
-  // in their expression lists (which could be any expression).   The isFromAnotherFile() will
-  // use the get_file_info() function on the SgExpression IR nodes and the data from that
-  // Sg_File_Info object to determine if that expression subtree should be unparsed.  This
-  // expression level granularity of unparsing capability is extremely useful in handling
-  // now #includes and other CPP directives are woven back into the AST.  But since the
-  // get_file_info() function is used, and it returns the value of get_operatorPosition(),
-  // it is critically important to have correct data in the SgExpression::p_operatorPosition
-  // Sg_File_Info object (it counts more that the startOfConstruct and endOfConstruct
-  // Sg_File_Info objects in controlling what expressions are unparsed.  So we have to set these
-  // up for all expressions (since any SgExpression could appear in the list contained in
-  // a SgAggregateInitializer or SgCompoundInitializer.
+        // DQ (11/2/2012): This is an important fix to support the new legacy
+        // frontend 4.x branch. Note that because the unparser will use the
+        // function isFromAnotherFile() in the unparsing of expressions,
+        // specifically: SgAggregateInitializer, SgCompoundInitializer, and
+        // anything in their expression lists (which could be any expression).
+        // The isFromAnotherFile() will use the get_file_info() function on the
+        // SgExpression IR nodes and the data from that Sg_File_Info object to
+        // determine if that expression subtree should be unparsed.  This
+        // expression level granularity of unparsing capability is extremely
+        // useful in handling now #includes and other CPP directives are woven
+        // back into the AST.  But since the get_file_info() function is used,
+        // and it returns the value of get_operatorPosition(), it is critically
+        // important to have correct data in the
+        // SgExpression::p_operatorPosition Sg_File_Info object (it counts more
+        // that the startOfConstruct and endOfConstruct Sg_File_Info objects in
+        // controlling what expressions are unparsed.  So we have to set these
+        // up for all expressions (since any SgExpression could appear in the
+        // list contained in a SgAggregateInitializer or SgCompoundInitializer.
 
-  // DQ (11/2/2012): Set the operator source position information to default values.
-  // This will trigger it to be reset to valid source position information in the front-end.
-     SgExpression* expression = isSgExpression(node);
-     if (expression != NULL)
-        {
+        // DQ (11/2/2012): Set the operator source position information to
+        // default values. This will trigger it to be reset to valid source
+        // position information in the front-end.
+        SgExpression *expression = isSgExpression(node);
+        if (expression != NULL) {
 #if 0
           SgBinaryOp* binaryOp = isSgBinaryOp(expression);
           if (binaryOp != NULL)
@@ -7177,8 +7188,9 @@ SageInterface::setSourcePosition(SgNode* node)
   // Check the mode and build the correct type of source code position.
      SourcePositionClassification scp = getSourcePositionClassificationMode();
 
-  // DQ (2/17/2013): Note that the SourcePositionClassification will be e_sourcePositionFrontendConstruction
-  // during construction of the AST from the EDG frontend.
+     // DQ (2/17/2013): Note that the SourcePositionClassification will be
+     // e_sourcePositionFrontendConstruction during construction of the AST from
+     // the legacy frontend frontend.
 
 #if 0
      printf ("In SageInterface::setSourcePosition(): SourcePositionClassification scp = %s \n",display(scp).c_str());
@@ -7231,8 +7243,9 @@ SageInterface::setSourcePosition(SgNode* node)
 
           case e_sourcePositionNullPointers:         // Set pointers to Sg_File_Info objects to NULL.
              {
-            // DQ (2/17/2013): We want to move to this mode as the one used for EDG/ROSE connection so that we can
-            // avoid building and rebuilding source position information.
+            // DQ (2/17/2013): We want to move to this mode as the one used for
+            // legacy frontend/ROSE connection so that we can avoid building and
+            // rebuilding source position information.
 #if 0
                printf ("e_sourcePositionNullPointers in SageInterface::setSourcePosition() \n");
 #endif
@@ -7242,12 +7255,15 @@ SageInterface::setSourcePosition(SgNode* node)
 
           case e_sourcePositionFrontendConstruction: // Specify as source position to be filled in as part of AST construction in the front-end.
              {
-            // DQ (2/17/2013): The setSourcePositionToDefault() function is called a lot, so it might be a performance issue.
-            // All IR nodes built by the Build Interface are assighed source position information
-            // using this function and then reset afterward as we use information within EDG to
-            // reset the source position information.  Ideally, the EDG/ROSE connection would
-            // use NULL pointers as the behavior for the front-end mode.  We can move to that
-            // later to make the source position handling more efficient.
+            // DQ (2/17/2013): The setSourcePositionToDefault() function is
+            // called a lot, so it might be a performance issue. All IR nodes
+            // built by the Build Interface are assighed source position
+            // information using this function and then reset afterward as we
+            // use information within legacy frontend to reset the source
+            // position information.  Ideally, the legacy frontend/ROSE
+            // connection would use NULL pointers as the behavior for the
+            // front-end mode.  We can move to that later to make the source
+            // position handling more efficient.
 
             // This function builds an empty Sg_File_Info entry (valid object but filled with default values; must be reset in front-end processing).
 #if 0
@@ -14850,9 +14866,10 @@ void SageInterface::fixStructDeclaration(SgClassDeclaration* structDecl, SgScope
   // SgClassSymbol* mysymbol = scope->lookup_class_symbol(name);
      SgClassSymbol* mysymbol = isSgClassSymbol(nondefdecl->get_symbol_from_symbol_table());
 
-  // DQ (3/14/2014): This is false for a copy of a class declaration being inserted into the AST.
-  // DQ (9/4/2012): I want to assert this for the new EDG/ROSE connection code (at least).
-  // ROSE_ASSERT(mysymbol != NULL);
+     // DQ (3/14/2014): This is false for a copy of a class declaration being
+     // inserted into the AST. DQ (9/4/2012): I want to assert this for the new
+     // legacy frontend/ROSE connection code (at least). ROSE_ASSERT(mysymbol !=
+     // NULL);
 
      if (mysymbol == NULL)
         {
@@ -14891,24 +14908,26 @@ void SageInterface::fixStructDeclaration(SgClassDeclaration* structDecl, SgScope
              }
         }
 
-  // DQ (9/4/2012): I want to assert this for the new EDG/ROSE connection code (at least).
-     ROSE_ASSERT(nondefdecl->get_type() != NULL);
+        // DQ (9/4/2012): I want to assert this for the new legacy frontend/ROSE
+        // connection code (at least).
+        ROSE_ASSERT(nondefdecl->get_type() != NULL);
 
-  // DQ (9/4/2012): This is a sign that the pointer to the type was deleted.
-     ROSE_ASSERT(nondefdecl->get_type()->variantT() != V_SgNode);
+        // DQ (9/4/2012): This is a sign that the pointer to the type was
+        // deleted.
+        ROSE_ASSERT(nondefdecl->get_type()->variantT() != V_SgNode);
 
-  // DQ (9/4/2012): This should be a SgClassType IR node.
-     ROSE_ASSERT(isSgClassType(nondefdecl->get_type()) != NULL);
+        // DQ (9/4/2012): This should be a SgClassType IR node.
+        ROSE_ASSERT(isSgClassType(nondefdecl->get_type()) != NULL);
 
-  // fixup SgClassType, which is associated with the first non-defining declaration only
-  // and the other declarations share it.
-     if (nondefdecl->get_type() == NULL)
-        {
+        // fixup SgClassType, which is associated with the first non-defining
+        // declaration only and the other declarations share it.
+        if (nondefdecl->get_type() == NULL) {
           nondefdecl->set_type(SgClassType::createType(nondefdecl));
         }
      ROSE_ASSERT (nondefdecl->get_type() != NULL);
 
-  // DQ (9/4/2012): If defDecl != NULL, I want to assert this for the new EDG/ROSE connection code (at least).
+     // DQ (9/4/2012): If defDecl != NULL, I want to assert this for the new
+     // legacy frontend/ROSE connection code (at least).
      if (defdecl != NULL)
         {
        // DQ (9/4/2012): This is a sign that the pointer to the type was deleted.
@@ -14921,24 +14940,35 @@ void SageInterface::fixStructDeclaration(SgClassDeclaration* structDecl, SgScope
   // ROSE_ASSERT(defdecl != NULL);
      if (defdecl != NULL)
         {
-       // DQ (9/4/2012): If defDecl != NULL, I want to assert this for the new EDG/ROSE connection code (at least).
-          ROSE_ASSERT(defdecl->get_type() != NULL);
-          if (defdecl->get_type() != nondefdecl->get_type())
-             {
-               printf ("ERROR: defdecl->get_type() != nondefdecl->get_type(): what are these: \n");
-               printf ("   defdecl->get_type()    = %p = %s \n",defdecl   ->get_type(),defdecl   ->get_type()->class_name().c_str());
-               SgNamedType* namedType_definingDecl = isSgNamedType(defdecl->get_type());
-               if (namedType_definingDecl != NULL)
-                  {
-                    printf ("namedType_definingDecl->get_declaration() = %p = %s \n",namedType_definingDecl->get_declaration(),namedType_definingDecl->get_declaration()->class_name().c_str());
-                  }
-               printf ("   nondefdecl->get_type() = %p = %s \n",nondefdecl->get_type(),nondefdecl->get_type()->class_name().c_str());
-               SgNamedType* namedType_nondefiningDecl = isSgNamedType(nondefdecl->get_type());
-               if (namedType_nondefiningDecl != NULL)
-                  {
-                    printf ("namedType_nondefiningDecl->get_declaration() = %p = %s \n",namedType_nondefiningDecl->get_declaration(),namedType_nondefiningDecl->get_declaration()->class_name().c_str());
-                  }
-             }
+       // DQ (9/4/2012): If defDecl != NULL, I want to assert this for the new
+       // legacy frontend/ROSE connection code (at least).
+       ROSE_ASSERT(defdecl->get_type() != NULL);
+       if (defdecl->get_type() != nondefdecl->get_type()) {
+         printf("ERROR: defdecl->get_type() != nondefdecl->get_type(): what "
+                "are these: \n");
+         printf("   defdecl->get_type()    = %p = %s \n", defdecl->get_type(),
+                defdecl->get_type()->class_name().c_str());
+         SgNamedType *namedType_definingDecl =
+             isSgNamedType(defdecl->get_type());
+         if (namedType_definingDecl != NULL) {
+           printf(
+               "namedType_definingDecl->get_declaration() = %p = %s \n",
+               namedType_definingDecl->get_declaration(),
+               namedType_definingDecl->get_declaration()->class_name().c_str());
+         }
+         printf("   nondefdecl->get_type() = %p = %s \n",
+                nondefdecl->get_type(),
+                nondefdecl->get_type()->class_name().c_str());
+         SgNamedType *namedType_nondefiningDecl =
+             isSgNamedType(nondefdecl->get_type());
+         if (namedType_nondefiningDecl != NULL) {
+           printf("namedType_nondefiningDecl->get_declaration() = %p = %s \n",
+                  namedType_nondefiningDecl->get_declaration(),
+                  namedType_nondefiningDecl->get_declaration()
+                      ->class_name()
+                      .c_str());
+         }
+       }
           //ROSE_ASSERT(defdecl->get_type() == nondefdecl->get_type());
         }
    }
@@ -25973,23 +26003,23 @@ SageInterface::isEquivalentType (const SgType* lhs, const SgType* rhs)
 
 #if 0
 // This is modified to be a template function and so must be moved to the header file.
-// DQ (8/30/2016): Added function to detect EDG AST normalization.
+// DQ (8/30/2016): Added function to detect legacy frontend AST normalization.
 bool
 SageInterface::isNormalizedTemplateInstantiation (SgFunctionDeclaration* function)
    {
-  // This function is called in the Call graph generation to avoid filtering out EDG normalized
+  // This function is called in the Call graph generation to avoid filtering out legacy frontend normalized
   // function template instnatiations (which come from normalized template functions and member functions).
 
      bool retval = false;
 
 #if 1
-  // DQ (8/30/2016): We need to mark this as an EDG normalization so that we can detect it as an exception
+  // DQ (8/30/2016): We need to mark this as an legacy frontend normalization so that we can detect it as an exception
   // to some simple attempts to filter the AST (e.g. for the Call Graph implementation which filters on only
   // functions in the current directory).  This explicit makring makes it much easier to get this test correct.
   // But we still need to look at if the location of the parent template is something that we wnat to output.
   // If tis is a template instantiation then it is not enough to look only at the non-defining declaration if
   // it is not compiler generated.
-     retval = function->get_marked_as_edg_normalization();
+     retval = function->get_marked_as_frontend_normalization();
 #else
   // Test for this to be a template instantation (in which case it was marked as
   // compiler generated but we may want to allow it to be used in the call graph,
@@ -25999,7 +26029,7 @@ SageInterface::isNormalizedTemplateInstantiation (SgFunctionDeclaration* functio
 
      if (templateInstantiationFunction != NULL)
         {
-       // When the defining function has been normalized by EDG, only the non-defining declaration will have a source position.
+       // When the defining function has been normalized by legacy frontend, only the non-defining declaration will have a source position.
           templateInstantiationFunction = isSgTemplateInstantiationFunctionDecl(templateInstantiationFunction->get_firstNondefiningDeclaration());
           SgTemplateFunctionDeclaration* templateFunctionDeclaration = templateInstantiationFunction->get_templateDeclaration();
           if (templateFunctionDeclaration != NULL)
@@ -26020,7 +26050,7 @@ SageInterface::isNormalizedTemplateInstantiation (SgFunctionDeclaration* functio
         {
           if (templateInstantiationMemberFunction != NULL)
              {
-            // When the defining function has been normalized by EDG, only the non-defining declaration will have a source position.
+            // When the defining function has been normalized by legacy frontend, only the non-defining declaration will have a source position.
                templateInstantiationMemberFunction = isSgTemplateInstantiationMemberFunctionDecl(templateInstantiationMemberFunction->get_firstNondefiningDeclaration());
                SgTemplateMemberFunctionDeclaration* templateMemberFunctionDeclaration = templateInstantiationMemberFunction->get_templateDeclaration();
                if (templateMemberFunctionDeclaration != NULL)
@@ -26785,14 +26815,15 @@ SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype ( SgFunct
             // bool: using_C11_Noreturn_keyword
             // bool: is_constexpr
             // bool: using_new_function_return_type_syntax
-            // bool: marked_as_edg_normalization
+            // bool: marked_as_frontend_normalization
             // bool: is_implicit_function
 
             // nondefiningFunctionDeclaration->set_parameterList_syntax                  ( functionDeclaration->get_parameterList_syntax() );
                nondefiningFunctionDeclaration->set_using_C11_Noreturn_keyword            ( functionDeclaration->get_using_C11_Noreturn_keyword() );
                nondefiningFunctionDeclaration->set_is_constexpr                          ( functionDeclaration->get_is_constexpr() );
                nondefiningFunctionDeclaration->set_using_new_function_return_type_syntax ( functionDeclaration->get_using_new_function_return_type_syntax() );
-               nondefiningFunctionDeclaration->set_marked_as_edg_normalization           ( functionDeclaration->get_marked_as_edg_normalization() );
+               nondefiningFunctionDeclaration->set_marked_as_frontend_normalization(
+                 functionDeclaration->get_marked_as_frontend_normalization());
                nondefiningFunctionDeclaration->set_is_implicit_function                  ( functionDeclaration->get_is_implicit_function() );
 #endif
 #if 0
@@ -27118,12 +27149,14 @@ SageInterface::convertFunctionDefinitionsToFunctionPrototypes(SgNode* node)
 void
 SageInterface::checkForInitializers( SgNode* node )
    {
-  // This function checks variable declarations for initializers.  An issue (bug) in EDG 6.0
-  // support for variable declarations initialized using lambda functions is that the initalizer
-  // is discarded at some point in the processing of the AST.  This function reports on all
-  // variable declarations and if they contain initializers and if so what kind of initializer.
+  // This function checks variable declarations for initializers.  An issue
+  // (bug) in legacy frontend 6.0 support for variable declarations initialized
+  // using lambda functions is that the initalizer is discarded at some point in
+  // the processing of the AST.  This function reports on all variable
+  // declarations and if they contain initializers and if so what kind of
+  // initializer.
 
-     ROSE_ASSERT(node != NULL);
+  ROSE_ASSERT(node != NULL);
 
   // Preorder traversal to uniquely label the scopes (SgScopeStatements)
      class CheckInitializerTraversal : public AstSimpleProcessing

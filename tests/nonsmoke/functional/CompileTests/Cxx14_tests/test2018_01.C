@@ -1,5 +1,6 @@
 // Hi Dan, Pei-Hung
-//    The following simple c++14 code snippet fails to compile with ROSE configured with EDG 4.12
+//    The following simple c++14 code snippet fails to compile with ROSE
+//    configured with legacy frontend 4.12
 
 #include <iostream>
 

@@ -191,7 +191,7 @@ function build_rose()
 
 # --with-alternate_backend_Cxx_compiler=${ALTERNATE_COMPILER_PATH}/mpicxx --with-alternate_backend_C_compiler=${ALTERNATE_COMPILER_PATH}/mpicc --with-alternate_backend_fortran_compiler=${ALTERNATE_COMPILER_PATH}/mpif77
 
-  ../sourcetree/configure --with-java=${JAVA_INSTALL_PATH} --with-CXX_DEBUG=-g --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --enable-languages=c++,fortran --enable-edg_version=5.0 --prefix=${ROSE_INSTALL_DEBUG}
+  ../sourcetree/configure --with-java=${JAVA_INSTALL_PATH} --with-CXX_DEBUG=-g --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --enable-languages=c++,fortran --prefix=${ROSE_INSTALL_DEBUG}
 
 # build and install ROSE tools
   echo "Start to build and install rose core"

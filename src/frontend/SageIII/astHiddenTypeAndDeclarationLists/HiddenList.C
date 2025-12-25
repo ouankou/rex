@@ -2578,7 +2578,7 @@ void GetName_And_Scopequalifiedname_AndScopename_Of_SgDeclStat_In_UsingDecl(SgDe
                 }
         }
 
-        // not allowed by EDG, but allowed under g++ -ansi
+        // not allowed by legacy frontend, but allowed under g++ -ansi
         //else if(isSgNamespaceDeclarationStatement(decl_stat)) {
         //        SgNamespaceDeclarationStatement* namesp_decl = isSgNamespaceDeclarationStatement(decl_stat);
                 // ...

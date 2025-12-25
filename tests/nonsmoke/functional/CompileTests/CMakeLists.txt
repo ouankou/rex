@@ -74,9 +74,9 @@ if(enable-c)
 
 	  add_subdirectory(nameQualificationAndTypeElaboration_tests)
   
-  # NewEDGInterface_C_tests is obsolete
-  # if(enable-new-edg-interface)
-  #   add_subdirectory(NewEDGInterface_C_tests)
+  # Legacy frontend interface tests are obsolete
+  # if(enable-legacy-frontend-interface)
+  #   add_subdirectory(LegacyFrontendInterface_C_tests)
   # endif()
 
   add_subdirectory(UnparseHeadersTests)

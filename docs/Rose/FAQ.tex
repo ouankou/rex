@@ -229,20 +229,20 @@ of interface required to make manipulation generally more simple.
 % DQ (8/7/2008): Added more questions from email on 8/7/2008.
 \item  We have read, that the rose compiler is provided under the BSD license. Is every
     part of the rose compiler under BSD licence and is it free for commercial use? \\
-   ROSE is free for commercial use, our research license with EDG has no
+   ROSE is free for commercial use, our research license with legacy frontend has no
 restrictions (except that we can only release the binary and not the source code).
-Obviously the EDG part is not released BSD, only the source code part.
+Obviously the legacy frontend part is not released BSD, only the source code part.
 If you want to build products using ROSE for C/C++, then you should
-consider contacting EDG for a license to there work then you could
+consider contacting legacy frontend for a license to there work then you could
 build commercial products and sell them; but you don't have to worry
 about ROSE.  I have no idea what ground your on if you build commercial
-products for sale based on ROSE and just use the EDG binary
+products for sale based on ROSE and just use the legacy frontend binary
 that we provide.  I expect it would be a complicated install for your customers. 
-In general if you are using EDG, and building commercial projects for sale,
-then I would encourage you to contact EDG and buy a license from them.
-This is was a few companies have done, and they have consulted EDG on this
+In general if you are using legacy frontend, and building commercial projects for sale,
+then I would encourage you to contact legacy frontend and buy a license from them.
+This is was a few companies have done, and they have consulted legacy frontend on this
 point.  Our goal is to especially encourage open-source C++ work using ROSE.
-Clearly we derive robustness in C++ in ROSE from the use of EDG, and we
+Clearly we derive robustness in C++ in ROSE from the use of legacy frontend, and we
 are thankful to there liberal research license.
 
 \item Is there a list of projects compiled with rose? \\
@@ -326,12 +326,12 @@ promise when it would happen.
     you use \#line directives, but is this really enough (e.g. in the presence of
     whitespace removal by some preprocessors).
 
-    The frontend of EDG includes CPP and thus it reports source code positions
+    The frontend of legacy frontend includes CPP and thus it reports source code positions
     before the CPP translation, thus we get and save this information.  For Fortran
     we have to handle the CPP translation more explicitly and so we only have the
     source position after translation (but Fortran is always a bit special when it
     is preprocessed).  I am not aware the CPP will remove whitespace, but it is not
-    an issue since we get the information from EDG where it is generated before CPP
+    an issue since we get the information from legacy frontend where it is generated before CPP
     translation.
 
 \item Code correctness: say someone analyzes some code which isn't fully correct/complete,
@@ -341,8 +341,8 @@ promise when it would happen.
 
     We can not currently handl incomplete code, I would argue that any analysis of such
     code would have huge question marks. The essential reasom for this limitation is that 
-    we use EDG for C and C++ and it can't handle incomplete code in version 3.4. 
-    However, the newer 3.11 version of EDG is expected to handle incomplete code and then
+    we use legacy frontend for C and C++ and it can't handle incomplete code in version 3.4. 
+    However, the newer 3.11 version of legacy frontend is expected to handle incomplete code and then
     we will support this, we have no experience with this yet.
 
 \item Dialects: how would you handle different language dialects, e.g. c89,c99,the
@@ -351,13 +351,13 @@ promise when it would happen.
 
     We support C89, C99, C++ (98 standard), Fortran 4, Fortran 66, Fortran 77, Fortran 90,
     Fortran 95, and Fortran 2003.  We will start work on C++0x when we upgrade to the newest
-    version of EDG.  We support C++ compiled using Microsoft Visual Studio, but not all
+    version of legacy frontend.  We support C++ compiled using Microsoft Visual Studio, but not all
     the MS extensions.  We support a number of GNU specific C and C++ extensions, but not
-    all. Since we use EDG for the frontend, we don't have any {\bf super} grammar
-    representation (evn EDG does not have such a construction in the design of there
+    all. Since we use legacy frontend for the frontend, we don't have any {\bf super} grammar
+    representation (evn legacy frontend does not have such a construction in the design of there
     frontend).  Such concepts don't work well for real languges when you need to handle
     all the corners (which is itself a sad commentary on parser generators and/or modern 
-    languages).  For C and C++ the typechecking is mostly done by EDG and we save this
+    languages).  For C and C++ the typechecking is mostly done by legacy frontend and we save this
     information and add to it in the ROSE IR.
 
 
@@ -372,7 +372,7 @@ Is there a version available that can be compiled/linked on cygwin?
 
 Answer from Dan:
    We have internally compiled ROSE on cygwin, and while it
-works, we don't try to release a cygwin binary of the EDG work that
+works, we don't try to release a cygwin binary of the legacy frontend work that
 would be required for an external release.  So we don't really officially
 support it.  I find Cygwin to be so slow that working with ROSE on cygwin
 is (I think) a painful process.  So I'm not really supportive of a making cygwin
@@ -441,14 +441,14 @@ Tool Demos at Dagstuhl: Scalable Program Analysis
     * How does your tool interface with other tools?
       ROSE is defined as a library so that it is as easy as possible to use with other
          tools.  How easy and how possible depends on the tool being used. Connections 
-         to PAG (SATiR), Yices, Maple, Wave, SPIN, MOPS, MPI, VizAnalyzer, Code Surfer,
+         to PAG (SATiR), Yices, Maple, SPIN, MOPS, MPI, VizAnalyzer, Code Surfer,
          IDA Pro, Objdump, and more.
 
     * Under what conditions is it available (free download, commercial product)?
       ROSE and Compass are available on the web (BSD), roseCompiler.org and we will
          be moving the SVN repository to outreach.scidac.gov to support working with
          external research groups. (Compass is a project within the ROSE release).
-         We use EDG for the C and C++ work and distribute it as a binary.
+         We use legacy frontend for the C and C++ work and distribute it as a binary.
 
     * If you were to write your tool from scratch again, what would you do differently?
       ROSE: We rewrite sections from time to time and make significant changes as 

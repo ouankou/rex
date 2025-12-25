@@ -6,12 +6,12 @@ struct A
 typedef union 
    {
      struct A* __sockaddr__;
-   } __SOCKADDR_ARG 
+} __SOCKADDR_ARG
 #if 1
-// This is required to process through EDG and GNU (backend).
-__attribute__ ((__transparent_union__))
+    // This is required to process through legacy frontend and GNU (backend).
+    __attribute__((__transparent_union__))
 #endif
-     ;
+    ;
 
 extern int getsockname (int __fd, __SOCKADDR_ARG __addr);
 

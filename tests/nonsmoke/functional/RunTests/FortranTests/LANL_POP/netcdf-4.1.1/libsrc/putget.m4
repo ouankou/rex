@@ -1840,7 +1840,7 @@ define(`NC_VARM_Lower_Body',dnl
 			/*
 			 * The following code permutes through the variable s
 			 * external start-index space and it s internal address
-			 * space.  At the UPC, this algorithm is commonly
+			 * space.  At the center, this algorithm is commonly
 			 * called "odometer code".
 			 */
 			idim = maxidim;

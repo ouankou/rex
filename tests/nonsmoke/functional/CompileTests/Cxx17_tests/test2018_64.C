@@ -1,6 +1,7 @@
 // __has_include for C++17
 
-// This appears to work for GNU g++ version 6.1, but fails for EDG 5.0 (or support there would need to be turned on).
+// This appears to work for GNU g++ version 6.1, but fails for legacy
+// frontend 5.0 (or support there would need to be turned on).
 
 #if __has_include(<optional>)
 #  include <optional>

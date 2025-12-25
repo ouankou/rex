@@ -13,9 +13,9 @@ struct X
        // Original code: return reinterpret_cast<detail::function::vtable_base*>(reinterpret_cast<std::size_t>(vtable) & ~static_cast<std::size_t>(0x01));
        // return reinterpret_cast<A::S*>(reinterpret_cast<std::size_t>(vtable) );
        // return reinterpret_cast<A::S*>(pointer);
- 
-      // This fails in the EDG/ROSE translation!
-         return reinterpret_cast<A::S*>(0L);
+
+       // This fails in the legacy frontend/ROSE translation!
+       return reinterpret_cast<A::S *>(0L);
         }
    };
 

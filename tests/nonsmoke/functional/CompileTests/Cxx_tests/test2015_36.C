@@ -1,8 +1,8 @@
 // This is a copy of test2004_67.C (with additions).
 
 // These are GNU 3.3.x specific attributes.
-// Force these to go away since we can't handle them yet (Need to turn on support in EDG for these)
-// #define __attribute__(name)
+// Force these to go away since we can't handle them yet (Need to turn on
+// support in legacy frontend for these) #define __attribute__(name)
 
 // This the the header file which demonstrates a problem for ROSE presently!
 // #include <fstream>

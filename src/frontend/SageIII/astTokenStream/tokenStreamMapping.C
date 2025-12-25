@@ -1,12 +1,13 @@
 /*
 // This file supports the new parse tree support in ROSE.
 // specifically this is a "Concrete Syntax Augmented AST"
-// Because the ROSE IR is close to that of the C/C++/Fortran 
+// Because the ROSE IR is close to that of the C/C++/Fortran
 // grammar the parse tree can be derived from the token stream
 // and the AST.  The principal representation of the CSA AST
 // is a map using the IR nodes of the AST as keys into the map
-// and the map elements being a data structure (TokenStreamSequenceToNodeMapping)
-// containing three pairs of indexes representing the subsequence 
+// and the map elements being a data structure
+(TokenStreamSequenceToNodeMapping)
+// containing three pairs of indexes representing the subsequence
 // of tokens for the leading tokens (often white space), the token
 // subsequence for the AST IR node (including its subtree), and
 // the trailing token subsequence (often white space).
@@ -27,18 +28,20 @@
 // (so much for ASCI art).
 //
 
-// We have a number of ways that we expect could be a problem for this 
+// We have a number of ways that we expect could be a problem for this
 // token stream mapping (possible failure modes):
 //   1) Toky() macro to write code (not working yet)
 //   2) Token pasting operator ## (WORKS)
-//   3) Use equivalent of generated binary as a test for generate source code 
-//      that is equivalent to the input file up to the use of new lines and other 
-//      white space (THIS IS NOT A GREAT TEST (unless the filename of the generated 
+//   3) Use equivalent of generated binary as a test for generate source code
+//      that is equivalent to the input file up to the use of new lines and
+other
+//      white space (THIS IS NOT A GREAT TEST (unless the filename of the
+generated
 //      code is made the same)).
 //   4) Use multiple variable names in the same variable declaration (FIXED).
 //
 // Each of these are being addressed before moving this code into ROSE,
-// merging it with the Wave support, and modifying the unparser to 
+// merging it with the preprocessing support, and modifying the unparser to
 // use the token stream support.
 */
 
@@ -1038,7 +1041,7 @@ Graph_TokenMappingTraversal::graph_ast_and_token_stream( SgSourceFile* source_fi
      printf ("In graph_ast_and_token_stream(): filename = %s \n",filename.c_str());
 #endif
 
-  // Open file...(file is declared in the EDG_ROSE_Graph namespace).
+     // Open file...(file is declared in the legacy frontend graph namespace).
      file.open(filename.c_str());
 
   // Output the opening header for a DOT file.
@@ -2484,9 +2487,18 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                                                      }
                                                     else
                                                      {
-                                                    // Examples failing this test are: "#pragma pack(1)" which does not compute the ending column 
-                                                    // position correctly because EDG normalizes the pragma's string to be "pack ( 1 )".  
-                                                    // See tests/nonsmoke/functional/CompileTests/C_tests/YardenPragmaPackExample.c for an example.
+                                                       // Examples failing this
+                                                       // test are: "#pragma
+                                                       // pack(1)" which does
+                                                       // not compute the ending
+                                                       // column position
+                                                       // correctly because
+                                                       // legacy frontend
+                                                       // normalizes the
+                                                       // pragma's string to be
+                                                       // "pack ( 1 )". See
+                                                       // tests/nonsmoke/functional/CompileTests/C_tests/YardenPragmaPackExample.c
+                                                       // for an example.
 
                                                        printf ("   --- WARNING: column numbers of IR node source position and token sequence don't match well enough (correction is the wrong sign) \n");
                                                        printf ("   --- --- IR node %p = %s : Need to fixup STARTING source position in IR (%d,%d) to match token stream's line and column info: start (%d,%d) \n",
@@ -2535,9 +2547,18 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                                                      }
                                                     else
                                                      {
-                                                    // Examples failing this test are: "#pragma pack(1)" which does not compute the ending column 
-                                                    // position correctly because EDG normalizes the pragma's string to be "pack ( 1 )".  
-                                                    // See tests/nonsmoke/functional/CompileTests/C_tests/YardenPragmaPackExample.c for an example.
+                                                       // Examples failing this
+                                                       // test are: "#pragma
+                                                       // pack(1)" which does
+                                                       // not compute the ending
+                                                       // column position
+                                                       // correctly because
+                                                       // legacy frontend
+                                                       // normalizes the
+                                                       // pragma's string to be
+                                                       // "pack ( 1 )". See
+                                                       // tests/nonsmoke/functional/CompileTests/C_tests/YardenPragmaPackExample.c
+                                                       // for an example.
 
                                                        printf ("   --- WARNING: column numbers of IR node source position and token sequence don't match well enough (correction is the wrong sign) \n");
                                                        printf ("   --- --- IR node %p = %s : Need to fixup ENDING source position in IR (%d,%d) to match token stream's line and column info: start (%d,%d) \n",
@@ -2616,7 +2637,10 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
 #if 1
                                 // DQ (1/4/2014): commented out to test with using token based unparsing.
 
-                                // DQ (12/22/2014): If this is part of an EDG normalization of template function definitions in template classes then it should not be processed.
+                                   // DQ (12/22/2014): If this is part of an
+                                   // legacy frontend normalization of template
+                                   // function definitions in template classes
+                                   // then it should not be processed.
                                    SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(statement);
                                    if (functionDeclaration != NULL)
                                       {
@@ -4023,7 +4047,7 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                                       {
                                         ROSE_ASSERT(mappingInfo->node != NULL);
 #error "DEAD CODE!"
-                                     // These are not set correctly in EDG.
+                                     // These are not set correctly in legacy frontend.
                                         SgCaseOptionStmt* caseOptionStatement       = isSgCaseOptionStmt(mappingInfo->node);
                                         SgDefaultOptionStmt* defaultOptionStatement = isSgDefaultOptionStmt(mappingInfo->node);
                                         if (caseOptionStatement != NULL || defaultOptionStatement != NULL)
@@ -5570,13 +5594,13 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
                Sg_File_Info* start_pos = locatedNode->get_startOfConstruct();
                Sg_File_Info* end_pos   = locatedNode->get_endOfConstruct();
 #if 0
-            // DQ (12/14/2014): This is part of a bug fix where the ending position does not include the trailing ";" in EDG.
+            // DQ (12/14/2014): This is part of a bug fix where the ending position does not include the trailing ";" in legacy frontend.
                SgForStatement* parent_is_forStatement = isSgForStatement(locatedNode->get_parent());
                if (parent_is_forStatement != NULL)
                   {
                     if (locatedNode == parent_is_forStatement->get_test())
                        {
-                         printf ("Found a node where the end position is not properly represented in EDG \n");
+                         printf ("Found a node where the end position is not properly represented in legacy frontend \n");
                          ROSE_ABORT();
                        }
                   }
@@ -5799,10 +5823,12 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 #if 1
                  // DQ (1/4/2014): commented out to test with using token based unparsing.
 
-                 // DQ (12/22/2014): If this is part of an EDG normalization of template function definitions in template classes then it should not be processed.
-                    SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(n);
-                    if (functionDeclaration != NULL)
-                       {
+                       // DQ (12/22/2014): If this is part of an legacy frontend
+                       // normalization of template function definitions in
+                       // template classes then it should not be processed.
+                       SgFunctionDeclaration *functionDeclaration =
+                           isSgFunctionDeclaration(n);
+                       if (functionDeclaration != NULL) {
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE
                          printf ("process_node = %s \n",process_node ? "true" : "false");
                          printf ("functionDeclaration->isNormalizedTemplateFunction() = %s \n",functionDeclaration->isNormalizedTemplateFunction() ? "true" : "false");
@@ -6005,14 +6031,21 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
                               ROSE_ABORT();
                             }
 #endif
-                      // Fixup any mistakes in the processing, usually cased by bad source position information from EDG.
-                      // Specific cases are:
-                      //    1) Function prototypes (secondary declarations) have a source position that is typcally the 
-                      //       start and end of the function name (missign the leading type and trailing function parameter list).
-                      //    2) Variable declarations (missing the token for the trailing ';').
-                      // These subsequences need to be fixed up on the way down (I think).
+                         // Fixup any mistakes in the processing, usually cased
+                         // by bad source position information from legacy
+                         // frontend. Specific cases are:
+                         //    1) Function prototypes (secondary declarations)
+                         //    have a source position that is typcally the
+                         //       start and end of the function name (missign
+                         //       the leading type and trailing function
+                         //       parameter list).
+                         //    2) Variable declarations (missing the token for
+                         //    the trailing ';').
+                         // These subsequences need to be fixed up on the way
+                         // down (I think).
 
-                      // DQ (1/24/2015): Add support for subexpressions containing "NULL" macro.
+                         // DQ (1/24/2015): Add support for subexpressions
+                         // containing "NULL" macro.
                          SgWhileStmt* parent_whileStatement = isSgWhileStmt(n->get_parent());
                          SgIfStmt* parent_ifStatement       = isSgIfStmt(n->get_parent());
                       // if (parent_whileStatement != NULL)
@@ -6323,10 +6356,13 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 #endif
                             }
 
-                      // DQ (12/14/2014): This is part of a bug fix where the ending position does not include the trailing ";" in EDG.
-                         SgForStatement* parent_is_forStatement = isSgForStatement(n->get_parent());
-                         if (parent_is_forStatement != NULL && n == parent_is_forStatement->get_test())
-                            {
+                            // DQ (12/14/2014): This is part of a bug fix where
+                            // the ending position does not include the trailing
+                            // ";" in legacy frontend.
+                            SgForStatement *parent_is_forStatement =
+                                isSgForStatement(n->get_parent());
+                            if (parent_is_forStatement != NULL &&
+                                n == parent_is_forStatement->get_test()) {
 #if 0
                               printf ("Found the test statement in a SgForStatement (ending must be fixed to include semi-colon) \n");
 #endif
@@ -6370,12 +6406,15 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
                                  }
                             }
 
-                      // DQ (12/27/2014): Handling the case of a SgBasicBlock in a SgSwitchStatement. This is because EDG does not 
-                      // represent this specific case well (except in terms of the position os the case constant expressions).
-                      // So we have to start there and backup to the first "{".
-                         SgBasicBlock* basicBlock = isSgBasicBlock(locatedNode);
-                         if (basicBlock != NULL)
-                            {
+                            // DQ (12/27/2014): Handling the case of a
+                            // SgBasicBlock in a SgSwitchStatement. This is
+                            // because legacy frontend does not represent this
+                            // specific case well (except in terms of the
+                            // position os the case constant expressions). So we
+                            // have to start there and backup to the first "{".
+                            SgBasicBlock *basicBlock =
+                                isSgBasicBlock(locatedNode);
+                            if (basicBlock != NULL) {
                               SgSwitchStatement* switchStatement = isSgSwitchStatement(locatedNode->get_parent());
                               if (switchStatement != NULL)
                                  {
@@ -6417,13 +6456,19 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
                                  }
                             }
 
-                      // DQ (12/28/2014): As a result of setting the source positon for the switch body more accruately, I think this adjustment is no longer required.
-                      // DQ (12/27/2014): Handling the case of a SgCaseOptionStmt in a SgSwitchStatement. This is because EDG does not 
-                      // represent this specific case well (except in terms of the position os the case constant expressions).
-                      // So we have to start there and backup to the first "case" keyword.
-                         SgCaseOptionStmt* caseOptionStatement = isSgCaseOptionStmt(locatedNode);
-                         if (caseOptionStatement != NULL)
-                            {
+                            // DQ (12/28/2014): As a result of setting the
+                            // source positon for the switch body more
+                            // accruately, I think this adjustment is no longer
+                            // required. DQ (12/27/2014): Handling the case of a
+                            // SgCaseOptionStmt in a SgSwitchStatement. This is
+                            // because legacy frontend does not represent this
+                            // specific case well (except in terms of the
+                            // position os the case constant expressions). So we
+                            // have to start there and backup to the first
+                            // "case" keyword.
+                            SgCaseOptionStmt *caseOptionStatement =
+                                isSgCaseOptionStmt(locatedNode);
+                            if (caseOptionStatement != NULL) {
 #if 0
                               printf ("Setup the starting position of the SgCaseOptionStatement = %p \n",caseOptionStatement);
 #endif
@@ -6731,13 +6776,13 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
 #endif
 
 #if 0
-  // DQ (12/14/2014): This is part of a bug fix where the ending position does not include the trailing ";" in EDG.
+  // DQ (12/14/2014): This is part of a bug fix where the ending position does not include the trailing ";" in legacy frontend.
      SgForStatement* parent_is_forStatement = isSgForStatement(n->get_parent());
      if (parent_is_forStatement != NULL)
         {
           if (n == parent_is_forStatement->get_test())
              {
-               printf ("Found a node where the end position is not properly represented in EDG \n");
+               printf ("Found a node where the end position is not properly represented in legacy frontend \n");
                ROSE_ABORT();
              }
         }
@@ -7252,7 +7297,7 @@ outputSourceCodeFromTokenStream_globalScope(SgSourceFile* sourceFile, vector<str
         }
 #endif
 
-  // Open file...(file is declared in the EDG_ROSE_Graph namespace).
+     // Open file...(file is declared in the legacy frontend graph namespace).
      std::ofstream file;
      file.open(filename.c_str());
 

@@ -95,22 +95,20 @@ class classType
        // classType ( register int* i ) {};
 #if TEST_CONST_MEMBERS
           classType()
-            // g++ does not require the initializers of const variables, EDG does
-             : publicConstDoubleValue(42),
-               protectedConstDoubleValue(43),
-               privateConstDoubleValue(44)
-             {};
+              // g++ does not require the initializers of const variables,
+              // legacy frontend does
+              : publicConstDoubleValue(42), protectedConstDoubleValue(43),
+                privateConstDoubleValue(44) {};
 #endif
 #endif
 
 
 #if TEST_CONST_MEMBERS
           explicit classType(register int integerValueParameter)
-            // g++ does not require the initializers of const variables, EDG does
-             : publicConstDoubleValue(1),
-               protectedConstDoubleValue(2),
-               privateConstDoubleValue(3)
-             {};
+              // g++ does not require the initializers of const variables,
+              // legacy frontend does
+              : publicConstDoubleValue(1), protectedConstDoubleValue(2),
+                privateConstDoubleValue(3) {};
 #endif
 
 #if 1

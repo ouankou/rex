@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncdump/cdl.h,v 1.3 2008/12/22 16:42:36 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncdump/cdl.h,v 1.3 2008/12/22 16:42:36 russ
+ *Exp $
  *********************************************************************/
 #ifndef _CDL_H_
 #define _CDL_H_

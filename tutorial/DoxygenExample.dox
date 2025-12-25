@@ -16,8 +16,8 @@
 |16|   *  with an upper-case letter, a hyphen, white space, or the name of the command. E.g., a disassembler tool might
 |17|   *  specify the purpose as "disassembles a binary specimen".
 |18|   *
-|19|   *  The @p description is a full, multi-line description written in the [Sawyer](https://github.com/matzke1/sawyer)
-|20|   *  markup language where "@" characters have special meaning..
+|19|   *  The @p description is a full, multi-line description written in the standard ROSE markup language where "@"
+|20|   *  characters have special meaning.
 |21|   *
 |22|   *  @{ */
 |23|  SgAsmBlock* frontend(int argc, char *argv[],

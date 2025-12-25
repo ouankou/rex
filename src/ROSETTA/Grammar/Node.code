@@ -2284,17 +2284,6 @@ $CLASSNAME::buildCommandLineToSubstituteTransformationFile( const vector<string>
   // argv[fileNameLocation] = "/home/dquinlan2/ROSE/SUN_CC_NOPURIFY/TransformationSpecification/rose_transformation.C";
   // argv[fileNameLocation] = "rose_transformation.C";
 
-#if 0
-  // This is not longer required (EDG sets its
-  // primary_source_file_name internally from the
-  // command line directly).
-
-  // Since it is a problem to call EDG more than once with
-  // (EDG comand line processing can only be called once)
-  // the easiest thing to do is change the name of the primary
-  // source file.  See notes in the TODO document.
-     EDG_secondarySourceFile = argv[fileNameLocation];
-#endif
 
   // printf ("Command line modified to include \"rose_transformation.C\"! \n");
 

@@ -221,7 +221,7 @@ INLINE_ELAPSED(__inline__)
  */
 
 /* intel's icc/ecc compiler */
-#if (defined(__EDG_VERSION) || defined(__ECC)) && defined(__ia64__) && !defined(HAVE_TICK_COUNTER)
+#if defined(__ECC) && defined(__ia64__) && !defined(HAVE_TICK_COUNTER)
 typedef unsigned long ticks;
 #include <ia64intrin.h>
 

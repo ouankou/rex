@@ -3,7 +3,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen3/ncgen.h,v 1.8 1997/07/07 18:27:04 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen3/ncgen.h,v 1.8 1997/07/07 18:27:04 russ
+ *Exp $
  *********************************************************************/
 
 #define MAX_NC_ATTSIZE    20000	/* max size of attribute (for ncgen) */

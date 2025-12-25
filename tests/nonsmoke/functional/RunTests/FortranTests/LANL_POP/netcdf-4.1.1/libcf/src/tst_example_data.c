@@ -19,7 +19,8 @@ main(int argc, char **argv)
 {
    printf("\n*** Testing libcf data examples.\n");
 
-#define EXAMPLE_FILE "/upc/share/ed/libcf_data/cami_0000-09-01_2x2.5_L26_c030918_USGS.nc"
+#define EXAMPLE_FILE                                                           \
+   "/shared/ed/libcf_data/cami_0000-09-01_2x2.5_L26_c030918_USGS.nc"
    printf("*** looking at %s...", EXAMPLE_FILE);
    {
       int ncid, did, vid;

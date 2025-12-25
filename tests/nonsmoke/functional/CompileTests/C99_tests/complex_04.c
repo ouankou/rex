@@ -2,7 +2,8 @@
 /*
    This test code fails for a mysterious reason, if any line is removed
    a file_info object is not generated correctly and the translation fails :-).
-   This may be an EDG problem (this codes was simplified from complex_01.c).
+   This may be an legacy frontend problem (this codes was simplified from
+   complex_01.c).
 
    This is a C and C99 test code of the use of complex types.
    It works because the rose_required_macros_and_functions.h
@@ -49,11 +50,12 @@ int main (void)
 
      __I__;
 
-  // This is now to specify imaginary numbers in EDG, not supported in GNU, so
-  // the code generation using GNU aas a backend drops the "_Imaginary" prefix.
-     _Imaginary float       x_edg_imaginary = 0.0;
-     _Imaginary double      y_edg_imaginary = 0.0;
-     _Imaginary long double z_edg_imaginary = 0.0;
+     // This is now to specify imaginary numbers in legacy frontend, not
+     // supported in GNU, so the code generation using GNU aas a backend drops
+     // the "_Imaginary" prefix.
+     _Imaginary float x_imaginary = 0.0;
+     _Imaginary double y_imaginary = 0.0;
+     _Imaginary long double z_imaginary = 0.0;
 
      _Complex float       x1 = 1.0;
      _Complex double      y1 = 2.0;

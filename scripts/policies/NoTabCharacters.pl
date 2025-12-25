@@ -117,7 +117,7 @@ my $nfail=0;
 my $files = FileLister->new(@ARGV);
 while (my $filename = $files->next_file) {
   next unless $filename =~ /\.(h|hh|hpp|c|C|cpp|yy|ll?)$/;
-  next if $filename =~ /\/EDG\//; # We don't own EDG sources and therefore can't enforce style constraints
+  next if $filename =~ /\/legacy frontend\//; # We don't own legacy frontend sources and therefore can't enforce style constraints
   next if is_disabled($filename);
 
   if (open FILE, "<", $filename) {

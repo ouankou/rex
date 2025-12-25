@@ -23,6 +23,6 @@ void foo()
 
      pf=f; //fine
 
-  // EDG correctly reports this as an error!
-  // pf=g; //error
+     // legacy frontend correctly reports this as an error!
+     // pf=g; //error
    }

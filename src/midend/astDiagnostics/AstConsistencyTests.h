@@ -509,10 +509,11 @@ class TestForReferencesToDeletedNodes : public ROSE_VisitTraversal
 
 class TestForParentsMatchingASTStructure: public AstPrePostProcessing
    {
-  // DQ (3/19/2012): This is a test from Robb that I want to use uniformally in the AST.
-  // This has been used to catch several locations in the AST where parents were not set
-  // as they are defined to be set in the AST (based on a traversal).  So this test is
-  // an important addition to the EDG 4.3 work to fix a number of the bugs in the EDG 3.3
+  // DQ (3/19/2012): This is a test from Robb that I want to use uniformally in
+  // the AST. This has been used to catch several locations in the AST where
+  // parents were not set as they are defined to be set in the AST (based on a
+  // traversal).  So this test is an important addition to the legacy
+  // frontend 4.3 work to fix a number of the bugs in the legacy frontend 3.3
   // work and define a cleaner representation of the AST.
 
   // Check that all nodes have the correct parent.  This code is not thread safe. 
@@ -543,30 +544,32 @@ class TestForParentsMatchingASTStructure: public AstPrePostProcessing
 
 class TestForSourcePosition: public AstSimpleProcessing
    {
-  // DQ (12/3/2012): This tests for Sg_File_Info objects that have an empty filename.
-  // These have been set at an early stage in the defelopment of the edg4x work and 
-  // now they are a problem.  so it is time to detect them and get rid of them.
+  // DQ (12/3/2012): This tests for Sg_File_Info objects that have an empty
+  // filename. These have been set at an early stage in development and now they
+  // are a problem.  so it is time to detect them and get rid of them.
 
-     public:
-          void testFileInfo( Sg_File_Info* fileInfo );
+public:
+  void testFileInfo(Sg_File_Info *fileInfo);
 
-          void visit ( SgNode* node );
+  void visit(SgNode *node);
    };
 
 
 class TestForMultipleWaysToSpecifyRestrictKeyword: public AstSimpleProcessing
    {
-  // DQ (12/11/2012): This tests for the two different ways in which const-volitile-restrict 
-  // modifiers can be specified.  It is a consiquence of the CV-modifier (SgTypeModifier) being 
-  // a part of the type declaration modifier and also the SgModifierType and the SgDeclarationModifier.
-  // Both are required and as a result it can be confusing that there are two locations to set
-  // these.  Historically in the EDG 3.3 version we used the SgModifierType for C-V, but the 
-  // SgDeclarationModifier for the restrict keyword.  In the edg 4.x version of ROSE, we now want 
-  // to make this more uniform and use the SgModifierType everywhere. To address the inconsistancy, 
-  // we want to check that both are always set consistanly.
+  // DQ (12/11/2012): This tests for the two different ways in which
+  // const-volitile-restrict modifiers can be specified.  It is a consiquence of
+  // the CV-modifier (SgTypeModifier) being a part of the type declaration
+  // modifier and also the SgModifierType and the SgDeclarationModifier. Both
+  // are required and as a result it can be confusing that there are two
+  // locations to set these.  Historically in the legacy frontend 3.3 version we
+  // used the SgModifierType for C-V, but the SgDeclarationModifier for the
+  // restrict keyword.  In newer ROSE versions, we now want to make this more
+  // uniform and use the SgModifierType everywhere. To address the
+  // inconsistancy, we want to check that both are always set consistanly.
 
-     public:
-          void visit ( SgNode* node );
+public:
+  void visit(SgNode *node);
    };
 
 

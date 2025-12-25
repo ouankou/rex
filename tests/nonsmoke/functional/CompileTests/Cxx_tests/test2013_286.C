@@ -34,12 +34,7 @@ class B : public X::A
           B();
    };
 
-// This is unparsed as: B::B(int x) : A(x){}
-// It is missing it's name qualification "X::" for "A", but it appears to compile fine with g++ (version 4.2) and also EDG.
-// B::B (int x)
-B::B ()
-   : X::A()
-   {
-   }
-
-
+   // This is unparsed as: B::B(int x) : A(x){}
+   // It is missing it's name qualification "X::" for "A", but it appears to
+   // compile fine with g++ (version 4.2) and also legacy frontend. B::B (int x)
+   B::B() : X::A() {}

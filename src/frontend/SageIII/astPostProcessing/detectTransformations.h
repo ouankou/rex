@@ -8,11 +8,12 @@ void detectTransformations( SgNode* node );
 
 void detectTransformations_local( SgNode* node );
 
-/*! \brief There sould not be any IR nodes marked as a transformation coming from the EDG/ROSE translation.
-           This test enforces this.
+/*! \brief There sould not be any IR nodes marked as a transformation coming
+   from the legacy frontend/ROSE translation. This test enforces this.
 
-    \internal This is only for testing the AST after translation.  User transformations would be caught by this 
-              and it should not be used downstream of user transformations.
+    \internal This is only for testing the AST after translation.  User
+   transformations would be caught by this and it should not be used downstream
+   of user transformations.
  */
 class DetectTransformations : public SgSimpleProcessing
    {

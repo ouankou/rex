@@ -68,7 +68,7 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
    cp ${srcdir}/config/rose_specific_emmintrin.h ./include-staging/${compilerName}_HEADERS/emmintrin.h
    cp ${srcdir}/config/rose_specific_xmmintrin.h ./include-staging/${compilerName}_HEADERS/xmmintrin.h
  # DQ (8/29/2015): This file is also required since the one available in the Intel header files will 
- # not compie with EDG (requires MS decl_spec grammar).
+ # not compie with legacy frontend (requires MS decl_spec grammar).
    cp ${srcdir}/config/rose_specific_mmintrin.h  ./include-staging/${compilerName}_HEADERS/mmintrin.h
 
  # Phlin (6/18/2012): Added support for SSE4.2.
@@ -88,22 +88,6 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
    else
       if test "$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER" -ge "5"; then
          cp ${srcdir}/config/rose_specific_avxintrin.h ./include-staging/${compilerName}_HEADERS/avxintrin.h
-      fi
-   fi
-
- # DQ (11/21/2016): EDG 4.12 can't handle a specific line of the GNU 6.1 vector.h header file. So build a modified version for this case.
- # The function calls: "_M_move_assign();" appear to be a problem for EDG 4.12 (seqfaults internally in il.c).
-   if test "x$edg_major_version_number" = "x4"; then
-      if test "$edg_minor_version_number" -eq "12"; then
-         if test x$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == x6; then
-            if test "$BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER" -ge "1"; then
-               mkdir -p ./include-staging/${compilerName}_HEADERS/bits
-               cp ${srcdir}/config/rose_specific_GNU_6_1_stl_vector.h ./include-staging/${compilerName}_HEADERS/bits/stl_vector.h
-               cp ${srcdir}/config/rose_specific_GNU_6_1_stl_list.h ./include-staging/${compilerName}_HEADERS/bits/stl_list.h
-               cp ${srcdir}/config/rose_specific_GNU_6_1_stl_deque.h ./include-staging/${compilerName}_HEADERS/bits/stl_deque.h
-               cp ${srcdir}/config/rose_specific_GNU_6_1_hashtable.h ./include-staging/${compilerName}_HEADERS/bits/hashtable.h
-            fi
-         fi
       fi
    fi
 
@@ -133,7 +117,7 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 [
  # Now setup the include path that we will prepend to any user -I<dir> options so that the 
  # required compiler-specific header files can be found (these are often relocated versions 
- # of the compiler specific header files that have been processed so that EDG can read them)
+ # of the compiler specific header files that have been processed so that legacy frontend can read them)
  # It is unfortunate, but many compiler-specific files include compiler-specific code which
  # will not compile with a standard C++ compiler or can not be processed using a standard
  # C preprocessor (cpp) (an ugly fact of common compilers).
@@ -155,9 +139,8 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 
 compilerNameCxx="`basename ${BACKEND_CXX_COMPILER}`"
 
- # DQ (11/1/2011): We need this same mechanism for C++'s use of EDG 4.x as we did for EDG 3.3 (but for C code this was not required; and was simpler).
+ # DQ (11/1/2011): We need this same mechanism for C++'s use of legacy frontend 4.x as we did for legacy frontend 3.3 (but for C code this was not required; and was simpler).
  # Include the directory with the subdirectories of header files
- # if test "x$enable_new_edg_interface" = "xyes"; then
  #   includeString="{`${srcdir}/config/get_compiler_header_dirs ${BACKEND_CXX_COMPILER} | while read dir; do echo -n \\\"$dir\\\",\ ; done` \"/usr/include\"}"
  # else
  #   includeString="{\"${compilerNameCxx}_HEADERS\"`${srcdir}/$ROSE_HOME/config/dirincludes "./include-staging/" "${compilerNameCxx}_HEADERS"`, `${srcdir}/config/get_compiler_header_dirs ${BACKEND_CXX_COMPILER} | while read dir; do echo $EO \\\"$dir\\\",$EC\ ; done` \"/usr/include\"}"
@@ -278,7 +261,7 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 [
  # Now setup the include path that we will prepend to any user -I<dir> options so that the 
  # required compiler-specific header files can be found (these are often relocated versions 
- # of the compiler specific header files that have been processed so that EDG can read them)
+ # of the compiler specific header files that have been processed so that legacy frontend can read them)
  # It is unfortunate, but many compiler-specific files include compiler-specific code which
  # will not compile with a standard C++ compiler or can not be processed using a standard
  # C preprocessor (cpp) (an ugly fact of common compilers).
@@ -300,9 +283,8 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 
    compilerNameC="`basename $BACKEND_C_COMPILER`"
 
- # DQ (11/1/2011): We need this same mechanism for C++'s use of EDG 4.x as we did for EDG 3.3 (but for C code this was not required; and was simpler).
+ # DQ (11/1/2011): We need this same mechanism for C++'s use of legacy frontend 4.x as we did for legacy frontend 3.3 (but for C code this was not required; and was simpler).
  # Include the directory with the subdirectories of header files
- # if test "x$enable_new_edg_interface" = "xyes"; then
  #   includeString="{`${srcdir}/config/get_compiler_header_dirs ${BACKEND_C_COMPILER} | while read dir; do echo -n \\\"$dir\\\",\ ; done` \"/usr/include\"}"
  # else
  #   includeString="{\"${compilerNameC}_HEADERS\"`${srcdir}/$ROSE_HOME/config/dirincludes "./include-staging/" "${compilerNameC}_HEADERS"`, `${srcdir}/config/get_compiler_header_dirs ${BACKEND_C_COMPILER} | while read dir; do echo $EO \\\"$dir\\\",$EC\ ; done` \"/usr/include\"}"
@@ -340,7 +322,7 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
    AC_DEFINE_UNQUOTED([C_INCLUDE_STRING],$includeString,[Include path for backend C compiler.])
 
 # DQ (2/21/2017): Need to add required header file to support Intel compiler because we are using 
-# the __INTEL_CLANG_COMPILER macro to use EDG with the Intel header files.
+# the __INTEL_CLANG_COMPILER macro to use legacy frontend with the Intel header files.
    if test "x$BACKEND_CXX_COMPILER_VENDOR" = "xintel"; then
 #     echo "SETUP BACKEND C COMPILER: Copying config/rose_specific_tgmath_clang.h to ${compilerNameC}_HEADERS/tgmath_clang.h"
       cp ${srcdir}/config/rose_specific_tgmath_clang.h ./include-staging/${compilerNameC}_HEADERS/tgmath_clang.h

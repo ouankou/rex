@@ -3,9 +3,9 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/ncgen.h,v 1.12 2010/04/04 19:39:53 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/ncgen.h,v 1.12 2010/04/04 19:39:53 dmh
+ *Exp $
  *********************************************************************/
-
 
 #ifdef USE_NETCDF4
 #define CLASSICONLY 0

@@ -2634,7 +2634,7 @@ else
 if ROSE_USING_GCC_VERSION_LATER_10_1
       # skip these codes when using GNU 10.1 (testing)
 else
-      # DQ (7/23/2020): These are failing code for EDG 6.0 and GNU 10.1 (debugging this).
+      # DQ (7/23/2020): These are failing code for legacy frontend 6.0 and GNU 10.1 (debugging this).
 #     EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
 endif
  # The test codes fail CLANG 10.0
@@ -2744,25 +2744,17 @@ $(TEST_Source_passed): %.passed: $(srcdir)/% $(TEST_TRANSLATOR) $(top_srcdir)/sc
 TEST_Objects_FoldedConstants = ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_FOLDED_CONSTANTS:.C=.foldedConstants-o}
 TEST_Objects_UnfoldedConstants = ${ALL_TESTCODES:.C=.unfoldedConstants-o}
 
-if ROSE_USE_EDG_VERSION_5_0
-# EDG versions 6.0 and later do not require the -rose:unparse_edg_normalized_method_ROSE_1392 
-# option (it appears that template declarations mihgt no longer be normalized).
 method-defn-in-tpldecl-0.C.passed: $(srcdir)/method-defn-in-tpldecl-0.C $(TEST_TRANSLATOR) $(top_srcdir)/scripts/test_exit_status
 	@$(RTH_RUN) \
-	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-0 -rose:unparse_edg_normalized_method_ROSE_1392; test -e method-defn-in-tpldecl-0" \
+	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-0; test -e method-defn-in-tpldecl-0" \
 	    TITLE="testTranslator $(notdir $<) [$@]" \
 	    $(top_srcdir)/scripts/test_exit_status $@
-endif
 
-if ROSE_USE_EDG_VERSION_5_0
-# EDG versions 6.0 and later do not require the -rose:unparse_edg_normalized_method_ROSE_1392 
-# option (it appears that template declarations mihgt no longer be normalized).
 method-defn-in-tpldecl-1.C.passed: $(srcdir)/method-defn-in-tpldecl-1.C $(srcdir)/method-defn-in-tpldecl-1.h $(TEST_TRANSLATOR) $(top_srcdir)/scripts/test_exit_status
 	@$(RTH_RUN) \
-	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-1 -rose:unparse_edg_normalized_method_ROSE_1392; test -e method-defn-in-tpldecl-1" \
+	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-1; test -e method-defn-in-tpldecl-1" \
 	    TITLE="testTranslator $(notdir $<) [$@]" \
 	    $(top_srcdir)/scripts/test_exit_status $@
-endif
 
 # DQ (9/18/2011): This is testing the option to process the AST to use the constant folded values (contained in the AST).
 $(TEST_Objects_FoldedConstants): ../../testTranslatorFoldedConstants
@@ -2955,10 +2947,10 @@ test_multiple_files_2: $(srcdir)/test2018_01.C $(srcdir)/test2018_02.C
 test_multiple_files_3: $(srcdir)/test2019_30a.C $(srcdir)/test2019_30b.C $(srcdir)/test2019_30.h 
 	../../testTranslator -rose:verbose 0 -c $(srcdir)/test2019_30a.C $(srcdir)/test2019_30b.C 
 
-# DQ (7/9/2019): This test demonstrates a failing case for older versions of EDG (pre 5.0) 
+# DQ (7/9/2019): This test demonstrates a failing case for older versions of legacy frontend (pre 5.0) 
 # when using at least GNU 5.1.  Not clear if we should worry about this since we are moving
-# to have EDG 5.0 be the default shortly.  This issue reproduces a problem that is only see
-# in one of the CFG tests.  It is not a problem with EDG 5.0, as I understand it.
+# to have legacy frontend 5.0 be the default shortly.  This issue reproduces a problem that is only see
+# in one of the CFG tests.  It is not a problem with legacy frontend 5.0, as I understand it.
 test_multiple_files_4: $(srcdir)/test2019_42a.C $(srcdir)/test2019_42b.C 
 	../../testTranslator -rose:verbose 0 -c $(srcdir)/test2019_42a.C $(srcdir)/test2019_42b.C 
 
@@ -2989,10 +2981,10 @@ endif
 
 # DQ (11/19/2012): HPCToolKit use.  This makes some significant assumptions on how we have setup HPCToolKit.
 hpctoolkit:
-	hpcrun -e WALLCLOCK -- ../../testTranslator  -w -rose:verbose 0 -rose:skip_unparse_asm_commands -rose:skipAstConsistancyTests -rose:skip_commentsAndDirectives -rose:skip_unparse -I/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests -c /home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests/testPerformance.C
+	hpcrun -e WALLCLOCK -- ../../testTranslator  -w -rose:verbose 0 -rose:skip_unparse_asm_commands -rose:skipAstConsistancyTests -rose:skip_commentsAndDirectives -rose:skip_unparse -I/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests -c /home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests/testPerformance.C
 #	hpcprof hpctoolkit-lt-testTranslator-measurements/lt-testTranslator-000000-000-0f802c45-7612-0.hpcrun
 	hpcprof hpctoolkit-lt-testTranslator-measurements/lt-testTranslator-000000-000-0f802c45-3676-0.hpcrun
-#	hpcviewer /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-edg4x-rc-debug_mode_off/tests/nonsmoke/functional/CompileTests/Cxx_tests/hpctoolkit-lt-testTranslator-database-11205 &
+#	hpcviewer /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-legacy_frontend-rc-debug_mode_off/tests/nonsmoke/functional/CompileTests/Cxx_tests/hpctoolkit-lt-testTranslator-database-11205 &
 
 check-local:
 #	@$(MAKE) $(PASSING_TEST_Source_passed)

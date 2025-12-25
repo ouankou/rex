@@ -19,7 +19,7 @@ traverseCommonBlock_SOURCES = traverseCommonBlock.C
 
 generatedCodeExamples = 
 
-# turn off edg warnings such as "variable x declared but never referenced" for test input files
+# turn off frontend warnings such as "variable x declared but never referenced" for test input files
 TEST_CXXFLAGS = -rose:verbose 0  -g3
 
 if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT

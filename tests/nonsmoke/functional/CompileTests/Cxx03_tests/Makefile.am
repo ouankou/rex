@@ -84,15 +84,15 @@ EXTRA_DIST = $(TESTCODES_REQUIRED_TO_PASS) $(TESTCODE_CURRENTLY_FAILING)
 check-local:
 if USING_GNU_COMPILER
 if ROSE_USING_GCC_VERSION_LATER_4_8
-	@echo "C++03 tests require configuration with either EDG version 4.9 and GNU version 4.8 or backend compiler or EDG 4.12 and 4.8 or any later GNU compiler."
-	@echo "C++03 tests using EDG 4.12 and any supported backend compiler are allowed."
+	@echo "C++03 tests require configuration with either legacy frontend version 4.9 and GNU version 4.8 or backend compiler or legacy frontend 4.12 and 4.8 or any later GNU compiler."
+	@echo "C++03 tests using legacy frontend 4.12 and any supported backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Source_passed)
 endif # ROSE_USING_GCC_VERSION_LATER_4_8
 else
 if USING_CLANG_COMPILER
 # Exclude this list of files in the case of CLANG compiler.
 	@echo "USING_CLANG_COMPILER == true"
-	@echo "C++03 tests not allowed with EDG 4.9: Clang backend compiler using EDG 4.12 or greater frontend."
+	@echo "C++03 tests not allowed with legacy frontend 4.9: Clang backend compiler using legacy frontend 4.12 or greater frontend."
 # DQ (3/22/2020): Builtins are now mostly supported, allowing tests so that we can debug Mac support during COVID-19 work at home.
 # DQ (2/21/2017): Too many failing files due to builtin functions that are missing.
 #	@$(MAKE) $(PASSING_TEST_Objects)
@@ -102,7 +102,7 @@ else # NOT USING_CLANG_COMPILER
 if USING_INTEL_COMPILER
 # Exclude this list of files in the case of Intel compiler.
 	@echo "USING_INTEL_COMPILER == true"
-	@echo "C++03 tests using EDG 4.12 Intel backend compiler are allowed."
+	@echo "C++03 tests using legacy frontend 4.12 Intel backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Source_passed)
 else # NOT USING_INTEL_COMPILER
 # This is an unknown compiler.

@@ -189,7 +189,7 @@ if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
     rose_inputbuildLabelStatement2.f
 endif
 
-# turn off edg warnings such as "variable x declared but never referenced" for test input files
+# turn off frontend warnings such as "variable x declared but never referenced" for test input files
 TEST_CXXFLAGS = -rose:verbose 0  -g3
 
 # Many of these tests follow a very regular pattern and can be transformed into a testable command in the same way.  Some

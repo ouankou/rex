@@ -205,23 +205,24 @@ Grammar::getGrammarName() const
 std::string
 Grammar::getGrammarTagName()
    {
-  // This function returns the grammar name to be substituted for "$GRAMMAR_TAG_PREFIX_"
-  // so that all tags (in the global enum) are unique.  However since for SAGE the enums
-  // are already set (they are used in the EDG code and I would like to avoid changing the
-  // SAGE EDG interface, and generaly I would like to have the base level grammar be
-  // compatable with SAGE) we want to have the "$GRAMMAR_TAG_PREFIX_" be "" in the case of the
-  // SAGE grammar.  To do this we recognize if this grammar is the base level grammar (root == NULL)
-  // and return "" in this case.  Within the hierarchy of grammars that ROSETTA builds
-  // the root grammar (base level grammar) has a NULL pointer for it's parent grammar.
+  // This function returns the grammar name to be substituted for
+  // "$GRAMMAR_TAG_PREFIX_" so that all tags (in the global enum) are unique.
+  // However since for SAGE the enums are already set (they are used in the
+  // legacy frontend code and I would like to avoid changing the SAGE legacy
+  // frontend interface, and generaly I would like to have the base level
+  // grammar be compatable with SAGE) we want to have the "$GRAMMAR_TAG_PREFIX_"
+  // be "" in the case of the SAGE grammar.  To do this we recognize if this
+  // grammar is the base level grammar (root == NULL) and return "" in this
+  // case.  Within the hierarchy of grammars that ROSETTA builds the root
+  // grammar (base level grammar) has a NULL pointer for it's parent grammar.
   // This is sufficient for its identification.
 
-     ROSE_ASSERT(this != NULL);
-     string returnName = "";
-     if (parentGrammar != NULL)
-        {
-       // returnName = getGrammarName();
-          returnName = getGrammarPrefixName();
-        }
+  ROSE_ASSERT(this != NULL);
+  string returnName = "";
+  if (parentGrammar != NULL) {
+    // returnName = getGrammarName();
+    returnName = getGrammarPrefixName();
+  }
 
      return returnName;
    }
@@ -3978,23 +3979,30 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
                             }
                        }
                  // Reaching the default case is an error.
-                    outputFile << "default: cout << \"invalid index \" << idx << "
-                        << "\" in get_traversalSuccessorByIndex()\" << endl;\n"
-                        << "ROSE_ASSERT(false);\n"
-                 // DQ (8/31/2009): Added return statement to avoid EDG warning when compiling ROSE with ROSE.
-                        << "return NULL;\n";
-                 // Close the switch.
-                    outputFile << "}\n";
+                       outputFile
+                           << "default: cout << \"invalid index \" << idx << "
+                           << "\" in get_traversalSuccessorByIndex()\" << "
+                              "endl;\n"
+                           << "ROSE_ASSERT(false);\n"
+                           // DQ (8/31/2009): Added return statement to avoid
+                           // legacy frontend warning when compiling ROSE with
+                           // ROSE.
+                           << "return NULL;\n";
+                       // Close the switch.
+                       outputFile << "}\n";
                   }
              }
           else
              {
             // There are no successors, so calling this function was an error. Complain.
-               outputFile << "cout << \"error: get_traversalSuccessorByIndex called on node of type \" << \""
-                          << node.getName() << "\" << \" that has no successors!\" << endl;\n"
-                          << "ROSE_ASSERT(false);\n"
-            // DQ (8/31/2009): Added return statement to avoid EDG warning when compiling ROSE with ROSE.
-                          << "return NULL;\n";
+            outputFile << "cout << \"error: get_traversalSuccessorByIndex "
+                          "called on node of type \" << \""
+                       << node.getName()
+                       << "\" << \" that has no successors!\" << endl;\n"
+                       << "ROSE_ASSERT(false);\n"
+                       // DQ (8/31/2009): Added return statement to avoid legacy
+                       // frontend warning when compiling ROSE with ROSE.
+                       << "return NULL;\n";
              }
           outputFile << "}\n";
        // end: generate get_traversalSuccessorByIndex() method
@@ -4155,11 +4163,14 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
             else
              {
             // There are no successors, so calling this function was an error. Complain.
-               outputFile << "cout << \"error: get_childIndex called on node of type \" << \""
-                          << node.getName() << "\" << \" that has no successors!\" << endl;\n"
-                          << "ROSE_ASSERT(false);\n"
-            // DQ (8/30/2009): Added return statement to avoid EDG warning when compiling ROSE with ROSE.
-                          << "return 0; \n";
+            outputFile << "cout << \"error: get_childIndex called on node of "
+                          "type \" << \""
+                       << node.getName()
+                       << "\" << \" that has no successors!\" << endl;\n"
+                       << "ROSE_ASSERT(false);\n"
+                       // DQ (8/30/2009): Added return statement to avoid legacy
+                       // frontend warning when compiling ROSE with ROSE.
+                       << "return 0; \n";
              }
           outputFile << "}\n";
        // end: generate get_childIndex() method

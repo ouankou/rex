@@ -23,8 +23,6 @@ violated.
 Policy checkers should not enter the following directories:
   * Directories containing an "include-staging" subdirectory. Such directoriess are
     build trees.
-  * The src/frontend/CxxFrontend/EDG/EDG_* directories. ROSE has no control over
-    the contents of these files since they belong to the Edison Design Group.
   * Any directory that contains a file name ".3rd_party_software"
 
 Although each policy checker can be run individually, the scripts/policies-checker.sh is a

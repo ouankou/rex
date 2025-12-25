@@ -1,4 +1,5 @@
-// This test code demonstrates that EDG normalizes the "__decltype()" gnu extension to "decltype()".
+// This test code demonstrates that legacy frontend normalizes the
+// "__decltype()" gnu extension to "decltype()".
 
 template < typename _Size >
 void  __fill_n_a ( _Size __n )

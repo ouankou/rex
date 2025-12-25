@@ -1,5 +1,4 @@
 // See also std::shared_ptr
-// See also Sawyer::SharedPointer ($ROSE/src/util/Sawyer/SharedPointer.h)
 
 #ifndef COUNT_REF_HANDLE
 #define COUNT_REF_HANDLE

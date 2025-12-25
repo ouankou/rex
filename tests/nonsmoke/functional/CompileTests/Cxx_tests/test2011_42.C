@@ -12,6 +12,7 @@ namespace C
    {
      typedef int A;
 
-  // Name qualification is required here (though GNU 4.2 does not appear to require it, EDG does).
+     // Name qualification is required here (though GNU 4.2 does not appear to
+     // require it, legacy frontend does).
      ::A::B foo();
    }

@@ -18,7 +18,7 @@ TESTCODES = data_hash.C
 #     lazyarray.C where.C partitioning.C domain.C array_notemplates.C
 
 # codes used to isolate bugs (not very interesting)
-# testUnparser.C findNullBlockInEDG.C
+# testUnparser.C findNullBlockInFrontend.C
 
 # Files which don't compile (but used to do so) (this has been isolated as test2001_23.C)
 # f_op_all.C i_op_all.C d_op_all.C
@@ -75,7 +75,7 @@ EXTRA_DIST = \
 
 clean-local:
 	rm -f *.o rose_*.C *.sage.C test2001_??.C.show outputFile *.out.C \
-              *.C.pdf *.C.edg.pdf *.pdf *.int.C rose_directives_list.txt core testSysIncludeOptionOrder.out \
+              *.C.pdf *.pdf *.int.C rose_directives_list.txt core testSysIncludeOptionOrder.out \
               testIncludeOptionOrder.out rose_testSysIncludeOptionOrder.c rose_testIncludeOptionOrder.c
 	rm -rf ti_files
 

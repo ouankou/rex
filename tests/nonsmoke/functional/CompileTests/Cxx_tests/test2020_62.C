@@ -1,5 +1,6 @@
 // This passes for g++ and clang++, but fails for gcc and clang (c mode).
-// This also fails for EDG (c mode), and passes for EDG in C++ mode.
+// This also fails for legacy frontend (c mode), and passes for legacy frontend
+// in C++ mode.
 static void foobar(struct my_class* X);
 
 struct my_class

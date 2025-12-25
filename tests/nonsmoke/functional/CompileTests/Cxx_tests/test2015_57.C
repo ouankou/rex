@@ -13,9 +13,11 @@
 //typedef float __m128 __attribute__ ((__vector_size__ (32), __may_alias__));
   typedef float __m128 __attribute__ ((__vector_size__ (16), __may_alias__));
 #endif
-// Intel backend compiler requires __inline to be only on the function 
-// declaration, not the defining function (EDG does not require this).
-  static __inline __m128 __attribute__((__always_inline__)) _mm_setzero_ps_rose (void);
+// Intel backend compiler requires __inline to be only on the function
+// declaration, not the defining function (legacy frontend does not require
+// this).
+static __inline __m128 __attribute__((__always_inline__))
+_mm_setzero_ps_rose(void);
 #else
 // Debugging to make sure we are using the Intel compiler macro.
 // #error "Intel compiler not being used"

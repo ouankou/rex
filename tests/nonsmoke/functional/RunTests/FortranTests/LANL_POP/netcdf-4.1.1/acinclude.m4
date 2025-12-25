@@ -148,7 +148,7 @@ fi
 ])
 
 dnl Check for utility for generating makefile dependencies.
-dnl Should only be used at the UPC.
+dnl Should only be used at the center.
 dnl
 AC_DEFUN([UD_PROG_CC_MAKEDEPEND],
 [

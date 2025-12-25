@@ -39,7 +39,7 @@
 # test03: Uses testCG on a set of specimens in test03-specimens, diffs results against 
 #         test03-answers
 #
-# test04: DOES NOT CURRENTLY RUN on EDG 5.0, Leek updated it for EDG 6.0 and gcc > 5.
+# test04: DOES NOT CURRENTLY RUN on legacy frontend 5.0, Leek updated it for legacy frontend 6.0 and gcc > 5.
 #         Test the specimens in the CompileTests/Cxx_tests for which we have answers in the 
 #         test04-answers 
 #
@@ -150,12 +150,9 @@ Test04AnswerDir = $(srcdir)/test04-answers
 Test04Specimens = $(notdir $(patsubst %.cg.dmp, %, $(wildcard $(Test04AnswerDir)/*.C.cg.dmp)))
 Test04Targets = $(addprefix t4_, $(addsuffix .passed, $(Test04Specimens)))
 
-#EDG 5.0 has problems with some of the Cxx compile tests, so we have to skip that.
-#And I updated the tests to reflect changes after gcc 4.9.  -Jim Leek (2022/03/10)
-if !ROSE_USE_EDG_VERSION_5_0  
+# Updated the tests to reflect changes after GCC 4.9. -Jim Leek (2022/03/10)
 if ROSE_USING_GCC_VERSION_LATER_4_9
 TEST_TARGETS += $(Test04Targets)
-endif
 endif
 
 test04: $(Test04Targets)

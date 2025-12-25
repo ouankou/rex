@@ -172,25 +172,14 @@ if test "x$enable_smaller_generated_files" = "xyes"; then
   AC_DEFINE([ROSE_USE_SMALLER_GENERATED_FILES], [], [Whether to use smaller (but more numerous) generated files for the ROSE IR])
 fi
 
-# This is the support for using EDG as the frontend in ROSE.
-AC_MSG_NOTICE([EDG frontend support removed; disabling legacy EDG toggles])
-edg_major_version_number=0
-edg_minor_version_number=0
-AC_SUBST(ROSE_EDG_MAJOR_VERSION_NUMBER, [$edg_major_version_number])
-AC_SUBST(ROSE_EDG_MINOR_VERSION_NUMBER, [$edg_minor_version_number])
-AM_CONDITIONAL(ROSE_USE_EDG_VERSION_5_0, [false])
-AM_CONDITIONAL(ROSE_USE_EDG_VERSION_6_0, [false])
-AM_CONDITIONAL(ROSE_USE_EDG_VERSION_6_3, [false])
-AM_CONDITIONAL(ROSE_HAS_EDG_SOURCE, [false])
-AM_CONDITIONAL(BINARY_EDG_TARBALL_ENABLED, [false])
-AM_CONDITIONAL(ROSE_USE_EDG_QUAD_FLOAT, [false])
-AM_CONDITIONAL(ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION, [false])
+# Legacy frontend support removed; keep legacy frontend toggles disabled.
+AC_MSG_NOTICE([legacy frontend support removed; legacy frontend toggles disabled])
 
 # This is the support for using Clang as a frontend in ROSE not the support for Clang as a compiler to compile ROSE source code.
 ROSE_SUPPORT_CLANG
 
-# DQ (1/4/2009) Added support for optional GNU language extensions in new EDG/ROSE interface.
-# This value will be substituted into EDG/4.0/src/rose_lang_feat.h in the future (not used at present!)
+# DQ (1/4/2009) Added support for optional GNU language extensions in new legacy frontend/ROSE interface.
+# This value will be substituted into legacy frontend/4.0/src/rose_lang_feat.h in the future (not used at present!)
 AC_ARG_ENABLE(gnu-extensions, AS_HELP_STRING([--enable-gnu-extensions], [Enable internal support in ROSE for GNU language extensions]))
 if test "x$enable_gnu_extensions" = "xyes"; then
   ROSE_SUPPORT_GNU_EXTENSIONS="TRUE"
@@ -199,8 +188,8 @@ else
 fi
 AC_SUBST(ROSE_SUPPORT_GNU_EXTENSIONS)
 
-# DQ (1/4/2009) Added support for optional Microsoft language extensions in new EDG/ROSE interface.
-# This value will be substituted into EDG/4.0/src/rose_lang_feat.h in the future (not used at present!)
+# DQ (1/4/2009) Added support for optional Microsoft language extensions in new legacy frontend/ROSE interface.
+# This value will be substituted into legacy frontend/4.0/src/rose_lang_feat.h in the future (not used at present!)
 AC_ARG_ENABLE(microsoft-extensions, AS_HELP_STRING([--enable-microsoft-extensions], [Enable internal support in ROSE for Microsoft language extensions]))
 if test "x$enable_microsoft_extensions" = "xyes"; then
   ROSE_SUPPORT_MICROSOFT_EXTENSIONS="TRUE"
@@ -369,7 +358,7 @@ ROSE_SUPPORT_GRAPHVIZ
 # we can make the backend selection a bit more compiler dependent. Actually we likely
 # don't need this!
 # DQ (9/17/2006): These should be the same for both C and C++ (else we will need separate macros)
-# Setup the -D<xxx> defines required to allow EDG to take the same path through the compiler
+# Setup the -D<xxx> defines required to allow legacy frontend to take the same path through the compiler
 # specific and system specific header files as for the backend compiler.  These depend
 # upon the selection of the back-end compiler.
 # GET_COMPILER_SPECIFIC_DEFINES
@@ -448,7 +437,7 @@ fi
 # *****************************************************************
 
 # DQ (2/7/17): This is a problem reported by Robb (sometimes gcc is not installed).
-# This is used in EDG (host_envir.h)  Test by building a bad version of gcc
+# This is used in legacy frontend (host_envir.h)  Test by building a bad version of gcc
 # use shell script called gcc with "exit 1" inside.
 if test "x$FRONTEND_CXX_COMPILER_VENDOR" = "xgnu" ; then
    GCC_VERSION=`gcc -dumpversion | cut -d\. -f1`
@@ -460,12 +449,12 @@ if test "x$FRONTEND_CXX_COMPILER_VENDOR" = "xgnu" ; then
    AC_SUBST(GCC_VERSION)
    AC_SUBST(GCC_MINOR_VERSION)
 else
- # DQ (2/8/2017): Default configuration of EDG will behave like GNU 4.8.x (unclear if this is idea).
+ # DQ (2/8/2017): Default configuration of legacy frontend will behave like GNU 4.8.x (unclear if this is idea).
    GCC_VERSION=4
    GCC_MINOR_VERSION=8
 fi
 
-# echo "Exiting after test for GNU compiler and setting the version info for EDG (GCC_VERSION and GCC_MINOR_VERSION)."
+# echo "Exiting after test for GNU compiler and setting the version info for legacy frontend (GCC_VERSION and GCC_MINOR_VERSION)."
 # exit 1
 
 # DQ (7/27/2020): debugging info
@@ -548,7 +537,7 @@ else
 
   # DQ (11/1/2011): I think that we need these for more complex header file
   # requirements than we have seen in testing C code to date.  Previously
-  # in testing C codes with the EDG 4.x we didn't need as many header files.
+  # in testing C codes with the legacy frontend 4.x we didn't need as many header files.
     GENERATE_BACKEND_C_COMPILER_SPECIFIC_HEADERS
     GENERATE_BACKEND_CXX_COMPILER_SPECIFIC_HEADERS
 fi
@@ -584,7 +573,7 @@ AC_PROG_CXX
 AC_MSG_NOTICE([in configure.in ... CXX = "$CXX"])
 
 # DQ (9/17/2006): These should be the same for both C and C++ (else we will need separate macros)
-# Setup the -D<xxx> defines required to allow EDG to take the same path through the compiler
+# Setup the -D<xxx> defines required to allow legacy frontend to take the same path through the compiler
 # specific and system specific header files as for the backend compiler.  These depend
 # upon the selection of the back-end compiler.
 GET_COMPILER_SPECIFIC_DEFINES
@@ -596,7 +585,7 @@ ROSE_FLAG_CXX_OPTIONS
 ROSE_FLAG_OPTIONS
 
 # This must go after the setup of the headers options
-# Setup the CXX_INCLUDE_STRING to be used by EDG to find the correct headers
+# Setup the CXX_INCLUDE_STRING to be used by legacy frontend to find the correct headers
 # SETUP_BACKEND_COMPILER_SPECIFIC_REFERENCES
 # JJW (12/10/2008): We don't preprocess the header files for the new interface,
 # but we still need to use the original C++ header directories
@@ -624,11 +613,6 @@ AC_C_BIGENDIAN
 AC_CHECK_HEADERS([byteswap.h machine/endian.h])
 
 ROSE_SUPPORT_VALGRIND
-
-AC_ARG_WITH(wave-default, [  --with-wave-default     Use Wave as the default preprocessor],
-            [AC_DEFINE([ROSE_WAVE_DEFAULT], true, [Use Wave as default in ROSE])],
-            [AC_DEFINE([ROSE_WAVE_DEFAULT], false, [Simple preprocessor as default in ROSE])]
-            )
 
 # Figure out what version of lex we have available
 # flex works better than lex (this gives a preference to flex (flex is gnu))
@@ -914,7 +898,7 @@ AC_SUBST(RT_LIBS)
 # if test -d ${srcdir}/developersScratchSpace; then
 #   :
 # else
-#   echo "This is a non-developer version of ROSE (source distributed with EDG binary)"
+#   echo "This is a non-developer version of ROSE (source distributed with legacy frontend binary)"
 #   enable_dq_developer_tests=no
 # fi
 # ])
@@ -956,7 +940,7 @@ AC_DEFUN([ROSE_SUPPORT_ROSE_PART_3],
 [
 # Begin macro ROSE_SUPPORT_ROSE_PART_3.
 
-# Legacy compatibility: provide a stable build triplet substitution even without EDG.
+# Legacy compatibility: provide a stable build triplet substitution even without legacy frontend.
 build_triplet_without_redhat=`${srcdir}/config/cleanConfigGuessOutput "$build" "$build_cpu" "$build_vendor"`
 AC_SUBST(build_triplet_without_redhat)
 
@@ -1230,8 +1214,6 @@ tests/nonsmoke/functional/CompilerOptionsTests/testIncludeOptions/Makefile
 tests/nonsmoke/functional/CompilerOptionsTests/testOutputFileOption/Makefile
 tests/nonsmoke/functional/CompilerOptionsTests/testNostdincOption/Makefile
 tests/nonsmoke/functional/CompilerOptionsTests/testAnsiOption/Makefile
-tests/nonsmoke/functional/CompilerOptionsTests/testWave/Makefile
-tests/nonsmoke/functional/CompilerOptionsTests/tokenStream_tests/Makefile
 tests/nonsmoke/functional/Makefile
 tests/nonsmoke/functional/moveDeclarationTool/Makefile
 tests/nonsmoke/functional/RunTests/A++Tests/Makefile

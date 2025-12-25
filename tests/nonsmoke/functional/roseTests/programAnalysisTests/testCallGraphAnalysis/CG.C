@@ -2,18 +2,19 @@
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
 // Interestingly it must be at the top of the list of include files.
 
-// DQ (8/26/2016): Added support for the call graph generation for template functions in classes 
-// that are moved by EDG outside of the class and for which we previously only captured the 
-// function prototype and for which the new fix adds the function definitions to the AST.
-// Note that this cased the results to change and for many of the save correct answer to be
-// updated to reflect the improved AST.  As a result of studing the results, the current
-// call graph computation has a number of observed limitations:
+// DQ (8/26/2016): Added support for the call graph generation for template
+// functions in classes that are moved by legacy frontend outside of the class
+// and for which we previously only captured the function prototype and for
+// which the new fix adds the function definitions to the AST. Note that this
+// cased the results to change and for many of the save correct answer to be
+// updated to reflect the improved AST.  As a result of studing the results, the
+// current call graph computation has a number of observed limitations:
 //    1) SgConstructorInitializers are not included as function calls
 //    2) implicit base class constructor calls are not handled.
-// Note that these were acceptable limitations for the time when the original call graph support 
-// was written.  However, we will be replacing this call graph with a future on based on a subset 
-// of the interprocedural control flow graph.
-
+// Note that these were acceptable limitations for the time when the original
+// call graph support was written.  However, we will be replacing this call
+// graph with a future on based on a subset of the interprocedural control flow
+// graph.
 
 #include "rose_config.h"
 #undef CONFIG_ROSE /* prevent error about including both private and public headers; must be between rose_config.h and rose.h */

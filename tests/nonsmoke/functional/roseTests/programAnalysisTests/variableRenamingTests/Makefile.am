@@ -8,15 +8,15 @@ noinst_PROGRAMS =
 # Location of input specimens (so we only need to list the file base names in the rest of the makefile).
 SPECIMEN_DIR = $(top_srcdir)/tests/nonsmoke/functional/CompileTests/Cxx_tests
 
-# These specimens were commented out in the edg3 branch with the comment that they "should be fixed (as opposed to testcodes
-# that are expected to fail)" and which currently also fail in the edg4x branch.
+# These specimens were commented out in the legacy branch with the comment that they "should be fixed (as opposed to testcodes
+# that are expected to fail)" and which currently still fail.
 FAILURE_TO_PASS = test2004_02.C test2005_114.C test2005_187.C test2006_47.C
 
-# These specimens fail the test but were also not tested in the edg3x release branch.
-NOT_TESTED_IN_EDG3 = test2006_54.C test2011_78.C
+# These specimens fail the test but were also not tested in the release branch.
+NOT_TESTED_IN_RELEASE_BRANCH = test2006_54.C test2011_78.C
 
 # Do not run the test against these input specimens.
-EXCLUDE_SPECIMENS = $(FAILURE_TO_PASS) $(NOT_TESTED_IN_EDG3)
+EXCLUDE_SPECIMENS = $(FAILURE_TO_PASS) $(NOT_TESTED_IN_RELEASE_BRANCH)
 
 # All the input specimens against which we should run the test.  The EXAMPLE_TESTCODES_REQUIRED_TO_PASS comes from
 # the following included file (BTW, it doesn't work to include it as "$(SPECIMEN_DIR)/Makefile-pass.inc").

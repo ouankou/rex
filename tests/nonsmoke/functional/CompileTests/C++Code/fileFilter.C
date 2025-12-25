@@ -39,9 +39,10 @@ using namespace std;
 bool
 fileContainsProblemCharaters ( string filename, bool ignoreTabs )
    {
-  // This function looks for characters that can appear in ASCII files, but which are
-  // a problem to the EDG parser (e.g. Carriage Returns) or tabs which would be a 
-  // problem to the accurate unparsing of the final code.
+  // This function looks for characters that can appear in ASCII files, but
+  // which are a problem to the legacy frontend parser (e.g. Carriage Returns)
+  // or tabs which would be a problem to the accurate unparsing of the final
+  // code.
 
   // printf ("Input filename = %s \n",filename.c_str());
 

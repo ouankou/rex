@@ -298,7 +298,7 @@ volatileTypeModifier_SOURCES = volatileTypeModifier.C
 
 findVariableDeclarations_SOURCES = findVariableDeclarations.C
 
-# Use this to control use of -lrose -ledg vs. the very long list 
+# Use this to control use of -lrose vs. the very long list 
 # of separate libraries which is faster to use in development.
 LDADD = $(WAVE_LDFLAGS) $(ROSE_SEPARATE_LIBS) 
 
@@ -1415,4 +1415,3 @@ if USE_ROSE_IN_BUILD_TREE_VAR
 else
 	$(MAKE) -f exampleMakefile
 endif
-

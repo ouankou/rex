@@ -8,16 +8,14 @@ class Templ
           static int templStatic;
    };
 
-// This does not compile with EDG...
-// template<typename T> Templ<T>::templStatic = 0;
+   // This does not compile with legacy frontend...
+   // template<typename T> Templ<T>::templStatic = 0;
 
-Templ<void> A;
+   Templ<void> A;
 
-
-class Descriptor
-   {
-     public:
-          class ExtensionRange{};
+   class Descriptor {
+   public:
+     class ExtensionRange {};
    };
 
 class DescriptorPool

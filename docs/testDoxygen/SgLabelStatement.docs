@@ -10,7 +10,7 @@ The label statment is used for labels asociated with goto statements.
 
 A label construct in C++ has a statement associated with it,
 this concept is not represented in ROSE, but is one of the ways 
-that IPR differs from ROSE.  It seems that EDG accepts the representation of
+that IPR differs from ROSE.  It seems that legacy frontend accepts the representation of
 a label without a statement as an extension (ref Peter).  An empty
 statement is an alternative representation:
 

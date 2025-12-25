@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/libncdap3/getvara.h,v 1.9 2010/04/10 20:56:38 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/getvara.h,v 1.9 2010/04/10 20:56:38
+ *dmh Exp $
  *********************************************************************/
 #ifndef GETVARA_H
 #define GETVARA_H

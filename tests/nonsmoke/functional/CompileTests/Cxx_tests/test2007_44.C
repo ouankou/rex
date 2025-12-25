@@ -9,11 +9,13 @@ void f() {
 
 produces the following assertion failure:
 
-identityTranslator: /home/willcock2/ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:18347: 
-SgExpression* sage_gen_expr(an_expr_node*, a_boolean, DataRequiredForComputationOfSourcePostionInformation*): Assertion sourcePositionData.ok() == true failed.
-Abort
+identityTranslator:
+/home/willcock2/ROSE/src/frontend/legacy_frontend/sage_gen_be.C:18347:
+SgExpression* sage_gen_expr(an_expr_node*, a_boolean,
+DataRequiredForComputationOfSourcePostionInformation*): Assertion
+sourcePositionData.ok() == true failed. Abort
 
--- Jeremiah Willcock 
+-- Jeremiah Willcock
 */
 
 struct A

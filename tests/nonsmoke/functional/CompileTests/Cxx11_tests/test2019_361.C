@@ -1,6 +1,7 @@
 class C 
    {
-  // DQ (4/13/2019): EDG 4.12 does not mark these internally as being specified using "= delete" syntax.
+  // DQ (4/13/2019): legacy frontend 4.12 does not mark these internally as
+  // being specified using "= delete" syntax.
 
   // These are marked using the "= delete" syntax.
      C& operator=(const C&) & = delete;

@@ -20,7 +20,8 @@ SimpleInstrumentation::visit (SgNode * astNode)
   if (block != NULL)
     {
        SgNullStatement* stmt = buildNullStatement();
-       attachArbitraryText(stmt,"int UPCR_TLD_DEFINE (counter2, 4, 4) = 100;");
+       attachArbitraryText(stmt,
+                           "int ROSE_TEST_TLD_DEFINE (counter2, 4, 4) = 100;");
        prependStatement(stmt,block);
     }
 }

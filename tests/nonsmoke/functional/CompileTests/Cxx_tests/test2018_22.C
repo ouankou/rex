@@ -25,11 +25,13 @@ typedef int (X::*PMF_)(int);
 // #define __builtin_va_arg(v,type) rose__builtin_va_arg(v,sizeof(type))
 // #define __builtin_va_arg builtin_va_arg
 
-// Since we can't turn on the builtin function (conflicts with EDG C++11 constexpr protytypes)
-// we need to define this in a way that we can recognize it and transform it back to a builtin
-// function.  Alternatively, we could selectively turn on the EDG support for only a few builtin
+// Since we can't turn on the builtin function (conflicts with legacy frontend
+// C++11 constexpr protytypes) we need to define this in a way that we can
+// recognize it and transform it back to a builtin function.  Alternatively, we
+// could selectively turn on the legacy frontend support for only a few builtin
 // functions.
-// #define __builtin_va_arg(v,__type) ({__type __builtin_va_arg_variable; __builtin_va_arg_variable;})
+// #define __builtin_va_arg(v,__type) ({__type __builtin_va_arg_variable;
+// __builtin_va_arg_variable;})
 
 X x;
 

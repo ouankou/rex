@@ -3,9 +3,11 @@ int xyz;
 
 /*
 
-When working with -rose:C_only, the frontend fails for 'if... else if...' constructs:
-expTranslator: ../../../../ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:22147: 
-     SgBasicBlock* sage_gen_block_statement(a_statement*): Assertion `startingFileInfo->ok()' failed.
+When working with -rose:C_only, the frontend fails for 'if... else if...'
+constructs: expTranslator:
+../../../../ROSE/src/frontend/legacy_frontend/sage_gen_be.C:22147: SgBasicBlock*
+sage_gen_block_statement(a_statement*): Assertion `startingFileInfo->ok()'
+failed.
 
 This would now be an urgent fix for us.
 */

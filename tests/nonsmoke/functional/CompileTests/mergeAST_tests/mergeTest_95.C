@@ -9,14 +9,14 @@ template <typename T>
 class Y : public X<T>
    {
      public:
-      // Note that if this constructor is not explicit then a compiler-generated version 
-      // of it is seen in the global scope but not added to the global declarations (currently).
-      // It is added as a member function to the AST and a symbol is added to the symbol table 
-      // in the scope. Then this is added as compiler generated, it still has it's EDG name 
-      // (e.g. "Y___L16")
-      // Y();// {}
+       // Note that if this constructor is not explicit then a
+       // compiler-generated version of it is seen in the global scope but not
+       // added to the global declarations (currently). It is added as a member
+       // function to the AST and a symbol is added to the symbol table in the
+       // scope. Then this is added as compiler generated, it still has it's
+       // legacy frontend name (e.g. "Y___L16") Y();// {}
 
-         virtual void do_toupper(const T & t) const;
+       virtual void do_toupper(const T &t) const;
    };
 
 Y<int> y;
