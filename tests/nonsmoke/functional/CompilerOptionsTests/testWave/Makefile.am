@@ -73,17 +73,6 @@ $(TEST_ObjectsTokens): testWaveTokens $(srcdir)/$(@:.o=.C)
 	rm -f tokens_$(@:.o=.c)
 	./testWaveTokens -c $(srcdir)/out/$(@:.o=.c) -o $(@:.c=.o)
 
-foo:
-	echo tokens_input.cxx | python -c ' \
-		import sys \
-		while sys.stdin: \
-			line = sys.stdin.readline() \
-			print ":::",line \
-		skip'
-#	if [ "`diff $(srcdir)/out/$(@:.o=.c).out $(@:.o=.c).out | wc -l`" != "0" ]; then exit 1; fi
-#	if [ "`diff $(srcdir)/out/rose_$(@:.o=.c) rose_$(@:.o=.c) | wc -l`" != "0" ]; then exit 1; fi
-	rm -f $(@:.c=.o)
-
 $(TEST_Rewrap): testRewrapping $(srcdir)/$(@:.o=.C)
 	rm -f $(@:.o=.c).out
 	./testWave -c $(srcdir)/out/$(@:.o=.c) -o $(@:.c=.o)

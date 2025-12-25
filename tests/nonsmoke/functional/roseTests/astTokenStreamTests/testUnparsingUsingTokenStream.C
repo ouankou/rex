@@ -22,7 +22,11 @@ void SimpleInstrumentation::visit(SgNode* astNode)
 #if 1
        // DQ (11/9/2015): Unless this is marked to be output in code generaton, this function will not show up in the output.
           printf ("Calling buildDefiningFunctionDeclaration() \n");
-          SgFunctionDeclaration *func_defn = buildDefiningFunctionDeclaration(SgName("testFunc"),buildVoidType(),buildFunctionParameterList(buildInitializedName(SgName("param1"),buildIntType(),NULL)),scope);
+          SgFunctionDeclaration *func_defn = buildDefiningFunctionDeclaration(
+              SgName("testFunc"), buildVoidType(),
+              buildFunctionParameterList(
+                  buildInitializedName(SgName("param1"), buildIntType(), NULL)),
+              scope);
 #endif
 #if 1
           reportNodesMarkedAsModified(func_defn);
@@ -139,8 +143,4 @@ int main(int argc, char *argv[])
   // checkIsModifiedFlag(project);
 
      return backend(project);
-   }
-
-
-
-
+}

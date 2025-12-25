@@ -218,7 +218,7 @@ HEADER_END
 HEADER_TOKEN_START
 // DQ (3/24/2007): These are added from Rama's
 // work on the lexical analysis of Fortran.  There will
-// be similar values for C and C++ (and Python at some point).
+// be similar values for C and C++.
 
 // DQ (3/24/2007): We should put this in a namespace or rename it.
 struct token_element

@@ -438,9 +438,11 @@ ROSE_DLL_API std::string getTemplateParameterKeyword(SgTemplateParameter* param)
    void initializeSwitchStatement(SgSwitchStatement* switchStatement,SgStatement *item_selector,SgStatement *body);
 
 //! Support function used for variable declarations in conditionals
-   void initializeWhileStatement(SgWhileStmt* whileStatement, SgStatement *  condition, SgStatement *body, SgStatement *else_body);
+   void initializeWhileStatement(SgWhileStmt *whileStatement,
+                                 SgStatement *condition, SgStatement *body);
 
-  //! Generate unique names for expressions and attach the names as persistent attributes ("UniqueNameAttribute")
+   //! Generate unique names for expressions and attach the names as persistent
+   //! attributes ("UniqueNameAttribute")
    void annotateExpressionsWithUniqueNames (SgProject* project);
 
    //! Check if a SgNode is a main() function declaration

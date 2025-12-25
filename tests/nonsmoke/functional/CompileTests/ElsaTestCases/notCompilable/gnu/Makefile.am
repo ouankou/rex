@@ -74,7 +74,6 @@ dC0014.c
 # DQ (6/30/2005): Removed to compile Kull (submitted by Jeremiah Willcock)
 #    test2005_85.C (Duff's Device)
 
-# Moved to explicit rule below so that we could include -I<pythonDir>
 #     test2005_18.C
 #     test2005_54.C
 #     test2005_24.C
@@ -94,7 +93,6 @@ dC0014.c
 #     test2004_30.C
 #     test2004_41.C
 
-# DQ (8/8/2005): requires use od Python.h not included in ROSE distribution
 #     test2004_92.C
 
 # Build the list of object files

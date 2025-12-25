@@ -53,12 +53,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildIntegerDivideOp()
    buildIntegerDivideAssignOp()
    
-   buildIsOp()
-   buildIsNotOp()
-   
-   buildMembershipOp()
-   buildNonMembershipOp()
-
    buildScopeOp()
 
   // Matlab operators
@@ -118,30 +112,12 @@ Additional functions to test (specific to sageBuilder.C):
    buildKeyDatumPair()
    buildKeyDatumPair_nfi()
 
-   buildDictionaryExp()
-   buildDictionaryExp_nfi()
-
-   buildComprehension()
-   buildComprehension_nfi()
-
-   buildListComprehension()
-   buildListComprehension_nfi()
-
-   buildSetComprehension()
-   buildSetComprehension_nfi()
-
-   buildDictionaryComprehension()
-   buildDictionaryComprehension_nfi()
-
    buildActualArgumentExpression()
    buildActualArgumentExpression_nfi()
 
    buildPragma()
 
    buildSwitchStatement_nfi()
-
-   buildExecStatement()
-   buildExecStatement_nfi()
 
    buildAtomicStmt()
    buildWhenStmt()
@@ -151,11 +127,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildDotDotExp()
 
    buildCatchStatementSeq()
-   buildPythonPrintStmt()
-   buildPythonPrintStmt_nfi()
-   buildPythonGlobalStmt()
-   buildPythonGlobalStmt_nfi()
-
    buildAsmStatement()
    buildAsmStatement_nfi()
 
@@ -178,7 +149,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildMatrixExp()
    buildMagicColonExp()
 
-   buildLambdaRefExp()
    buildTypeExpression()
    buildFunctionParameterRefExp_nfi()
    buildLambdaExp()
@@ -191,15 +161,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildStmtDeclarationStatement()
 
    buildNamespaceDeclaration()
-
-   buildNaryComparisonOp()
-   buildNaryComparisonOp_nfi()
-
-   buildNaryBooleanOp()
-   buildNaryBooleanOp_nfi()
-
-   buildStringConversion()
-   buildStringConversion_nfi()
 
    buildNondefiningClassDeclaration()
 
@@ -244,6 +205,4 @@ Additional functions to test (specific to sageBuilder.C):
 
 
    
-
-
 

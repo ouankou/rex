@@ -2335,7 +2335,9 @@ bool ClangToDotTranslator::VisitFunctionDecl(clang::FunctionDecl * function_decl
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, NULL);
+        sg_function_decl =
+            SageBuilder::buildDefiningFunctionDeclaration(name, ret_type,
+                                                          param_list, NULL);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {
@@ -2520,7 +2522,9 @@ bool ClangToDotTranslator::VisitFunctionDecl(clang::FunctionDecl * function_decl
     SgFunctionDeclaration * sg_function_decl;
 
     if (function_decl->isThisDeclarationADefinition()) {
-        sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type, param_list, NULL);
+        sg_function_decl =
+            SageBuilder::buildDefiningFunctionDeclaration(name, ret_type,
+                                                          param_list, NULL);
         sg_function_decl->set_definingDeclaration(sg_function_decl);
 
         if (function_decl->isVariadic()) {

@@ -1387,14 +1387,18 @@ ResetParentPointers::evaluateInheritedAttribute (
 #endif
                                    classDeclaration->set_parent(functionDeclaration);
                                  }
-                           // DQ (10/17/2004): Modified this to not enforce assertion that defining
-                           // declaration existed (see Python specific testcode: test2004_92.C).
-                           // Implemented the same fix for the firstNondefiningDeclaration as well.
+                                 // DQ (10/17/2004): Modified this to not
+                                 // enforce assertion that defining declaration
+                                 // existed. Implemented the same fix for the
+                                 // firstNondefiningDeclaration as well.
 
-                           // ROSE_ASSERT(classDeclaration->get_definingDeclaration() != NULL);
-                              if (classDeclaration->get_definingDeclaration() != NULL)
-                                 {
-                                // DQ (1/30/2013): Commented out assertion that appears to be only an issue for ROSE compiling ROSE (part of testing).
+                                 // ROSE_ASSERT(classDeclaration->get_definingDeclaration()
+                                 // != NULL);
+                                 if (classDeclaration
+                                         ->get_definingDeclaration() != NULL) {
+                                   // DQ (1/30/2013): Commented out assertion
+                                   // that appears to be only an issue for ROSE
+                                   // compiling ROSE (part of testing).
                                    if (classDeclaration->get_definingDeclaration()->get_parent() == NULL)
                                       {
 // DQ (9/12/2014): Added more control over output of messages for release versions of ROSE.
@@ -1405,7 +1409,7 @@ ResetParentPointers::evaluateInheritedAttribute (
 #endif
                                       }
                                 // ROSE_ASSERT(classDeclaration->get_definingDeclaration()->get_parent() != NULL);
-                                 }
+          }
 
                            // ROSE_ASSERT(classDeclaration->get_firstNondefiningDeclaration() != NULL);
                               if (classDeclaration->get_firstNondefiningDeclaration() != NULL)

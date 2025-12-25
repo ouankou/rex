@@ -403,17 +403,6 @@ OPTIONS
             on Windows systems as Perl is not generally found on Windows
             systems.
 
-        --postinstall-python=<pathname>
-
-            The pathname of a Python script which is to be included with
-            the installer's payload. It will be run by the generated
-            installer after all of the payload directories have been
-            extracted and installed.
-
-            Such post-install Python scripts are not generally supported
-            on Windows systems as Perl is not generally found on Windows
-            systems.
-
         --postinstall-sh=<pathname>
 
             The pathname of a Bourne-shell script which is to be included
@@ -440,17 +429,6 @@ OPTIONS
             extracted and installed.
 
             Such preinstall Perl scripts are not generally supported
-            on Windows systems as Perl is not generally found on Windows
-            systems.
-
-        --preinstall-python=<pathname>
-
-            The pathname of a Python script which is to be included with
-            the installer's payload. It will be run by the generated
-            installer before all of the payload directories have been
-            extracted and installed.
-
-            Such pre-install Python scripts are not generally supported
             on Windows systems as Perl is not generally found on Windows
             systems.
 

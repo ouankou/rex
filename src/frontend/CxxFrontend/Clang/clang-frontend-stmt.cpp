@@ -5271,8 +5271,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 isSgTemplateInstantiationMemberFunctionDecl(
                     SageBuilder::buildNondefiningMemberFunctionDeclaration(
                         SgName(method_decl->getNameAsString()), ret_type,
-                        param_list, class_scope, /*decoratorList=*/NULL,
-                        functionConstVolatileFlags,
+                        param_list, class_scope, functionConstVolatileFlags,
                         /*buildTemplateInstantiation=*/true, builder_args));
 
             if (inst_decl != NULL) {
@@ -5677,7 +5676,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   isSgTemplateInstantiationMemberFunctionDecl(
                       SageBuilder::buildNondefiningMemberFunctionDeclaration(
                           template_base_name, ret_type, param_list, func_scope,
-                          /*decoratorList=*/NULL, functionConstVolatileFlags,
+                          functionConstVolatileFlags,
                           /*buildTemplateInstantiation=*/true, builder_args));
 
               if (inst_decl != NULL) {
@@ -5950,7 +5949,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   isSgTemplateInstantiationFunctionDecl(
                       SageBuilder::buildNondefiningFunctionDeclaration(
                           template_base_name, ret_type, param_list, func_scope,
-                          /*decoratorList=*/NULL,
                           /*buildTemplateInstantiation=*/true, builder_args,
                           SgStorageModifier::e_default,
                           /*forceFreeFunctionScope=*/false));

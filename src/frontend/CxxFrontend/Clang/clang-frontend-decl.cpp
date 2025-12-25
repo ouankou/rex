@@ -5982,13 +5982,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         inst_nondef_decl =
             SageBuilder::buildNondefiningMemberFunctionDeclaration(
                 name, ret_type, inst_nondef_param_list, scope_for_symbol_table,
-                /*decoratorList=*/NULL, inst_method_cv_flags,
+                inst_method_cv_flags,
                 /*buildTemplateInstantiation=*/true, template_args_ptr);
       } else {
         inst_nondef_decl = SageBuilder::buildNondefiningFunctionDeclaration(
             name, ret_type, inst_nondef_param_list, scope_for_symbol_table,
-            /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
-            template_args_ptr, SgStorageModifier::e_default,
+            /*buildTemplateInstantiation=*/true, template_args_ptr,
+            SgStorageModifier::e_default,
             /*forceFreeFunctionScope=*/isFriendFreeFunction);
       }
 
@@ -6091,13 +6091,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             ROSE_ASSERT(inst_nondef_member != NULL);
             defining_inst = SageBuilder::buildDefiningMemberFunctionDeclaration(
                 name, ret_type, param_list, scope_for_symbol_table,
-                /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
-                inst_method_cv_flags, inst_nondef_member, template_args_ptr);
+                /*buildTemplateInstantiation=*/true, inst_method_cv_flags,
+                inst_nondef_member, template_args_ptr);
           } else {
             defining_inst = SageBuilder::buildDefiningFunctionDeclaration(
                 name, ret_type, param_list, scope_for_symbol_table,
-                /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
-                inst_symbol_decl, template_args_ptr,
+                /*buildTemplateInstantiation=*/true, inst_symbol_decl,
+                template_args_ptr,
                 /*forceFreeFunctionScope=*/isFriendFreeFunction);
           }
 
@@ -6275,7 +6275,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
           first_nondef =
               SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
-                  name, ret_type, first_param_list, builder_scope, NULL,
+                  name, ret_type, first_param_list, builder_scope,
                   functionConstVolatileFlags, effective_template_params);
           ROSE_ASSERT(first_nondef != NULL);
 
@@ -6321,7 +6321,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         SgTemplateMemberFunctionDeclaration *defining_template =
             SageBuilder::buildDefiningTemplateMemberFunctionDeclaration(
-                name, ret_type, param_list, target_scope, NULL,
+                name, ret_type, param_list, target_scope,
                 functionConstVolatileFlags, first_nondef);
 
         sg_function_decl = defining_template;
@@ -6407,7 +6407,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
           first_nondef =
               SageBuilder::buildNondefiningTemplateFunctionDeclaration(
-                  name, ret_type, first_param_list, builder_scope, NULL,
+                  name, ret_type, first_param_list, builder_scope,
                   templateParams);
           ROSE_ASSERT(first_nondef != NULL);
 
@@ -6459,7 +6459,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         SgTemplateFunctionDeclaration *defining_template =
             SageBuilder::buildDefiningTemplateFunctionDeclaration(
-                name, ret_type, param_list, target_scope, NULL, first_nondef);
+                name, ret_type, param_list, target_scope, first_nondef);
 
         sg_function_decl = defining_template;
         sg_function_decl->set_definingDeclaration(sg_function_decl);
@@ -6535,7 +6535,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
       if (first_nondef_for_builder != NULL) {
         sg_function_decl = SageBuilder::buildDefiningFunctionDeclaration(
-            name, ret_type, param_list, builder_scope, /*decoratorList=*/NULL,
+            name, ret_type, param_list, builder_scope,
             /*buildTemplateInstantiation=*/false, first_nondef_for_builder,
             /*templateArgumentsList=*/NULL, builder_force_free_scope);
       } else {
@@ -6614,14 +6614,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (isTemplateMemberFunction) {
         sg_function_decl =
             SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
-                name, ret_type, param_list, scope_for_symbol_table, NULL,
+                name, ret_type, param_list, scope_for_symbol_table,
                 functionConstVolatileFlags, templateParams);
         param_list->set_parent(sg_function_decl);
         sg_function_decl->set_parameterList(param_list);
       } else {
         sg_function_decl =
             SageBuilder::buildNondefiningTemplateFunctionDeclaration(
-                name, ret_type, param_list, scope_for_symbol_table, NULL,
+                name, ret_type, param_list, scope_for_symbol_table,
                 templateParams);
 
         // Set parameter list parent
@@ -6644,8 +6644,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             sg_function_decl =
                 SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
                     name, ret_type, param_list, scope_for_symbol_table,
-                    /*decoratorList=*/NULL, functionConstVolatileFlags,
-                    empty_template_params);
+                    functionConstVolatileFlags, empty_template_params);
 
             param_list->set_parent(sg_function_decl);
             sg_function_decl->set_parameterList(param_list);
@@ -6662,14 +6661,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           sg_function_decl =
               SageBuilder::buildNondefiningMemberFunctionDeclaration(
                   name, ret_type, param_list, scope_for_symbol_table,
-                  /*decoratorList=*/NULL, functionConstVolatileFlags,
+                  functionConstVolatileFlags,
                   /*buildTemplateInstantiation=*/true, empty_template_args);
         } else {
           sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
               name, ret_type, param_list, scope_for_symbol_table,
-              /*decoratorList=*/NULL, /*buildTemplateInstantiation=*/true,
-              empty_template_args, SgStorageModifier::e_default,
-              isFriendFreeFunction);
+              /*buildTemplateInstantiation=*/true, empty_template_args,
+              SgStorageModifier::e_default, isFriendFreeFunction);
         }
 
         if (SgTemplateInstantiationFunctionDecl *inst_func =
@@ -6715,8 +6713,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
       } else if (!built_template_member_pattern) {
         sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
-            name, ret_type, param_list, scope_for_symbol_table, NULL, false,
-            NULL, SgStorageModifier::e_default, isFriendFreeFunction);
+            name, ret_type, param_list, scope_for_symbol_table, false, NULL,
+            SgStorageModifier::e_default, isFriendFreeFunction);
       }
     }
 

@@ -668,10 +668,9 @@ SageInterface::initializeSwitchStatement(SgSwitchStatement* switchStatement,SgSt
           body->set_parent(switchStatement);
    }
 
-
-void
-SageInterface::initializeWhileStatement(SgWhileStmt* whileStatement, SgStatement *  condition, SgStatement *body, SgStatement *else_body)
-   {
+   void SageInterface::initializeWhileStatement(SgWhileStmt *whileStatement,
+                                                SgStatement *condition,
+                                                SgStatement *body) {
      ROSE_ASSERT(whileStatement);
 
   // Rasmussen (3/22/2020): Fixed setting case insensitivity
@@ -683,23 +682,11 @@ SageInterface::initializeWhileStatement(SgWhileStmt* whileStatement, SgStatement
      if (whileStatement->get_body() == NULL)
           whileStatement->set_body(body);
 
-  // Python support.
-     if (whileStatement->get_else_body() == NULL)
-          whileStatement->set_else_body(else_body);
-
      setOneSourcePositionNull(whileStatement);
      if (condition) condition->set_parent(whileStatement);
-     if (body) body->set_parent(whileStatement);
-
-  // DQ (8/10/2011): This is added by Michael to support a Python specific feature.
-     if (else_body != NULL)
-        {
-          whileStatement->set_else_body(else_body);
-          else_body->set_parent(whileStatement);
-        }
+     if (body)
+       body->set_parent(whileStatement);
    }
-
-
 
 SgNamespaceDefinitionStatement*
 SageInterface::enclosingNamespaceScope( SgDeclarationStatement* declaration )
@@ -22894,7 +22881,7 @@ void SageInterface::annotateExpressionsWithUniqueNames (SgProject* project)
     sg::swap_child(ll, rr, &SgFunctionDeclaration::get_definition,    &SgFunctionDeclaration::set_definition);
     sg::swap_child(ll, rr, &SgFunctionDeclaration::get_parameterList, &SgFunctionDeclaration::set_parameterList);
 
-    // \todo do we need to swap also exception spec, decorator_list, etc. ?
+    // \todo do we need to swap other metadata (exception specs, etc.)?
   }
 #endif
 
@@ -22917,10 +22904,6 @@ void SageInterface::annotateExpressionsWithUniqueNames (SgProject* project)
     // create new function definition/declaration in the same scope
     SgScopeStatement*         containing_scope = definingDeclaration.get_scope();
     SgType*                   result_type = definingDeclaration.get_type()->get_return_type();
-    SgExprListExp*            decorators = deepCopy( definingDeclaration.get_decoratorList() );
-
- // DQ (4/9/2015): Suggested fix for this function.
- // SgFunctionDeclaration*    wrapperfn = SB::buildDefiningFunctionDeclaration(newName, result_type, &param_list, containing_scope, decorators);
     SgFunctionDeclaration*    wrapperfn = SB::buildDefiningFunctionDeclaration(newName, result_type, &param_list, containing_scope);
 
     SgFunctionDefinition*     wrapperdef = wrapperfn->get_definition();
@@ -26384,8 +26367,8 @@ SageInterface::buildFunctionPrototype ( SgFunctionDeclaration* functionDeclarati
      bool isTemplateInstantiationMemberFunctionDecl = false;
 
      SgScopeStatement* scope             = functionDeclaration->get_scope();
-  // SgTemplateParameterPtrList* templateParameterList = NULL; // functionDeclaration->get_templateParameterList();
-     SgExprListExp* python_decoratorList = NULL;
+     // SgTemplateParameterPtrList* templateParameterList = NULL; //
+     // functionDeclaration->get_templateParameterList();
      bool buildTemplateInstantiation     = false;
      SgTemplateArgumentPtrList* templateArgumentsList = NULL;
 
@@ -26418,15 +26401,21 @@ SageInterface::buildFunctionPrototype ( SgFunctionDeclaration* functionDeclarati
 
                functionConstVolatileFlags = memberFunctionType->get_mfunc_specifier();
 
-            // SgTemplateMemberFunctionDeclaration*
-            // buildNondefiningTemplateMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist,
-            //      SgScopeStatement* scope, SgExprListExp* decoratorList, unsigned int functionConstVolatileFlags, SgTemplateParameterPtrList* templateParameterList );
+               // SgTemplateMemberFunctionDeclaration*
+               // buildNondefiningTemplateMemberFunctionDeclaration (const
+               // SgName & name, SgType* return_type, SgFunctionParameterList
+               // *parlist,
+               //      SgScopeStatement* scope, unsigned int
+               //      functionConstVolatileFlags, SgTemplateParameterPtrList*
+               //      templateParameterList );
 
                SgTemplateParameterPtrList templateParameterList = original_templateMemberFunctionDeclaration->get_templateParameters();
             // ROSE_ASSERT(templateParameterList != NULL);
 
                templateMemberFunctionDeclaration =
-                    buildNondefiningTemplateMemberFunctionDeclaration ( name, return_type, param_list, scope, python_decoratorList, functionConstVolatileFlags, &templateParameterList );
+                   buildNondefiningTemplateMemberFunctionDeclaration(
+                       name, return_type, param_list, scope,
+                       functionConstVolatileFlags, &templateParameterList);
 #if 0
                printf ("ERROR: Template functions are not yet supported! \n");
                ROSE_ABORT();
@@ -26454,13 +26443,18 @@ SageInterface::buildFunctionPrototype ( SgFunctionDeclaration* functionDeclarati
 
                SgTemplateFunctionDeclaration* templateFunctionDeclaration = NULL; // isSgTemplateFunctionDeclaration(functionDeclaration);
 
-            // SgTemplateFunctionDeclaration*
-            // buildNondefiningTemplateFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist,
-            //      SgScopeStatement* scope=NULL, SgExprListExp* decoratorList = NULL, SgTemplateParameterPtrList* templateParameterList = NULL);
+               // SgTemplateFunctionDeclaration*
+               // buildNondefiningTemplateFunctionDeclaration (const SgName &
+               // name, SgType* return_type, SgFunctionParameterList *parlist,
+               //      SgScopeStatement* scope=NULL, SgTemplateParameterPtrList*
+               //      templateParameterList = NULL);
 
                SgTemplateParameterPtrList templateParameterList = original_templateFunctionDeclaration->get_templateParameters();
 
-               templateFunctionDeclaration = buildNondefiningTemplateFunctionDeclaration ( name, return_type, param_list, scope, python_decoratorList, &templateParameterList );
+               templateFunctionDeclaration =
+                   buildNondefiningTemplateFunctionDeclaration(
+                       name, return_type, param_list, scope,
+                       &templateParameterList);
 #if 0
                printf ("ERROR: Template functions are not yet supported! \n");
                ROSE_ABORT();
@@ -26512,9 +26506,13 @@ SageInterface::buildFunctionPrototype ( SgFunctionDeclaration* functionDeclarati
 
                SgMemberFunctionDeclaration* memberFunctionDeclaration = NULL; // isSgMemberFunctionDeclaration(functionDeclaration);
 
-            // SgMemberFunctionDeclaration*
-            // buildNondefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist,
-            //      SgScopeStatement* scope, SgExprListExp* decoratorList, unsigned int functionConstVolatileFlags, bool buildTemplateInstantiation, SgTemplateArgumentPtrList* templateArgumentsList);
+               // SgMemberFunctionDeclaration*
+               // buildNondefiningMemberFunctionDeclaration (const SgName &
+               // name, SgType* return_type, SgFunctionParameterList *parlist,
+               //      SgScopeStatement* scope, unsigned int
+               //      functionConstVolatileFlags, bool
+               //      buildTemplateInstantiation, SgTemplateArgumentPtrList*
+               //      templateArgumentsList);
 
                unsigned int functionConstVolatileFlags = 0;
 
@@ -26542,9 +26540,10 @@ SageInterface::buildFunctionPrototype ( SgFunctionDeclaration* functionDeclarati
                     functionConstVolatileFlags = memberFunctionType->get_mfunc_specifier();
 
                     memberFunctionDeclaration =
-                         buildNondefiningMemberFunctionDeclaration
-                              ( name, return_type, param_list, scope, python_decoratorList, functionConstVolatileFlags,
-                                buildTemplateInstantiation,templateArgumentsList );
+                        buildNondefiningMemberFunctionDeclaration(
+                            name, return_type, param_list, scope,
+                            functionConstVolatileFlags,
+                            buildTemplateInstantiation, templateArgumentsList);
 #if 0
                     printf ("ERROR: Member functions are not yet supported! \n");
                     ROSE_ABORT();
@@ -26595,9 +26594,12 @@ SageInterface::buildFunctionPrototype ( SgFunctionDeclaration* functionDeclarati
           case V_SgFunctionDeclaration:
              {
             // This is for a non-member non-template function declaration.
-               nondefiningFunctionDeclaration = buildNondefiningFunctionDeclaration (name, return_type, param_list, scope, python_decoratorList, buildTemplateInstantiation,templateArgumentsList);
-               ROSE_ASSERT(nondefiningFunctionDeclaration != NULL);
-               break;
+            nondefiningFunctionDeclaration =
+                buildNondefiningFunctionDeclaration(
+                    name, return_type, param_list, scope,
+                    buildTemplateInstantiation, templateArgumentsList);
+            ROSE_ASSERT(nondefiningFunctionDeclaration != NULL);
+            break;
              }
 
        // DQ (10/29/2020): Added new case.
@@ -26623,7 +26625,10 @@ SageInterface::buildFunctionPrototype ( SgFunctionDeclaration* functionDeclarati
 #if 0
                printf ("In case V_SgTemplateInstantiationFunctionDecl: using name = %s \n",name.str());
 #endif
-               nondefiningFunctionDeclaration = buildNondefiningFunctionDeclaration (name, return_type, param_list, scope, python_decoratorList, buildTemplateInstantiation,templateArgumentsList);
+               nondefiningFunctionDeclaration =
+                   buildNondefiningFunctionDeclaration(
+                       name, return_type, param_list, scope,
+                       buildTemplateInstantiation, templateArgumentsList);
                ROSE_ASSERT(nondefiningFunctionDeclaration != NULL);
                break;
              }

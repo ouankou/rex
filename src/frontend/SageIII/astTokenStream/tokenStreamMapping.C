@@ -4627,7 +4627,8 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
                               printf ("ending_NodeSequenceWithoutTokenMapping = %zu childAttributes.size() = %zu trailing_edge_node = %p \n",ending_NodeSequenceWithoutTokenMapping,childAttributes.size(),trailing_edge_node);
 #endif
-                           // Where the next child is associated with a NULL pointer (e.g. SgFunctionDeclaration can have a NULL pointer to the Python specific decorator list).
+                              // Where the next child is associated with a NULL
+                              // pointer.
                               int index = 1;
                               while ( (trailing_edge_node == NULL) && (ending_NodeSequenceWithoutTokenMapping + index) < childAttributes.size())
                                  {

@@ -6593,8 +6593,7 @@ typedef enum
 extern
 GQuark g_regex_error_quark (void);
 // # 296 "/home/dquinlan/local/glib-2.38.2-install/include/glib-2.0/glib/gregex.h"
-typedef enum
-{
+typedef enum {
   G_REGEX_CASELESS = 1 << 0,
   G_REGEX_MULTILINE = 1 << 1,
   G_REGEX_DOTALL = 1 << 2,
@@ -6611,8 +6610,7 @@ typedef enum
   G_REGEX_NEWLINE_LF = 1 << 21,
   G_REGEX_NEWLINE_CRLF = G_REGEX_NEWLINE_CR | G_REGEX_NEWLINE_LF,
   G_REGEX_NEWLINE_ANYCRLF = G_REGEX_NEWLINE_CR | 1 << 22,
-  G_REGEX_BSR_ANYCRLF = 1 << 23,
-  G_REGEX_JAVASCRIPT_COMPAT = 1 << 25
+  G_REGEX_BSR_ANYCRLF = 1 << 23
 } GRegexCompileFlags;
 // # 386 "/home/dquinlan/local/glib-2.38.2-install/include/glib-2.0/glib/gregex.h"
 typedef enum
@@ -11381,10 +11379,8 @@ typedef enum {
   RA_LISTENERS,
   RA_REGISTER,
   RA_PLUGIN_REGISTER,
-  RA_PYTHON_REGISTER,
   RA_HANDOFF,
   RA_PLUGIN_HANDOFF,
-  RA_PYTHON_HANDOFF,
   RA_LUA_PLUGINS,
   RA_PREFERENCES,
   RA_CONFIGURATION

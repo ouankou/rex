@@ -318,10 +318,10 @@ namespace LEOS {
 #  define BOOST_FUNCTION_STD_NS std
 //#endif
 
-// Borrowed from Boost.Python library: determines the cases where we
+// Borrowed from Boost: determines the cases where we
 // need to use std::type_info::name to compare instead of operator==.
-//#if defined( BOOST_NO_TYPEID )
-//#  define BOOST_FUNCTION_COMPARE_TYPE_ID(X,Y) ((X)==(Y))
+// #if defined( BOOST_NO_TYPEID )
+// #  define BOOST_FUNCTION_COMPARE_TYPE_ID(X,Y) ((X)==(Y))
 #if (defined(__GNUC__) && __GNUC__ >= 3) \
 //#elif (defined(__GNUC__) && __GNUC__ >= 3) \
  || defined(_AIX) \
@@ -1229,9 +1229,13 @@ void func1() {
             ("abcdef", createParseAndSetMember(&Database_t::etamin));
 }
 
- // Code above is reproducer for ROSE IdentityTranslator error that looks like this::
- // ...
- // TypidentityTranslator: /tmp/too1/spack-stage/spack-stage-h9i5VC/rose/src/frontend/SageIII/sageInterface/sageInterface.C:20774: bool SageInterface::isEquivalentType(const SgType*, const SgType*): Assertion `false' failed.
- // ...
- // ERROR: In SageInterface::isEquivalentType(): recursive limit exceeded for : counter = 301
-
+// Code above is reproducer for ROSE IdentityTranslator error that looks like
+// this::
+// ...
+// TypidentityTranslator:
+// /tmp/too1/spack-stage/spack-stage-h9i5VC/rose/src/frontend/SageIII/sageInterface/sageInterface.C:20774:
+// bool SageInterface::isEquivalentType(const SgType*, const SgType*): Assertion
+// `false' failed.
+// ...
+// ERROR: In SageInterface::isEquivalentType(): recursive limit exceeded for :
+// counter = 301

@@ -132,22 +132,24 @@ int main (int argc, char *argv[]) {
   // 3 - Build a member functions defined inside the class (need to add a hidden 1st non-defining)
 
   SgTemplateParameterPtrList mfnc0_tpl_params;
-  SgTemplateMemberFunctionDeclaration * mfnc0_decl = SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
-      "Set", buildVoidType(),
-      SageBuilder::buildFunctionParameterList( SageBuilder::buildInitializedName(SgName("E"), t_par1_type) ),
-      t_class_defn, nullptr, 0, &mfnc0_tpl_params
-  );
+  SgTemplateMemberFunctionDeclaration *mfnc0_decl =
+      SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
+          "Set", buildVoidType(),
+          SageBuilder::buildFunctionParameterList(
+              SageBuilder::buildInitializedName(SgName("E"), t_par1_type)),
+          t_class_defn, 0, &mfnc0_tpl_params);
 
   mfnc0_decl->get_declarationModifier().get_storageModifier().setStatic();
   mfnc0_decl->set_parent(t_class_defn);
 //  t_class_defn->append_statement(mfnc0_decl);
   mfnc0_decl->setCompilerGenerated(); // FIXME that is not sufficent so I also commented out the call to append_statement() above
 
-  SgTemplateMemberFunctionDeclaration * mfnc1_decl = SageBuilder::buildDefiningTemplateMemberFunctionDeclaration(
-      "Set", buildVoidType(),
-      SageBuilder::buildFunctionParameterList( SageBuilder::buildInitializedName(SgName("E"), t_par1_type) ),
-      t_class_defn, nullptr, 0, mfnc0_decl
-  );
+  SgTemplateMemberFunctionDeclaration *mfnc1_decl =
+      SageBuilder::buildDefiningTemplateMemberFunctionDeclaration(
+          "Set", buildVoidType(),
+          SageBuilder::buildFunctionParameterList(
+              SageBuilder::buildInitializedName(SgName("E"), t_par1_type)),
+          t_class_defn, 0, mfnc0_decl);
 
   mfnc1_decl->get_declarationModifier().get_storageModifier().setStatic();
   mfnc1_decl->set_parent(t_class_defn);
@@ -158,17 +160,18 @@ int main (int argc, char *argv[]) {
   // 4 - Build a member functions defined outside the class
 
   SgTemplateParameterPtrList mfnc2_tpl_params;
-  SgTemplateMemberFunctionDeclaration * mfnc2_decl = SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
-      "Reset", buildVoidType(), SageBuilder::buildFunctionParameterList(), t_class_defn, nullptr, 0, &mfnc2_tpl_params
-  );
+  SgTemplateMemberFunctionDeclaration *mfnc2_decl =
+      SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
+          "Reset", buildVoidType(), SageBuilder::buildFunctionParameterList(),
+          t_class_defn, 0, &mfnc2_tpl_params);
   mfnc2_decl->get_declarationModifier().get_storageModifier().setStatic();
   mfnc2_decl->set_parent(t_class_defn);
   t_class_defn->append_statement(mfnc2_decl);
-  
-  SgTemplateMemberFunctionDeclaration * mfnc3_decl = SageBuilder::buildDefiningTemplateMemberFunctionDeclaration(
-      "Reset", buildVoidType(), SageBuilder::buildFunctionParameterList(), t_class_defn,
-      nullptr, 0, mfnc2_decl
-  );
+
+  SgTemplateMemberFunctionDeclaration *mfnc3_decl =
+      SageBuilder::buildDefiningTemplateMemberFunctionDeclaration(
+          "Reset", buildVoidType(), SageBuilder::buildFunctionParameterList(),
+          t_class_defn, 0, mfnc2_decl);
   mfnc3_decl->set_parent(scope);
   scope->append_statement(mfnc3_decl);
 
@@ -178,5 +181,3 @@ int main (int argc, char *argv[]) {
 
   return backend (project);
 }
-
-

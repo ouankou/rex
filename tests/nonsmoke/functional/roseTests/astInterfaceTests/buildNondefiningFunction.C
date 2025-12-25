@@ -39,10 +39,16 @@ int main (int argc, char *argv[])
 
   SgFunctionParameterList * paraList3 = isSgFunctionParameterList(deepCopy(paraList));
 
-// DQ (8/23/2013): The buildDefiningFunctionDeclaration requires the non-defining declaration to be specified.
-// SageBuilder::buildDefiningFunctionDeclaration_T(const SgName & XXX_name, SgType* return_type, SgFunctionParameterList* paralist, bool isMemberFunction, SgScopeStatement* scope, 
-//      SgExprListExp* decoratorList, unsigned int functionConstVolatileFlags, actualFunction* first_nondefining_declaration, SgTemplateArgumentPtrList* templateArgumentsList)
-// SgFunctionDeclaration *func3 = buildDefiningFunctionDeclaration (SgName("foo"),buildVoidType(),paraList3);
+  // DQ (8/23/2013): The buildDefiningFunctionDeclaration requires the
+  // non-defining declaration to be specified.
+  // SageBuilder::buildDefiningFunctionDeclaration_T(const SgName& XXX_name,
+  // SgType* return_type, SgFunctionParameterList* paralist,
+  //     bool isMemberFunction, SgScopeStatement* scope, unsigned int
+  //     functionConstVolatileFlags, actualFunction*
+  //     first_nondefining_declaration, SgTemplateArgumentPtrList*
+  //     templateArgumentsList)
+  // SgFunctionDeclaration *func3 = buildDefiningFunctionDeclaration
+  // (SgName("foo"),buildVoidType(),paraList3);
   SgFunctionDeclaration *func3 = buildDefiningFunctionDeclaration (SgName("foo"),buildVoidType(),paraList3);
 
 	  // build a statement inside the function body
@@ -74,4 +80,3 @@ int main (int argc, char *argv[])
   AstTests::runAllTests(project);
   return backend (project);
 }
-

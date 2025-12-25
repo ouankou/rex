@@ -139,9 +139,6 @@ Grammar::setUpExpressions ()
   // DQ (12/13/2007): Added support for Fortran string concatenation operator
      NEW_TERMINAL_MACRO (ConcatenationOp,        "ConcatenationOp",        "CONCATENATION_OP" );
 
-  // driscoll6 (7/20/11): Support for n-ary operators in python
-     NEW_TERMINAL_MACRO (NaryComparisonOp,       "NaryComparisonOp",       "NARY_COMPARISON_OP");
-     NEW_TERMINAL_MACRO (NaryBooleanOp,          "NaryBooleanOp",          "NARY_BOOLEAN_OP");
      NEW_TERMINAL_MACRO (BoolValExp,             "BoolValExp",             "BOOL_VAL" );
      NEW_TERMINAL_MACRO (StringVal,              "StringVal",              "STRING_VAL" );
      NEW_TERMINAL_MACRO (ShortVal,               "ShortVal",               "SHORT_VAL" );
@@ -206,29 +203,9 @@ Grammar::setUpExpressions ()
   // sgCudaKernelCallExp is a node for CUDA support, it catch kernel's call.
      NEW_TERMINAL_MACRO (CudaKernelCallExp,        "CudaKernelCallExp",        "KERN_CALL" );
 
-  // driscoll6 (6/27/11) Support for Python
-     NEW_TERMINAL_MACRO (LambdaRefExp,              "LambdaRefExp",                 "LAMBDA_REF_EXP" );
-     NEW_TERMINAL_MACRO (TupleExp,                  "TupleExp",                     "TUPLE_EXP" );
-     NEW_TERMINAL_MACRO (ListExp,                   "ListExp",                      "LIST_EXP" );
-     NEW_TERMINAL_MACRO (DictionaryExp,             "DictionaryExp",                "DICT_EXP" );
-     NEW_TERMINAL_MACRO (KeyDatumPair,              "KeyDatumPair",                 "KEY_DATUM_PAIR" );
-
-     NEW_TERMINAL_MACRO (Comprehension,             "Comprehension",                "COMPREHENSION");
-     NEW_TERMINAL_MACRO (ListComprehension,         "ListComprehension",            "LIST_COMPREHENSION" );
-     NEW_TERMINAL_MACRO (SetComprehension,          "SetComprehension",             "SET_COMPREHENSION" );
-     NEW_TERMINAL_MACRO (DictionaryComprehension,   "DictionaryComprehension",      "DICTIONARY_COMPREHENSION" );
-     NEW_TERMINAL_MACRO (MembershipOp,              "MembershipOp",                 "MEMBERSHIP_OP" );
-     NEW_TERMINAL_MACRO (NonMembershipOp,           "NonMembershipOp",              "NON_MEMBERSHIP_OP" );
-     NEW_TERMINAL_MACRO (IsOp,                      "IsOp",                         "IS_OP" );
-     NEW_TERMINAL_MACRO (IsNotOp,                   "IsNotOp",                      "IS_NOT_OP" );
-
-     NEW_TERMINAL_MACRO (StringConversion,          "StringConversion",              "STR_CONV" );
-     NEW_TERMINAL_MACRO (YieldExpression,           "YieldExpression",               "YIELD_EXP" );
-
   // DQ (7/25/2020): Adding C++17 fold operator support.
      NEW_TERMINAL_MACRO (FoldExpression,            "FoldExpression",            "FOLD_EXPR" );
-     NEW_TERMINAL_MACRO (ChooseExpression,          "ChooseExpression",          "CHOOSE_EXPR" );
-  // NEW_TERMINAL_MACRO (YieldExpression,           "YieldExpression",           "YIELD_EXPR" );
+     NEW_TERMINAL_MACRO(ChooseExpression, "ChooseExpression", "CHOOSE_EXPR");
      NEW_TERMINAL_MACRO (AwaitExpression,           "AwaitExpression",           "AWAIT_EXPR" );
 
   // DQ (7/25/2020): Adding C++20 spaceship operator support.
@@ -381,25 +358,23 @@ Grammar::setUpExpressions ()
                             IntegerDivideAssignOp | ExponentiationAssignOp,
                             "CompoundAssignOp", "COMPOUND_ASSIGN_OP", false);
 
-     NEW_NONTERMINAL_MACRO (BinaryOp,
-          ArrowExp       | DotExp           | DotStarOp           | ArrowStarOp      | EqualityOp           | LessThanOp     |
-          GreaterThanOp  | NotEqualOp       | LessOrEqualOp       | GreaterOrEqualOp | AddOp                | SubtractOp     |
-          MultiplyOp     | DivideOp         | IntegerDivideOp     | ModOp            | AndOp                | OrOp           |
-          BitXorOp       | BitAndOp         | BitOrOp             | BitEqvOp         | CommaOpExp           | LshiftOp       |
-          RshiftOp       | PntrArrRefExp    | ScopeOp             | AssignOp         | ExponentiationOp     |
-          ConcatenationOp | PointerAssignOp | UserDefinedBinaryOp | CompoundAssignOp | MembershipOp         | SpaceshipOp    |
-          NonMembershipOp | IsOp            | IsNotOp             | ElementwiseOp        | PowerOp        |
-          LeftDivideOp    |
-          SIMDBinaryOp | SIMDLoad | SIMDBroadcast | SIMDStore | SIMDPartialStore | SIMDScalarStore |
-          SIMDGather | SIMDExplicitGather | SIMDScatter,
-          "BinaryOp","BINARY_EXPRESSION", false);
+     NEW_NONTERMINAL_MACRO(
+         BinaryOp,
+         ArrowExp | DotExp | DotStarOp | ArrowStarOp | EqualityOp | LessThanOp |
+             GreaterThanOp | NotEqualOp | LessOrEqualOp | GreaterOrEqualOp |
+             AddOp | SubtractOp | MultiplyOp | DivideOp | IntegerDivideOp |
+             ModOp | AndOp | OrOp | BitXorOp | BitAndOp | BitOrOp | BitEqvOp |
+             CommaOpExp | LshiftOp | RshiftOp | PntrArrRefExp | ScopeOp |
+             AssignOp | ExponentiationOp | ConcatenationOp | PointerAssignOp |
+             UserDefinedBinaryOp | CompoundAssignOp | SpaceshipOp |
+             ElementwiseOp | PowerOp | LeftDivideOp | SIMDBinaryOp | SIMDLoad |
+             SIMDBroadcast | SIMDStore | SIMDPartialStore | SIMDScalarStore |
+             SIMDGather | SIMDExplicitGather | SIMDScatter,
+         "BinaryOp", "BINARY_EXPRESSION", false);
 
-     NEW_NONTERMINAL_MACRO (NaryOp,
-          NaryBooleanOp  | NaryComparisonOp,
-          "NaryOp","NARY_EXPRESSION", false);
-
-  // DQ (11/21/2017): This was removed in favor of using the SgLabelRefExp.
-  // DQ (11/21/2017): Added support for label address value (see test2017_73.C).
+     // DQ (11/21/2017): This was removed in favor of using the SgLabelRefExp.
+     // DQ (11/21/2017): Added support for label address value (see
+     // test2017_73.C).
      NEW_NONTERMINAL_MACRO(
          ValueExp,
          BoolValExp | StringVal | ShortVal | CharVal | UnsignedCharVal |
@@ -411,9 +386,8 @@ Grammar::setUpExpressions ()
              VoidVal /* | LabelAddressVal */,
          "ValueExp", "ValueExpTag", false);
 
-     NEW_NONTERMINAL_MACRO (ExprListExp,
-          ListExp  | TupleExp | MatrixExp,
-          "ExprListExp","EXPR_LIST", /* can have instances = */ true);
+     NEW_NONTERMINAL_MACRO(ExprListExp, MatrixExp, "ExprListExp", "EXPR_LIST",
+                           /* can have instances = */ true);
 
      // TV (06/06/13) : CudaKernelCall are now considered to be a FunctionCall
      NEW_NONTERMINAL_MACRO (FunctionCallExp,
@@ -446,9 +420,6 @@ Grammar::setUpExpressions ()
              UnknownArrayOrFunctionReference | PseudoDestructorRefExp |
              CAFCoExpression |
              CudaKernelExecConfig | /* TV (04/22/2010): CUDA support */
-             LambdaRefExp | DictionaryExp | KeyDatumPair | Comprehension |
-             ListComprehension | SetComprehension | DictionaryComprehension |
-             NaryOp | StringConversion | YieldExpression |
              TemplateFunctionRefExp | TemplateMemberFunctionRefExp | AlignOfOp |
              RangeExp | MagicColonExp | // SK(08/20/2015): RangeExp and
                                         // MagicColonExp for Matlab
@@ -512,8 +483,8 @@ Grammar::setUpExpressions ()
 #endif
 
      UnaryOp.setFunctionPrototype             ( "HEADER_EXTRA_FUNCTIONS", "../Grammar/Expression.code" );
-     BinaryOp.setFunctionPrototype            ( "HEADER_EXTRA_FUNCTIONS", "../Grammar/Expression.code" );
-     NaryOp.setFunctionPrototype              ( "HEADER_EXTRA_FUNCTIONS", "../Grammar/Expression.code" );
+     BinaryOp.setFunctionPrototype("HEADER_EXTRA_FUNCTIONS",
+                                   "../Grammar/Expression.code");
 
 #if 0
   // DQ (1/14/2006): Removing the set_type() function since it shuld be computed from the operands directly
@@ -550,9 +521,6 @@ Grammar::setUpExpressions ()
 
      BinaryOp.excludeFunctionPrototype        ( "HEADER_GET_TYPE", "../Grammar/Expression.code" );
      BinaryOp.excludeSubTreeFunctionPrototype ( "HEADER_GET_TYPE", "../Grammar/Expression.code" );
-
-     NaryOp.excludeFunctionPrototype          ( "HEADER_GET_TYPE", "../Grammar/Expression.code" );
-     NaryOp.excludeSubTreeFunctionPrototype   ( "HEADER_GET_TYPE", "../Grammar/Expression.code" );
 
      ClassNameRefExp.excludeFunctionPrototype ( "HEADER_GET_TYPE", "../Grammar/Expression.code" );
      ValueExp.excludeFunctionPrototype        ( "HEADER_GET_TYPE", "../Grammar/Expression.code" );
@@ -731,21 +699,6 @@ Grammar::setUpExpressions ()
      ConcatenationOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                   "../Grammar/Expression.code" );
 
-     MembershipOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                  "../Grammar/Expression.code" );
-     NonMembershipOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                  "../Grammar/Expression.code" );
-     IsOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                  "../Grammar/Expression.code" );
-     IsNotOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                  "../Grammar/Expression.code" );
-     NaryOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                  "../Grammar/Expression.code" );
-     NaryComparisonOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                  "../Grammar/Expression.code" );
-     NaryBooleanOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                  "../Grammar/Expression.code" );
-
   // DQ (2/5/2004): Adding support for varargs in AST
      VarArgStartOp.setFunctionSource           ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      VarArgStartOneOperandOp.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
@@ -797,19 +750,11 @@ Grammar::setUpExpressions ()
      SuperExp.setFunctionSource         ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      ClassExp.setFunctionSource         ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      RefExp.setFunctionSource           ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     Initializer.setFunctionSource      ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     TupleExp.setFunctionSource         ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     ListExp.setFunctionSource          ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     DictionaryExp.setFunctionSource    ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     KeyDatumPair.setFunctionSource     ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     Comprehension.setFunctionSource           ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     SetComprehension.setFunctionSource        ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     ListComprehension.setFunctionSource       ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     DictionaryComprehension.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     StringConversion.setFunctionSource        ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
-     YieldExpression.setFunctionSource         ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
+     Initializer.setFunctionSource(
+         "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+         "../Grammar/Expression.code");
 
-  // DQ (7/25/2020): Adding support for C++17 and C++20.
+     // DQ (7/25/2020): Adding support for C++17 and C++20.
      FoldExpression.setFunctionSource          ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      AwaitExpression.setFunctionSource         ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      ChooseExpression.setFunctionSource        ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
@@ -854,9 +799,8 @@ Grammar::setUpExpressions ()
      UnaryOp.excludeFunctionPrototype        ( "HEADER_PRECEDENCE", "../Grammar/Expression.code" );
      ExpressionRoot.excludeFunctionPrototype ( "HEADER_PRECEDENCE", "../Grammar/Expression.code" );
      BinaryOp.setSubTreeFunctionPrototype    ( "HEADER_PRECEDENCE", "../Grammar/Expression.code" );
-     BinaryOp.excludeFunctionPrototype       ( "HEADER_PRECEDENCE", "../Grammar/Expression.code" );
-     NaryOp.setSubTreeFunctionPrototype      ( "HEADER_PRECEDENCE", "../Grammar/Expression.code" );
-     NaryOp.excludeFunctionPrototype         ( "HEADER_PRECEDENCE", "../Grammar/Expression.code" );
+     BinaryOp.excludeFunctionPrototype("HEADER_PRECEDENCE",
+                                       "../Grammar/Expression.code");
 
      CompoundAssignOp.excludeFunctionPrototype ( "HEADER_PRECEDENCE", "../Grammar/Expression.code" );
 
@@ -968,13 +912,7 @@ Grammar::setUpExpressions ()
      PointerAssignOp.editSubstitute ( "PRECEDENCE_VALUE", " 2" );
      IntegerDivideAssignOp.editSubstitute  ( "PRECEDENCE_VALUE", " 2" );
      ExponentiationAssignOp.editSubstitute ( "PRECEDENCE_VALUE", " 2" );
-     ThrowOp.editSubstitute         ( "PRECEDENCE_VALUE", "15" );
-     MembershipOp.editSubstitute    ( "PRECEDENCE_VALUE", " 9" );
-     NonMembershipOp.editSubstitute ( "PRECEDENCE_VALUE", " 9" );
-     IsOp.editSubstitute            ( "PRECEDENCE_VALUE", " 9" );
-     IsNotOp.editSubstitute         ( "PRECEDENCE_VALUE", " 9" );
-     NaryComparisonOp.editSubstitute ( "PRECEDENCE_VALUE", "13" );
-     NaryBooleanOp.editSubstitute    ( "PRECEDENCE_VALUE", "13" );
+     ThrowOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
      ConcatenationOp.editSubstitute ( "PRECEDENCE_VALUE", " 3" );
 
@@ -1068,11 +1006,9 @@ Grammar::setUpExpressions ()
      CudaKernelExecConfig.editSubstitute ( "PRECEDENCE_VALUE", " 0" );
      CudaKernelCallExp.editSubstitute ( "PRECEDENCE_VALUE", " 0" );
 
-     LambdaRefExp.editSubstitute ( "PRECEDENCE_VALUE", " 0" );
-
      UnaryOp.setFunctionPrototype ( "HEADER_GET_NEXT_EXPRESSION", "../Grammar/Expression.code" );
-     BinaryOp.setFunctionPrototype ( "HEADER_GET_NEXT_EXPRESSION", "../Grammar/Expression.code" );
-     NaryOp.setFunctionPrototype ( "HEADER_GET_NEXT_EXPRESSION", "../Grammar/Expression.code" );
+     BinaryOp.setFunctionPrototype("HEADER_GET_NEXT_EXPRESSION",
+                                   "../Grammar/Expression.code");
      CallExpression.setFunctionPrototype ( "HEADER_GET_NEXT_EXPRESSION", "../Grammar/Expression.code" );
      ConditionalExp.setFunctionPrototype ( "HEADER_GET_NEXT_EXPRESSION", "../Grammar/Expression.code" );
      NewExp.setFunctionPrototype ( "HEADER_GET_NEXT_EXPRESSION", "../Grammar/Expression.code" );
@@ -1119,15 +1055,6 @@ Grammar::setUpExpressions ()
      BinaryOp.setDataPrototype ( "SgExpression*", "originalExpressionTree", "= NULL",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
-
-     NaryOp.setFunctionPrototype ( "HEADER_NARY_OP", "../Grammar/Expression.code" );
-     NaryOp.setDataPrototype     ( "SgExpressionPtrList", "operands", "",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     NaryOp.editSubstitute       ( "HEADER_LIST_DECLARATIONS", "HEADER_LIST_FUNCTIONS", "../Grammar/Expression.code" );
-     NaryOp.editSubstitute       ( "LIST_NAME", "operand" );
-     NaryOp.setDataPrototype     ( "VariantTList", "operators", "",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
 
      ExpressionRoot.setFunctionPrototype ( "HEADER_EXPRESSION_ROOT_EXPRESSION", "../Grammar/Expression.code" );
   // QY:9/30/04: remove statement pointer. use parent pointer instead
@@ -1855,23 +1782,18 @@ Grammar::setUpExpressions ()
      GreaterThanOp.setFunctionPrototype ( "HEADER_GREATER_THAN_OPERATOR", "../Grammar/Expression.code" );
      NotEqualOp.setFunctionPrototype ( "HEADER_NOT_EQUAL_OPERATOR", "../Grammar/Expression.code" );
      LessOrEqualOp.setFunctionPrototype ( "HEADER_LESS_OR_EQUAL_OPERATOR", "../Grammar/Expression.code" );
-     GreaterOrEqualOp.setFunctionPrototype ( "HEADER_GREATER_OR_EQUAL_OPERATOR", "../Grammar/Expression.code" );
-     MembershipOp.setFunctionPrototype ( "HEADER_MEMBERSHIP_OP", "../Grammar/Expression.code" );
-     NonMembershipOp.setFunctionPrototype ( "HEADER_NON_MEMBERSHIP_OP", "../Grammar/Expression.code" );
-     IsOp.setFunctionPrototype ( "HEADER_IS_OP", "../Grammar/Expression.code" );
-     IsNotOp.setFunctionPrototype ( "HEADER_IS_NOT_OP", "../Grammar/Expression.code" );
+     GreaterOrEqualOp.setFunctionPrototype("HEADER_GREATER_OR_EQUAL_OPERATOR",
+                                           "../Grammar/Expression.code");
 
-  // DQ (6/20/2006): Relational Operators must return bool type
+     // DQ (6/20/2006): Relational Operators must return bool type
      EqualityOp.editSubstitute       ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
      LessThanOp.editSubstitute       ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
      GreaterThanOp.editSubstitute    ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
      NotEqualOp.editSubstitute       ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
      LessOrEqualOp.editSubstitute    ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     GreaterOrEqualOp.editSubstitute ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     MembershipOp.editSubstitute     ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     NonMembershipOp.editSubstitute  ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     IsOp.editSubstitute             ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     IsNotOp.editSubstitute          ( "HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "HEADER_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
+     GreaterOrEqualOp.editSubstitute("HEADER_BOOLEAN_GET_TYPE_MEMBER_FUNCTION",
+                                     "HEADER_BOOLEAN_GET_TYPE",
+                                     "../Grammar/Expression.code");
 
      AddOp.setFunctionPrototype ( "HEADER_ADD_OPERATOR", "../Grammar/Expression.code" );
      SubtractOp.setFunctionPrototype ( "HEADER_SUBTRACT_OPERATOR", "../Grammar/Expression.code" );
@@ -1888,9 +1810,6 @@ Grammar::setUpExpressions ()
      CommaOpExp.setFunctionPrototype ( "HEADER_COMMA_OPERATOR_EXPRESSION", "../Grammar/Expression.code" );
      LshiftOp.setFunctionPrototype ( "HEADER_LEFT_SHIFT_OPERATOR", "../Grammar/Expression.code" );
      RshiftOp.setFunctionPrototype ( "HEADER_RIGHT_SHIFT_OPERATOR", "../Grammar/Expression.code" );
-
-     NaryComparisonOp.setFunctionPrototype ( "HEADER_NARY_COMPARISON_OP", "../Grammar/Expression.code" );
-     NaryBooleanOp.setFunctionPrototype ( "HEADER_NARY_BOOLEAN_OP", "../Grammar/Expression.code" );
 
      MinusOp.setFunctionPrototype ( "HEADER_MINUS_OPERATOR", "../Grammar/Expression.code" );
      UnaryAddOp.setFunctionPrototype ( "HEADER_UNARY_ADD_OPERATOR", "../Grammar/Expression.code" );
@@ -2798,61 +2717,6 @@ Grammar::setUpExpressions ()
 
      CudaKernelCallExp.setDataPrototype ( "SgCudaKernelExecConfig*", "exec_config", "= NULL", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
- // driscoll6 (6/27/11): Python support
-     LambdaRefExp.setFunctionPrototype ( "HEADER_LAMBDA_REF_EXP", "../Grammar/Expression.code" );
-     LambdaRefExp.setDataPrototype ("SgFunctionDeclaration*", "functionDeclaration", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     TupleExp.setFunctionPrototype ( "HEADER_TUPLE_EXP", "../Grammar/Expression.code" );
-     ListExp.setFunctionPrototype ( "HEADER_LIST_EXP", "../Grammar/Expression.code" );
-
-     DictionaryExp.setFunctionPrototype ( "HEADER_DICTIONARY_EXP", "../Grammar/Expression.code" );
-     DictionaryExp.setDataPrototype("SgKeyDatumPairPtrList", "key_datum_pairs", "",
-                                  NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     DictionaryExp.editSubstitute       ( "HEADER_LIST_DECLARATIONS", "HEADER_LIST_FUNCTIONS", "../Grammar/Expression.code" );
-     DictionaryExp.editSubstitute       ( "LIST_NAME", "key_datum_pair" );
-
-     KeyDatumPair.setFunctionPrototype ( "HEADER_KEY_DATUM_PAIR", "../Grammar/Expression.code" );
-     KeyDatumPair.setDataPrototype ("SgExpression*", "key", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     KeyDatumPair.setDataPrototype ("SgExpression*", "datum", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     Comprehension.setFunctionPrototype ( "HEADER_COMPREHENSION", "../Grammar/Expression.code" );
-     Comprehension.setDataPrototype ("SgExpression*", "target", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     Comprehension.setDataPrototype ("SgExpression*", "iter", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     Comprehension.setDataPrototype ("SgExprListExp*", "filters", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     SetComprehension.setFunctionPrototype ( "HEADER_SET_COMPREHENSION", "../Grammar/Expression.code" );
-     SetComprehension.setDataPrototype ("SgExpression*", "element", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     SetComprehension.setDataPrototype ("SgExprListExp*", "generators", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     ListComprehension.setFunctionPrototype ( "HEADER_LIST_COMPREHENSION", "../Grammar/Expression.code" );
-     ListComprehension.setDataPrototype ("SgExpression*", "element", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     ListComprehension.setDataPrototype ("SgExprListExp*", "generators", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     DictionaryComprehension.setFunctionPrototype ( "HEADER_DICTIONARY_COMPREHENSION", "../Grammar/Expression.code" );
-     DictionaryComprehension.setDataPrototype ("SgKeyDatumPair*", "element", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     DictionaryComprehension.setDataPrototype ("SgExprListExp*", "generators", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     StringConversion.setFunctionPrototype ( "HEADER_STRING_CONVERSION", "../Grammar/Expression.code" );
-     StringConversion.setDataPrototype ("SgExpression*", "expression", "= NULL",
-                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     YieldExpression.setFunctionPrototype        ( "HEADER_YIELD_EXPRESSION", "../Grammar/Expression.code" );
-     YieldExpression.setFunctionSource           ( "SOURCE_YIELD_EXPRESSION", "../Grammar/Expression.code" );
-     YieldExpression.setDataPrototype            ( "SgExpression*", "value", "= NULL",
-             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
   // DQ (7/25/2020): Adding C++17 language features (required for C++20 support).
      FoldExpression.setFunctionPrototype        ( "HEADER_FOLD_EXPRESSION", "../Grammar/Expression.code" );
      FoldExpression.setFunctionSource           ( "SOURCE_FOLD_EXPRESSION", "../Grammar/Expression.code" );
@@ -2888,8 +2752,8 @@ Grammar::setUpExpressions ()
      Expression.setFunctionSource ( "SOURCE_BASECLASS_EXPRESSION", "../Grammar/Expression.code" );
 
      UnaryOp.setFunctionSource  ( "SOURCE_UNARY_EXPRESSION", "../Grammar/Expression.code" );
-     BinaryOp.setFunctionSource ( "SOURCE_BINARY_EXPRESSION", "../Grammar/Expression.code" );
-     NaryOp.setFunctionSource   ( "SOURCE_NARY_OP", "../Grammar/Expression.code" );
+     BinaryOp.setFunctionSource("SOURCE_BINARY_EXPRESSION",
+                                "../Grammar/Expression.code");
 
      ExpressionRoot.setFunctionSource         ( "SOURCE_EXPRESSION_ROOT","../Grammar/Expression.code" );
 
@@ -2976,13 +2840,10 @@ Grammar::setUpExpressions ()
      NotEqualOp.setFunctionSource       ( "SOURCE_NOT_EQUAL_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      LessOrEqualOp.setFunctionSource    ( "SOURCE_LESS_OR_EQUAL_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      GreaterOrEqualOp.setFunctionSource ( "SOURCE_GREATER_OR_EQUAL_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
-     NotOp.setFunctionSource            ( "SOURCE_NOT_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
-     MembershipOp.setFunctionSource     ( "SOURCE_MEMBERSHIP_OP","../Grammar/Expression.code" );
-     NonMembershipOp.setFunctionSource  ( "SOURCE_NON_MEMBERSHIP_OP","../Grammar/Expression.code" );
-     IsOp.setFunctionSource             ( "SOURCE_IS_OP","../Grammar/Expression.code" );
-     IsNotOp.setFunctionSource          ( "SOURCE_IS_NOT_OP","../Grammar/Expression.code" );
+     NotOp.setFunctionSource("SOURCE_NOT_OPERATOR_EXPRESSION",
+                             "../Grammar/Expression.code");
 
-  // DQ (6/20/2006): Relational Operators must return bool type
+     // DQ (6/20/2006): Relational Operators must return bool type
      EqualityOp.editSubstitute       ( "SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
      LessThanOp.editSubstitute       ( "SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
      GreaterThanOp.editSubstitute    ( "SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
@@ -3007,16 +2868,10 @@ Grammar::setUpExpressions ()
      LshiftOp.setFunctionSource ( "SOURCE_LEFT_SHIFT_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      RshiftOp.setFunctionSource ( "SOURCE_RIGHT_SHIFT_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
 
-     NaryComparisonOp.setFunctionSource ( "SOURCE_NARY_COMPARISON_OP","../Grammar/Expression.code" );
-     NaryBooleanOp.setFunctionSource ( "SOURCE_NARY_BOOLEAN_OP","../Grammar/Expression.code" );
-
      MinusOp.setFunctionSource ( "SOURCE_MINUS_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
 
-     UnaryAddOp.setFunctionSource ( "SOURCE_UNARY_ADD_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
-     MembershipOp.editSubstitute  ( "SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     NonMembershipOp.editSubstitute  ( "SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     IsOp.editSubstitute          ( "SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
-     IsNotOp.editSubstitute       ( "SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION", "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code" );
+     UnaryAddOp.setFunctionSource("SOURCE_UNARY_ADD_OPERATOR_EXPRESSION",
+                                  "../Grammar/Expression.code");
 
      SizeOfOp.setFunctionSource ( "SOURCE_SIZE_OF_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
      AlignOfOp.setFunctionSource ( "SOURCE_ALIGN_OF_OPERATOR_EXPRESSION","../Grammar/Expression.code" );
@@ -3332,28 +3187,6 @@ Grammar::setUpExpressions ()
      CudaKernelExecConfig.setFunctionSource ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
      CudaKernelExecConfig.setFunctionSource ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
      CudaKernelCallExp.setFunctionSource ( "SOURCE_CUDA_KERNEL_CALL_EXPRESSION","../Grammar/Expression.code" );
-
-  // driscoll6 (6/27/11): Python support
-     LambdaRefExp.setFunctionSource ( "SOURCE_LAMBDA_REF_EXP","../Grammar/Expression.code" );
-     TupleExp.setFunctionSource     ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     TupleExp.setFunctionSource     ( "SOURCE_TUPLE_EXP","../Grammar/Expression.code" );
-     ListExp.setFunctionSource      ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     ListExp.setFunctionSource      ( "SOURCE_LIST_EXP","../Grammar/Expression.code" );
-     DictionaryExp.setFunctionSource    ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     DictionaryExp.setFunctionSource    ( "SOURCE_DICTIONARY_EXP","../Grammar/Expression.code" );
-     KeyDatumPair.setFunctionSource     ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     KeyDatumPair.setFunctionSource     ( "SOURCE_KEY_DATUM_PAIR","../Grammar/Expression.code" );
-     Comprehension.setFunctionSource     ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     Comprehension.setFunctionSource     ( "SOURCE_COMPREHENSION","../Grammar/Expression.code" );
-     ListComprehension.setFunctionSource     ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     ListComprehension.setFunctionSource     ( "SOURCE_LIST_COMPREHENSION","../Grammar/Expression.code" );
-     SetComprehension.setFunctionSource     ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     SetComprehension.setFunctionSource     ( "SOURCE_SET_COMPREHENSION","../Grammar/Expression.code" );
-     DictionaryComprehension.setFunctionSource     ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     DictionaryComprehension.setFunctionSource     ( "SOURCE_DICTIONARY_COMPREHENSION","../Grammar/Expression.code" );
-     StringConversion.setFunctionSource     ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
-     StringConversion.setFunctionSource     ( "SOURCE_STRING_CONVERSION","../Grammar/Expression.code" );
-     YieldExpression.setFunctionSource      ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );
 
   // DQ (7/25/2020): Adding support for C++20.
      FoldExpression.setFunctionSource      ( "SOURCE_DEFAULT_GET_TYPE","../Grammar/Expression.code" );

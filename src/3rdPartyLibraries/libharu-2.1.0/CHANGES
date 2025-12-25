@@ -5,7 +5,6 @@ Version 2.1.0 (2008.05.27)
  - Added initial support for Alpha channel in RGB and palette-based PNG images.
  - Added HPDF_GetTTFontDefFromFile() function. This closes [FR #1604475] (HPDF_FONT_EXISTS not error) 
  - Added FreeBasic bindings. (Klaus Siebke)
- - Added Python bindings. (Li Jun)
  - Added U3D support. (Michail Vidiassov)
 
  - Changed the build system to use autotools.

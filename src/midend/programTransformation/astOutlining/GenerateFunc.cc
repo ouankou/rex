@@ -63,7 +63,8 @@ createFuncSkeleton (const string& name, SgType* ret_type,
         }
        else
         {
-          func = SageBuilder::buildDefiningFunctionDeclaration(name,ret_type,params,scope);
+          func = SageBuilder::buildDefiningFunctionDeclaration(name, ret_type,
+                                                               params, scope);
         }
 
      ROSE_ASSERT (func != NULL);

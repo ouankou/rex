@@ -3909,25 +3909,7 @@ version )
                 echo >>$file ""
                 echo >>$file "1;"
                 echo >>$file ""
-                ;;
-            python )
-                echo >>$file "##"
-                echo >>$file "##  ${file} -- Version Information for ${name} (syntax: Python)"
-                echo >>$file "##  [automatically generated and maintained by GNU shtool]"
-                echo >>$file "##"
-                echo >>$file ""
-                echo >>$file "class ${prefix}version:"
-                echo >>$file "    v_hex       = ${vHex}"
-                echo >>$file "    v_short     = \"${vShort}\""
-                echo >>$file "    v_long      = \"${vLong}\""
-                echo >>$file "    v_tex       = \"${vTeX}\""
-                echo >>$file "    v_gnu       = \"${vGNU}\""
-                echo >>$file "    v_web       = \"${vWeb}\""
-                echo >>$file "    v_sccs      = \"${vSCCS}\""
-                echo >>$file "    v_rcs       = \"${vRCS}\""
-                echo >>$file ""
-                ;;
-            * ) echo "$msgprefix:Error: invalid argument to option \`-l': \`$opt_l'" 1>&2
+                ;;            * ) echo "$msgprefix:Error: invalid argument to option \`-l': \`$opt_l'" 1>&2
                 shtool_exit 1
                 ;;
         esac

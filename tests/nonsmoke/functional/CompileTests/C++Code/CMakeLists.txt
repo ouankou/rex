@@ -40,14 +40,6 @@ if(valgrind)
   #	rm -f test2005_172
   #	${valgrind} testTranslator ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} test2005_172.o -o test2005_172
 
-  # This code requires access to Python.h
-  # (in the ${CMAKE_CURRENT_SOURCE_DIR}/pythonDir directory)
-  add_test(
-    NAME test2005_54
-    COMMAND ${valgrind} testTranslator ${ROSE_FLAGS}
-            -I${CMAKE_CURRENT_SOURCE_DIR}/pythonDir
-            -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_54.C
-  )
 
   add_test(
     NAME test2005_64

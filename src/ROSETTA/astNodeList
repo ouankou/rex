@@ -13,7 +13,6 @@ SgArrowExp
 SgArrowStarOp
 SgAsmOp
 SgAsmStmt
-SgAssertStmt
 SgAssignInitializer
 SgAssignOp
 SgAssignStatement
@@ -66,8 +65,6 @@ SgCommonBlock
 SgCommonBlockObject
 SgCommonSymbol
 SgComplexVal
-SgComprehension
-SgComprehensionList
 SgCompoundAssignOp
 SgCompoundInitializer
 SgCompoundLiteralExp
@@ -95,8 +92,6 @@ SgDefineDirectiveStatement
 SgDeleteExp
 SgDerivedTypeStatement
 SgDesignatedInitializer
-SgDictionaryComprehension
-SgDictionaryExp
 SgDimensionObject
 SgDirectedGraph
 SgDirectedGraphEdge
@@ -133,7 +128,6 @@ SgEnumVal
 SgEqualityOp
 SgEquivalenceStatement
 SgErrorDirectiveStatement
-SgExecStatement
 SgExponentiationOp
 SgExponentiationAssignOp
 SgExprListExp
@@ -210,10 +204,7 @@ SgHeaderFileReport
 SgInterfaceStatement
 SgInterfaceSymbol
 SgIntrinsicSymbol
-SgIsOp
-SgIsNotOp
 SgIorAssignOp
-SgKeyDatumPair
 SgCudaKernelExecConfig
 SgCudaKernelCallExp
 SgLabelRefExp
@@ -222,15 +213,12 @@ SgLabelSymbol
 SgLambdaCapture
 SgLambdaCaptureList
 SgLambdaExp
-SgLambdaRefExp
 SgLeftDivideOp
 SgLessOrEqualOp
 SgLessThanOp
 SgLineDirectiveStatement
 SgLinemarkerDirectiveStatement
 SgLinkageModifier
-SgListComprehension
-SgListExp
 SgLocatedNode
 SgLocatedNodeSupport
 SgLongDoubleVal
@@ -245,7 +233,6 @@ SgMemberFunctionDeclaration
 SgMemberFunctionRefExp
 SgMemberFunctionSymbol
 SgMemberFunctionType
-SgMembershipOp
 SgMicrosoftAttributeDeclaration
 SgMinusAssignOp
 SgMinusMinusOp
@@ -267,15 +254,11 @@ SgNamespaceAliasDeclarationStatement
 SgNamespaceDeclarationStatement
 SgNamespaceDefinitionStatement
 SgNamespaceSymbol
-SgNaryOp
-SgNaryBooleanOp
-SgNaryComparisonOp
 SgNewExp
 SgNode
 SgNoexceptOp
 SgNotEqualOp
 SgNotOp
-SgNonMembershipOp
 SgNonrealDecl
 SgNonrealRefExp
 SgNonrealSymbol
@@ -453,7 +436,6 @@ SgOrOp
 SgParameterStatement
 SgPartialFunctionModifierType
 SgPartialFunctionType
-SgPassStatement
 SgPlusAssignOp
 SgPlusPlusOp
 SgPntrArrRefExp
@@ -487,7 +469,6 @@ SgRvalueReferenceType
 SgScopeOp
 SgScopeStatement
 SgSequenceStatement
-SgSetComprehension
 SgShortVal
 SgSIMDBinaryOp
 SgSIMDAddOp
@@ -523,7 +504,6 @@ SgStatementExpression
 SgStatementFunctionStatement
 SgStopOrPauseStatement
 SgStorageModifier
-SgStringConversion
 SgStringKeyedBidirectionalGraph
 SgStringVal
 SgStructureModifier
@@ -567,7 +547,6 @@ SgSuperExp
 SgThrowOp
 SgToken
 SgTryStmt
-SgTupleExp
 SgType
 SgTypeBool
 SgTypeChar
@@ -649,13 +628,11 @@ SgVariantStatement
 SgVoidVal
 SgWaitStatement
 SgWarningDirectiveStatement
-SgWithStatement
 SgWcharVal
 SgWhereStatement
 SgWhileStmt
 SgWriteStatement
 SgXorAssignOp
-SgYieldExpression
 Sg_File_Info
 SgTypeCAFTeam
 SgCAFWithTeamStatement

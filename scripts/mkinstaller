@@ -67,7 +67,6 @@ $TBG_HTML_EXT   = ".html";
 $TBG_KSH_EXT    = "";
 $TBG_O_EXT      = ".o";
 $TBG_PERL_EXT   = "";
-$TBG_PYTHON_EXT = "";
 $TBG_SH_EXT     = "";
 $TBG_X_EXT      = "";
 
@@ -1158,50 +1157,6 @@ $TBG_WWWDir     = "";
                              last parseArgs;
                           };
 
-                       /^--postinstall-python$/
-
-                          && do {
-                             print DBGOUT "mkinstaller:    is $opt\n" if $debugging_app;
-                             print STDERR "mkinstaller: error: missing or zero-length argument to $opt option\n";
-                             cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                             close DBGOUT if $dbgOutToPathname ne "";
-                             exit 1;
-                          };
-
-                       /^(--postinstall-python)=(.*)$/
-
-                          && do {
-                             my $optName     = $1;
-                             my $given       = pKit_unquote($2);
-                             print DBGOUT "mkinstaller:    is $opt\n" if $debugging_app;
-                             if ($given eq "") {
-                                print STDERR "mkinstaller: error: missing or zero-length argument to $optName option\n";
-                                cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                                close DBGOUT if $dbgOutToPathname ne "";
-                                exit 1;
-                             }
-                             if ($postInstallPathname ne "") {
-                                print STDERR "mkinstaller: error: unexpected $optName=\"$given\"\n";
-                                cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                                close DBGOUT if $dbgOutToPathname ne "";
-                                exit 1;
-                             }
-                             $postInstallPathname = $given;
-                             $postInstallBasename = pKit_basename($postInstallPathname);
-                             $postInstallFlavour  = "python";
-                             if ($postInstallBasename eq "") {
-                                print STDERR "mkinstaller: error: can't extract basename of \"".pKit_nativePathname($postInstallPathname)."\"\n";
-                                cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                                close DBGOUT if $dbgOutToPathname ne "";
-                                exit 1;
-                             }
-                             print DBGOUT "mkinstaller:    ...python post-install script\n" if $debugging_app;
-                             print DBGOUT "mkinstaller:       pathname [$postInstallPathname]\n" if $debugging_app;
-                             print DBGOUT "mkinstaller:       basename [$postInstallBasename]\n" if $debugging_app;
-                             print DBGOUT "mkinstaller:          style [$postInstallFlavour]\n" if $debugging_app;
-                             last parseArgs;
-                          };
-
                        /^--postinstall-sh$/
 
                           && do {
@@ -1328,50 +1283,6 @@ $TBG_WWWDir     = "";
                                 exit 1;
                              }
                              print DBGOUT "mkinstaller:    ...perl pre-install script\n" if $debugging_app;
-                             print DBGOUT "mkinstaller:       pathname [$preInstallPathname]\n" if $debugging_app;
-                             print DBGOUT "mkinstaller:       basename [$preInstallBasename]\n" if $debugging_app;
-                             print DBGOUT "mkinstaller:          style [$preInstallFlavour]\n" if $debugging_app;
-                             last parseArgs;
-                          };
-
-                       /^--preinstall-python$/
-
-                          && do {
-                             print DBGOUT "mkinstaller:    is $opt\n" if $debugging_app;
-                             print STDERR "mkinstaller: error: missing or zero-length argument to $opt option\n";
-                             cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                             close DBGOUT if $dbgOutToPathname ne "";
-                             exit 1;
-                          };
-
-                       /^(--preinstall-python)=(.*)$/
-
-                          && do {
-                             my $optName     = $1;
-                             my $given       = pKit_unquote($2);
-                             print DBGOUT "mkinstaller:    is $opt\n" if $debugging_app;
-                             if ($given eq "") {
-                                print STDERR "mkinstaller: error: missing or zero-length argument to $optName option\n";
-                                cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                                close DBGOUT if $dbgOutToPathname ne "";
-                                exit 1;
-                             }
-                             if ($preInstallPathname ne "") {
-                                print STDERR "mkinstaller: error: unexpected $optName=\"$given\"\n";
-                                cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                                close DBGOUT if $dbgOutToPathname ne "";
-                                exit 1;
-                             }
-                             $preInstallPathname = $given;
-                             $preInstallBasename = pKit_basename($preInstallPathname);
-                             $preInstallFlavour  = "python";
-                             if ($preInstallBasename eq "") {
-                                print STDERR "mkinstaller: error: can't extract basename of \"".pKit_nativePathname($preInstallPathname)."\"\n";
-                                cleanupTemps($TmpDirT,$keep,$verbosityLevel,$debugging_app);
-                                close DBGOUT if $dbgOutToPathname ne "";
-                                exit 1;
-                             }
-                             print DBGOUT "mkinstaller:    ...python pre-install script\n" if $debugging_app;
                              print DBGOUT "mkinstaller:       pathname [$preInstallPathname]\n" if $debugging_app;
                              print DBGOUT "mkinstaller:       basename [$preInstallBasename]\n" if $debugging_app;
                              print DBGOUT "mkinstaller:          style [$preInstallFlavour]\n" if $debugging_app;
@@ -3334,9 +3245,6 @@ $TBG_WWWDir     = "";
       elsif ($preInstallFlavour eq "perl") {
          $ok = 1;
       }
-      elsif ($preInstallFlavour eq "python") {
-         $ok = 1;
-      }
       elsif ($preInstallFlavour eq "sh") {
          $ok = 1;
       }
@@ -3392,9 +3300,6 @@ $TBG_WWWDir     = "";
          $ok = 1;
       }
       elsif ($postInstallFlavour eq "perl") {
-         $ok = 1;
-      }
-      elsif ($postInstallFlavour eq "python") {
          $ok = 1;
       }
       elsif ($postInstallFlavour eq "sh") {
@@ -3959,9 +3864,6 @@ $TBG_WWWDir     = "";
       elsif ($preInstallFlavour eq "perl") {
          $ok = 1;
       }
-      elsif ($preInstallFlavour eq "python") {
-         $ok = 1;
-      }
       elsif ($preInstallFlavour eq "sh") {
          $ok = 1;
       }
@@ -4017,9 +3919,6 @@ $TBG_WWWDir     = "";
          $ok = 1;
       }
       elsif ($postInstallFlavour eq "perl") {
-         $ok = 1;
-      }
-      elsif ($postInstallFlavour eq "python") {
          $ok = 1;
       }
       elsif ($postInstallFlavour eq "sh") {
@@ -23689,17 +23588,6 @@ sub help {
    |            on Windows systems as Perl is not generally found on Windows
    |            systems.
    |
-   |        --postinstall-python=<pathname>
-   |
-   |            The pathname of a Python script which is to be included with
-   |            the installer's payload. It will be run by the generated
-   |            installer after all of the payload directories have been
-   |            extracted and installed.
-   |
-   |            Such post-install Python scripts are not generally supported
-   |            on Windows systems as Perl is not generally found on Windows
-   |            systems.
-   |
    |        --postinstall-sh=<pathname>
    |
    |            The pathname of a Bourne-shell script which is to be included
@@ -23726,17 +23614,6 @@ sub help {
    |            extracted and installed.
    |
    |            Such preinstall Perl scripts are not generally supported
-   |            on Windows systems as Perl is not generally found on Windows
-   |            systems.
-   |
-   |        --preinstall-python=<pathname>
-   |
-   |            The pathname of a Python script which is to be included with
-   |            the installer's payload. It will be run by the generated
-   |            installer before all of the payload directories have been
-   |            extracted and installed.
-   |
-   |            Such pre-install Python scripts are not generally supported
    |            on Windows systems as Perl is not generally found on Windows
    |            systems.
    |
@@ -24818,19 +24695,6 @@ sub html {
    |               systems.
    |            </blockquote>
    |
-   |            <b>--preinstall-python=</b><i>pathname</i>
-   |            <blockquote>
-   |               The pathname of a Python script which is to be included with
-   |               the installer's payload. It will be run by the generated
-   |               installer before all of the payload directories have been
-   |               extracted and installed.
-   |            </blockquote>
-   |            <blockquote>
-   |               Such pre-install Python scripts are not generally supported
-   |               on Windows systems as Python is not generally found on Windows
-   |               systems.
-   |            </blockquote>
-   |
    |            <b>--preinstall-sh=</b><i>pathname</i>
    |            <blockquote>
    |               The pathname of a Bourne-shell script which is to be included
@@ -24862,19 +24726,6 @@ sub html {
    |            <blockquote>
    |               Such post-install Perl scripts are not generally supported
    |               on Windows systems as Perl is not generally found on Windows
-   |               systems.
-   |            </blockquote>
-   |
-   |            <b>--postinstall-python=</b><i>pathname</i>
-   |            <blockquote>
-   |               The pathname of a Python script which is to be included with
-   |               the installer's payload. It will be run by the generated
-   |               installer after all of the payload directories have been
-   |               extracted and installed.
-   |            </blockquote>
-   |            <blockquote>
-   |               Such post-install Python scripts are not generally supported
-   |               on Windows systems as Python is not generally found on Windows
    |               systems.
    |            </blockquote>
    |
@@ -25612,4 +25463,3 @@ EOF1
 EOF2
    close(HTML);
 }
-

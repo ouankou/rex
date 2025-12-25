@@ -523,9 +523,6 @@ ROSE_DLL_API SgSuperExp* buildSuperExp_nfi(SgClassSymbol* sym);
 ROSE_DLL_API SgClassExp* buildClassExp(SgClassSymbol* sym);
 ROSE_DLL_API SgClassExp* buildClassExp_nfi(SgClassSymbol* sym);
 
-//! Build lambda expression
-ROSE_DLL_API SgLambdaRefExp* buildLambdaRefExp(SgType* return_type, SgFunctionParameterList* params, SgScopeStatement* scope);
-
 #define BUILD_UNARY_PROTO(suffix) \
 ROSE_DLL_API Sg##suffix * build##suffix(SgExpression* op =NULL); \
 ROSE_DLL_API Sg##suffix * build##suffix##_nfi(SgExpression* op);
@@ -622,22 +619,18 @@ BUILD_BINARY_PROTO(GreaterThanOp)
 BUILD_BINARY_PROTO(IntegerDivideOp)
 BUILD_BINARY_PROTO(IntegerDivideAssignOp)
 BUILD_BINARY_PROTO(IorAssignOp)
-BUILD_BINARY_PROTO(IsOp)
-BUILD_BINARY_PROTO(IsNotOp)
 
 BUILD_BINARY_PROTO(LessOrEqualOp)
 BUILD_BINARY_PROTO(LessThanOp)
 BUILD_BINARY_PROTO(LshiftAssignOp)
 BUILD_BINARY_PROTO(LshiftOp)
 
-BUILD_BINARY_PROTO(MembershipOp)
 BUILD_BINARY_PROTO(MinusAssignOp)
 BUILD_BINARY_PROTO(ModAssignOp)
 BUILD_BINARY_PROTO(ModOp)
 BUILD_BINARY_PROTO(MultAssignOp)
 BUILD_BINARY_PROTO(MultiplyOp)
 
-BUILD_BINARY_PROTO(NonMembershipOp)
 BUILD_BINARY_PROTO(NotEqualOp)
 BUILD_BINARY_PROTO(OrOp)
 BUILD_BINARY_PROTO(PlusAssignOp)
@@ -678,30 +671,6 @@ SgExprListExp * buildExprListExp_nfi(const std::vector<SgExpression*>& exprs);
 
 //! Build a SgSubscriptExpression, used for array shape expressions.  The lower bound and stride may be nullptrs
 SgSubscriptExpression * buildSubscriptExpression_nfi(SgExpression* lower_bound, SgExpression* upper_bound, SgExpression* stride);
-
-//! Build a SgTupleExp
-ROSE_DLL_API SgTupleExp * buildTupleExp(SgExpression * expr1 = NULL, SgExpression* expr2 = NULL, SgExpression* expr3 = NULL, SgExpression* expr4 = NULL, SgExpression* expr5 = NULL, SgExpression* expr6 = NULL, SgExpression* expr7 = NULL, SgExpression* expr8 = NULL, SgExpression* expr9 = NULL, SgExpression* expr10 = NULL);
-ROSE_DLL_API SgTupleExp * buildTupleExp(const std::vector<SgExpression*>& exprs);
-SgTupleExp * buildTupleExp_nfi();
-SgTupleExp * buildTupleExp_nfi(const std::vector<SgExpression*>& exprs);
-
-//! Build a SgListExp
-ROSE_DLL_API SgListExp * buildListExp(SgExpression * expr1 = NULL, SgExpression* expr2 = NULL, SgExpression* expr3 = NULL, SgExpression* expr4 = NULL, SgExpression* expr5 = NULL, SgExpression* expr6 = NULL, SgExpression* expr7 = NULL, SgExpression* expr8 = NULL, SgExpression* expr9 = NULL, SgExpression* expr10 = NULL);
-ROSE_DLL_API SgListExp * buildListExp(const std::vector<SgExpression*>& exprs);
-SgListExp * buildListExp_nfi();
-SgListExp * buildListExp_nfi(const std::vector<SgExpression*>& exprs);
-
-ROSE_DLL_API SgComprehension * buildComprehension(SgExpression *target, SgExpression *iter, SgExprListExp *ifs);
-SgComprehension * buildComprehension_nfi(SgExpression *target, SgExpression *iter, SgExprListExp *ifs);
-
-ROSE_DLL_API SgListComprehension * buildListComprehension(SgExpression *elt, SgExprListExp *generators);
-SgListComprehension * buildListComprehension_nfi(SgExpression *elt, SgExprListExp *generators);
-
-ROSE_DLL_API SgSetComprehension * buildSetComprehension(SgExpression *elt, SgExprListExp *generators);
-SgSetComprehension * buildSetComprehension_nfi(SgExpression *elt, SgExprListExp *generators);
-
-ROSE_DLL_API SgDictionaryComprehension * buildDictionaryComprehension(SgKeyDatumPair *kd_pair, SgExprListExp *generators);
-SgDictionaryComprehension * buildDictionaryComprehension_nfi(SgKeyDatumPair *kd_pair, SgExprListExp *generators);
 
 //! Build SgVarRefExp based on a variable's Sage name. It will lookup the name in the symbol table internally starting from scope. A variable name is unique so type can be inferred (double check this).
 
@@ -1058,65 +1027,77 @@ ROSE_DLL_API void setTemplateParametersInDeclaration              ( SgDeclaratio
 
 //! Build a prototype for a function, handle function type, symbol etc transparently
 // DQ (7/26/2012): Changing the API to include template arguments so that we can generate names with and without template arguments (to support name mangiling).
-ROSE_DLL_API SgFunctionDeclaration * buildNondefiningFunctionDeclaration(
-  const SgName & name,
-  SgType * return_type,
-  SgFunctionParameterList *parlist,
-  SgScopeStatement* scope = NULL,
-  SgExprListExp* decoratorList = NULL,
-  bool buildTemplateInstantiation = false,
-  SgTemplateArgumentPtrList * templateArgumentsList = NULL,
-  SgStorageModifier::storage_modifier_enum sm = SgStorageModifier::e_default,
-  bool forceFreeFunctionScope = false
-);
+ROSE_DLL_API SgFunctionDeclaration *buildNondefiningFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope = NULL, bool buildTemplateInstantiation = false,
+    SgTemplateArgumentPtrList *templateArgumentsList = NULL,
+    SgStorageModifier::storage_modifier_enum sm = SgStorageModifier::e_default,
+    bool forceFreeFunctionScope = false);
 
 //! Build a prototype for an existing function declaration (defining or nondefining is fine)
-ROSE_DLL_API SgFunctionDeclaration * buildNondefiningFunctionDeclaration(
-  const SgFunctionDeclaration * funcdecl,
-  SgScopeStatement * scope = NULL,
-  SgExprListExp * decoratorList = NULL
-);
+ROSE_DLL_API SgFunctionDeclaration *
+buildNondefiningFunctionDeclaration(const SgFunctionDeclaration *funcdecl,
+                                    SgScopeStatement *scope = NULL);
 
-// DQ (8/11/2013): Even though template functions can't use partial specialization, they can be specialized,
-// however the specialization does not define a template and instead defines a template instantiation, so we
-// don't need the SgTemplateArgumentPtrList in this function.
-// SgTemplateFunctionDeclaration* buildNondefiningTemplateFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope=NULL, SgExprListExp* decoratorList = NULL);
-ROSE_DLL_API SgTemplateFunctionDeclaration*
-buildNondefiningTemplateFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope=NULL, SgExprListExp* decoratorList = NULL, SgTemplateParameterPtrList* templateParameterList = NULL);
+// DQ (8/11/2013): Even though template functions can't use partial
+// specialization, they can be specialized, however the specialization does not
+// define a template and instead defines a template instantiation, so we don't
+// need the SgTemplateArgumentPtrList in this function.
+ROSE_DLL_API SgTemplateFunctionDeclaration *
+buildNondefiningTemplateFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope = NULL,
+    SgTemplateParameterPtrList *templateParameterList = NULL);
 
 // DQ (8/11/2013): Note that access to the SgTemplateParameterPtrList should be handled through the first_nondefining_declaration (which is a required parameter).
 // DQ (12/1/2011): Adding support for template declarations into the AST.
-ROSE_DLL_API SgTemplateFunctionDeclaration*
-buildDefiningTemplateFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, SgTemplateFunctionDeclaration* first_nondefining_declaration);
+ROSE_DLL_API SgTemplateFunctionDeclaration *
+buildDefiningTemplateFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope,
+    SgTemplateFunctionDeclaration *first_nondefining_declaration);
 
 // DQ (11/8/2020): Define a function to build a default constructor for a class.
 // ROSE_DLL_API SgMemberFunctionDeclaration* buildConstructor ( const SgName & typeName, SgClassType* initializedName_classType, SgClassDefinition* classDefinition);
 ROSE_DLL_API SgMemberFunctionDeclaration* buildDefaultConstructor ( SgClassType* classType );
 
 //! Build a prototype member function declaration
-// SgMemberFunctionDeclaration * buildNondefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope=NULL, SgExprListExp* decoratorList = NULL);
-// SgMemberFunctionDeclaration * buildNondefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope=NULL, SgExprListExp* decoratorList = NULL, unsigned int functionConstVolatileFlags = 0);
-// SgMemberFunctionDeclaration* buildNondefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope=NULL, SgExprListExp* decoratorList = NULL, unsigned int functionConstVolatileFlags = 0, bool buildTemplateInstantiation = false);
-ROSE_DLL_API SgMemberFunctionDeclaration*
-buildNondefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, unsigned int functionConstVolatileFlags, bool buildTemplateInstantiation, SgTemplateArgumentPtrList* templateArgumentsList);
+ROSE_DLL_API SgMemberFunctionDeclaration *
+buildNondefiningMemberFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope, unsigned int functionConstVolatileFlags,
+    bool buildTemplateInstantiation,
+    SgTemplateArgumentPtrList *templateArgumentsList);
 
-// DQ (8/12/2013): This function needs to supporte SgTemplateParameterPtrList and SgTemplateArgumentPtrList parameters.
-// SgTemplateMemberFunctionDeclaration* buildNondefiningTemplateMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope = NULL, SgExprListExp* decoratorList = NULL, unsigned int functionConstVolatileFlags = 0);
-ROSE_DLL_API SgTemplateMemberFunctionDeclaration*
-buildNondefiningTemplateMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, unsigned int functionConstVolatileFlags, SgTemplateParameterPtrList* templateParameterList );
+// DQ (8/12/2013): This function needs to supporte SgTemplateParameterPtrList
+// and SgTemplateArgumentPtrList parameters.
+ROSE_DLL_API SgTemplateMemberFunctionDeclaration *
+buildNondefiningTemplateMemberFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope, unsigned int functionConstVolatileFlags,
+    SgTemplateParameterPtrList *templateParameterList);
 
 // DQ (12/1/2011): Adding support for template declarations in the AST.
-ROSE_DLL_API SgTemplateMemberFunctionDeclaration*
-buildDefiningTemplateMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, unsigned int functionConstVolatileFlags, SgTemplateMemberFunctionDeclaration* first_nondefing_declaration );
+ROSE_DLL_API SgTemplateMemberFunctionDeclaration *
+buildDefiningTemplateMemberFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope, unsigned int functionConstVolatileFlags,
+    SgTemplateMemberFunctionDeclaration *first_nondefing_declaration);
 
 ////! Build a prototype member function declaration
 // SgMemberFunctionDeclaration* buildNondefiningMemberFunctionDeclaration (const SgName & name, SgMemberFunctionType* func_type, SgFunctionParameterList* paralist, SgScopeStatement* scope=NULL);
 
-// DQ (8/11/2013): Note that the specification of the SgTemplateArgumentPtrList is somewhat redundant with the required parameter first_nondefinng_declaration (I think).
+// DQ (8/11/2013): Note that the specification of the SgTemplateArgumentPtrList
+// is somewhat redundant with the required parameter
+// first_nondefinng_declaration (I think).
 //! Build a defining ( non-prototype) member function declaration
-// SgMemberFunctionDeclaration* buildDefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation, unsigned int functionConstVolatileFlags, SgMemberFunctionDeclaration* first_nondefinng_declaration);
-ROSE_DLL_API SgMemberFunctionDeclaration*
-buildDefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList *parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation, unsigned int functionConstVolatileFlags, SgMemberFunctionDeclaration* first_nondefinng_declaration, SgTemplateArgumentPtrList* templateArgumentsList);
+ROSE_DLL_API SgMemberFunctionDeclaration *
+buildDefiningMemberFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope, bool buildTemplateInstantiation,
+    unsigned int functionConstVolatileFlags,
+    SgMemberFunctionDeclaration *first_nondefinng_declaration,
+    SgTemplateArgumentPtrList *templateArgumentsList);
 
 #if 0
 // DQ (3/20/2017): This function is not used (so let's see if we can remove it).
@@ -1124,7 +1105,7 @@ buildDefiningMemberFunctionDeclaration (const SgName & name, SgType* return_type
 // DQ (7/26/2012): I would like to remove this from the API (at least for now while debugging the newer API required for template argument handling).
 //! Build a defining ( non-prototype) member function declaration from a SgMemberFunctionType
 ROSE_DLL_API SgMemberFunctionDeclaration*
-buildDefiningMemberFunctionDeclaration (const SgName & name, SgMemberFunctionType* func_type, SgScopeStatement* scope, SgExprListExp* decoratorList = NULL /* , unsigned int functionConstVolatileFlags = 0 */, SgMemberFunctionDeclaration* first_nondefinng_declaration = NULL);
+buildDefiningMemberFunctionDeclaration (const SgName & name, SgMemberFunctionType* func_type, SgScopeStatement* scope, SgMemberFunctionDeclaration* first_nondefinng_declaration = NULL);
 #endif
 
 #if 0
@@ -1132,7 +1113,7 @@ buildDefiningMemberFunctionDeclaration (const SgName & name, SgMemberFunctionTyp
 //! Build a prototype for an existing member function declaration (defining or nondefining is fine)
 // SgMemberFunctionDeclaration*
 ROSE_DLL_API SgMemberFunctionDeclaration*
-buildNondefiningMemberFunctionDeclaration (const SgMemberFunctionDeclaration* funcdecl, SgScopeStatement* scope=NULL, SgExprListExp* decoratorList = NULL, unsigned int functionConstVolatileFlags = 0);
+buildNondefiningMemberFunctionDeclaration (const SgMemberFunctionDeclaration* funcdecl, SgScopeStatement* scope=NULL, unsigned int functionConstVolatileFlags = 0);
 #endif
 
 // DQ (8/28/2012): This preserves the original API with a simpler function (however for C++ at least, it is frequently not sufficent).
@@ -1143,11 +1124,16 @@ ROSE_DLL_API SgMemberFunctionDeclaration* buildNondefiningMemberFunctionDeclarat
 // We need to decide if the SageBuilder API should include these sorts of functions.
 ROSE_DLL_API SgMemberFunctionDeclaration* buildDefiningMemberFunctionDeclaration(const SgName& name, SgType* return_type, SgFunctionParameterList* parameter_list, SgScopeStatement* scope = NULL);
 
-// DQ (8/11/2013): Note that the specification of the SgTemplateArgumentPtrList is somewhat redundant with the required parameter first_nondefinng_declaration (I think).
+// DQ (8/11/2013): Note that the specification of the SgTemplateArgumentPtrList
+// is somewhat redundant with the required parameter
+// first_nondefinng_declaration (I think).
 //! Build a function declaration with a function body
-// SgFunctionDeclaration* buildDefiningFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList * parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation, SgFunctionDeclaration* first_nondefinng_declaration);
-ROSE_DLL_API SgFunctionDeclaration*
-buildDefiningFunctionDeclaration (const SgName & name, SgType* return_type, SgFunctionParameterList * parlist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation = false, SgFunctionDeclaration* first_nondefinng_declaration = NULL, SgTemplateArgumentPtrList* templateArgumentsList = NULL, bool forceFreeFunctionScope = false);
+ROSE_DLL_API SgFunctionDeclaration *buildDefiningFunctionDeclaration(
+    const SgName &name, SgType *return_type, SgFunctionParameterList *parlist,
+    SgScopeStatement *scope, bool buildTemplateInstantiation,
+    SgFunctionDeclaration *first_nondefinng_declaration,
+    SgTemplateArgumentPtrList *templateArgumentsList,
+    bool forceFreeFunctionScope);
 
 // DQ (8/28/2012): This preserves the original API with a simpler function (however for C++ at least, it is frequently not sufficient).
 // We need to decide if the SageBuilder API should include these sorts of functions.
@@ -1239,10 +1225,22 @@ ROSE_DLL_API SgForInitStatement* buildForInitStatement_nfi(SgStatementPtrList & 
 ROSE_DLL_API SgForInitStatement* buildForInitStatement( SgStatement* statement );
 
 //!Build a for statement, assume none of the arguments is NULL
-ROSE_DLL_API SgForStatement * buildForStatement(SgStatement* initialize_stmt,  SgStatement * test, SgExpression * increment, SgStatement * loop_body, SgStatement * else_body = NULL);
-ROSE_DLL_API SgForStatement * buildForStatement_nfi(SgStatement* initialize_stmt, SgStatement * test, SgExpression * increment, SgStatement * loop_body, SgStatement * else_body = NULL);
-ROSE_DLL_API SgForStatement * buildForStatement_nfi(SgForInitStatement * init_stmt, SgStatement * test, SgExpression * increment, SgStatement * loop_body, SgStatement * else_body = NULL);
-ROSE_DLL_API void buildForStatement_nfi(SgForStatement* result, SgForInitStatement * init_stmt, SgStatement * test, SgExpression * increment, SgStatement * loop_body, SgStatement * else_body = NULL);
+ROSE_DLL_API SgForStatement *buildForStatement(SgStatement *initialize_stmt,
+                                               SgStatement *test,
+                                               SgExpression *increment,
+                                               SgStatement *loop_body);
+ROSE_DLL_API SgForStatement *buildForStatement_nfi(SgStatement *initialize_stmt,
+                                                   SgStatement *test,
+                                                   SgExpression *increment,
+                                                   SgStatement *loop_body);
+ROSE_DLL_API SgForStatement *
+buildForStatement_nfi(SgForInitStatement *init_stmt, SgStatement *test,
+                      SgExpression *increment, SgStatement *loop_body);
+ROSE_DLL_API void buildForStatement_nfi(SgForStatement *result,
+                                        SgForInitStatement *init_stmt,
+                                        SgStatement *test,
+                                        SgExpression *increment,
+                                        SgStatement *loop_body);
 
 // DQ (3/26/2018): Adding support for range based for statement.
 // ROSE_DLL_API SgRangeBasedForStatement* buildRangeBasedForStatement_nfi(SgVariableDeclaration* initializer, SgExpression* range, SgStatement* body);
@@ -1257,15 +1255,12 @@ ROSE_DLL_API SgRangeBasedForStatement* buildRangeBasedForStatement_nfi(
 ROSE_DLL_API void buildDoWhileStatement_nfi(SgDoWhileStmt* result, SgStatement * body, SgStatement * condition);
 
 //! Build while statement
-ROSE_DLL_API SgWhileStmt * buildWhileStmt(SgStatement *  condition, SgStatement *body, SgStatement *else_body = NULL);
-inline SgWhileStmt * buildWhileStmt(SgExpression *  condition, SgStatement *body, SgStatement* else_body = NULL) {
-  return buildWhileStmt(buildExprStatement(condition), body, else_body);
+ROSE_DLL_API SgWhileStmt *buildWhileStmt(SgStatement *condition,
+                                         SgStatement *body);
+inline SgWhileStmt *buildWhileStmt(SgExpression *condition, SgStatement *body) {
+  return buildWhileStmt(buildExprStatement(condition), body);
 }
-SgWhileStmt * buildWhileStmt_nfi(SgStatement *  condition, SgStatement *body, SgStatement *else_body = NULL);
-
-//! Build a with statement
-ROSE_DLL_API SgWithStatement* buildWithStatement(SgExpression* expr, SgStatement* body);
-SgWithStatement* buildWithStatement_nfi(SgExpression* expr, SgStatement* body);
+SgWhileStmt *buildWhileStmt_nfi(SgStatement *condition, SgStatement *body);
 
 //! Build do-while statement
 ROSE_DLL_API SgDoWhileStmt * buildDoWhileStmt(SgStatement *  body, SgStatement *condition);
@@ -1308,27 +1303,6 @@ SgBreakStmt* buildBreakStmt_nfi();
 //! Build a continue statement
 ROSE_DLL_API SgContinueStmt* buildContinueStmt();
 SgContinueStmt* buildContinueStmt_nfi();
-
-//! Build a pass statement
-ROSE_DLL_API SgPassStatement* buildPassStatement();
-SgPassStatement* buildPassStatement_nfi();
-
-//! Build a Assert statement
-ROSE_DLL_API SgAssertStmt* buildAssertStmt(SgExpression* test);
-ROSE_DLL_API SgAssertStmt* buildAssertStmt(SgExpression *test, SgExpression *exceptionArgument);
-SgAssertStmt* buildAssertStmt_nfi(SgExpression* test);
-
-//! Build a yield statement
-ROSE_DLL_API SgYieldExpression* buildYieldExpression(SgExpression* value);
-SgYieldExpression* buildYieldExpression_nfi(SgExpression* value);
-
-//! Build a key-datum pair
-ROSE_DLL_API SgKeyDatumPair* buildKeyDatumPair    (SgExpression* key, SgExpression* datum);
-SgKeyDatumPair* buildKeyDatumPair_nfi(SgExpression* key, SgExpression* datum);
-
-//! Build a list of key-datum pairs
-ROSE_DLL_API SgDictionaryExp* buildDictionaryExp    (std::vector<SgKeyDatumPair*> pairs);
-SgDictionaryExp* buildDictionaryExp_nfi(std::vector<SgKeyDatumPair*> pairs);
 
 //! Build an Actual Argument Expression
 ROSE_DLL_API SgActualArgumentExpression* buildActualArgumentExpression(SgName arg_name, SgExpression* arg);
@@ -1389,15 +1363,6 @@ ROSE_DLL_API SgStmtDeclarationStatement* buildStmtDeclarationStatement_nfi(SgSta
 ROSE_DLL_API SgNamespaceDeclarationStatement *  buildNamespaceDeclaration(const SgName& name, SgScopeStatement* scope=NULL);
 ROSE_DLL_API SgNamespaceDeclarationStatement *  buildNamespaceDeclaration_nfi(const SgName& name, bool unnamednamespace, SgScopeStatement* scope );
 ROSE_DLL_API SgNamespaceDefinitionStatement * buildNamespaceDefinition(SgNamespaceDeclarationStatement* d=NULL);
-
-//! driscoll6 (7/20/11) : Support n-ary operators for python
-ROSE_DLL_API SgNaryComparisonOp* buildNaryComparisonOp(SgExpression* lhs);
-ROSE_DLL_API SgNaryComparisonOp* buildNaryComparisonOp_nfi(SgExpression* lhs);
-ROSE_DLL_API SgNaryBooleanOp* buildNaryBooleanOp(SgExpression* lhs);
-ROSE_DLL_API SgNaryBooleanOp* buildNaryBooleanOp_nfi(SgExpression* lhs);
-
-ROSE_DLL_API SgStringConversion* buildStringConversion(SgExpression* exp);
-ROSE_DLL_API SgStringConversion* buildStringConversion_nfi(SgExpression* exp);
 
 // DQ (6/6/2012): Addeding support to include template arguments in the generated type (template argument must be provided as early as possible).
 // DQ (1/24/2009): Added this "_nfi" function but refactored buildStructDeclaration to also use it (this needs to be done uniformally).
@@ -1465,21 +1430,9 @@ ROSE_DLL_API SgTryStmt* buildTryStmt(SgStatement* body,
                                      SgCatchOptionStmt* catch3=NULL,
                                      SgCatchOptionStmt* catch4=NULL);
 
-// charles4 (9/16/2011): Adding support for try stmts.
-//! Build a try statement.
-//SgTryStmt* buildTryStmt(SgStatement *try_body, SgCatchStatementSeq *catches, SgStatement *finally_body = NULL);
-
-// charles4 (9/16/2011): Adding support for try stmts.
-//! Build a try statement.
-ROSE_DLL_API SgTryStmt* buildTryStmt(SgBasicBlock *try_body, SgBasicBlock *finally_body = NULL);
-
 // charles4 (9/16/2011): Adding support for Catch Blocks.
 //! Build an initial sequence of Catch blocks containing 0 or 1 element.
 ROSE_DLL_API SgCatchStatementSeq *buildCatchStatementSeq(SgCatchOptionStmt * = NULL);
-
-//! Build an exec statement
-ROSE_DLL_API SgExecStatement* buildExecStatement(SgExpression* executable, SgExpression* globals = NULL, SgExpression* locals = NULL);
-SgExecStatement* buildExecStatement_nfi(SgExpression* executable, SgExpression* globals = NULL, SgExpression* locals = NULL);
 
 // DQ (4/30/2010): Added support for building asm statements.
 //! Build a NULL statement

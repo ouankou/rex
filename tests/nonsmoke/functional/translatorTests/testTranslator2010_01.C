@@ -24,7 +24,9 @@ main(int argc, char **argv)
 #endif
 
 #if 1
-     SgFunctionDeclaration *func = buildDefiningFunctionDeclaration("a_function", buildVoidType(), buildFunctionParameterList(), globalScope);
+     SgFunctionDeclaration *func = buildDefiningFunctionDeclaration(
+         "a_function", buildVoidType(), buildFunctionParameterList(),
+         globalScope);
      appendStatement(func, globalScope);
 #endif
 

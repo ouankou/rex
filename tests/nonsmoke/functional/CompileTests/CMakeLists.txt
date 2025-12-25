@@ -94,6 +94,3 @@ if(enable-c)
   endif()
 endif()
 
-if(enable-python)
-   #add_subdirectory(Python_tests)
-endif()

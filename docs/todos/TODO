@@ -17,7 +17,6 @@ Local repository:
     POP, 
     OMP tests, 
     developerscratch, 
-    Python example test, 
     ROSEHPCT tests
 
 Old projects:
@@ -1135,7 +1134,6 @@ will not (since ROSE implements it's own code generating C++ backend; EDG's is
 not used).
 
   
-
 
 
 
