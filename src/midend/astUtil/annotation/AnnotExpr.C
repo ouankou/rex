@@ -5,6 +5,9 @@
 #include "SymbolicMultiply.h"
 #include "SymbolicPlus.h"
 #include "SymbolicSelect.h"
+#include <cerrno>
+#include <cstdlib>
+#include <limits>
 #include <mlog.h>
 #include <string.h>
 
@@ -298,8 +301,26 @@ bool ExtendibleParamDescriptor ::get_extension(int &l, int &u) const {
   SymbolicVal ub = get_ext_ub();
   if (lb.GetValType() == VAL_CONST && lb.GetTypeName() == "int" &&
       ub.GetValType() == VAL_CONST && ub.GetTypeName() == "int") {
-    l = atoi(lb.toString().c_str());
-    u = atoi(ub.toString().c_str());
+    const std::string lb_text = lb.toString();
+    const std::string ub_text = ub.toString();
+    char *end = nullptr;
+    errno = 0;
+    long lb_value = std::strtol(lb_text.c_str(), &end, 10);
+    if (errno != 0 || end == lb_text.c_str() || *end != '\0' ||
+        lb_value < std::numeric_limits<int>::min() ||
+        lb_value > std::numeric_limits<int>::max()) {
+      return false;
+    }
+    end = nullptr;
+    errno = 0;
+    long ub_value = std::strtol(ub_text.c_str(), &end, 10);
+    if (errno != 0 || end == ub_text.c_str() || *end != '\0' ||
+        ub_value < std::numeric_limits<int>::min() ||
+        ub_value > std::numeric_limits<int>::max()) {
+      return false;
+    }
+    l = static_cast<int>(lb_value);
+    u = static_cast<int>(ub_value);
     return true;
   }
   return false;
