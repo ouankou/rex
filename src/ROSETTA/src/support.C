@@ -1040,9 +1040,11 @@ Grammar::setUpSupport ()
      File.setDataPrototype         ( "bool", "OpenCL_only", "= false",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/7/2018): By default for C/C++ I now think this should be false (and it is set this way for source files.
-  // DQ (5/18/2008): Added flag to specify that CPP preprocessing is required (default true for C and C++, and
-  // Fortran with *.F?? extension an explicitly set to false for fortran with *.f?? extension and binaries).
+     // DQ (9/7/2018): By default for C/C++ I now think this should be false
+     // (and it is set this way for source files. DQ (5/18/2008): Added flag to
+     // specify that CPP preprocessing is required (default true for C and C++,
+     // and Fortran with *.F?? extension is explicitly set to false for Fortran
+     // with *.f?? extension).
      File.setDataPrototype         ( "bool", "requires_C_preprocessor", "= true",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // DQ (8/19/2007): Added more options specific to Fortran support
@@ -1132,16 +1134,6 @@ Grammar::setUpSupport ()
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      File.setDataPrototype         ( "bool", "unparse_function_calls_using_operator_names", "= false",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (8/30/2008): Added support for tailoring the output of unparsed disassembled instructions
-     File.setDataPrototype         ( "bool", "unparse_instruction_addresses", "= true",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     File.setDataPrototype         ( "bool", "unparse_raw_memory_contents", "= true",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     File.setDataPrototype         ( "bool", "unparse_binary_file_format", "= true",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (8/27/2007): Added support for simple translation using separately specified language unparser.
@@ -1344,27 +1336,6 @@ Grammar::setUpSupport ()
      File.setDataPrototype("bool", "experimental_fortran_frontend_OFP_test", "= false",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (8/16/2008): parse binary executable file format only (some uses of ROSE may only do analysis of
-  // the binary executable file format and not the instructions).  This is also useful for testing.
-     File.setDataPrototype         ( "bool", "read_executable_file_format_only", "= false",
-                 NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/9/2008): parse binary executable file format only (but skip the representation of
-  // symbols since there can be thousands of them and they make the dot graphs impossible to manage).
-     File.setDataPrototype         ( "bool", "visualize_executable_file_format_skip_symbols", "= false",
-                 NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/9/2008): parse binary executable file format only (but skip the representation of
-  // symbols since there can be thousands of them and they make the dot graphs impossible to manage).
-     File.setDataPrototype         ( "bool", "visualize_dwarf_only", "= false",
-                 NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (8/26/2008): Adds support for only disassembling the instructions, skips use of information
-  // gathered from the data structures built from the binary executable file format (symbols,
-  // section permisions, etc.).
-     File.setDataPrototype         ( "bool", "read_instructions_only", "= false",
-                 NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // DQ (5/23/2015): This must be static because ASM statments can exist in GNU statement expressions
   // within typeof operators which then causes the ASM statement to not be traversed as part of the
   // AST (beccause it is hidden in a type (and types are not traversed).  The unparsing of the ASM
@@ -1392,7 +1363,8 @@ Grammar::setUpSupport ()
      File.setDataPrototype         ( "bool", "isLibraryArchive", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/5/2009): added boolean data member to record if this is an object file being processed for binary analysis.
+     // DQ (2/5/2009): added boolean data member to record if this is an object
+     // file.
      File.setDataPrototype         ( "bool", "isObjectFile", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1907,17 +1879,9 @@ Grammar::setUpSupport ()
             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      Project.setDataPrototype("SgStringList","includeFileList", "",
             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("SgStringList","excludeFileList", "",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#if 1
-  // DQ (2/4/2009): Moved this to the SgProject since it applies to the command line and all files.
-  // DQ (1/9/2008): This permits a file to be marked explicitly as a binary file and avoids
-  // confusion when processing object files within linking (where no source file is present
-  // and the object file could be interpreted as being provided for binary analysis).
-     Project.setDataPrototype ( "bool", "binary_only", "= false",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-
+     Project.setDataPrototype("SgStringList", "excludeFileList", "",
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
 #if 1
   // DQ (1/20/2010): Added list of directories to the SgProject to represent large scale projects
   // (as can be useful for code generation).

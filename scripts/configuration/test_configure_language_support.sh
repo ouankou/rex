@@ -29,12 +29,10 @@ echo "Running configure tests in sandbox: ${TESTDIR}"
 # $ sed -n '/checking user-specified languages to support/,/disabled/p'
 # checking user-specified languages to support... 
 #
-#  -  Binary-analysis
 #  +  C
 #  -  C++
 #  -  Cuda
 #  -  Fortran
-#  -  PHP
 #  -  OpenCL
 #
 # (+)enabled (-)disabled
@@ -43,11 +41,9 @@ echo "Running configure tests in sandbox: ${TESTDIR}"
 #
 # Example:
 # $ sed -n '/checking user-specified languages to support/,/disabled/p' /tmp/config.log | sed -n 's/.*\([+-] .*\)/\1/p'
-#-  Binary-analysis
 #-  C++
 #-  Cuda
 #-  Fortran
-#-  PHP
 #-  OpenCL
 
 # test_language_options <language_options>
@@ -98,12 +94,10 @@ function test_configure {
 
 
 if test "x$1" = "xtest" ; then
-source ${SCRIPT_DIR}/test_configure_binary_support.unit
 source ${SCRIPT_DIR}/test_configure_c_support.unit
 source ${SCRIPT_DIR}/test_configure_cxx_support.unit
 source ${SCRIPT_DIR}/test_configure_cuda_support.unit
 source ${SCRIPT_DIR}/test_configure_fortran_support.unit
-source ${SCRIPT_DIR}/test_configure_php_support.unit
 source ${SCRIPT_DIR}/test_configure_opencl_support.unit
 
 echo "*********************************************"

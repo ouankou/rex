@@ -178,31 +178,4 @@ if (HAVE_SYS_TIME_H)
   #   )
   # endforeach()
 
-  if (enable-binary-analysis)
-    #---------------------------------------------------------------------------
-    add_executable(binaryPaths binaryPaths.C)
-    target_link_libraries(binaryPaths ROSE_DLL ${link_with_libraries})
-
-    set(binaryPaths_SPECIMENS t1 t2 t3 t4)
-    foreach(specimen ${binaryPaths_SPECIMENS})
-      add_test(
-        NAME bp_${specimen}
-        COMMAND binaryPaths ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
-      )
-    endforeach()
-
-    #---------------------------------------------------------------------------
-    add_executable(bPTP bPTP.C)
-    target_link_libraries(bPTP ROSE_DLL ${link_with_libraries})
-
-    set(bPTP_SPECIMENS t1 t2 t3 t4)
-    foreach(specimen ${bPTP_SPECIMENS})
-      add_test(
-        NAME bptp_${specimen}
-        COMMAND bPTP ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
-      )
-    endforeach()
-  endif()
-
 endif()
-

@@ -7,7 +7,7 @@ PHONY: test test_testTokenGeneration test_testAnalysis test_testCodeGeneration t
 include $(top_srcdir)/tests/nonsmoke/functional/input_codes/Makefile.for.input.codes
 
 # DQ (4/17/2010): If we are not supporting C++ then we can't run most of our tests, but if
-# we are supporting only Fortran then we can at least run the Fortran tests (same with PHP).
+# we are supporting only Fortran then we can at least run the Fortran tests.
 # SUBDIRS = CompileTests roseTests RunTests PerformanceTests CompilerOptionsTests translatorTests
 # SUBDIRS = CompileTests roseTests
 # SUBDIRS += . UnitTests CompileTests
@@ -370,4 +370,3 @@ myCleanRule:
 	rm -f a.out *.dot *.binary
 	rm -f *.C_identity
 	rm -rf rose_minimal.cpp rose-passed_files.txt rose-failed_files.txt
-

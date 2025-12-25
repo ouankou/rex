@@ -102,7 +102,7 @@ ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH_ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT 
      -I$(top_srcdir)/src/frontend/SageIII/ompparser/src \
      -I$(top_srcdir)/src/frontend/SageIII/sage_support \
      -I$(top_srcdir)/src/frontend/OpenFortranParser_SAGE_Connection \
-     -I"$(JAVA_HOME)/include" \
+     $(JAVA_JVM_INCLUDE) \
      -I$(top_srcdir)/src/backend/unparser \
      -I$(top_srcdir)/src/backend/unparser/formatSupport \
      -I$(top_srcdir)/src/backend/unparser/languageIndependenceSupport \
@@ -139,7 +139,7 @@ ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH = \
      -I$(top_srcdir)/src/frontend/SageIII/includeDirectivesProcessing \
      -I$(top_srcdir)/src/frontend/SageIII/sage_support \
      -I$(top_srcdir)/src/frontend/OpenFortranParser_SAGE_Connection \
-     -I"$(JAVA_HOME)/include" \
+     $(JAVA_JVM_INCLUDE) \
       $(ROSE_CLANG_FRONTEND_INCLUDE) \
       $(ROSE_CLANG_INCLUDE) \
      -I$(top_srcdir)/src/backend/unparser \

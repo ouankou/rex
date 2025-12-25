@@ -19,14 +19,14 @@
  *
  *  <table>
  *    <tr><td><b>Subject name</b></td><td><b>What it means</b></td></tr>
- *    <tr><td>%Frontend, %Binary %Analysis</td><td>Some broad part of the ROSE library.</td></tr>
+ *    <tr><td>%Frontend, %Analysis</td><td>Some broad part of the ROSE library.</td></tr>
  *    <tr><td>codethorn, compass2</td><td>A particular project that uses ROSE.</td></td>
  *    <tr><td>%Attribute, %Stack %Delta</td><td>Some specific feature.</td></tr>
  *  </table>
  *
  *  Some examples of good commit titles:
  *
- *  @li (Attributes) BinaryAnalysis::Attribute is moved
+ *  @li (Attributes) Attribute is moved
  *  @li (move tool) one more test case for comments handling
  *  @li (C++11) Minor fixes to compile ROSE with C++11
  *  @li (Tutorial) Fixed link error in tutorial
@@ -66,14 +66,14 @@
  *  This commit message makes it clear what users must change in their code:
  *
  *  @verbatim
-    (Binary Analysis) Changed names for some classes in the new SymbolicExpr
-    
-    SymbolicExpr::TreeNode         -> SymbolicExpr::Node
-    SymbolicExpr::TreeNodePtr      -> SymbolicExpr::Ptr
-    SymbolicExpr::LeafNodePtr      -> SymbolicExpr::LeafPtr
-    SymbolicExpr::InternalNodePtr  -> SymbolicExpr::InternalPtr
+    (Attributes) Changed names for some classes in the new Attribute API
 
-    BINARY-123
+    Attribute::Node         -> Attribute::NodeBase
+    Attribute::NodePtr      -> Attribute::Ptr
+    Attribute::LeafPtr      -> Attribute::ScalarPtr
+    Attribute::InternalPtr  -> Attribute::CompositePtr
+
+    ROSE-123
  @endverbatim
  *
  * This commit makes it clear to the simulator2 project maintainer why a change was made since it was changed by someone that

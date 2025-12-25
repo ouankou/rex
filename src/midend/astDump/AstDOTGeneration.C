@@ -834,16 +834,22 @@ AstDOTGeneration::evaluateSynthesizedAttribute(SgNode* node, DOTInheritedAttribu
             // string filename = string("./") + Rose::utility_stripPathFromFileName(original_filename) + "."+filenamePostfix+"dot";
                string filename = string("./") + Rose::utility_stripPathFromFileName(original_filename) + filenamePostfix + ".dot";
 
-            // printf ("generated filename for dot file (from SgSourceFile or SgBinaryComposite) = %s file->get_parent() = %p \n",filename.c_str(),file->get_parent());
+               // printf ("generated filename for dot file (from SgSourceFile) =
+               // %s file->get_parent() = %p
+               // \n",filename.c_str(),file->get_parent());
 
-            // printf ("file->get_parent() = %p \n",file->get_parent());
-            // cout << "generating DOT file (from SgSourceFile or SgBinaryComposite): " << filename2 << " ... ";
+               // printf ("file->get_parent() = %p \n",file->get_parent());
+               // cout << "generating DOT file (from SgSourceFile): " <<
+               // filename2 << " ... ";
 
-            // DQ (9/1/2008): this effects the output of DOT files when multiple files are specified
-            // on the command line.  A SgProject is still built even when a single file is specificed
-            // on the command line, however there are cases where a SgFile can be built without a
-            // SgProject and this case allows those SgFile rooted subtrees to be output as DOT files.
-            // If there is a SgProject then output the dot file from there, else output as a SgFile.
+               // DQ (9/1/2008): this effects the output of DOT files when
+               // multiple files are specified on the command line.  A SgProject
+               // is still built even when a single file is specificed on the
+               // command line, however there are cases where a SgFile can be
+               // built without a SgProject and this case allows those SgFile
+               // rooted subtrees to be output as DOT files. If there is a
+               // SgProject then output the dot file from there, else output as
+               // a SgFile.
                if (file->get_parent() == NULL)
                   {
                  // If there is no SgProject then output the file now!
@@ -854,9 +860,10 @@ AstDOTGeneration::evaluateSynthesizedAttribute(SgNode* node, DOTInheritedAttribu
                   }
                  else
                   {
-                 // There is a SgProject IR node, but if we will be traversing it we want to output the
-                 // graph then (so that the graph will include the SgProject IR nodes and connect multiple
-                 // files (SgSourceFile or SgBinaryComposite IR nodes).
+                    // There is a SgProject IR node, but if we will be
+                    // traversing it we want to output the graph then (so that
+                    // the graph will include the SgProject IR nodes and connect
+                    // multiple files (SgSourceFile IR nodes).
                     if ( visitedNodes.find(file->get_parent()) == visitedNodes.end() )
                        {
                       // This SgProject node was not input as part of the traversal,

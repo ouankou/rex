@@ -245,16 +245,11 @@ ASTtools::isC99 (const SgNode* n)
         }
         break;
    // case V_SgFile:
-      case V_SgSourceFile:
-#ifdef ROSE_ENABLE_BINARY_ANALYSIS
-      case V_SgBinaryComposite:
-#endif
-        {
+        case V_SgSourceFile: {
           const SgFile* file = isSgFile (n);
           ROSE_ASSERT (file);
           return file->get_C99_only ();
-        }
-        break;
+        } break;
       default:
         return ASTtools::isC99 (n->get_parent ());
       }

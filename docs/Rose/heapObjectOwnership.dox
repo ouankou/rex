@@ -21,22 +21,22 @@
  *
  *  The <b>shared ownership</b> paradigm allows multiple parents to point to the same heap-allocated object, and all parents
  *  share the ownership of the that object. The parents coordinate with each other so that when the last parent relinquishes
- *  ownership then the heap-allocated object is deleted. This is the paradigm used by most of the binary analysis parts of ROSE.
+ *  ownership then the heap-allocated object is deleted. This is the paradigm used by some ROSE subsystems.
  *
  *  @section heap_object_shared_ownership Shared ownership
  *
  *  Within ROSE, shared ownership is implemented using smart pointers. A smart pointer behaves for the most part like a native
- *  C++ pointer, but performs additional functions. The binary analysis parts of ROSE implement shared ownership using either
+ *  C++ pointer, but performs additional functions. Some ROSE subsystems implement shared ownership using either
  *  <code>boost::shared_ptr</code> or @ref Sawyer::SharedPointer, both of which use reference counting. The reason for two
  *  implementations is that we found <code>boost::shared_ptr</code> to be too slow in some situations.
  *
- *  Most binary analysis, heap-allocated, shared-ownership objects have a typedef for their pointer type. The pointer type name
- *  is either the same as the class name with "Ptr" appended, or a public "Ptr" type defined in the class (or both). These
- *  objects normally have protected constructors in order to prevent users from accidentally allocating them on the stack or
- *  data/bss sections. Instead, they provide a class method (static member function) to create a new, heap-allocated
- *  instance. This factory method goes by the name of "instance", although a few classes use other names.  The destructor for a
- *  heap-allocated shared object is only called automatically as a result of the object's final owner relinquishing ownership
- *  (i.e., the reference count reaches zero).
+ *  Most heap-allocated, shared-ownership objects have a typedef for their pointer type. The pointer type name is either the
+ *  same as the class name with "Ptr" appended, or a public "Ptr" type defined in the class (or both). These objects normally
+ *  have protected constructors in order to prevent users from accidentally allocating them on the stack or data/bss sections.
+ *  Instead, they provide a class method (static member function) to create a new, heap-allocated instance. This factory
+ *  method goes by the name of "instance", although a few classes use other names.  The destructor for a heap-allocated shared
+ *  object is only called automatically as a result of the object's final owner relinquishing ownership (i.e., the reference
+ *  count reaches zero).
  *
  *  Shared pointers are often passed as function arguments using a const reference to avoid the need to increment and decrement
  *  the reference count. Occasionally the underlying raw pointer is even passed directly, but this is only safe when the

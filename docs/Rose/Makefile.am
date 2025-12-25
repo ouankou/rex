@@ -106,7 +106,7 @@ latexFiles = preface.tex acknowledgments.tex introduction.tex \
              rose-processing-phases.pdf testing.tex \
              writingYourFirstTranslator.tex overviewOfRose.tex \
              developersAppendix.tex astMerge.tex installRose.tex \
-             demo.tex OpenMPsupport.tex \
+             OpenMPsupport.tex \
              rose_exam_1.tex rose_exam_traversals_1.tex
 
 # DQ (3/4/2009): Removed requirements.tex since it is not longer used.

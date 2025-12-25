@@ -126,11 +126,12 @@
 \today
 \end{center}
 
-\input{demo}
+\chapter{Overview}
+REX focuses on source-to-source analysis and transformation for C/C++ and
+Fortran. The legacy ROSE demo guide is no longer applicable. See the ROSE
+Tutorial and user manual for current examples.
 
 \end{document}
-
-
 
 
 

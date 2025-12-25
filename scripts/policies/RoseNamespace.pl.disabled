@@ -199,8 +199,8 @@ my @policies = (
 	'This enables users to test whether a certain ROSE capability is present
 	in their installed version of ROSE by testing whether a particular
 	header has been included indirectly. For instance, the user might
-	include <Rose/BinaryAnalysis/Disassembler.h> and then check whether
-	ROSE_BinaryAnalysis_Disassembler_Jvm_H is defined in order to determine
+	include <Rose/Frontend/Frontend.h> and then check whether
+	ROSE_Frontend_Frontend_H is defined in order to determine
 	if this version of ROSE supports that capability. The
 	reason for "ROSE" being allcaps is because we have a separate policy
 	that states that all ROSE-related C preprocessor symbols begin with
@@ -231,7 +231,6 @@ my @extra_words = qw/
     AST 			# Abstract Syntax Tree
     CFG				# Control Flow Graph
     CIL				# Common Intermediate Language
-    JVM				# Java Virtual Machine
     callbacks			# missing from dictionary
     Concolic			# as in Concolic Testing
     demangler			# missing from dictionary
@@ -262,7 +261,7 @@ my %bad_words = (
     # Bad word              Replacement           What already uses the replacement that may cause user confusion
     #==================     ====================  ================================================================
     'cmdline'           => 'CommandLine',         # Rose::CommandLine etc.
-    'config'            => 'Configuration',	  # Rose::BinaryAnalysis::Partitioner2::Configuration, ::Configuration, etc.
+    'config'            => 'Configuration',	  # Rose::Configuration, etc.
     'deref'             => 'Dereference',	  # CodeThorn, RTED, Fuse, C++ backend, etc.
     'expr'              => 'Expression',	  # SgExpression, SgAsmBinaryExpression, SgAwaitExpression, etc.
     'oob'               => 'OutOfBounds',         # uncommon abbreviation

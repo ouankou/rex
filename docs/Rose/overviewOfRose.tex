@@ -33,10 +33,10 @@ use ROSE. This is a chapter that I think Rich would like to write
 \section{Introduction}
      This chapter was requested by several people who wanted to understand 
 how ROSE was designed and implemented.  ROSE supports a number of different 
-languages and used different parsers and or frontends to address each on.
-For C, C99, and C++; we use the EDG frontend.  While for Fortran we
-use the Open Fortran Parser as a parser and build the fronend end required.
-ROSE contains a midend, where analysis support is made available and and backend 
+languages and use different parsers and/or frontends to address each one.
+For C and C++, REX uses the Clang/LLVM frontend.  For Fortran we
+use the Open Fortran Parser and build the frontend required.
+ROSE contains a midend, where analysis support is made available and a backend 
 which does the code generation from the IR.
 
    The goal of the design of the IR is to not loose any source code information.
@@ -46,23 +46,20 @@ disadvantages.  The IR forms the base for an abstract syntax tree, so clearly
 some syntatic details are lost in the IR, but these are regenerated in the 
 back-end (which has language specific support).
 
-   More languages could be added to ROSE, ROSE is designed to be langauge
-neutral, but it is implemented in C++. PHP has for example been added to 
-ROSE, but it represnted initial work and an experiment with the general subject of
-run-time typed scripting language support.
+   More languages could be added to ROSE, ROSE is designed to be language
+neutral, but it is implemented in C++.
 
 \section{Design}
 
 Fundamentally, ROSE has three parts:
 \begin{enumerate}
-   \item frontend, which addresses language specific parsers/frontend issues (and the
-         binary disassembly for the case of the binary support in ROSE);
+   \item frontend, which addresses language specific parsers/frontend issues;
    \item midend, which addresses analysis and transformation issues; 
    \item backend which addresses code generation issues.
 \end{enumerate}
 
    The frontend constructs an AST which saves as much as possible about the structure of
-the original source code (or binary for the case of the ROSE binary supposrt).
+the original source code.
 
    This section will cover the design goals etc. of ROSE.
 

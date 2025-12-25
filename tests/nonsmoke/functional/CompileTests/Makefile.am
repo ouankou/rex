@@ -16,8 +16,8 @@ include $(top_srcdir)/config/Makefile.for.ROSE.includes.and.libs
 # DQ (12/5/2007): Removed A++Code because this takes a long time (about 1 minute).
 
 
-# DQ (4/17/2010): These directories are now organized based on what sets of languages 
-# are enabled in ROSE (including binary analysis).
+# DQ (4/17/2010): These directories are now organized based on what sets of languages
+# are enabled in ROSE.
 
 # DQ (7/28/2014): Moved this to aver the C and C++ language tests.
 # SUBDIRS = x10_tests
@@ -168,5 +168,4 @@ status:
 	@$(srcdir)/status.sh compiler
 	@$(srcdir)/status.sh backend
 	@$(srcdir)/status.sh translator
-
 

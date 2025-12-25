@@ -1,5 +1,5 @@
 # DQ (4/17/2010): These directories are now organized based on what sets of
-# languages are enabled in ROSE (including binary analysis).
+# languages are enabled in ROSE.
 
 if(enable-c)
   add_subdirectory (astMergeTests)

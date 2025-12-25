@@ -269,8 +269,8 @@ promise when it would happen.
       How do you handle global static objects?
 
    The information computed is as accurate as possible and alwasy represent the full
-   languge (including full C++, Fortran 2003, etc.).  Some languges are newer
-   (e.g. Fortran 2003 and PHP so that will still has to mature).  Implicit calls to
+   languge (including full C++, Fortran 2003, etc.).  Some languages are newer
+   (e.g. Fortran 2003) and will still have to mature.  Implicit calls to
    constructors, destructors, short curcuit evaluation, etc. are not inserted specific analysis in:
    {\tt src/midend/programTransformation/implicitCodeGeneration} is used. This code introduces
    implicit calls into the AST as explicit calls which are ignored by the code generation
@@ -350,8 +350,7 @@ promise when it would happen.
     all these somehow? Or you have alternative grammars / type checkers?
 
     We support C89, C99, C++ (98 standard), Fortran 4, Fortran 66, Fortran 77, Fortran 90,
-    Fortran 95, Fortran 2003, PHP and Binary Analysis for x86 and ARM using ELF and PE,
-    NE, LE, and DOS binary formats).  We will start work on C++0x when we upgrade to the newest
+    Fortran 95, and Fortran 2003.  We will start work on C++0x when we upgrade to the newest
     version of EDG.  We support C++ compiled using Microsoft Visual Studio, but not all
     the MS extensions.  We support a number of GNU specific C and C++ extensions, but not
     all. Since we use EDG for the frontend, we don't have any {\bf super} grammar
@@ -408,12 +407,12 @@ Tool Demos at Dagstuhl: Scalable Program Analysis
 
     * Which problem does your tool solve?
       ROSE: is a general purpose source-to-source compiler infrastructure for C, C++,
-         Fortran 2003, and Binaries; supporting optimization and the connection of
+         Fortran 2003; supporting optimization and the connection of
          source code based tools.  By design it supports outside collaborations with 
          so that new research ideas can have impact on DOE applications.  We are obsessed
          with the faithful representation of the source code.
-      Compass: is a simple tool wrapping arbitrary static analysis plug-ins for source 
-         code and binaries.
+      Compass: is a simple tool wrapping arbitrary static analysis plug-ins for source
+         code.
 
     * What kind of analysis is the tool using?
       ROSE: AST, CFG, Call graph, class hierarchy graph, SDG (and you can define your own

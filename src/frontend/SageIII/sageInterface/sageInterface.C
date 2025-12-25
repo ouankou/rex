@@ -5095,8 +5095,8 @@ SageInterface::generateFileList()
 
      FileTraversal fileTraversal;
 
-  // traverse just the SgFile nodes (both the SgSourceFile and SgBinaryComposite IR nodes)!
-  // SgFile::visitRepresentativeNode(fileTraversal);
+     // traverse just the SgFile nodes (SgSourceFile IR nodes).
+     // SgFile::visitRepresentativeNode(fileTraversal);
      SgSourceFile::traverseMemoryPoolNodes(fileTraversal);
   // This would alternatively traverse all IR nodes in thememory pool!
   // fileTraversal.traverseMemoryPool();
@@ -5316,15 +5316,16 @@ SageInterface::is_Cxx_language()
      for (int i = 0; i < size; i++)
         {
        // DQ (8/19/2007): Make sure this is not a Fortran code!
-       // if (fileList[i]->get_C99_only() == false && fileList[i]->get_C_only() == false)
-       // if (fileList[i]->get_Fortran_only() == false && fileList[i]->get_C99_only() == false && fileList[i]->get_C_only() == false && fileList[i]->get_binary_only() == false)
-          if (fileList[i]->get_Cxx_only() == true)
-             {
-            // ROSE_ASSERT(fileList[i]->get_Cxx_only() == true);
-               ROSE_ASSERT(fileList[i]->get_Fortran_only() == false && fileList[i]->get_C99_only() == false && fileList[i]->get_C_only() == false);
+       // if (fileList[i]->get_C99_only() == false && fileList[i]->get_C_only()
+       // == false)
+       if (fileList[i]->get_Cxx_only() == true) {
+         // ROSE_ASSERT(fileList[i]->get_Cxx_only() == true);
+         ROSE_ASSERT(fileList[i]->get_Fortran_only() == false &&
+                     fileList[i]->get_C99_only() == false &&
+                     fileList[i]->get_C_only() == false);
 
-               returnValue = true;
-             }
+         returnValue = true;
+       }
         }
 
      return returnValue;

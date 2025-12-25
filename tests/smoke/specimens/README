@@ -4,7 +4,7 @@ tests. This hierarchy should NOT contain checkers or tests.
 === Definitions ===
 
 A "Specimen" is some kind of input for a "checker". The input could be
-source code, binaries, tables, config files, etc.  This directory
+source code, tables, config files, etc.  This directory
 contains mainly specimens that serve as inputs for more than one
 checker found in multiple other directories.
 

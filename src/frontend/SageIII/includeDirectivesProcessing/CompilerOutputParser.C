@@ -189,11 +189,7 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
             // might want to correct this (for now we will clean up the command line as part of command line handling).
 
                inputFile -> stripFortranCommandLineOptions(argv);
-             }
-            else
-             {
-            // This is the case of binary analysis...(nothing to do there)
-             }
+          }
         }
 
     //This part is from int SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )

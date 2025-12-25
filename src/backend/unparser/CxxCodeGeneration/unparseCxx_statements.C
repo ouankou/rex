@@ -11148,16 +11148,18 @@ Unparse_ExprStmt::unparseGotoStmt(SgStatement* stmt, SgUnparse_Info& info)
 static bool
 isOutputAsmOperand(SgAsmOp* asmOp)
    {
-  // There are two way of evaluating if an SgAsmOp is an output operand, 
-  // depending of if we are using the specific mechanism that knows 
-  // records register details or the more general mechanism that records 
-  // the registers as strings.  The string based mechanism lack precision 
-  // and would require parsing to retrive the instruction details, but it 
-  // is instruction set independent.  The more precise mechanism records 
+  // There are two way of evaluating if an SgAsmOp is an output operand,
+  // depending of if we are using the specific mechanism that knows
+  // records register details or the more general mechanism that records
+  // the registers as strings.  The string based mechanism lack precision
+  // and would require parsing to retrive the instruction details, but it
+  // is instruction set independent.  The more precise mechanism records
   // the specific register codes and could in the future be interpreted
-  // to be a part of the binary analysis support in ROSE.
+  // as part of instruction-aware analysis.
 
-     return (asmOp->get_recordRawAsmOperandDescriptions() == true) ? (asmOp->get_isOutputOperand() == true) : (asmOp->get_modifiers() & SgAsmOp::e_output);
+  return (asmOp->get_recordRawAsmOperandDescriptions() == true)
+             ? (asmOp->get_isOutputOperand() == true)
+             : (asmOp->get_modifiers() & SgAsmOp::e_output);
    }
 
 

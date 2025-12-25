@@ -111,7 +111,6 @@ HIDE_IN_BODY_DOCS      = NO
 
 # If the BRIEF_MEMBER_DESC tag is set to YES (the default) Doxygen will 
 # include brief member descriptions after the members that are listed in 
-# the file and class documentation (similar to JavaDoc). 
 # Set to NO to disable this.
 
 BRIEF_MEMBER_DESC      = YES
@@ -190,13 +189,9 @@ VERBATIM_HEADERS       = YES
 
 SHOW_INCLUDE_FILES     = YES
 
-# If the JAVADOC_AUTOBRIEF tag is set to YES then Doxygen 
-# will interpret the first line (until the first dot) of a JavaDoc-style 
-# comment as the brief description. If set to NO, the JavaDoc 
 # comments  will behave just like the Qt-style comments (thus requiring an 
 # explict @brief command for a brief description.
 
-JAVADOC_AUTOBRIEF      = NO
 
 # The MULTILINE_CPP_IS_BRIEF tag can be set to YES to make Doxygen 
 # treat a multi-line C++ special comment block (i.e. a block of //! or /// 
@@ -207,7 +202,6 @@ JAVADOC_AUTOBRIEF      = NO
 MULTILINE_CPP_IS_BRIEF = NO
 
 # If the DETAILS_AT_TOP tag is set to YES then Doxygen 
-# will output the detailed description near the top, like JavaDoc.
 # If set to NO, the detailed description appears after the member 
 # documentation.
 
@@ -302,12 +296,9 @@ MAX_INITIALIZER_LINES  = 30
 
 OPTIMIZE_OUTPUT_FOR_C  = NO
 
-# Set the OPTIMIZE_OUTPUT_JAVA tag to YES if your project consists of Java sources 
-# only. Doxygen will then generate output that is more tailored for Java. 
 # For instance namespaces will be presented as packages, qualified scopes 
 # will look different, etc.
 
-OPTIMIZE_OUTPUT_JAVA   = NO
 
 # Set the SHOW_USED_FILES tag to NO to disable the list of files generated 
 # at the bottom of the documentation of classes and structs. If set to YES the 
@@ -389,7 +380,6 @@ INPUT                  += @DOXYGEN_ADDED_DIRECTORY_2@
 # FILE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp 
 # and *.h) to filter out the source-files in the directories. If left 
 # blank the following patterns are tested: 
-# *.c *.cc *.cxx *.cpp *.c++ *.java *.ii *.ixx *.ipp *.i++ *.inl *.h *.hh *.hxx *.hpp 
 # *.h++ *.idl *.odl
 
 # Must list *.h explicitly to have header files be read
@@ -543,7 +533,6 @@ GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 
 # The HTML_FILE_EXTENSION tag can be used to specify the file extension for 
-# each generated HTML page (for example: .htm,.php,.asp). If it is left blank 
 # doxygen will generate files with .html extension.
 
 HTML_FILE_EXTENSION    = .html
@@ -625,7 +614,6 @@ ENUM_VALUES_PER_LINE   = 1
 # If the GENERATE_TREEVIEW tag is set to YES, a side panel will be
 # generated containing a tree-like index structure (just like the one that 
 # is generated for HTML Help). For this to work a browser that supports 
-# JavaScript and frames is required (for instance Mozilla, Netscape 4.0+, 
 # or Internet explorer 4.0+). Note that for large projects the tree generation 
 # can take a very long time. In such cases it is better to disable this feature. 
 # Windows users are probably better off using the HTML help feature.

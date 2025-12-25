@@ -3040,11 +3040,6 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
              }
 
 #if 0
-       // DQ (9/7/2017): Make sure that binaries are processed through the new general language support.
-          ROSE_ASSERT(file->get_binary_only() == false);
-#endif
-
-#if 0
           printf ("In unparseFile(SgFile* file): end of switch: outputFilename not set using default: outputFilename = %s \n",outputFilename.c_str());
 #endif
 
@@ -4997,9 +4992,7 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
           SgSourceFile* sourceFile = isSgSourceFile(file);
        // ASSERT_not_null(sourceFile);
 
-       // DQ (8/7/2018): We might want to allow mixed collections of binaries and source files.
-          if (sourceFile != NULL)
-             {
+          if (sourceFile != NULL) {
             // #if 1
             // DQ (4/4/2020): Added header file unparsing feature specific debug level.
                if (SgProject::get_unparseHeaderFilesDebug() >= 4)
@@ -5039,13 +5032,11 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
                printf ("Exiting as a test (after call to display header file report) \n");
                ROSE_ABORT();
 #endif
-             }
-            else
-             {
+          } else {
 #if 0
                printf ("project->get_fileList_ptr()->get_listOfFiles()[%zu] is not a SgSourceFile \n",i);
 #endif
-             }
+          }
 #if 0
           printf ("Exiting after computing the name qualification on the first file (as a test for debugging codeSegregation tool) \n");
           ROSE_ABORT();

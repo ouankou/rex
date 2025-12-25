@@ -773,7 +773,8 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
   // printf ("In determineFileType(): Calling CommandlineProcessing::generateSourceFilenames(argv) \n");
   // Rose_STL_Container<string> fileList = CommandlineProcessing::generateSourceFilenames(argv);
      ROSE_ASSERT(project != NULL);
-     Rose_STL_Container<string> fileList = CommandlineProcessing::generateSourceFilenames(argv,project->get_binary_only());
+     Rose_STL_Container<string> fileList =
+         CommandlineProcessing::generateSourceFilenames(argv);
 
 #if 0
   // this->display("In SgFile::setupSourceFilename()");
@@ -1719,17 +1720,7 @@ SgProject::parse()
      if ( (get_fileList().empty() == false) && (get_useBackendOnly() == false) )
         {
           AstPostProcessing(this);
-        }
-#if 0
-       else
-        {
-       // Alternatively if this is a part of binary analysis then process via AstPostProcessing().
-          if (this->get_binary_only() == true)
-             {
-               AstPostProcessing(this);
-             }
-        }
-#endif
+     }
 
   // negara1 (06/23/2011): Collect information about the included files to support unparsing of those that are modified.
   // In the first step, get the include search paths, which will be used while attaching include preprocessing infos.
@@ -1783,7 +1774,6 @@ SgProject::parse()
 
           SgSourceFile* sourceFile = isSgSourceFile(file);
 
-       // We can't assert this when supporting binary analysis.
        // ROSE_ASSERT(sourceFile != NULL);
           if (sourceFile != nullptr)
              {
@@ -2048,15 +2038,18 @@ SgFile::doSetupForConstructor(const vector<string>& argv, SgProject* project)
 
      ASSERT_not_null(get_parent());
 
-  // DQ (2/4/2009): The specification of "-rose:binary" causes filenames to be interpreted
-  // differently if they are object files or libary archive files.
-  // DQ (4/21/2006): Setup the source filename as early as possible
-  // setupSourceFilename(argv);
-  // Rose_STL_Container<string> fileList = CommandlineProcessing::generateSourceFilenames(argv);
-  // Rose_STL_Container<string> fileList = CommandlineProcessing::generateSourceFilenames(argv,get_binary_only());
-     Rose_STL_Container<string> fileList = CommandlineProcessing::generateSourceFilenames(argv,project->get_binary_only());
+     // DQ (2/4/2009): The specification of "-rose:binary" causes filenames to
+     // be interpreted differently if they are object files or libary archive
+     // files. DQ (4/21/2006): Setup the source filename as early as possible
+     // setupSourceFilename(argv);
+     // Rose_STL_Container<string> fileList =
+     // CommandlineProcessing::generateSourceFilenames(argv);
+     // Rose_STL_Container<string> fileList =
+     // CommandlineProcessing::generateSourceFilenames(argv);
+     Rose_STL_Container<string> fileList =
+         CommandlineProcessing::generateSourceFilenames(argv);
 
-  // DQ (12/23/2008): Use of this assertion will simplify the code below!
+     // DQ (12/23/2008): Use of this assertion will simplify the code below!
      ROSE_ASSERT (fileList.empty() == false);
      string sourceFilename = *(fileList.begin());
 
@@ -2298,8 +2291,8 @@ SgFile::generate_C_preprocessor_intermediate_filename( string sourceFilename )
   // PP (8/23/2022): Experimental: Do not override the flag from the command line. RC-1381
   //   set_skip_unparse(false);
 
-     // DQ (9/2/2008): Factored out the details of building the AST for Source
-     // code (SgSourceFile IR node) and Binaries (SgBinaryComposite IR node)
+     // DQ (9/2/2008): Factored out the details of building the AST for source
+     // code (SgSourceFile IR node).
      // Note that making buildAST() a virtual function does not appear to solve
      // the problems since it is called form the base class.  This is awkward
      // code which is temporary.
@@ -2495,32 +2488,34 @@ SgFile::secondaryPassOverSourceFile()
      printf (" --- get_header_file_unparsing_optimization_header_file() = %s \n",this->get_header_file_unparsing_optimization_header_file() ? "true" : "false");
 #endif
 
-  // **************************************************************************
-  //                      Secondary Pass Over Source File
-  // **************************************************************************
-  // This pass collects extra information about the source file that may not have
-  // been available from previous tools that operated on the file. For example:
-  //    1) EDG ignores comments and so we collect the whole token stream in this phase.
-  //    2) OFP ignores comments similarly to EDG and so we collect the whole token stream.
-  //    3) Binary disassembly ignores the binary format so we collect this information
-  //       about the structure of the ELF binary separately.
-  // For source code (C,C++,Fortran) we collect the whole token stream, for example:
-  //    1) Comments
-  //    2) Preprocessors directives
-  //    3) White space
-  //    4) All tokens (each is classified as to what specific type of token it is)
-  //
-  // There is no secondary processing for binaries.
+     // **************************************************************************
+     //                      Secondary Pass Over Source File
+     // **************************************************************************
+     // This pass collects extra information about the source file that may not
+     // have been available from previous tools that operated on the file. For
+     // example:
+     //    1) EDG ignores comments and so we collect the whole token stream in
+     //    this phase. 2) OFP ignores comments similarly to EDG and so we
+     //    collect the whole token stream.
+     // For source code (C,C++,Fortran) we collect the whole token stream, for
+     // example:
+     //    1) Comments
+     //    2) Preprocessors directives
+     //    3) White space
+     //    4) All tokens (each is classified as to what specific type of token
+     //    it is)
+     //
 
-  // DQ (10/27/2018): Added documentation.
-  // Note that this function is called from two locations:
-  // 1) From the sage_support.cpp (for the main source file)
-  // 2) From the attachPreprocessingInfoTraversal.C (for any header files when using the unparse headers option)
+     // DQ (10/27/2018): Added documentation.
+     // Note that this function is called from two locations:
+     // 1) From the sage_support.cpp (for the main source file)
+     // 2) From the attachPreprocessingInfoTraversal.C (for any header files
+     // when using the unparse headers option)
 
-  // GB (9/4/2009): Factored out the secondary pass. It is now done after
-  // the whole project has been constructed and fixed up.
+     // GB (9/4/2009): Factored out the secondary pass. It is now done after
+     // the whole project has been constructed and fixed up.
 
-        {
+     {
        // This is set in the unparser now so that we can handle the source file plus all header files
 
        // DQ (8/19/2019): When header file optimization is turned on the this asertion is incorrect.
@@ -2878,7 +2873,7 @@ SgFile::secondaryPassOverSourceFile()
             // sourceFile->fixupASTSourcePositionsBasedOnDetectedLineDirectives();
 
              } //end if get_skip_commentsAndDirectives() is false
-        }
+     }
 
 #if 0
      printf ("Leaving SgFile::secondaryPassOverSourceFile() \n");

@@ -76,12 +76,9 @@ LINK = $(CXXLINK)
 
 lib_LTLIBRARIES = librose.la
 
-# if ROSE_USE_OPEN_FORTRAN_PARSER
-if ROSE_USE_INTERNAL_JAVA_SUPPORT
-   JAVA_JVM_FLAGS = $(JAVA_JVM_LINK)
-
-# OpenFortranParser-${OFP_VERSION}.jar:
-#	cd ${top_builddir}/src/3rdPartyLibraries/fortran-parser; $(MAKE) get_jar_file
+JAVA_JVM_FLAGS =
+if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
+  JAVA_JVM_FLAGS = $(JAVA_JVM_LINK)
 endif
 
 librose_la_SOURCES = dummyCppFileForLibrose.C
@@ -180,7 +177,7 @@ if USING_CLANG_COMPILER
 endif
 LDFLAGS_ROSEBIN += -fno-rtti
 
-if ROSE_USE_INTERNAL_JAVA_SUPPORT
+if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 if OS_MACOSX
   LDFLAGS_ROSEBIN += $(ROSE_LINK_RPATHS)
 endif

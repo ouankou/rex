@@ -89,7 +89,6 @@ OUTPUT_LANGUAGE        = English
 
 # If the BRIEF_MEMBER_DESC tag is set to YES (the default) Doxygen will
 # include brief member descriptions after the members that are listed in
-# the file and class documentation (similar to JavaDoc).
 # Set to NO to disable this.
 
 BRIEF_MEMBER_DESC      = YES
@@ -156,13 +155,9 @@ STRIP_FROM_INC_PATH    =
 
 SHORT_NAMES            = NO
 
-# If the JAVADOC_AUTOBRIEF tag is set to YES then Doxygen
-# will interpret the first line (until the first dot) of a JavaDoc-style
-# comment as the brief description. If set to NO, the JavaDoc
 # comments will behave just like regular Qt-style comments
 # (thus requiring an explicit @brief command for a brief description.)
 
-JAVADOC_AUTOBRIEF      = YES
 
 # If the QT_AUTOBRIEF tag is set to YES then Doxygen will
 # interpret the first line (until the first dot) of a Qt-style
@@ -220,12 +215,9 @@ TCL_SUBST              =
 
 OPTIMIZE_OUTPUT_FOR_C  = NO
 
-# Set the OPTIMIZE_OUTPUT_JAVA tag to YES if your project consists of Java
 # sources only. Doxygen will then generate output that is more tailored for
-# Java. For instance, namespaces will be presented as packages, qualified
 # scopes will look different, etc.
 
-OPTIMIZE_OUTPUT_JAVA   = NO
 
 # Set the OPTIMIZE_FOR_FORTRAN tag to YES if your project consists of Fortran
 # sources only. Doxygen will then generate output that is more tailored for
@@ -243,9 +235,6 @@ OPTIMIZE_OUTPUT_VHDL   = NO
 # parses. With this tag you can assign which parser to use for a given extension.
 # Doxygen has a built-in mapping, but you can override or extend it using this
 # tag. The format is ext=language, where ext is a file extension, and language
-# is one of the parsers supported by doxygen: IDL, Java, Javascript, CSharp, C,
-# C++, D, PHP, Objective-C, Python, Fortran, VHDL, C, C++. For instance to make
-# doxygen treat .inc files as Fortran files (default is PHP), and .f files as C
 # (default is Fortran), use: inc=Fortran f=C. Note that for custom extensions
 # you also need to set FILE_PATTERNS otherwise the files are not read by doxygen.
 
@@ -696,8 +685,6 @@ INPUT_ENCODING         = UTF-8
 # FILE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp
 # and *.h) to filter out the source-files in the directories. If left
 # blank the following patterns are tested:
-# *.c *.cc *.cxx *.cpp *.c++ *.d *.java *.ii *.ixx *.ipp *.i++ *.inl *.h *.hh
-# *.hxx *.hpp *.h++ *.idl *.odl *.cs *.php *.php3 *.inc *.m *.mm *.dox *.py
 # *.f90 *.f *.for *.vhd *.vhdl
 
 FILE_PATTERNS          = *.h \
@@ -914,7 +901,6 @@ GENERATE_HTML          = YES
 HTML_OUTPUT            = ROSE_HTML_Reference
 
 # The HTML_FILE_EXTENSION tag can be used to specify the file extension for
-# each generated HTML page (for example: .htm,.php,.asp). If it is left blank
 # doxygen will generate files with .html extension.
 
 HTML_FILE_EXTENSION    = .html
@@ -1168,7 +1154,6 @@ DISABLE_INDEX          = NO
 # If the tag value is set to YES, a side panel will be generated
 # containing a tree-like index structure (just like the one that
 # is generated for HTML Help). For this to work a browser that supports
-# JavaScript, DHTML, CSS and frames is required (i.e. any modern browser).
 # Windows users are probably better off using the HTML help feature.
 # Since the tree basically has the same information as the tab index you
 # could consider to set DISABLE_INDEX to NO when enabling this option.
@@ -1210,7 +1195,6 @@ FORMULA_FONTSIZE       = 10
 FORMULA_TRANSPARENT    = YES
 
 # Enable the USE_MATHJAX option to render LaTeX formulas using MathJax
-# (see http://www.mathjax.org) which uses client side Javascript for the
 # rendering instead of using prerendered bitmaps. Use this if you do not
 # have LaTeX installed or if you want to formulas look prettier in the HTML
 # output. When enabled you may also need to install MathJax separately and
@@ -1236,18 +1220,14 @@ MATHJAX_RELPATH        = http://cdn.mathjax.org/mathjax/latest
 MATHJAX_EXTENSIONS     =
 
 # When the SEARCHENGINE tag is enabled doxygen will generate a search box
-# for the HTML output. The underlying search engine uses javascript
 # and DHTML and should work on any modern browser. Note that when using
 # HTML help (GENERATE_HTMLHELP), Qt help (GENERATE_QHP), or docsets
 # (GENERATE_DOCSET) there is already a search function so this one should
-# typically be disabled. For large projects the javascript based search engine
 # can be slow, then enabling SERVER_BASED_SEARCH may provide a better solution.
 
 SEARCHENGINE           = YES
 
 # When the SERVER_BASED_SEARCH tag is enabled the search engine will be
-# implemented using a PHP enabled web server instead of at the web client
-# using Javascript. Doxygen will generate the search PHP script and index
 # file to put on the web server. The advantage of the server
 # based approach is that it scales better to large projects and allows
 # full text search. The disadvantages are that it is more difficult to setup

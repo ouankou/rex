@@ -13,35 +13,26 @@
 %    Source code regeneration
 %
    ROSE is an open source compiler infrastructure for building tools that can
-read and write source code in multiple languages (C/C++/Fortran) and/or analyze
-binary executables (using the x86, Power-PC, and ARM instruction sets).
+read and write source code in multiple languages (C/C++/Fortran).
 The target audience for ROSE is people building tools for the analysis
 and transformation of software generally as well as code generation tools.
 % source code and/or analysis of binary executables.
 ROSE provides a library (librose) that can be 
 used to support the universal requirements of tools that
-do custom analysis and/or transformations on source code
-and custom analysis of binary forms of software. ROSE is 
+do custom analysis and/or transformations on source code. ROSE is
 portable across and expanding range of operating systems
 and work with an growing number of compilers.
 
    ROSE provides a common level of infrastructure support to
-user-defined tools, so that they need not implement the 
-complex support required for software analysis and transformation operations. 
-For source code based tools these include parsing, common forms of 
+user-defined tools, so that they need not implement the
+complex support required for software analysis and transformation operations.
+For source code based tools these include parsing, common forms of
 compiler analysis, common transformations, and code generation.
-For binary analysis based tools these include disassembly,
-function boundary detection, and common forms of analysis.
-User defined tools may also mix source code and binary analysis
-to form more interesting tools for specialized purposes.
-ROSE is part of research work to unify the analysis of
-both source code and binaries within general compiler research
-and define mixed forms of static and dynamic analysis.
 
-   ROSE works by reading the source code and/or binary
+   ROSE works by reading the source code
 and generating an Abstract Syntax Tree (AST).  The AST forms
-a graph representing the structure of the source code and/or binary
-executable and is held in memory to provide the fastest possible means 
+a graph representing the structure of the source code
+and is held in memory to provide the fastest possible means 
 of operating on the graph.  The nodes used to define the AST graph are 
 an {\em intermediate representation} (IR); common within compiler research
 as a way of representing the structure of software absent syntax details
@@ -55,11 +46,7 @@ the input code passed on the command line to any tool built using ROSE.
 Similarly, an automated transformation of the variable declaration 
 held in the AST would be expressed using a traversal over the AST and
 code {\em semantic actions} to mutate the AST. Then the transformed source code would be 
-generated ({\em unparsed}) from the AST.  In the case of binaries 
-(including executables, object files, and libraries), the AST will 
-represent the structure of the binary. The AST for a binary also includes the 
-binary file format (symbol table, debug format, import tables, etc.), 
-disassembled instructions, all instruction operands, etc.
+generated ({\em unparsed}) from the AST.
 
    ROSE provides a rich set of tools to support the analysis of 
 software including the support for users to build their own forms
@@ -69,7 +56,7 @@ for analysis and transformation.
 A wide assortment of AST traversals are provided
 to express both analysis and transformations of the AST. A set of
 common forms of analysis are provided (call graph, control flow, etc.)
-most work uniformly on both source code and binary executables.
+most work uniformly on source code.
 Visualization support in included to help users understand and debug
 their tools.  GUI support is available to support building professional
 level tools using ROSE. ROSE is actively supported by a small

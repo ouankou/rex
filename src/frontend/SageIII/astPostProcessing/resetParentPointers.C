@@ -2019,7 +2019,6 @@ resetParentPointersInMemoryPool(SgNode* node)
 
           SgSourceFile* sourceFile = isSgSourceFile(file);
 
-       // DQ (10/9/2012): Robb points out that this is a problem for the binary analysis.
        // ROSE_ASSERT(sourceFile != NULL);
           if (sourceFile != NULL)
              {
@@ -2067,9 +2066,9 @@ resetParentPointersInMemoryPool(SgNode* node)
 
   // ROSE_ASSERT(globalScope != NULL);
 
-  // DQ (10/9/2012): Make this conditional upon having found a valid SgGlobal (not the case for a binary file).
-     if (globalScope != NULL)
-        {
+        // DQ (10/9/2012): Make this conditional upon having found a valid
+        // SgGlobal.
+        if (globalScope != NULL) {
           ResetParentPointersInMemoryPool t(globalScope);
 
           ROSE_ASSERT(t.globalScope != NULL);
@@ -2080,13 +2079,12 @@ resetParentPointersInMemoryPool(SgNode* node)
        // parent pointers have been set
        // Reset parents of any remaining unset Sg_File_Info object first
           resetFileInfoParentPointersInMemoryPool();
-        }
-       else
-        {
-       // DQ (8/5/2019): This fails for the binary analysis, where there is no SgGlobal found.
-       // DQ (8/2/2019): This function is only meaningful to call with the SgProject node, and will do nothing otherwise.
-       // printf ("In resetParentPointersInMemoryPool(): This function is not doing anything when called using: node = %p = %s \n",node,node->class_name().c_str());
-       // ROSE_ASSERT(false);
+        } else {
+          // DQ (8/2/2019): This function is only meaningful to call with the
+          // SgProject node, and will do nothing otherwise. printf ("In
+          // resetParentPointersInMemoryPool(): This function is not doing
+          // anything when called using: node = %p = %s
+          // \n",node,node->class_name().c_str()); ROSE_ASSERT(false);
         }
    }
 
@@ -2552,7 +2550,6 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                case V_SgSymbolTable:
             // case V_SgFile:
                case V_SgSourceFile:
-               case V_SgBinaryComposite:
                case V_SgTypedefSeq:
                case V_SgFunctionParameterTypeList:
                case V_SgPragma:

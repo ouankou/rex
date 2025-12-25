@@ -8,16 +8,6 @@
 
 #include "rosedefs.h"
 
-#if 0
-// Forward references to namespaces used in the binary execuable file format support.
-namespace Exec{
-namespace ELF{
-   int xxx;
-}
-   int xxx;
-}
-#endif
-
 // DQ (4/21/2009): This header file contains the definitions of the IR nodes.
 // tps : avoid detection" header files are scanned whether they include sage3basic.h for .h and .hh
 
@@ -87,66 +77,6 @@ namespace ELF{
 #include "HiddenList.h"
 #include "HiddenList_Output.h"
 #include "HiddenList_Intersection.h"
-
-
-#if 0
-// DQ (1/31/2013): This is an attempt to make this test code smaller.
-
-// DQ (1/25/2008): Added cfgToDot.h as suggested by Jeremiah
-#include "cfgToDot.h"
-
-#include "DataConversion.h"
-// Files in src/frontend/ExecFormats
-#include <Rose/BinaryAnalysis/MemoryMap.h>
-
-#include <Rose/BinaryAnalysis/InstructionEnumsX86.h>
-#include "x86InstructionProperties.h"
-#include "armInstructionEnum.h"
-#include "powerpcInstructionEnum.h"
-
-// Files in src/frontend/Disassemblers
-#include <Rose/BinaryAnalysis/Disassembler.h>
-#include <Rose/BinaryAnalysis/DisassemblerPowerpc.h>
-#include <Rose/BinaryAnalysis/DisassemblerX86.h>
-#include "Partitioner.h"
-#include "Assembler.h"
-#include "AssemblerX86.h"
-
-// Files in src/backend/asmUnparser
-#include "AsmUnparser.h"
-#include "AsmUnparser_compat.h"  /*backward compatibility functions once in unparseAsm.h*/
-
-
-
-
-// ABI struct layout and similar helpers in src/frontend/SageIII/sageInterface
-#include "abiStuff.h"
-
-// DQ (3/8/2009): Why is this here?
-// added .h file for error check transformations
-//#include "RuntimeInstrumentation.h"
-
-// Laksono (12/06/2010): we include PHPFrontend.h if and only if a PHP support is required
-#ifdef USE_ROSE_PHP_SUPPORT
-#include "PHPFrontend.h"
-#endif
-
-// Include PythonFrontend.h if and only if a Python support is required
-#ifdef USE_ROSE_PYTHON_SUPPORT
-#include "PythonFrontend.h"
-#endif
-
-// Support for Xen/Ether hypervisor
-#include "ether.h"
-
-// King84 (2010.08.03) : Now that everything is defined we can include all the implementation files for templates.
-#define TEMPLATE_IMPLEMENTATIONS
-// DQ (6/25/2011): Commented out so that I could debug name qualification without function definitions in header files.
-#include "AstDOTGenerationImpl.C"
-#include "utility_functionsImpl.C"
-#undef TEMPLATE_IMPLEMENTATIONS
-
-#endif
 
 // DQ (4/20/2009): Added support to optionally get more information out about new delete operators.
 #define COMPILE_DEBUG_STATEMENTS 1

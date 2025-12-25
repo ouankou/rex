@@ -30,7 +30,6 @@ SgExpBaseClass
 SgBaseClassModifier
 SgBasicBlock
 SgBidirectionalGraph
-SgBinaryComposite
 SgBinaryOp
 SgBitAndOp
 SgBitAttribute

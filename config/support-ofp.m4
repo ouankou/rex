@@ -15,25 +15,21 @@ ofp_patch_version_number=7
 
 if test "x$support_fortran_language" = "xyes"; then
   AC_MSG_CHECKING([for gfortran to test whether Fortran support can be used])
-  if test "x$USE_JAVA" = x1; then
-    CPPFLAGS="$CPPFLAGS $JAVA_JVM_INCLUDE"
-    if test "x$GFORTRAN_PATH" != "x"; then
-      ofp_enabled=yes
-      AC_MSG_RESULT([yes])
-      AC_DEFINE([USE_GFORTRAN_IN_ROSE], [1], [Mark that GFORTRAN is available])
+  CPPFLAGS="$CPPFLAGS $JAVA_JVM_INCLUDE"
+  if test "x$GFORTRAN_PATH" != "x"; then
+    ofp_enabled=yes
+    AC_MSG_RESULT([yes])
+    AC_DEFINE([USE_GFORTRAN_IN_ROSE], [1], [Mark that GFORTRAN is available])
 
-    # Test that we have correctly evaluated the major and minor versions numbers...
-      if test x$BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER == x; then
-        AC_MSG_FAILURE([could not compute the major version number of "$BACKEND_FORTRAN_COMPILER"])
-      fi
-      if test x$BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER == x; then
-        AC_MSG_FAILURE([could not compute the minor version number of "$BACKEND_FORTRAN_COMPILER"])
-      fi
-    else
-      AC_MSG_RESULT([no ... gfortran cannot be found (try --with-gfortran=<path>)])
+  # Test that we have correctly evaluated the major and minor versions numbers...
+    if test x$BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER == x; then
+      AC_MSG_FAILURE([could not compute the major version number of "$BACKEND_FORTRAN_COMPILER"])
+    fi
+    if test x$BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER == x; then
+      AC_MSG_FAILURE([could not compute the minor version number of "$BACKEND_FORTRAN_COMPILER"])
     fi
   else
-    AC_MSG_RESULT([no ... Java cannot be found (try --with-java=<path>)])
+    AC_MSG_RESULT([no ... gfortran cannot be found (try --with-gfortran=<path>)])
   fi
 else
   AC_MSG_NOTICE([Fortran is not enabled so OFP is disabled])

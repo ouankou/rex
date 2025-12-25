@@ -149,11 +149,6 @@ if ROSE_MPI
 else
 	@echo "Automake conditional ROSE_MPI: NOT defined"
 endif
-if ROSE_OFP_CONTAINS_JAVA_FILE
-	@echo "Automake conditional ROSE_OFP_CONTAINS_JAVA_FILE: DEFINED"
-else
-	@echo "Automake conditional ROSE_OFP_CONTAINS_JAVA_FILE: NOT defined"
-endif
 if ROSE_PCH
 	@echo "Automake conditional ROSE_PCH: DEFINED"
 else
@@ -173,11 +168,6 @@ if ROSE_USE_INDENT
 	@echo "Automake conditional ROSE_USE_INDENT: DEFINED"
 else
 	@echo "Automake conditional ROSE_USE_INDENT: NOT defined"
-endif
-if ROSE_USE_INTERNAL_JAVA_SUPPORT_AM_CONDITIONAL
-	@echo "Automake conditional ROSE_USE_INTERNAL_JAVA_SUPPORT_AM_CONDITIONAL: DEFINED"
-else
-	@echo "Automake conditional ROSE_USE_INTERNAL_JAVA_SUPPORT_AM_CONDITIONAL: NOT defined"
 endif
 if ROSE_USE_LLVM
 	@echo "Automake conditional ROSE_USE_LLVM: DEFINED"

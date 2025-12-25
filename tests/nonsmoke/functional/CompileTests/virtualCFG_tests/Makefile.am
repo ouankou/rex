@@ -442,137 +442,6 @@ C99_TESTCODES_REQUIRED_TO_PASS = \
      test2006_143.c \
      test2008_01.c
 
-JAVA_TESTCODES_REQUIRED_TO_PASS = \
-     test2011_01.java \
-     test2011_02.java \
-     test2011_03.java \
-     test2011_06.java \
-     test2011_07.java \
-     test2011_08.java \
-     test2011_09.java \
-     test2011_10.java \
-     test2011_11.java \
-     test2011_12.java \
-     test2011_13.java \
-     test2011_14.java \
-     test2011_15.java \
-     test2011_16.java \
-     test2011_17.java \
-     test2011_18.java \
-     test2011_19.java \
-     test2011_20.java \
-     test2011_26.java \
-     test2011_29.java \
-     test2011_30.java \
-     test2011_31.java \
-     test2011_32.java \
-     test2011_33.java \
-     test2011_34.java \
-     test2011_35.java \
-     test2011_36.java \
-     test2011_37.java \
-     test2011_38.java \
-     test2011_39.java \
-     test2011_40.java \
-     test2011_41.java \
-     test2011_44.java \
-     test2011_46.java \
-     test2011_47.java \
-     test2011_48.java \
-     test2011_49.java \
-     test2011_50.java \
-     pgc_test2011_03.java \
-     pgc_test2011_08.java \
-     cave3_IntLit0.java \
-     cave3_LoadDep0.java \
-     cave3_assert0.java \
-     cave3_assert1.java \
-     cave3_block0.java \
-     cave3_call0.java \
-     cave3_call1.java \
-     cave3_constructor0.java \
-     cave3_constructor1.java \
-     cave3_constructor2.java \
-     cave3_constructor3.java \
-	 cave3_DoubleLit0.java \
-     cave3_dowhile0.java \
-     cave3_for0.java \
-     cave3_for1.java \
-     cave3_for2.java \
-     cave3_for3.java \
-     cave3_for4.java \
-     cave3_for5.java \
-     cave3_for6.java \
-     cave3_for7.java \
-     cave3_for8.java \
-     cave3_foreach0.java \
-     cave3_foreach1.java \
-     cave3_foreach2.java \
-     cave3_foreach4.java \
-     cave3_foreach5.java \
-     cave3_foreach6.java \
-     cave3_foreach7.java \
-     cave3_if0.java \
-     cave3_if1.java \
-     cave3_labelDecl0.java \
-     cave3_labelDecl1.java \
-     cave3_labelDecl2.java \
-     cave3_labelDecl3.java \
-     cave3_labelBreak0.java \
-     cave3_labelBreak1.java \
-     cave3_labelBreak2.java \
-     cave3_labelBreak4.java \
-     cave3_labelBreak5.java \
-     cave3_labelContinue0.java \
-     cave3_labelContinue1.java \
-     cave3_labelContinue2.java \
-     cave3_labelContinue3.java \
-     cave3_labelContinueBreak0.java \
-     cave3_labelContinueBreak1.java \
-     cave3_mthParam0.java \
-     cave3_nameResolution0.java \
-     cave3_rshift0.java \
-     cave3_rshift1.java \
-     cave3_synchronized0.java \
-     cave3_while0.java \
-     cave3_while1.java \
-     cave3_while2.java \
-     cave3_while3.java \
-     cave3_while4.java
-
-# Not yet fully supported in java frontend:
-#	  cave3_import0.java \
-#	  cave3_import1.java \
-#	  cave3_import2.java \
-#	  cave3_import3.java \
-#     cave3_foreach3.java \
-#     cave3_instanceof0.java \
-#     cave3_assert2.java \
-#     cave3_assert3.java \
-#
-#
-# Buggy cfg implementation
-# Weird cfg for System.out.println
-#     test2011_04.java \
-#     test2011_05.java \
-#     pgc_2011_30.java \
-#     test2011_21.java \
-#     test2011_22.java \
-#     test2011_23.java \
-#     test2011_24.java \
-#     test2011_25.java \
-#     test2011_27.java \
-#     test2011_28.java \
-# Synchronized missing
-# SgJavaImportStatement missing
-#     test2011_42.java \
-#     test2011_43.java \
-#     test2011_44.java \
-# Doesn't compile
-#     test2011_45.java \
-#     test2011_46.java \
-#
-
 # Configure-time automake conditional
 if ROSE_USE_LONG_MAKE_CHECK_RULE
 
@@ -612,7 +481,6 @@ TEST_Sources = ${ALL_TESTCODES:.C=.C.passed}
 # F90_FILES = ${F90_TESTCODES_REQUIRED_TO_PASS:.f90=.F90-o}
 # F77_FILES = ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS:.f=.F-o}
 # F03_FILES = ${F03_TESTCODES_REQUIRED_TO_PASS:.f03=.F03-o}
-# JAVA_FILES = ${JAVA_TESTCODES_REQUIRED_TO_PASS:.java=.java-o}
 
 CXX_FILES = ${TESTCODES_REQUIRED_TO_PASS:.C=.CXX.passed}
 C_FILES   = ${EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS:.C=.C.passed}
@@ -620,7 +488,6 @@ C99_FILES = ${C99_TESTCODES_REQUIRED_TO_PASS:.c=.C99.passed}
 F90_FILES = ${F90_TESTCODES_REQUIRED_TO_PASS:.f90=.F90.passed}
 F77_FILES = ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS:.f=.F.passed}
 F03_FILES = ${F03_TESTCODES_REQUIRED_TO_PASS:.f03=.F03.passed}
-JAVA_FILES = ${JAVA_TESTCODES_REQUIRED_TO_PASS:.java=.java.passed}
 
 $(CXX_FILES): %.passed: testVirtualCFG
 #	./testVirtualCFG $(ROSE_FLAGS) -DTEST_STRING_MACRO=\""Thu Apr 14 08:18:33 PDT 2005"\" -I$(srcdir)/../Cxx_tests $(TESTCODE_INCLUDES) -c $(srcdir)/../Cxx_tests/$(@:.CXX-o=.C) && touch $@
@@ -658,16 +525,6 @@ $(F03_FILES): ./testVirtualCFG
 #	./testVirtualCFG $(ROSE_FLAGS) -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:f2003 -c $(srcdir)/../Fortran_tests/$(@:.F03-o=.f03) && touch $@
 	@$(RTH_RUN) CMD="./testVirtualCFG $(ROSE_FLAGS) -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:f2003 -c $(srcdir)/../Fortran_tests/$(@:.F03.passed=.f03)" $(top_srcdir)/scripts/test_exit_status $@
 
-#$(JAVA_FILES): testVirtualCFG $(srcdir)/../Java_tests/$(@:.java-o=.java)
-#	cp $(srcdir)/../Java_tests/$(@:.java-o=.java) $(@:.java-o=.temp.java)
-#	./testVirtualCFG $(ROSE_FLAGS) -I$(srcdir)/../Java_tests -c $(@:.java-o=.temp.java) && touch $@
-
-$(JAVA_FILES): testVirtualCFG
-	@cp $(srcdir)/../Java_tests/$(@:.java.passed=.java) $(@:.java.passed=.java)
-#	./testVirtualCFG $(ROSE_FLAGS) -c $(@:.java-o=.java) && touch $@
-	@$(RTH_RUN) CMD="./testVirtualCFG $(ROSE_FLAGS) -c $(@:.java.passed=.java)" $(top_srcdir)/scripts/test_exit_status $@
-
-
 QMTEST_Objects = ${ALL_TESTCODES:.C=.qmt}
 
 # Make rule to build the QMTest database files
@@ -693,8 +550,6 @@ else
 check-fortran:
 endif
 
-# check-local: check-cxx check-c check-c99 check-fortran check-java
-# check-local: check-c check-c99 check-fortran check-java check-cxx
 # check-local: $(CXX_FILES) $(C_FILES)
 check-local:
 	@$(MAKE) check-c
@@ -723,30 +578,6 @@ endif # USING_INTEL_COMPILER
 endif # USING_CLANG_COMPILER
 endif # USING_GNU_COMPILER
 	@$(MAKE) check-fortran
-if USING_GNU_COMPILER
-if !ROSE_USING_GCC_VERSION_LATER_4_9
-	@echo "Some specific Java tests are skipped with any later GNU compiler (GNU 4.9 or later)."
-# conditional-check-local: extraTests
-	@$(MAKE) check-java
-	@echo "Tests for Java."
-#  Run this test explicitly since it has to be run using a specific rule and can't be lumped with the rest
-#	These C programs must be called externally to the test codes in the "TESTCODES" make variable
-endif # NOT ROSE_USING_GCC_VERSION_LATER_4_9
-else
-if USING_CLANG_COMPILER
-# Exclude this list of files in the case of CLANG compiler.
-	@echo "USING_CLANG_COMPILER == true"
-else # NOT USING_CLANG_COMPILER
-	@echo "USING_CLANG_COMPILER == false"
-if USING_INTEL_COMPILER
-# Exclude this list of files in the case of Intel compiler.
-	@echo "USING_INTEL_COMPILER == true"
-else # NOT USING_INTEL_COMPILER
-# This is an unknown compiler.
-	@echo "USING_INTEL_COMPILER == false"
-endif # USING_INTEL_COMPILER
-endif # USING_CLANG_COMPILER
-endif # USING_GNU_COMPILER
 	@echo "******************************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/CompileTests/virtualCFG_tests: make check rule complete (terminated normally) ******"
 	@echo "******************************************************************************************************"
@@ -763,10 +594,6 @@ clean-local:
 	rm -f test_*.dot
 	rm -f *.dot
 	rm -rf QMTest
-	rm -f *.java
-	rm -f *.class
-	rm -fr rose-output* ecj-classes-* javac-output-classes javac-syntax-check-classes
+	rm -fr rose-output*
 	rm -f *.passed *.failed *.err *.out
-
-
 
