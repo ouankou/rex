@@ -96,7 +96,7 @@ bool SymbolicValDescriptor::merge(const SymbolicValDescriptor &that) {
 
 string SymbolicExtendVar ::get_varname(string name, int index) {
   char buf[20];
-  sprintf(buf, "%d", index);
+  snprintf(buf, sizeof(buf), "%d", index);
   return name + "_" + buf;
 }
 
