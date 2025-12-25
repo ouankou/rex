@@ -4,6 +4,7 @@
 #include "ReachingDefinition.h"
 #include "StmtInfoCollect.h"
 #include <cassert>
+#include <functional>
 
 bool DebugReachingDef() {
   static int r = 0;
@@ -173,8 +174,10 @@ void ReachingDefNode::finalize(AstInterface &fa,
                                const ReachingDefinitions *_in) {
   CollectLocalDefinitions collectgen(fa, g);
   CollectKillDefinitions collectkill(fa, g);
-  std::function<bool(AstNodePtr, AstNodePtr)> collectgen_f(collectgen),
-      collectkill_f(collectkill);
+  std::function<bool(AstNodePtr, AstNodePtr)> collectgen_f(
+      std::ref(collectgen));
+  std::function<bool(AstNodePtr, AstNodePtr)> collectkill_f(
+      std::ref(collectkill));
   StmtSideEffectCollect<AstNodePtr> op(fa, a);
   std::list<AstNodePtr> &stmts = GetStmts();
   for (std::list<AstNodePtr>::iterator p = stmts.begin(); p != stmts.end();
