@@ -2,9 +2,6 @@
 foreach(include ${ROSE_INCLUDES})
   list(APPEND ROSE_INCLUDE_FLAGS "-I${include}")
 endforeach()
-foreach(include ${Boost_INCLUDE_DIRS})
-  list(APPEND ROSE_INCLUDE_FLAGS "-I${include}")
-endforeach()
 
 # default values for our compile tests
 set(ROSE_FLAGS -w -rose:verbose 0)
@@ -93,4 +90,3 @@ if(enable-c)
     add_subdirectory(staticCFG_tests)
   endif()
 endif()
-

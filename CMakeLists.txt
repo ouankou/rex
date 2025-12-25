@@ -484,8 +484,7 @@ find_bison()
 include(FindDoxygen)
 find_doxygen()
 
-# Zlib is required by Boost. To find it in a special place, set ZLIB_ROOT to its installation prefix.
-# Zlib is required by libharu
+# Zlib is required by libharu. To find it in a special place, set ZLIB_ROOT to its installation prefix.
 include(FindZlib)
 find_zlib()
 

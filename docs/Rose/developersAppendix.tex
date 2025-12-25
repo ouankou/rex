@@ -1569,7 +1569,6 @@ path for your translator and rename it to textit{roseTranslator}.
 Then a configuration line likes like the following:
 
 \begin{verbatim}
-../sourcetree/configure --with-boost=/home/liao6/opt/boost_1_35_0 \
 --with-CXX_DEBUG="-g -DNDEBUG" --with-C_DEBUG="-g -DNDEBUG" \
 --prefix=/home/liao6/daily-test-rose/compass/install \ 
 CXX=roseTranslator CXXLD=g++
@@ -1629,7 +1628,6 @@ Overview of the options:
                        and clicking on the platforms you want to use.
  \item {\tt CONFIGURE\_OPTIONS} - Define which options you want to pass to {\tt
                          configure}.  You will very likely need, at a minimum,
-                         to refer to the correct boost directory.
 
  \item {\tt JAVA\_HOME} - If the JVM runtime (used by the Fortran OFP frontend)
                          is included in the prereqs, {\tt JAVA\_HOME} should be
@@ -1648,8 +1646,6 @@ Example options file:
 \begin{verbatim}
 TITLE="testing default on all linux platforms"
 DESCRIPTION="minimal configuration options, gcc 4.2.4"
-PREREQS="gcc-4.2.4, boost-1.35.0"
-CONFIGURE_OPTIONS="--with-boost=/prereq/boost-1.35.0 --with-CXX_WARNINGS=-Wall"
 \end{verbatim}
 
 
@@ -3300,7 +3296,7 @@ class Value {
      virtual unsigned short getConcreteValueUnsignedShort() const;
 };
 
-typedef boost::shared_ptr<Value> ValueP;
+typedef std::shared_ptr<Value> ValueP;
 
 template <typename PrimType>
 class IntegralPrimTypeValue : public GenericPrimTypeValue<PrimType>
@@ -4032,16 +4028,6 @@ Other useful utility functions in ROSE
 \begin{lstlisting}
 
 <HEADER_GRAPH_START>
- //! Simple edge type used to input data to Boost algorithms
-     typedef std::pair<int, int> BoostEdgeType;
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-  // We need this local type so that the member access functions for data members of this type can be resolved.
-  // typedef std::vector<SgGraph::BoostEdgeType> SgBoostEdgeList;
-     typedef std::vector<BoostEdgeType> SgBoostEdgeList;
-  // typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-     typedef std::vector<int> SgBoostEdgeWeightList;
-  // typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
      int hashCode( const char* p, int len) const; // hash a character array
   // void initialize_graph_id();
      void append_properties( int addr, const std::string & prop );
@@ -4055,8 +4041,7 @@ Other useful utility functions in ROSE
      SgGraphEdge* addEdge( SgGraphEdge* edge );
      void post_construction_initialization();
 
- //! Support for Boost Minimum Spanning Tree.
-  // std::vector <BoostEdgeDescriptor> generateSpanningTree();
+ //! Support for minimum spanning tree.
      std::vector <SgGraphEdge*> generateSpanningTree();
   // tps (4/30/2009): Added properties for nodes and edges
   // todo: this will be replaced with AstAttributes once the graph conversion is done.
@@ -4104,18 +4089,6 @@ Other useful utility functions in ROSE
 
 
 <HEADER_GRAPH_POSTDECLARATION_START>
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-// We need this global type so that the member access functions (defined outside the class)
-// for data members of this type can be resolved.
-typedef SgGraph::SgBoostEdgeList SgBoostEdgeList;
-typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-typedef SgGraph::SgBoostEdgeWeightList SgBoostEdgeWeightList;
-typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
-// Supporting graph type required by Boost Graph Library.
-// typedef boost::graph_traits < SgGraph::BoostGraphType >::edge_descriptor BoostEdgeDescriptor;
-
-
 <HEADER_GRAPHNODE_START>
      void append_properties( int addr, const std::string & prop );	
      void post_construction_initialization();

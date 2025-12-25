@@ -896,11 +896,14 @@ NameQualificationTraversal::evaluateTemplateInstantiationDeclaration ( SgDeclara
           declaration,declaration->class_name().c_str(),currentScope,currentScope->class_name().c_str(),positionStatement,positionStatement->class_name().c_str());
 #endif
 
-  // DQ (10/31/2015): This code is designed to eliminate the infinite recursion possible in some rare cases of
-  // template instantiation (see test2015_105.C extracted from ROSE compiling ROSE header files and the boost
-  // usage present there).  Note that this could be restricted to the handling of SgTemplateInstantiationDecl
-  // instead (I think).  But it might be that I have just not yet seen a recursive case using template functions
-  // instantiations, template member function instantiations and template variable instantiations.
+     // DQ (10/31/2015): This code is designed to eliminate the infinite
+     // recursion possible in some rare cases of template instantiation (see
+     // test2015_105.C extracted from ROSE compiling ROSE header files and the
+     // template-heavy usage present there).  Note that this could be restricted
+     // to the handling of SgTemplateInstantiationDecl instead (I think).  But
+     // it might be that I have just not yet seen a recursive case using
+     // template functions instantiations, template member function
+     // instantiations and template variable instantiations.
      SgTemplateInstantiationDecl* templateInstantiationDeclaration = isSgTemplateInstantiationDecl(declaration);
      SgClassDefinition* nonconst_def = templateInstantiationDeclaration != NULL ? isSgClassDefinition(templateInstantiationDeclaration->get_definition()) : NULL;
 
@@ -2719,10 +2722,16 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                        {
                          SgTemplateDeclaration* templateDeclaration = isSgTemplateDeclaration(declaration);
                          ASSERT_not_null(templateDeclaration);
-                      // DQ (7/24/2018): This is output spew for Cxx11_tests/test2016_90.C and Cxx_tests/test2013_63.C (and others).
-                      // It is not new, but it is also not clear that it is too much of an issue that we have some used of SgTemplateDeclaration
-                      // in place since within templates we can at times not have enough information to build anything more specific.
-                      // All of these issues appear to be related to input codes using boost: e.g. boost/graph/topological_sort.hpp.
+                         // DQ (7/24/2018): This is output spew for
+                         // Cxx11_tests/test2016_90.C and
+                         // Cxx_tests/test2013_63.C (and others). It is not new,
+                         // but it is also not clear that it is too much of an
+                         // issue that we have some used of
+                         // SgTemplateDeclaration in place since within
+                         // templates we can at times not have enough
+                         // information to build anything more specific. All of
+                         // these issues appear to be related to input codes
+                         // using template-heavy headers.
 #if 0
                          MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::nameQualificationDepth(): case V_SgTemplateDeclaration: still emitted for template template parameter (seen in template template argument of `this`)\n");
 #endif
@@ -6132,7 +6141,12 @@ NameQualificationTraversal::traverseType ( SgType* type, SgNode* nodeReferenceTo
              if (typeNameString.length() > 6000) {
                if (SgProject::get_verbose() > 0)
                   {
-                    MLOG_WARN_C(MLOG_UNPARSER, "Warning: type names should not be this long...(unless this is boost) typeNameString.length() = %" PRIuPTR " \n",typeNameString.length());
+                 MLOG_WARN_C(MLOG_UNPARSER,
+                             "Warning: type names should not be this "
+                             "long...(unless this is from template-heavy "
+                             "headers) typeNameString.length() = %" PRIuPTR
+                             " \n",
+                             typeNameString.length());
                   }
 #if 0
             // DQ (6/30/2013): Allow the output of an example so that we can verify that this make
@@ -6187,7 +6201,11 @@ NameQualificationTraversal::traverseType ( SgType* type, SgNode* nodeReferenceTo
                     output_file << typeNameString;
                     output_file.close();
 #endif
-                    MLOG_WARN_C(MLOG_UNPARSER, "Error: type names should not be this long... (even in boost, I think) typeNameString.length() = %" PRIuPTR " \n",typeNameString.length());
+                    MLOG_WARN_C(MLOG_UNPARSER,
+                                "Error: type names should not be this long... "
+                                "(even for template-heavy headers) "
+                                "typeNameString.length() = %" PRIuPTR " \n",
+                                typeNameString.length());
                     MLOG_WARN_C(MLOG_UNPARSER, "nodeReferenceToType = %p = %s \n",nodeReferenceToType,nodeReferenceToType->class_name().c_str());
                     if (nodeReferenceToType->get_file_info())
                        {
@@ -6415,16 +6433,21 @@ NameQualificationTraversal::traverseTemplatedMemberFunction(SgMemberFunctionRefE
 #if 0
           MLOG_WARN_C(MLOG_UNPARSER, "++++++++++++++++ memberFunctionNameString (globalUnparseToString()) = %s \n",memberFunctionNameString.c_str());
 #endif
-       // DQ (3/30/2018): Incremented this for ROSE compiling ROSE using Boost (after bugfix for private types to be replaced with non-private unparsable types).
-       // DQ (12/3/2014): Incremented this for ARES application files.
-       // DQ (6/9/2013): I have incremented this value to support mangled names in the protobuf-2.5.0 application.
-       // This is symptematic of an error which causes the whole class to be included with the class
-       // definition.  This was fixed by calling unparseInfoPointer->set_SkipClassDefinition() above.
-       // [Robb Matzke 2018-06-19]: Incremented from 8000 to 9000 because <rose.h> has a name that's 8960 characters, namely "__gnu_cxx::new_allocator< _Rb_tree_node< map< ... >
-       //    ::value_type > > ::deallocate".
-       // if (memberFunctionNameString.length() > 4000)
-       // if (memberFunctionNameString.length() > 8000)
-       // if (memberFunctionNameString.length() > 8000)
+          // DQ (3/30/2018): Incremented this for ROSE compiling ROSE with
+          // template-heavy headers (after bugfix for private types). DQ
+          // (12/3/2014): Incremented this for ARES application files. DQ
+          // (6/9/2013): I have incremented this value to support mangled names
+          // in the protobuf-2.5.0 application. This is symptematic of an error
+          // which causes the whole class to be included with the class
+          // definition.  This was fixed by calling
+          // unparseInfoPointer->set_SkipClassDefinition() above. [Robb Matzke
+          // 2018-06-19]: Incremented from 8000 to 9000 because <rose.h> has a
+          // name that's 8960 characters, namely "__gnu_cxx::new_allocator<
+          // _Rb_tree_node< map< ... >
+          //    ::value_type > > ::deallocate".
+          // if (memberFunctionNameString.length() > 4000)
+          // if (memberFunctionNameString.length() > 8000)
+          // if (memberFunctionNameString.length() > 8000)
           if (memberFunctionNameString.length() > 9000)
              {
                MLOG_WARN_C(MLOG_UNPARSER, "Error: function names should not be this long... memberFunctionNameString.length() = %" PRIuPTR " \n",memberFunctionNameString.length());

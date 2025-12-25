@@ -45,15 +45,18 @@ ROSE_UTIL_API bool isNotSymbolicLink(const Path &path);
 
 /** Predicate returning true for matching names.
  *
- *  Returns true if and only if the final component of the path matches the specified regular expression.
+ *  Returns true if and only if the final component of the path matches the
+ * specified regular expression.
  *
- *  For example, to find all files whose base name matches the glob "rose_*" use this (note that the corresponding regular
- *  expression is "rose_.*", with a dot):
+ *  For example, to find all files whose base name matches the glob "rose_*" use
+ * this (note that the corresponding regular expression is "rose_.*", with a
+ * dot):
  *
  * @code
  *  using namespace Rose::FileSystem;
  *  Path top = "/foo/bar"; // where the search starts
- *  std::vector<Path> roseFiles = findAllNames(top, baseNameMatches(boost::regex("rose_.*")));
+ *  std::vector<Path> roseFiles = findAllNames(top,
+ * baseNameMatches(std::regex("rose_.*")));
  * @endcode */
 class ROSE_UTIL_API baseNameMatches {
     const std::regex &re_;

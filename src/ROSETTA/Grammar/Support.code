@@ -10,8 +10,6 @@ HEADER_START
           $CLASSNAME & operator= ( const $CLASSNAME & X );
 HEADER_END
 
-#define ROSE_SKIP_COMPILATION_OF_WAVE 1
-
 // ****************************************************
 // ************ Support for Graph IR nodes ************
 // ****************************************************
@@ -513,19 +511,6 @@ HEADER_GRAPH_START
                e_last_property      /*!< last value (unused, serves as upper bound on values) */
              };
 
- //! Simple edge type used to input data to Boost algorithms
-     typedef std::pair<int, int> BoostEdgeType;
-
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-  // We need this local type so that the member access functions for data members of this type can be resolved.
-  // typedef std::vector<SgGraph::BoostEdgeType> SgBoostEdgeList;
-     typedef std::vector<BoostEdgeType> SgBoostEdgeList;
-  // typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-     typedef std::vector<int> SgBoostEdgeWeightList;
-  // typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
-
      int hashCode( const char* p, int len) const; // hash a character array
   // void initialize_graph_id();
      void append_properties( int addr, const std::string & prop );
@@ -544,8 +529,6 @@ HEADER_GRAPH_START
 
      void post_construction_initialization() override;
 
- //! Support for Boost Minimum Spanning Tree.
-  // std::vector <BoostEdgeDescriptor> generateSpanningTree();
      std::vector <SgGraphEdge*> generateSpanningTree();
 
      // tps (4/30/2009): Added properties for nodes and edges
@@ -611,21 +594,6 @@ HEADER_GRAPH_END
 
 
 HEADER_GRAPH_POSTDECLARATION_START
-
-
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-// We need this global type so that the member access functions (defined outside the class)
-// for data members of this type can be resolved.
-typedef SgGraph::SgBoostEdgeList SgBoostEdgeList;
-typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-typedef SgGraph::SgBoostEdgeWeightList SgBoostEdgeWeightList;
-typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
-
-
-// Supporting graph type required by Boost Graph Library.
-// typedef boost::graph_traits < SgGraph::BoostGraphType >::edge_descriptor BoostEdgeDescriptor;
 
 
 HEADER_GRAPH_POSTDECLARATION_END
@@ -4405,8 +4373,6 @@ struct hash_Name
   // DQ (12/22/2005): Added constructor to support case insensitive name semantics
      const rose_hash_multimap* hash_multimap;
 
-  // CH (4/8/2010): Use boost::unordered instead
-  // CH (4/13/2010): Use boost::hash<string> instead
   // rose_hash::hash<const char*> hasher;
      rose_hash::hash<std::string> hasher;
 
@@ -4432,7 +4398,6 @@ struct hash_Name
  */
 
 // tps (11/19/2009) : Constructor of hash_multimap in MSVS is different
-// CH (4/8/2010): Use boost::unordered instead
 
 class rose_hash_multimap : public rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>
    {
@@ -4446,7 +4411,6 @@ class rose_hash_multimap : public rose_hash::unordered_multimap<SgName, SgSymbol
        // DQ (11/27/2010): Older version of code before adding support for case insensitive behavior.
           rose_hash_multimap(bool case_insensitive_semantics = false)
           // : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(), parent(NULL)
-          // : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(boost::unordered_detail::default_bucket_count,hash_Name(),eqstr(case_insensitive_semantics)), parent(NULL)
              : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(11,hash_Name(),eqstr(case_insensitive_semantics)), parent(NULL)
              {}
 
@@ -4461,7 +4425,6 @@ class rose_hash_multimap : public rose_hash::unordered_multimap<SgName, SgSymbol
 #else
        // DQ (11/27/2010): Newer version of code after adding support for case insensitive behavior.
           rose_hash_multimap()
-          // : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(boost::unordered_detail::default_bucket_count,hash_Name(this),eqstr(this)), parent(NULL), case_insensitive_semantics(false)
              : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(17,hash_Name(this),eqstr(this)), parent(NULL), case_insensitive_semantics(false)
              {
 #if 0
@@ -6281,18 +6244,7 @@ public:
 HEADER_APPLICATION_FILE_END
 
 HEADER_APPLICATION_SOURCE_FILE_START
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
      public:
-       // King84 (2010.09.22): Added support for getting the preprocessed token stream and the raw token stream.
-          typedef boost::wave::cpplexer::lex_token<>  token_type;
-          typedef std::list<token_type>             LexTokenList;
-     protected:
-          LexTokenList rawTokenStream;
-     public:
-          LexTokenList& get_rawTokenStream() { return rawTokenStream; }
-#else
-     public:
-#endif
 
        // SgSourceFile ( int & argc, char** & argv, int & errorCode, int fileNameIndex = 0, SgProject* project = NULL );
           SgSourceFile(std::vector<std::string>& argv, SgProject* project = NULL);
@@ -7614,7 +7566,6 @@ rose_hash_multimap::delete_elements()
 size_t
 hash_Name::operator()(const SgName & name) const
    {
-  // CH (4/8/2010): Use boost::unordered instead
   // return hasher(name.str());
 
      ROSE_ASSERT(hash_multimap != NULL);
@@ -7654,7 +7605,6 @@ SgSymbolTable::SgSymbolTable()
   // This should always be a non-null pointer (and never shared)!
      int symbolTableSize = 17;
 
-  // CH (4/8/2010): Use boost::unordered instead
 #if 0
      MLOG_INFO_C("ROSETTA", "WARNING: Symbol table built using default constructor in SgSymbolTable(). \n");
      p_table = new BaseHashType();
@@ -7681,7 +7631,6 @@ SgSymbolTable::SgSymbolTable(int symbolTableSize)
   // AJ (10/21/2004): Adjusted implementation to use new STL hash map interface
   // p_table = new SgSymbolHashMultiMap(sz);
 
-// CH (4/8/2010): Use boost::unordered instead
 //#ifdef _MSCx_VER
 #if 0
      MLOG_WARN_C("ROSETTA", "WARNING: Symbol table built using default constructor in SgSymbolTable(int symbolTableSize). \n");
@@ -8304,7 +8253,6 @@ SgSymbolTable::remove_function_type( const SgName & name )
 
      ROSE_ASSERT (p_table != NULL);
 
-  // CH (4/8/2010): Use boost::unordered instead
      list<rose_hash_multimap::iterator> deleteList;
      rose_hash_multimap::iterator it = get_table()->find(name);
 
@@ -8322,7 +8270,6 @@ SgSymbolTable::remove_function_type( const SgName & name )
 #endif
 
   // Now remove the copy of the symbol from the symbol table and insert the shared symbol
-  // CH (4/8/2010): Use boost::unordered instead
      list<rose_hash_multimap::iterator>::iterator i = deleteList.begin();
 
      while (i != deleteList.end())
@@ -8587,7 +8534,6 @@ SgSymbolTable::remove( const SgSymbol* symbol )
           symbol,symbol->class_name().c_str(),SageInterface::get_name(symbol).c_str(),
           symbolBasis,symbolBasis->class_name().c_str(),SageInterface::get_name(symbolBasis).c_str(),this);
 #endif
-// CH (4/8/2010): Use boost::unordered instead
 //#ifdef _MSCx_VER
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator elementToDelete = get_table()->end();
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator it = get_table()->find(name);
@@ -9709,8 +9655,6 @@ SgSymbolTable::hasMatchingTemplateParametersOrArgumentsOrNoTemplateParametersOrA
 #endif
                                                 }
 
-                                          // DQ (5/19/2014): /include/boost/chrono/duration.hpp contains a new kind of template argument that maps to what EDG calls tak_start_of_pack_expansion.
-                                          // This support is not yet implemented in ROSE (version 1.50 of Boost and version 4.9 of EDG are required to detect this).
                                           // returning "isTemplateType = false;" for now.
                                           // ROSE_ASSERT(T::is_matching_kind(*templateParameterOrArgumentLocal,*templateParameterOrArgumentFromSymbol) == false);
                                              if (T::is_matching_template_pack_expansion(*templateParameterOrArgumentLocal,*templateParameterOrArgumentFromSymbol) == true)
@@ -11599,7 +11543,6 @@ SgSymbolTable::get_symbols() const
      set<SgNode*> returnSet;
 
      ROSE_ASSERT(p_table != NULL);
-// CH (4/8/2010): Use boost::unordered instead
 //#ifdef _MSCx_VER
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator i = get_table()->begin();
 //#else
@@ -15916,9 +15859,6 @@ SgFile::initialization()
   // DQ (9/24/2006): Permit optional enforcement of ANSI standards
      p_strict_language_handling = false;
 
-  // AS (9/29/2008): Use Wave
-     p_wave = false;
-
   // DQ (10/31/2006): Output information that can be used to colorize properties of generated code (useful for debugging).
      p_embedColorCodesInGeneratedCode = 0;
 
@@ -16672,7 +16612,6 @@ SgFile::display ( const std::string & label ) const
      printf ("     p_markGeneratedFiles                        = %s \n",(p_markGeneratedFiles == true) ? "true" : "false");
      printf ("     p_negative_test                             = %s \n",(p_negative_test == true) ? "true" : "false");
      printf ("     p_strict_language_handling                  = %s \n",(p_strict_language_handling == true) ? "true" : "false");
-     printf ("     p_wave                                      = %s \n",(p_wave == true) ? "true" : "false");
      printf ("     p_embedColorCodesInGeneratedCode            = %s \n",(p_embedColorCodesInGeneratedCode == true) ? "true" : "false");
      printf ("     p_generateSourcePositionCodes               = %s \n",(p_generateSourcePositionCodes == true) ? "true" : "false");
      printf ("     p_sourceFileUsesCppFileExtension            = %s \n",(p_sourceFileUsesCppFileExtension == true) ? "true" : "false");
@@ -18062,9 +18001,6 @@ SgProject::initialization()
      p_backendErrorCode                    = 0;
      p_outputFileName                      = "";
      p_compileOnly                         = false;
-
-  // DQ (11/10/2016): Added initialization for data member that appeared to be missing.
-     p_wave                         = false;
 
      p_prelink                             = false;
      p_template_instantiation_mode         = e_unknown;

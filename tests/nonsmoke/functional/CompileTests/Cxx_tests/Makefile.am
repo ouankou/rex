@@ -173,7 +173,6 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2004_145.C \
    test2004_146.C \
    test2004_147.C \
-   test2004_148.C \
    test2004_149.C \
    test2004_14.C \
    test2004_150.C \
@@ -248,12 +247,10 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2004_79.C \
    test2004_80.C \
    test2004_81.C \
-   test2004_83.C \
    test2004_84.C \
    test2004_86.C \
    test2004_87.C \
    test2004_88.C \
-   test2004_89.C \
    test2004_90.C \
    test2004_91.C \
    test2004_93.C \
@@ -274,7 +271,6 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2005_09.C \
    test2005_100.C \
    test2005_101.C \
-   test2005_102.C \
    test2005_103.C \
    test2005_104.C \
    test2005_105.C \
@@ -484,7 +480,6 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2006_118.C \
    test2006_119.C \
    test2006_120.C \
-   test2006_121.C \
    test2006_122.C \
    test2006_123.C \
    test2006_124.C \
@@ -2024,7 +2019,7 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
 endif
 
 if !USING_INTEL_COMPILER
-# DQ (9/19/2020): this test fails with the Intel v17 compiler (something regarding boost).
+# DQ (9/19/2020): this test fails with the Intel v17 compiler (likely header-related).
 EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
    test2017_63.C 
 endif
@@ -2409,7 +2404,6 @@ TESTCODE_CURRENTLY_FAILING = \
    test2016_94.C \
    test2016_95.C \
    test2017_05.C \
-   test2017_06.C \
    test2017_07.C \
    test2017_08.C \
    test2017_12.C \
@@ -2490,8 +2484,6 @@ else
 endif
 
 EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
-     test2014_77.C \
-     test2014_78.C 
 
 if USING_CLANG_COMPILER
   TESTCODE_CURRENTLY_FAILING += \
@@ -2697,7 +2689,7 @@ else
 VALGRIND =
 endif
 
-TESTCODE_INCLUDES = -I$(srcdir) $(ROSE_BOOST_NORMAL_INCLUDE_PATH) -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Code -I$(top_builddir)
+TESTCODE_INCLUDES = -I$(srcdir) -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Code -I$(top_builddir)
 
 #########
 # Targets lists
@@ -2724,7 +2716,7 @@ TEST_TRANSLATOR=../../testTranslator
 
 LANG_FLAGS =
 
-# NP 4/23/21 C++14 flag is needed in order to parse the boost headers which use C++14.
+# NP 4/23/21 C++14 flag is needed in order to parse some headers which use C++14.
 if USING_INTEL_COMPILER
    ROSE_FLAGS = -std=c++14
 else
@@ -2793,27 +2785,27 @@ test2005_56.o: $(TEST_TRANSLATOR)
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -DTEST_STRING_MACRO=\""Thu Apr 14 08:18:33 PDT 2005"\" -c $(srcdir)/test2005_56.C -o test2005_56.o
 
 test2014_54.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(VALGRIND) $(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) $(ROSE_INCLUDES) -c $(srcdir)/test2010_01.C -o test2010_01.o
 
 test2010_01.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(VALGRIND) $(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) $(ROSE_INCLUDES) -c $(srcdir)/test2010_01.C -o test2010_01.o
 
 test2010_02.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_02.C -o test2010_02.o
 
 test2010_07.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_07.C -o test2010_07.o
 
 test2010_08.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_08.C -o test2010_08.o
 
 cpp_test2010_07: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	g++ -E -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_07.C
 
 # DQ (9/13/2013): Added new test for -rose:unparse_includes (which has a bug in how it unparses C++ style comments
@@ -3077,12 +3069,11 @@ clean-local:
 #  TIMEOUT_TOLERANCE    $gnu_time * $TIMEOUT_TOLERANCE (threshold tests only)
 #------------------------------------------------------------------------------
 
-# DQ (6/30/2013): Increased this to support compiling Boost example tests. We 
 # need to rethink how we want to handl this. I suggest restricting this to a 
 # few tests instead of each test. Compiling with optimization also makes about
-# a factor of four difference for test2013_241.C (boost example test code).
+# a factor of four difference for test2013_241.C (template-heavy example test code).
 # Since Jenkins testing is currently done without optimization we need the 
-# larger timeout value just to handle the newer boost test codes.
+# larger timeout value just to handle the newer template-heavy test codes.
 # TIMEOUT            ?= 60  # Default timeout value
 TIMEOUT            ?= 420  # Default timeout value
 TIMEOUT_TOLERANCE  ?= 20  # Default timeout tolerance value for threshold
@@ -3121,4 +3112,3 @@ $(TEST_Source_passed:.C.passed=.timed_with_threshold):
 
 status:
 	@$(MAKE) $(TEST_Source_passed)
-

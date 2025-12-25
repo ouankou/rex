@@ -242,7 +242,6 @@ test2004_84.C \
 test2004_86.C \
 test2004_87.C \
 test2004_88.C \
-test2004_89.C \
 test2004_90.C \
 test2004_91.C \
 test2004_93.C \
@@ -294,7 +293,6 @@ test2004_144.C \
 test2004_145.C \
 test2004_146.C \
 test2004_147.C \
-test2004_148.C \
 test2004_150.C \
 test2004_151.C \
 test2004_152.C \
@@ -554,7 +552,6 @@ test2006_113.C \
 test2006_115.C \
 test2006_116.C \
 test2006_119.C \
-test2006_121.C \
 test2006_122.C \
 test2006_125.C \
 test2006_126.C \
@@ -670,7 +667,6 @@ X.C \
 $(FAILING_TESTS)
 
 # DQ (11/17/2017): Added test2006_08.C to be excluded from Intel testing (look into this later).
-# DQ (3/11/2017): This file is a problem for Intel v15 (using Boost 1.57 and 1.59) 
 # on RHEL 7.3, however I can't reproduce this on my desktop machine.
 if !USING_INTEL_COMPILER
 LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += \
@@ -706,7 +702,6 @@ EDG_49_GNU_6_1_PROBLEM_FILES = \
    test2005_45.C \
    test2005_93.C \
    test2005_98.C \
-   test2005_102.C \
    test2005_181.C \
    test2006_20.C \
    test2006_79.C \
@@ -781,7 +776,6 @@ OLD_LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += \
    test2005_45.C \
    test2005_93.C \
    test2005_98.C \
-   test2005_102.C \
    test2005_181.C \
    test2006_20.C \
    test2006_79.C \
@@ -856,7 +850,6 @@ FAILING_TESTS =
 
 
 # DQ (1/8/2008): This is not a file that is copied to the distribution.
-# test2004_83.C
 # test2005_172.C
 # test2007_56.C
 # test2007_95.C -- broken test case
@@ -1017,4 +1010,3 @@ clean-local:
 
 distclean-local:
 	rm -rf Templates.DB *_copy_graph_old_nodes *.dot
-

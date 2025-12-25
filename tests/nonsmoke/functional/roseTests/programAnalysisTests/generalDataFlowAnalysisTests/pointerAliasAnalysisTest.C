@@ -1,13 +1,12 @@
 #include "rose.h"
-#include <list>
-#include <sstream>
-#include <iostream>
-#include <fstream>
-#include <string>
 #include <algorithm>
-#include <map>
 #include <ctype.h>
-#include <boost/algorithm/string.hpp>
+#include <fstream>
+#include <iostream>
+#include <list>
+#include <map>
+#include <sstream>
+#include <string>
 using namespace std;
 #include "genericDataflowCommon.h"
 #include "VirtualCFGIterator.h"
@@ -21,6 +20,15 @@ using namespace std;
 #include "printAnalysisStates.h"
 #include "pointerAliasAnalysis.h"
 
+static void erase_all(std::string &value, const std::string &needle) {
+  if (needle.empty()) {
+    return;
+  }
+  size_t pos = 0;
+  while ((pos = value.find(needle, pos)) != std::string::npos) {
+    value.erase(pos, needle.size());
+  }
+}
 
 /*
 bool mFilter (CFGNode cfgn)
@@ -188,15 +196,15 @@ int main(int argc, char *argv[])
         VarsExprsProductLattice* lattice = dynamic_cast <VarsExprsProductLattice *>(NodeState::getLatticeAbove(&poal, pdecl,0)[0]);
         ROSE_ASSERT (lattice != NULL);
         string lattice_str = lattice->str();
-        boost::erase_all(lattice_str, " ");
-        boost::erase_all(lattice_str, "\n");
+        erase_all(lattice_str, " ");
+        erase_all(lattice_str, "\n");
         //    cout <<lattice_str<<endl;
         std::string pragma_str = pdecl->get_pragma()->get_pragma ();
         pragma_str.erase (0,5);
-        boost::erase_all(pragma_str, "\n");
+        erase_all(pragma_str, "\n");
         // cout <<pragma_str <<endl;
 
-        boost::erase_all(pragma_str, " ");
+        erase_all(pragma_str, " ");
 
         size_t found = lattice_str.find(pragma_str);
         if (found != string::npos)
@@ -219,5 +227,3 @@ int main(int argc, char *argv[])
     Dbg::dotGraphGenerator (&poal);
 return 0;
 }
-
-

@@ -2693,7 +2693,7 @@ SgType::isEquivalentType (const SgType & Y) const;
 
      bool isSame = false;
 
-  // While debugging avoid infinte loops (most type chains in STL and boost are only a 3-4 long in test2015_127.C, nesting is how it goes wild).
+  // While debugging avoid infinte loops (most type chains in STL and template-heavy headers are only a 3-4 long in test2015_127.C, nesting is how it goes wild).
      static int counter = 0;
 
      const SgType & X = *this;
@@ -7224,8 +7224,8 @@ SgClassType::createType(SgDeclarationStatement* cd, SgExpression* optional_fortr
 #endif
         }
 #if 0
-  // DQ (1/22/2013): We can't assert this when we have complex template handling as in Boost.
-  // This case is demonstrated in Boost as part of ROSE compiling ROSE in testRoseHeaders_01.C
+  // DQ (1/22/2013): We can't assert this when we have complex template handling.
+  // This case is demonstrated as part of ROSE compiling ROSE in testRoseHeaders_01.C
 
   // DQ (8/23/2012): Restoring the original code...
      ROSE_ASSERT(returnType->get_declaration() == cd);

@@ -4719,10 +4719,9 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
                           << std::endl;
                        }
 
-                  // copy_file will only completely override the existing file in Boost 1.46+
-                  // http://stackoverflow.com/questions/14628836/boost-copy-file-has-inconsistent-behavior-when-overwrite-if-exists-is-used
-                    if (std::filesystem::exists(unparsed_file))
-                       {
+                       // Remove the existing file first to ensure a complete
+                       // overwrite.
+                       if (std::filesystem::exists(unparsed_file)) {
                          std::filesystem::remove(unparsed_file);
                        }
 #if 0
@@ -5053,17 +5052,6 @@ SgProject::compileOutput()
                     compilerNameString = "f77";
                   }
              }
-
-          // TOO1 (2014-10-09): Use the correct Boost version that ROSE was configured --with-boost
-#ifdef ROSE_BOOST_PATH
-          if (get_C_only() || get_Cxx_only())
-             {
-            // Search dir for header files, after all directories specified by -I but
-            // before the standard system directories.
-               originalCommandLine.push_back("-isystem");
-               originalCommandLine.push_back(std::string(ROSE_BOOST_PATH) + "/include");
-             }
-#endif
 
        // DQ (8/13/2006): Add a space to avoid building "g++-E" as output.
        // compilerNameString += " ";
@@ -6301,10 +6289,10 @@ void preventConstructionOnStack(SgNode* n)
 
   signed long dist = (char *)n - (char *)frameaddr;
 
-  // DQ (12/6/2009): This fails for the 4.0.4 compiler, but only in 64-bit when run with Hudson.
-  // I can't reporduce the problem using the 4.0.4 compiler, but it is uniformally a problem
-  // since it fails on all tests (via hudson) which are using Boost 1.40 and either minimal or
-  // full configurations (and also for the tests of the EDG binary).
+  // DQ (12/6/2009): This fails for the 4.0.4 compiler, but only in 64-bit when
+  // run with Hudson. I can't reporduce the problem using the 4.0.4 compiler,
+  // but it is uniformally a problem since it fails on all tests (via hudson)
+  // using older configurations (and also for the tests of the EDG binary).
   // assert (dist < -10000 || dist > 10000);
 
 #ifdef __GNUC__

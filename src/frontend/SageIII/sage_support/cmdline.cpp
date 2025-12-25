@@ -1023,20 +1023,6 @@ SgProject::processCommandLine(const vector<string>& input_argv)
           set_Cxx_only(true);
         }
 
-#if 0
-     printf ("In SgProject: before processing option: (get_wave() == %s) \n",get_wave() ? "true" : "false");
-#endif
-     if ( CommandlineProcessing::isOption(local_commandLineArgumentList,"-rose:","wave",false) == true )
-        {
-          if ( SgProject::get_verbose() >= 1 )
-               printf ("Option -rose:wave found! (get_wave() == %s) \n",get_wave() ? "true" : "false");
-
-          set_wave(true);
-
-          if ( SgProject::get_verbose() >= 1 )
-               printf ("   --- after calling set_wave(true) (get_wave() == %s) \n",get_wave() ? "true" : "false");
-        }
-
   // Liao 6/29/2012: support linking flags for OpenMP lowering when no SgFile is available
      set_openmp_linking(false);
      if ( CommandlineProcessing::isOption(local_commandLineArgumentList,"-rose:OpenMP:","lowering",true) == true
@@ -4062,8 +4048,7 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
      optionCount = sla(argv, "-rose:", "($)", "(skipfinalCompileStep)",1);
      optionCount = sla(argv, "-rose:", "($)", "(prelink)",1);
      optionCount = sla(argv, "-"     , "($)", "(ansi)",1);
-     optionCount = sla(argv, "-rose:", "($)", "(markGeneratedFiles)",1);
-     optionCount = sla(argv, "-rose:", "($)", "(wave)",1);
+     optionCount = sla(argv, "-rose:", "($)", "(markGeneratedFiles)", 1);
      optionCount = sla(argv, "-rose:", "($)", "(negative_test)",1);
      integerOption = 0;
      optionCount = sla(argv, "-rose:", "($)^", "(embedColorCodesInGeneratedCode)", &integerOption, 1);
@@ -4526,22 +4511,6 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
   // the default value of "originalCompilerName" is "CC"
      vector<string> compilerNameString;
      compilerNameString.push_back(compilerName);
-
-  // TOO1 (2014-10-09): Use the correct Boost version that ROSE was configured --with-boost
-#ifdef ROSE_BOOST_PATH
-  // DQ (4/13/2015): Only add boost path for C++ applications, never for C applications
-  // (though this does not to have ever caused an error that I know of).
-  // if (get_C_only() || get_Cxx_only())
-
-  // TV (01/08/2019): with ubuntu 18.04 using default boost, this causes an issue
-     if (get_Cxx_only() == true && std::string(ROSE_BOOST_PATH) != "/usr")
-        {
-       // Search dir for header files, after all directories specified by -I but
-       // before the standard system directories.
-       compilerNameString.push_back("-isystem");
-       compilerNameString.push_back(std::string(ROSE_BOOST_PATH) + "/include");
-        }
-#endif
 
   // DQ (1/17/2006): test this
   // ROSE_ASSERT(get_fileInfo() != NULL);

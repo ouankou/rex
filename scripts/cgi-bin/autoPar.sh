@@ -11,7 +11,6 @@ roseTranslator="$ROSE_INSTALL_PATH/autoPar"
 PATH=/home/ubuntu/opt/jvm/jdk1.7.0_51/bin:$PATH
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/opt/jvm/jdk1.7.0_51/jre/lib/amd64/server:/home/ubuntu/opt/jvm/jdk1.7.0_51/lib
 export PATH LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/home/ubuntu/opt/boost/1.61.0/gcc-4.9.3-default/lib:$LD_LIBRARY_PATH
 
 alias zgrviewer='/home/ubuntu/opt/zgrviewer-0.10.0/run.sh'
 export PATH=$PATH:/home/ubuntu/opt/rose_inst/bin
@@ -237,4 +236,3 @@ echo "<p>"
 echo "<button onclick=\"goBack()\">Go Back To Try Another One</button>"
 
 echo "</body></html>"
-

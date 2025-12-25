@@ -215,7 +215,7 @@ check-dynload:
 	${AM_V_at}if ! ./rose-compiler --version; then                                           \
 	  echo "error: You cannot run a program linked with ROSE. Please be sure that your" >&2; \
 	  echo "error: LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (Mac OSX) contains the" >&2; \
-	  echo "error: correct libraries (JVM, Boost, librose.so, etc.)" >&2;                    \
+	  echo "error: correct libraries (JVM, librose.so, etc.)" >&2;                           \
 	  exit 1;                                                                                \
 	fi
 

@@ -89,7 +89,7 @@ joinMangledQualifiers (const SgName& base, const SgName& name)
 #if 0
   // DQ (8/25/2006): This is debugging code required to find a problem that
   // results in a 480,000,000 character string used of a mangled name prefix
-  // within the boost_tests/test_boost_phoenix_v2.C
+  // within a template-heavy test case
      printf ("base.getString ().size() = %ld name.getString ().size() = %ld \n",base.getString().size(),name.getString().size());
 
      const int MODERATE_SIZE = 1000;
@@ -318,7 +318,9 @@ mangleQualifiersToString (const SgScopeStatement* scope)
 
 #error "DEAD CODE!"
 
-                 // Original code that demonstrated infinite recursive behavior for rare case of test2015_105.C (extracted from boost use in ROSE header files).
+                    // Original code that demonstrated infinite recursive
+                    // behavior for rare case of test2015_105.C (extracted from
+                    // template-heavy use in ROSE header files).
 #if 0
                     printf ("In manglingSupport.C: mangleQualifiersToString(): Calling def->get_mangled_name(): def = %p = %s \n",def,def->class_name().c_str());
 #endif

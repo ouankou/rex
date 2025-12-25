@@ -1,4 +1,4 @@
-include_directories(${ROSE_INCLUDES} ${Boost_INCLUDE_DIRS})
+include_directories(${ROSE_INCLUDES})
 
 add_executable(checkCompilation checkCompilation.C)
 target_link_libraries(checkCompilation ROSE_DLL ${link_with_libraries})

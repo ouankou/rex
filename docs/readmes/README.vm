@@ -27,7 +27,6 @@ gmake[1]: Leaving directory `/home/user/rose-prerequisites/qt-x11-opensource-src
 gmake: *** [sub-gui-make_default-ordered] Error 2
 
    2) Error running "configure" in ROSE compile tree:
-[user@rose compileTree]$ /home/user/svn-rose/configure --with-boost=/home/user/local/boost_1_37_0_install-gxx-4.1.2
 /home/user/svn-rose/configure: line 88: echo: write error: No space left on device
 /home/user/svn-rose/configure: line 89: echo: write error: No space left on device
 /home/user/svn-rose/configure: line 201: echo: write error: No space left on device
@@ -43,18 +42,13 @@ Instructions to build ROSE support in VM (these have been done for you):
       build, configure, make, make install.
 
    2) Copy rose-prerequisites
-         scp dquinlan@tux270:~/local/boost_1_37_0.tar.gz .
-         scp dquinlan@tux270.llnl.gov:~/local/boost_1_37_0.tar.gz .
          scp dquinlan@tux270.llnl.gov:~/local/graphviz-2.20.2.tar.gz .
          scp dquinlan@tux270.llnl.gov:~/local/zgrviewer-0.8.1.zip .
          scp dquinlan@tux270.llnl.gov:~/local/qt-x11-opensource-src-4.4.1.tar.gz .
 
        * Note that bjam does not appear to be required.
-         scp dquinlan@tux270.llnl.gov:~/local/boost-jam-3.1.12-1-linuxx86.tgz .
 
    3) Install required rose prerequisites
-      a) untar and configure boost:
-           ./configure --prefix=/home/user/local/boost_1_37_0_install-gxx-4.1.2
            make
            make install
 
@@ -64,7 +58,6 @@ Instructions to build ROSE support in VM (these have been done for you):
           make install
 
    4) Need to edit the .bashrc file:
-      a) to add boost to LD library path.
 
 
 
@@ -78,12 +71,9 @@ Output of history (remove later):
     6  echo $PATH
     7  ./build
     8  pwd
-    9  scp dquinlan@tux270:~/local/boost_1_37_0.tar.gz .
-   10  scp dquinlan@tux270.llnl.gov:~/local/boost_1_37_0.tar.gz .
    11  scp dquinlan@tux270.llnl.gov:~/local/graphviz-2.20.2.tar.gz .
    12  scp dquinlan@tux270.llnl.gov:~/local/zgrviewer-0.8.1.zip .
    13  scp dquinlan@tux270.llnl.gov:~/local/qt-x11-opensource-src-4.4.1.tar.gz .
-   14  scp dquinlan@tux270.llnl.gov:~/local/boost-jam-3.1.12-1-linuxx86.tgz .
    15  ls
    16  pwd
    17  mkdir ~/local
@@ -102,9 +92,7 @@ Output of history (remove later):
    30  ls
    31  cd rose-prerequisites/
    32  ls
-   33  tar -zxf boost-jam-3.1.12-1-linuxx86.tgz 
    34  ls
-   35  cd boost-jam-3.1.12-1-linuxx86
    36  ls
    37  ls -l
    38  echo $SHELL
@@ -117,16 +105,12 @@ Output of history (remove later):
    45  cd rose
    46  cd rose-prerequisites/
    47  ls
-   48  tar -zxf boost_1_37_0.tar.gz 
    49  which bjam
    50  pwd
-   51  cd boost_1_37_0
    52  ls
    53  #configure --prefix=/home/user/local/
    54  which g++
    55  g++ --version
-   56  configure --prefix=/home/user/local/boost_1_37_0_install-gxx-4.1.2
-   57  ./configure --prefix=/home/user/local/boost_1_37_0_install-gxx-4.1.2
    58  ls
    59  h
    60  history

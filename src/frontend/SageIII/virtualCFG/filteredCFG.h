@@ -22,7 +22,8 @@ namespace VirtualCFG
         {
         }
 
-        /**  Need a default constructor to use with boost_graph. Underlying node will be invalid. */
+        /**  Need a default constructor to use with graph wrappers. Underlying
+         * node will be invalid. */
         FilteredCFGNode() : n()
         {
         }
@@ -89,24 +90,16 @@ namespace VirtualCFG
         {
         }
 
-        /**  Need a default constructor to use with boost_graph. Underlying path will be invalid. */
-        FilteredCFGEdge()
-        {
-        }
-        
-        void setFilter(const FilterFunction& f)
-        {
-            filter = f;
-        }
+      /**  Need a default constructor to use with graph wrappers. Underlying
+       * path will be invalid. */
+      FilteredCFGEdge() {}
 
-        std::string toString()const
-        {
-            return p.toString();
-        }
-        std::string toStringForDebugging() const
-        {
-            return p.toStringForDebugging();
-        }
+      void setFilter(const FilterFunction &f) { filter = f; }
+
+      std::string toString() const { return p.toString(); }
+      std::string toStringForDebugging() const {
+        return p.toStringForDebugging();
+      }
         std::string id() const
         {
             return p.id();

@@ -2,7 +2,6 @@
 
 #include <Rose/StringUtility/StringToNumber.h>
 
-#include <boost/lexical_cast.hpp>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -14,8 +13,8 @@
 template<class T>
 static std::string
 typeName() {
-    return (std::numeric_limits<T>::is_signed ? "int" : "uint") +
-        boost::lexical_cast<std::string>(8*sizeof(T)) + "_t";
+  return (std::numeric_limits<T>::is_signed ? "int" : "uint") +
+         std::to_string(8 * sizeof(T)) + "_t";
 }
 
 template<class T>
@@ -53,7 +52,7 @@ toString(const T& n_, size_t radix = 10, size_t nBits = 8*sizeof(T)) {
             }
             break;
         default:
-            ASSERT_not_reachable("invalid radix " + boost::lexical_cast<std::string>(radix));
+          ASSERT_not_reachable("invalid radix " + std::to_string(radix));
     }
     return ss.str();
 }

@@ -6,8 +6,8 @@
 
 if (HAVE_SYS_TIME_H)
 
-  # Tests disabled: The following tests require removed boost graph headers (SgGraphTemplate.h, graphProcessing.h)
-  # These were removed as part of the deBoost effort. Re-enable when graph support is reimplemented.
+  # Tests disabled: The following tests require removed graph headers (SgGraphTemplate.h, graphProcessing.h)
+  # These were removed as part of the graph cleanup effort. Re-enable when graph support is reimplemented.
   # Disabled tests: proFunSIG, interproceduralCFG, f1-f4, ff1-ff3, strictGraphTest*, smtlibParser, sourcePTP, processnew3Down4SgIncGraph*
 
   #-----------------------------------------------------------------------------

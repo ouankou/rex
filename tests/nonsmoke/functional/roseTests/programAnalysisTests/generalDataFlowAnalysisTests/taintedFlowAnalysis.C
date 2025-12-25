@@ -1,7 +1,8 @@
 #include "taintedFlowAnalysis.h"
 
-#include <boost/bind.hpp>
-#include <boost/mem_fn.hpp>
+#include <functional>
+
+using namespace std::placeholders;
 
 int taintedFlowAnalysisDebugLevel = 2;
 
@@ -202,7 +203,7 @@ void TaintedFlowAnalysisTransfer::transferArith(SgBinaryOp *sgn, T transferOp)
 void
 TaintedFlowAnalysisTransfer::transferArith(SgBinaryOp *sgn, TransferOp transferOp)
    {
-     transferArith(sgn, boost::mem_fn(transferOp));
+  transferArith(sgn, std::mem_fn(transferOp));
    }
 
 void 
@@ -317,61 +318,71 @@ TaintedFlowAnalysisTransfer::visit(SgValueExp *sgn)
 void
 TaintedFlowAnalysisTransfer::visit(SgPlusAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgMinusAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgMultAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgDivAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgModAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgAddOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgSubtractOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgMultiplyOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgDivideOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
 TaintedFlowAnalysisTransfer::visit(SgModOp *sgn)
    {
-     transferArith(sgn, boost::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1, _2, _3, _4 ));
+  transferArith(sgn, std::bind(&TaintedFlowAnalysisTransfer::transferTaint, _1,
+                               _2, _3, _4));
    }
 
 void
@@ -447,11 +458,11 @@ TaintedFlowAnalysis::transfer(const Function& func, const DataflowNode& n, NodeS
      return false;
    }
 
-boost::shared_ptr<IntraDFTransferVisitor>
-TaintedFlowAnalysis::getTransferVisitor(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo)
-   {
-  // Why is the boost shared pointer used here?
-     return boost::shared_ptr<IntraDFTransferVisitor>(new TaintedFlowAnalysisTransfer(func, n, state, dfInfo));
+   std::shared_ptr<IntraDFTransferVisitor>
+   TaintedFlowAnalysis::getTransferVisitor(
+       const Function &func, const DataflowNode &n, NodeState &state,
+       const std::vector<Lattice *> &dfInfo) {
+     // Why is the shared pointer used here?
+     return std::shared_ptr<IntraDFTransferVisitor>(
+         new TaintedFlowAnalysisTransfer(func, n, state, dfInfo));
    }
-
-

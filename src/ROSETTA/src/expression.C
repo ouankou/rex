@@ -394,11 +394,14 @@ Grammar::setUpExpressions ()
           CudaKernelCallExp,
           "FunctionCallExp","FUNC_CALL", true);
 
-  // DQ (7/12/2013): Added new IR nodes to support new type of function call (builtin functions used for type trait support
-  // in later versions of GNU and other compilers).  For more details see: http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html
-  // These are required to be supported as part of bug fix for proper handling of Boost (but also some STL that was never a
-  // noticed problem).  These builtin functions take types as parameters and sometimes return types as well.  They will
-  // require an implementation in ROSE to support analysis.
+     // DQ (7/12/2013): Added new IR nodes to support new type of function call
+     // (builtin functions used for type trait support in later versions of GNU
+     // and other compilers).  For more details see:
+     // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html These are required to
+     // be supported as part of a bug fix for proper handling of template-heavy
+     // libraries (and some STL that was never a noticed problem).  These
+     // builtin functions take types as parameters and sometimes return types as
+     // well. require an implementation in ROSE to support analysis.
      NEW_NONTERMINAL_MACRO (CallExpression,FunctionCallExp,"CallExpression","CALL_EXPRESSION", true);
      NEW_TERMINAL_MACRO (TypeTraitBuiltinOperator, "TypeTraitBuiltinOperator", "TYPE_TRAIT_BUILTIN_OPERATOR");
   // NEW_NONTERMINAL_MACRO (CallExpression,FunctionCallExp | TypeTraitBuiltinOperator,"CallExpression","CALL_EXPRESSION", true);

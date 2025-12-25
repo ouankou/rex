@@ -42,7 +42,6 @@ Work done for the upcoming 0.8.9a release:
     inputJacobi.c and inputOrphanedFor.c
    -# (DONE) Note that I removed the ROSE/projects/OpenMP_Translator/tests/epcc-c/arraybench.c
     because it had been removed by Liao from his tests and had some problems.
-   -# (DONE) Build a boost specific tests directory (using examples from Markus)
    -# (DONE) All Sage IR destructors have their body commented out so that the AST File I/O tests
     will pass.  The AST File I/O tests clear the memory pools using the destructors and
     this is likely the mistake.  We might consider a function to reset all fields in the

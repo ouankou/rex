@@ -138,7 +138,6 @@ TESTCODES = \
      test2004_86.C \
      test2004_87.C \
      test2004_88.C \
-     test2004_89.C \
      test2004_90.C \
      test2004_91.C \
      test2004_93.C \
@@ -195,7 +194,6 @@ TESTCODES = \
      test2004_145.C \
      test2004_146.C \
      test2004_147.C \
-     test2004_148.C \
      test2004_149.C \
      test2004_150.C \
      test2004_151.C \
@@ -303,7 +301,6 @@ TESTCODES = \
      test2005_99.C \
      test2005_100.C \
      test2005_101.C \
-     test2005_102.C \
      test2005_103.C \
      test2005_104.C \
      test2005_105.C \
@@ -652,7 +649,6 @@ check-local: $(TRANSLATOR_EXECUTABLE) test2004_19.o test2004_21.o test2005_56.o
 	@echo "*********************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/CompileTests/C++Code: make check rule complete (terminated normally) ******"
 	@echo "*********************************************************************************************"
-
 
 
 

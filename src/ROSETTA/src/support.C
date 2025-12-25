@@ -1260,14 +1260,6 @@ Grammar::setUpSupport ()
      File.setDataPrototype         ( "bool", "strict_language_handling", "= false",
                  NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     // AS (9/29/2008): Added support for wave on command line
-
-     File.setDataPrototype         ( "bool", "wave", "= false",
-         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-
-
-
   // DQ (10/31/2006): Support for embedded color codes in the generated code from ROSE.
   // Different values trigger embedded codes for different types of internal data
   // (missing information, compiler generated code, etc.).
@@ -1596,14 +1588,6 @@ Grammar::setUpSupport ()
      Graph.setDataPrototype("static int","index_counter","",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // These are Boost specific data members used to return results from Boost Graph Library algorithms.
-  // These will likely be removed since they can and should be put into the API for the graph algorithms.
-  // DQ (4/29/2009): Added boost specific data structures required by many boost graph algorithms.
-     Graph.setDataPrototype("SgBoostEdgeList","boost_edges","",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Graph.setDataPrototype("SgBoostEdgeWeightList","boost_edge_weights","",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // DQ (11/1/2015): Build the access functions, but don't let the set_* access function set the "p_isModified" flag.
   // Attribute support for SgGraph
   // Graph.setDataPrototype("AstAttributeMechanism*","attributeMechanism","= NULL",
@@ -1814,11 +1798,6 @@ Grammar::setUpSupport ()
   // DQ (2/12/2004): Added to support -c on compiler command line
      Project.setDataPrototype("bool","compileOnly", "= false",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // AS (9/29/2008): Added support for wave on command line
-     Project.setDataPrototype("bool","wave", "= false",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
 
   // Project.setDataPrototype("bool","linkOnly", "= false",
   //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);

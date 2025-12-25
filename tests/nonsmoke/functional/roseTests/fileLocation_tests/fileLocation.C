@@ -18,8 +18,7 @@
 
 #include <libgen.h>             /* basename(), dirame()               */
 
-// CH (1/29/2010): Needed for boost::filesystem::exists(...)
-#include "boost/filesystem.hpp"
+#include <filesystem>
 
 using namespace std;
 using namespace Rose;
@@ -29,12 +28,10 @@ bool
 isLink( const string & name )
    {
 	// First, check if this file exists
-     if(!boost::filesystem::exists(name))
-     {
+        if (!std::filesystem::exists(name)) {
           printf("The file \"%s\" does not exist!\n", name.c_str());
           return false;
-     }
-
+        }
 
   // In oorder to evaluate if this is a link we can't just check the file directly, 
   // since the file might be part of a directory that is linked.  So we have to
@@ -217,26 +214,6 @@ class visitorTraversal : public AstSimpleProcessing
           virtual void visit(SgNode* n);
    };
 
-#if 0
-           enum FileNameLocation { FILENAME_LOCATION_UNKNOWN, 
-                                   FILENAME_LOCATION_USER,    
-                                   FILENAME_LOCATION_LIBRARY };
-           
-           /* Files can be classified as being part of one of these
-            * libraries: Unknown, it isn't a library - it's part of
-            * the user application, or any of the libraries that the
-            * enum values imply, this list will likely be added to
-            * over time */
-           enum FileNameLibrary { FILENAME_LIBRARY_UNKNOWN,
-                                  FILENAME_LIBRARY_USER,
-                                  FILENAME_LIBRARY_C,
-                                  FILENAME_LIBRARY_STDCXX,
-                                  FILENAME_LIBRARY_LINUX,
-                                  FILENAME_LIBRARY_GCC,
-                                  FILENAME_LIBRARY_BOOST,
-                                  FILENAME_LIBRARY_ROSE };
-#endif
-
 void
 display ( const StringUtility::FileNameLocation & X, const string & label = "" )
    {
@@ -279,40 +256,12 @@ getName(const StringUtility::FileNameLocation & X)
      return "unknown";
 }
 
-void
-display ( const StringUtility::FileNameLibrary & X, const string & label = "" )
-   {
-       // Since FileNameLibrary is changed to string type, just print it out.
-       /* 
-     printf ("In display(FileNameLibrary): label = %s \n",label.c_str());
-     string classification = "";
-     switch (X)
-        {
-          case FILENAME_LIBRARY_UNKNOWN: classification = "unknown";        break;
-          case FILENAME_LIBRARY_USER:    classification = "user";           break;
-          case FILENAME_LIBRARY_C:       classification = "library C";      break;
-          case FILENAME_LIBRARY_STDCXX:  classification = "library STDCXX"; break;
-	  case FILENAME_LIBRARY_STL:     classification = "library STL";    break;
-          case FILENAME_LIBRARY_LINUX:   classification = "library LINUX";  break;
-          case FILENAME_LIBRARY_GCC:     classification = "library GCC";    break;
-          case FILENAME_LIBRARY_BOOST:   classification = "library BOOST";  break;
-          case FILENAME_LIBRARY_ROSE:    classification = "library ROSE";   break;
-
-          default:
-             {
-               printf ("Error: undefined library classification X = %d \n",X);
-               ROSE_ASSERT(false);
-             }
-        }
-
-     printf ("library classification = %s \n",classification.c_str());
-     */
-       printf("library classification = %s \n", X.c_str());
+void display(const StringUtility::FileNameLibrary &X,
+             const string &label = "") {
+  printf("library classification = %s \n", X.c_str());
 
   // return classification;
-   }
-
-
+}
 
 void 
 visitorTraversal::visit(SgNode* n)
@@ -323,11 +272,12 @@ visitorTraversal::visit(SgNode* n)
           string filename = statement->get_file_info()->get_filename();
 
 	  // CH (2/1/2010): Get the real filename (not a symlink)
-	  if(boost::filesystem::exists(filename))
-	     filename = realpath(filename.c_str(), NULL);
+          if (std::filesystem::exists(filename))
+            filename = realpath(filename.c_str(), NULL);
 
-       // Skip the case of compiler generated Sg_File_Info objects.
-          //if (previousFilename != filename && filename != "compilerGenerated")
+          // Skip the case of compiler generated Sg_File_Info objects.
+          // if (previousFilename != filename && filename !=
+          // "compilerGenerated")
           if (previousFilenames.count(filename) == 0 && filename != "compilerGenerated")
              {
 #if 0
@@ -344,12 +294,12 @@ visitorTraversal::visit(SgNode* n)
 				//string sourceDir = "/home/hou1/rose";
 				string sourceDir = "/";
 				map<string, string> libs;
-				libs["/home/hou1/opt/rose"] = "MyRose";
-				libs["/home/hou1/opt/boost"] = "MyBoost";
-            // This causes the path edit distance to be: 0
-               //string sourceDir = "/home/dquinlan/ROSE";
+                                libs["/home/hou1/opt/rose"] = "MyRose";
+                                // This causes the path edit distance to be: 0
+                                // string sourceDir = "/home/dquinlan/ROSE";
 
-               classification = classifyFileName(filename,sourceDir,libs);
+                                classification =
+                                    classifyFileName(filename, sourceDir, libs);
 #else
                string home = "/home/dquinlan/";
                string sourceDir = home + "ROSE/svn-rose/";
@@ -414,6 +364,4 @@ main(int argc, char * argv[])
      myvisitor.traverse(project,preorder);
 
      return backend(project);
-   }
-
-
+}

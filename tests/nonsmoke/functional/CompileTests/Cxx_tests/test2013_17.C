@@ -1,6 +1,6 @@
 // This is a simplification of test2013_16.C as part of debugging.
 
-// This code appears in flex_string.hpp as part of boost.
+// This code appears in flex_string.hpp as part of a template utility header.
 // It is used in ROSE, so ROSE will not compile ROSE until
 // we can handle this construction of switch statements.
 
@@ -20,5 +20,4 @@ duff_foobar()
                     case 1: a = 7;
                   }
         }
-   }
-
+}

@@ -4,12 +4,9 @@
 #
 #
 
-# ROSE_TEST_BOOST_ROOT
-
 SCRIPT_DIR="`pwd`"
 ROSE_DIR="`pwd`/../.."
-export ROSE_TEST_BOOST_ROOT=/home/too1/local/boost/1_41/default-install
-CONFIGURE="${ROSE_DIR}/configure --with-boost=${ROSE_TEST_BOOST_ROOT}"
+CONFIGURE="${ROSE_DIR}/configure"
 TESTDIR=/tmp/ROSE_test_configure_language_support
 LOG="config.output"
 LOG_OUT="language_support.output"

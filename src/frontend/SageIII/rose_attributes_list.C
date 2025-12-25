@@ -6,9 +6,6 @@
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
 
-// PP (10/1/21): for handling Ada case insensitivity
-#include <boost/algorithm/string/case_conv.hpp>
-
 // DQ (11/28/2009): I think this is equivalent to "USE_ROSE"
 // #if CAN_NOT_COMPILE_WITH_ROSE != true
 // #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
@@ -27,27 +24,6 @@ std::map<std::string,ROSEAttributesList* > mapFilenameToAttributes;
 using namespace std;
 using namespace Rose;
 
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// DQ (3/9/2013): Moved this function from the header file to support SWIG
-std::string
-PreprocessingInfo::rose_macro_call::get_expanded_string()
-   {
-     std::ostringstream os;
-     token_container::const_iterator iter;
-     for (iter=expanded_macro.begin(); iter!=expanded_macro.end(); iter++)
-          os << (*iter).get_value();
-     return os.str();
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// DQ (3/9/2013): Moved this function from the header file to support SWIG (to be uniform with fix above).
-PreprocessingInfo::rose_macro_call::rose_macro_call()
-   : macro_call(), arguments(),expanded_macro()
-   {
-   }
-#endif
-
 // JH (01/03/2006) methods for packing the PreprocessingInfo data, in order to store it into
 // a file and rebuild it!
 unsigned int PreprocessingInfo::packed_size () const
@@ -65,31 +41,27 @@ unsigned int PreprocessingInfo::packed_size () const
   /* string size and string */ sizeof (unsigned int) + filenameForCompilerGeneratedLinemarker.size() +
   /* string size and string */ sizeof (unsigned int) + optionalflagsForCompilerGeneratedLinemarker.size();
 
-  // This is part of Wave support in ROSE.
-// #ifndef USE_ROSE
-  // Add in the four pointers required for the Wave support.
-  // Until we add the support to save all the Wave data into
-  // the AST file we would have to reprocess the relevant
-  // file to store this.
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-     packedSize +=
-                   sizeof (tokenStream) +
-                   sizeof (macroDef) +
-                   sizeof (macroCall) +
-                   sizeof (includeDirective);
-#endif
-// #endif
+     // This is part of Wave support in ROSE.
+     // #ifndef USE_ROSE
+     // Add in the four pointers required for the Wave support.
+     // Until we add the support to save all the Wave data into
+     // the AST file we would have to reprocess the relevant
+     // file to store this.
+     // #endif
 
-  // Debugging information.  What can we assert about the packedSize vs. the sizeof(PreprocessingInfo)?
-  // If there is anything, then it might make for a simple test here.  However, there does not appear to
-  // be any relationship since the sizeof(PreprocessingInfo) does not account for the sizes of internal
-  // strings used.
-  // printf ("In PreprocessingInfo::packed_size(): packedSize = %u sizeof(PreprocessingInfo) = %" PRIuPTR " \n",packedSize,sizeof(PreprocessingInfo));
+     // Debugging information.  What can we assert about the packedSize vs. the
+     // sizeof(PreprocessingInfo)? If there is anything, then it might make for
+     // a simple test here.  However, there does not appear to be any
+     // relationship since the sizeof(PreprocessingInfo) does not account for
+     // the sizes of internal strings used. printf ("In
+     // PreprocessingInfo::packed_size(): packedSize = %u
+     // sizeof(PreprocessingInfo) = %" PRIuPTR "
+     // \n",packedSize,sizeof(PreprocessingInfo));
 
-  // I think that because we have to save additional information the packedSize will
-  // be a little larger than the sizeof(PreprocessingInfo).  So assert this as a test.
-  // Unfortunately it is not always true!
-  // ROSE_ASSERT(packedSize >= sizeof(PreprocessingInfo));
+     // I think that because we have to save additional information the
+     // packedSize will be a little larger than the sizeof(PreprocessingInfo).
+     // So assert this as a test. Unfortunately it is not always true!
+     // ROSE_ASSERT(packedSize >= sizeof(PreprocessingInfo));
 
      return packedSize;
    }
@@ -198,18 +170,6 @@ void PreprocessingInfo::unpacked( char* storePointer )
      printf ("DONE: Calling display on unpacked Sg_File_Info object \n");
 #endif
 
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-     // #if CAN_NOT_COMPILE_WITH_ROSE != true
-     // #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
-     // #ifndef USE_ROSE
-     // DQ and AS (6/23/2006): and the stuff of Wave specific macro support ...
-     tokenStream      = NULL;
-     macroDef         = NULL;
-     macroCall        = NULL;
-     includeDirective = NULL;
-// #endif
-#endif
-
   // DQ (2/28/2010): Some assertion checking that will be done later in the unparser.
   // This test helps debug if any of the data members are set at an offset to there
   // proper positions.
@@ -221,357 +181,6 @@ void PreprocessingInfo::unpacked( char* storePointer )
 // ********************************************
 // Member functions for class PreprocessingInfo
 // ********************************************
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-   // #if CAN_NOT_COMPILE_WITH_ROSE != true
-   // #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
-   // #ifndef USE_ROSE
-   // AS(012006) Added to support macros
-   PreprocessingInfo::rose_macro_call *PreprocessingInfo::get_macro_call() {
-     return macroCall;
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// AS(012006) Added to support macros
-PreprocessingInfo::rose_macro_definition*
-PreprocessingInfo::get_macro_def()
-   {
-     return macroDef;
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-//AS(060706) Added support for include directive
-PreprocessingInfo::rose_include_directive*
-PreprocessingInfo::get_include_directive()
-   {
-     return includeDirective;
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-const token_container*
-PreprocessingInfo::get_token_stream()
-   {
-     return tokenStream;
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-void PreprocessingInfo::push_back_token_stream(token_type tok)
-   {
-     tokenStream->push_back(tok);
-
-     internalString = string(boost::wave::util::impl::as_string(*tokenStream).c_str());
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-void PreprocessingInfo::push_front_token_stream(token_type tok)
-   {
-     tokenStream->insert(tokenStream->begin(),tok);
-
-     internalString = string(boost::wave::util::impl::as_string(*tokenStream).c_str());
-  }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// AS(012006) Added to support macros
-PreprocessingInfo::PreprocessingInfo(token_container tokCont, DirectiveType typeOfDirective, RelativePositionType relPos)
-   : whatSortOfDirective(typeOfDirective), relativePosition(relPos)
-   {
-  // ROSE_ASSERT(false);
-  // implement the position information
-     tokenStream = new token_container();
-
-     int lineNo = tokCont[0].get_position().get_line();
-     int colNo  = tokCont[0].get_position().get_column();
-
-     file_info = new Sg_File_Info(tokCont[0].get_position().get_file().c_str(),lineNo,colNo);
-     ROSE_ASSERT(file_info != NULL);
-
-  // DQ (12/23/2006): Mark this as a comment or directive (mostly so that we can know that the parent being NULL is not meaningful).
-     file_info->setCommentOrDirective();
-
-  // lineNumber   = lineNo;//macroDef->macrodef.lineNumber;
-  // columnNumber = colNo; //macroDef->macrodef.columnNumber;
-
-     (*tokenStream)= tokCont;
-
-     internalString = string(boost::wave::util::impl::as_string(*tokenStream).c_str());
-
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of new data member.
-     p_isTransformation = false;
-
-  // DQ (1/13/2014): Added checking for logic to compute macro name for #define macros.
-     if (whatSortOfDirective == PreprocessingInfo::CpreprocessorDefineDeclaration)
-        {
-          string name = getMacroName();
-#if 0
-          printf ("In PreprocessingInfo(): After calling getMacroName(): name = %s \n",name.c_str());
-#endif
-        }
-
-     if(SgProject::get_verbose() >= 1)
-         std::cout << " String for declaration:" << internalString<< " at line: " << lineNo << " and col:" << colNo << std::endl;
-
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// AS(012006) Added to support macros
-PreprocessingInfo::PreprocessingInfo(rose_macro_call* mcall, RelativePositionType relPos)
-// DQ (2/28/2010): Removed preinitialization list to avoid compiler warnings about the order
-// of the initializations.  These are due to a reordering of the data members in the class
-// so that we can get the AST File I/O working.
-// : macroCall(mcall), relativePosition(relPos)
-   {
-  // DQ (2/28/2010): Removed preinitialization list and moved data member initialization to here.
-     macroCall        = mcall;
-     relativePosition = relPos;
-
-     tokenStream = new token_container();
-
-     whatSortOfDirective = PreprocessingInfo::CMacroCall;
-     ROSE_ASSERT(mcall != NULL);
-     ROSE_ASSERT(mcall->macro_def != NULL);
-  // implement the position information
-
-     int lineNo = mcall->macro_call.get_position().get_line();
-     int colNo  = mcall->macro_call.get_position().get_column();
-
-     macroCall = mcall;
-
-     tokenStream->push_back(macroCall->macro_call);
-
-     typedef token_container_container::const_iterator vec_call_iterator_t;
-
-  //BEGIN: Make a copy of the arguments
-
-     vec_call_iterator_t it = macroCall->arguments.begin();
-     vec_call_iterator_t it_end = macroCall->arguments.end();
-
-     if(macroCall->is_functionlike == true){
-          token_type tk1(boost::wave::T_LEFTPAREN,"(",boost::wave::util::file_position_type(BOOST_WAVE_STRINGTYPE(),lineNo,colNo));
-          tokenStream->push_back(tk1);
-
-          while (it != it_end ){
-            //         std::cout << boost::wave::util::impl::as_string(*it);
-               copy (it->begin(), it->end(),
-                   inserter(*tokenStream, tokenStream->end()));
-               token_type tk(boost::wave::T_COMMA,",",boost::wave::util::file_position_type("",lineNo,colNo));
-               ++it;
-               if(it != it_end)
-                    tokenStream->push_back(tk);
-
-          }
-          token_type tk2(boost::wave::T_RIGHTPAREN,")",boost::wave::util::file_position_type("",lineNo,colNo));
-          tokenStream->push_back(tk2);
-     }
-
-
-     file_info = new Sg_File_Info( mcall->macro_call.get_position().get_file().c_str(),lineNo,colNo);
-  // lineNumber     = lineNo;
-  // columnNumber   = colNo;
-
-  // DQ (12/23/2006): Mark this as a comment or directive (mostly so that we can know that the parent being NULL is not meaningful.
-     file_info->setCommentOrDirective();
-
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of new data member.
-     p_isTransformation = false;
-
-     internalString = string(boost::wave::util::impl::as_string(*tokenStream).c_str());
-
-  // DQ (1/13/2014): Added checking for logic to compute macro name for #define macros.
-     if (whatSortOfDirective == PreprocessingInfo::CpreprocessorDefineDeclaration)
-        {
-          string name = getMacroName();
-#if 0
-          printf ("In PreprocessingInfo(): After calling getMacroName(): name = %s \n",name.c_str());
-#endif
-        }
-
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-PreprocessingInfo::PreprocessingInfo(rose_macro_definition* mdef, RelativePositionType relPos)
-// DQ (2/28/2010): Removed preinitialization list to avoid compiler warnings about the order
-// of the initializations.  These are due to a reordering of the data members in the class
-// so that we can get the AST File I/O working.
-// : macroDef(mdef), relativePosition(relPos)
-   {
-  // DQ (2/28/2010): Removed preinitialization list and moved data member initialization to here.
-     macroDef         = mdef;
-     relativePosition = relPos;
-
-     tokenStream = new token_container();
-
-     whatSortOfDirective = PreprocessingInfo::CpreprocessorDefineDeclaration;
-     ROSE_ASSERT(mdef != NULL);
-     macroDef = mdef;
-  //implement the position information
-     int lineNo, colNo;
-     string filename;
-     if(mdef->is_predefined == false){
-         lineNo = mdef->macro_name.get_position().get_line();
-         colNo  = mdef->macro_name.get_position().get_column();
-         filename = std::string(mdef->macro_name.get_position().get_file().c_str());
-     }else{
-         lineNo = 0;
-         colNo  = 0;
-         filename="<builltin>";
-     }
-     file_info = new Sg_File_Info(filename, lineNo, colNo);
-
-     tokenStream->push_back(macroDef->macro_name);
-
-     typedef token_container::const_iterator vec_call_iterator_t;
-
-  //BEGIN: Make a copy of the arguments
-
-     vec_call_iterator_t it = macroDef->paramaters.begin();
-     vec_call_iterator_t it_end = macroDef->paramaters.end();
-
-
-     if(macroDef->is_functionlike == true){
-          token_type tk1(boost::wave::T_LEFTPAREN,"(",boost::wave::util::file_position_type(filename.c_str(),lineNo,colNo));
-          tokenStream->push_back(tk1);
-
-          while (it != it_end ){
-            //         std::cout << boost::wave::util::impl::as_string(*it);
-               tokenStream->push_back(*it);
-               token_type tk(boost::wave::T_COMMA,",",boost::wave::util::file_position_type(filename.c_str(),lineNo,colNo));
-               ++it;
-               if(it != it_end)
-                    tokenStream->push_back(tk);
-
-          }
-          token_type tk2(boost::wave::T_RIGHTPAREN,")",boost::wave::util::file_position_type(filename.c_str(),lineNo,colNo));
-          tokenStream->push_back(tk2);
-     }
-
-     token_type tk1(boost::wave::T_SPACE,"\t",boost::wave::util::file_position_type(filename.c_str(),lineNo,colNo));
-     tokenStream->push_back(tk1);
-
-     copy (macroDef->definition.begin(), macroDef->definition.end(),
-         inserter(*tokenStream, tokenStream->end()));
-
-  //Support macros declared on the commandline. If declared on the commandline
-  //set filename to ""
-
-
-  // lineNumber     = lineNo;
-  // columnNumber   = colNo;
-
-  // DQ (12/23/2006): Mark this as a comment or directive (mostly so that we can know that the parent being NULL is not meaningful.
-     file_info->setCommentOrDirective();
-
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of new data member.
-     p_isTransformation = false;
-
-     internalString = string("#define\t")+string(boost::wave::util::impl::as_string(*tokenStream).c_str());
-
-     if(SgProject::get_verbose() >= 1)
-          std::cout << "Internal string is: " << internalString << std::endl;
-  // internalString = boost::wave::util::impl::as_string(tokenStream) ;
-
-  // DQ (1/13/2014): Added checking for logic to compute macro name for #define macros.
-     if (whatSortOfDirective == PreprocessingInfo::CpreprocessorDefineDeclaration)
-        {
-          string name = getMacroName();
-#if 0
-          printf ("In PreprocessingInfo(): After calling getMacroName(): name = %s \n",name.c_str());
-#endif
-        }
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-PreprocessingInfo::PreprocessingInfo(rose_include_directive* inclDir, RelativePositionType relPos)
-// DQ (2/28/2010): Removed preinitialization list to avoid compiler warnings about the order
-// of the initializations.  These are due to a reordering of the data members in the class
-// so that we can get the AST File I/O working.
-// : includeDirective(inclDir), relativePosition(relPos)
-   {
-  // DQ (2/28/2010): Removed preinitialization list and moved data member initialization to here.
-     includeDirective = inclDir;
-     relativePosition = relPos;
-
-     tokenStream = new token_container();
-
-     whatSortOfDirective = PreprocessingInfo::CpreprocessorIncludeDeclaration;
-     ROSE_ASSERT(inclDir != NULL);
-  // implement the position information
-     int lineNo = inclDir->directive.get_position().get_line();
-     int colNo  = inclDir->directive.get_position().get_column();
-
-  // Support macros declared on the commandline. If declared on the commandline
-  // set filename to ""
-
-     if (inclDir->directive.get_position().get_file().size() != 0)
-          file_info = new Sg_File_Info(std::string(inclDir->directive.get_position().get_file().c_str()),lineNo,colNo);
-     else
-          file_info = new Sg_File_Info("", lineNo, colNo);
-
-  // DQ (12/23/2006): Mark this as a comment or directive (mostly so that we can know that the parent being NULL is not meaningful.
-     file_info->setCommentOrDirective();
-
-#if 0
-     lineNumber     = lineNo;
-     columnNumber   = colNo;
-#endif
-
-     internalString = std::string(inclDir->directive.get_value().c_str()) ;
-
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of new data member.
-     p_isTransformation = false;
-   }
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-PreprocessingInfo::PreprocessingInfo( token_type directive, token_list_container expression, bool expression_value, DirectiveType dirType, RelativePositionType relPos )
-   : relativePosition(relPos)
-   {
-     tokenStream = new token_container();
-
-  // ROSE_ASSERT(false);
-  // implement the position information
-     int lineNo = directive.get_position().get_line();
-     int colNo  = directive.get_position().get_column();
-
-     whatSortOfDirective = dirType;
-     file_info = new Sg_File_Info(directive.get_position().get_file().c_str(),lineNo,colNo);
-  // lineNumber   = lineNo;//macroDef->macrodef.lineNumber;
-  // columnNumber = colNo; //macroDef->macrodef.columnNumber;
-
-  // DQ (12/23/2006): Mark this as a comment or directive (mostly so that we can know that the parent being NULL is not meaningful.
-     file_info->setCommentOrDirective();
-
-     tokenStream->push_back(directive);
-     token_type tk1(boost::wave::T_SPACE," ",boost::wave::util::file_position_type(directive.get_position().get_file().c_str(),lineNo,colNo));
-     tokenStream->push_back(tk1);
-     copy (expression.begin(), expression.end(), inserter(*tokenStream, tokenStream->end()));
-
-     internalString = string(boost::wave::util::impl::as_string(*tokenStream).c_str()) +"\n";
-
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of new data member.
-     p_isTransformation = false;
-
-     if (SgProject::get_verbose() >= 1)
-          std::cout << "INTERNAL IF STRING: " << internalString << std::endl;
-
-  // DQ (1/13/2014): Added checking for logic to compute macro name for #define macros.
-     if (whatSortOfDirective == PreprocessingInfo::CpreprocessorDefineDeclaration)
-        {
-          string name = getMacroName();
-#if 0
-          printf ("In PreprocessingInfo(): After calling getMacroName(): name = %s \n",name.c_str());
-#endif
-        }
-   }
-#endif
 
 // #endif
 
@@ -1520,57 +1129,6 @@ ROSEAttributesList::moveElements( ROSEAttributesList & pList )
           ROSE_ASSERT (pList.attributeList.size() == 0);
         }
    }
-
-
-// DQ (5/9/2007): This is required for WAVE support.
-// DQ (4/13/2007): I would like to remove this function, but this is part of WAVE support
-void
-ROSEAttributesList::addElement( PreprocessingInfo &pRef )
-   {
-     ROSE_ASSERT(this != NULL);
-
-     insertElement(pRef);
-   }
-
-
-// DQ (5/9/2007): This is required for WAVE support.
-// DQ (4/13/2007): I would like to remove this function
-void
-ROSEAttributesList::insertElement( PreprocessingInfo & pRef )
-   {
-     ROSE_ASSERT(this != NULL);
-
-     int done = 0;
-     vector<PreprocessingInfo*>::iterator i = attributeList.begin();
-     if ( attributeList.size() > 0 )
-        {
-       // Note that the insertion requires a traversal over the whole list
-       // that is being built (n^2 complexity if used in moveElements()).
-          while( i != attributeList.end() )
-             {
-               if( (*i)->getLineNumber() <= pRef.getLineNumber())
-                  {
-                    i++;
-                  }
-                 else
-                  {
-                    attributeList.insert( i, &pRef );
-                    done = 1;
-                    break;
-                  }
-             }
-
-       // If it has not been added yet, then at least include it at the end!
-          if(!done)
-               attributeList.push_back( &pRef );
-        }
-       else
-        {
-       // Handle the first element of the list directly
-          attributeList.push_back( &pRef );
-        }
-   }
-
 
 void
 ROSEAttributesList::setFileName(const string & fName)

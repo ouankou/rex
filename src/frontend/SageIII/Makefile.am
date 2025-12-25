@@ -135,7 +135,6 @@ libsage3_la_SOURCES = $(libsage3Sources) preproc-c.ll omp_exprparser_lexer.ll om
 # nodist_libsage3_la_SOURCES = $(ROSETTA_GENERATED_SOURCE) $(top_builddir)/rose_config.h
 nodist_libsage3_la_SOURCES = $(ROSETTA_GENERATED_SOURCE) license_string.h
 
-#if ROSE_USE_BOOST_WAVE
 libsage3_la_LIBADD_not_used= \
   astFixup/libastFixup.la \
   accparser/libaccparser.la \

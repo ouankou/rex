@@ -1,11 +1,9 @@
 #ifndef POINTERALIAS_ANALYSIS_H
 #define POINTERALIAS_ANALYSIS_H
 
-#include <boost/shared_ptr.hpp>
-#include <boost/unordered_map.hpp>
-#include <algorithm>
 #include "VariableStateTransfer.h"
-
+#include <algorithm>
+#include <memory>
 
 extern int pointerAliasAnalysisDebugLevel;
 
@@ -148,8 +146,9 @@ public:
     pointerAliasAnalysis(LiveDeadVarsAnalysis* ldva);
     void genInitState(const Function& func, const DataflowNode& n, const NodeState& state,std::vector<Lattice*>& initLattices, std::vector<NodeFact*>& initFacts);
     bool transfer(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo);
-    boost::shared_ptr<IntraDFTransferVisitor> getTransferVisitor(const Function& func, const DataflowNode& 
-n, NodeState& state, const std::vector<Lattice*>& dfInfo);
+    std::shared_ptr<IntraDFTransferVisitor>
+    getTransferVisitor(const Function &func, const DataflowNode &n,
+                       NodeState &state, const std::vector<Lattice *> &dfInfo);
 };
 
 #endif

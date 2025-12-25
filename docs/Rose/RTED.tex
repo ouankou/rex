@@ -318,7 +318,6 @@ Then include the original RTED directory. The following are the additional inclu
 -I/home/panas2/rose/ROSE-git/src/roseSupport 
 -I/home/panas2/rose/ROSE-git/src/midend/astProcessing/ 
 -I/home/panas2/rose/ROSE\_includes 
--I/home/panas2/programs/boost/install/include/ 
 -I/home/panas2/rose/build/src/frontend/SageIII 
 -I/home/panas2/rose/build 
 \end{verbatim}
@@ -354,7 +353,6 @@ After that we compile the transformed file:
 \begin{verbatim}
   gcc -g -Wall -o assignment\_scope\_while.bin rose\_assignment\_
   scope\_while.c ../RuntimeSystem.cpp -isystem /home/panas2/programs/
-  boost/install//include -I/home/panas2/rose/ROSE\_includes/ 
   -I../ /home/panas2/rose/build/projects/RTED/CppRuntimeSystem/.libs/
   libCppRuntimeSystem.so.0 -L/home/panas2/programs/qt/install/qt//lib 
   -L/home/panas2/programs/qt/install/qt/lib -L/usr/X11R6/lib 
@@ -376,7 +374,6 @@ OR when creating a static library under ROSE for CppRuntimeSystem, we can do
 \begin{verbatim}
   gcc -g -Wall -o assignment\_scope\_while.bin rose\_assignment\_
   scope\_while.c ../RuntimeSystem.cpp -isystem /home/panas2/programs/
-  boost/install//include -I/home/panas2/rose/ROSE\_includes/ -I../ 
   -L/home/panas2/programs/qt/install/qt//lib -L/home/panas2/programs/qt/
   install/qt/lib -L/usr/X11R6/lib /home/panas2/programs/qt/install/
   qt/lib/libQt3Support.so /home/panas2/programs/qt/install/qt/lib/
@@ -408,7 +405,6 @@ Includes:
   -I/home/panas2/rose/ROSE-git/src/roseSupport 
   -I/home/panas2/rose/ROSE-git/src/midend/astProcessing/ 
   -I/home/panas2/rose/ROSE\_includes 
-  -I/home/panas2/programs/boost/install/include/ 
   -I/home/panas2/rose/build/src/frontend/SageIII -I/home/panas2/rose/build
 \end{verbatim}
 

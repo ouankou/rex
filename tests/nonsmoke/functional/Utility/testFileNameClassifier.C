@@ -48,23 +48,6 @@ main(int argc, char** argv)
     ROSE_ASSERT(classification.getLibraryName() == "UNKNOWN");
     // TODO distance metric
 
-    // TODO we'd like this to be able to classifyFileName this as a library
-    // still instead of lumping it in with the application
-    // for now this may be okay, though
-    classification = classifyFileName(home + "usr/include/boost/boost-1_35/filesystem.hpp",
-                                      sourceDir);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_UNKNOWN);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_UNKNOWN);
-    ROSE_ASSERT(classification.getLibraryName() == "UNKNOWN");
-    ROSE_ASSERT(classification.getDistanceFromSourceDirectory() == 6);
-
-    classification = classifyFileName("/usr/include/boost/boost-1_35/filesystem.hpp",
-                                      sourceDir);
-    ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_LIBRARY);
-    ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_BOOST);
-    ROSE_ASSERT(classification.getLibraryName() == "boost");
-    ROSE_ASSERT(classification.getDistanceFromSourceDirectory() == 8);
-
     classification = classifyFileName("/usr/include/rose.h", sourceDir);
     ROSE_ASSERT(classification.getLocation() == FILENAME_LOCATION_LIBRARY);
     ROSE_ASSERT(classification.getLibrary() == FILENAME_LIBRARY_ROSE);

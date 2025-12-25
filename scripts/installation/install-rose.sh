@@ -25,25 +25,16 @@ function configure_variables()
   #---------environment settings ----------------
   # where to find required software packages
   #module load intel/18.0.1
-  # Only a limited places to look for boost installation
-
-# On tux385   
- if [ -d "/nfs/casc/overture/ROSE/opt/rhel7/x86_64/boost/1_60_0/gcc/4.9.3" ] ; then
-    BOOST_INSTALL_PATH=/nfs/casc/overture/ROSE/opt/rhel7/x86_64/boost/1_60_0/gcc/4.9.3
-    JAVA_INSTALL_PATH=/nfs/casc/overture/ROSE/opt/rhel7/x86_64/java/jdk/1.8.0_131
-# On LC system     
- elif  [ -d "/g/g17/liao6/opt/boost_1_55_0_inst" ] ; then   
-    BOOST_INSTALL_PATH=/g/g17/liao6/opt/boost_1_55_0_inst
-    JAVA_INSTALL_PATH=/g/g17/liao6/opt/jdk1.8.0_201
- fi
-  
-
-# sanity check of boost and java
-  if [ ! -d ${BOOST_INSTALL_PATH} ] ; then
-     echo "Specified ${BOOST_INSTALL_PATH} does not exist. aborting..."
-     exit 1
+  # Only a limited places to look for Java installation
+  # On tux385
+  if [ -d "/nfs/casc/overture/ROSE/opt/rhel7/x86_64/java/jdk/1.8.0_131" ] ; then
+     JAVA_INSTALL_PATH=/nfs/casc/overture/ROSE/opt/rhel7/x86_64/java/jdk/1.8.0_131
+  # On LC system
+  elif  [ -d "/g/g17/liao6/opt/jdk1.8.0_201" ] ; then
+     JAVA_INSTALL_PATH=/g/g17/liao6/opt/jdk1.8.0_201
   fi
 
+# sanity check of java
   if [ ! -d ${JAVA_INSTALL_PATH} ] ; then
      echo "Specified ${JAVA_INSTALL_PATH} does not exist. aborting..."
      exit 1
@@ -200,7 +191,7 @@ function build_rose()
 
 # --with-alternate_backend_Cxx_compiler=${ALTERNATE_COMPILER_PATH}/mpicxx --with-alternate_backend_C_compiler=${ALTERNATE_COMPILER_PATH}/mpicc --with-alternate_backend_fortran_compiler=${ALTERNATE_COMPILER_PATH}/mpif77
 
-  ../sourcetree/configure --with-java=${JAVA_INSTALL_PATH} --with-boost=${BOOST_INSTALL_PATH} --with-CXX_DEBUG=-g --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --enable-languages=c++,fortran --disable-boost-version-check --enable-edg_version=5.0 --prefix=${ROSE_INSTALL_DEBUG}
+  ../sourcetree/configure --with-java=${JAVA_INSTALL_PATH} --with-CXX_DEBUG=-g --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --enable-languages=c++,fortran --enable-edg_version=5.0 --prefix=${ROSE_INSTALL_DEBUG}
 
 # build and install ROSE tools
   echo "Start to build and install rose core"
@@ -263,4 +254,3 @@ date
 
 exec 1>&6 6>&- # restore 1 and cancel 6
 exec 2>&7 7>&- # restore 2 and cancel 7
-

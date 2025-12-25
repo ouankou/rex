@@ -10,35 +10,28 @@
 
 #include <iostream>
 
-#include <boost/thread.hpp>
-
-#include <fstream>
+#include <Sawyer/Stopwatch.h>
 #include <algorithm>
 #include <climits>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
 #include <queue>
-#include <boost/lexical_cast.hpp>
-#include <boost/progress.hpp>
-#include <boost/bind.hpp>
-#include <boost/filesystem.hpp>
-#include <Sawyer/Stopwatch.h>
+#include <thread>
 
 using namespace std;
 
-using namespace boost;
-
-
+namespace fs = std::filesystem;
 
 struct FileSizeCompare
 {
-    bool operator()(const string& lf, const string& rf) const
-    {
-        using namespace boost::filesystem;
-        string f1 = lf + ".binary";
-        string f2 = rf + ".binary";
-        if (!exists(f1) || !exists(f2))
-            return false;
-        return file_size(f1) > file_size(f2);
-    }
+  bool operator()(const string &lf, const string &rf) const {
+    string f1 = lf + ".binary";
+    string f2 = rf + ".binary";
+    if (!fs::exists(f1) || !fs::exists(f2))
+      return false;
+    return fs::file_size(f1) > fs::file_size(f2);
+  }
 };
 
 class AstStorage
@@ -48,9 +41,9 @@ class AstStorage
     int counter_;
     string dir_;
 
-    boost::mutex mutex_;
+    std::mutex mutex_;
 
-    public:
+  public:
     AstStorage(const vector<string>& filenames)
         : counter_(0) 
     {
@@ -61,20 +54,19 @@ class AstStorage
     // Fetch several files to merge. The number of files is passed in.
     vector<string> GetFiles(int n)
     {
-        boost::mutex::scoped_lock scoped_lock(mutex_);
+      std::lock_guard<std::mutex> scoped_lock(mutex_);
 
-        if (astFiles_.size() < 2) return vector<string>();
+      if (astFiles_.size() < 2)
+        return vector<string>();
 
-        vector<string> files;
-        for (int i = 0; i < n; ++i)
-        {
-            if (!astFiles_.empty())
-            {
-                string filename = astFiles_.top();
-                astFiles_.pop();
-                files.push_back(filename);
-            }
+      vector<string> files;
+      for (int i = 0; i < n; ++i) {
+        if (!astFiles_.empty()) {
+          string filename = astFiles_.top();
+          astFiles_.pop();
+          files.push_back(filename);
         }
+      }
         files.push_back(GetOutputFileName());
         return files;
     }
@@ -82,47 +74,41 @@ class AstStorage
     // Push a new file into file pool.
     void PushFile(string filename)
     {
-        boost::mutex::scoped_lock scoped_lock(mutex_);
-        astFiles_.push(filename);
+      std::lock_guard<std::mutex> scoped_lock(mutex_);
+      astFiles_.push(filename);
     }
 
     void GenerateOutput(const string& output) 
     {
         // DQ (3/4/2010): This source file does not appear to compile with the AST File I/O (which is kind of ironic).
 #ifndef CXX_IS_ROSE_AST_FILE_IO
-        using namespace boost::filesystem;
-        if (exists(output))
-            remove(output);
+        if (fs::exists(output))
+          fs::remove(output);
         Rose::FileSystem::copyFile(astFiles_.top() + ".binary", output);
         Clear();
 #endif
     }
 
     // Remove the temporary directory.
-    void Clear()
-    {
-        boost::filesystem::remove_all(dir_);
-    }
+    void Clear() { fs::remove_all(dir_); }
 
-    private:    
+  private:
     string GetOutputFileName()
     {
         if (counter_ == 0)
         {
             dir_ = "tmp";
-            if (boost::filesystem::exists(dir_))
-            {
-                for (int i = 0; i < INT_MAX; ++i)
-                {
-                    dir_ = "tmp" + lexical_cast<string>(i);
-                    if (!boost::filesystem::exists(dir_))
-                        break;
-                }
+            if (fs::exists(dir_)) {
+              for (int i = 0; i < INT_MAX; ++i) {
+                dir_ = "tmp" + std::to_string(i);
+                if (!fs::exists(dir_))
+                  break;
+              }
             }
-            boost::filesystem::create_directory(dir_);
+            fs::create_directory(dir_);
         }
 
-        return dir_ + "/" + lexical_cast<string>(counter_++) + ".C";
+        return dir_ + "/" + std::to_string(counter_++) + ".C";
     }
 };
 
@@ -194,12 +180,16 @@ void MergeAstFiles(const vector<string>& astFiles, const string& output, int nth
     //  for (int i = 0; i < astFiles.size() - n * nthread; ++i)
     //       nfile[i]++;
 
-    boost::thread_group thrds;
+    std::vector<std::thread> thrds;
+    thrds.reserve(nthread);
 
-    for (int i = 0; i < nthread; ++i)
-        thrds.create_thread(boost::bind(MergeAst, &storage, 2/*nfile[i]*/));
+    for (int i = 0; i < nthread; ++i) {
+      thrds.emplace_back(MergeAst, &storage, 2 /*nfile[i]*/);
+    }
 
-    thrds.join_all();
+    for (auto &thrd : thrds) {
+      thrd.join();
+    }
 
     MergeAst(&storage, nthread);
 
@@ -233,12 +223,11 @@ int main ( int argc, char * argv[] )
     for (int i = 1; i < 6; i += 1)
     {
         Sawyer::Stopwatch t;
-        string output = "output" + lexical_cast<string>(i);
-        output = "output" + lexical_cast<string>(i) + ".txt";
+        string output = "output" + std::to_string(i);
+        output = "output" + std::to_string(i) + ".txt";
         MergeAstFiles(fileNames, output, i);
         cout << i << " : " << t << endl;
     }
 
     return 0;
 }
-

@@ -117,14 +117,14 @@ FAILING_CXX_CONSTPROP_SPECIMENS =													 \
 	test2004_111.C test2004_112.C test2004_113.C test2004_114.C test2004_115.C test2004_117.C test2004_118.C test2004_119.C	 \
 	test2004_12.C test2004_121.C test2004_122.C test2004_123.C test2004_124.C test2004_125.C test2004_128.C test2004_13.C	 \
 	test2004_131.C test2004_132.C test2004_133.C test2004_134.C test2004_135.C test2004_136.C test2004_137.C test2004_138.C	 \
-	test2004_140.C test2004_144.C test2004_146.C test2004_147.C test2004_148.C test2004_150.C test2004_151.C test2004_152.C	 \
+	test2004_140.C test2004_144.C test2004_146.C test2004_147.C test2004_150.C test2004_151.C test2004_152.C	 \
 	test2004_153.C test2004_154.C test2004_155.C test2004_156.C test2004_158.C test2004_16.C test2004_160.C test2004_163.C	 \
 	test2004_17.C test2004_19.C test2004_23.C test2004_24.C test2004_26.C test2004_27.C test2004_28.C test2004_29.C		 \
 	test2004_30.C test2004_31.C test2004_32.C test2004_33.C test2004_34.C test2004_37.C test2004_38.C test2004_39.C		 \
 	test2004_40.C test2004_42.C test2004_44.C test2004_49.C test2004_50.C test2004_51.C test2004_53.C test2004_54.C		 \
 	test2004_56.C test2004_58.C test2004_59.C test2004_61.C test2004_62.C test2004_64.C test2004_65.C test2004_67.C		 \
 	test2004_68.C test2004_69.C test2004_70.C test2004_71.C test2004_73.C test2004_74.C test2004_76.C test2004_78.C		 \
-	test2004_79.C test2004_80.C test2004_81.C test2004_83.C test2004_84.C test2004_86.C test2004_87.C test2004_89.C		 \
+	test2004_79.C test2004_80.C test2004_81.C test2004_83.C test2004_84.C test2004_86.C test2004_87.C		 \
 	test2004_90.C test2004_91.C test2004_93.C test2004_94.C test2004_95.C test2004_96.C test2004_97.C test2004_98.C		 \
 	test2004_99.C test2005_01.C test2005_02.C test2005_03.C test2005_05.C test2005_105.C test2005_107.C test2005_109.C	 \
 	test2005_11.C test2005_110.C test2005_111.C test2005_113.C test2005_116.C test2005_117.C test2005_119.C test2005_120.C	 \
@@ -144,7 +144,7 @@ FAILING_CXX_CONSTPROP_SPECIMENS =													 \
 	test2005_94.C test2005_95.C test2005_96.C test2005_97.C test2005_99.C test2006_01.C test2006_02.C test2006_03.C		 \
 	test2006_06.C test2006_07.C test2006_08.C test2006_10.C test2006_101.C test2006_103.C test2006_104.C test2006_105.C	 \
 	test2006_106.C test2006_107.C test2006_108.C test2006_109.C test2006_111.C test2006_113.C test2006_114.C test2006_116.C	 \
-	test2006_117.C test2006_118.C test2006_12.C test2006_120.C test2006_121.C test2006_122.C test2006_123.C test2006_126.C	 \
+	test2006_117.C test2006_118.C test2006_12.C test2006_120.C test2006_122.C test2006_123.C test2006_126.C	 \
 	test2006_129.C test2006_13.C test2006_14.C test2006_140.C test2006_142.C test2006_143.C test2006_144.C test2006_145.C	 \
 	test2006_146.C test2006_149.C test2006_150.C test2006_151.C test2006_152.C test2006_153.C test2006_155.C test2006_156.C	 \
 	test2006_157.C test2006_158.C test2006_16.C test2006_161.C test2006_162.C test2006_163.C test2006_164.C test2006_165.C	 \
@@ -188,7 +188,7 @@ CXX_CONSTPROP_SPECIMENS_FAILING =											\
 	test2004_161.C test2004_162.C test2004_164.C test2004_18.C test2004_35.C test2004_36.C test2004_43.C		\
 	test2004_45.C test2004_47.C test2004_48.C test2004_52.C test2004_55.C test2004_60.C test2004_63.C test2004_75.C	\
 	test2004_77.C test2004_85.C test2004_88.C test2005_06.C test2005_07.C test2005_08.C test2005_09.C test2005_10.C	\
-	test2005_100.C test2005_101.C test2005_102.C test2005_103.C test2005_104.C test2005_106.C test2005_108.C	\
+	test2005_100.C test2005_101.C test2005_103.C test2005_104.C test2005_106.C test2005_108.C	\
 	test2005_112.C test2005_118.C test2005_12.C test2005_122.C test2005_128.C test2005_129.C test2005_130.C		\
 	test2005_131.C test2005_132.C test2005_133.C test2005_136.C test2005_137.C test2005_138.C test2005_139.C	\
 	test2005_141.C test2005_142.C test2005_143.C test2005_146.C test2005_152.C test2005_155.C test2005_156.C	\

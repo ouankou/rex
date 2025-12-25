@@ -49,11 +49,6 @@
 #include "FileUtility.h"
 #include "general_token_defs.h"
 
-
-// This does not appear to exist for my version of boost.
-// #include <boost/icl/interval_map.hpp>
-
-
 // DQ (10/9/2013): Required mods:
 //    1) The edges of subtress need to be trimmed back to avoid overlap.
 //       Also all overlap should be detected.
@@ -6033,13 +6028,18 @@ TokenMappingTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute 
                                    printf ("Handling NULL condition: start_of_token_subsequence = %d end_of_token_subsequence = %d \n",start_of_token_subsequence,end_of_token_subsequence);
                                    printf ("   --- tokenStream[end_of_token_subsequence = %d]->p_tok_elem->token_lexeme = %s \n",end_of_token_subsequence,tokenStream[end_of_token_subsequence]->p_tok_elem->token_lexeme.c_str());
 #endif
-                                // DQ (1/25/2015): This is a more general interpretation for any macro name.  But it id only better, 
-                                // not robust for more general macro recognition, we will need boost::wave to do a better job later.
-                                // if (tokenStream[end_of_token_subsequence+1]->p_tok_elem->token_lexeme == "NULL")
-                                   if (tokenStream[end_of_token_subsequence+1]->p_tok_elem->token_id == ROSE_token_ids::C_CXX_IDENTIFIER)
-                                      {
-                                        end_of_token_subsequence++;
-                                      }
+                                // DQ (1/25/2015): This is a more general
+                                // interpretation for any macro name.  But it is
+                                // only better, not robust for more general
+                                // macro recognition; we will need a full
+                                // preprocessor to do a better job later. if
+                                // (tokenStream[end_of_token_subsequence+1]->p_tok_elem->token_lexeme
+                                // == "NULL")
+                                if (tokenStream[end_of_token_subsequence + 1]
+                                        ->p_tok_elem->token_id ==
+                                    ROSE_token_ids::C_CXX_IDENTIFIER) {
+                                  end_of_token_subsequence++;
+                                }
 #if 0
                                    printf ("   --- After adjustment: tokenStream[end_of_token_subsequence = %d]->p_tok_elem->token_lexeme = %s \n",end_of_token_subsequence,tokenStream[end_of_token_subsequence]->p_tok_elem->token_lexeme.c_str());
 #endif

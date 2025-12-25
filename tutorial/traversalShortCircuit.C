@@ -1,4 +1,4 @@
-// Example of an AST traversal that uses the Boost idiom of throwing
+// Example of an AST traversal that uses a common idiom of throwing
 // an exception to exit the traversal early.
 
 #include <rose.h>

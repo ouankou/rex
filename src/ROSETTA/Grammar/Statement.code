@@ -8951,7 +8951,7 @@ SgDeclarationStatement::fixupTemplateNameForMangledNameSupport( const SgName & n
         }
 
   // DQ (8/10/2005): This is a fix for a bug where a "-" shows up in some template
-  // arguments within names generated from compiling boost (boost/mpl/if.hpp).
+  // arguments within names generated from compiling template-heavy headers.
   // I think that is shows up with "-1" is passed as an argument to a template.
      string minusMarker         = "_-";
      length = minusMarker.size();

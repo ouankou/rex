@@ -311,10 +311,9 @@ SgGraph::addEdge( SgGraphEdge* edge )
        // DQ (5/2/2009): Note that operator[] is not available for the multimap container.
        // p_node_index_pair_to_edge_multimap[std::pair<int,int>(edge->get_node_A(),edge->get_node_B())] = edge;
 #if 1
-       // p_node_index_pair_to_edge_multimap.insert(std::pair<std::pair<int,int>,SgGraphEdge*>(std::pair<int,int>(edge->get_node_A()->get_index(),edge->get_node_B()->get_index()),edge));
-       //
-// CH (4/9/2010): Use boost::unordered instead 
-//#ifdef _MSCx_VER
+          // p_node_index_pair_to_edge_multimap.insert(std::pair<std::pair<int,int>,SgGraphEdge*>(std::pair<int,int>(edge->get_node_A()->get_index(),edge->get_node_B()->get_index()),edge));
+          //
+// #ifdef _MSCx_VER
 #if 0
 // tps (12/09/09) : Cannot compile this right now.
 //#pragma message("rose_graph_support.C: Problem compiling multimap")
@@ -512,16 +511,14 @@ SgGraph::display_node_index_pair_to_edge_multimap() const
      printf ("Inside of SgGraph::display_node_index_pair_to_edge_multimap(): \n");
 // #ifdef ROSE_USE_NEW_GRAPH_NODES
      rose_graph_integerpair_edge_hash_multimap::const_iterator i = p_node_index_pair_to_edge_multimap.begin();
-     while (i != p_node_index_pair_to_edge_multimap.end())
-        {
-// CH (4/9/2010): Use boost::unordered instead 
+     while (i != p_node_index_pair_to_edge_multimap.end()) {
 //#ifndef _MSCx_VER
 #if 1
 // tps (12/08/09) : Does not work under windows:  error C2039: 'first' : is not a member of 'System::UInt32'
                         printf ("   node pair: (i->first.first = %d,i->first.second = %d) SgGraphEdge: i->second = %p = %d \n",i->first.first,i->first.second,i->second,i->second->get_index());
 #endif
                   i++;
-        }
+  }
 // #endif
    }
 

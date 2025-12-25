@@ -85,10 +85,7 @@ check-local:
 	@echo "************************************************************************************************"
 	@echo "*** ROSE/tests/nonsmoke/functional/CompilerOptionsTests/testWave: make check rule start                          ***"
 	@echo "************************************************************************************************"
-#if ROSE_USING_BOOST_VERSION_1_35
-#	It is not helpful to have Boost version dependent tests in ROSE.
 	@$(MAKE) $(PASSING_TEST_Objects)
-#endif
 	@echo "************************************************************************************************"
 	@echo "*** ROSE/tests/nonsmoke/functional/CompilerOptionsTests/testWave: make check rule complete (terminated normally) ***"
 	@echo "************************************************************************************************"

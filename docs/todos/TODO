@@ -45,7 +45,6 @@ Sub directories :
     TXT2HTML N
     aterm_bundle N
     proposals N
-    Boost test N
     mpich N
     MySQL N
     COCO N
@@ -1134,7 +1133,6 @@ will not (since ROSE implements it's own code generating C++ backend; EDG's is
 not used).
 
   
-
 
 
 

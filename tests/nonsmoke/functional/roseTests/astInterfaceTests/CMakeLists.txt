@@ -39,7 +39,6 @@ set(noinst_programs
   collectReadWriteVariables
   typeTraits
   livenessAnalysis
-  replaceMacroCalls
   getDependentDecls
   buildStructDeclaration2
   buildTypedefDeclaration
@@ -253,12 +252,6 @@ add_test(
   NAME astInterface_loopTiling
   COMMAND loopTiling -rose:loopTiling:line 7 -rose:loopTiling:depth 3 -rose:loopTiling:tilesize 5 ${TEST_CXXFLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/inputloopTiling.C
 )
-
-# replaceMacroCalls test (disabled in Makefile.am due to boost:wave issues)
-# add_test(
-#   NAME astInterface_replaceMacroCalls
-#   COMMAND replaceMacroCalls ${TEST_CXXFLAGS} -rose:wave -c ${CMAKE_CURRENT_SOURCE_DIR}/inputreplaceMacroCalls.C
-# )
 
 # insertStatementBeforeFunction test (needs -I flag)
 add_test(

@@ -783,8 +783,9 @@ void postProcessingSupport (SgNode* node)
        // is built elsewhere within ROSE.
           fixupNullPointersInAST(node);
 
-       // DQ (8/9/2005): Some function definitions in Boost are build without 
-       // a body (example in test2005_102.C, but it appears to work fine).
+          // DQ (8/9/2005): Some function definitions in third-party headers are
+          // built without a body (example in test2005_102.C, but it appears to
+          // work fine).
           fixupFunctionDefinitions(node);
 
        // DQ (8/10/2005): correct any template declarations mistakenly marked as compiler-generated

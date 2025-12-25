@@ -165,7 +165,7 @@ if(Z3_FOUND_LIB)
   target_link_libraries(ROSE_DLL ${Z3_LIBRARY})
 endif()
 
-# Zlib is a compression library and is needed by Boost. Make sure you compiled Boost with this same zlib.
+# Zlib is a compression library used by libharu.
 if(ZLIB_FOUND)
   target_link_libraries(ROSE_DLL ${ZLIB_LIBRARY})
 endif()

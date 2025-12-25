@@ -197,9 +197,10 @@ AstTests::runAllTests(SgProject* sageProject)
           return;
         }
 
-  // DQ (2/23/2014): Adding support for gathering statistics from boost hash tables.
-     if ( SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL )
-  // if ( SgProject::get_verbose() >= 0 )
+        // DQ (2/23/2014): Adding support for gathering statistics from hash
+        // tables.
+        if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL)
+        // if ( SgProject::get_verbose() >= 0 )
         {
           for (size_t i = 0; i < sageProject->get_fileList().size(); i++)
              {
@@ -1962,9 +1963,9 @@ TestAstForProperlyMangledNames::visit ( SgNode* node )
         }
   // ROSE_ASSERT(mangledName.find(')') == string::npos);
 
-  // DQ (8/9/2005): this is an error in KULL (use of boost/mpl/if.hpp)
-     if (mangledName.find('-') != string::npos)
-        {
+        // DQ (8/9/2005): this is an error in KULL (use of template-heavy
+        // headers)
+        if (mangledName.find('-') != string::npos) {
           printf ("AST Consistency Test: found \"-\" in mangledName = %s \n",mangledName.c_str());
 
           SgDeclarationStatement* declaration = isSgDeclarationStatement(node);
@@ -2306,56 +2307,57 @@ TestAstForUniqueNodesInAST::visit ( SgNode* node )
              }
 
 #if ENFORCE_UNIQUE_IR_NODES
-       // DQ (11/28/2015): The older failing tests (below) are now fixed; but there
-       // are some newer failing tests (within Boost header files):
-       // test2015_87.C
-       // test2015_90.C
-       // test2015_91.C
-       // test2015_94.C
-       // test2015_95.C
-       // test2015_96.C
-       // test2015_127.C
-       // Also the RoseExample_tests fail (since they include the same boost issues).
-       // So we still can not yet enforce this AST consistancy test.
+             // DQ (11/28/2015): The older failing tests (below) are now fixed;
+             // but there are some newer failing tests (within large third-party
+             // headers): test2015_87.C test2015_90.C test2015_91.C
+             // test2015_94.C
+             // test2015_95.C
+             // test2015_96.C
+             // test2015_127.C
+             // Also the RoseExample_tests fail (since they include the same
+             // issues). So we still can not yet enforce this AST consistancy
+             // test.
 
-       // DQ (11/23/2015): As of this date, we can now enforce this test (I think).
-       // DQ (4/8/2014): This now only fails for Boost examples, so I this is the good news,
-       // however, it means that I still can't enforce this everywhere. These tests:
-       // test2013_234.C
-       // test2013_240.C
-       // test2013_242.C
-       // test2013_246.C
-       // test2013_241.C
+             // DQ (11/23/2015): As of this date, we can now enforce this test
+             // (I think). DQ (4/8/2014): This now only fails for third-party
+             // examples, so this is the good news, however, it means that I
+             // still can't enforce this everywhere. These tests: test2013_234.C
+             // test2013_240.C
+             // test2013_242.C
+             // test2013_246.C
+             // test2013_241.C
 
-       // DQ (10/16/2013): Now that we have the token stream support computed correctly,
-       // we have to disable this check to support the C++ tests (e.g. test2004_77.C).
-       // DQ (10/14/2013): Turn this on as part of testing the token stream mapping!
-       // DQ (10/19/2012): This fails for a collection of C++ codes only:
-       // test2011_121.C
-       // test2011_141.C
-       // test2011_142.C
-       // test2005_142.C
-       // test2009_41.C
-       // test2006_124.C
-       // test2005_128.C
-       // test2005_34.C
-       // test2004_129.C
-       // test2004_130.C
-       // test2004_85.C
-       // test2004_127.C
-       // test2005_103.C
-       // test2005_42.C
-       // test2006_84.C
-       // test2005_35.C
-       // test2006_141.C
-       // inputBug317.C
-       // test2005_161.C
-       // test2004_120.C
-       // This is a result of new work to support class/struct/union declarations output in unusual
-       // location in some exmaples from C applications that have been a focus lately.
-       // I might want to fix this up later after the dust settles.  These appear to be unusual cases.
+             // DQ (10/16/2013): Now that we have the token stream support
+             // computed correctly, we have to disable this check to support the
+             // C++ tests (e.g. test2004_77.C). DQ (10/14/2013): Turn this on as
+             // part of testing the token stream mapping! DQ (10/19/2012): This
+             // fails for a collection of C++ codes only: test2011_121.C
+             // test2011_141.C
+             // test2011_142.C
+             // test2005_142.C
+             // test2009_41.C
+             // test2006_124.C
+             // test2005_128.C
+             // test2005_34.C
+             // test2004_129.C
+             // test2004_130.C
+             // test2004_85.C
+             // test2004_127.C
+             // test2005_103.C
+             // test2005_42.C
+             // test2006_84.C
+             // test2005_35.C
+             // test2006_141.C
+             // inputBug317.C
+             // test2005_161.C
+             // test2004_120.C
+             // This is a result of new work to support class/struct/union
+             // declarations output in unusual location in some exmaples from C
+             // applications that have been a focus lately. I might want to fix
+             // this up later after the dust settles.  These appear to be
+             // unusual cases.
 
-          ROSE_ABORT();
+             ROSE_ABORT();
 #else
 
        // DQ (4/26/2012): debugging... (test2012_67.C)
@@ -2365,7 +2367,9 @@ TestAstForUniqueNodesInAST::visit ( SgNode* node )
           if ( SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL )
 #endif
              {
-               printf ("In TestAstForUniqueNodesInAST::visit (): Rare issue (only effects Boost examples): node = %p = %s \n",node,node->class_name().c_str());
+            printf("In TestAstForUniqueNodesInAST::visit (): Rare issue (only "
+                   "affects third-party examples): node = %p = %s \n",
+                   node, node->class_name().c_str());
              }
 #endif
         }

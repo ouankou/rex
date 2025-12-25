@@ -129,18 +129,6 @@ class AttachPreprocessingInfoTreeTrav
       // DQ (2/28/2019): We need to return the line that is associated with the source file where this can be a node shared between multiple ASTs.
          int source_file_id;
 
-      //! AS(011306) Map of ROSEAttributesLists mapped to filename from Wave
-       // DQ (12./12/2008): this should be updated to use int instead of strings.
-       // For now I will not touch the Wave specific implementation.
-       // std::map<std::string,ROSEAttributesList*>* currentMapOfAttributes;
-
-      //! Use_Wave == true specifies if a wave preprocessor is used
-          bool use_Wave;
-
-      //  The mapOfAttributes declaration is specific to wave usage.
-      //! Map of filenames to list of attributes as found by WAVE.  
-       //   std::map<std::string,ROSEAttributesList*>* mapOfAttributes; 
-
        // DQ (4/30/2020): We no long need this in the new simplified support for CPP directivces and comments and unparsing of header files.
       //! AS(092107) Optimization variable to avoid n^2 complexity in 
       //! iterateOverListAndInsertPreviouslyUninsertedElementsAppearingBeforeLineNumber()         
@@ -154,14 +142,9 @@ class AttachPreprocessingInfoTreeTrav
        // include files (except should specified using exclusion lists via the command line).
           bool processAllIncludeFiles;
 
-     public:
-       // DQ (9/24/2007): Moved function definition to source file from header file.
-       // AS(011306) Constructor for use of Wave Preprocessor
-          AttachPreprocessingInfoTreeTrav( std::map<std::string,ROSEAttributesList*>* attrMap);
-
-     public:
-
-       // Destructor
+        public:
+        public:
+          // Destructor
           ~AttachPreprocessingInfoTreeTrav();
 
        // DQ (6/2/2020): Change the API for this function.
@@ -212,7 +195,10 @@ class AttachPreprocessingInfoTreeTrav
        // ROSEAttributesList* buildCommentAndCppDirectiveList ( bool use_Wave, std::string currentFilename );
        // static ROSEAttributesList* buildCommentAndCppDirectiveList ( bool use_Wave, std::string currentFilename );
        // static ROSEAttributesList* buildCommentAndCppDirectiveList ( bool use_Wave, SgSourceFile* sourceFile, std::string currentFilename );
-          static ROSEAttributesList* buildCommentAndCppDirectiveList ( bool use_Wave, SgSourceFile* sourceFile, std::string currentFilename, std::string new_filename );
+          static ROSEAttributesList *
+          buildCommentAndCppDirectiveList(SgSourceFile *sourceFile,
+                                          std::string currentFilename,
+                                          std::string new_filename);
    };
 
 #endif

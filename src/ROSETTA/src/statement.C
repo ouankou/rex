@@ -1868,7 +1868,7 @@ Grammar::setUpStatements ()
   // DQ (6/28/2013): The template arguments should not always be output where the function is used in a SgTemplateFunctionRefExp
   // and so we need to record this.  This does not handle where individual function reference expression may or may not explicitly
   // specify the template argument list, but only where some do or all do not explicitly specify the template argument list.
-  // See test2013_242.C for an example of where this is required (a boost graph example test code).
+  // See test2013_242.C for an example of where this is required (a graph example test code).
      TemplateFunctionDeclaration.setDataPrototype ( "bool", "template_argument_list_is_explicit", "= false",
                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
@@ -2089,10 +2089,13 @@ Grammar::setUpStatements ()
      TemplateInstantiationFunctionDecl.setDataPrototype ( "bool", "nameResetFromMangledForm", "= false",
                                                   NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #if 1
-  // DQ (6/28/2013): The template arguments should not always be output where the function is used in a SgTemplateFunctionRefExp
-  // and so we need to record this.  This does not handle where individual function reference expression may or may not explicitly
-  // specify the template argument list, but only where some do or all do not explicitly specify the template argument list.
-  // See test2013_242.C for an example of where this is required (a boost graph example test code).
+     // DQ (6/28/2013): The template arguments should not always be output where
+     // the function is used in a SgTemplateFunctionRefExp and so we need to
+     // record this.  This does not handle where individual function reference
+     // expression may or may not explicitly specify the template argument list,
+     // but only where some do or all do not explicitly specify the template
+     // argument list. See test2013_242.C for an example of where this is
+     // required (a graph example test code).
      TemplateInstantiationFunctionDecl.setDataPrototype ( "bool", "template_argument_list_is_explicit", "= false",
                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif

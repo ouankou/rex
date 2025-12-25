@@ -73,9 +73,12 @@ class TokenStreamSequenceToNodeMapping
        // Static date for generating unique keys into the tokenSequencePool
           static size_t tokenStreamSize;
 
-       // A map of unique subsequences (intervals).  An alternative might be a Boost interval map.
-       // static map<size_t,TokenStreamSequenceToNodeMapping*> tokenSequencePool;
-       // static map<size_t,TokenStreamSequenceToNodeMapping*,TokenStreamSequenceToNodeMapping_key> tokenSequencePool;
+          // A map of unique subsequences (intervals). An interval map could
+          // also work here. static
+          // map<size_t,TokenStreamSequenceToNodeMapping*> tokenSequencePool;
+          // static
+          // map<size_t,TokenStreamSequenceToNodeMapping*,TokenStreamSequenceToNodeMapping_key>
+          // tokenSequencePool;
           static std::map<TokenStreamSequenceToNodeMapping_key,TokenStreamSequenceToNodeMapping*> tokenSequencePool;
 
        // Constructor

@@ -120,9 +120,9 @@
  *  @c @@brief is used:
  *
  *  @code
- *  * @defgroup installation_dependencies_boost How to install Boost
+ *  * @defgroup installation_dependencies_zlib How to install Zlib
  *  * @ingroup installation_dependencies
- *  * @brief Instructions for installing Boost, a ROSE software dependency.
+ *  * @brief Instructions for installing Zlib, a ROSE software dependency.
  *  @endcode
  *
  *  <b>Location of documentation source?</b> Regardless of whether one chooses to write a page or a module, the documentation

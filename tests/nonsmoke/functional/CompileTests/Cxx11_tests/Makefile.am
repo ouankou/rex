@@ -101,8 +101,6 @@ TESTCODES_REQUIRED_TO_PASS = \
    test2014_74.C \
    test2014_75.C \
    test2014_76.C \
-   test2014_77.C \
-   test2014_78.C \
    test2014_79.C \
    test2014_80.C \
    test2014_81.C \
@@ -838,7 +836,6 @@ TESTCODES_REQUIRED_TO_PASS += \
 # resolved by the Intel v17.0.4 compiler as it is installed on Jenkins. The issues seem 
 # to be that the Jenkins installation of Intel v17 is using the GNU headers and the version
 # of GNU headers is 4.8.5 (which is too old).  Installing GNU 6.1 and maybe a later version 
-# of boost than 1.57 (I'm using Boost 1.60) should fix the problem.  Nathan is fixing this
 # issue and so this file can be added back in later after Jenkins's use of GNU by Intel v17 
 # is updated.
 # test2018_100.C
@@ -1251,7 +1248,6 @@ TEST_TRANSLATOR=../../testTranslator
 # ROSE_FLAGS
 
 
-# NP 4/23/21 C++14 flag is needed in order to parse the boost headers which use C++14.
 
 if USING_INTEL_COMPILER
    LANG_FLAGS = -std=c++14
@@ -1324,4 +1320,3 @@ clean-local:
 
 status:
 	@$(MAKE) $(TEST_Source_passed)
-

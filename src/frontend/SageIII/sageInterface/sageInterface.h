@@ -768,8 +768,6 @@ ROSE_DLL_API PreprocessingInfo* attachArbitraryText(SgLocatedNode* target,
                 const std::string & text,
                PreprocessingInfo::RelativePositionType position=PreprocessingInfo::before);
 
-//!Check if a pragma declaration node has macro calls attached, if yes, replace macro calls within the pragma string with expanded strings. This only works if -rose:wave is turned on.
-ROSE_DLL_API void replaceMacroCallsWithExpandedStrings(SgPragmaDeclaration* target);
 //@}
 
 //! Build and attach comment onto the global scope of a source file

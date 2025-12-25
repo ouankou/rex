@@ -1,4 +1,4 @@
-// This code appears in flex_string.hpp as part of boost.
+// This code appears in flex_string.hpp as part of a template utility header.
 // It is used in ROSE, so ROSE will not compile ROSE until
 // we can handle this construction of switch statements.
 
@@ -27,5 +27,4 @@ inline void pod_fill(Pod* b, Pod* e, T c)
             case 1: *b = c; ++b;
                   }
         }
-   }
-
+}

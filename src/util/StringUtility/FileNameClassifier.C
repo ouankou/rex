@@ -323,10 +323,6 @@ using namespace Rose;
                 {
                     return Rose::StringUtility::FILENAME_LIBRARY_GCC;
                 }
-                if (fileName.find("boost") != string::npos)
-                {
-                    return Rose::StringUtility::FILENAME_LIBRARY_BOOST;
-                }
                 if (fileName.find("rose.h") != string::npos ||
                         fileName.find("include-staging/g++_HEADERS") != string::npos ||
                         fileName.find("include-staging/gcc_HEADERS") != string::npos)
@@ -526,27 +522,6 @@ using namespace Rose;
                     "Unknown", //FILENAME_LIBRARY_UNKNOWN,
                     directoryDistance(fileName, appPath));
         }
-
-/* 
-    // Possible return values for FileNameClassification::getLibraryName
-    // Corresponds 1-to-1 to FileNameLibrary enum in the header file
-    static const size_t FILENAME_NAMES_SIZE = 8;
-    static const char* FILENAME_NAMES[FILENAME_NAMES_SIZE] = { "UNKNOWN",
-                                                               "USER",
-                                                               "c",
-                                                               "stdc++",
-                                                               "linux",
-                                                               "gcc",
-                                                               "boost",
-                                                               "rose" };    
-const string
-StringUtility::FileNameClassification::getLibraryName() const
-    {
-        ROSE_ASSERT(this);
-        ROSE_ASSERT(library >= 0 && library < (int)FILENAME_NAMES_SIZE);
-        return FILENAME_NAMES[library];
-    }
-*/
 
 const string
 Rose::StringUtility::stripDotsFromHeaderFileName(const string& name)

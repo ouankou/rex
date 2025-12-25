@@ -23747,8 +23747,7 @@ sub help {
    |EXAMPLE
    |    The following is an annotated example of the use of mkinstaller by the
    |    ROSE project to form a binary installer. Note that it is assumed that
-   |    both the boost and ROSE libraries have been built and "installed" on
-   |    this system.
+   |    the ROSE libraries have been built and "installed" on this system.
    |
    |    Assuming:
    |
@@ -23756,9 +23755,6 @@ sub help {
    |
    |        mkinstaller installed under /opt/totebag/bin
    |                                and /opt/totebag/lib
-   |
-   |        Boost installed in /opt/boost/include
-   |                       and /opt/boost/lib
    |
    |        ROSE installed in /opt/ROSE/bin
    |                      and /opt/ROSE/include
@@ -23771,7 +23767,6 @@ sub help {
    |                                     -c ROSE-rh6-4.8.5-installer \\
    |                                     CC=gcc \\
    |                                     CXX=g++ \\
-   |                                     /opt/boost/{include,lib} \\
    |                                     /opt/ROSE/{bin,include,lib,share} \\
    |                                     --postinstall-perl=/opt/totebag/lib/mkinstaller/rose-post-install
    |
@@ -23808,13 +23803,6 @@ sub help {
    |       just the compiler name, not a pathname. This will be encoded
    |       in the generated installer that indicates how the binaries to be
    |       installed were built. Not really an option, it is required.
-   |
-   |           /opt/boost/{include,lib} \\
-   |
-   |       The pathnames where the boost headers and libraries were installed
-   |       when they were built. Note that the example uses a curious form
-   |       of wildcard notation. It actually expands to 2 separate directory
-   |       pathnames: /opt/boost/include and /opt/boost/lib
    |
    |           /opt/ROSE/{bin,include,lib,share} \\
    |
@@ -24888,8 +24876,7 @@ sub html {
    |      <blockquote>
    |         The following is an annotated example of the use of <i>mkinstaller</i> by the
    |         <i>ROSE</i> project to form a binary installer. Note that it is assumed that
-   |         both the <i>boost</i> and <i>ROSE</i> libraries have been built and "installed" on
-   |         this (host) system.
+   |         the <i>ROSE</i> libraries have been built and "installed" on this (host) system.
    |      </blockquote>
    |      <blockquote>
    |         Assuming:
@@ -24899,10 +24886,6 @@ sub html {
    |         <blockquote>
    |            <i>mkinstaller</i> installed under  <b><big><code>/opt/totebag/bin</code></big></b>
    |            and <b><big><code>/opt/totebag/lib</code></big></b>
-   |         </blockquote>
-   |         <blockquote>
-   |            <i>Boost</i> installed in <b><big><code>/opt/boost/include</code></big></b>
-   |            and <b><big><code>/opt/boost/lib</code></big></b>
    |         </blockquote>
    |         <blockquote>
    |            <i>ROSE</i> installed in <b><big><code>/opt/ROSE/bin</code></big></b>
@@ -24917,7 +24900,6 @@ sub html {
    |                             -c ROSE-rh6-4.8.5-installer \\
    |                             CC=gcc \\
    |                             CXX=g++ \\
-   |                             /opt/boost/{include,lib} \\
    |                             /opt/ROSE/{bin,include,lib,share} \\
    |                             --postinstall-perl=/opt/totebag/lib/mkinstaller/rose-post-install
    |</pre>
@@ -24963,15 +24945,6 @@ sub html {
    |            just the compiler name, not a pathname. This will be encoded
    |            in the generated installer that indicates how the binaries to be
    |            installed were built.
-   |            <blockquote>
-   |<pre>
-   |/opt/boost/{include,lib} \\
-   |</pre>
-   |            </blockquote>
-   |            The pathnames where the <i>boost</i> headers and libraries were installed
-   |            when they were built. Note that the example uses a curious form
-   |            of wildcard notation. It actually expands to 2 separate directory
-   |            pathnames: <b><big><code>/opt/boost/include</code></big></b> and <b><big><code>/opt/boost/lib</code></big></b>
    |            <blockquote>
    |<pre>
    |/opt/ROSE/{bin,include,lib,share} \\

@@ -12,7 +12,6 @@ normalizationTranslator_CPPFLAGS = $(ROSE_INCLUDES)
 normalizationTranslator_LDFLAGS = $(ROSE_RPATHS)
 normalizationTranslator_LDADD = $(ROSE_LIBS)
 
-# test2013_242.C "(problem with Boost code in ROSE compiling ROSE)" as of 2014-03-26
 broken_tests = test2013_242.C
 
 # DQ (5/26/2014): I would like to skip the normalization of the test2013_241.C 
@@ -38,7 +37,7 @@ normalizationTranslator_SPECIMENS = $(filter-out $(broken_tests), $(ROSE__CXX_TE
 normalizationTranslator_TEST_TARGETS = $(addsuffix .passed, $(normalizationTranslator_SPECIMENS))
 
 normalizationTranslator_SWITCHES = \
-	 -w -rose:verbose 0 $(ROSE_BOOST_NORMAL_INCLUDE_PATH) \
+	 -w -rose:verbose 0 \
 	-I$(normalizationTranslator_SPECIMENS_DIR) -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Code
 
 $(normalizationTranslator_TEST_TARGETS): %.passed: $(ROSE__CXX_TESTS_DIR)/% normalizationTranslator $(TEST_EXIT_STATUS)

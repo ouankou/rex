@@ -1,12 +1,11 @@
 #include "rose.h"
 
-#include <list>
-#include <sstream>
-#include <iostream>
 #include <fstream>
-#include <string.h>
+#include <iostream>
+#include <list>
 #include <map>
-#include <boost/algorithm/string.hpp>
+#include <sstream>
+#include <string.h>
 using namespace std;
 
 #include "genericDataflowCommon.h"
@@ -22,6 +21,16 @@ using namespace std;
 #include "constantPropagation.h"
 
 int numFails = 0, numPass = 0;
+
+static void erase_all(std::string &value, const std::string &needle) {
+  if (needle.empty()) {
+    return;
+  }
+  size_t pos = 0;
+  while ((pos = value.find(needle, pos)) != std::string::npos) {
+    value.erase(pos, needle.size());
+  }
+}
 
 class evaluateAnalysisStates : public UnstructuredPassIntraAnalysis
    {
@@ -154,16 +163,15 @@ main( int argc, char * argv[] )
     VarsExprsProductLattice* lattice = dynamic_cast <VarsExprsProductLattice *>(NodeState::getLatticeAbove(&cpA, pdecl,0)[0]);
     ROSE_ASSERT (lattice != NULL);
     string lattice_str = lattice->str();
-    boost::erase_all(lattice_str, " ");
-    boost::erase_all(lattice_str, "\n");
-//    cout <<lattice_str<<endl;
+    erase_all(lattice_str, " ");
+    erase_all(lattice_str, "\n");
+    //    cout <<lattice_str<<endl;
     std::string pragma_str = pdecl->get_pragma()->get_pragma ();
     pragma_str.erase (0,5);
-    boost::erase_all(pragma_str, "\n");
+    erase_all(pragma_str, "\n");
     // cout <<pragma_str <<endl;
 
-
-    boost::erase_all(pragma_str, " ");
+    erase_all(pragma_str, " ");
 
     if (lattice_str == pragma_str)
     {
@@ -194,7 +202,4 @@ main( int argc, char * argv[] )
 	
   // Unparse and compile the project (so this can be used for testing)
      return /*backend(project) +*/ numFails;
-   }
-
-
-
+}

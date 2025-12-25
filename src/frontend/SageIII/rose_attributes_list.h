@@ -6,11 +6,8 @@
 //#include <list>
 //#include <vector>
 #include <map>
-#include <boost/wave.hpp>
-#include <boost/wave/cpplexer/cpp_lex_token.hpp>
 // Include the ROSE lex specific definitions of tokens
 #include "general_token_defs.h"
-//#define ROSE_SKIP_COMPILATION_OF_WAVE 1
 
 // #ifdef CAN_NOT_COMPILE_WITH_ROSE
 //    #warning "CAN_NOT_COMPILE_WITH_ROSE IS defined"
@@ -48,14 +45,6 @@ class SgFile;
 
 // #if !CAN_NOT_COMPILE_WITH_ROSE
 // #ifndef USE_ROSE
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-
-typedef boost::wave::cpplexer::lex_token<>  token_type;
-typedef std::vector<token_type>             token_container;
-typedef std::list<token_type>               token_list_container;
-typedef std::vector<std::list<token_type> > token_container_container;
-
-#endif
 
 //! For preprocessing information including source comments, #include , #if, #define, etc
 class PreprocessingInfo
@@ -201,115 +190,10 @@ class PreprocessingInfo
        // a flag here is not going to work for that.  so we have to also record that the ROSEAttributesList has changed.
           bool p_isTransformation;
 
-// This is part of Wave support in ROSE.
-// #ifndef USE_ROSE
-     public:
-/*
-       // AS using the lexer_token from boost_wave in order to store structures
-          typedef boost::wave::cpplexer::lex_token<> token_type;
-          typedef std::vector<token_type>            token_container;
-          typedef std::list<token_type>              token_list_container;
-          typedef std::vector<std::list<token_type> >       token_container_container;
-*/
-     private:
-       // FIXME: To support Jochens AST binary save work the tokenSteam must
-       // have a pointer type.
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-       // A stream of tokens representing the current prerpocessing info
-       // object. This is equivalent to the internal string, but of cause
-       // contains more information since it is a tokenized stream.
-          token_container* tokenStream;
-
-     public:
-          typedef struct r_include_directive
-             {
-            // The parameter 'directive' contains the (expanded) file name found after
-            // the #include directive. This has the format '<file>', '"file"' or 'file'.
-               token_type directive;
-            // The paths plus name to the include directive filename
-               std::string absname;
-               std::string relname;
-             } rose_include_directive;
-
-       // Internal representation of a macro #define directive
-          typedef struct r_macro_def
-             {
-               bool is_functionlike;
-               bool is_predefined;
-               token_type macro_name;
-               token_container paramaters;
-               token_list_container definition;
-               r_macro_def() : macro_name(), paramaters(),definition() {}
-             } rose_macro_definition;
-
-       // Internal representation of a macro call
-       // e.g #define MACRO_CALL int x;
-       // MACRO_CALL
-#if 0
-          typedef struct r_macro_call
-             {
-               bool is_functionlike;
-               PreprocessingInfo* macro_def;
-               token_type macro_call;
-               token_container_container arguments;
-               token_container expanded_macro;
-
-            // Get string representation of the expanded macro
-               std::string get_expanded_string()
-                  {
-                    std::ostringstream os;
-                    token_container::const_iterator iter;
-                    for (iter=expanded_macro.begin(); iter!=expanded_macro.end(); iter++)
-                         os << (*iter).get_value();
-                    return os.str();
-                  }
-
-               r_macro_call() : macro_call(), arguments(),expanded_macro() {}
-             } rose_macro_call;
-#else
-       // DQ (3/9/2013): Modified to address SWIG error.
-          struct rose_macro_call
-             {
-               bool is_functionlike;
-               PreprocessingInfo* macro_def;
-               token_type macro_call;
-               token_container_container arguments;
-               token_container expanded_macro;
-
-            // DQ (3/9/2013): The function definition is moved to the source file to get around SWIG error.
-            // Get string representation of the expanded macro
-               std::string get_expanded_string();
-
-            // DQ (3/9/2013): The function definition is moved to the source file to get around SWIG error.
-               rose_macro_call();
-             };
-#endif
-
-     private:
-       // AS add macro definition
-          rose_macro_definition*  macroDef;
-       // AS add macro call
-          rose_macro_call*        macroCall;
-       // AS include directive
-          rose_include_directive* includeDirective;
-
-#endif
-
   // member functions
      public:
          ~PreprocessingInfo();
           PreprocessingInfo();
-
-// #ifndef USE_ROSE
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-       // AS (112105) Added constructors to support macros
-          PreprocessingInfo(token_container, DirectiveType, RelativePositionType);
-          PreprocessingInfo(rose_macro_call*, RelativePositionType);
-          PreprocessingInfo(rose_macro_definition*, RelativePositionType);
-          PreprocessingInfo(token_type, token_list_container, bool, DirectiveType,RelativePositionType);
-          PreprocessingInfo(rose_include_directive*, RelativePositionType);
-#endif
 
        // This constructor is called from the C++ code generated from the lex file (preproc.lex)
        // PreprocessingInfo(DirectiveType, const char *inputStringPointer, int line_no , int col_no,
@@ -389,23 +273,6 @@ class PreprocessingInfo
           void set_filenameForCompilerGeneratedLinemarker( std::string x );
           void set_optionalflagsForCompilerGeneratedLinemarker( std::string x );
 
-// #ifndef USE_ROSE
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-  // Wave specific member functions.
-     public:
-       // Access functions to get the macro call or macro definition.
-       // These are NULL if the type is not CMacroCall or
-       // CpreprocessorDefineDeclaration
-          rose_macro_call* get_macro_call();
-          rose_macro_definition* get_macro_def();
-          rose_include_directive* get_include_directive();
-
-          const token_container* get_token_stream();
-          void push_front_token_stream(token_type tok);
-          void push_back_token_stream(token_type tok);
-
-#endif
-
       // DQ (12/30/2013): Adding support to supress output of macros that are self-referential.
       // e.g. "#define foo X->foo", which would be expanded a second time in the backend processing.
       // Note that if we don't output the #define, then we still might have a problem if there was
@@ -477,78 +344,83 @@ class ROSEAttributesList
          ~ROSEAttributesList();
        // DQ (4/19/2006): Adding SgFileInfo objects so we need to pass in a filename string
        // void addElement(PreprocessingInfo::DirectiveType, const char *pLine, int lineNumber, int columnNumber, int numberOfLines);
-          void addElement(PreprocessingInfo::DirectiveType, const std::string & pLine, const std::string & filename, int lineNumber, int columnNumber, int numberOfLines);
-#if 1
-       // DQ (5/9/2007): This is required for WAVE support.
-       // DQ (4/13/2007): I would like to remove this function, but it is used by WAVE support within ROSE.
-          void addElement( PreprocessingInfo &pRef );
-#endif
-       // void addElements( ROSEAttributesList &);
-          void moveElements( ROSEAttributesList &);
+         void addElement(PreprocessingInfo::DirectiveType,
+                         const std::string &pLine, const std::string &filename,
+                         int lineNumber, int columnNumber, int numberOfLines);
+         // void addElements( ROSEAttributesList &);
+         void moveElements(ROSEAttributesList &);
 
-#if 1
-       // DQ (5/9/2007): This is required for WAVE support.
-       // DQ (4/13/2007): I would like to remove this function
-          void insertElement( PreprocessingInfo & pRef );
-#endif
+         // [DT] 3/15/2000 -- Interface to fileName member.
+         void setFileName(const std::string &fName);
+         std::string getFileName();
 
-       // [DT] 3/15/2000 -- Interface to fileName member.
-          void setFileName(const std::string & fName);
-          std::string getFileName();
+         // 3/16/2000 -- Interface to index member.
+         void setIndex(int i);
+         int getIndex();
 
-       // 3/16/2000 -- Interface to index member.
-          void setIndex(int i);
-          int getIndex();
+         PreprocessingInfo *operator[](int i);
+         int size(void);
+         int getLength(void);
+         void deepClean(void);
+         void clean(void);
 
-          PreprocessingInfo* operator[](int i);
-          int size(void);
-          int getLength(void);
-          void deepClean(void);
-          void clean(void);
+         // DQ (9/19/2013): generate the number associated with each position
+         // relative to the attached IR node. size_t
+         // numberByRelativePosition(PreprocessingInfo::RelativePositionType
+         // pos);
 
-      // DQ (9/19/2013): generate the number associated with each position relative to the attached IR node.
-      // size_t numberByRelativePosition(PreprocessingInfo::RelativePositionType pos);
+         // Access function for list
+         std::vector<PreprocessingInfo *> &getList() { return attributeList; };
 
-       // Access function for list
-          std::vector<PreprocessingInfo*> & getList() { return attributeList; };
+         void
+         display(const std::string &label); // DQ 02/18/2001 -- For debugging.
 
-          void display ( const std::string & label );          // DQ 02/18/2001 -- For debugging.
+         // DQ (1/21/2008): Added access function to save the raw token stream
+         // from the lex pass.
+         void set_rawTokenStream(LexTokenStreamTypePointer s);
+         LexTokenStreamTypePointer get_rawTokenStream();
 
-       // DQ (1/21/2008): Added access function to save the raw token stream from the lex pass.
-          void set_rawTokenStream( LexTokenStreamTypePointer s );
-          LexTokenStreamTypePointer get_rawTokenStream();
+         // This function processes the token stream to generate the input for
+         // what weaves the CPP directives and comments into the AST.  All other
+         // tokens are ignore in this pass.
+         void generatePreprocessorDirectivesAndCommentsForAST(
+             const std::string &filename);
 
-       // This function processes the token stream to generate the input for what weaves the
-       // CPP directives and comments into the AST.  All other tokens are ignore in this pass.
-          void generatePreprocessorDirectivesAndCommentsForAST( const std::string & filename );
+         // DQ (11/26/2008): This is old code!
+         // Collection comments and CPP directives for fixed format (easier
+         // case) void
+         // collectFixedFormatPreprocessorDirectivesAndCommentsForAST( const
+         // std::string & filename );
 
-       // DQ (11/26/2008): This is old code!
-       // Collection comments and CPP directives for fixed format (easier case)
-       // void collectFixedFormatPreprocessorDirectivesAndCommentsForAST( const std::string & filename );
+         // DQ (11/16/2008): Adding support for recognition of CPP directives
+         // outside of the lex tokenization.
+         void collectPreprocessorDirectivesAndCommentsForAST(
+             const std::string &filename, languageTypeEnum languageType);
 
-       // DQ (11/16/2008): Adding support for recognition of CPP directives outside of the lex tokenization.
-          void collectPreprocessorDirectivesAndCommentsForAST( const std::string & filename, languageTypeEnum languageType );
+         // DQ (11/17/2008): Refactored the code.
+         bool isFortran77Comment(const std::string &line);
+         bool isFortran90Comment(const std::string &line);
+         bool
+         isCppDirective(const std::string &line,
+                        PreprocessingInfo::DirectiveType &cppDeclarationKind,
+                        std::string &restOfTheLine);
 
-       // DQ (11/17/2008): Refactored the code.
-          bool isFortran77Comment( const std::string & line );
-          bool isFortran90Comment( const std::string & line );
-          bool isCppDirective( const std::string & line, PreprocessingInfo::DirectiveType & cppDeclarationKind, std::string & restOfTheLine );
+         // DQ (12/15/2012): traverse the attributeList and process all of the
+         // #line directives to generate a list of file ids that should be
+         // considered equivalent to that of the input source file's filename.
+         // std::set<int> generateFileIdListFromLineDirectives();
+         void generateFileIdListFromLineDirectives();
 
-       // DQ (12/15/2012): traverse the attributeList and process all of the #line directives to generate a
-       // list of file ids that should be considered equivalent to that of the input source file's filename.
-       // std::set<int> generateFileIdListFromLineDirectives();
-          void generateFileIdListFromLineDirectives();
+         // DQ (12/15/2012): Added access function.
+         std::set<int> &get_filenameIdSet();
 
-       // DQ (12/15/2012): Added access function.
-          std::set<int> & get_filenameIdSet();
+         // DQ (9/29/2013): Added to support adding processed CPP directives and
+         // comments as tokens to token list.
+         PreprocessingInfo *lastElement();
 
-       // DQ (9/29/2013): Added to support adding processed CPP directives and comments as tokens to token list.
-          PreprocessingInfo* lastElement();
-
-       // DQ (1/15/2015): Adding support for token-based unparsing. Access function for new data member.
-       // bool isTransformation() const;
-       // void setAsTransformation();
-       // void unsetAsTransformation();
+         // DQ (1/15/2015): Adding support for token-based unparsing. Access
+         // function for new data member. bool isTransformation() const; void
+         // setAsTransformation(); void unsetAsTransformation();
    };
 
 //
@@ -588,13 +460,5 @@ class ROSEAttributesListContainer
           std::map<std::string, ROSEAttributesList*> & getList() { return attributeListMap; };
           void display ( const std::string & label );          // DQ 02/18/2001 -- For debugging.
    };
-
-
-// #ifndef USE_ROSE
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-
-extern token_container wave_tokenStream;
-
-#endif
 
 #endif

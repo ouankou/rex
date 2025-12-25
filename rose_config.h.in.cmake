@@ -480,14 +480,6 @@
 //AS Don't know what to do with this
 #undef ROSE_USE_VALGRIND
 
-/* Simple preprocessor as default in ROSE */
-//AS Need configure option to allow wave to be default
-#define ROSE_WAVE_DEFAULT false
-
-/* Location (unquoted) of Wave specified on configure line. */
-//AS Not needed
-//#undef ROSE_WAVE_PATH
-
 /* REX: SAGE_TRANSFORM - legacy EDG setting, kept for backwards compatibility */
 //AS Need configure flag to control this variable
 #define SAGE_TRANSFORM 1

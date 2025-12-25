@@ -94,10 +94,9 @@ toHex2(uint64_t value, size_t nbits, bool show_unsigned_decimal, bool show_signe
 
     // Hexadecimal value
 
-    //std::string retval;
-    //int nnibbles = (nbits+3)/4;
-    //std::string fmt = "0x%0" + std::to_string(nnibbles) + "x";
-    //retval = (boost::format(fmt) % value).str();
+    // std::string retval;
+    // int nnibbles = (nbits+3)/4;
+    // std::string fmt = "0x%0" + std::to_string(nnibbles) + "x";
 
     std::stringstream ss;
     ss << "0x" << std::setw((nbits + 3) / 4) << std::setfill('0') << std::hex << value;

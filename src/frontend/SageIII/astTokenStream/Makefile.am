@@ -2,16 +2,11 @@ include $(top_srcdir)/config/Makefile.for.ROSE.includes.and.libs
 
 AM_CPPFLAGS = $(ROSE_INCLUDES)
 
-#if ROSE_USE_BOOST_WAVE
-
 # DQ (10/27/2013): Commented out for now from this Makefile.am (experimenting with replacing with new implementation independent of WAVE).
 # libastTokenStream_la_SOURCES      = createMap.C  doCompleteMapping.C  linearizeAST.C unparseMacro.C
 # libastTokenStream_la_LIBADD       = 
 # libastTokenStream_la_DEPENDENCIES = 
 # include_HEADERS = createMap.h  doCompleteMapping.h  linearizeAST.h unparseMacro.h
-
-#endif
-
 
 # DQ (10/27/2013): This is a new definition of libastTokenStream
 # noinst_LTLIBRARIES = libastTokenStream.la
@@ -34,4 +29,3 @@ pkginclude_HEADERS = createMap.h  doCompleteMapping.h  linearizeAST.h unparseMac
    maxExtents.h detectMacroOrIncludeFileExpansions.h detectMacroExpansionsToBeUnparsedAsAstTransformations.h
 
 EXTRA_DIST = CMakeLists.txt
-

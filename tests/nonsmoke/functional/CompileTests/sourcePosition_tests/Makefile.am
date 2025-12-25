@@ -164,7 +164,6 @@ test2004_85.C \
 test2004_86.C \
 test2004_87.C \
 test2004_88.C \
-test2004_89.C \
 test2004_90.C \
 test2004_91.C \
 test2004_93.C \
@@ -220,7 +219,6 @@ test2004_144.C \
 test2004_145.C \
 test2004_146.C \
 test2004_147.C \
-test2004_148.C \
 test2004_150.C \
 test2004_151.C \
 test2004_152.C \
@@ -325,7 +323,6 @@ test2005_97.C \
 test2005_99.C \
 test2005_100.C \
 test2005_101.C \
-test2005_102.C \
 test2005_103.C \
 test2005_104.C \
 test2005_105.C \
@@ -507,7 +504,6 @@ test2006_117.C \
 test2006_118.C \
 test2006_119.C \
 test2006_120.C \
-test2006_121.C \
 test2006_122.C \
 test2006_123.C \
 test2006_125.C \
@@ -741,4 +737,3 @@ cleandata:
 
 # EXTRA_DIST = CMakeLists.txt README $(ALL_TESTCODES)
 EXTRA_DIST = README
-

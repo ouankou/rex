@@ -21,7 +21,6 @@ set(SAGE3_SOURCES
   rose_attributes_list.C
   attachPreprocessingInfo.C
   attachPreprocessingInfoTraversal.C
-  attributeListMap.C
   manglingSupport.C
   sage_support/sage_support.cpp
   sage_support/cmdline.cpp
@@ -95,4 +94,3 @@ install(
     ${CMAKE_CURRENT_BINARY_DIR}/Cxx_GrammarTreeTraversalAccessEnums.h
     ${CMAKE_CURRENT_BINARY_DIR}/AstQueryMemoryPool.h
   DESTINATION ${INCLUDE_INSTALL_DIR})
-

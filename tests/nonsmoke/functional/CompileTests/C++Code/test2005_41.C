@@ -2,12 +2,10 @@
 template <typename Mesh>
 struct MeshConcept
    {
-     void constraints()
-        {
-       // using namespace boost;
-       // Every model of MeshConcept must also model SpaceConcept.
-          function_requires<SpaceConcept<Mesh> >();
-        }
+  void constraints() {
+    // Every model of MeshConcept must also model SpaceConcept.
+    function_requires<SpaceConcept<Mesh>>();
+  }
 
    }; // end struct MeshConcept
 
@@ -23,5 +21,4 @@ void foo()
   // PackageMesh<int> package;
      typedef void (MeshConcept<int>::* funcMeshMeshConcept)();
   // PackageMesh<int>::funcMeshMeshConcept functionPointer;
-   }
-
+}

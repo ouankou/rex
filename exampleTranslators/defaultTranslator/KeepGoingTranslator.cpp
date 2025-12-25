@@ -40,9 +40,8 @@ Refactored and documented: Liao, 4/13/2017
 int
 main(int argc, char * argv[])
 {
-  // Using home may be a better choice, no scattered log files in every subdirectories.  
-  //  report_filename__fail(boost::filesystem::path(getenv("HOME")).native()+"/rose-failed_files.txt");
-  //  report_filename__pass(boost::filesystem::path(getenv("HOME")).native()+"/rose-passed_files.txt");
+  // Using home may be a better choice, no scattered log files in every
+  // subdirectories.
   Rose::KeepGoing::report_filename__fail = "rose-failed_files.txt";
   Rose::KeepGoing::report_filename__pass="rose-passed_files.txt";
 //  Rose::KeepGoing::expectations_filename__fail="";
@@ -116,4 +115,3 @@ main(int argc, char * argv[])
   // return backend(project); 
   return backend_status;
 }
-

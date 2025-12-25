@@ -29,7 +29,6 @@ install(TARGETS main DESTINATION bin)
 ## "if" for DQ_DEVELOPER_TESTS (AutoMake conditional block)
 #if DQ_DEVELOPER_TESTS 
 #
-#if ROSE_USE_BOOST_WAVE
 #
 #INCLUDES = $(ROSE_INCLUDES) -I$(srcdir)/../colorAST_tests
 #

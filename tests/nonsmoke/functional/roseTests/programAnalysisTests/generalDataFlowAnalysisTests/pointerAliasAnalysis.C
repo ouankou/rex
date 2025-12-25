@@ -557,11 +557,11 @@ bool pointerAliasAnalysis::transfer(const Function& func, const DataflowNode& n,
     return false;
 }
 
-boost::shared_ptr<IntraDFTransferVisitor>
-pointerAliasAnalysis::getTransferVisitor(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo)
-{
-    return boost::shared_ptr<IntraDFTransferVisitor>(new pointerAliasAnalysisTransfer(func, n, state, dfInfo));
+std::shared_ptr<IntraDFTransferVisitor>
+pointerAliasAnalysis::getTransferVisitor(const Function &func,
+                                         const DataflowNode &n,
+                                         NodeState &state,
+                                         const std::vector<Lattice *> &dfInfo) {
+  return std::shared_ptr<IntraDFTransferVisitor>(
+      new pointerAliasAnalysisTransfer(func, n, state, dfInfo));
 }
-
-
-

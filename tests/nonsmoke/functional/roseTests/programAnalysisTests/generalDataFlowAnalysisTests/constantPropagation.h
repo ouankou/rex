@@ -9,6 +9,7 @@ TODO: the constant propagation analysis is limited to live variables at a point.
 */
 
 #include "VariableStateTransfer.h"
+#include <memory>
 
 extern int constantPropagationAnalysisDebugLevel;
 
@@ -146,7 +147,10 @@ class ConstantPropagationAnalysis : public IntraFWDataflow
 	
           bool transfer(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo);
 
-          boost::shared_ptr<IntraDFTransferVisitor> getTransferVisitor(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo);
+          std::shared_ptr<IntraDFTransferVisitor>
+          getTransferVisitor(const Function &func, const DataflowNode &n,
+                             NodeState &state,
+                             const std::vector<Lattice *> &dfInfo);
    };
 
 

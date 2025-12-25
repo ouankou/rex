@@ -27,19 +27,12 @@ ofstream ofile;
 // a helper function
 string toString (SgVarRefExp* ref)
 {
-  string ret; 
-  ret+= ref->unparseToString(); 
-#if __cplusplus >= 201103L
+  string ret;
+  ret += ref->unparseToString();
   ret+="@";
   ret+= std::to_string(ref->get_file_info()->get_line()); 
   ret+=":";
-  ret+= std::to_string(ref->get_file_info()->get_col()); 
-#else
-  ret+="@";
-  ret+= boost::lexical_cast<std::string>(ref->get_file_info()->get_line()); 
-  ret+=":";
-  ret+= boost::lexical_cast<std::string>(ref->get_file_info()->get_col()); 
-#endif
+  ret += std::to_string(ref->get_file_info()->get_col());
   return ret; 
 }
 
@@ -143,4 +136,3 @@ int main(int argc, char * argv[])
   // Generate source code from AST and call the vendor's compiler
   return backend(project);
 }
-

@@ -7,7 +7,6 @@
 #include "VirtualFunctionAnalysis.h"
 
 using namespace std;
-using namespace boost;
 
 void PrintUsage( char* name)
 {

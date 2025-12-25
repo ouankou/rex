@@ -20,12 +20,13 @@ IncludeDirective::IncludeDirective(const string& directiveText) {
         }
         else                                            // include macro
         {
-            // Syntax of the accepted macros: BOOST_PP_ITERATE()
-            startPos = directiveText.find("#include") + 9;
-            while ((startPos < directiveText.size()) && (directiveText[startPos] == ' '))
-                startPos++;
-            endPos = directiveText.find(")", startPos)+1;
-            ROSE_ASSERT(endPos != string::npos);
+          // Syntax of the accepted macros: MACRO()
+          startPos = directiveText.find("#include") + 9;
+          while ((startPos < directiveText.size()) &&
+                 (directiveText[startPos] == ' '))
+            startPos++;
+          endPos = directiveText.find(")", startPos) + 1;
+          ROSE_ASSERT(endPos != string::npos);
         }
     }
     
@@ -40,7 +41,4 @@ bool IncludeDirective::isQuotedInclude() {
     return isQuotedIncludeDirective;
 }
 
-size_t IncludeDirective::getStartPos() {
-    return startPos;
-}
-
+size_t IncludeDirective::getStartPos() { return startPos; }

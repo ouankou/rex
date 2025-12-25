@@ -1,7 +1,8 @@
 #include "constantPropagation.h"
 
-#include <boost/bind.hpp>
-#include <boost/mem_fn.hpp>
+#include <functional>
+
+using namespace std::placeholders;
 
 int constantPropagationAnalysisDebugLevel = 2;
 
@@ -237,7 +238,7 @@ void ConstantPropagationAnalysisTransfer::transferArith(SgBinaryOp *sgn, T trans
 void
 ConstantPropagationAnalysisTransfer::transferArith(SgBinaryOp *sgn, TransferOp transferOp)
    {
-     transferArith(sgn, boost::mem_fn(transferOp));
+  transferArith(sgn, std::mem_fn(transferOp));
    }
 
 void 
@@ -394,61 +395,83 @@ ConstantPropagationAnalysisTransfer::visit(SgValueExp *sgn)
 void
 ConstantPropagationAnalysisTransfer::visit(SgPlusAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1, _2, _3, _4, true ));
+  transferArith(
+      sgn, std::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1,
+                     _2, _3, _4, true));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgMinusAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1, _2, _3, _4, false));
+  transferArith(
+      sgn, std::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1,
+                     _2, _3, _4, false));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgMultAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferMultiplicative, _1, _2, _3, _4 ));
+  transferArith(
+      sgn,
+      std::bind(&ConstantPropagationAnalysisTransfer::transferMultiplicative,
+                _1, _2, _3, _4));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgDivAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferDivision, _1, _2, _3, _4 ));
+  transferArith(
+      sgn, std::bind(&ConstantPropagationAnalysisTransfer::transferDivision, _1,
+                     _2, _3, _4));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgModAssignOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferMod, _1, _2, _3, _4 ));
+  transferArith(sgn,
+                std::bind(&ConstantPropagationAnalysisTransfer::transferMod, _1,
+                          _2, _3, _4));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgAddOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1, _2, _3, _4, true ));
+  transferArith(
+      sgn, std::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1,
+                     _2, _3, _4, true));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgSubtractOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1, _2, _3, _4, false));
+  transferArith(
+      sgn, std::bind(&ConstantPropagationAnalysisTransfer::transferAdditive, _1,
+                     _2, _3, _4, false));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgMultiplyOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferMultiplicative, _1, _2, _3, _4 ));
+  transferArith(
+      sgn,
+      std::bind(&ConstantPropagationAnalysisTransfer::transferMultiplicative,
+                _1, _2, _3, _4));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgDivideOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferDivision, _1, _2, _3, _4 ));
+  transferArith(
+      sgn, std::bind(&ConstantPropagationAnalysisTransfer::transferDivision, _1,
+                     _2, _3, _4));
    }
 
 void
 ConstantPropagationAnalysisTransfer::visit(SgModOp *sgn)
    {
-     transferArith(sgn, boost::bind(&ConstantPropagationAnalysisTransfer::transferMod, _1, _2, _3, _4 ));
+  transferArith(sgn,
+                std::bind(&ConstantPropagationAnalysisTransfer::transferMod, _1,
+                          _2, _3, _4));
    }
 
 void
@@ -530,10 +553,11 @@ ConstantPropagationAnalysis::transfer(const Function& func, const DataflowNode& 
      return false;
    }
 
-boost::shared_ptr<IntraDFTransferVisitor>
-ConstantPropagationAnalysis::getTransferVisitor(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo)
-   {
-  // Why is the boost shared pointer used here?
-     return boost::shared_ptr<IntraDFTransferVisitor>(new ConstantPropagationAnalysisTransfer(func, n, state, dfInfo));
+   std::shared_ptr<IntraDFTransferVisitor>
+   ConstantPropagationAnalysis::getTransferVisitor(
+       const Function &func, const DataflowNode &n, NodeState &state,
+       const std::vector<Lattice *> &dfInfo) {
+     // Why is the shared pointer used here?
+     return std::shared_ptr<IntraDFTransferVisitor>(
+         new ConstantPropagationAnalysisTransfer(func, n, state, dfInfo));
    }
-

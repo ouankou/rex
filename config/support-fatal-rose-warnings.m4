@@ -175,7 +175,7 @@ if test "x$enable_fatal_rose_warnings" = "xyes"; then
       CXX_WARNINGS+="-Wno-error=return-type "
       C_WARNINGS+="-Wno-error=return-type "
 
-    # DQ (12/6/2016): Disable this warning since it comes from Boost and we can't do anythng about it.
+    # DQ (12/6/2016): Disable this warning since it comes from external headers and we can't do anything about it.
       CXX_WARNINGS+="-Wno-c++11-extensions "
       C_WARNINGS+="-Wno-c++11-extensions "
 
@@ -269,4 +269,3 @@ AC_MSG_NOTICE([after being reset: CXXFLAGS = "$CXXFLAGS"])
 
 ]
 )
-

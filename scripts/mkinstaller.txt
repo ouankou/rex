@@ -562,8 +562,7 @@ OPTIONS
 EXAMPLE
     The following is an annotated example of the use of mkinstaller by the
     ROSE project to form a binary installer. Note that it is assumed that
-    both the boost and ROSE libraries have been built and "installed" on
-    this system.
+    the ROSE libraries have been built and "installed" on this system.
 
     Assuming:
 
@@ -571,9 +570,6 @@ EXAMPLE
 
         mkinstaller installed under /opt/totebag/bin
                                 and /opt/totebag/lib
-
-        Boost installed in /opt/boost/include
-                       and /opt/boost/lib
 
         ROSE installed in /opt/ROSE/bin
                       and /opt/ROSE/include
@@ -586,7 +582,6 @@ EXAMPLE
                                      -c ROSE-rh6-4.8.5-installer \
                                      CC=gcc \
                                      CXX=g++ \
-                                     /opt/boost/{include,lib} \
                                      /opt/ROSE/{bin,include,lib,share} \
                                      --postinstall-perl=/opt/totebag/lib/mkinstaller/rose-post-install
 
@@ -623,13 +618,6 @@ EXAMPLE
        just the compiler name, not a pathname. This will be encoded
        in the generated installer that indicates how the binaries to be
        installed were built. Not really an option, it is required.
-
-           /opt/boost/{include,lib} \
-
-       The pathnames where the boost headers and libraries were installed
-       when they were built. Note that the example uses a curious form
-       of wildcard notation. It actually expands to 2 separate directory
-       pathnames: /opt/boost/include and /opt/boost/lib
 
            /opt/ROSE/{bin,include,lib,share} \
 

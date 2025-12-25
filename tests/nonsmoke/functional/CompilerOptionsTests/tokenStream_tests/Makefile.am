@@ -4,8 +4,6 @@ include $(top_srcdir)/config/Makefile.for.ROSE.includes.and.libs
 # These are C testcodes targeting aspects of C that might not be a subset of C++ #
 ##################################################################################
 
-# if ROSE_USE_BOOST_WAVE
-
 AM_CPPFLAGS = $(ROSE_INCLUDES)
 AM_LDFLAGS = $(ROSE_RPATHS)
 

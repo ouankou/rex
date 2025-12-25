@@ -10,7 +10,6 @@
  * (inside src/midend/astProcessing/)*/
 
 using namespace std;
-using namespace boost;
 using namespace Rose;
 
 

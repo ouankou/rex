@@ -1552,7 +1552,8 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
                for(std::vector<PreprocessingInfo*>::iterator jItr = iItr->second->getList().begin(); jItr != iItr->second->getList().end(); ++jItr)
                   {
                   // std::cout << "Inserting element" <<  (*jItr)->getString() << std::endl;
-                     preprocessorInfoList->insertElement(**jItr);
+                     preprocessorInfoList->getList().push_back(
+                         new PreprocessingInfo(**jItr));
                   }
 
              }

@@ -27,8 +27,7 @@
  *
  *  Within ROSE, shared ownership is implemented using smart pointers. A smart pointer behaves for the most part like a native
  *  C++ pointer, but performs additional functions. Some ROSE subsystems implement shared ownership using either
- *  <code>boost::shared_ptr</code> or @ref Sawyer::SharedPointer, both of which use reference counting. The reason for two
- *  implementations is that we found <code>boost::shared_ptr</code> to be too slow in some situations.
+ *  <code>std::shared_ptr</code> or @ref Sawyer::SharedPointer, both of which use reference counting.
  *
  *  Most heap-allocated, shared-ownership objects have a typedef for their pointer type. The pointer type name is either the
  *  same as the class name with "Ptr" appended, or a public "Ptr" type defined in the class (or both). These objects normally
@@ -42,8 +41,8 @@
  *  the reference count. Occasionally the underlying raw pointer is even passed directly, but this is only safe when the
  *  caller holds the ownership for the duration of the callee's use of the raw pointer (i.e., the callee should not save the
  *  raw pointer).  A new shared-ownership pointer can be always created from a raw pointer when the Sawyer::SharedPointer
- *  implementation is used, but <code>boost::shared_ptr</code> requires that the class inherit from
- *  <code>boost::shared_from_this</code>.
+ *  implementation is used, but <code>std::shared_ptr</code> requires that the class inherit from
+ *  <code>std::enable_shared_from_this</code>.
  *
  *  Because reference counting by itself doesn't work well with ownership cycles, and since detecting ownership cycles in C++
  *  is too invasive to the API, ROSE is designed to not use internal data structures that could introduce cycles. If you find a

@@ -2,7 +2,6 @@
 #include <graphProcessing.h>
 #include <staticCFG.h>
 using namespace std;
-using namespace boost;
 using namespace Rose;
 typedef myGraph CFGforT;
 class visitorTraversal : public SgGraphTraversal<CFGforT>

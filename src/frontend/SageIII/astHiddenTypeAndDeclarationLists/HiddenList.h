@@ -57,7 +57,6 @@ struct equal_symbol {
 
 };
 
-// CH (4/13/2010): Use boost::hash<string> instead
 #if 0
 struct eqstr3 {
 
@@ -86,7 +85,6 @@ struct HashFunction_String
                         return x;
                 }*/
         public:
-// CH (4/8/2010): Use boost::unordered instead
 #if 0       
                                            public:
       static const size_t bucket_size = 4;
@@ -94,7 +92,6 @@ struct HashFunction_String
 #endif
                 int operator()(const std::string & in) const
                 {
-// CH (4/8/2010): Use boost::hash instead
 #if 0
                         return stdext::hash_compare<char*>()((char*)in.c_str());
 #else
@@ -249,7 +246,6 @@ struct cmp_SgSymbolPointer {
 struct HashFunction_SymbolHashMap {
 
      public:
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
           static const size_t bucket_size = 4;
           static const size_t min_buckets = 8;
@@ -258,7 +254,6 @@ struct HashFunction_SymbolHashMap {
                 int operator()(SgSymbol* S) const
                 {
                         // calculate hashfunction-value based on address of SgSymbol
-// CH (4/8/2010): Use boost::hash instead
 #if 0
                         return stdext::hash_compare<int>()((int)S);
 #else
@@ -344,8 +339,7 @@ typedef std::deque<SymbolInformation*> Vector_Of_SymbolInformation;
 // this hash_map contains:
 //  Key: pointer to SgSymbol
 //  Value: struct of booleans for getting class, namespace & validity information
-//  
-// CH (4/8/2010): Use boost::unordered instead
+//
 #if 0
 typedef rose_hash::unordered_map<SgSymbol*, SymbolHashMapValue*> SymbolHashMap;
 #else
@@ -355,12 +349,10 @@ typedef rose_hash::unordered_map<SgSymbol*, SymbolHashMapValue*, HashFunction_Sy
 //  Key: symbol-name from the SymbolTable
 //  Value: HashMap of Pointers & boolean if scope can be named of this symbols
 //
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 // typedef rose_hash::unordered_map<std::string, SymbolHashMap, HashFunction_String> ScopeStackEntry;
 typedef rose_hash::unordered_map<std::string, SymbolHashMap> ScopeStackEntry;
 #else
-// CH (4/13/2010): Use boost::hash<string>
 //typedef rose_hash::unordered_map<std::string, SymbolHashMap, HashFunction_String, cmp_string> ScopeStackEntry;
 typedef rose_hash::unordered_map<std::string, SymbolHashMap> ScopeStackEntry;
 #endif
@@ -369,12 +361,10 @@ typedef rose_hash::unordered_map<std::string, SymbolHashMap> ScopeStackEntry;
 //  Key: (qualified) Name of namespace
 //  Value: std::vector of struct symbol table
 //
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 // typedef rose_hash::unordered_map<std::string, Vector_Of_SymbolInformation, HashFunction_String> StringVectorHashMap;
 typedef rose_hash::unordered_map<std::string, Vector_Of_SymbolInformation> StringVectorHashMap;
 #else
-// CH (4/13/2010): Use boost::hash<string>
 //typedef rose_hash::unordered_map<std::string, Vector_Of_SymbolInformation, HashFunction_String, eqstr3> StringVectorHashMap;
 typedef rose_hash::unordered_map<std::string, Vector_Of_SymbolInformation> StringVectorHashMap;
 #endif
@@ -418,12 +408,10 @@ struct NamespaceInformation {
 };
 
 typedef std::vector<NamespaceInformation> VectorOfNamespaceInformation;
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 // typedef rose_hash::unordered_map<std::string, VectorOfNamespaceInformation, HashFunction_String> String_VectorOfNamespaceInformation_HashMap;
 typedef rose_hash::unordered_map<std::string, VectorOfNamespaceInformation> String_VectorOfNamespaceInformation_HashMap;
 #else
-// CH (4/13/2010): Use boost::hash<string>
 //typedef rose_hash::unordered_map<std::string, VectorOfNamespaceInformation, HashFunction_String, eqstr3> String_VectorOfNamespaceInformation_HashMap;
 typedef rose_hash::unordered_map<std::string, VectorOfNamespaceInformation> String_VectorOfNamespaceInformation_HashMap;
 #endif
@@ -434,13 +422,11 @@ struct it_VectorOfNamespaceInformation_boolean {
         bool first_namespace_occurence;
 };
 
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 // DQ (11/27/2009): Unclear now to fix this.
 // typedef rose_hash::unordered_map<std::string, it_VectorOfNamespaceInformation_boolean, HashFunction_String> String_it_VectorOfNamespaceInformation_boolean;
 typedef rose_hash::unordered_map<std::string, it_VectorOfNamespaceInformation_boolean> String_it_VectorOfNamespaceInformation_boolean;
 #else
-// CH (4/13/2010): Use boost::hash<string>
 //typedef rose_hash::unordered_map<std::string, it_VectorOfNamespaceInformation_boolean, HashFunction_String, eqstr3> String_it_VectorOfNamespaceInformation_boolean;
 typedef rose_hash::unordered_map<std::string, it_VectorOfNamespaceInformation_boolean> String_it_VectorOfNamespaceInformation_boolean;
 #endif
@@ -475,7 +461,6 @@ struct LinkedListStackSetSgDeclarationStatements {
 struct HashFunction_SgUsingDirectiveStatement {
 
         public:
-// CH (4/8/2010): Use boost::unordered instead
 #if 0                   
                                            public:
       static const size_t bucket_size = 4;
@@ -485,7 +470,6 @@ struct HashFunction_SgUsingDirectiveStatement {
                 int operator()(SgUsingDirectiveStatement* using_dir) const
                 {
                         // calculate hashfunction-value based on address of SgUsingDirectiveStatement
-// CH (4/8/2010): Use boost::hash instead
 #if 0
                         return stdext::hash_compare<int>()((int)using_dir);
 #else
@@ -498,7 +482,6 @@ struct HashFunction_SgUsingDirectiveStatement {
 //  Key: Address of SgUsingDirectiveStatement
 //  Value: LinkedListStackSetSgDeclarationStatements
 //
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 typedef rose_hash::unordered_map<SgUsingDirectiveStatement*, LinkedListStackSetSgDeclarationStatements> UsingDirectiveStatement_LinkedListStackSetSgDeclarationStatements_HashMap;
 #else
@@ -509,7 +492,6 @@ typedef rose_hash::unordered_map<SgUsingDirectiveStatement*, LinkedListStackSetS
 struct HashFunction_SgUsingDeclarationStatement {
 
         public:
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
                                            public:
       static const size_t bucket_size = 4;
@@ -518,7 +500,6 @@ struct HashFunction_SgUsingDeclarationStatement {
                 int operator()(SgUsingDeclarationStatement* using_decl) const
                 {
                         // calculate hashfunction-value based on address of SgUsingDeclarationStatement
-// CH (4/8/2010): Use boost::hash instead
 #if 0
                         return stdext::hash_compare<int>()((int)using_decl);
 #else
@@ -531,7 +512,6 @@ struct HashFunction_SgUsingDeclarationStatement {
 //  Key: Address of SgUsingDirectiveStatement
 //  Value: LinkedListStackSetSgDeclarationStatements
 //
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 typedef rose_hash::unordered_map<SgUsingDeclarationStatement*, LinkedListStackSetSgDeclarationStatements> UsingDeclarationStatement_LinkedListStackSetSgDeclarationStatements_HashMap;
 #else
@@ -541,7 +521,6 @@ typedef rose_hash::unordered_map<SgUsingDeclarationStatement*, LinkedListStackSe
 //  Key: Address of SgUsingDirectiveStatement
 //  Value: SetSgDeclarationStatements
 //
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 typedef rose_hash::unordered_map<SgUsingDirectiveStatement*, SetSgDeclarationStatements> UsingDirectiveStatement_SetSgDeclarationStatements_HashMap;
 #else
@@ -551,7 +530,6 @@ typedef rose_hash::unordered_map<SgUsingDirectiveStatement*, SetSgDeclarationSta
 //  Key: Address of SgUsingDirectiveStatement
 //  Value: SetSgDeclarationStatements
 //
-// CH (4/8/2010): Use boost::unordered instead
 #if 0
 typedef rose_hash::unordered_map<SgUsingDeclarationStatement*, SetSgDeclarationStatements> UsingDeclarationStatement_SetSgDeclarationStatements_HashMap;
 #else

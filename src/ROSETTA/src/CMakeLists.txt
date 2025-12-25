@@ -68,7 +68,7 @@ add_executable(CxxGrammarMetaProgram ${CxxGrammarMetaProgram_SRCS})
 add_dependencies(CxxGrammarMetaProgram roseUtil)
 
 # build ROSETTA code generator
-set(link_libs ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+set(link_libs ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(CxxGrammarMetaProgram ${link_libs} roseUtil)
 
 if(enable-smaller-generated-files)

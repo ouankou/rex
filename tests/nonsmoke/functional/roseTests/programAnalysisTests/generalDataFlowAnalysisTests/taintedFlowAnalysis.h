@@ -2,18 +2,19 @@
 #define CONSTANT_PROPAGATION_ANALYSIS_H
 
 #if 0
-#include "common.h"
-#include "VirtualCFGIterator.h"
-#include "cfgUtils.h"
 #include "CFGRewrite.h"
 #include "CallGraphTraverse.h"
-#include "analysisCommon.h"
+#include "VariableStateTransfer.h"
+#include "VirtualCFGIterator.h"
 #include "analysis.h"
+#include "analysisCommon.h"
+#include "cfgUtils.h"
+#include "common.h"
 #include "dataflow.h"
 #include "latticeFull.h"
 #include "liveDeadVarAnalysis.h"
 #include "printAnalysisStates.h"
-#include "VariableStateTransfer.h"
+#include <memory>
 
 #include <map>
 #include <string>
@@ -168,7 +169,10 @@ class TaintedFlowAnalysis : public IntraFWDataflow
 	
           bool transfer(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo);
 
-          boost::shared_ptr<IntraDFTransferVisitor> getTransferVisitor(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo);
+          std::shared_ptr<IntraDFTransferVisitor>
+          getTransferVisitor(const Function &func, const DataflowNode &n,
+                             NodeState &state,
+                             const std::vector<Lattice *> &dfInfo);
    };
 
 
@@ -388,9 +392,9 @@ class DivAnalysis : public IntraFWDataflow
 		
   bool transfer(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo)
   { assert(0); return false; }
-  boost::shared_ptr<IntraDFTransferVisitor> getTransferVisitor(const Function& func, const DataflowNode& n,
-                                                            NodeState& state, const std::vector<Lattice*>& dfInfo)
-  { return boost::shared_ptr<IntraDFTransferVisitor>(new DivAnalysisTransfer(func, n, state, dfInfo)); }
+  std::shared_ptr<IntraDFTransferVisitor> getTransferVisitor(const Function& func, const DataflowNode& n,
+                                  NodeState& state, const std::vector<Lattice*>& dfInfo)
+  { return std::shared_ptr<IntraDFTransferVisitor>(new DivAnalysisTransfer(func, n, state, dfInfo)); }
 };
 
 // prints the Lattices set by the given DivAnalysis 

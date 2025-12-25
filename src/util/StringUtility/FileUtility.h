@@ -152,7 +152,6 @@ static const std::string FILENAME_LIBRARY_STDCXX = "C++";
 static const std::string FILENAME_LIBRARY_STL = "STL";
 static const std::string FILENAME_LIBRARY_LINUX = "Linux";
 static const std::string FILENAME_LIBRARY_GCC = "GCC";
-static const std::string FILENAME_LIBRARY_BOOST = "Boost";
 static const std::string FILENAME_LIBRARY_ROSE = "Rose";
 
 // CH (2/16/2010): Use this typedef to avoid following changes

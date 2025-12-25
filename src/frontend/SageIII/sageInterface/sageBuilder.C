@@ -1787,8 +1787,9 @@ SageBuilder::buildVariableDeclaration_nfi (const SgName & name, SgType* type, Sg
                     ROSE_ABORT();
                   }
 #endif
-            // DQ (7/14/2014): Set the variable initialized (see test2014_107.C, also required for boost for_each support)).
-            // initializedName->set_initptr(varInit);
+                  // DQ (7/14/2014): Set the variable initialized (see
+                  // test2014_107.C, also required for for_each support)).
+                  // initializedName->set_initptr(varInit);
 #if DEBUG_BUILD_VARIABLE_DECLARATION
                printf ("In SageBuilder::buildVariableDeclaration_nfi(): After sharing the exisitng SgInitializedName: initializedName = %p = %s \n",initializedName,initializedName->get_name().str());
                printf (" --- initializedName->get_initptr()     = %p \n",initializedName->get_initptr());
@@ -4525,7 +4526,7 @@ SageBuilder::buildNondefiningTemplateFunctionDeclaration(
 
 #if 0
   // Optional debugging.
-  // DQ (9/24/2015): Added more testing (for boost 1.54 and test2015_62.C).
+  // DQ (9/24/2015): Added more testing (for test2015_62.C).
      ROSE_ASSERT(result != NULL);
      ROSE_ASSERT(templateParameterList != NULL);
      ROSE_ASSERT(result->get_templateParameters().size() == templateParameterList->size());
@@ -10413,8 +10414,12 @@ SgModifierType* SageBuilder::buildModifierType(SgType* base_type /* = NULL*/)
      if (result != result2)
         {
 #if 1
-       // DQ (10/27/2015): This is the cause of a bug in the test2015_97.C (boost template problem).
-          printf ("WARNING: In SageBuilder::buildModifierType(): using previously build SgModifierType from global type table: result2 = %p = %s \n",result2,result2->class_name().c_str());
+       // DQ (10/27/2015): This is the cause of a bug in the test2015_97.C
+       // (template-related problem).
+       printf(
+           "WARNING: In SageBuilder::buildModifierType(): using previously "
+           "build SgModifierType from global type table: result2 = %p = %s \n",
+           result2, result2->class_name().c_str());
 #endif
 #if 0
        // DQ (9/3/2012): While debugging let's skip calling delete so that the slot in the memory pool will not be reused.
@@ -11391,8 +11396,10 @@ SageBuilder::buildNondefiningClassDeclaration_nfi(const SgName& XXX_name, SgClas
                ROSE_ASSERT(nondefdecl != NULL);
                ROSE_ASSERT(nondefdecl->get_parent() != NULL);
 
-            // DQ (5/18/2014): Added test to match that in set_firstNondefiningDeclaration().
-            // This is a problem for the Boost code after the fix to detec templates vs. template instantiation declarations.
+               // DQ (5/18/2014): Added test to match that in
+               // set_firstNondefiningDeclaration(). This is a problem for
+               // template-heavy code after the fix to detect templates vs.
+               // template instantiation declarations.
                if (nondefdecl->variantT() != firstNondefdecl->variantT())
                   {
                     printf ("ERROR: In SgDeclarationStatement::set_firstNondefiningDeclaration(): nondefdecl = %p = %s IS NOT THE SAME AS firstNondefiningDeclaration = %p = %s \n",
@@ -14432,11 +14439,12 @@ SageBuilder::buildTemplateClassDeclaration_nfi(const SgName& XXX_name, SgClassDe
      ROSE_ASSERT (nondefdecl->get_type() != NULL);
   // ROSE_ASSERT (nondefdecl->get_type()->get_declaration() == isSgDeclarationStatement(nondefdecl));
 
-  // DQ (1/22/2013): This assertion is a problem for boost code represented by ROSE compiling ROSE (see testRoseHeaders_01.C)
+     // DQ (1/22/2013): This assertion is a problem for template-heavy code
+     // represented by ROSE compiling ROSE (see testRoseHeaders_01.C)
      if (isSgClassType(nondefdecl->get_type())->get_declaration() != isSgDeclarationStatement(nondefdecl))
         {
 #if 0
-          printf ("In buildTemplateClassDeclaration_nfi(): detected isSgClassType(nondefdecl->get_type())->get_declaration() != isSgDeclarationStatement(nondefdecl) (problem with Boost code in ROSE compiling ROSE) \n");
+          printf ("In buildTemplateClassDeclaration_nfi(): detected isSgClassType(nondefdecl->get_type())->get_declaration() != isSgDeclarationStatement(nondefdecl) (problem with template-heavy code in ROSE compiling ROSE) \n");
 #endif
         }
   // ROSE_ASSERT (isSgClassType(nondefdecl->get_type())->get_declaration() == isSgDeclarationStatement(nondefdecl));
