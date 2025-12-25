@@ -133,7 +133,7 @@ main(
 			 strcmp(lang_name, "fortran77") == 0 ||
 			 strcmp(lang_name, "Fortran77") == 0) {
 		    fortran_flag = 1;
-                } else { /* Fortran90 and other language targets. */
+                } else { /* Fortran90, Java, C++, Perl, Python, Ruby, ... */
                   derror("%s: output language %s not implemented", progname,
                          lang_name);
                   return (1);
@@ -149,9 +149,9 @@ main(
             derror("%s: out of memory", progname);
             return (1);
           }
-          (void)strcpy(netcdf_name,optarg);
-	  break;
-	case 'x':		/* set nofill mode to speed up creation of large files */
+          (void)strcpy(netcdf_name, optarg);
+          break;
+        case 'x':		/* set nofill mode to speed up creation of large files */
 	  nofill_flag = 1;
 	  break;
         case 'v':		/* a deprecated alias for "kind" option */

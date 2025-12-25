@@ -28,10 +28,11 @@ int main (int argc, char *argv[])
   // about if this is what we want as a new API). build defining function
   // declaration SageBuilder::buildDefiningFunctionDeclaration(const SgName&
   // name, SgType* return_type, SgFunctionParameterList* paralist,
-  //     SgScopeStatement* scope, bool buildTemplateInstantiation,
-  //     SgFunctionDeclaration* first_nondefining_declaration,
-  //     SgTemplateArgumentPtrList* templateArgumentsList)
-  // SgFunctionDeclaration * func1 = buildDefiningFunctionDeclaration
+  // SgScopeStatement* scope, SgExprListExp* decoratorList, bool
+  // buildTemplateInstantiation, SgFunctionDeclaration*
+  // first_nondefining_declaration, SgTemplateArgumentPtrList*
+  // templateArgumentsList) SgFunctionDeclaration * func1 =
+  // buildDefiningFunctionDeclaration
   // ("foo",buildVoidType(),paraList,NULL,NULL,false,NULL,NULL);
   // SgFunctionDeclaration * func1 = buildDefiningFunctionDeclaration
   // (SgName("foo"),buildVoidType(),paraList);

@@ -318,7 +318,7 @@ namespace LEOS {
 #  define BOOST_FUNCTION_STD_NS std
 //#endif
 
-// Borrowed from Boost: determines the cases where we
+// Borrowed from Boost.Python library: determines the cases where we
 // need to use std::type_info::name to compare instead of operator==.
 // #if defined( BOOST_NO_TYPEID )
 // #  define BOOST_FUNCTION_COMPARE_TYPE_ID(X,Y) ((X)==(Y))
