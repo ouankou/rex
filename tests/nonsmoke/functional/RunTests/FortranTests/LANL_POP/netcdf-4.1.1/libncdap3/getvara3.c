@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/libncdap3/getvara3.c,v 1.40 2009/12/03 18:53:16 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/getvara3.c,v 1.40 2009/12/03
+ *18:53:16 dmh Exp $
  *********************************************************************/
 #include "ncdap3.h"
 #include "dapodom.h"

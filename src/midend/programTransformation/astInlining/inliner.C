@@ -6,8 +6,8 @@
 #include <string>
 #include <iomanip>
 // PP(14/10/20) PRE->legacy::PRE #include "pre.h"
-#include "rose_config.h" // for BOOST_FILESYSTEM_VERSION
 #include "RoseAst.h" // using AST Iterator
+#include "rose_config.h"
 #include <AstConsistencyTests.h>
 
 // DQ (8/1/2005): test use of new static function to create

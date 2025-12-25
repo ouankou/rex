@@ -1,4 +1,5 @@
-// Strange example of typedef and declaration from EDG manual (section 11.3, page 270)
+// Strange example of typedef and declaration from legacy frontend manual
+// (section 11.3, page 270)
 
 #include <stdio.h>
 
@@ -13,7 +14,8 @@ main ()
 #else
      int i = 42;
 
-  // This example from the EDG manual fails with the KCC compiler!
+     // This example from the legacy frontend manual fails with the KCC
+     // compiler!
      I(i)++; // cast i to I and then increment
 #endif
 

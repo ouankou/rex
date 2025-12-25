@@ -20,15 +20,16 @@ int foobar(void)
      // Unparses as:
      //    (typeof(typeof(struct pending_eoi ) * )[2]) )__ptr;
 
-     // Since we can't generate:
-     //    (typeof(&per_cpu__pending_eoi) )
-     // because EDG does not have the required information if they 
-     // type has not been defined previously, I think what we what is:
-     //    (typeof(typeof(struct pending_eoi ) [2]) *)  __ptr;
-     // But at present we generate:
-     //    (typeof(typeof(struct pending_eoi ) (*)[2]) )__ptr;
-     // which might also be OK and equivalent.
-     // This subject of equivalence and/or correctness needs a bit more review, I think.
+        // Since we can't generate:
+        //    (typeof(&per_cpu__pending_eoi) )
+        // because legacy frontend does not have the required information if
+        // they type has not been defined previously, I think what we what is:
+        //    (typeof(typeof(struct pending_eoi ) [2]) *)  __ptr;
+        // But at present we generate:
+        //    (typeof(typeof(struct pending_eoi ) (*)[2]) )__ptr;
+        // which might also be OK and equivalent.
+        // This subject of equivalence and/or correctness needs a bit more
+        // review, I think.
 
         (typeof(&per_cpu__pending_eoi) ) __ptr;
         0;

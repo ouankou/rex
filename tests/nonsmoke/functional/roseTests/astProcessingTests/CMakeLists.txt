@@ -6,8 +6,8 @@
 
 if (HAVE_SYS_TIME_H)
 
-  # Tests disabled: The following tests require removed boost graph headers (SgGraphTemplate.h, graphProcessing.h)
-  # These were removed as part of the deBoost effort. Re-enable when graph support is reimplemented.
+  # Tests disabled: The following tests require removed graph headers (SgGraphTemplate.h, graphProcessing.h)
+  # These were removed as part of the graph cleanup effort. Re-enable when graph support is reimplemented.
   # Disabled tests: proFunSIG, interproceduralCFG, f1-f4, ff1-ff3, strictGraphTest*, smtlibParser, sourcePTP, processnew3Down4SgIncGraph*
 
   #-----------------------------------------------------------------------------
@@ -154,7 +154,7 @@ if (HAVE_SYS_TIME_H)
   #-----------------------------------------------------------------------------
   # add_executable(processnew3Down4SgIncGraph2 processnew3Down4SgIncGraph2.C)
   # target_link_libraries(processnew3Down4SgIncGraph2
-  #   ROSE_DLL EDG ${link_with_libraries})
+  #   ROSE_DLL legacy frontend ${link_with_libraries})
   # set(processnew3Down4SgIncGraph2_SPECIMENS test11.C test12.C test13.C test14.C)
   #
   # foreach(specimen ${processnew3Down4SgIncGraph2_SPECIMENS})
@@ -167,7 +167,7 @@ if (HAVE_SYS_TIME_H)
   #-----------------------------------------------------------------------------
   # add_executable(processnew3Down4SgIncGraph3 processnew3Down4SgIncGraph3.C)
   # target_link_libraries(processnew3Down4SgIncGraph3
-  #   ROSE_DLL EDG ${link_with_libraries})
+  #   ROSE_DLL legacy frontend ${link_with_libraries})
   # set(processnew3Down4SgIncGraph3_SPECIMENS test11.C test12.C test13.C test14.C)
   #
   # set(processnew3Down4SgIncGraph3_SPECIMENS eif.C eif2.C eif3.C eif4.C)

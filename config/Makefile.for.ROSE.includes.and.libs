@@ -36,7 +36,6 @@ endif
 AM_CXXFLAGS = -std=c++17
 
 # This is properly handled by automake even when specified in an include file
-EDG_LIBS = @EDG_LIBS@
 
 RT_LIBS = @RT_LIBS@
 
@@ -80,16 +79,9 @@ if USING_CLANG_COMPILER
 endif
 
 # DQ (3/6/2013): We need to build a SWIG path that can't include the isystem option.
-# Note use of "-isystem" option in ROSE_BOOST_PREINCLUDE_PATH to have the
-# boost specified on the configure
-# command-line be used instead of the OS version of boost that is sometimes
-# installed with Linux (it is always a version too old to be used with ROSE).
-# This is used only when the ROSE configuration detects a previously installed
-# version of Boost (e.g /usr/include/boost) that we don't want to use.
 # if ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 # ROSE_INCLUDES =
-#    $(ROSE_BOOST_PREINCLUDE_PATH)
-ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH_ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT = \
+ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH_ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT = \
      -I$(top_builddir)/src/frontend/SageIII \
      -I$(top_srcdir)/src \
      -I$(top_srcdir)/src/frontend \
@@ -122,8 +114,7 @@ ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH_ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT 
      $(ROSE_FLANG_INCLUDES)
 # else # ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 # ROSE_INCLUDES =
-#     $(ROSE_BOOST_PREINCLUDE_PATH)
-ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH = \
+ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH = \
      -I$(top_builddir)/src/frontend/SageIII \
      -I$(top_srcdir)/src \
      -I$(top_srcdir)/src/frontend \
@@ -208,8 +199,8 @@ ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH = \
 #    $(ROSE_CLANG_FRONTEND_INCLUDE)
 #    $(ROSE_CLANG_INCLUDE)
 
-SWIG_ROSE_INCLUDES = $(ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH)
-ROSE_INCLUDES = -I$(top_builddir) -I$(top_builddir)/src $(ROSE_INCLUDES_WITHOUT_BOOST_ISYSTEM_PATH)
+SWIG_ROSE_INCLUDES = $(ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH)
+ROSE_INCLUDES = -I$(top_builddir) -I$(top_builddir)/src $(ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH)
 
 # DQ (10/28/2008): I think these should be included, I don't know why they
 # were removed (used with some legacy tests, and Yices tests).
@@ -217,9 +208,6 @@ ROSE_INCLUDES = -I$(top_builddir) -I$(top_builddir)/src $(ROSE_INCLUDES_WITHOUT_
 #     $(ROSE_WINE_INCLUDES)
 
 # New way using two libraries
-# ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.a $(top_builddir)/src/libedg.a
-# ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.so $(top_builddir)/src/libedg.so
-# ROSE_LIBS_WITH_PATH = $(libdir)/librose.so $(libdir)/libedg.so
 # ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.la
 # ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.la $(JAVA_JVM_LIB)
 # JJW 7/25/2008: This should probably just be the same as ROSE_LIBS

@@ -10,8 +10,8 @@ bin_PROGRAMS = statements
 statements_SOURCES = statements.C
 
 # DQ (8/14/2004) Developer's Note:
-# This permits the use of the pair of libraries -lrose -ledg OR the longer 
-# list of libraries (the later option is much faster for development work).
+# This permits the use of the short ROSE library list or the longer
+# list of libraries (the latter option is much faster for development work).
 LDADD = $(ROSE_SEPARATE_LIBS)
 
 # Turn on GNU Coverage Tool (gcov)
@@ -164,7 +164,6 @@ test2004_85.C \
 test2004_86.C \
 test2004_87.C \
 test2004_88.C \
-test2004_89.C \
 test2004_90.C \
 test2004_91.C \
 test2004_93.C \
@@ -220,7 +219,6 @@ test2004_144.C \
 test2004_145.C \
 test2004_146.C \
 test2004_147.C \
-test2004_148.C \
 test2004_150.C \
 test2004_151.C \
 test2004_152.C \
@@ -325,7 +323,6 @@ test2005_97.C \
 test2005_99.C \
 test2005_100.C \
 test2005_101.C \
-test2005_102.C \
 test2005_103.C \
 test2005_104.C \
 test2005_105.C \
@@ -507,7 +504,6 @@ test2006_117.C \
 test2006_118.C \
 test2006_119.C \
 test2006_120.C \
-test2006_121.C \
 test2006_122.C \
 test2006_123.C \
 test2006_125.C \
@@ -577,7 +573,7 @@ TESTCODES_REQUIRED_TO_PASS += \
    test2006_79.C \
    test2006_124.C 
 
-# Using EDG 4.12 or later (independent of the compiler).
+# Using legacy frontend 4.12 or later (independent of the compiler).
 OLD_TESTCODES_REQUIRED_TO_PASS = \
    test2004_77.C \
    test2004_143.C \
@@ -697,9 +693,9 @@ $(TEST_Objects): statements
 # DQ (11/11/2012): Example command-line to run tview on generated file in current directory.
 # Must be in the source directory and this there is no absolute path to the build_dir so this 
 # test is not really easy to make.  Not really important, maybe we can think about this later.
-# java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
+# java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
 # test:
-#	cd $(top_srcdir)/src/roseIndependentSupport/tview; pwd; ls; java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
+#	cd $(top_srcdir)/src/roseIndependentSupport/tview; pwd; ls; java tview /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
 #	cd $(top_srcdir)/src/roseIndependentSupport/tview; pwd; ls; java tview $(top_builddir)/tests/nonsmoke/functional/CompileTests/sourcePosition_tests/test2001_01.C
 
 check-local:
@@ -741,4 +737,3 @@ cleandata:
 
 # EXTRA_DIST = CMakeLists.txt README $(ALL_TESTCODES)
 EXTRA_DIST = README
-

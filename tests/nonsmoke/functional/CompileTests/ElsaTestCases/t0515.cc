@@ -2,7 +2,7 @@
 // assertion-failure-inducing input from acovea_4.0.0-4_acovea.cpp
 // nested DQTs in return type
 
-// This testcase has another interesting aspect: EDG and GCC both
+// This testcase has another interesting aspect: legacy frontend and GCC both
 // seem to regard the templatized 'sqrt' as not matching any
 // call site if their attempt to compute the return type encounters
 // errors due to member lookup failure, for example because the

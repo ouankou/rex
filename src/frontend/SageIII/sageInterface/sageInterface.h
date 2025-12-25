@@ -768,8 +768,6 @@ ROSE_DLL_API PreprocessingInfo* attachArbitraryText(SgLocatedNode* target,
                 const std::string & text,
                PreprocessingInfo::RelativePositionType position=PreprocessingInfo::before);
 
-//!Check if a pragma declaration node has macro calls attached, if yes, replace macro calls within the pragma string with expanded strings. This only works if -rose:wave is turned on.
-ROSE_DLL_API void replaceMacroCallsWithExpandedStrings(SgPragmaDeclaration* target);
 //@}
 
 //! Build and attach comment onto the global scope of a source file
@@ -2781,23 +2779,33 @@ SgInitializedName& getFirstVariable(SgVariableDeclaration& vardecl);
 
 // DQ (8/31/2016): Making this a template function so that we can have it work with user defined filters.
 //! This function detects template instantiations that are relevant when filters are used.
-/*!
-    EDG normalizes some in-class template functions and member functions to be redefined outside of a class. this causes the associated template instantiations
-    to be declared outside of the class, and to be marked as compiler generated (since the compiler generated form outside of the class declaration).
-    ROSE captures the function definitions, but in the new location (defined outside of the class declaration).  This can confuse some simple tests
-    for template instantiations that are a part of definitions in a file, thus we have this function to detect this specific normalization.
- */
-template < class T >
-bool isTemplateInstantiationFromTemplateDeclarationSatisfyingFilter (SgFunctionDeclaration* function, T* filter )
-   {
-  // DQ (9/1/2016): This function is called in the Call graph generation to avoid filtering out EDG normalized
-  // function template instnatiations (which come from normalized template functions and member functions).
-  // Note that because of the EDG normailzation the membr function is moved outside of the class, and
-  // thus marked as compiler generated.  However the template instantiations are always marked as compiler
-  // generated (if not specializations) and so we want to include a template instantiation that is marked
-  // as compiler generated, but is from a template declaration that satisfyied a specific user defined filter.
-  // The complexity of this detection is isolated here, but knowing that it must be called is more complex.
-  // This function is call in the CG.C file of tests/nonsmoke/functional/roseTests/programAnalysisTests/testCallGraphAnalysis.
+   /*!
+       legacy frontend normalizes some in-class template functions and member
+      functions to be redefined outside of a class. this causes the associated
+      template instantiations to be declared outside of the class, and to be
+      marked as compiler generated (since the compiler generated form outside of
+      the class declaration). ROSE captures the function definitions, but in the
+      new location (defined outside of the class declaration).  This can confuse
+      some simple tests for template instantiations that are a part of
+      definitions in a file, thus we have this function to detect this specific
+      normalization.
+    */
+   template <class T>
+   bool isTemplateInstantiationFromTemplateDeclarationSatisfyingFilter(
+       SgFunctionDeclaration *function, T *filter) {
+     // DQ (9/1/2016): This function is called in the Call graph generation to
+     // avoid filtering out legacy frontend normalized function template
+     // instnatiations (which come from normalized template functions and member
+     // functions). Note that because of the legacy frontend normailzation the
+     // membr function is moved outside of the class, and thus marked as
+     // compiler generated.  However the template instantiations are always
+     // marked as compiler generated (if not specializations) and so we want to
+     // include a template instantiation that is marked as compiler generated,
+     // but is from a template declaration that satisfyied a specific user
+     // defined filter. The complexity of this detection is isolated here, but
+     // knowing that it must be called is more complex. This function is call in
+     // the CG.C file of
+     // tests/nonsmoke/functional/roseTests/programAnalysisTests/testCallGraphAnalysis.
 
      bool retval = false;
 
@@ -2815,17 +2823,17 @@ bool isTemplateInstantiationFromTemplateDeclarationSatisfyingFilter (SgFunctionD
 
      if (templateInstantiationFunction != NULL)
         {
-       // When the defining function has been normalized by EDG, only the non-defining declaration will have a source position.
-          templateInstantiationFunction = isSgTemplateInstantiationFunctionDecl(templateInstantiationFunction->get_firstNondefiningDeclaration());
-          SgTemplateFunctionDeclaration* templateFunctionDeclaration = templateInstantiationFunction->get_templateDeclaration();
-          if (templateFunctionDeclaration != NULL)
-             {
-               retval = filter->operator()(templateFunctionDeclaration);
-             }
-            else
-             {
-             // Assume false.
-             }
+       // When the defining function has been normalized by legacy frontend,
+       // only the non-defining declaration will have a source position.
+       templateInstantiationFunction = isSgTemplateInstantiationFunctionDecl(
+           templateInstantiationFunction->get_firstNondefiningDeclaration());
+       SgTemplateFunctionDeclaration *templateFunctionDeclaration =
+           templateInstantiationFunction->get_templateDeclaration();
+       if (templateFunctionDeclaration != NULL) {
+         retval = filter->operator()(templateFunctionDeclaration);
+       } else {
+         // Assume false.
+       }
 
 #if DEBUG_TEMPLATE_NORMALIZATION_DETECTION
           printf ("   --- case of templateInstantiationFunction: retval = %s \n",retval ? "true" : "false");
@@ -2835,17 +2843,22 @@ bool isTemplateInstantiationFromTemplateDeclarationSatisfyingFilter (SgFunctionD
         {
           if (templateInstantiationMemberFunction != NULL)
              {
-            // When the defining function has been normalized by EDG, only the non-defining declaration will have a source position.
-               templateInstantiationMemberFunction = isSgTemplateInstantiationMemberFunctionDecl(templateInstantiationMemberFunction->get_firstNondefiningDeclaration());
-               SgTemplateMemberFunctionDeclaration* templateMemberFunctionDeclaration = templateInstantiationMemberFunction->get_templateDeclaration();
-               if (templateMemberFunctionDeclaration != NULL)
-                  {
-                    retval = filter->operator()(templateMemberFunctionDeclaration);
-                  }
-                 else
-                  {
-                 // Assume false.
-                  }
+            // When the defining function has been normalized by legacy
+            // frontend, only the non-defining declaration will have a source
+            // position.
+            templateInstantiationMemberFunction =
+                isSgTemplateInstantiationMemberFunctionDecl(
+                    templateInstantiationMemberFunction
+                        ->get_firstNondefiningDeclaration());
+            SgTemplateMemberFunctionDeclaration
+                *templateMemberFunctionDeclaration =
+                    templateInstantiationMemberFunction
+                        ->get_templateDeclaration();
+            if (templateMemberFunctionDeclaration != NULL) {
+              retval = filter->operator()(templateMemberFunctionDeclaration);
+            } else {
+              // Assume false.
+            }
 
 #if DEBUG_TEMPLATE_NORMALIZATION_DETECTION
                printf ("   --- case of templateInstantiationMemberFunction: retval = %s \n",retval ? "true" : "false");

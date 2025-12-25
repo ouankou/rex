@@ -5,7 +5,7 @@ struct A
 };
 
 // This should preceed the extern template declaration
-// but it is not present in the AST from EDG (I think).
+// but it is not present in the AST from legacy frontend (I think).
 template<> int A<long>::get() const;
 
 extern template class A<int>;

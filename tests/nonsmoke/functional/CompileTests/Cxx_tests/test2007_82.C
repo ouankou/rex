@@ -1,4 +1,4 @@
-/* 
+/*
 Email from Andreas:
 
 when compiling the attached code in ROSE I get the following error:
@@ -8,8 +8,8 @@ line 3: error:
  __builtin_copysign(1.0, z);
  ^
 
-Errors in EDG Processing: (edg_errorLevel > 3)
-Aborted (core dumped) 
+Errors in legacy frontend Processing: (frontend_errorLevel > 3)
+Aborted (core dumped)
 
 */
 

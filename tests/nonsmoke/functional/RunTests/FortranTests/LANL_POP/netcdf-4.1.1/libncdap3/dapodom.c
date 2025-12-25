@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/libncdap3/dapodom.c,v 1.11 2009/11/14 22:33:20 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/dapodom.c,v 1.11 2009/11/14
+ *22:33:20 dmh Exp $
  *********************************************************************/
 
 #include "config.h"

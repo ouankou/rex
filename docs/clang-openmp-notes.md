@@ -25,7 +25,7 @@
 
 2. **ROSE OpenMP AST construction + lowering (future)**  
    - Triggered by `-fopenmp` plus existing `-rose:openmp:*` options.  
-   - Behaviour: reuse the mature EDG-based pipeline—parse pragmas, build ROSE OpenMP IR, then generate lowered multithreaded code. Clang frontend would need parity with the EDG path (currently incomplete).
+   - Behaviour: reuse the mature legacy frontend-based pipeline—parse pragmas, build ROSE OpenMP IR, then generate lowered multithreaded code. Clang frontend would need parity with the legacy frontend path (currently incomplete).
 
 3. **Clang-native OpenMP-to-SAGE translation (long-term)**  
    - Triggered by an explicit `--rex-openmp-clang` or similar.  
@@ -35,10 +35,10 @@
 ### Outstanding Items
 - Evaluate whether pure passthrough should use `SgPragmaDeclaration` instead of raw `PreprocessingInfo` for improved tooling compatibility.
 - Investigate compatibility of existing ROSE OpenMP lowering passes when driven from Clang ASTs (mode 2).
-- Design command-line UX for selecting between modes 1–3 without confusing EDG users.
+- Design command-line UX for selecting between modes 1–3 without confusing legacy frontend users.
 - Add regression coverage: run `rose-compiler -fopenmp` and verify that the emitted pragmas and loop headers remain canonical.
 
 ### Practical Notes
 - The current passthrough path allows the user to recompile the generated file with `clang-20 -fopenmp` successfully.
-- When no OpenMP flags are supplied, pragmas remain untouched but Clang also does not attempt to parse them as structured directives, matching EDG’s historical behaviour.
+- When no OpenMP flags are supplied, pragmas remain untouched but Clang also does not attempt to parse them as structured directives, matching legacy frontend’s historical behaviour.
 - Mode selection logic lives entirely in `clang-frontend.cpp`; no build-system changes are required.

@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/offsets.c,v 1.1 2009/09/25 18:22:40 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/offsets.c,v 1.1 2009/09/25 18:22:40 dmh
+ *Exp $
  *********************************************************************/
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *

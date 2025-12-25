@@ -75,7 +75,7 @@ unsigned char      __builtin_ia32_rorqi(unsigned char __X, int __C);
 unsigned short     __builtin_ia32_rorhi(unsigned short __X, int __C);
 void               __builtin_ia32_pause();
 
-// This function has a different return type within EDG version 4.12.
+// This function has a different return type within legacy frontend version 4.12.
 // int                __builtin_ia32_bsrdi(long long __X);
 
 long long          __builtin_bswap64(long long __X);

@@ -6,8 +6,8 @@ void foo()
    {
      puts();
 
-  // The "(void)" is lost in EDG and so is unavailable in ROSE.
-  // Using the "PRESERVE_TOP_LEVEL_CASTS_TO_VOID_IN_IL" switch 
-  // this should be fixed in EDG 3.10.
+     // The "(void)" is lost in legacy frontend and so is unavailable in ROSE.
+     // Using the "PRESERVE_TOP_LEVEL_CASTS_TO_VOID_IN_IL" switch
+     // this should be fixed in legacy frontend 3.10.
      (void) puts();
    }

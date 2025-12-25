@@ -1,7 +1,8 @@
 // This test code demonstrates the requirement in ROSE for a -m32 mode.
-// The cast of an address in 64-bit mode to a 32-bit value is an error in EDG.
-// It is correct that it is an error in EDG since it is interpreted in 64-bit mode.
-// EDG is working on a fix for this issue, providing a 32-bit mode for the front-end.
+// The cast of an address in 64-bit mode to a 32-bit value is an error in legacy
+// frontend. It is correct that it is an error in legacy frontend since it is
+// interpreted in 64-bit mode. legacy frontend is working on a fix for this
+// issue, providing a 32-bit mode for the front-end.
 
 #define DEMO_BUG 1
 

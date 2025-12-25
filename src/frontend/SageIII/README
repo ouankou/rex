@@ -91,7 +91,7 @@ Here we summarize the separate sub-directoies of this directory:
 
    astCommentsAndCppSupport
       This is the support for extraction of comments and preprocessor control directives
-      (it includes the support for using Wave as well).
+      (it includes support for preprocessing directives and token streams).
 
    astHiddenTypeAndDeclarationLists
       This is the implementation of the generation of list of symbols in each scope
@@ -177,7 +177,7 @@ The bug is that I am missing:
    SgType* type = NULL, 
    SgType* defaultTypeParameter = NULL, 
 
-These are used in the SgTemplateParameter constructor in the EDG/ROSE translation.
+These are used in the SgTemplateParameter constructor in the legacy frontend/ROSE translation.
 There is no build function in the SageBuilder namespace.
 
 returnNode = 
@@ -191,5 +191,4 @@ SgTemplateParameter::build_node_from_nonlist_children(
 
    2) There is nothing to say what the elements are of an IR node that has a container.
       So this has to be handled via some specific function that will be case oriented.
-
 

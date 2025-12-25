@@ -69,7 +69,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    struct __coroutine_traits_impl {};
 
 #if 1
-// DQ (7/26/2020): Fixup header files for EDG.
+// DQ (7/26/2020): Fixup header files for legacy frontend.
   template <typename> struct my__void_t {};
   template <typename _Result>
     struct __coroutine_traits_impl<_Result,
@@ -102,7 +102,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       constexpr coroutine_handle() noexcept : _M_fr_ptr(0) {}
 
 #if 1
-   // DQ (7/26/2020): Fixup header files for EDG.
+   // DQ (7/26/2020): Fixup header files for legacy frontend.
       typedef void* nullptr_t;
       constexpr coroutine_handle(nullptr_t __h) noexcept
 	: _M_fr_ptr(__h)
@@ -166,7 +166,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
 #if _COROUTINES_USE_SPACESHIP
 #if 1
-// DQ (7/26/2020): Fixup header files for EDG.
+// DQ (7/26/2020): Fixup header files for legacy frontend.
   constexpr strong_ordering
   operator<=>(coroutine_handle<> __a, coroutine_handle<> __b) noexcept
   {
@@ -226,7 +226,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       }
 
 #if 1
-   // DQ (7/26/2020): Fixup header files for EDG.
+   // DQ (7/26/2020): Fixup header files for legacy frontend.
       typedef void* nullptr_t;
       coroutine_handle& operator=(nullptr_t) noexcept
       {
@@ -297,7 +297,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       _Promise& promise() const
       {
 #if 1
-     // DQ (7/26/2020): Fixup header files for EDG.
+     // DQ (7/26/2020): Fixup header files for legacy frontend.
         return _Promise();
 #else
 	return *static_cast<_Promise*>(

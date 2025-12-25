@@ -2,8 +2,9 @@
 
 struct A
    {
-  // Note that EDG automatically inserts a forward declaration for struct B (but this is wrong, since it declares struct  B to be in struct A).
-  // 1) We don't want EDG to output this extra declaration.
+  // Note that legacy frontend automatically inserts a forward declaration for
+  // struct B (but this is wrong, since it declares struct  B to be in struct
+  // A). 1) We don't want legacy frontend to output this extra declaration.
   // struct B;
 
   // This is a declaration of a pointer to the global struct B (which is not declared in global scope).

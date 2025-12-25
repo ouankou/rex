@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/nctest/vputget.c,v 1.13 2006/10/31 16:19:49 ed Exp $
+ *   $Header: /shared/CVS/netcdf-3/nctest/vputget.c,v 1.13 2006/10/31 16:19:49
+ *ed Exp $
  *********************************************************************/
 
 #include <config.h>

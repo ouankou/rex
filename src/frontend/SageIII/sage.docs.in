@@ -18,8 +18,8 @@
      \bug Not finished yet.
      \warning Some aspects still under development.
      \todo - Finish documentation \n
-           - Upgrade to newest version of EDG C++ front end \n
-           - Reconstruct connection between EDG and SAGE III IR
+           - Upgrade to newest version of legacy frontend C++ front end \n
+           - Reconstruct connection between legacy frontend and SAGE III IR
 
      \note Large parts of documentation contained in <b>ROSE/SAGE/sage.docs</b>.
 

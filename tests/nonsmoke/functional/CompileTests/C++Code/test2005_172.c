@@ -14,9 +14,9 @@ int main(argc, argv)
 Here is the output under 0.8.6a:
 
 ./defaultTranslator -rose:C_only -o kandr kandr.c
-In build_EDG_CommandLine(): Option -c not found (compile AND link) set
+In build_frontend_command_line(): Option -c not found (compile AND link) set
 autoInstantiation = true ...
-In build_EDG_CommandLine(): autoInstantiation = true adding
+In build_frontend_command_line(): autoInstantiation = true adding
 --auto_instantiation -tused ...
 Command-line error: instantiation mode option can be used only when
 compiling
@@ -24,11 +24,11 @@ compiling
 
 1 catastrophic error detected in this compilation.
 Compilation terminated.
-abort on exit from EDG front-end processing!
+abort on exit from legacy frontend front-end processing!
 defaultTranslator:
-/usr/casc/overture/bwhite/rose-0.8.6a/ROSE/src/frontend/EDG/EDG_3.3/src/host_envir.c:1512:
-void exit_compilation(an_error_severity): Assertion `false' failed.
-Abort
+/usr/casc/overture/bwhite/rose-0.8.6a/ROSE/src/frontend/legacy
+frontend/legacy_frontend/src/host_envir.c:1512: void
+exit_compilation(an_error_severity): Assertion `false' failed. Abort
 
 If I add the '-c' flag, it doesn't die:
 ./defaultTranslator -rose:C_only -c -o kandr kandr.c
@@ -63,7 +63,6 @@ Thanks,
 Brian
 
 */
-
 
 int main(argc, argv)
      int argc;

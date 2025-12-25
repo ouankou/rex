@@ -8,8 +8,10 @@ template < class T > void templateFunction () {};
 class ClassType
    {
      public:
-       // EDG BUG: EDG IR does not record use of export keyword on template member functions
-       // EDG BUG: member function template marked as template function instead of templeate member function in EDG
+       // legacy frontend BUG: legacy frontend IR does not record use of export
+       // keyword on template member functions legacy frontend BUG: member
+       // function template marked as template function instead of templeate
+       // member function in legacy frontend
      public   : template < class T > void publicTemplateMemberFunction    () {}
      protected: template < class T > void protectedTemplateMemberFunction () {}
      private  : template < class T > void privateTemplateMemberFunction   () {}

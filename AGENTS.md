@@ -3,7 +3,7 @@
 ## Project Overview
 REX is a modernization and cleanup effort of the ROSE compiler infrastructure. It is an open-source compiler infrastructure to build source-to-source program transformation and analysis tools for large-scale applications (C, C++, Fortran, OpenMP, etc.).
 
-**Key Differentiator:** REX exclusively uses the Clang/LLVM frontend (specifically LLVM 20) for C/C++ analysis, moving away from the legacy EDG frontend.
+**Key Differentiator:** REX exclusively uses the Clang/LLVM frontend (specifically LLVM 20) for C/C++ analysis, moving away from the legacy frontend.
 
 ## Directory Structure
 *   **`src/`**: Core compiler source code.

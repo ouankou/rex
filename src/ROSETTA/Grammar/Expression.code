@@ -1702,7 +1702,7 @@ HEADER_ASM_OP_START
                e_imm_symbol,       /*!< s: any symbolic reference */
                e_imm_float,        /*!< E, F: any floating point constant */
 
-            // DQ (7/22/2006): Let's assume we want to include these (controled by EDG's setting of GNU_X86_ASM_EXTENSIONS_ALLOWED start)
+            // DQ (7/22/2006): Let's assume we want to include these (controled by legacy frontend's setting of GNU_X86_ASM_EXTENSIONS_ALLOWED start)
             /* register constraints */
                e_reg_a,            /*!< a: ax */
                e_reg_b,            /*!< b: bx */
@@ -1731,7 +1731,7 @@ HEADER_ASM_OP_START
                e_imm_sse,          /*!< H: any SSE standard constant */
                e_imm_sext32,       /*!< e: any 32-bit quantity sign extended to 64 bits */
                e_imm_zext32,       /*!< Z: any 32-bit quantity zero extended to 64 bits */
-            // DQ (7/22/2006): Let's assume we want to include these (controled by EDG's setting of GNU_X86_ASM_EXTENSIONS_ALLOWED end)
+            // DQ (7/22/2006): Let's assume we want to include these (controled by legacy frontend's setting of GNU_X86_ASM_EXTENSIONS_ALLOWED end)
                e_last
              };
 
@@ -1901,7 +1901,7 @@ SOURCE_BASECLASS_EXPRESSION_START
 Sg_File_Info*
 SgExpression::get_file_info() const
    {
-  // DQ (11/8/2006): Note that the EDG/SageIII translation only
+  // DQ (11/8/2006): Note that the legacy frontend/SageIII translation only
   // uses set_startOfConstruct() and set_endOfConstruct().
 
   // This redefines get_file_info() as it is implemented for a SgLocatedNode
@@ -1917,7 +1917,7 @@ SgExpression::get_file_info() const
 void
 SgExpression::set_file_info(Sg_File_Info* fileInfo)
    {
-  // DQ (11/8/2006): Note that the EDG/SageIII translation only
+  // DQ (11/8/2006): Note that the legacy frontend/SageIII translation only
   // uses set_startOfConstruct() and set_endOfConstruct().
 
   // This redefines get_file_info() as it is implemented for a SgLocatedNode
@@ -4588,7 +4588,7 @@ SgTemplateParameterVal::get_template_parameter_name() const
   // Note that we have to store the index position into the template parameter list
   // so that this template parameter can be identified and its name used.  It
   // can be different from the template parameter name of the template class declaration
-  // (which is the name referenced in EDG), so we have to find the enclosing template
+  // (which is the name referenced in legacy frontend), so we have to find the enclosing template
   // declaration and use the index position into its template parameter list (which
   // can of course use different names).
 
@@ -4597,7 +4597,7 @@ SgTemplateParameterVal::get_template_parameter_name() const
 
      ROSE_ASSERT(get_parent() != NULL);
 
-  // DQ (7/24/2012): For the new EDG support (4.x) and new template handling, we don't use
+  // DQ (7/24/2012): For the new legacy frontend support (4.x) and new template handling, we don't use
   // a generic SgTemplateDeclaration; instead we have specific kinds of template declarations.
   // So templateDeclaration will always be NULL now.
 
@@ -5227,8 +5227,8 @@ SgArrowStarOp::get_type() const
 
           default:
              {
-            // DQ (1/19/2017): Handle default case (matches EDG 4.x and Clang frontend behavior)
-            // REX: Simplified - always use this behavior (previously conditional on EDG version)
+            // DQ (1/19/2017): Handle default case (matches legacy frontend 4.x and Clang frontend behavior)
+            // REX: Simplified - always use this behavior (previously conditional on legacy frontend version)
                returnType = someType;
              }
         }
@@ -5753,7 +5753,7 @@ SgTypeIdOp::get_type() const
      if (p_operand_expr != NULL)
         {
        // Could we alternatively just call get_type on the expression directly?
-       // Note that EDG provised us with the type on the expression explicitly so
+       // Note that legacy frontend provised us with the type on the expression explicitly so
        // this has influenced the design here with saves the expression type explicitly.
           returnType = p_expression_type;
           ROSE_ASSERT(returnType != NULL);
@@ -6099,7 +6099,7 @@ SgPointerDerefExp::get_type() const
                break;
              }
 
-       // DQ (5/25/2013): Added this for the case of the new EDG interface.
+       // DQ (5/25/2013): Added this for the case of the new legacy frontend interface.
        // DQ (6/18/2007): The dereference of a function type is a function call so the type is it's return type (I think)
           case V_SgFunctionType:
              {
@@ -6109,7 +6109,7 @@ SgPointerDerefExp::get_type() const
                break;
              }
 
-       // DQ (5/25/2013): Added this for the case of the new EDG interface.
+       // DQ (5/25/2013): Added this for the case of the new legacy frontend interface.
           case V_SgClassType:
              {
                SgClassType* classType = isSgClassType(someType);
@@ -6117,7 +6117,7 @@ SgPointerDerefExp::get_type() const
                break;
              }
 
-       // DQ (7/13/2013): Added this for the case of the new EDG interface.
+       // DQ (7/13/2013): Added this for the case of the new legacy frontend interface.
           case V_SgTypeVoid:
              {
                SgTypeVoid* voidType = isSgTypeVoid(someType);
@@ -6137,7 +6137,7 @@ SgPointerDerefExp::get_type() const
                break;
              }
 #endif
-       // DQ (2/16/2014): Added this for the case of the new EDG interface (sometimes this case is required).
+       // DQ (2/16/2014): Added this for the case of the new legacy frontend interface (sometimes this case is required).
           case V_SgTypeUnknown:
              {
                returnType = someType;
@@ -6147,7 +6147,7 @@ SgPointerDerefExp::get_type() const
           default:
              {
             // DQ (10/23/2016): Commented out message to avoid output spew.
-            // DQ (12/31/2008): This is the new behavior for EDG version 4.x.
+            // DQ (12/31/2008): This is the new behavior for legacy frontend version 4.x.
             // printf ("Warning: default reached in In SgPointerDerefExp::get_type() someType = %s \n",someType->class_name().c_str());
                returnType = someType;
              }
@@ -6743,7 +6743,7 @@ SgPntrArrRefExp::get_type() const
                returnType = SgTypeChar::createType();
                break;
              }
-       // DQ (12/31/2008): This is a better fit for the new EDG/ROSE translation interface.
+       // DQ (12/31/2008): This is a better fit for the new legacy frontend/ROSE translation interface.
           default:
              {
 #if 0
@@ -7526,8 +7526,8 @@ SOURCE_CONSTRUCTOR_INITIALIZER_EXPRESSION_START
  *
  * When the p_declaration is the null pointer then the SgConstructorInitializer::p_expression_type can be used to determine
  * whether the constructor initializer is for a class type without a declared constructor, or for a non-class type.  In the
- * former case, the p_expression_type points to a SgClassType.  In the latter case it points to either a SgFunctionType (EDG4)
- * or null (EDG3). */
+ * former case, the p_expression_type points to a SgClassType.  In the latter case it points to either a SgFunctionType
+ * or null depending on frontend behavior. */
 SgClassDeclaration*
 SgConstructorInitializer::get_class_decl () const
 {

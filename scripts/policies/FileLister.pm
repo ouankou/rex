@@ -6,8 +6,7 @@ use Cwd 'abs_path';
 sub new {
   my($cls,@root) = @_;
   my $self = bless {build=>0,               # include build subtrees identified by presence of "include-staging"?
-		    edg=>0,                 # enter the EDG_* directories containing C/C++ parser source code?
-		    thirdparty=>0,          # software not "owned by" ROSE developers, other than EDG which is handled above
+		    thirdparty=>0,          # software not "owned by" ROSE developers
 		    generated=>0,           # software that is machine-generated
 		    install=>0,             # files in the ROSE install directory
 		    recursive=>1,           # recurse into directories; -1=never; 0=only into specified dirs; 1=always
@@ -117,7 +116,6 @@ sub next_name {
   my $retval = shift @{$self->{pending}};
   return $retval unless defined $retval;
   if ((!$self->{build}      && -d "$retval/include-staging") ||
-      (!$self->{edg}        && $retval =~ /\/EDG(_[\d\.]+)?$/ && -d $retval) ||
       (!$self->{thirdparty} && is_3rdparty($retval)) ||
       (!$self->{generated}  && $self->is_generated($retval)) ||
       (!$self->{install}    && is_install($retval)) ||

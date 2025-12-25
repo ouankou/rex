@@ -23,27 +23,27 @@ handling, new C++ modifiers, bug fixes, a rewrite and reorganization, and much m
 Much other work has 
 been done in ROSE to make it easy to define source-to-source translators, including 
 numerous loop optimizations, and some program analysis (still incomplete).
-EDG only builds its own AST and it is difficult to modify it (I think)
+legacy frontend only builds its own AST and it is difficult to modify it (I think)
 and against their license to publish it or tools to manipulate it.  ROSE provides
 an IR (SAGE III) that is designed to be modified, is object-oriented, and can be published
-(since it completely hides the EDG AST and does not need it after translation to
-SAGE).  SAGE is independent of EDG by design. Current work with Rice is using the 
+(since it completely hides the legacy frontend AST and does not need it after translation to
+SAGE).  SAGE is independent of legacy frontend by design. Current work with Rice is using the 
 SAGE III IR as a basis for an IR that would work in a similar way with the 
 Open64 compiler infrastructure.
 
    ROSE adds AST traversal mechanisms based on ideas from attribute grammars
 and adds an AST rewrite mechanism.  At some point we will have more meaningful
 program analysis (part of cooperative work with many other groups), it is in 
-these ways that what we have done adds to EDG and
+these ways that what we have done adds to legacy frontend and
 hopefully provides a more useful infrastructure for the automated transformation of
-C++ applications beyond that of the design goals of EDG.  I understand that the
-design goals of EDG are only to provide a front-end to compiler vendors, a critical
+C++ applications beyond that of the design goals of legacy frontend.  I understand that the
+design goals of legacy frontend are only to provide a front-end to compiler vendors, a critical
 piece but not at all enough by itself for our work on optimization of high-level 
 abstractions.  I expect that ROSE will be useful to anyone who would otherwise use 
-EDG directly, but certainly it is not required, many people use EDG by itself.
-We, like the rest of the world, of course has the deepest respect for EDG.
-For our purposes we need something like EDG's front-end to support our own research work
-on program optimization. I don't know of any alternatives to using EDG given that 
+legacy frontend directly, but certainly it is not required, many people use legacy frontend by itself.
+We, like the rest of the world, of course has the deepest respect for legacy frontend.
+For our purposes we need something like legacy frontend's front-end to support our own research work
+on program optimization. I don't know of any alternatives to using legacy frontend given that 
 we have to process complex laboratory C++ applications.
 
 \section{GOAL of ROSE}
@@ -110,7 +110,7 @@ be modified using any additional information (typically additional information f
 semantics of user-defined abstractions). The AST in ROSE is a representation of the 
 structure of the application source code (little normalization occurs). The AST includes
 completely resolved type information, up to the limitations of static type analysis as
-specified by the C++ standard (much of this we get because we use EDG and it implements
+specified by the C++ standard (much of this we get because we use legacy frontend and it implements
 the static type analysis).
 
 
@@ -122,51 +122,13 @@ number of autoconf, automake, LaTeX, dot, etc.  ROSE distributions appear in
 the form of a tar'd compressed directory with an embedded version number 
 (e.g. {\it ROSE-0.8.10a.tar.gz}). These sometimes embed the word {\bf binary} or {\bf source}
 to distinguish source code versions (all source code to ROSE including the source code 
-to the EDG front-end used in parts of ROSE) from binary versions (all source code to ROSE
-but a binary of any EDG specific parts or parts of ROSE which use the EDG header files).
+to the legacy frontend front-end used in parts of ROSE) from binary versions (all source code to ROSE
+but a binary of any legacy frontend specific parts or parts of ROSE which use the legacy frontend header files).
 This currently constitutes three small libraries in ROSE.  The source to to as much of
 ROSE as possible is freely distributed under BSD license.
 
    A binary distribution of ROSE refers to the distribution of ROSE that uses a binary
-version of the EDG work used by ROSE.  We protect the source code of EDG by saving only 
-the binary libraries that we build from the EDG work (the EDG source code and any parts 
-of ROSE that use the EDG header files).  
-
-The configure option {\tt --with-edg_source_code=true} builds a version of ROSE which assumes
-that the EDG source code is present. It is required to use this option to compile ROSE 
-when it is checked out from CVS (since we store the sorce code for all fo ROSE including
-EDG in the CVS repository.  Without this option (the default case; no specifying 
-{\tt --with-edg_source_code=true} or directly specifying {\tt --with-edg_source_code=false}) the 
-configure script will look for existing binary libraries (in either the build tree or the
-source tree), if it finds the required library (only searches for libedg33.la) then
-is will continue to build the Makefile files so that the {\tt make dist} rule will package up
-a distribution and execute the makefile's {\it dist-hook} rules to copy the binary from the 
-compile tree to the distribution.  At this point the distribution is a binary distribution
-(and contains non of the protected source code for EDG).
-
-The libraries specifically affected are:
-\begin{itemize}
-   \item {\bf \$(top_builddir)/src/frontend/CxxFrontend/EDG_3.3/src/libedg33.la}
-   % \item {\bf \$(top_builddir)/src/frontend/CxxFrontend/EDG_3.3/util/libedgutil.la}
-   \item {\bf \$(top_builddir)/src/frontend/CxxFrontend/EDG_SAGE_Connection/libedgSage.la}
-\end{itemize}
-and are placed into the distribution by the {\tt make dist} rule which builds a ROSE distribution
-(often run as part of the {\tt make distcheck} rule).  This is the behavir of {\tt make dist}
-when the configure option {\tt --with-edg_source_code=true} is {\bf NOT} used.
-
-Summary of build steps (to build a binary distribution):
-\begin{itemize}
-   \item {\tt configure --with-edg_source_code=true} \\
-          Builds version of ROSE containing EDG source code.
-   \item  {\tt make} \\
-          Builds all the libraries (make dist may require make to be run prior {\tt make dist}.
-   \item  {\tt make dist} \\
-          Builds a source code distribution of ROSE (distributable to those with EDG source license)
-   \item {\tt configure} \\
-          Builds a version of ROSE that will use the pre-built EDG libraries.
-   \item {\tt make dist} \\
-          Builds a distribution with copies of the required EDG based libraries
-          (this is the binary form of ROSE and can be distributed to anyone).
-\end{itemize}
-
+version of the legacy frontend work used by ROSE.  We protect the source code of legacy frontend by saving only 
+the binary libraries that we build from the legacy frontend work (the legacy frontend source code and any parts 
+of ROSE that use the legacy frontend header files).  
 

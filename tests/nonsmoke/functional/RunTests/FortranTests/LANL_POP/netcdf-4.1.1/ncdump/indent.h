@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 2007, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncdump/indent.h,v 1.1 2007/05/20 20:42:30 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncdump/indent.h,v 1.1 2007/05/20 20:42:30
+ *russ Exp $
  *********************************************************************/
 
 #ifdef __cplusplus

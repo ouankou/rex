@@ -142,7 +142,7 @@ TESTCODE_CURRENTLY_FAILING = \
    test2020_123.C 
 
 # DQ (7/21/2020): These test codes have not yet been fixed up to be valid test codes for C++20 support in ROSE.
-# They may fail for issues unrelated to C++20 support in EDG 6.0.
+# They may fail for issues unrelated to C++20 support in legacy frontend 6.0.
 UNEVALUATED_TEST_CODES = 
 
 if USING_GNU_COMPILER

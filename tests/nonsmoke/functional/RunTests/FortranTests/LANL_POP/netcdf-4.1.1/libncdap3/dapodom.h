@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/libncdap3/dapodom.h,v 1.9 2009/11/14 22:33:21 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/dapodom.h,v 1.9 2009/11/14 22:33:21
+ *dmh Exp $
  *********************************************************************/
 /* Copyright 2009, UCAR/Unidata and OPeNDAP, Inc.
    See the COPYRIGHT file for more information. */

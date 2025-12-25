@@ -120,8 +120,7 @@ void DefUseAnalysis::replaceElement(SgNode* sgNode,
     //table[sgNode].erase(initName);
     //    table[sgNode].insert(make_pair(initName,sgNode));
 
-    multitype& map = table[sgNode];
-    //map.erase(std::remove_if(map.begin(), map.end(), std::bind(boost::type<bool>(), DefUseAnalysismycond, std::placeholders::_1, initName)), map.end());
+    multitype &map = table[sgNode];
     map.erase(std::remove_if(map.begin(), map.end(), [initName](const auto& pair) {
             return DefUseAnalysismycond(pair, initName);
         }), map.end());

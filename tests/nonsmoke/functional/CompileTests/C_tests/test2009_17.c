@@ -3,7 +3,7 @@
    For most *nix systems, it should be expanded to a file name without path
 
    SPEC CPU 2006' sphinx3 relies on this for execution verification
-   EDG 3.3/4.0's macro.c has been changed to support this.
+   legacy frontend 3.3/4.0's macro.c has been changed to support this.
  */
 #include <assert.h>
 #include <string.h>

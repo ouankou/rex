@@ -7,7 +7,7 @@ Wrapping the non-basic block statement in a SgBasicBlock before inserting
 as loop body of for loop!
 This case does not appear to be executed
 identityTranslator:
-../../../../NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:18377:
+../../../../NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:18377:
 SgForStatement* sage_gen_for_statement(a_statement*): Assertion `false'
 failed.
 Aborted
@@ -20,7 +20,6 @@ Andreas
 Compiling the code:
 
 */
-
 
 /*** generates code for sla prototypes ***/
 #define SLA_FCN_PROTO(N,T) \

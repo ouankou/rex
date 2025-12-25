@@ -26,7 +26,6 @@ Using just two options that take parameters.
 Older notes:
 Fortran Tests fail with certain libraries enabled.
 Libraries in question are:
-    - boost iostream
     - libraries added when building with qt
 
 Laksono has sent email with three bugs in ROSE.

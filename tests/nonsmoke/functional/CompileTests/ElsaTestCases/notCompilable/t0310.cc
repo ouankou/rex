@@ -2,7 +2,7 @@
 // 5.16 para 5
 
 // gcc (3.4.0) erroneously rejects many of the things this file tests,
-// but Intel C++ (EDG) accepts it
+// but Intel C++ (legacy frontend) accepts it
 
 struct Int {
   operator int();

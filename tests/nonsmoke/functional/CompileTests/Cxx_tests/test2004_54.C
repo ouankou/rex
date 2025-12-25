@@ -1,5 +1,5 @@
 /*
-Here is a minimal example of a bug in the EDG/SAGE connection (again
+Here is a minimal example of a bug in the legacy frontend/SAGE connection (again
 extracted from the IU C++ bindings for MPI).  The default constructor for
 iter is necessary to reproduce the bug, even though it is never used.  The
 use of a constructor assignment for pos is also necessary, although p can

@@ -46,9 +46,9 @@ void foobar()
      int *a;
      int x[3];
 
-  // EDG presents the case "(int *[3])&x" and that 
+  // legacy frontend presents the case "(int *[3])&x" and that 
   // it would be nice if this becomes "x", not "&x".
-  // the EDG/Sage III translation appears to track this case 
+  // the legacy frontend/Sage III translation appears to track this case 
   // "is_array_decay_cast(expr)" but I can't seem to generate
   // source code that will demonstrate it.  The example below 
   // is close to what we want and is translated to multiple casts 

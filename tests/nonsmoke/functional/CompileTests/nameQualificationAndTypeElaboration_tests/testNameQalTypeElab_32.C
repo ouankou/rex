@@ -8,12 +8,12 @@ class myVector
        // class vector{};
 
        // This references a class that is not defined or declared elsewhere.
-       // We build the declaration but we don't build a symbol (since we 
+       // We build the declaration but we don't build a symbol (since we
        // would not know what scope to associate it with).  By default we
        // define the scope of the SgClassDeclaration for class vector to be
-       // SgGlobal. After checking it appears that EDG is assigning it to 
-       // global scope (or it defaults to global scope, I think).
-          myVector operator= (const class vector &x) const;
+       // SgGlobal. After checking it appears that legacy frontend is assigning
+       // it to global scope (or it defaults to global scope, I think).
+       myVector operator=(const class vector &x) const;
    };
 
 // A test for empty intersection of symbols from all scopes would help

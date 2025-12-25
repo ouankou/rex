@@ -50,7 +50,7 @@ There are some inconsistencies in the filename handler such as: (1) not recogniz
 .CC, .CP, .C++, .CPP, .CXX as valid filename extensions for C++ language on case-sensitive
 systems and  (2) not recognizing .CxX, .cPp, etc. as valid filename extensions for
 C++ language on case-sensitive systems. The sole reason for the inconsistency is that
-of compatibility with GNU (as well as EDG).
+of compatibility with GNU (as well as legacy frontend).
 
 
 \section{IR Memory Consumption}
@@ -407,8 +407,8 @@ Performance Report (resolution = 0.010000, number of IR nodes = 289439, memory u
                AST SgFile Constructor: time (sec) =  18.380805
                     AST Front End Processing (SgFile): time (sec) =  4.846442
                          AST Constrution (included Sage III Translation): time (sec) =  4.840888
-                              EDG AST Constrution: time (sec) =  0.807095
-                              AST EDG/Sage III Translation: time (sec) =  3.926241
+                              legacy frontend AST Constrution: time (sec) =  0.807095
+                              AST legacy frontend/Sage III Translation: time (sec) =  3.926241
                     AST post-processing: time (sec) =  13.513127
                          (fixup function definitions - missing body) time (sec) =  0.379914
                          (fixup template declarations) time (sec) =  0.435447
@@ -419,7 +419,7 @@ Performance Report (resolution = 0.010000, number of IR nodes = 289439, memory u
                          (fixup class data member initialization) time (sec) =  0.575695
                          (fixup for generation of GNU compatable code) time (sec) =  0.580172
                          (testing declarations (no side-effects to AST))) time (sec) =  0.638836
-                         (fixup storage access of forward template declarations (EDG bug)) time (sec) =  0.542976
+                         (fixup storage access of forward template declarations (legacy frontend bug)) time (sec) =  0.542976
                          (fixup template specializations) time (sec) =  0.860818
                          (mark template specializations for output) time (sec) =  0.595816
                          (mark template instantiations for output) time (sec) =  0.567450

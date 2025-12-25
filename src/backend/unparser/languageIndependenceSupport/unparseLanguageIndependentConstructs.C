@@ -4639,8 +4639,9 @@ UnparseLanguageIndependentConstructs::unparseExpression(SgExpression* expr, SgUn
         }
        else
         {
-       // DQ (5/21/2004): revised need_paren handling in EDG/SAGE III and within SAGE III IR)
-       // QY (7/9/2004): revised to use the new unp->u_sage->PrintStartParen test
+          // DQ (5/21/2004): revised need_paren handling in legacy frontend/SAGE
+          // III and within SAGE III IR) QY (7/9/2004): revised to use the new
+          // unp->u_sage->PrintStartParen test
           bool printParen = requiresParentheses(expr,info);
 #if 0
           printf ("In unparseExpression(): expr = %p = %s printParen = %s \n",expr,expr->class_name().c_str(),printParen ? "true" : "false");
@@ -4717,33 +4718,33 @@ UnparseLanguageIndependentConstructs::unparseExpression(SgExpression* expr, SgUn
             // info.set_SkipDefinition();
              }
 
-       // DQ (10/13/2006): Remove output of qualified names from this level of generality!
-       // DQ (12/22/2005): Output any name qualification that is required
-       // (we only explicitly store the global scope qualification since
-       // this is all that it seems that EDG stores).
-       // unparseQualifiedNameList(expr->get_qualifiedNameList());
+             // DQ (10/13/2006): Remove output of qualified names from this
+             // level of generality! DQ (12/22/2005): Output any name
+             // qualification that is required (we only explicitly store the
+             // global scope qualification since this is all that it seems that
+             // legacy frontend stores).
+             // unparseQualifiedNameList(expr->get_qualifiedNameList());
 
-          switch (expr->variant())
-             {
-            // DQ (4/18/2013): I don't think this is ever called this way, IR node resolve to the derived classes not the base classes.
-               case UNARY_EXPRESSION:
-                  {
-                    printf ("This should never be called: case UNARY_EXPRESSION\n");
-                    ROSE_ABORT();
+             switch (expr->variant()) {
+               // DQ (4/18/2013): I don't think this is ever called this way, IR
+               // node resolve to the derived classes not the base classes.
+             case UNARY_EXPRESSION: {
+               printf("This should never be called: case UNARY_EXPRESSION\n");
+               ROSE_ABORT();
 
-                    unparseUnaryExpr (expr, info);
-                    break;
-                  }
+               unparseUnaryExpr(expr, info);
+               break;
+             }
 
-            // DQ (4/18/2013): I don't think this is ever called this way, IR node resolve to the derived classes not the base classes.
-               case BINARY_EXPRESSION:
-                  {
-                    printf ("This should never be called: case BINARY_EXPRESSION\n");
-                    ROSE_ABORT();
+               // DQ (4/18/2013): I don't think this is ever called this way, IR
+               // node resolve to the derived classes not the base classes.
+             case BINARY_EXPRESSION: {
+               printf("This should never be called: case BINARY_EXPRESSION\n");
+               ROSE_ABORT();
 
-                    unparseBinaryExpr(expr, info);
-                    break;
-                  }
+               unparseBinaryExpr(expr, info);
+               break;
+             }
 
              case MATRIX_EXP:
                {
@@ -4757,8 +4758,9 @@ UnparseLanguageIndependentConstructs::unparseExpression(SgExpression* expr, SgUn
             // DQ (7/31/2014): Adding support for C++11 nullptr const value expressions.
                case NULLPTR_VAL:
 
-            // DQ: These cases are separated out so that we can handle the
-            // original expression tree from any possible constant folding by EDG.
+                 // DQ: These cases are separated out so that we can handle the
+                 // original expression tree from any possible constant folding
+                 // by legacy frontend.
                case BOOL_VAL:
                case SHORT_VAL:
                case CHAR_VAL:
@@ -4789,8 +4791,7 @@ UnparseLanguageIndependentConstructs::unparseExpression(SgExpression* expr, SgUn
 
                     break;
                   }
-
-             }
+                  }
 
           if (printParen)
              {
@@ -5666,17 +5667,21 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
                ROSE_ABORT();
              }
 #endif
-       // DQ (2/5/2003):
-       // The old directive handling allows all the test codes to parse properly, but
-       // is not sufficent for handling the A++ transformations which are more complex.
-       // I am trying to recover the old way which permitted all the test codes to work
-       // before I fix it to be consistant with how it must work for the A++ transformation
-       // to work properly.  This is work that was unfinished by Markus K. summer 2002.
-       // (Though he did do a great job not enough information was provided in SAGE from EDG
-       // to finish it (I think)).
+             // DQ (2/5/2003):
+             // The old directive handling allows all the test codes to parse
+             // properly, but is not sufficent for handling the A++
+             // transformations which are more complex. I am trying to recover
+             // the old way which permitted all the test codes to work before I
+             // fix it to be consistant with how it must work for the A++
+             // transformation to work properly.  This is work that was
+             // unfinished by Markus K. summer 2002. (Though he did do a great
+             // job not enough information was provided in SAGE from legacy
+             // frontend to finish it (I think)).
 
-       // DQ (2/18/2003): Work to allow all CPP directives to be unparsed correctly on a statement
-       //                 by statement basis has been completed, tested, and checked in.
+             // DQ (2/18/2003): Work to allow all CPP directives to be unparsed
+             // correctly on a statement
+             //                 by statement basis has been completed, tested,
+             //                 and checked in.
 
 #if 0
           printf ("(*i)->getRelativePosition() == whereToUnparse (matches == %s) \n",(*i)->getRelativePosition() == whereToUnparse ? "true" : "false");
@@ -5776,7 +5781,9 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
                                  }
                               break;
 
-                      // extern declarations must be handled as comments since the EDG frontend strips them away
+                              // extern declarations must be handled as comments
+                              // since the legacy frontend frontend strips them
+                              // away
                          case PreprocessingInfo::ClinkageSpecificationStart:
                          case PreprocessingInfo::ClinkageSpecificationEnd:
                               if ( !info.SkipComments() )
@@ -5835,7 +5842,8 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
                          case PreprocessingInfo::CpreprocessorElifDeclaration:
                          case PreprocessingInfo::CpreprocessorEndifDeclaration:
                          case PreprocessingInfo::CpreprocessorLineDeclaration:
-                      // AS(120506) Added support for skipped tokens for Wave
+                           // AS(120506) Added support for skipped tokens in the
+                           // token stream.
                          case PreprocessingInfo::CSkippedToken:
                               if ( !info.SkipComments() )
                                  {
@@ -6016,16 +6024,19 @@ UnparseLanguageIndependentConstructs::unparseUnaryExpr(SgExpression* expr, SgUnp
   // printf ("In Unparse_ExprStmt::unparseUnaryExpr: toplevel_expression = %d arrow_op = %d \n",toplevel_expression,arrow_op);
 #endif
 
-  // We have to test to see if the operand associated with this unary expression is a function pointer
-  // then we can use either function pointer calling syntax
-  // (for void (*functionPointer) (int) as a declaration):
-  //      1) functionPointer (x);
-  //      2) (*functionPointer) (x);
-  // Either is valid syntax (see Stroustrup (2nd Edition) section 7.7 "Pointer to Function" page 156.)
-  // It seems that EDG and SAGE represent the two similarly, so we have to choose which format we
-  // want to have in the unparsing. Likely this should be an option to the unparser.
+     // We have to test to see if the operand associated with this unary
+     // expression is a function pointer then we can use either function pointer
+     // calling syntax (for void (*functionPointer) (int) as a declaration):
+     //      1) functionPointer (x);
+     //      2) (*functionPointer) (x);
+     // Either is valid syntax (see Stroustrup (2nd Edition) section 7.7
+     // "Pointer to Function" page 156.) It seems that legacy frontend and SAGE
+     // represent the two similarly, so we have to choose which format we want
+     // to have in the unparsing. Likely this should be an option to the
+     // unparser.
 
-  // bool isFunctionType = (isSgFunctionType(unary_op->get_type()) != NULL) ? true : false;
+     // bool isFunctionType = (isSgFunctionType(unary_op->get_type()) != NULL) ?
+     // true : false;
 
 #if 0
      printf ("unary_op->get_mode() == SgUnaryOp::prefix is  %s \n",(unary_op->get_mode() == SgUnaryOp::prefix)  ? "true" : "false");
@@ -6400,15 +6411,22 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
              {
             // If this is a member function, then we will need to include that reference to the calling class through the arrow operator.
 
-            // DQ (7/5/2018): If we are going to force the output of the "->" operator, then we have to force the output of the lhs
-            // expression (see test2018_120.C) or the lhs of the lhs, ... unclear how to handle this more complex case.  Unless we
-            // explicitly search the lhs expression for the "this" operand so that we can unparse it when there is not a variable
-            // reference expression as in test2018_85.C.  I would rather output the "this->" part of the unparsed expression than
-            // skip it, however, the case in test2018_120.C has a compiler generated "this" and so it might be better to use this
-            // as a test for if we should make this a special case and unparse the "->" operator.  This would be inconsistant with
-            // the original code, but then the EDG AST does marks even the "this" expression as comnpiler generated and that is
-            // equivalent semantics, so that might be the best solution.  EDG just normalizes the code with respect to the source
-            // position information in this case.
+            // DQ (7/5/2018): If we are going to force the output of the "->"
+            // operator, then we have to force the output of the lhs expression
+            // (see test2018_120.C) or the lhs of the lhs, ... unclear how to
+            // handle this more complex case.  Unless we explicitly search the
+            // lhs expression for the "this" operand so that we can unparse it
+            // when there is not a variable reference expression as in
+            // test2018_85.C.  I would rather output the "this->" part of the
+            // unparsed expression than skip it, however, the case in
+            // test2018_120.C has a compiler generated "this" and so it might be
+            // better to use this as a test for if we should make this a special
+            // case and unparse the "->" operator.  This would be inconsistant
+            // with the original code, but then the legacy frontend AST does
+            // marks even the "this" expression as comnpiler generated and that
+            // is equivalent semantics, so that might be the best solution.
+            // legacy frontend just normalizes the code with respect to the
+            // source position information in this case.
 
 #if 0
                printf ("In unparseBinaryExpr(): Set suppressOutputOfImplicitArrowExp = false: as special case of a member function reference: memberFunctionRefExp = %p = %s \n",memberFunctionRefExp,memberFunctionRefExp->class_name().c_str());
@@ -6819,7 +6837,9 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                       curprint(string(" ") + op_name + " ");
                     }
 
-                 // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
+                    // DQ (7/5/2014): Add assertions using simpler evaluation
+                    // against stored valuses from the legacy frontend
+                    // translation.
                     if (is_currently_a_function_call == true)
                        {
                       // DQ (7/5/2014): Reset based on test2004_149.C (can't be set true or false based on test2004_149.C).
@@ -6837,7 +6857,9 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                     printf("~~~~~~~ In unparseBinaryExpr(): SKIPPING output of SgDotExp (operator name = %s) \n",info.get_operator_name().c_str());
                     curprint("/* SKIPPING output of operator name = " + info.get_operator_name() + " */\n ");
 #endif
-                 // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
+                    // DQ (7/5/2014): Add assertions using simpler evaluation
+                    // against stored valuses from the legacy frontend
+                    // translation.
                     if (is_currently_a_function_call == true)
                        {
                       // DQ (7/5/2014): Reset based on test2013_113.C (can't be set true or false based on test2004_47.C).
@@ -6987,18 +7009,23 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                               printf ("++++++++++++++++ output of the RHS 1 \n");
                               curprint ( "\n /* unparseBinaryExpr(): output RHS 1 */ \n");
 #endif
-                           // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
+                              // DQ (7/5/2014): Add assertions using simpler
+                              // evaluation against stored valuses from the
+                              // legacy frontend translation.
                               if (is_currently_a_function_call == true)
                                  {
                                    ROSE_ASSERT(current_function_call_uses_operator_syntax == true);
                                    ROSE_ASSERT(current_function_call_is_compiler_generated == false);
                                  }
 
-                           // DQ (7/6/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
-                              if (parent_is_a_function_call == true)
-                                 {
-                                // DQ (7/6/2014): This is true only because of the outer predicate.
-                                // ROSE_ASSERT(parent_function_call_uses_operator_syntax == true);
+                                 // DQ (7/6/2014): Add assertions using simpler
+                                 // evaluation against stored valuses from the
+                                 // legacy frontend translation.
+                                 if (parent_is_a_function_call == true) {
+                                   // DQ (7/6/2014): This is true only because
+                                   // of the outer predicate.
+                                   // ROSE_ASSERT(parent_function_call_uses_operator_syntax
+                                   // == true);
                                    ROSE_ASSERT(parent_function_call_is_compiler_generated == false);
                                  }
 
@@ -7011,7 +7038,9 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                          printf ("++++++++++++++++ output of the RHS 2 \n");
                          curprint ( "\n /* unparseBinaryExpr(): output RHS 2 */ \n");
 #endif
-                      // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
+                         // DQ (7/5/2014): Add assertions using simpler
+                         // evaluation against stored valuses from the legacy
+                         // frontend translation.
                          if (is_currently_a_function_call == true)
                             {
                            // DQ (7/6/2014): Reset based on test2013_117.C (can't be set based on test2013_117.C).
@@ -7022,14 +7051,19 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                            // ROSE_ASSERT(current_function_call_is_compiler_generated == true);
                             }
 
-                      // DQ (7/6/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
-                         if (parent_is_a_function_call == true)
-                            {
-                           // DQ (7/6/2014): This is true only because of the outer predicate.
-                           // ROSE_ASSERT(parent_function_call_uses_operator_syntax == true);
+                            // DQ (7/6/2014): Add assertions using simpler
+                            // evaluation against stored valuses from the legacy
+                            // frontend translation.
+                            if (parent_is_a_function_call == true) {
+                              // DQ (7/6/2014): This is true only because of the
+                              // outer predicate.
+                              // ROSE_ASSERT(parent_function_call_uses_operator_syntax
+                              // == true);
 
-                           // DQ (7/5/2014): Reset based on test2004_47.C (can't be set according to test2005_141.C).
-                           // ROSE_ASSERT(parent_function_call_is_compiler_generated == true);
+                              // DQ (7/5/2014): Reset based on test2004_47.C
+                              // (can't be set according to test2005_141.C).
+                              // ROSE_ASSERT(parent_function_call_is_compiler_generated
+                              // == true);
                             }
 
                          unparseExpression(rhs, info);
@@ -7046,7 +7080,9 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
 
                     unparseExpression(rhs, info);
 
-                 // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
+                    // DQ (7/5/2014): Add assertions using simpler evaluation
+                    // against stored valuses from the legacy frontend
+                    // translation.
                     if (is_currently_a_function_call == true)
                        {
                       // DQ (7/5/2014): Reset based on test2004_149.C (can't be set according to test2004_47.C).
@@ -7058,7 +7094,7 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
                       // ROSE_ASSERT(current_function_call_is_compiler_generated == true);
                        }
 #if 0
-                 // DQ (7/6/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
+                 // DQ (7/6/2014): Add assertions using simpler evaluation against stored valuses from the legacy frontend translation.
                     if (parent_is_a_function_call == true)
                        {
                       // DQ (7/6/2014): Reset based on test2001_28.C // (can't be set according to test2004_149.C).
@@ -7079,7 +7115,8 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
 #if DEBUG_BINARY_OPERATORS
                printf ("++++++++++++++++ skipping output of the RHS 4 \n");
 #endif
-            // DQ (7/5/2014): Add assertions using simpler evaluation against stored valuses from the EDG translation.
+               // DQ (7/5/2014): Add assertions using simpler evaluation against
+               // stored valuses from the legacy frontend translation.
                if (is_currently_a_function_call == true)
                   {
                     ROSE_ASSERT(current_function_call_uses_operator_syntax == true);
@@ -7462,17 +7499,18 @@ UnparseLanguageIndependentConstructs::unparseCharVal(SgExpression* expr, SgUnpar
                case '\4': curprint ( "\'\\4\'"); break;
                case '\5': curprint ( "\'\\5\'"); break;
                case '\6': curprint ( "\'\\6\'"); break;
-            // EDG complains that \7, \8, and \9 are redundent (and EDG is correct!)
-            // This case is replicated with ASCII BS case '\a' (below)
-            // case '\7': curprint ( "\'\\7\'"; break;
-            // This case is replicated with ASCI BEL case '\b' (below)
-            // case '\8': curprint ( "\'\\8\'"; break;
-            // This case is replicated with ASCI HT case '\t' (below)
-            // case '\9': curprint ( "\'\\9\'"; break;
-            // Note that if we skip this case then '\b' is converted to '^H' which is likely
-            // equivalant but is different enough to be annoying.  Likely other literals have
-            // similar equivalants.  I now expect that '^H' is the wrong translation of '\b'.
-            // So the cases below are required.
+                 // legacy frontend complains that \7, \8, and \9 are redundent
+                 // (and legacy frontend is correct!) This case is replicated
+                 // with ASCII BS case '\a' (below) case '\7': curprint (
+                 // "\'\\7\'"; break; This case is replicated with ASCI BEL case
+                 // '\b' (below) case '\8': curprint ( "\'\\8\'"; break; This
+                 // case is replicated with ASCI HT case '\t' (below) case '\9':
+                 // curprint ( "\'\\9\'"; break; Note that if we skip this case
+                 // then '\b' is converted to '^H' which is likely equivalant
+                 // but is different enough to be annoying.  Likely other
+                 // literals have similar equivalants.  I now expect that '^H'
+                 // is the wrong translation of '\b'. So the cases below are
+                 // required.
                case '\n': curprint ( "\'\\n\'"); break;
                case '\t': curprint ( "\'\\t\'"); break;
                case '\v': curprint ( "\'\\v\'"); break;
@@ -8042,8 +8080,9 @@ UnparseLanguageIndependentConstructs::unparseFloatVal(SgExpression* expr, SgUnpa
         }
        else
         {
-       // Test for NaN value (famous test of to check for equality) or check for C++ definition of NaN.
-       // We detect C99 and C "__NAN__" in EDG, but translate to backend specific builtin function.
+          // Test for NaN value (famous test of to check for equality) or check
+          // for C++ definition of NaN. We detect C99 and C "__NAN__" in legacy
+          // frontend, but translate to backend specific builtin function.
           if ((float_value != float_value) || (float_value == std::numeric_limits<float>::quiet_NaN()) )
              {
             // curprint ( "std::numeric_limits<float>::quiet_NaN()";
@@ -8121,8 +8160,9 @@ UnparseLanguageIndependentConstructs::unparseDoubleVal(SgExpression* expr, SgUnp
         }
        else
         {
-       // Test for NaN value (famous test of to check for equality) or check for C++ definition of NaN.
-       // We detect C99 and C "__NAN__" in EDG, but translate to backend specific builtin function.
+          // Test for NaN value (famous test of to check for equality) or check
+          // for C++ definition of NaN. We detect C99 and C "__NAN__" in legacy
+          // frontend, but translate to backend specific builtin function.
           if ( (double_value != double_value) || (dbl_val->get_value() == std::numeric_limits<double>::quiet_NaN()) )
              {
             // curprint ( "std::numeric_limits<double>::quiet_NaN()";
@@ -8169,8 +8209,9 @@ UnparseLanguageIndependentConstructs::unparseLongDoubleVal(SgExpression* expr, S
         }
        else
         {
-       // Test for NaN value (famous test of to check for equality) or check for C++ definition of NaN.
-       // We detect C99 and C "__NAN__" in EDG, but translate to backend specific builtin function.
+          // Test for NaN value (famous test of to check for equality) or check
+          // for C++ definition of NaN. We detect C99 and C "__NAN__" in legacy
+          // frontend, but translate to backend specific builtin function.
           if ( (longDouble_value != longDouble_value) || (longDouble_value == std::numeric_limits<long double>::quiet_NaN()) )
              {
             // curprint ( "std::numeric_limits<long double>::quiet_NaN()";

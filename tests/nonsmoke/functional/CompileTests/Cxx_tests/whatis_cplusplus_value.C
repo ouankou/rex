@@ -33,12 +33,6 @@ int main()
      printf ("__GNUC_PATCHLEVEL__ = %d  \n",__GNUC_PATCHLEVEL__);
      printf ("_GLIBCXX_CONSTEXPR  = %s  \n","_GLIBCXX_CONSTEXPR");
 
-#if defined(__EDG_VERSION__)
-     printf ("__EDG_VERSION__     = %d \n",__EDG_VERSION__);
-#else
-     printf ("__EDG_VERSION__ is not defined! \n");
-#endif
-
 #if defined(ROSE_CONSTEXPR)
   // std::string s = {ROSE_CONSTEXPR};
   // printf ("ROSE_CONSTEXPR      = %s \n","ROSE_CONSTEXPR");

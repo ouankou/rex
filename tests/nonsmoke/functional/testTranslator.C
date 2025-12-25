@@ -28,7 +28,8 @@ int main( int argc, char * argv[] )
   // DQ (3/20/2017): Test info about mode (code coverage).
      ROSE_ASSERT(SageBuilder::display(SageBuilder::SourcePositionClassificationMode) == "e_sourcePositionTransformation");
 
-  // DQ (3/20/2017): Test this function after EDG/ROSE translation (not required for users).
+     // DQ (3/20/2017): Test this function after legacy frontend/ROSE
+     // translation (not required for users).
      SageBuilder::clearScopeStack();
 
 #if 0

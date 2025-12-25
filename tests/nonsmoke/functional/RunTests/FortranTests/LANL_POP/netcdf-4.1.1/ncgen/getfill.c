@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/getfill.c,v 1.7 2010/04/04 19:39:49 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/getfill.c,v 1.7 2010/04/04 19:39:49 dmh
+ *Exp $
  *********************************************************************/
 
 #include "includes.h"

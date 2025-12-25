@@ -41,10 +41,6 @@ omp_exprparser_parser.hh: omp_exprparser_parser.cc
 all-local: roseh sage.docs 
 
 # AM_CPPFLAGS = $(ROSE_INCLUDES)
-# AM_CPPFLAGS = $(ROSE_INCLUDES) -I$(top_srcdir)/src/frontend/EDG_SAGE_Connection -I$(top_srcdir)/src/frontend/EDG/EDG_3.3/src $(WAVE_INCLUDES)
-# AM_CPPFLAGS = $(ROSE_INCLUDES) -I$(top_srcdir)/src/frontend/EDG_SAGE_Connection -I$(top_srcdir)/src/frontend/EDG/EDG_3.3/src
-# JJW 6-2-2008: We shouldn't be using anything from EDG outside these two directories
-# AM_CPPFLAGS = $(ROSE_INCLUDES) # -I$(top_srcdir)/src/frontend/EDG_SAGE_Connection -I$(top_srcdir)/src/frontend/EDG/EDG_3.3/src
 AM_CPPFLAGS = $(ROSE_INCLUDES) -I$(top_srcdir)/src/frontend/SageIII/ompparser/src
 AM_CPPFLAGS += -I$(top_srcdir)/src/frontend/SageIII/accparser/src
 
@@ -135,7 +131,6 @@ libsage3_la_SOURCES = $(libsage3Sources) preproc-c.ll omp_exprparser_lexer.ll om
 # nodist_libsage3_la_SOURCES = $(ROSETTA_GENERATED_SOURCE) $(top_builddir)/rose_config.h
 nodist_libsage3_la_SOURCES = $(ROSETTA_GENERATED_SOURCE) license_string.h
 
-#if ROSE_USE_BOOST_WAVE
 libsage3_la_LIBADD_not_used= \
   astFixup/libastFixup.la \
   accparser/libaccparser.la \

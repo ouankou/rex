@@ -129,8 +129,8 @@ void foobar()
      auto z = 1.0_E +2.0;  // OK
      auto q = (1.0_E)+2.0; // OK
 
-  // This is supported in GNU g++ version 6.1, but not in EDG (it should be an error).
-  // auto w = 1_p+2;       // error
+     // This is supported in GNU g++ version 6.1, but not in legacy frontend (it
+     // should be an error). auto w = 1_p+2;       // error
 
      auto u = 1_p +2;      // OK
    }

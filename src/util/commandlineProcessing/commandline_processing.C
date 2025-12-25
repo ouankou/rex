@@ -343,7 +343,7 @@ CommandlineProcessing::generateOptionWithNameParameterList ( Rose_STL_Container<
                    it = argList.erase(it);
 
 #if 0
-                // DQ (1/25/2017): Comment this out as a test of C file command line generation to EDG.
+                // DQ (1/25/2017): Comment this out as a test of C file command line generation to legacy frontend.
 
                 // DQ (1/21/2017): Adding support for options taking more than one paramter.
                    if (isOptionTakingThirdParameter(inputPrefix) == true)
@@ -359,7 +359,7 @@ CommandlineProcessing::generateOptionWithNameParameterList ( Rose_STL_Container<
                              ROSE_ABORT();
                            }
 #if 0
-                        printf ("Need to handle options taking more than one parameter (e.g. --edg_parameter:): inputPrefix = %s \n",inputPrefix.c_str());
+                        printf ("Need to handle options taking more than one parameter (e.g. --frontend-parameter:): inputPrefix = %s \n",inputPrefix.c_str());
                         ROSE_ABORT();
 #endif
                       }
@@ -437,11 +437,13 @@ CommandlineProcessing::addListToCommandLine ( vector<string> & argv , string pre
      for (size_t i = 0; i < argList.size(); ++i)
         {
 #if 1
-       // DQ (1/25/2017): Original version of code (required for C test codes to pass, see C_tests directory).
-       // However, this causes a problem for the --edg_parameter support (which is fixed by the code below).
-          argv.push_back(prefix + argList[i]);
+       // DQ (1/25/2017): Original version of code (required for C test codes to
+       // pass, see C_tests directory). However, this causes a problem for the
+       // frontend-parameter support (which is fixed by the code below).
+       argv.push_back(prefix + argList[i]);
 #else
-       // DQ (1/25/2017): Comment this out as a test of C file command line generation to EDG.
+       // DQ (1/25/2017): Comment this out as a test of C file command line
+       // generation to legacy frontend.
 
        // DQ (1/21/2017): The prefix should only be on the first argument (if it is non-empty).
        // argv.push_back(prefix + argList[i]);

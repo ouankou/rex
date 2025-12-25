@@ -28,7 +28,7 @@ AstNodePtr  CodeGen( AstInterface &_fa)
 gives the following error:
 
 identityTranslator:
-/home/saebjornsen1/ROSE-October/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:16405:
+/home/saebjornsen1/ROSE-October/NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:16405:
 SgExpression* sage_gen_expr(an_expr_node*, int): Assertion "expressionFileInfo->ok()" failed.
 #endif
 

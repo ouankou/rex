@@ -1,12 +1,11 @@
-// This fails in EDG 6.0:
-// "/data1/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG60-BOOST_1_60-dq-development-
+// This fails in legacy frontend 6.0:
+// "/data1/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND60-LIB_1_60-dq-development-
 //          rc-cxx-only/include-staging/g++_HEADERS/hdrs5/system_error", line
 //          147: internal error: assertion failed at: "overload.cc", line 11162
 //          in cast_pointer_for_field_selection
 //
 //             enable_if<is_error_code_enum<_ErrorCodeEnum>::value>::type>
 //                       ^
-
 
 #include <iostream>
 #include <vector>
@@ -48,6 +47,4 @@ int main() {
     for (auto n = v.size(); auto i : v) // the init-statement (C++20)
         std::cout << --n + i << ' ';
     std::cout << '\n';
- 
 }
-

@@ -1,6 +1,8 @@
 // problem code:
-// preprocessor: /home/dquinlan/ROSE/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sageSupport.C:759:
-//    Sg_File_Info* generateFileInfo(a_source_sequence_entry*, constructPosition): Assertion `s != __null' failed.
+// preprocessor:
+// /home/dquinlan/ROSE/NEW_ROSE/src/frontend/legacy_frontend/sageSupport.C:759:
+//    Sg_File_Info* generateFileInfo(a_source_sequence_entry*,
+//    constructPosition): Assertion `s != __null' failed.
 
 #include <vector>
 

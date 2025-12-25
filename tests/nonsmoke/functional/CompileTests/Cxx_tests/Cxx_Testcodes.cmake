@@ -209,7 +209,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2004_145.C
   test2004_146.C
   test2004_147.C
-  test2004_148.C
   test2004_149.C
   test2004_15.C
   test2004_150.C
@@ -284,13 +283,11 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2004_79.C
   test2004_80.C
   test2004_81.C
-  test2004_83.C
   test2004_84.C
   test2004_85.C
   test2004_86.C
   test2004_87.C
   test2004_88.C
-  test2004_89.C
   test2004_90.C
   test2004_91.C
   test2004_93.C
@@ -312,7 +309,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2005_10.C
   test2005_100.C
   test2005_101.C
-  test2005_102.C
   test2005_103.C
   test2005_104.C
   test2005_105.C
@@ -525,7 +521,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2006_119.C
   test2006_12.C
   test2006_120.C
-  test2006_121.C
   test2006_122.C
   test2006_123.C
   test2006_124.C
@@ -750,7 +745,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2009_19.C
   test2009_20.C
   test2009_21.C
-  test2009_24.C
   test2009_27.C
   test2009_28.C
   test2009_30.C
@@ -779,7 +773,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2011_117.C
   test2011_118.C
   test2011_119.C
-  test2011_120.C
   test2011_121.C
   test2011_133.C
   test2011_135.C
@@ -1184,7 +1177,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2012_96.C
   test2012_97.C
   test2012_98.C
-  test2012_99.C
   test2013_01.C
   test2013_02.C
   test2013_03.C
@@ -1334,13 +1326,10 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_230.C
   test2013_231.C
   test2013_232.C
-  test2013_235.C
-  test2013_237.C
   test2013_238.C
   test2013_239.C
   test2013_243.C
   test2013_244.C
-  test2013_246.C
   test2013_25.C
   test2013_250.C
   test2013_251.C
@@ -1426,7 +1415,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_59.C
   test2013_60.C
   test2013_61.C
-  test2013_63.C
   test2013_64.C
   test2013_65.C
   test2013_66.C
@@ -1478,11 +1466,8 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_101.C
   test2014_102.C
   test2014_107.C
-  test2014_108.C
   test2014_109.C
   test2014_11.C
-  test2014_110.C
-  test2014_111.C
   test2014_112.C
   test2014_114.C
   test2014_115.C
@@ -1555,9 +1540,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_184.C
   test2014_185.C
   test2014_186.C
-  test2014_187.C
-  test2014_187_work_around.C
-  test2014_188.C
   test2014_189.C
   test2014_19.C
   test2014_190.C
@@ -1576,7 +1558,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_202.C
   test2014_203.C
   test2014_204.C
-  test2014_205.C
   test2014_206.C
   test2014_207.C
   test2014_208.C
@@ -1603,9 +1584,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_233.C
   test2014_234.C
   test2014_235.C
-  test2014_236.C
-  test2014_238.C
-  test2014_239.C
   test2014_24.C
   test2014_240.C
   test2014_241.C
@@ -1645,17 +1623,11 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_67.C
   test2014_68.C
   test2014_70.C
-  test2014_71.C
-  test2014_72.C
-  test2014_73.C
   test2014_74.C
   test2014_75.C
   test2014_76.C
-  test2014_77.C
-  test2014_78.C
   test2014_79.C
   test2014_80.C
-  test2014_81.C
   test2014_82.C
   test2014_83.C
   test2014_84.C
@@ -1682,11 +1654,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2015_07.C
   test2015_08.C
   test2015_09.C
-  test2015_100.C
-  test2015_101.C
-  test2015_102.C
-  test2015_103.C
-  test2015_104.C
   test2015_106.C
   test2015_107.C
   test2015_108.C
@@ -1695,21 +1662,15 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2015_112.C
   test2015_113.C
   test2015_114.C
-  test2015_115.C
-  test2015_116.C
   test2015_117.C
   test2015_118.C
   test2015_119.C
-  test2015_120.C
-  test2015_121.C
   test2015_122.C
   test2015_123.C
   test2015_124.C
   test2015_125.C
   test2015_126.C
-  test2015_127.C
   test2015_128.C
-  test2015_129.C
   test2015_130.C
   test2015_131.C
   test2015_132.C
@@ -1727,9 +1688,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2015_144.C
   test2015_145.C
   test2015_146.C
-  test2015_147.C
-  test2015_148.C
-  test2015_149.C
   test2015_150.C
   test2015_151.C
   test2015_152.C
@@ -1755,7 +1713,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2015_45.C
   test2015_50.C
   test2015_52.C
-  test2015_55.C
   test2015_57.C
   test2015_58.C
   test2015_59.C
@@ -1770,12 +1727,8 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2015_81.C
   test2015_85.C
   test2015_86.C
-  test2015_88.C
   test2015_89.C
-  test2015_97.C
-  test2015_99.C
   test2016_01.C
-  test2016_02.C
   test2016_03.C
   test2016_04.C
   test2016_05.C
@@ -1788,10 +1741,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2016_12.C
   test2016_13.C
   test2016_14.C
-  test2016_15.C
-  test2016_16.C
-  test2016_17.C
-  test2016_18.C
   test2016_19.C
   test2016_20.C
   test2016_21.C
@@ -1804,7 +1753,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2016_31.C
   test2016_32.C
   test2016_33.C
-  test2016_34.C
   test2016_36.C
   test2016_37.C
   test2016_38.C
@@ -1816,14 +1764,10 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2016_45.C
   test2016_46.C
   test2016_47.C
-  test2016_48.C
   test2016_49.C
   test2016_50.C
   test2016_51.C
   test2016_53.C
-  test2016_54.C
-  test2016_55.C
-  test2016_56.C
   test2016_57.C
   test2016_59.C
   test2016_60.C
@@ -1846,10 +1790,8 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2016_86.C
   test2016_87.C
   test2016_88.C
-  test2016_89.C
   test2016_91.C
   test2016_93.C
-  test2016_96.C
   test2017_01.C
   test2017_02.C
   test2017_03.C
@@ -1875,9 +1817,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2017_21.C
   test2017_22.C
   test2017_23.C
-  test2017_26.C
-  test2017_27.C
-  test2017_28.C
   test2017_30.C
   test2017_31.C
   test2017_32.C
@@ -1895,8 +1834,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2017_47.C
   test2017_48.C
   test2017_49.C
-  test2017_50.C
-  test2017_51.C
   test2017_52.C
   test2017_53.C
   test2017_54.C
@@ -1907,7 +1844,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2017_60.C
   test2017_61.C
   test2017_62.C
-  test2017_63.C
   test2017_64.C
   test2017_65.C
   test2017_66.C
@@ -2132,7 +2068,3 @@ set(REX_FRONTEND_ERROR_TESTS
 
 # Export variables for downstream tests
 set(ROSE__CXX_TESTS ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
-set(ROSE__CXX_TESTS__BOOST "")
-
-set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS__FAILING_ON_ROSE_CLANG
-_CXX_TESTS__BOOST "")

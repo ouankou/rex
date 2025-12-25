@@ -3,18 +3,19 @@
 // simpler analysis, simpler specification of transformations, etc.).
 
 // Note that in the traversal, we don't see the template declaration first
-// so there are limits on the order in which some error checking can be done 
-// within the AST. I think this may be a bug since I would want to see the 
-// template declarations represented in the order that they appear within 
-// the source code! The template declaration appears in the AST as an instantiation
-// without any parameters and with the class name set to the template name.
-// These are the options that we have set in EDG to force this to happen!
-// Thus the first thing that we see is the place-holder default instatiation 
-// associated with the template.  Any additional instatiations will follow
-// and appear in ther order of declaration.  All instantiations will reference
-// a SgTemplateDeclaration IR node which contains the string associated with the
-// template.  The advantage of this design is that we have all instatiations in the 
-// AST along with the original templat in the AST as well.
+// so there are limits on the order in which some error checking can be done
+// within the AST. I think this may be a bug since I would want to see the
+// template declarations represented in the order that they appear within
+// the source code! The template declaration appears in the AST as an
+// instantiation without any parameters and with the class name set to the
+// template name. These are the options that we have set in legacy frontend to
+// force this to happen! Thus the first thing that we see is the place-holder
+// default instatiation associated with the template.  Any additional
+// instatiations will follow and appear in ther order of declaration.  All
+// instantiations will reference a SgTemplateDeclaration IR node which contains
+// the string associated with the template.  The advantage of this design is
+// that we have all instatiations in the AST along with the original templat in
+// the AST as well.
 template<typename T> class X
    {
      public:

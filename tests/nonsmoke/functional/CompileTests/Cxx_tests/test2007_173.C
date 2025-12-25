@@ -2,8 +2,8 @@
 // This test fails for g++ version 3.4.6, but should work for a later versions.
 // But it does not work in g++ 4.2.2, so maybe it will be fixed later.
 
-// It is considered legal code and it does pass with EDG (and it is properly
-// handled by ROSE.)
+// It is considered legal code and it does pass with legacy frontend (and it is
+// properly handled by ROSE.)
 class A
    {
   // This will default to private, but should be available to class B

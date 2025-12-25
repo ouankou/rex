@@ -102,8 +102,7 @@ int main() {
 	   std::cout << "=======================================================================" << std::endl;
 
    }
-   //check and abort, only supported by C-style API
-   //MLOG_CHECK_ERROR_ABORT_C(1==1, MLOG_EDG2SAGE, "error %d = %s and abort\n", 1, "one");
+   // check and abort, only supported by C-style API
 
    i = 100;
    int ten = 10;

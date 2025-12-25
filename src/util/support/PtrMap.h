@@ -47,9 +47,10 @@ class PtrMapWrap
 
     const T1* Current() const 
        {
-      // DQ (11/3/2011): Warning about type qualifier is meaningless on cast type (caught by new EDG compiling ROSE).
-      // return (p == impl->end())? 0 : reinterpret_cast<const T1* const>((*p).first);
-         return (p == impl->end())? 0 : reinterpret_cast<const T1*>((*p).first);
+      // DQ (11/3/2011): Warning about type qualifier is meaningless on cast
+      // type (caught by new legacy frontend compiling ROSE). return (p ==
+      // impl->end())? 0 : reinterpret_cast<const T1* const>((*p).first);
+      return (p == impl->end()) ? 0 : reinterpret_cast<const T1 *>((*p).first);
        }
 
     T2* Current2() const { return (p == impl->end())? 0 : reinterpret_cast<T2*>((*p).second.p); }

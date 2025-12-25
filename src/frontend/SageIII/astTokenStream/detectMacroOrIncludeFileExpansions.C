@@ -7,9 +7,11 @@ using namespace std;
 
 MacroExpansion::MacroExpansion (const string & name) : macro_name(name), shared(false)
    {
-  // This is the default source position (for postions in EDG number system is line 1 and column 1 (emacs is different and starts at (0,0) coordinates).
-     line   = 0;
-     column = 0;
+  // This is the default source position (for postions in legacy frontend number
+  // system is line 1 and column 1 (emacs is different and starts at (0,0)
+  // coordinates).
+  line = 0;
+  column = 0;
 
   // Default position is -1, since zero is the first token in the token sequence.
      token_start = -1;

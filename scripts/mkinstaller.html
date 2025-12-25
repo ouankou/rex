@@ -708,8 +708,7 @@
       <blockquote>
          The following is an annotated example of the use of <i>mkinstaller</i> by the
          <i>ROSE</i> project to form a binary installer. Note that it is assumed that
-         both the <i>boost</i> and <i>ROSE</i> libraries have been built and "installed" on
-         this (host) system.
+         the <i>ROSE</i> libraries have been built and "installed" on this (host) system.
       </blockquote>
       <blockquote>
          Assuming:
@@ -719,10 +718,6 @@
          <blockquote>
             <i>mkinstaller</i> installed under  <b><big><code>/opt/totebag/bin</code></big></b>
             and <b><big><code>/opt/totebag/lib</code></big></b>
-         </blockquote>
-         <blockquote>
-            <i>Boost</i> installed in <b><big><code>/opt/boost/include</code></big></b>
-            and <b><big><code>/opt/boost/lib</code></big></b>
          </blockquote>
          <blockquote>
             <i>ROSE</i> installed in <b><big><code>/opt/ROSE/bin</code></big></b>
@@ -737,7 +732,6 @@
                              -c ROSE-rh6-4.8.5-installer \
                              CC=gcc \
                              CXX=g++ \
-                             /opt/boost/{include,lib} \
                              /opt/ROSE/{bin,include,lib,share} \
                              --postinstall-perl=/opt/totebag/lib/mkinstaller/rose-post-install
 </pre>
@@ -785,13 +779,8 @@ CXX=g++ \
             installed were built.
             <blockquote>
 <pre>
-/opt/boost/{include,lib} \
 </pre>
             </blockquote>
-            The pathnames where the <i>boost</i> headers and libraries were installed
-            when they were built. Note that the example uses a curious form
-            of wildcard notation. It actually expands to 2 separate directory
-            pathnames: <b><big><code>/opt/boost/include</code></big></b> and <b><big><code>/opt/boost/lib</code></big></b>
             <blockquote>
 <pre>
 /opt/ROSE/{bin,include,lib,share} \

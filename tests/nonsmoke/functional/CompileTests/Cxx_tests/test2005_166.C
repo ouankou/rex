@@ -4,7 +4,7 @@ This is the first bug from compiling ROSE with ROSE. Compiling this code:
 gives the following output:
 
 identityTranslator:
-../../../../NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:18365:
+../../../../NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:18365:
 SgForStatement* sage_gen_for_statement(a_statement*): Assertion
 `isSgBasicBlock(sageStmt) != __null' failed.
 Aborted

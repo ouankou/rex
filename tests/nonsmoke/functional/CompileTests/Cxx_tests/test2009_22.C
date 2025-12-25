@@ -33,9 +33,9 @@ class DIdxSet: public IdxSet
 DIdxSet::DIdxSet(const DIdxSet& old)
    : IdxSet()
 {
-//   j = old.j;
-// EDG output is:  this->IdxSet::operator= ( old );
-   IdxSet::operator= ( old );
+  //   j = old.j;
+  // legacy frontend output is:  this->IdxSet::operator= ( old );
+  IdxSet::operator=(old);
 }
 
 

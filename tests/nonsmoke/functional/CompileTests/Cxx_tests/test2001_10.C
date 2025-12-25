@@ -20,8 +20,9 @@ class A
           A (int i, int j);
           A (double* dataPtr, Domain X);
 
-// EDG 4.3 version of ROSE does not handle the const well...
-//        A operator()();
+          // legacy frontend 4.3 version of ROSE does not handle the const
+          // well...
+          //        A operator()();
           A operator()() const;
    };
 
@@ -41,7 +42,7 @@ A::A (double* dataPtr, Domain X)
    {
    }
 
-// EDG 4.3 version of ROSE does not handle the const well...
+// legacy frontend 4.3 version of ROSE does not handle the const well...
 // A A::operator()()
 A A::operator()() const
    {

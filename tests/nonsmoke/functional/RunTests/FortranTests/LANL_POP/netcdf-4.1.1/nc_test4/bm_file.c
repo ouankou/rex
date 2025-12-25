@@ -807,8 +807,9 @@ int copy_file(char *file_name_in, char *file_name_out, int cmode_out,
 }
 
 #define NDIMS 3
-#define MAX_DEFLATE 9      
-#define INPUT_FILE "/upc/share/testdata/nssl/mosaic3d_nc/tile1/20070803-2300.netcdf"
+#define MAX_DEFLATE 9
+#define INPUT_FILE                                                             \
+  "/shared/testdata/nssl/mosaic3d_nc/tile1/20070803-2300.netcdf"
 #define COLON ":"
 #define COMMA ","
 

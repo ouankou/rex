@@ -12,7 +12,7 @@ MeshBase<int>::getNumberOfDimensions()
      return 3;
    }
 
-// set SKIP_ERROR to 0 to demonstrate error in EDG.
+// set SKIP_ERROR to 0 to demonstrate error in legacy frontend.
 #define SKIP_ERROR 0
 #if SKIP_ERROR
 // DQ (9/12/2004): With this commented out an error is generated where 

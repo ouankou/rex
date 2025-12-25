@@ -1064,7 +1064,7 @@ bool Unparse_MOD_SAGE::printConstructorName(SgExpression* expr)
 #if 0
        // DQ (12/8/2004): This is overly restrictive for the return statement
        // within compilation of polygonaldiffusionsolverswig within Kull.
-       // I suspect that there are many places where the EDG's meaning of explicit cast
+       // I suspect that there are many places where the legacy frontend's meaning of explicit cast
        // is more conservative than the one which I want.  However, I can imagine that
        // this is a relatively complex issue.
           if (con_init->get_is_explicit_cast() == true)
@@ -1317,14 +1317,17 @@ bool Unparse_MOD_SAGE::noQualifiedName(SgExpression* expr)
      SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr);
      if (mfunc_ref != NULL)
         {
-       // DQ (12/11/2004): I'm not so sure that the need_qualifier data member is always set properly in Sage III from EDG, or even in EDG!
-          if (mfunc_ref->get_need_qualifier())
-             {
-            // check if this is a iostream operator function and the value of the overload opt is false
-               if (!unp->opt.get_overload_opt() && isIOStreamOperator(mfunc_ref));
-                 else
-                    return false;
-             }
+       // DQ (12/11/2004): I'm not so sure that the need_qualifier data member
+       // is always set properly in Sage III from legacy frontend, or even in
+       // legacy frontend!
+       if (mfunc_ref->get_need_qualifier()) {
+         // check if this is a iostream operator function and the value of the
+         // overload opt is false
+         if (!unp->opt.get_overload_opt() && isIOStreamOperator(mfunc_ref))
+           ;
+         else
+           return false;
+       }
         }
      return true;
    }
@@ -2370,13 +2373,17 @@ Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement* decl_stmt, SgUnparse_I
              }
         }
 
-  // DQ (12/1/2007): Added support for gnu extension "__thread" (will be available in EDG version > 3.3)
-  // But added to support use by Gouchun Shi (UIUC).  Code generation support also added in unparser.
-  // This only works on gnu backends and those compatable with gnu (which is a lot of compilers so skip
-  // special code to be conditional on the backend).  According to documentation, "__thread" should
-  // appear immediately after "extern" or "static" and can not be combined with other storage modifiers.
-     if (decl_stmt->get_declarationModifier().get_storageModifier().get_thread_local_storage() == true)
-        {
+        // DQ (12/1/2007): Added support for gnu extension "__thread" (will be
+        // available in legacy frontend version > 3.3) But added to support use
+        // by Gouchun Shi (UIUC).  Code generation support also added in
+        // unparser. This only works on gnu backends and those compatable with
+        // gnu (which is a lot of compilers so skip special code to be
+        // conditional on the backend).  According to documentation, "__thread"
+        // should appear immediately after "extern" or "static" and can not be
+        // combined with other storage modifiers.
+        if (decl_stmt->get_declarationModifier()
+                .get_storageModifier()
+                .get_thread_local_storage() == true) {
           curprint( "__thread ");
         }
 

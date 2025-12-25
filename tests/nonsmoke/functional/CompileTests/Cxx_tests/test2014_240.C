@@ -1,5 +1,5 @@
 
-namespace boost {
+namespace third_party {
 
 #if 1
   namespace detail {
@@ -29,13 +29,12 @@ template<typename Functor>
     return true;
   }
 
-}
+  } // namespace third_party
 
-namespace boost
-{
-    template <class Key, class T, class Hash, class Pred, class Alloc>
-    class unordered_map
-    {
-      friend bool operator==<Key, T, Hash, Pred, Alloc>( unordered_map const&, unordered_map const& );
-    };
-}
+  namespace third_party {
+  template <class Key, class T, class Hash, class Pred, class Alloc>
+  class unordered_map {
+    friend bool operator== <Key, T, Hash, Pred, Alloc>(unordered_map const &,
+                                                       unordered_map const &);
+  };
+  } // namespace third_party

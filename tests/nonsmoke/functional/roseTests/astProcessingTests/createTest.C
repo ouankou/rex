@@ -9,7 +9,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 using namespace std;
-using namespace boost;
 using namespace Rose;
 
 
@@ -58,12 +57,6 @@ int main(int argc, char *argv[]) {
   ss << "#include \"graphProcessing.h\"\n";
   ss << "#include \"staticCFG.h\"\n";
   ss << "using namespace std;\n";
-  ss << "using namespace boost;\n";
-
-
-
-
-
 
   //ss << "set<vector<string> >  sssv;\n";
   //ss << "vector<string> sss;\n";
@@ -165,4 +158,3 @@ myfile.close();
 delete vis;
 return 0;
 }
-

@@ -77,7 +77,7 @@ LONG_LIST_TESTCODES_REQUIRED_TO_PASS += \
    copytest2007_45.C 
 endif
 
-# DQ (2/28/2015): These fail due to the fix for the EDG template normalization.
+# DQ (2/28/2015): These fail due to the fix for the legacy frontend template normalization.
 #  copytest2007_40.C 
 
 # DQ (6/22/2011): These fail the new name qualification support.
@@ -242,7 +242,6 @@ test2004_84.C \
 test2004_86.C \
 test2004_87.C \
 test2004_88.C \
-test2004_89.C \
 test2004_90.C \
 test2004_91.C \
 test2004_93.C \
@@ -294,7 +293,6 @@ test2004_144.C \
 test2004_145.C \
 test2004_146.C \
 test2004_147.C \
-test2004_148.C \
 test2004_150.C \
 test2004_151.C \
 test2004_152.C \
@@ -554,7 +552,6 @@ test2006_113.C \
 test2006_115.C \
 test2006_116.C \
 test2006_119.C \
-test2006_121.C \
 test2006_122.C \
 test2006_125.C \
 test2006_126.C \
@@ -670,7 +667,6 @@ X.C \
 $(FAILING_TESTS)
 
 # DQ (11/17/2017): Added test2006_08.C to be excluded from Intel testing (look into this later).
-# DQ (3/11/2017): This file is a problem for Intel v15 (using Boost 1.57 and 1.59) 
 # on RHEL 7.3, however I can't reproduce this on my desktop machine.
 if !USING_INTEL_COMPILER
 LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += \
@@ -678,77 +674,6 @@ LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += \
    test2006_08.C \
    test2006_37.C 
 endif
-
-EDG_49_CLANG_PROBLEM_FILES = \
-   test2003_28.C \
-   test2004_24.C \
-   test2004_62.C \
-   test2004_65.C \
-   test2005_36.C \
-   test2005_80.C \
-   test2005_110.C \
-   test2005_162.C \
-   test2005_185.C \
-   test2005_195.C \
-   test2006_02.C \
-   test2006_18.C \
-   test2006_42.C \
-   test2006_95.C \
-   test2006_96.C \
-   test2006_117.C \
-   test2006_118.C \
-   test2006_120.C \
-   test2006_123.C 
-
-EDG_49_GNU_6_1_PROBLEM_FILES = \
-   test2004_149.C \
-   test2005_28.C \
-   test2005_45.C \
-   test2005_93.C \
-   test2005_98.C \
-   test2005_102.C \
-   test2005_181.C \
-   test2006_20.C \
-   test2006_79.C \
-   test2006_92.C 
-
-EDG_412_GNU_6_1_PROBLEM_FILES =
-
-
-if USING_GNU_COMPILER
-#	@echo "USING_GCC_COMPILER == true"
-if ROSE_USING_GCC_VERSION_LATER_4_9
-#	@echo "ROSE_USING_GCC_VERSION_LATER_4_9 == true"
-# Exclude these tests on GNU 4.9 and later compilers).
-if ROSE_USING_GCC_VERSION_LATER_6_1
-#	@echo "ROSE_USING_GCC_VERSION_LATER_4_9 == true"
-LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += $(EDG_49_CLANG_PROBLEM_FILES)
-else # NOT ROSE_USING_GCC_VERSION_LATER_6_1
-LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += $(EDG_412_GNU_6_1_PROBLEM_FILES) $(EDG_49_GNU_6_1_PROBLEM_FILES) $(EDG_49_CLANG_PROBLEM_FILES)
-endif # ROSE_USING_GCC_VERSION_LATER_6_1
-else  # NOT ROSE_USING_GCC_VERSION_LATER_4_9
-# If this is not the CLANG or Intel compilers and an earlier version of GNU than GNU 4.9 compiler, so include these files.
-#	@echo "ROSE_USING_GCC_VERSION_LATER_4_9 == false"
-LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += $(EDG_412_GNU_6_1_PROBLEM_FILES) $(EDG_49_GNU_6_1_PROBLEM_FILES) $(EDG_49_CLANG_PROBLEM_FILES)
-endif # ROSE_USING_GCC_VERSION_LATER_4_9
-else  # NOT USING_GNU_COMPILER
-#	@echo "USING_GCC_COMPILER == false"
-if USING_CLANG_COMPILER
-# Exclude this list of files in the case of CLANG compiler.
-#	@echo "USING_CLANG_COMPILER == true"
-# LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += $(EDG_412_GNU_6_1_PROBLEM_FILES) $(EDG_49_GNU_6_1_PROBLEM_FILES)
-# LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += 
-else # NOT USING_CLANG_COMPILER
-#	@echo "USING_CLANG_COMPILER == false"
-if USING_INTEL_COMPILER
-# Exclude this list of files in the case of Intel compiler.
-#	@echo "USING_INTEL_COMPILER == true"
-else # NOT USING_INTEL_COMPILER
-# This is an unknown compiler.
-#	@echo "USING_INTEL_COMPILER == false"
-endif # USING_INTEL_COMPILER
-endif # USING_CLANG_COMPILER
-endif # USING_GNU_COMPILER
 
 OLD_LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS = 
 
@@ -781,7 +706,6 @@ OLD_LONG_LIST_EXTRA_TESTCODES_REQUIRED_TO_PASS += \
    test2005_45.C \
    test2005_93.C \
    test2005_98.C \
-   test2005_102.C \
    test2005_181.C \
    test2006_20.C \
    test2006_79.C \
@@ -799,7 +723,7 @@ endif
 # (Need to debug this seperately).
 #    test2007_141.C 
 
-# DQ (2/28/2015): These fail due to the fix for the EDG template normalization.
+# DQ (2/28/2015): These fail due to the fix for the legacy frontend template normalization.
 # test2004_149.C 
 # test2005_28.C 
 # test2005_93.C 
@@ -856,7 +780,6 @@ FAILING_TESTS =
 
 
 # DQ (1/8/2008): This is not a file that is copied to the distribution.
-# test2004_83.C
 # test2005_172.C
 # test2007_56.C
 # test2007_95.C -- broken test case
@@ -1017,4 +940,3 @@ clean-local:
 
 distclean-local:
 	rm -rf Templates.DB *_copy_graph_old_nodes *.dot
-

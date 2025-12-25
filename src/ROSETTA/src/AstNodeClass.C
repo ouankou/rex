@@ -622,12 +622,14 @@ AstNodeClass::getBaseName () const
 void
 AstNodeClass::addGrammarPrefixToName()
    {
-  // In this function we prefix the grammar's name to the names of all terminals and nonterminals
-  // This allows them to have unique names in the global namespace (allowing us to have multiple
-  // grammars in use (each built from the same base level C++ grammar (using the new version of SAGE).
-  // However we don't want to modify the names of the tags unless they are a part of a higher level 
-  // grammar.  This is done to preserve the names already used in SAGE (and in the EDG/SAGE interface 
-  // code) which we don't want to change.
+  // In this function we prefix the grammar's name to the names of all terminals
+  // and nonterminals This allows them to have unique names in the global
+  // namespace (allowing us to have multiple grammars in use (each built from
+  // the same base level C++ grammar (using the new version of SAGE). However we
+  // don't want to modify the names of the tags unless they are a part of a
+  // higher level grammar.  This is done to preserve the names already used in
+  // SAGE (and in the legacy frontend/SAGE interface code) which we don't want
+  // to change.
 
   // To match the names used in SAGE the base level grammar will use "Sg" as its name
 
@@ -690,54 +692,69 @@ AstNodeClass::setFunctionPrototype ( const GrammarString & inputMemberFunction )
    }
 
 // This was originally a CPP macro instead of a function! I'm not aware of the reason for that, so I'm leaving it. [Matzke]
-#define SETUP_MARKER_STRINGS_MACRO                                                                                             \
-    string functionString;                                                                                                     \
-    string errorMessage;                                                                                                       \
-    /* First try the new approach where we locate everything at one place instead of five places; the five being: */           \
-    /*   (1) The #include's located at the top of src/ROSETTA/Grammar/xxx.code files */                                        \
-    /*   (2) The class declaration and its properties in src/ROSETTA/src/xxx.C files */                                        \
-    /*   (3) Extra declarations that aren't needed by ROSETTA, in the middle src/ROSETTA/Grammar/xxx.code files */             \
-    /*   (4) Definitions for the extra members, at the end of src/ROSETTA/Grammar/xxx.code files */                            \
-    /*   (5) Documentation for the ROSETTA members in docs/testDoxygen/xxx.docs files. */                                      \
-    /* We have to use try/catch because Grammar::extractStringFromFile throws (used to abort) if it can't find the string. */  \
-    try {                                                                                                                      \
-        /* Can't use boost::regex here due to policy prohibition against boost dependencies in ROSETTA */                      \
-        string startMarkerString = "#if defined(" + markerString + ") || defined(DOCUMENTATION)";                              \
-        string endMarkerString = "#endif // " + markerString;                                                                  \
-        string directory;                                                                                                      \
-        functionString = StringUtility::toString(Grammar::extractStringFromFile(startMarkerString, endMarkerString,            \
-                                                                                filename, directory));                         \
-    } catch (const std::runtime_error &e) {                                                                                    \
-        if (strstr(e.what(), "could not locate startMarker") == NULL) {                                                        \
-            errorMessage = e.what();                                                                                           \
-        }                                                                                                                      \
-    }                                                                                                                          \
-    /* If new way didn't work, then try the old way, looking for START and END tags */                                         \
-    if (functionString.empty() && errorMessage.empty()) {                                                                      \
-        string startSuffix = "_START";                                                                                         \
-        string endSuffix   = "_END";                                                                                           \
-        string startMarkerString = markerString + startSuffix;                                                                 \
-        string endMarkerString = markerString + endSuffix;                                                                     \
-        string directory;                                                                                                      \
-        try {                                                                                                                  \
-            functionString = StringUtility::toString(Grammar::extractStringFromFile(startMarkerString, endMarkerString,        \
-                                                                                        filename, directory));                 \
-        } catch (const std::runtime_error &e) {                                                                                \
-            errorMessage = e.what();                                                                                           \
-        }                                                                                                                      \
-    }                                                                                                                          \
-    /* Print the error message that was originally emitted by extractStringFromFile just before it aborted. */                 \
-    if (!errorMessage.empty()) {                                                                                               \
-        fprintf(stderr, "%s\n", errorMessage.c_str());                                                                         \
-        ROSE_ASSERT(false);                                                                                                    \
-    }                                                                                                                          \
-    GrammarString* codeString = new GrammarString(functionString);                                                             \
-    codeString->setVirtual(pureVirtual);
+#define SETUP_MARKER_STRINGS_MACRO                                          \
+     string functionString;                                                    \
+     string errorMessage;                                                      \
+     /* First try the new approach where we locate everything at one place     \
+      * instead of five places; the five being: */                             \
+     /*   (1) The #include's located at the top of                             \
+      * src/ROSETTA/Grammar/xxx.code files */                                  \
+     /*   (2) The class declaration and its properties in                      \
+      * src/ROSETTA/src/xxx.C files */                                         \
+     /*   (3) Extra declarations that aren't needed by ROSETTA, in the middle  \
+      * src/ROSETTA/Grammar/xxx.code files */                                  \
+     /*   (4) Definitions for the extra members, at the end of                 \
+      * src/ROSETTA/Grammar/xxx.code files */                                  \
+     /*   (5) Documentation for the ROSETTA members in                         \
+      * docs/testDoxygen/xxx.docs files. */                                    \
+     /* We have to use try/catch because Grammar::extractStringFromFile throws \
+      * (used to abort) if it can't find the string. */                        \
+     try {                                                                     \
+       /* Can't use regex from external libraries here due to policy           \
+        * prohibiting extra dependencies in ROSETTA */                         \
+       string startMarkerString =                                              \
+           "#if defined(" + markerString + ") || defined(DOCUMENTATION)";      \
+       string endMarkerString = "#endif // " + markerString;                   \
+       string directory;                                                       \
+       functionString =                                                        \
+           StringUtility::toString(Grammar::extractStringFromFile(             \
+               startMarkerString, endMarkerString, filename, directory));      \
+     } catch (const std::runtime_error &e) {                                   \
+       if (strstr(e.what(), "could not locate startMarker") == NULL) {         \
+         errorMessage = e.what();                                              \
+       }                                                                       \
+     }                                                                         \
+     /* If new way didn't work, then try the old way, looking for START and    \
+      * END tags */                                                            \
+     if (functionString.empty() && errorMessage.empty()) {                     \
+       string startSuffix = "_START";                                          \
+       string endSuffix = "_END";                                              \
+       string startMarkerString = markerString + startSuffix;                  \
+       string endMarkerString = markerString + endSuffix;                      \
+       string directory;                                                       \
+       try {                                                                   \
+         functionString =                                                      \
+             StringUtility::toString(Grammar::extractStringFromFile(           \
+                 startMarkerString, endMarkerString, filename, directory));    \
+       } catch (const std::runtime_error &e) {                                 \
+         errorMessage = e.what();                                              \
+       }                                                                       \
+     }                                                                         \
+     /* Print the error message that was originally emitted by                 \
+      * extractStringFromFile just before it aborted. */                       \
+     if (!errorMessage.empty()) {                                              \
+       fprintf(stderr, "%s\n", errorMessage.c_str());                          \
+       ROSE_ASSERT(false);                                                     \
+     }                                                                         \
+     GrammarString *codeString = new GrammarString(functionString);            \
+     codeString->setVirtual(pureVirtual);
 
-GrammarString* AstNodeClass::setupMarkerStrings(string markerString,string filename, bool pureVirtual) {
-    SETUP_MARKER_STRINGS_MACRO;
-    return codeString;
-}
+   GrammarString *AstNodeClass::setupMarkerStrings(string markerString,
+                                                   string filename,
+                                                   bool pureVirtual) {
+     SETUP_MARKER_STRINGS_MACRO;
+     return codeString;
+   }
 
 void
 AstNodeClass::setFunctionPrototype ( const string& markerString, const string& filename, bool pureVirtual )
@@ -1566,8 +1583,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                     if (  varTypeString == " rose_hash_multimap*" )
                        {
                          s += "     if ( p_" + varNameString + " != NULL )\n" ;
-                         s += "        { \n" ;
-                         // CH (4/8/2010): Use boost::unordered instead
+                         s += "        { \n";
                          //                      s += "#ifdef _MSCx_VER \n" ;
                          //s += "          rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator it; \n" ;
                          //                      s += "#else \n" ;

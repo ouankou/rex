@@ -1,19 +1,22 @@
-//URK: 08/22/06
-//This program tests for different flavours of ints
-//refer to http://home.att.net/~jackklein/c/inttypes.html and Stroustrup's books
+// URK: 08/22/06
+// This program tests for different flavours of ints
+// refer to http://home.att.net/~jackklein/c/inttypes.html and Stroustrup's
+// books
 //
-//In EDG, the float_value_lexeme element of a_constant is now a character array 
-//of length 128. Once it is made into a string, more test cases needed to be added.
+// In legacy frontend, the float_value_lexeme element of a_constant is now a
+// character array of length 128. Once it is made into a string, more test cases
+// needed to be added.
 //
 //
-//Also look at 
-//http://osr5doc.ca.caldera.com:457/topics/ComplStdC_LangFeatures.html
-//for notes on character and string literals.
+// Also look at
+// http://osr5doc.ca.caldera.com:457/topics/ComplStdC_LangFeatures.html
+// for notes on character and string literals.
 //
-//The notes in the tentative proposal
-//http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1823.html
-//is kind of scary! It says that even u'a', UL'a' and a whole slew of other stuff could be 
-//character literals (and hence string literals) when the proposal is accepted.
+// The notes in the tentative proposal
+// http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1823.html
+// is kind of scary! It says that even u'a', UL'a' and a whole slew of other
+// stuff could be character literals (and hence string literals) when the
+// proposal is accepted.
 
 #include <stdio.h>
 #include <wchar.h>

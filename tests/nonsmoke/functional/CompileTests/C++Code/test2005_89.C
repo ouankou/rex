@@ -100,7 +100,7 @@ public:
 
 #ifdef INSTANTIATE_TEMPLATE_CLASS
 // DQ: This requires the base class specification within the specialization!
-// This does not appear to be output by EDG!!!
+// This does not appear to be output by legacy frontend!!!
 template <> class Bthis < double > : public A<double> {} ;
 #endif
 

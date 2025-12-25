@@ -3,7 +3,7 @@
 # This is a script to automatically release a ROSE package.
 # It will
 #  a) make a distribution package off the head of the external repository
-#     Choosing the external repository is safer compared using the internal one with EDG files
+#     Choosing the external repository is safer compared using the internal one with legacy frontend files
 #     run a set of tests 
 #  b) automatically fill out a web form to upload the package and release it.
 # by Liao
@@ -20,8 +20,6 @@ SOURCE_REPOS=https://outreach.scidac.gov/svn/rose/trunk
 ROSE_TOP=/home/liao6/daily-test-rose/release
 #ROSE_TOP=/home/liao6/daily-test-rose/20081029_050001
 
-# How many types of platforms to support
-EDG_BIN_COUNT=0
 #The local directory with the scripts for our regression tests
 SCRIPT_TOP=/home/liao6/rose/scripts
 
@@ -76,7 +74,7 @@ cd ${ROSE_TOP}
 
 # in case we want to use this script on both internal and external repository
 # they have different file names for the distributions
-#ROSE_DISTRIBUTION=$(find build -name  \*source-with-EDG-binary\*.tar.gz)
+#ROSE_DISTRIBUTION=$(find build -name  \*source-with-legacy frontend-binary\*.tar.gz)
 ROSE_DISTRIBUTION=$(find build -name rose-${VERSION_NO}.tar.gz)
 
 if [ ROSE_DISTRIBUTION[0] ]; then
@@ -109,48 +107,13 @@ find . -name .svn | xargs rm -rf
 # get the full path to the unpacked distribution
 ROSE_DIST_DIR=$(ls ${UPLOAD_DIR})
 echo "Unpacked ROSE distribution directory is: ${ROSE_DIST_DIR}"
-# Make sure no EDG copyrighted files exist
-#----------------------------------------------------
-
-# We search for some representative source files of EDG
-EDG_FILES=($(find . -name il_def.h -or -name cp_gen_be.c -or -name lower_il.h))
-#EDG_FILES=($(find . -name Makefile.am))
-if [ ${EDG_FILES[0]} ]; then
-  echo Fatal Error: Found copyrighted EDG source files:${EDG_FILES[@]}
-  exit 1
-else
-  echo "Made sure that there is No EDG source files.."
-fi
-
-# and the copyright string of EDG: "Proprietary information of Edison Design Group Inc."
-pwd
-EDG_COPYRIGHT_STRINGS=($(find . -name \*.C -or -name \*.h -or -name \*.c -or -name \*.cpp|xargs grep 'Proprietary information of Edison Design Group Inc.'))
-
-if [ ${EDG_COPYRIGHT_STRINGS[0]} ]; then
-  echo Fatal Error: Found copyrighted EDG text in source files:${EDG_COPYRIGHT_STRINGS[@]}
-  exit 2
-else
-  echo "Double checked there is no copyrighted EDG text"
-fi
-
-# Make sure all binary EDG versions for three platforms exist:i686-apple, i686-redhat, 
-# and x86_64-redhat, using a bash array (index starting from 0) to test it.
-EDG_BINARIES=($(find . -name roseBinaryEDG-\*.tar.gz))
-# array start from 0, so the third element is array[2]
-if [ ${EDG_BINARIES[$EDG_BIN_COUNT-1]} ]; then
-   echo Found the EDG binaries for $EDG_BIN_COUNT platfoms as expected. It is ${EDG_BINARIES[@]}. 
-else 
-  echo Fatal Error: Less than $EDG_BIN_COUNT platforms is supported. 
-  exit 3
-fi
-
 # re-pack the package after sanity check and post-processing
 # final file name to be uploaded 
 # make sure its name is formalized as something like 
-# rose-0.9.4a-source-with-EDG-binary-2759.tar.gz
+# rose-0.9.4a-source-2759.tar.gz
 cd ${UPLOAD_DIR}
 
-FILE_NAME=${PACKAGE_NAME}-${VERSION_NO}-source-with-EDG-binary-${REVISION_NO}.tar.gz
+FILE_NAME=${PACKAGE_NAME}-${VERSION_NO}-source-${REVISION_NO}.tar.gz
 
 if [ -d ${PACKAGE_NAME}-${VERSION_NO} ]; then
   tar czvf "${FILE_NAME}" ${PACKAGE_NAME}-${VERSION_NO} &>/dev/null || {echo "error in tar czvf ...tar.gz packge; exit 1;"}

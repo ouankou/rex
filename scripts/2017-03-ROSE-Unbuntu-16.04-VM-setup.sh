@@ -42,22 +42,6 @@ sed -i '$ a export PATH=/home/demo/opt/jvm/jdk1.7.0_51/bin:$PATH\nexport LD_LIBR
 #open new terminal
 #check that javac -version says javac 1.7.0_51
 
-#---------- installing Boost ----------
-
-# download boost from
-# https://sourceforge.net/projects/boost/files/boost/1.61.0/
-
-cd ~/Downloads
-wget -O boost-1.61.0.tar.bz2 http://sourceforge.net/projects/boost/files/boost/1.61.0/boost_1_61_0.tar.bz2/download
-tar xf boost-1.61.0.tar.bz2
-cd boost_1_61_0
-./bootstrap.sh --prefix=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default --with-libraries=chrono,date_time,filesystem,iostreams,program_options,random,regex,serialization,signals,system,thread,wave
-./b2 -sNO_BZIP2=1 install
-
-export LD_LIBRARY_PATH=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default/lib:$LD_LIBRARY_PATH
-# add to .bashrc
-sed -i '$ a export LD_LIBRARY_PATH=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default/lib:$LD_LIBRARY_PATH\n' $HOME/.bashrc
-
 # doxygen
 apt-get -y install doxygen 
 
@@ -107,13 +91,11 @@ rm -r ~/Downloads/*
 # add jdk to PATH and LD_LIBRARY_PATH
 #PATH=/home/demo/opt/jvm/jdk1.7.0_51/bin:$PATH
 #LD_LIBRARY_PATH=/home/demo/opt/jvm/jdk1.7.0_51/jre/lib/amd64/server:/home/demo/opt/jvm/jdk1.7.0_51/lib:$LD_LIBRARY_PATH
-# add boost to LD_LIBRARY_PATH
-#LD_LIBRARY_PATH=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default/lib:$LD_LIBRARY_PATH
 # create alias for zgrviewer
 #alias zgrviewer='/home/demo/opt/zgrviewer-0.10.0/run.sh'
 #export PATH LD_LIBRARY_PATH
 
-#sed -i '$ a # add jdk to PATH and LD_LIBRARY_PATH\nPATH=/home/demo/opt/jvm/jdk1.7.0_51/bin:$PATH\nLD_LIBRARY_PATH=/home/demo/opt/jvm/jdk1.7.0_51/jre/lib/amd64/server:/home/demo/opt/jvm/jdk1.7.0_51/lib:$LD_LIBRARY_PATH\n# add boost to LD_LIBRARY_PATH\nLD_LIBRARY_PATH=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default/lib:$LD_LIBRARY_PATH\n# create alias for zgrviewer\nalias zgrviewer='/home/demo/opt/zgrviewer-0.10.0/run.sh'\nexport PATH LD_LIBRARY_PATH\n' $HOME/.bashrc
+#sed -i '$ a # add jdk to PATH and LD_LIBRARY_PATH\nPATH=/home/demo/opt/jvm/jdk1.7.0_51/bin:$PATH\nLD_LIBRARY_PATH=/home/demo/opt/jvm/jdk1.7.0_51/jre/lib/amd64/server:/home/demo/opt/jvm/jdk1.7.0_51/lib:$LD_LIBRARY_PATH\n# create alias for zgrviewer\nalias zgrviewer='/home/demo/opt/zgrviewer-0.10.0/run.sh'\nexport PATH LD_LIBRARY_PATH\n' $HOME/.bashrc
 
 
 #---------- install rose ----------
@@ -125,7 +107,7 @@ cd rose-develop
 cd ..
 mkdir build-rose
 cd build-rose
-CC=/usr/bin/gcc-4.9 CXX=g++-4.9 FC=/usr/bin/gfortran-4.9 CXXFLAGS='-g -rdynamic -Wall -Wno-unused-local-typedefs -Wno-attributes' /home/demo/rose-develop/configure --enable-assertion-behavior=abort --prefix=/home/demo/opt/rose_inst --with-CFLAGS=-fPIC --with-CXXFLAGS=-fPIC --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --with-C_DEBUG='-g -rdynamic' --with-CXX_DEBUG='-g -rdynamic' --with-C_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-CXX_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-ROSE_LONG_MAKE_CHECK_RULE=yes --with-boost=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default --with-gfortran='/usr/bin/gfortran-4.9' --with-java=/home/demo/opt/jvm/jdk1.7.0_51/bin/javac --enable-languages=all --enable-projects-directory --with-doxygen --without-sqlite3 --without-libreadline --without-magic --without-yaml --with-dlib='/home/demo/opt/dlib/18.18' --without-wt --without-yices --without-pch --enable-rosehpct --with-gomp_omp_runtime_library=/usr/lib/gcc/x86_64-linux-gnu/4.9/ --without-haskell --enable-edg_version=4.12
+CC=/usr/bin/gcc-4.9 CXX=g++-4.9 FC=/usr/bin/gfortran-4.9 CXXFLAGS='-g -rdynamic -Wall -Wno-unused-local-typedefs -Wno-attributes' /home/demo/rose-develop/configure --enable-assertion-behavior=abort --prefix=/home/demo/opt/rose_inst --with-CFLAGS=-fPIC --with-CXXFLAGS=-fPIC --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --with-C_DEBUG='-g -rdynamic' --with-CXX_DEBUG='-g -rdynamic' --with-C_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-CXX_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-ROSE_LONG_MAKE_CHECK_RULE=yes --with-gfortran='/usr/bin/gfortran-4.9' --with-java=/home/demo/opt/jvm/jdk1.7.0_51/bin/javac --enable-languages=all --enable-projects-directory --with-doxygen --without-sqlite3 --without-libreadline --without-magic --without-yaml --with-dlib='/home/demo/opt/dlib/18.18' --without-wt --without-yices --without-pch --enable-rosehpct --with-gomp_omp_runtime_library=/usr/lib/gcc/x86_64-linux-gnu/4.9/ --without-haskell
 make core
 make install-core
 

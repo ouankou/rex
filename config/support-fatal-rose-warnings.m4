@@ -107,7 +107,7 @@ if test "x$enable_fatal_rose_warnings" = "xyes"; then
       C_WARNINGS+=-Wno-misleading-indentation "
 
     # Except for a few specific warnings that should not be an error (unclear how widely available this option is).
-    # These are specific to Sawyer and we want to get past that code plus the ROSETTA code so that anyone can
+    # These are specific to internal logging and we want to get past that code plus the ROSETTA code so that anyone can
     # debug specific warnings in there code more directly (by compiling any subdirectory).
       CXX_WARNINGS+="-Wno-error=unused-variable "
       C_WARNINGS+="-Wno-error=unused-variable "
@@ -162,7 +162,7 @@ if test "x$enable_fatal_rose_warnings" = "xyes"; then
       C_WARNINGS+="-Werror=implicit-function-declaration "
 
     # Except for a few specific warnings that should not be an error (unclear how widely available this option is).
-    # These are specific to Sawyer and we want to get past that code plus the ROSETTA code so that anyone can
+    # These are specific to internal logging and we want to get past that code plus the ROSETTA code so that anyone can
     # debug specific warnings in there code more directly (by compiling any subdirectory).
       CXX_WARNINGS+="-Wno-error=unused-variable "
       C_WARNINGS+="-Wno-error=unused-variable "
@@ -175,7 +175,7 @@ if test "x$enable_fatal_rose_warnings" = "xyes"; then
       CXX_WARNINGS+="-Wno-error=return-type "
       C_WARNINGS+="-Wno-error=return-type "
 
-    # DQ (12/6/2016): Disable this warning since it comes from Boost and we can't do anythng about it.
+    # DQ (12/6/2016): Disable this warning since it comes from external headers and we can't do anything about it.
       CXX_WARNINGS+="-Wno-c++11-extensions "
       C_WARNINGS+="-Wno-c++11-extensions "
 
@@ -223,7 +223,7 @@ if test "x$enable_fatal_rose_warnings" = "xyes"; then
       C_WARNINGS+="-Werror=implicit-function-declaration "
 
     # Except for a few specific warnings that should not be an error (unclear how widely available this option is).
-    # These are specific to Sawyer and we want to get past that code plus the ROSETTA code so that anyone can
+    # These are specific to internal logging and we want to get past that code plus the ROSETTA code so that anyone can
     # debug specific warnings in there code more directly (by compiling any subdirectory).
     # CXX_WARNINGS+="-Wno-error=unused-variable "
     # C_WARNINGS+="-Wno-error=unused-variable "
@@ -269,4 +269,3 @@ AC_MSG_NOTICE([after being reset: CXXFLAGS = "$CXXFLAGS"])
 
 ]
 )
-

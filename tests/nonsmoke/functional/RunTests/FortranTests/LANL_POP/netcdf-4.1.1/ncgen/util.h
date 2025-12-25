@@ -3,7 +3,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/util.h,v 1.3 2010/04/04 19:39:57 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/util.h,v 1.3 2010/04/04 19:39:57 dmh
+ *Exp $
  *********************************************************************/
 
 #define MAX(x,y) ((x)>(y)?(x):(y))

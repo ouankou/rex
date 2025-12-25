@@ -10,8 +10,6 @@
 #include <map>
 
 #include <ctype.h>
-#include <boost/algorithm/string.hpp>
-
 using namespace std;
 
 // TODO group them into one header
@@ -26,6 +24,16 @@ using namespace std;
 #include "printAnalysisStates.h"
 #include "liveDeadVarAnalysis.h"
 int numFails = 0, numPass = 0;
+
+static void erase_all(std::string &value, const std::string &needle) {
+  if (needle.empty()) {
+    return;
+  }
+  size_t pos = 0;
+  while ((pos = value.find(needle, pos)) != std::string::npos) {
+    value.erase(pos, needle.size());
+  }
+}
 
 bool gfilter (CFGNode cfgn) 
 {
@@ -124,7 +132,7 @@ main( int argc, char * argv[] )
 
     LiveVarsLattice* lattice = getLiveOutVarsAt(&ldva, pdecl,0);
     string lattice_str = lattice->str();
-   boost::erase_all(lattice_str, " ");
+    erase_all(lattice_str, " ");
     cout <<lattice_str<<endl;
     std::string pragma_str = pdecl->get_pragma()->get_pragma ();
     pragma_str.erase (0,5);
@@ -133,7 +141,7 @@ main( int argc, char * argv[] )
     // 
     // string.erase(std::remove_if(string.begin(), string.end(), std::isspace), string.end());
 
-   boost::erase_all(pragma_str, " ");
+    erase_all(pragma_str, " ");
 
     cout <<pragma_str <<endl;
     if (lattice_str == pragma_str)
@@ -152,6 +160,3 @@ main( int argc, char * argv[] )
   Dbg::dotGraphGenerator (&ldva);
   return 0;
 }
-
-
-

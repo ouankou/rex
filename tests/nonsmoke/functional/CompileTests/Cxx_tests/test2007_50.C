@@ -9,7 +9,7 @@ int main() {
    using B::E2; // causes error :
 /*
 ERROR: Default reached in sage_gen_using_declaration(): symbol = SgEnumSymbol
-HiddenList: ../../../../NEW_ROSE_MAY7/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:33608: SgUsingDeclarationStatement* sage_gen_using_declaration(a_using_decl*): Assertion `false' failed.
+HiddenList: ../../../../NEW_ROSE_MAY7/src/frontend/legacy_frontend/sage_gen_be.C:33608: SgUsingDeclarationStatement* sage_gen_using_declaration(a_using_decl*): Assertion `false' failed.
 Aborted
 */
    return 0;

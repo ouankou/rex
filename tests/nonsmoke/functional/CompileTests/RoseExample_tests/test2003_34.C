@@ -19,7 +19,8 @@ MyTraversal::visit ( SgNode* astNode )
      string incstr="#include \"newadinc.h\"";
      if(sg!=NULL)
         {
-       // DQ (8/15/2006): I had to comment this out to get it to compile with EDG, need to look into this!
+       // DQ (8/15/2006): I had to comment this out to get it to compile with
+       // legacy frontend, need to look into this!
        // MiddleLevelRewrite::insert(sg,incstr,MidLevelCollectionTypedefs::TopOfCurrentScope);
         }
    }

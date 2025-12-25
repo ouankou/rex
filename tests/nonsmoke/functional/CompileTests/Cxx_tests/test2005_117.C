@@ -26,10 +26,10 @@ int foo(T, typename S<T>::type * ret);
 // Error in ROSE: was unparsed as "int j = foo(1,(0));" the explicit cast is missing in the generated code
 int j = foo(1, (int*)0);
 
-// This compiles using EDG, and war unparsed as "int j = foo(1,(0));", but does not compile with g++
-// this is an example of something that EDG permits but g++ does not permit (at least for g++ version 3.3.2)
-// Since this is a reported bug in g++ we don't really have to fix it. 
-// int k = foo(1, 0);
-// #endif
+// This compiles using legacy frontend, and war unparsed as "int j =
+// foo(1,(0));", but does not compile with g++ this is an example of something
+// that legacy frontend permits but g++ does not permit (at least for g++
+// version 3.3.2) Since this is a reported bug in g++ we don't really have to
+// fix it. int k = foo(1, 0); #endif
 
 int *l = (int*) 0;

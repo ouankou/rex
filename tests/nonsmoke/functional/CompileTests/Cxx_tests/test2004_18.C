@@ -50,7 +50,7 @@ char* TestStringArgument<T>::foo ()
 #endif
 
 #if 0
-// EDG reports that use of a float as a template parameter is "non-standard"
+// legacy frontend reports that use of a float as a template parameter is "non-standard"
 // Can't build test code to test this case.
 template<float T>
 class TestFloatArgument
@@ -86,7 +86,7 @@ int* TestAddressArgument<T>::foo ()
 
 #if 0
 // Can't build test code to test this case (aggregate case).
-// This case generates an enum value which is out of range within EDG!
+// This case generates an enum value which is out of range within legacy frontend!
 template<int T>
 class TestAggregateArgument
    {
@@ -119,7 +119,7 @@ int TestAggregateArgument<T>::TestAggregateArgument_inner<U>::foo ()
 #endif
 
 #if 0
-// EDG reports that use of a float as a template parameter is "non-standard"
+// legacy frontend reports that use of a float as a template parameter is "non-standard"
 // Can't build test code to test this case.
 template<class T>
 class TestTemplateArgument

@@ -38,9 +38,9 @@ Summary of the changes:
             C_COMMENT corresponded to C++ style comments
             CPP_COMMENT corresponded to C-style comments.
         It was felt that the names were confusing.
-        The other choice was to name the C-style comments as C_COMMENT and C++ style 
-        comments as CPP_COMMENT as in Wave. That was also found to be confusing, as CPP usually 
-        means C Pre Processor). The new terminology is (partly) taken from makefiles which 
+        The other choice was to name the C-style comments as C_COMMENT and C++ style
+        comments as CPP_COMMENT. That was also found to be confusing, as CPP usually
+        means C Pre Processor). The new terminology is (partly) taken from makefiles which
         allows 3 types of flags (C_FLAGS/CPP_FLAGS/CXX_FLAGS).
 
 =========================================================================================
@@ -51,7 +51,7 @@ Summary of the changes:
                 and char bracestack[500] for matching of braces)
 =========================================================================================
     Exact Position information for literals
-        The previous method to get the position information from EDG is incorrect in 
+        The previous method to get the position information from legacy frontend is incorrect in 
         most of the cases. A second scan (like this lexer does) of the input was thought 
         to be necessary to attach additional info.
 =========================================================================================
@@ -110,8 +110,8 @@ trigraphs
                 character literals etc.  
                 Trigraph sequences, alternative tokens (lex.trigraph and lex.digraph of the standard).  
                 hexadecimal floating point literals and similar arcane stuff 
-                        (HOW DOES EDG handle them? How does Wave handle them?)
-    The user should probably use the wave workaround (does it support these?????), if she needs such things.
+                        (HOW DOES legacy frontend handle them? How does the preprocessor handle them?)
+    The user should probably use the compiler preprocessor if she needs such things.
 =========================================================================================
     Use of standard variable names like ([:space:] and [:blank:]) that come with FLEX. 
     Read the flex http://www.gnu.org/software/flex/manual/ for details. They work like C functions
@@ -1400,7 +1400,7 @@ BEGIN NORMAL;
                 }
 
 
-  /* MS 08/31/2020: added special case of string literal inside macro; note GNU allows single double quotes in macros, but EDG rejects it */
+  /* MS 08/31/2020: added special case of string literal inside macro; note GNU allows single double quotes in macros, but legacy frontend rejects it */
   /* Actions for string literals. */
 <STRING_LIT_IN_MACRO>\\\r\n              {/*eat escaped DOS line-term*/  preproc_line_num++; preproc_column_num=1; macroString += yytext;}
 <STRING_LIT_IN_MACRO>\\\n                {/*eat escaped linefeed*/       preproc_line_num++; preproc_column_num=1; macroString += yytext;}
@@ -1552,7 +1552,8 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
                for(std::vector<PreprocessingInfo*>::iterator jItr = iItr->second->getList().begin(); jItr != iItr->second->getList().end(); ++jItr)
                   {
                   // std::cout << "Inserting element" <<  (*jItr)->getString() << std::endl;
-                     preprocessorInfoList->insertElement(**jItr);
+                     preprocessorInfoList->getList().push_back(
+                         new PreprocessingInfo(**jItr));
                   }
 
              }

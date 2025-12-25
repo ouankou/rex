@@ -5,7 +5,10 @@ If a default argument to a nondefining function declaration is a temporary
 instantiation via the object's constructor, and it is the last declaration
 in the program, then I get the following assertion error:
 
-identityTranslator: ../../../../ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:19287: SgExpression* sage_gen_expr(an_expr_node*, int): Assertion `curr_source_sequence_entry != __null' failed.
+identityTranslator:
+../../../../ROSE/src/frontend/legacy_frontend/sage_gen_be.C:19287: SgExpression*
+sage_gen_expr(an_expr_node*, int): Assertion `curr_source_sequence_entry !=
+__null' failed.
 
 This seems to occur for both implicit and explicit constructors.
 
@@ -45,9 +48,8 @@ the bug manifests itself; it can be suppressed by uncommenting any of
 the dummy declarations.
 
 Thanks,
--- Peter 
+-- Peter
 */
-
 
 class A{
 

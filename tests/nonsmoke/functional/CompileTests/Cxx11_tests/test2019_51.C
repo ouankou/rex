@@ -1,12 +1,13 @@
 // The minimized code for:
-//   YYYYY: testTranslator[50041] 4.00701s Rose[FATAL]: .../EDG/edgRose/edgRose.C:59854
-
+//   YYYYY: testTranslator[50041] 4.00701s Rose[FATAL]: .../legacy
+//   frontend/frontend_bridge/frontend_bridge.C:59854
 
 enum E {
   e = sizeof( (struct A*)0 )
 };
 
-// The issue is that a iek_src_seq_secondary_decl is found in EDG_ROSE_Translation::parse_enumerators.
+// The issue is that a iek_src_seq_secondary_decl is found in
+// Frontend_Translation::parse_enumerators.
 
 // The original C++ code used a scoped enumeration:
 

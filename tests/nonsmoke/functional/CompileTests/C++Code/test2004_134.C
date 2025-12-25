@@ -57,10 +57,9 @@ void foobar( int x )
      class A;
    }
 
-// Looking at the scope of the unnamed ellipsis parameter (scope is NULL since there is no EDG scope)
-void foobar( ... );
+   // Looking at the scope of the unnamed ellipsis parameter (scope is NULL
+   // since there is no legacy frontend scope)
+   void foobar(...);
 
-// Scope of ellipsis parameter is that of the function (SgFunctionDefinition)
-void foobar( ... ) {};
-
-
+   // Scope of ellipsis parameter is that of the function (SgFunctionDefinition)
+   void foobar(...) {};

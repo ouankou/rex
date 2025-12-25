@@ -810,10 +810,10 @@ F90_TESTCODES_REQUIRED_TO_PASS += \
 # DQ (11/11/2014): These test fail due to changes to support C++11 work (need to look into this seperately).
 #    test2010_107.f90 
 
-# DQ (3/4/13): Failing test for edg4x branch
+# DQ (3/4/13): Failing test for legacy_frontend branch
 # test2010_48.f90 
 
-# DQ (2/21/13): Failing test for edg4x branch
+# DQ (2/21/13): Failing test for legacy_frontend branch
 # test2010_48.f90 
 # test2010_66.f90 
 # test2010_67.f90 

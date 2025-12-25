@@ -7,7 +7,7 @@
 \brief This class represents the concept of a C++ expression built from a class name.
 
 This IR node does not appear within any AST's that I have built, but it is
-part of the EDG/Sage III translation, and I recall that it is part of the 
+part of the legacy frontend/Sage III translation, and I recall that it is part of the 
 support for the AST associated with template declarations (SgTemplateDeclaration)
 but that is currently a string while we debug the support for template declarations 
 as a more meaningful AST.

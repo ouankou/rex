@@ -25,11 +25,10 @@ ROSE_BUILD="${ROSE_TOP}/ROSE_CompileTree/svn-LINUX-64bit-3.4.6-fortran"
 # ROSE_INSTALL="${ROSE_TOP}/rose-local-test/rosetest_install"
 ROSE_INSTALL="${ROSE_BUILD}"
 BUILD_LOG="${ROSE_BUILD}/../buildlog"
-BOOST_INSTALL=/home/dquinlan/local/boost_1_35_0_install
 
 # store configuration options into an array ()
 # $@ means the optional parameters provided with the command line running current script 
-CONFIGURE_FLAGS=(--with-edg_source_code=true --enable-dq-developer-tests --with-ROSE_LONG_MAKE_CHECK_RULE=yes --enable-rosehpct --with-java=/usr/apps/java/jdk1.5.0_11 --with-openFortranParser=/home/dquinlan/ROSE/OpenFortranParser/ofp_install --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-CXXFLAGS=-fPIC -with-CFLAGS=-fPIC --with-boost=${BOOST_INSTALL} --prefix="${ROSE_INSTALL}" "$@")
+CONFIGURE_FLAGS=(--enable-dq-developer-tests --with-ROSE_LONG_MAKE_CHECK_RULE=yes --enable-rosehpct --with-java=/usr/apps/java/jdk1.5.0_11 --with-openFortranParser=/home/dquinlan/ROSE/OpenFortranParser/ofp_install --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-CXXFLAGS=-fPIC -with-CFLAGS=-fPIC --prefix="${ROSE_INSTALL}" "$@")
 
 # make using multiple processes
 MAKEFLAGS="-j16"
@@ -49,9 +48,7 @@ source /usr/apps/gcc/4.2.2/setup.sh
 
 export PATH="/usr/apps/java/jdk1.5.0_11/bin:$PATH"
 export PATH="/usr/apps/automake/1.9.6/bin:$PATH"
-export BOOST_ROOT=${BOOST_INSTALL}
-
-export LD_LIBRARY_PATH="${BOOST_ROOT}/lib:/usr/apps/java/jdk1.5.0_11/lib:/usr/apps/java/jdk1.5.0_11/jre/lib/amd64/client:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="/usr/apps/java/jdk1.5.0_11/lib:/usr/apps/java/jdk1.5.0_11/jre/lib/amd64/client:$LD_LIBRARY_PATH"
 export LD_LIBRARY_PATH="/home/dquinlan/ROSE/OpenFortranParser/ofp_install/lib/:$LD_LIBRARY_PATH"
 
 export JAVA_HOME=/usr/apps/java/jdk1.5.0_11

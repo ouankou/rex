@@ -26,8 +26,8 @@ void foobar()
             // i0;
                break;
           case A::enum1:
-            // GNU requires an expression here, but EDG does not.
-               break;
+            // GNU requires an expression here, but legacy frontend does not.
+            break;
         }
 
    }

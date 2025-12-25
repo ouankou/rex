@@ -112,7 +112,7 @@ If no error occurs, all generated files are removed and no files
 remain in the directory.
 
 Restrictions: the tests are currently restricted to g++4.8 (or newer)
-using the EDG front end. The tests will be extended to other compilers
+using the legacy frontend front end. The tests will be extended to other compilers
 and clang in future. The compilers and the front end are restricted in
 Makefile.am.
 

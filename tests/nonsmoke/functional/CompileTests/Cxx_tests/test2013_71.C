@@ -58,8 +58,9 @@ typedef int foo_integer_9 __attribute__((aligned(128)));
 // typedef int foo_integer_10 __attribute__((aligned(256)));
 // typedef int foo_integer_11 __attribute__((aligned(512)));
 
-// These will both output (unparsed) the same (without the alignment specification), 
-// the EDG front-end does not proved any choice here.
+// These will both output (unparsed) the same (without the alignment
+// specification), the legacy frontend front-end does not proved any choice
+// here.
 int x_0;
 int x_1 __attribute__((aligned(0)));
 

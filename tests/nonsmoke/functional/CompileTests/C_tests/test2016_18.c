@@ -7,14 +7,12 @@ const int xvalue = 1;
 const int yvalue = 1;
 
 #ifndef __GNUC__
-// If this is in global scope then we can't use the extra {} that ROSE generates.
-// But also this code is non standard and is an error with GNU 4.8 but only a waring with EDG and Intel.
+// If this is in global scope then we can't use the extra {} that ROSE
+// generates. But also this code is non standard and is an error with GNU 4.8
+// but only a waring with legacy frontend and Intel.
 const struct point p = { .y = yvalue, .x = xvalue };
 #else
 #ifdef __INTEL_COMPILER
-const struct point p = { .y = yvalue, .x = xvalue };
-#endif
-#ifdef __EDG_VERSION__
 const struct point p = { .y = yvalue, .x = xvalue };
 #endif
 #endif

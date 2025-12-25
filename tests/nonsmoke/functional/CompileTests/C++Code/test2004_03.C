@@ -1,6 +1,7 @@
-// This test code has several instances of the same bug in the EDG/SAGE connection.
-// The problem is fixed (1/14/2004), the current source seq poitner is no longer 
-// conditionally incremented (which allows it to be NULL in some cases).
+// This test code has several instances of the same bug in the legacy
+// frontend/SAGE connection. The problem is fixed (1/14/2004), the current
+// source seq poitner is no longer conditionally incremented (which allows it to
+// be NULL in some cases).
 
 #if 1
 // this works fine
@@ -29,7 +30,7 @@ function_A () {
 
 
 #if 1
-// Causes a assertion failure in EDG/SAGE connection
+// Causes a assertion failure in legacy frontend/SAGE connection
 struct foo_C
    {
      int x;

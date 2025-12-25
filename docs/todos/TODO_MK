@@ -3,9 +3,9 @@ Markus Kowarschik.
 ----------------------------------------------------------------
 
 1.
-Check in the new EDG version where exception handling is enabled!
+Check in the new legacy frontend version where exception handling is enabled!
 This is necessary in order to fix the bug that Erin discovered.
-Otherwise EDG will terminate with an error message.
+Otherwise legacy frontend will terminate with an error message.
 
 *****
 
@@ -51,7 +51,7 @@ of class SgMemberFunctionRefExp!
 class doubleGridCollectionFunction where "operator[]" is defined!)
 
 Dan's suggestion: Fix the definition of the need_qualifier member variable
-in the EDG code!
+in the legacy frontend code!
 
 As a workaround the flag overload_opt in the class Unparser_Opt can be
 set to TRUE (see comment in file unparser.C) to enforce the keyword "operator"
@@ -63,7 +63,7 @@ The default value of this flag is FALSE, see file preprocessorSupport.C.
 3.
 This is another problem with the file "defect.C".
 The problem of missing modifiers (e.g., const) seems to be a bug in SAGE
-or in the EDG code.
+or in the legacy frontend code.
 The method isSgModifierType() returns 0 in the case where the error occurs!
 See for example method unparseReferenceType() in unparse_type.C
 

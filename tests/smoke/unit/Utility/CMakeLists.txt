@@ -1,4 +1,4 @@
-include_directories(${ROSE_INCLUDES} ${Boost_INCLUDE_DIRS})
+include_directories(${ROSE_INCLUDES})
 
 set(SMOKE_UTILITY_TESTS
     attributeTests

@@ -51,7 +51,7 @@ descriptions for functions).
 /*!
 \var SgTemplateInstantiationFunctionDecl::p_nameResetFromMangledForm
 \brief This bool value is set to false at construction and later reset to true 
-within post-processing as each instantiated template name is reset from EDG
+within post-processing as each instantiated template name is reset from legacy frontend
 names (e.g. "A____L42") to ROSE generated names (e.g. "A<int>").  Either names
 would work as well for some purposes, but for source to source translation purposes
 we wanted the original names to be used (also avoids/simplifies linking issues 

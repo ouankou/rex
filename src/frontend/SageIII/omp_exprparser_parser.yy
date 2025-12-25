@@ -15,7 +15,7 @@ in the build tree
 %define parse.error verbose
 
 %{
-/* DQ (2/10/2014): IF is conflicting with Boost template IF. */
+/* DQ (2/10/2014): IF is conflicting with template IF. */
 #undef IF
 
 #include <stdio.h>

@@ -1,4 +1,4 @@
-// Note that this feature requires EDG 4.8:
+// Note that this feature requires legacy frontend 4.8:
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ >= 8 || __GNUC__ > 4
 #include<stdalign.h>

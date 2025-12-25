@@ -10,42 +10,13 @@
 // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
 
-#include <filesystem>
-
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-// #ifndef USE_ROSE
-// Local typedefs used in this file only...
-typedef boost::wave::cpplexer::lex_token<>  token_type;
-typedef std::vector<token_type>             token_container;
-typedef std::list<token_type>               token_list_container;
-typedef std::vector<std::list<token_type> > token_container_container;
-// #endif
-#endif
-
 // DQ (11/28/2009): I think this is equivalent to "USE_ROSE"
-// DQ (11/28/2008): What does this evaluate to???  Does this mix C++ constants with CPP values (does this make sense? Is "true" defined?)
-// #if CAN_NOT_COMPILE_WITH_ROSE != true
-// #if !CAN_NOT_COMPILE_WITH_ROSE
-#ifndef USE_ROSE
-#endif
-
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-///////////////////////////////////////////////////////////////////////////////
-//  Include Wave itself
-#include <boost/wave.hpp>
-///////////////////////////////////////////////////////////////////////////////
-// Include the lexer stuff
-#include <boost/wave/cpplexer/cpp_lex_token.hpp>    // token class
-#include <boost/wave/cpplexer/cpp_lex_iterator.hpp> // lexer class
-
-#include "advanced_preprocessing_hooks.h"
-#include "attributeListMap.h"
-#endif
-
-#include <boost/filesystem.hpp>         // exsits()
+// DQ (11/28/2008): What does this evaluate to???  Does this mix C++ constants
+// with CPP values (does this make sense? Is "true" defined?) #if
+// CAN_NOT_COMPILE_WITH_ROSE != true #if !CAN_NOT_COMPILE_WITH_ROSE
 
 //Include files to get the current path
 #include <unistd.h>
@@ -74,52 +45,19 @@ findNodes(SgNode* astNode)
    }
 #endif
 
-#if 0
-// DQ (12/16/2008): comment out while I debug the non-wave support.
-
-// AS (011306) Support for Wave preprocessor
-void
-attachPreprocessingInfo(SgSourceFile *sageFilePtr, std::map<std::string,ROSEAttributesList*>* attrMap)
-   {
-  // DQ (7/6/2005): Introduce tracking of performance of ROSE.
-     TimingPerformance timer ("AST Comment Processing (using Wave, inner part):");
-
-  // Dummy attribute
-     AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh;
-  // AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh(NULL);
-
-  // Make sure that the argument is not a NULL pointer
-     ROSE_ASSERT(sageFilePtr);
-
-  // DQ (12/16/2008): comment out while I debug the non-wave support.
-#if 0
-  // Create tree traversal object for attaching the preprocessing information (using Wave)
-     AttachPreprocessingInfoTreeTrav tt(attrMap);
-
-  // Run tree traversal on specified source file
-     tt.traverseWithinFile(sageFilePtr,inh);
-#else
-     printf ("Wave support not implemented in new support for CPP directives and comment handling. \n");
-     ROSE_ABORT();
-#endif
-   }
-#endif
-
-
 // DQ (5/4/2020): Added directly here because it is required for this function.
 typedef std::map<int, ROSEAttributesList*> AttributeMapType;
 
-
-// DQ (12/3/2020): We sometimes want to read a file twice, and gather the comments 
-// and CPP directives twice, but the second time the file is read it is read so that 
-// it can build a file with a different name. So we need to specify the name of the
-// file that we want the comments and CPP directives to eventually be attached to 
-// and not the one from which they were take.  This technique is used to support
-// building a second file to be a dynamic library within the codeSegregation tool.
-// DQ (4/5/2006): Older version not using Wave preprocessor
-// This is the function to be called from the main function
-// DQ: Now called by the SgFile constructor body (I think)
-// void attachPreprocessingInfo(SgSourceFile *sageFilePtr)
+// DQ (12/3/2020): We sometimes want to read a file twice, and gather the
+// comments and CPP directives twice, but the second time the file is read it is
+// read so that it can build a file with a different name. So we need to specify
+// the name of the file that we want the comments and CPP directives to
+// eventually be attached to and not the one from which they were take.  This
+// technique is used to support building a second file to be a dynamic library
+// within the codeSegregation tool. DQ (4/5/2006): Older version not using the
+// current preprocessing pipeline. This is the function to be called from the
+// main function DQ: Now called by the SgFile constructor body (I think) void
+// attachPreprocessingInfo(SgSourceFile *sageFilePtr)
 void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_filename )
    {
      ROSE_ASSERT(sageFilePtr != NULL);
@@ -132,7 +70,8 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
 #if DEBUG_ATTACH_PREPROCESSOR_INFO
      printf ("################################################################ \n");
      printf ("################################################################ \n");
-     printf ("In attachPreprocessingInfo(): wave = %s file    = %p = %s \n",sageFilePtr->get_wave() ? "true" : "false",sageFilePtr,sageFilePtr->get_sourceFileNameWithPath().c_str());
+     printf("In attachPreprocessingInfo(): file    = %p = %s \n", sageFilePtr,
+            sageFilePtr->get_sourceFileNameWithPath().c_str());
      printf (" --- unparse output filename                    = %s \n",sageFilePtr->get_unparse_output_filename().c_str());
      printf (" --- sageFilePtr->getFileName()                 = %s \n",sageFilePtr->getFileName().c_str());
      printf (" --- sageFilePtr->get_globalScope()             = %p \n",sageFilePtr->get_globalScope());
@@ -179,10 +118,7 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
   // ROSE_ASSERT(sageFilePtr->get_unparse_output_filename() != "");
 #endif
 
-  // ROSEAttributesList* headerAttributes = getListOfAttributes(fileNameId);
-  // bool use_Wave = false;
-  // ROSEAttributesList* commentAndCppDirectiveList = buildCommentAndCppDirectiveList(use_Wave, Sg_File_Info::getFilenameFromID(currentFileNameId) );
-  // ROSEAttributesList* commentAndCppDirectiveList = buildCommentAndCppDirectiveList(use_Wave, sageFilePtr->getFileName() );
+     // ROSEAttributesList* headerAttributes = getListOfAttributes(fileNameId);
      string filename = sageFilePtr->get_sourceFileNameWithPath();
      ROSEAttributesList* commentAndCppDirectiveList = NULL;
 
@@ -198,10 +134,13 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
      // to use new_filename. DQ (7/4/2020): This function should be called only
      // for C/C++ source code. commentAndCppDirectiveList =
      // getPreprocessorDirectives(filename);
-     bool usingWave = false;
-  // commentAndCppDirectiveList = AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(usingWave,filename);
-  // commentAndCppDirectiveList = AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(usingWave,sageFilePtr,filename);
-     commentAndCppDirectiveList = AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(usingWave,sageFilePtr,filename,new_filename);
+     // commentAndCppDirectiveList =
+     // AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(filename);
+     // commentAndCppDirectiveList =
+     // AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(sageFilePtr,filename);
+     commentAndCppDirectiveList =
+         AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
+             sageFilePtr, filename, new_filename);
 
      ROSE_ASSERT(commentAndCppDirectiveList != NULL);
 
@@ -276,9 +215,9 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
 
 #ifndef  CXX_IS_ROSE_CODE_GENERATION
   // DQ (7/6/2005): Introduce tracking of performance of ROSE.
-     TimingPerformance timer_2 ("AST Comment and CPP Directive Processing (not using Wave):");
+     TimingPerformance timer_2("AST Comment and CPP Directive Processing:");
 
-  // Dummy attribute (nothing is done here since this is an empty class)
+     // Dummy attribute (nothing is done here since this is an empty class)
      AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh;
 
   // DQ (4/19/2006): Now supporting either the collection or ALL comments and CPP directives 
@@ -375,19 +314,6 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
      ROSE_ABORT();
 #endif
 
-  // When using Wave get all the preprocessing dirctives for all the files.
-     if ( sageFilePtr->get_wave() == true )
-        {
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
-       // DQ (5/4/2020): Disabled use of WAVE (at least for now).
-          printf ("Disabled use of WAVE (at least for now) \n");
-       // attachPreprocessingInfoUsingWave(sageFilePtr, tt.get_attributeMapForAllFiles() );
-#else
-          printf ("Boost wave is not available within this configuration \n");
-          ROSE_ABORT();
-#endif
-        }
-
 #if 0
   // Note that this only builds the include graph starting at the first header file not the input source file.
      string dotgraph_filename = "include_file_graph_from_before_attachPreprocessingInfo";
@@ -416,10 +342,6 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
      tt.traverse(sageFilePtr, inh);
 
   // endif for ifndef  CXX_IS_ROSE_CODE_GENERATION
-#endif
-
-#if 0
-     printf ("In attachPreprocessingInfo(): build include graph: wave = %s file = %p = %s \n",sageFilePtr->get_wave() ? "true" : "false",sageFilePtr,sageFilePtr->get_sourceFileNameWithPath().c_str());
 #endif
 
 #if 0

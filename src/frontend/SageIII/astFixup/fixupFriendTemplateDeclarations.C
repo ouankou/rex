@@ -34,13 +34,15 @@ fixupFriendDeclarations()
 void
 FixupFriendTemplateDeclarations::visit(SgNode* node)
    {
-  // This function marks template declarations that are declared to be friends with the ROSE 
-  // internal marking as friends.  Specifically it sets the firend flag in the declaration modifier
-  // (the organization of modifiers follows the C++ grammar as laid out in the back of Bjarne's book).
-  // EDG does not always record friend functions when they are templates (perhaps because we use the
-  // template string implementation at present), however the friend keyward is in the string if it
-  // is declared as such.  We determine if a declaration is a friend by checking the scope (stored 
-  // explicitly) against the location of the declaration (using the parent information).
+  // This function marks template declarations that are declared to be friends
+  // with the ROSE internal marking as friends.  Specifically it sets the firend
+  // flag in the declaration modifier (the organization of modifiers follows the
+  // C++ grammar as laid out in the back of Bjarne's book). legacy frontend does
+  // not always record friend functions when they are templates (perhaps because
+  // we use the template string implementation at present), however the friend
+  // keyward is in the string if it is declared as such.  We determine if a
+  // declaration is a friend by checking the scope (stored explicitly) against
+  // the location of the declaration (using the parent information).
 
 #if 0
      printf ("##### FixupFriendTemplateDeclarations::visit(node = %p = %s) \n",node,node->sage_class_name());

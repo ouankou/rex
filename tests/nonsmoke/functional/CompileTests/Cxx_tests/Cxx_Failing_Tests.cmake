@@ -115,7 +115,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_32.C
   test2007_33.C
   test2007_34.C
-  test2007_35.C
   test2007_36.C
   test2007_37.C
   test2007_39.C
@@ -124,7 +123,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_51.C
   test2007_52.C
   test2007_54.C
-  test2007_56.C
   test2007_58.C
   test2007_60.C
   test2007_61.C
@@ -160,7 +158,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2009_17.C
   test2009_21.C
   test2009_22.C
-  test2009_23.C
   test2009_25.C
   test2009_26.C
   test2009_29.C
@@ -175,10 +172,8 @@ set(TESTCODE_CURRENTLY_FAILING
   test2009_45.C
   test2009_46.C
   test2009_47.C
-  test2010_01.C
   test2010_02.C
   test2010_07.C
-  test2010_08.C
   test2010_09.C
   test2010_10.C
   test2010_11.C
@@ -281,17 +276,9 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_195.C
   test2013_197.C
   test2013_212.C
-  test2013_224.C
-  test2013_233.C
-  test2013_234.C
-  test2013_235.C
-  test2013_236.C
   test2013_24.C
-  test2013_240.C
-  test2013_241.C
   test2013_243.C
   test2013_245.C
-  test2013_246.C
   test2013_247.C
   test2013_248.C
   test2013_249.C
@@ -306,7 +293,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_267.C
   test2013_268.C
   test2013_269.C
-  test2013_270.C
   test2013_30.C
   test2013_304.C
   test2013_309.C
@@ -321,19 +307,12 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_45.C
   test2013_49.C
   test2013_62.C
-  test2013_63.C
   test2013_84.C
   test2013_85.C
   test2013_96.C
   test2014_100.C
   test2014_101.C
   test2014_102.C
-  test2014_103.C
-  test2014_104.C
-  test2014_105.C
-  test2014_106.C
-  test2014_111.C
-  test2014_113.C
   test2014_118.C
   test2014_119.C
   test2014_120.C
@@ -344,13 +323,9 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_158.C
   test2014_159.C
   test2014_164.C
-  test2014_173.C
   test2014_175.C
   test2014_180.C
   test2014_181.C
-  test2014_187.C
-  test2014_187_work_around.C
-  test2014_188.C
   test2014_211.C
   test2014_213.C
   test2014_214.C
@@ -359,9 +334,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_228.C
   test2014_229.C
   test2014_23.C
-  test2014_236.C
-  test2014_237.C
-  test2014_238.C
   test2014_25.C
   test2014_42.C
   test2014_44.C
@@ -374,59 +346,23 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_65.C
   test2014_66.C
   test2014_69.C
-  test2014_71.C
-  test2014_81.C
   test2014_99.C
-  test2015_105.C
   test2015_109.C
-  test2015_115.C
-  test2015_116.C
-  test2015_120.C
   test2015_126.C
-  test2015_127.C
-  test2015_129.C
   test2015_135.C
   test2015_136.C
-  test2015_148.C
   test2015_25.C
-  test2015_55.C
-  test2015_62.C
-  test2015_63.C
-  test2015_64.C
   test2015_70.C
   test2015_72_icpc.C
   test2015_81.C
   test2015_82.C
   test2015_83.C
   test2015_84.C
-  test2015_87.C
-  test2015_90.C
-  test2015_91.C
-  test2015_92.C
-  test2015_93.C
-  test2015_94.C
-  test2015_95.C
-  test2015_96.C
-  test2015_98.C
-  test2016_15.C
-  test2016_16.C
-  test2016_17.C
-  test2016_18.C
   test2016_20.C
-  test2016_24.C
   test2016_35.C
-  test2016_39.C
   test2016_52.C
-  test2016_58.C
   test2016_82.C
-  test2016_89.C
-  test2016_90.C
-  test2016_92.C
-  test2016_94.C
-  test2016_95.C
-  test2016_96.C
   test2017_05.C
-  test2017_06.C
   test2017_07.C
   test2017_08.C
   test2017_12.C
@@ -439,7 +375,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2017_44.C
   test2017_46.C
   test2017_47.C
-  test2017_50.C
   test2017_67.C
   test2017_69.C
   test2017_85.C

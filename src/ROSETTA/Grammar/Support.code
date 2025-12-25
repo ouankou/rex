@@ -10,8 +10,6 @@ HEADER_START
           $CLASSNAME & operator= ( const $CLASSNAME & X );
 HEADER_END
 
-#define ROSE_SKIP_COMPILATION_OF_WAVE 1
-
 // ****************************************************
 // ************ Support for Graph IR nodes ************
 // ****************************************************
@@ -513,19 +511,6 @@ HEADER_GRAPH_START
                e_last_property      /*!< last value (unused, serves as upper bound on values) */
              };
 
- //! Simple edge type used to input data to Boost algorithms
-     typedef std::pair<int, int> BoostEdgeType;
-
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-  // We need this local type so that the member access functions for data members of this type can be resolved.
-  // typedef std::vector<SgGraph::BoostEdgeType> SgBoostEdgeList;
-     typedef std::vector<BoostEdgeType> SgBoostEdgeList;
-  // typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-     typedef std::vector<int> SgBoostEdgeWeightList;
-  // typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
-
      int hashCode( const char* p, int len) const; // hash a character array
   // void initialize_graph_id();
      void append_properties( int addr, const std::string & prop );
@@ -544,8 +529,6 @@ HEADER_GRAPH_START
 
      void post_construction_initialization() override;
 
- //! Support for Boost Minimum Spanning Tree.
-  // std::vector <BoostEdgeDescriptor> generateSpanningTree();
      std::vector <SgGraphEdge*> generateSpanningTree();
 
      // tps (4/30/2009): Added properties for nodes and edges
@@ -611,21 +594,6 @@ HEADER_GRAPH_END
 
 
 HEADER_GRAPH_POSTDECLARATION_START
-
-
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-// We need this global type so that the member access functions (defined outside the class)
-// for data members of this type can be resolved.
-typedef SgGraph::SgBoostEdgeList SgBoostEdgeList;
-typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-typedef SgGraph::SgBoostEdgeWeightList SgBoostEdgeWeightList;
-typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
-
-
-// Supporting graph type required by Boost Graph Library.
-// typedef boost::graph_traits < SgGraph::BoostGraphType >::edge_descriptor BoostEdgeDescriptor;
 
 
 HEADER_GRAPH_POSTDECLARATION_END
@@ -925,11 +893,11 @@ HEADER_STORAGE_MODIFIER_START
           bool isMutable() const;
           void setMutable();
 
-       // This is not used (but is present in the EDG AST)
+       // This is not used (but is present in the legacy frontend AST)
           bool isTypedef() const;
           void setTypedef();
 
-       // This is not used (but is present in the EDG AST)
+       // This is not used (but is present in the legacy frontend AST)
           bool isAsm() const;
           void setAsm();
 
@@ -1762,7 +1730,7 @@ HEADER_TYPE_MODIFIER_START
 
             // DQ (1/24/2016): New GNU attributes not previously supported in ROSE (added to support custom device specification on types).
             // This is part of an experiment to support a new feature in CUDA that would allow device specification in the function parameter type.
-            // I am not certain that it should not already exist, but we don't have it implemented in ROSE.  EDG appears to drop the "__device__"
+            // I am not certain that it should not already exist, but we don't have it implemented in ROSE.  legacy frontend appears to drop the "__device__"
             // keyword, so I am trying to capture it as an attribute.
                e_gnu_attribute__device__             = 34,/*!< Using GNU support for general attributes in the contect of parameter type (ROSE extension using GNU attribute extension) */
 
@@ -2682,7 +2650,7 @@ void $CLASSNAME::setAuto()      { p_modifier = e_auto; }
 bool $CLASSNAME::isUnspecified() const { return p_modifier == e_unspecified; }
 void $CLASSNAME::setUnspecified()      { p_modifier = e_unspecified; }
 
-// This is not used (but is present in the EDG AST)
+// This is not used (but is present in the legacy frontend AST)
 bool $CLASSNAME::isTypedef() const { return p_modifier == e_typedef; }
 void $CLASSNAME::setTypedef()      { p_modifier = e_typedef; }
 
@@ -4405,8 +4373,6 @@ struct hash_Name
   // DQ (12/22/2005): Added constructor to support case insensitive name semantics
      const rose_hash_multimap* hash_multimap;
 
-  // CH (4/8/2010): Use boost::unordered instead
-  // CH (4/13/2010): Use boost::hash<string> instead
   // rose_hash::hash<const char*> hasher;
      rose_hash::hash<std::string> hasher;
 
@@ -4432,7 +4398,6 @@ struct hash_Name
  */
 
 // tps (11/19/2009) : Constructor of hash_multimap in MSVS is different
-// CH (4/8/2010): Use boost::unordered instead
 
 class rose_hash_multimap : public rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>
    {
@@ -4446,7 +4411,6 @@ class rose_hash_multimap : public rose_hash::unordered_multimap<SgName, SgSymbol
        // DQ (11/27/2010): Older version of code before adding support for case insensitive behavior.
           rose_hash_multimap(bool case_insensitive_semantics = false)
           // : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(), parent(NULL)
-          // : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(boost::unordered_detail::default_bucket_count,hash_Name(),eqstr(case_insensitive_semantics)), parent(NULL)
              : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(11,hash_Name(),eqstr(case_insensitive_semantics)), parent(NULL)
              {}
 
@@ -4461,7 +4425,6 @@ class rose_hash_multimap : public rose_hash::unordered_multimap<SgName, SgSymbol
 #else
        // DQ (11/27/2010): Newer version of code after adding support for case insensitive behavior.
           rose_hash_multimap()
-          // : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(boost::unordered_detail::default_bucket_count,hash_Name(this),eqstr(this)), parent(NULL), case_insensitive_semantics(false)
              : rose_hash::unordered_multimap<SgName, SgSymbol*, hash_Name, eqstr>(17,hash_Name(this),eqstr(this)), parent(NULL), case_insensitive_semantics(false)
              {
 #if 0
@@ -4692,7 +4655,7 @@ HEADER_SYMBOL_TABLE_START
 
 #if 0
        // DQ (8/13/2013): Since function templates, member function templates, and class templates are symbols not derived from SgTemplateSymbol,
-       // this function is not very useful since it returns a SgTemplateSymbol.  This was a part of the older pre-EDG4x API.
+       // this function is not very useful since it returns a SgTemplateSymbol.  This was a part of the older pre-legacy-frontend 4.x API.
        // DQ (8/10/2013): Added support for specification of template parameters (for member and non-member function overloading) and template arguments (for class specialization).
        // SgTemplateSymbol*  find_template(const SgName & name);
           SgTemplateSymbol*  find_template(const SgName & name, SgTemplateParameterPtrList* templateParameterList, SgTemplateArgumentPtrList* templateArgumentList);
@@ -5778,7 +5741,7 @@ HEADER_FILE_INFORMATION_START
           void unsetShared();
           void setShared();
 
-       // DQ (5/6/2006): Added to support gnu compatability mode (incomplete within EDG and
+       // DQ (5/6/2006): Added to support gnu compatability mode (incomplete within legacy frontend and
        // which we make complete through the declaration of builtin functions as required).
           void unsetFrontendSpecific();
           void setFrontendSpecific();
@@ -5904,7 +5867,6 @@ HEADER_FILE_INFORMATION_END
 
 HEADER_APPLICATION_FILE_PREDECLARATION_START
 // DQ (4/23/2006): Declaration of friend functions outside of class required by g++ 4.1.0!
-// void alternativeSageEdgInterfaceConstruction( SgFile *file );
 HEADER_APPLICATION_FILE_PREDECLARATION_END
 
 HEADER_APPLICATION_FILE_START
@@ -6134,12 +6096,6 @@ public:
       //! Move this function from ROSE into the AST restructuring tool
        // friend void roseDisplayMechanism( SgFile *file );
 
-// #ifndef ROSE_USE_SWIG_SUPPORT
-#ifndef SWIG
-       // DQ (3/10/2013): This function is left undefined in the final link step for SWIG support, so remove it from SWIG processing for now.
-          friend void alternativeSageEdgInterfaceConstruction( SgFile *file );
-#endif
-
       //! Move this function from ROSE into the AST restructuring tool
        // int callFrontEnd ( int & argc, char** & argv , SgFile & file, int fileNameIndex );
        // int callFrontEnd ( int & argc, char** & argv );
@@ -6167,7 +6123,7 @@ public:
           static void stripRoseCommandLineOptions ( std::vector<std::string> & argv );
 
        // DQ (6/17/2005): I think that this should be a static function and perhaps moved to SgProject instead of in SgFile
-      //! function that removes all EDG related options from a command line
+      //! function that removes all legacy frontend related options from a command line
 
 
        // DQ (4/2/2011): Added Fortran specific support to filter command line options from the backend compiler's command line.
@@ -6182,8 +6138,6 @@ public:
           void build_CLANG_CommandLine ( std::vector<std::string> & inputCommandLine, std::vector<std::string>& argv, int fileNameIndex );
 
       //! Move this function from ROSE into the AST restructuring tool
-      //  friend void pdfPrintAbstractSyntaxTreeEDG  ( SgFile *file, bool writeOutHeaderFiles = false );
-      //  friend void pdfPrintAbstractSyntaxTreeEDG  ( SgFile *file );
       //  friend void pdfPrintAbstractSyntaxTreeSage ( SgFile *file, bool writeOutHeaderFiles = false );
 
        // Move this function from ROSE into the AST restructuring tool (placed here os it can be called)
@@ -6281,18 +6235,7 @@ public:
 HEADER_APPLICATION_FILE_END
 
 HEADER_APPLICATION_SOURCE_FILE_START
-#ifndef ROSE_SKIP_COMPILATION_OF_WAVE
      public:
-       // King84 (2010.09.22): Added support for getting the preprocessed token stream and the raw token stream.
-          typedef boost::wave::cpplexer::lex_token<>  token_type;
-          typedef std::list<token_type>             LexTokenList;
-     protected:
-          LexTokenList rawTokenStream;
-     public:
-          LexTokenList& get_rawTokenStream() { return rawTokenStream; }
-#else
-     public:
-#endif
 
        // SgSourceFile ( int & argc, char** & argv, int & errorCode, int fileNameIndex = 0, SgProject* project = NULL );
           SgSourceFile(std::vector<std::string>& argv, SgProject* project = NULL);
@@ -7614,7 +7557,6 @@ rose_hash_multimap::delete_elements()
 size_t
 hash_Name::operator()(const SgName & name) const
    {
-  // CH (4/8/2010): Use boost::unordered instead
   // return hasher(name.str());
 
      ROSE_ASSERT(hash_multimap != NULL);
@@ -7654,7 +7596,6 @@ SgSymbolTable::SgSymbolTable()
   // This should always be a non-null pointer (and never shared)!
      int symbolTableSize = 17;
 
-  // CH (4/8/2010): Use boost::unordered instead
 #if 0
      MLOG_INFO_C("ROSETTA", "WARNING: Symbol table built using default constructor in SgSymbolTable(). \n");
      p_table = new BaseHashType();
@@ -7681,7 +7622,6 @@ SgSymbolTable::SgSymbolTable(int symbolTableSize)
   // AJ (10/21/2004): Adjusted implementation to use new STL hash map interface
   // p_table = new SgSymbolHashMultiMap(sz);
 
-// CH (4/8/2010): Use boost::unordered instead
 //#ifdef _MSCx_VER
 #if 0
      MLOG_WARN_C("ROSETTA", "WARNING: Symbol table built using default constructor in SgSymbolTable(int symbolTableSize). \n");
@@ -7806,7 +7746,7 @@ SgSymbolTable::get_name( const SgNode* node) const
              }
 
        // DQ (2/14/2007): Note that for template-based declarations there is a process where within the post-processing of
-       // the AST the names are updated from the EDG form (e.g. "template_name___Lnnn"), to the template specialization
+       // the AST the names are updated from the legacy frontend form (e.g. "template_name___Lnnn"), to the template specialization
        // form (e.g. "template_name<int>"). Since the symbol references only one of the declarations, if there are defining
        // declarations and non-defining declarations, the name can be changed in the declaration but not in the associated symbol.
        // Details of this situation require more clarification.
@@ -7898,7 +7838,7 @@ SgSymbolTable::get_name( const SgNode* node) const
              }
 #endif
        // DQ (12/26/2011): This is no longer a base class for SgTemplateClassDeclaration and other templae declaration IR nodes.
-       // It is used only for the EDG 3.3 compatable support for template declarations.
+       // It is used only for the legacy frontend 3.3 compatable support for template declarations.
           case V_SgTemplateDeclaration:
              {
                const SgTemplateDeclaration* templateDeclaration = isSgTemplateDeclaration(node);
@@ -8216,7 +8156,7 @@ SgSymbolTable::insert ( const SgName & nm , SgSymbol *sp )
 
 
 #if 0
-  // We can't test this because where symbols are inserted (EDG/SageIII translation) the scopes are not set yet (done in AST post-processing).
+  // We can't test this because where symbols are inserted (legacy frontend/SageIII translation) the scopes are not set yet (done in AST post-processing).
   // DQ (2/14/2007): Added error checking!
      SgStatement* statement = isSgStatement(sp->get_symbol_basis());
      if (statement != NULL)
@@ -8304,7 +8244,6 @@ SgSymbolTable::remove_function_type( const SgName & name )
 
      ROSE_ASSERT (p_table != NULL);
 
-  // CH (4/8/2010): Use boost::unordered instead
      list<rose_hash_multimap::iterator> deleteList;
      rose_hash_multimap::iterator it = get_table()->find(name);
 
@@ -8322,7 +8261,6 @@ SgSymbolTable::remove_function_type( const SgName & name )
 #endif
 
   // Now remove the copy of the symbol from the symbol table and insert the shared symbol
-  // CH (4/8/2010): Use boost::unordered instead
      list<rose_hash_multimap::iterator>::iterator i = deleteList.begin();
 
      while (i != deleteList.end())
@@ -8587,7 +8525,6 @@ SgSymbolTable::remove( const SgSymbol* symbol )
           symbol,symbol->class_name().c_str(),SageInterface::get_name(symbol).c_str(),
           symbolBasis,symbolBasis->class_name().c_str(),SageInterface::get_name(symbolBasis).c_str(),this);
 #endif
-// CH (4/8/2010): Use boost::unordered instead
 //#ifdef _MSCx_VER
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator elementToDelete = get_table()->end();
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator it = get_table()->find(name);
@@ -9709,17 +9646,15 @@ SgSymbolTable::hasMatchingTemplateParametersOrArgumentsOrNoTemplateParametersOrA
 #endif
                                                 }
 
-                                          // DQ (5/19/2014): /include/boost/chrono/duration.hpp contains a new kind of template argument that maps to what EDG calls tak_start_of_pack_expansion.
-                                          // This support is not yet implemented in ROSE (version 1.50 of Boost and version 4.9 of EDG are required to detect this).
                                           // returning "isTemplateType = false;" for now.
                                           // ROSE_ASSERT(T::is_matching_kind(*templateParameterOrArgumentLocal,*templateParameterOrArgumentFromSymbol) == false);
                                              if (T::is_matching_template_pack_expansion(*templateParameterOrArgumentLocal,*templateParameterOrArgumentFromSymbol) == true)
                                                 {
 #if 0
-                                                  MLOG_INFO_C("ROSETTA", "----- SgSymbolTable::hasMatchingTemplateArgumentsOrNoTemplateArguments(): This is the case of a template_pack_expansion: not yet supported (edg calls this tak_start_of_pack_expansion) \n");
+                                                  MLOG_INFO_C("ROSETTA", "----- SgSymbolTable::hasMatchingTemplateArgumentsOrNoTemplateArguments(): This is the case of a template_pack_expansion: not yet supported (legacy frontend calls this tak_start_of_pack_expansion) \n");
 #endif
 #if DEBUG_MATCHING_TEMPLATE_ARGUMENTS
-                                                  MLOG_INFO_C("ROSETTA", "----- SgSymbolTable::hasMatchingTemplateArgumentsOrNoTemplateArguments(): This is the case of a template_pack_expansion: not yet supported (edg calls this tak_start_of_pack_expansion) \n");
+                                                  MLOG_INFO_C("ROSETTA", "----- SgSymbolTable::hasMatchingTemplateArgumentsOrNoTemplateArguments(): This is the case of a template_pack_expansion: not yet supported (legacy frontend calls this tak_start_of_pack_expansion) \n");
 #endif
                                                // DQ (12/28/2018): Return true if both a marked as template pack.
                                                   isTemplateType = true;
@@ -9998,7 +9933,7 @@ SgSymbolTable::find_nontemplate_class (const SgName & nm, SgTemplateArgumentPtrL
   // DQ (8/12/2013): The semantics of find_symbol_with_template_args_support() was to never
   // return a SgTemplateClassSymbol where as the semantics of find_symbol_support() is to
   // return anything that is a derived class from SgClassSymbol, which can be a SgTemplateClassSymbol.
-  // So this is an error in EDG/ROSE function: retrieveAssociatedClassSymbol().
+  // So this is an error in legacy frontend/ROSE function: retrieveAssociatedClassSymbol().
   // Need to fix this tomorrow morning (make the function optionally strict so that we can
   // reuse the same minimal templated support.
      ROSE_ASSERT(isSgTemplateClassSymbol(s) == NULL);
@@ -10071,7 +10006,7 @@ SgTemplateSymbol*
 SgSymbolTable::find_template(const SgName & nm, SgTemplateParameterPtrList* templateParameterList, SgTemplateArgumentPtrList* templateSpecializationArgumentList)
    {
   // DQ (8/13/2013): Since function templates, member function templates, and class templates are symbols not derived from SgTemplateSymbol,
-  // this function is not very useful since it returns a SgTemplateSymbol.  This was a part of the older pre-EDG4x API.
+  // this function is not very useful since it returns a SgTemplateSymbol.  This was a part of the older pre-legacy-frontend 4.x API.
 
   // DQ (8/12/2013): I think this is the wrong function to call.
      MLOG_INFO_C("ROSETTA", "ERROR: This function is not specific enough, please select find_template_class(), or find_template_function(), or find_template_member_function() \n");
@@ -11599,7 +11534,6 @@ SgSymbolTable::get_symbols() const
      set<SgNode*> returnSet;
 
      ROSE_ASSERT(p_table != NULL);
-// CH (4/8/2010): Use boost::unordered instead
 //#ifdef _MSCx_VER
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator i = get_table()->begin();
 //#else
@@ -12753,7 +12687,7 @@ SgInitializedName::get_declaration() const
    {
      assert (this != NULL);
   // DQ (6/13/2005): This function assumes that the parents have been set!
-  // so it should not be used in the EDG/Sage translation!
+  // so it should not be used in the legacy frontend/Sage translation!
   // assert(get_parent() != NULL);
 
 #if 1
@@ -15760,7 +15694,7 @@ SgFile::getFileName () const
 SgFile::SgFile ( int & argc, char** & argv , SgProject* project )
 // : p_numberOfCommandLineArguments(argc) , p_commandLineArgumentList(NULL)
    {
-  // This constructor actually makes the call to EDG to build the AST (via callFrontEnd()).
+  // This constructor actually makes the call to legacy frontend to build the AST (via callFrontEnd()).
      assert (argv && argc >= 0);
 
   // Note use of pointer arithmetic in the computation of "argv + argc", this is standard STL fair.
@@ -15770,7 +15704,7 @@ SgFile::SgFile ( int & argc, char** & argv , SgProject* project )
 SgFile::SgFile ( vector<string> & argv ,  SgProject* project )
 // : p_numberOfCommandLineArguments(argc) , p_commandLineArgumentList(NULL)
    {
-  // This constructor actually makes the call to EDG to build the AST (via callFrontEnd()).
+  // This constructor actually makes the call to legacy frontend to build the AST (via callFrontEnd()).
      doSetupForConstructor(argv,  project);
    }
 
@@ -15844,7 +15778,7 @@ SgFile::initialization()
      p_skip_transformation     = false;
      p_skip_unparse            = false;
 
-  // DQ (11/1/2011): Added support to skip translation of EDG AST to ROSE AST.
+  // DQ (11/1/2011): Added support to skip translation of legacy frontend AST to ROSE AST.
 
 
 #if 1
@@ -15904,8 +15838,7 @@ SgFile::initialization()
   // p_outputGrammarTreeFiles  = false;  // default should be false (set to true while debugging)
   // p_outputGrammarTreeFilesForHeaderFiles = false; // default is to skip headers
 
-  // Support for faster processing of pdf output (where we likely don't need the pdf output of the the EDG AST)
-  // p_outputGrammarTreeFilesForEDG = false;
+  // Support for faster processing of pdf output (where we likely don't need the pdf output of the the legacy frontend AST)
 
   // DQ (9/5/2006): Added mechanism to optionally watermark files generated by ROSE
      p_markGeneratedFiles = false;
@@ -15915,9 +15848,6 @@ SgFile::initialization()
 
   // DQ (9/24/2006): Permit optional enforcement of ANSI standards
      p_strict_language_handling = false;
-
-  // AS (9/29/2008): Use Wave
-     p_wave = false;
 
   // DQ (10/31/2006): Output information that can be used to colorize properties of generated code (useful for debugging).
      p_embedColorCodesInGeneratedCode = 0;
@@ -16286,14 +16216,14 @@ SgFile::outputPDF ()
 void
 roseDisplayMechanism( SgFile *file )
    {
-  // This is the function called by EDG if set using the set_sage_transform_function()
-  // function. We use it to permit the EDG AST to be dumped out to a file.  This
-  // step must be done before EDG's AST is deleted and so can't be done when other
-  // Sage/ROSE transformations are done (which is now after the EDG AST is released
+  // This is the function called by legacy frontend if set using the set_sage_transform_function()
+  // function. We use it to permit the legacy frontend AST to be dumped out to a file.  This
+  // step must be done before legacy frontend's AST is deleted and so can't be done when other
+  // Sage/ROSE transformations are done (which is now after the legacy frontend AST is released
   // under the new (simplified) interface).
 
-  // This function is called at the point where the EDG program tree has already
-  // been parsed into the C++ (modified Sage) grammar but the EDG AST still exists.
+  // This function is called at the point where the legacy frontend program tree has already
+  // been parsed into the C++ (modified Sage) grammar but the legacy frontend AST still exists.
 
 #if ROSE_INTERNAL_DEBUG
      if ( file->get_verbose() > 1 )
@@ -16312,16 +16242,6 @@ roseDisplayMechanism( SgFile *file )
        // as well (this makes the output files very large)
           bool writeOutHeaderFiles = file->get_outputGrammarTreeFilesForHeaderFiles();
 
-       // Added to speed up processing of large files when we just want the SAGE 3 AST
-          bool writeOutEDG_AST = file->get_outputGrammarTreeFilesForEDG();
-
-       // Output the source code file (as represented by the EDG AST) as a PDF file (with bookmarks)
-       // Allow this to be off by default since the files generated are so large and most often we just want the SAGE 3 AST
-          if (writeOutEDG_AST == true)
-               pdfPrintAbstractSyntaxTreeEDG ( file, writeOutHeaderFiles );
-            else
-               MLOG_INFO_C("ROSETTA", "Skipping output of EDG AST in PDF format (EDG output must be turned on explicitly using commandline option) \n");
-
        // Output the source code file (as represented by the SAGE AST) as a PDF file (with bookmarks)
        // pdfPrintAbstractSyntaxTreeSage ( file, writeOutHeaderFiles );
 
@@ -16330,7 +16250,6 @@ roseDisplayMechanism( SgFile *file )
         }
        else
         {
-       // MLOG_INFO_C("ROSETTA", "## Skip dumping the EDG program tree to a file ## \n");
         }
    }
 #endif
@@ -16338,7 +16257,7 @@ roseDisplayMechanism( SgFile *file )
 // Moved to sage_support.cpp: int  SgFile::callFrontEnd ()
 // Moved to sage_support.cpp: void SgFile::stripRoseCommandLineOptions ( vector<string>& argv )
 // Moved to sage_support.cpp: void SgFile::processRoseCommandLineOptions ( vector<string> & argv )
-// Moved to sage_support.cpp: void SgFile::stripEdgCommandLineOptions ( vector<string> & argv )
+// Moved to sage_support.cpp: void SgFile::stripTranslationCommandLineOptions ( vector<string> & argv )
 // Moved to sage_support.cpp: void SgFile::processBackendSpecificCommandLineOptions ( const vector<string>& argvOrig )
 // Moved to sage_support.cpp: bool SgFile::isPrelinkPhase() const
 
@@ -16371,7 +16290,7 @@ SgFile::get_project()
      return project;
    }
 
-// Removed: void SgFile::build_EDG_CommandLine() - EDG frontend has been removed
+// Removed: void SgFile::build_frontend_command_line() - legacy frontend has been removed
 // Moved to sage_support.cpp: void SgFile::usage ( int status )
 
  //! get the current directory
@@ -16563,7 +16482,7 @@ SgFile::display ( const std::string & label ) const
 
      printf ("     p_C_only()                                  = %s \n",(p_C_only == true)   ? "true" : "false");
 
-  // DQ (3/28/2013): Added support to specify C89 support, so that default can be C99 support (same as EDG3x branch).
+  // DQ (3/28/2013): Added support to specify C89 support, so that default can be C99 support (same as the legacy frontend 3.x branch).
      printf ("     p_Cxx_only()                                = %s \n",(p_Cxx_only == true) ? "true" : "false");
      printf ("     p_Fortran_only()                            = %s \n",(p_Fortran_only == true) ? "true" : "false");
      printf ("     p_CoArrayFortran_only()                     = %s \n",(p_CoArrayFortran_only == true) ? "true" : "false");
@@ -16666,13 +16585,11 @@ SgFile::display ( const std::string & label ) const
 #if 0
      printf ("     p_outputGrammarTreeFiles                    = %s \n",(p_outputGrammarTreeFiles               == true) ? "true" : "false");
      printf ("     p_outputGrammarTreeFilesForHeaderFiles      = %s \n",(p_outputGrammarTreeFilesForHeaderFiles == true) ? "true" : "false");
-     printf ("     p_outputGrammarTreeFilesForEDG              = %s \n",(p_outputGrammarTreeFilesForEDG  == true) ? "true" : "false");
 #endif
 
      printf ("     p_markGeneratedFiles                        = %s \n",(p_markGeneratedFiles == true) ? "true" : "false");
      printf ("     p_negative_test                             = %s \n",(p_negative_test == true) ? "true" : "false");
      printf ("     p_strict_language_handling                  = %s \n",(p_strict_language_handling == true) ? "true" : "false");
-     printf ("     p_wave                                      = %s \n",(p_wave == true) ? "true" : "false");
      printf ("     p_embedColorCodesInGeneratedCode            = %s \n",(p_embedColorCodesInGeneratedCode == true) ? "true" : "false");
      printf ("     p_generateSourcePositionCodes               = %s \n",(p_generateSourcePositionCodes == true) ? "true" : "false");
      printf ("     p_sourceFileUsesCppFileExtension            = %s \n",(p_sourceFileUsesCppFileExtension == true) ? "true" : "false");
@@ -16754,14 +16671,12 @@ X preprocessorDirectivesAndCommentsList
 X attributeMechanism
 X KCC_frontend
 X new_frontend
-X disable_edg_backend
 X disable_sage_backend
 X testingLevel
 X preinit_il
 X enable_cp_backend
 // X outputGrammarTreeFiles
 // X outputGrammarTreeFilesForHeaderFiles
-// X outputGrammarTreeFilesForEDG
 
 X markGeneratedFiles
 X negative_test
@@ -17992,7 +17907,7 @@ SgProject::SgProject( const SgProject & project )
      ROSE_ABORT();
    }
 
-//! constructor invokes EDG front end and creates AST. Use frontend() instead.
+//! constructor invokes legacy frontend front end and creates AST. Use frontend() instead.
 SgProject::SgProject ( int argc, char** argv, bool frontendConstantFolding)
    {
   // DQ (11/4/2015): Added assertion.
@@ -18000,7 +17915,7 @@ SgProject::SgProject ( int argc, char** argv, bool frontendConstantFolding)
 
      initialization();
 
-  // DQ (9/18/2011): Added support to use frontend specific constnat folding (applies to C/C++ using EDG).
+  // DQ (9/18/2011): Added support to use frontend specific constnat folding (applies to C/C++ using legacy frontend).
   // All other languges have no specific constant folding options in there frontends.  We use to support
   // the original expression tree in the AST, and this provided both the constant folded value and
   // the original expression tree, but this was a problem for analysis (which tened to mix them together).
@@ -18012,7 +17927,7 @@ SgProject::SgProject ( int argc, char** argv, bool frontendConstantFolding)
      set_frontendErrorCode(errorCode);
    }
 
-//! constructor invokes EDG front end and creates AST. Use frontend() instead.
+//! constructor invokes legacy frontend front end and creates AST. Use frontend() instead.
 SgProject::SgProject ( const std::vector<std::string>& argv, bool frontendConstantFolding )
    {
   // DQ (11/4/2015): Added assertion.
@@ -18020,7 +17935,7 @@ SgProject::SgProject ( const std::vector<std::string>& argv, bool frontendConsta
 
      initialization();
 
-  // DQ (9/18/2011): Added support to use frontend specific constnat folding (applies to C/C++ using EDG).
+  // DQ (9/18/2011): Added support to use frontend specific constnat folding (applies to C/C++ using legacy frontend).
   // All other languges have no specific constant folding options in there frontends.  We use to support
   // the original expression tree in the AST, and this provided both the constant folded value and
   // the original expression tree, but this was a problem for analysis (which tened to mix them together).
@@ -18062,9 +17977,6 @@ SgProject::initialization()
      p_backendErrorCode                    = 0;
      p_outputFileName                      = "";
      p_compileOnly                         = false;
-
-  // DQ (11/10/2016): Added initialization for data member that appeared to be missing.
-     p_wave                         = false;
 
      p_prelink                             = false;
      p_template_instantiation_mode         = e_unknown;
@@ -21118,7 +21030,6 @@ SgTemplateArgument::get_mangled_name (void) const
                  else
                   {
                  // DQ (8/19/2014): I am not clear how important it is to warn about this issue.
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if DEBUG_TEMPLATE_ARGUMENT_GET_MANGLED_NAME
                     MLOG_INFO_C("ROSETTA", "WARNING: In SgTemplateArgument::get_mangled_name(): parent declaration is not handled: this->get_parent() = %p = %s \n",parent,parent->class_name().c_str());
 #endif
@@ -21489,7 +21400,6 @@ SgTemplateArgument::get_qualified_name_prefix() const
   //    SgBaseClass
   //    SgTemplateArgument
 
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if 0
   // DQ (9/27/2012): This does appear to be called in processing test2004_127.C.
      MLOG_INFO_C("ROSETTA", "This is not called see the function: SgTemplateArgument::get_qualified_name_prefix_for_type() \n");

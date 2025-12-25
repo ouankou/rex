@@ -7,7 +7,7 @@ Dan,
 
 On an unrelated note, I have found that if I have a C file that 
 includes a file "heap.h" (ie #include "heap.h") the heap.h that
-rose/edg pulls in is the heap.h under g++_HEADERS/hdrs3, even if you 
+the ROSE frontend pulls in is the heap.h under g++_HEADERS/hdrs3, even if you 
 have something like this:
 
 mytool -c -rose:C  -I../include fileThatIncludesHeap.c 
@@ -44,4 +44,3 @@ to allow C code to contain C++ style comments.
 thanks,
 chadd
 #endif
-

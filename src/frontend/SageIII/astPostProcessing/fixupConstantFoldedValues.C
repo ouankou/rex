@@ -223,8 +223,10 @@ void removeConstantFoldedValue(SgProject * project) {
   std::set<SgExpression *> seen_in_ot_chain; 
 
   for (auto child: cet.originals) {
-    // Check that it is the actual original tree of a *potential* chain of substitutions
-    //    Note: I am not sure chain of substitutions occur with latest version of EDG
+    // Check that it is the actual original tree of a *potential* chain of
+    // substitutions
+    //    Note: I am not sure chain of substitutions occur with latest version
+    //    of legacy frontend
     if (child->get_originalExpressionTree() == NULL && seen_in_ot_chain.find(child) == seen_in_ot_chain.end()) {
       seen_in_ot_chain.insert(child);
 
@@ -259,17 +261,21 @@ void removeConstantFoldedValue(SgProject * project) {
       }
 
       if (isSgEnumVal(folded)) {
-        // TODO 1st issue: the initializer of a variable using enum-value (`X::enum_e e = X::none`):
+        // TODO 1st issue: the initializer of a variable using enum-value
+        // (`X::enum_e e = X::none`):
         //        -> the value is in the original tree of the enum-value
         //        -> this replacement create a type error in C++
-        // TODO 2nd issue: `enum { s = sizeof(struct X {  } };` definition of X would not be unparsed
+        // TODO 2nd issue: `enum { s = sizeof(struct X {  } };` definition of X
+        // would not be unparsed
         //        -> not an issue if struct is anonymous
-        //        -> I cannot find a correct predicate would probably need to save more info in EDG
+        //        -> I cannot find a correct predicate would probably need to
+        //        save more info in legacy frontend
         replace_folded_by_child = false;
       }
 
-      // DQ (7/23/2020): Only required now for C++11 code using EDG 6.0 and GNU 10.1 (see Cxx11_tests/test2015_02.C).
-      // DQ (7/18/2020): Added support to permit Cxx11_tests/test2020_69.C to pass.
+      // DQ (7/23/2020): Only required now for C++11 code using legacy
+      // frontend 6.0 and GNU 10.1 (see Cxx11_tests/test2015_02.C). DQ
+      // (7/18/2020): Added support to permit Cxx11_tests/test2020_69.C to pass.
       // TV: moved that to not break the pattern
       replace_folded_by_child &= !isSgLambdaExp(child);
 
@@ -306,7 +312,8 @@ struct RemoveOriginalExpressionTrees : public ROSE_VisitTraversal {
   }
 };
 
-//! This removes the original expression tree from value expressions where it has been constant folded by EDG.
+//! This removes the original expression tree from value expressions where it
+//! has been constant folded by legacy frontend.
 void resetConstantFoldedValues( SgNode* node ) {
 
 #if 1

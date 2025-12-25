@@ -38,7 +38,7 @@ Inside of Sg_File_Info::display(declarationStatement)
     isCommentOrDirective                  = false
     isToken                               = false
     filename =
-/home/andreas/REPOSITORY-BUILD/gcc-4.1.1/ROSE/boost-June-14a-2007-Unsafe/tutorial/sageHeaderOnly.C
+/home/andreas/REPOSITORY-BUILD/gcc-4.1.1/ROSE/third-party-June-14a-2007-Unsafe/tutorial/sageHeaderOnly.C
     line     = 19  column = 28
 Inside of Sg_File_Info::display(declarationAssociatedWithSymbol)
     isTransformation                      = false
@@ -50,18 +50,13 @@ Inside of Sg_File_Info::display(declarationAssociatedWithSymbol)
     isCommentOrDirective                  = false
     isToken                               = false
     filename =
-/home/andreas/REPOSITORY-BUILD/gcc-4.1.1/ROSE/boost-June-14a-2007-Unsafe/tutorial/sageHeaderOnly.C
+/home/andreas/REPOSITORY-BUILD/gcc-4.1.1/ROSE/third-party-June-14a-2007-Unsafe/tutorial/sageHeaderOnly.C
     line     = 10  column = 5
 lt-identityTranslator:
 /home/andreas/REPOSITORY-SRC/ROSE/June-14a-Unsafe/NEW_ROSE/src/backend/unparser/name_qualification_support.C:362:
 SgName Unparser::generateNameQualifier(SgDeclarationStatement*, const
 SgUnparse_Info&, bool): Assertion
-declarationAssociatedWithSymbol->get_symbol_from_symbol_table() != __null failed.
-Aborted 
+declarationAssociatedWithSymbol->get_symbol_from_symbol_table() != __null
+failed. Aborted
 
 */
-
-
-
-
-

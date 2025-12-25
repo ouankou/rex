@@ -1142,10 +1142,11 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
        // ROSE_ASSERT (p_numberOfSourceFileNames == 0);
           ROSE_ASSERT (file->get_sourceFileNameWithPath().empty() == true);
 
-       // If no source code file name was found then likely this is:
-       //   1) a link command, or
-       //   2) called as part of the SageBuilder::buildFile()
-       // using the C++ compiler.  In this case skip the EDG processing.
+          // If no source code file name was found then likely this is:
+          //   1) a link command, or
+          //   2) called as part of the SageBuilder::buildFile()
+          // using the C++ compiler.  In this case skip the legacy frontend
+          // processing.
         }
 
 #if 0
@@ -1270,7 +1271,8 @@ struct RoseSettings {
         : showRoseSettings(false), useOldCommandlineParser(false) {}
 } rose_settings;
 
-//! internal function to invoke the EDG frontend and generate the AST
+//! internal function to invoke the legacy frontend frontend and generate the
+//! AST
 int
 SgProject::parse(const vector<string>& argv)
    {
@@ -1280,7 +1282,7 @@ SgProject::parse(const vector<string>& argv)
      TimingPerformance timer ("AST (SgProject::parse(argc,argv)):");
 
 #if 0
-  // Unclear if we want to use this feature of Sawyer.
+  // Unclear if we want to use this feature of the old command line parser.
      if (rose_settings.useOldCommandlineParser)
         {
        // Example of usage from outliner.
@@ -1714,13 +1716,14 @@ SgProject::parse()
   // never called by SgFile::callFrontEnd either.)
   // if ( !get_fileList().empty() && !get_useBackendOnly() )
 
-  // Now that file-id validation is hardened and AstPostProcessing filters out
-  // irrelevant system-header debris, we can run the pass for all frontends
-  // (Clang and EDG). Keep the original guards that skip purely backend-only runs.
-     if ( (get_fileList().empty() == false) && (get_useBackendOnly() == false) )
-        {
+        // Now that file-id validation is hardened and AstPostProcessing filters
+        // out irrelevant system-header debris, we can run the pass for all
+        // frontends (Clang and legacy frontend). Keep the original guards that
+        // skip purely backend-only runs.
+        if ((get_fileList().empty() == false) &&
+            (get_useBackendOnly() == false)) {
           AstPostProcessing(this);
-     }
+        }
 
   // negara1 (06/23/2011): Collect information about the included files to support unparsing of those that are modified.
   // In the first step, get the include search paths, which will be used while attaching include preprocessing infos.
@@ -1809,18 +1812,14 @@ SgProject::parse()
                     exit(1);
                  // return std::max(100, errorCode);
                   }
-             }
-            else
-             {
-#if 0
-               printf ("Test for call to secondaryPassOverSourceFile(): get_disable_edg_backend() = %s \n",
-                    file->get_disable_edg_backend() ? "true" : "false");
-#endif
+          } else {
 #if 0
                display("Calling secondaryPassOverSourceFile()");
 #endif
-            // DQ (1/23/2018): If we are not doing the translation of EDG to ROSE, then we don't want to call this second pass.
-            // This will fix the negative test in Plum hall for what should be an error to the C preprocessor.
+            // DQ (1/23/2018): If we are not doing the translation of legacy
+            // frontend to ROSE, then we don't want to call this second pass.
+            // This will fix the negative test in Plum hall for what should be
+            // an error to the C preprocessor.
             // file->secondaryPassOverSourceFile();
 
             // DQ (8/19/2019): Divide this into two parts, for optimization of
@@ -1838,7 +1837,7 @@ SgProject::parse()
                printf ("Exiting after test! \n");
                ROSE_ABORT();
 #endif
-             }
+          }
         }
 
      if (errorCode != 0)
@@ -1945,12 +1944,11 @@ SgProject::parse()
              }
         }
 
-  // warnings from EDG processing are OK but not errors
-     ROSE_ASSERT (errorCode <= 3);
+        // warnings from legacy frontend processing are OK but not errors
+        ROSE_ASSERT(errorCode <= 3);
 
-  // if (get_useBackendOnly() == false)
-     if ( SgProject::get_verbose() >= 1 )
-        {
+        // if (get_useBackendOnly() == false)
+        if (SgProject::get_verbose() >= 1) {
           cout << "C++ source(s) parsed. AST generated." << endl;
         }
 
@@ -2163,7 +2161,8 @@ SgFile::generate_C_preprocessor_intermediate_filename( string sourceFilename )
   // DQ (7/6/2005): Introduce tracking of performance of ROSE.
      TimingPerformance timer ("AST Front End Processing (SgFile):");
 
-  // This function processes the command line and calls the EDG frontend.
+     // This function processes the command line and calls the legacy frontend
+     // frontend.
      int frontendErrorLevel = 0;
 
   // Build an argc,argv based C style commandline (we might not really need this)
@@ -2233,28 +2232,28 @@ SgFile::generate_C_preprocessor_intermediate_filename( string sourceFilename )
      vector<string> inputCommandLine;
 
 #if 0
-     printf ("Inside of SgFile::callFrontEnd(): Calling build_EDG_CommandLine (fileNameIndex = %d) \n",fileNameIndex);
+     printf ("Inside of SgFile::callFrontEnd(): Calling build_frontend_command_line (fileNameIndex = %d) \n",fileNameIndex);
 #endif
 
-  // Build the commandline for EDG
+     // Build the commandline for legacy frontend
      if (get_C_only() || get_Cxx_only() || get_Cuda_only() || get_OpenCL_only() )
         {
 #ifdef BACKEND_CXX_IS_CLANG_COMPILER
      // REX: Clang backend is now supported with Clang frontend
 #endif
 
-       // REX: Call Clang command line builder (EDG removed)
-          build_CLANG_CommandLine (inputCommandLine,localCopy_argv,fileNameIndex );
+     // REX: Call Clang command line builder (legacy frontend removed)
+     build_CLANG_CommandLine(inputCommandLine, localCopy_argv, fileNameIndex);
         }
        else
         {
 #if 0
-          printf ("Failed to call build_EDG_CommandLine() (not a C, C++, Cuda, or OpenCL program) \n");
+          printf ("Failed to call build_frontend_command_line() (not a C, C++, Cuda, or OpenCL program) \n");
 #endif
         }
 
 #if 0
-     printf ("DONE: Inside of SgFile::callFrontEnd(): Calling build_EDG_CommandLine (fileNameIndex = %d) \n",fileNameIndex);
+     printf ("DONE: Inside of SgFile::callFrontEnd(): Calling build_frontend_command_line (fileNameIndex = %d) \n",fileNameIndex);
 #endif
      std::string tmp_translatorCommandLineString = CommandlineProcessing::generateStringFromArgList(inputCommandLine,false,true);
 #if 0
@@ -2267,9 +2266,9 @@ SgFile::generate_C_preprocessor_intermediate_filename( string sourceFilename )
   // ROSE_ASSERT (get_sourceFileNamesWithoutPath() != NULL);
   // ROSE_ASSERT (get_sourceFileNameWithoutPath().empty() == false);
 
-  // display("AFTER build_EDG_CommandLine in SgFile::callFrontEnd()");
+     // display("AFTER build_frontend_command_line in SgFile::callFrontEnd()");
 
-  // Exit if we are to ONLY call the vendor's backend compiler
+     // Exit if we are to ONLY call the vendor's backend compiler
      if (p_useBackendOnly == true)
         {
 #if 0
@@ -2336,15 +2335,18 @@ SgFile::generate_C_preprocessor_intermediate_filename( string sourceFilename )
   // DQ (4/20/2006): This code was moved from the SgFile constructor so that is would
   // permit the separate construction of the SgProject and call to the front-end cleaner.
 
-  // DQ (5/22/2005): This is a older function with a newer more up-to-date comment on why we have it.
-  // This function is a repository for minor AST fixups done as a post-processing step in the
-  // construction of the Sage III AST from the EDG frontend.  In some cases it fixes specific
-  // problems in either EDG or the translation of EDG to Sage III (more the later than the former).
-  // In other cases if does post-processing (e.g. setting parent pointers in the AST) can could
-  // only done from a more complete global view of the staticly defined AST.  In many cases these
-  // AST fixups are not so temporary so the name of the function might change at some point.
-  // Notice that all AST fixup is done before attachment of the comments to the AST.
-  // temporaryAstFixes(this);
+        // DQ (5/22/2005): This is a older function with a newer more up-to-date
+        // comment on why we have it. This function is a repository for minor
+        // AST fixups done as a post-processing step in the construction of the
+        // Sage III AST from the legacy frontend frontend.  In some cases it
+        // fixes specific problems in either legacy frontend or the translation
+        // of legacy frontend to Sage III (more the later than the former). In
+        // other cases if does post-processing (e.g. setting parent pointers in
+        // the AST) can could only done from a more complete global view of the
+        // staticly defined AST.  In many cases these AST fixups are not so
+        // temporary so the name of the function might change at some point.
+        // Notice that all AST fixup is done before attachment of the comments
+        // to the AST. temporaryAstFixes(this);
 
 #if 0
   // FMZ (this is just debugging support)
@@ -2494,9 +2496,9 @@ SgFile::secondaryPassOverSourceFile()
      // This pass collects extra information about the source file that may not
      // have been available from previous tools that operated on the file. For
      // example:
-     //    1) EDG ignores comments and so we collect the whole token stream in
-     //    this phase. 2) OFP ignores comments similarly to EDG and so we
-     //    collect the whole token stream.
+     //    1) legacy frontend ignores comments and so we collect the whole token
+     //    stream in this phase. 2) OFP ignores comments similarly to legacy
+     //    frontend and so we collect the whole token stream.
      // For source code (C,C++,Fortran) we collect the whole token stream, for
      // example:
      //    1) Comments
@@ -2640,7 +2642,8 @@ SgFile::secondaryPassOverSourceFile()
 
         {
        // DQ (8/18/2019): Add performance analysis support.
-          TimingPerformance timer ("EDG-ROSE header file support for tokens:");
+       TimingPerformance timer(
+           "legacy frontend-ROSE header file support for tokens:");
 
        // DQ (7/2/2020): Use this variable for now while debuging this code moved from the parse() function.
           SgFile* file = sourceFile;
@@ -3244,33 +3247,34 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
   }
 
 #if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT)
-  // This is how we pass the pointer to the SgFile created in ROSE before the Open
-  // Fortran Parser is called to the Open Fortran Parser.  In the case of C/C++ using
-  // EDG the SgFile is passed through the edg_main() function, but not so with the
-  // Open Fortran Parser's openFortranParser_main() function API.  So we use this
-  // global variable to pass the SgFile (so that the parser c_action functions can
-  // build the Fotran AST using the existing SgFile.
+  // This is how we pass the pointer to the SgFile created in ROSE before the
+  // Open Fortran Parser is called to the Open Fortran Parser.  In the case of
+  // C/C++ using the legacy frontend the SgFile is passed through the frontend
+  // entry point, but not so with the Open Fortran Parser's
+  // openFortranParser_main() function API.  So we use this global variable to
+  // pass the SgFile (so that the parser c_action functions can build the Fotran
+  // AST using the existing SgFile.
 
-     // FMZ(7/27/2010): check command line options for Rice CAF syntax
-     //  -rose:CoArrayFortran, -rose:CAF, -rose:caf
+  // FMZ(7/27/2010): check command line options for Rice CAF syntax
+  //  -rose:CoArrayFortran, -rose:CAF, -rose:caf
 
-     // SG (7/9/2015) In case of a mixed language project, force case
-     // insensitivity here.
-     SageBuilder::symbol_table_case_insensitive_semantics = true;
+  // SG (7/9/2015) In case of a mixed language project, force case
+  // insensitivity here.
+  SageBuilder::symbol_table_case_insensitive_semantics = true;
 
-     bool using_rice_caf = false;
-     vector<string> ArgTmp = get_project()->get_originalCommandLineArgumentList();
-     int sizeArgs = ArgTmp.size();
+  bool using_rice_caf = false;
+  vector<string> ArgTmp = get_project()->get_originalCommandLineArgumentList();
+  int sizeArgs = ArgTmp.size();
 
-     for (int i = 0; i< sizeArgs; i++)  {
-       if (ArgTmp[i].find("-rose:caf",0)==0     ||
-           ArgTmp[i].find("-rose:CAF2.0",0)==0  ||
-           ArgTmp[i].find("-rose:CAF2.0",0)==0  ) {
+  for (int i = 0; i < sizeArgs; i++) {
+    if (ArgTmp[i].find("-rose:caf", 0) == 0 ||
+        ArgTmp[i].find("-rose:CAF2.0", 0) == 0 ||
+        ArgTmp[i].find("-rose:CAF2.0", 0) == 0) {
 
-         using_rice_caf=true;
-         break;
-       }
-     }
+      using_rice_caf = true;
+      break;
+    }
+  }
 
      extern SgSourceFile* OpenFortranParser_globalFilePointer;
 
@@ -3360,11 +3364,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
           FileSystem::Path base = abs_dir.filename().stem();
           string preprocessFilename = (abs_dir / (base.string() + "-" + Rose::Unique::genUniqueID() + ".F90")).string();
 
-          // The Sawyer::FileSystem::TemporaryFile d'tor will delete the file. We close the file after it's created because
-          // Rose::FileSystem::copyFile will reopen it in binary mode anyway.
-          //yanyh15 2023-01/19, not sure the purpose of this: create a file, and then delete it.
-          //Sawyer::FileSystem::TemporaryFile tempFile(preprocessFilename);
-          //tempFile.stream().close();
+          // yanyh15 2023-01/19, not sure the purpose of this: create a file,
+          // and then delete it.
 
           // copy source file to pseudonym file
           try {
@@ -4430,7 +4431,7 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
                                   inputCommandLine, false, false);
 
   if (get_verbose() > 1) {
-    printf("In build_C_and_Cxx_AST(): Before calling edg_main: "
+    printf("In build_C_and_Cxx_AST(): Before calling frontend entry point: "
            "frontEndCommandLineString = %s \n",
            frontEndCommandLineString.c_str());
   }
@@ -4440,7 +4441,8 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
      CommandlineProcessing::generateArgcArgvFromList(inputCommandLine, c_cxx_argc, c_cxx_argv);
 
 #ifdef ROSE_BUILD_CXX_LANGUAGE_SUPPORT
-  // This is the function call to the EDG front-end (modified in ROSE to pass a SgFile)
+     // This is the function call to the legacy frontend front-end (modified in
+     // ROSE to pass a SgFile)
 
 #if 0
        // If this was selected as an option then we can stop here (rather than call OFP again).
@@ -4452,7 +4454,7 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
              }
 #endif
 
-  // REX: Always use Clang frontend (EDG removed)
+     // REX: Always use Clang frontend (legacy frontend removed)
      int clang_main(int, char *[], SgSourceFile & sageFile );
      int frontendErrorLevel = clang_main (c_cxx_argc, c_cxx_argv, *this);
 
@@ -4494,8 +4496,13 @@ SgSourceFile::buildAST( vector<string> argv, vector<string> inputCommandLine )
                                                // This is the C/C++ case (default).
                                                   frontendErrorLevel = build_C_and_Cxx_AST(argv,inputCommandLine);
 
-                                               // DQ (12/29/2008): The newer version of EDG (version 3.10 and 4.0) use different return codes for indicating an error.
-                                               // Any non-zero value indicates an error.
+                                                  // DQ (12/29/2008): The newer
+                                                  // version of legacy frontend
+                                                  // (version 3.10 and 4.0) use
+                                                  // different return codes for
+                                                  // indicating an error. Any
+                                                  // non-zero value indicates an
+                                                  // error.
                                                   frontend_failed = (frontendErrorLevel != 0);
                                                 }
         }
@@ -4587,20 +4594,22 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
   //       just one file (as part of the multi-file support)
   // ROSE_ASSERT (sageProject.numberOfFiles() == 1);
 
-  // ******************************************************************************
-  // At this point in the control flow (for ROSE) we have returned from the processing
-  // via the EDG frontend (or skipped it if that option was specified).
-  // The following has been done or explicitly skipped if such options were specified
-  // on the commandline:
-  //    1) The application program has been parsed
-  //    2) All AST's have been build (one for each grammar)
-  //    3) The transformations have been edited into the C++ AST
-  //    4) The C++ AST has been unparsed to form the final output file (all code has
-  //       been generated into a different filename)
-  // ******************************************************************************
+     // ******************************************************************************
+     // At this point in the control flow (for ROSE) we have returned from the
+     // processing via the legacy frontend frontend (or skipped it if that
+     // option was specified). The following has been done or explicitly skipped
+     // if such options were specified on the commandline:
+     //    1) The application program has been parsed
+     //    2) All AST's have been build (one for each grammar)
+     //    3) The transformations have been edited into the C++ AST
+     //    4) The C++ AST has been unparsed to form the final output file (all
+     //    code has
+     //       been generated into a different filename)
+     // ******************************************************************************
 
-  // What remains is to run the specified compiler (typically the C++ compiler) using
-  // the generated output file (unparsed and transformed application code).
+     // What remains is to run the specified compiler (typically the C++
+     // compiler) using the generated output file (unparsed and transformed
+     // application code).
      int returnValueForRose = 0;
 
   // DQ (1/17/2006): test this
@@ -4683,9 +4692,12 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
                  // header file list, and is required to be supported in ROSE as part of some application
                  // specific configuration testing (when configure tests ROSE translators)).
 
-                 // TOO1 (9/23/2013): There was never an else branch (or assertion) here before.
-                 //                   Commenting out for now to allow $ROSE/tests/CompilerOptionTests to pass
-                 //                   in order to expedite the transition from ROSE-EDG3 to ROSE-EDG4.
+                 // TOO1 (9/23/2013): There was never an else branch (or
+                 // assertion) here before.
+                 //                   Commenting out for now to allow
+                 //                   $ROSE/tests/CompilerOptionTests to pass in
+                 //                   order to expedite the transition from
+                 //                   ROSE-FRONTEND3 to ROSE-FRONTEND4.
                  //   ROSE_ASSERT(! "Not implemented yet");
                        }
              }
@@ -4719,10 +4731,9 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
                           << std::endl;
                        }
 
-                  // copy_file will only completely override the existing file in Boost 1.46+
-                  // http://stackoverflow.com/questions/14628836/boost-copy-file-has-inconsistent-behavior-when-overwrite-if-exists-is-used
-                    if (std::filesystem::exists(unparsed_file))
-                       {
+                       // Remove the existing file first to ensure a complete
+                       // overwrite.
+                       if (std::filesystem::exists(unparsed_file)) {
                          std::filesystem::remove(unparsed_file);
                        }
 #if 0
@@ -4893,18 +4904,21 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
           perror("Serious Error returned from internal systemFromVector command");
         }
 
-  // Assemble an exit status that combines the values for ROSE and the C++/C compiler
-  // return an exit status which is the boolean OR of the bits from the EDG/SAGE/ROSE and the compile step
-     int finalCompiledExitStatus = returnValueForRose | returnValueForCompiler;
+        // Assemble an exit status that combines the values for ROSE and the
+        // C++/C compiler return an exit status which is the boolean OR of the
+        // bits from the legacy frontend/SAGE/ROSE and the compile step
+        int finalCompiledExitStatus =
+            returnValueForRose | returnValueForCompiler;
 
-  // It is a strange property of the UNIX $status that it does not map uniformally from
-  // the return value of the "exit" command (or "return" statement).  So if the exit
-  // status from the compilation stage is nonzero then we just make the exit status 1
-  // (this does seem to be a portable solution).
-  // FYI: only the first 8 bits of the exit value are significant (Solaris uses 'exit_value mod 256').
-     if (finalCompiledExitStatus != 0)
-        {
-       // If this it is non-zero then make it 1 to be more clear to external tools (e.g. make)
+        // It is a strange property of the UNIX $status that it does not map
+        // uniformally from the return value of the "exit" command (or "return"
+        // statement).  So if the exit status from the compilation stage is
+        // nonzero then we just make the exit status 1 (this does seem to be a
+        // portable solution). FYI: only the first 8 bits of the exit value are
+        // significant (Solaris uses 'exit_value mod 256').
+        if (finalCompiledExitStatus != 0) {
+          // If this it is non-zero then make it 1 to be more clear to external
+          // tools (e.g. make)
           finalCompiledExitStatus = 1;
         }
 
@@ -4969,7 +4983,8 @@ SgProject::compileOutput()
        // strip out any rose options before passing the command line.
           SgFile::stripRoseCommandLineOptions( argv );
 
-       // strip out edg specific options that would cause an error in the backend linker (compiler).
+          // strip out frontend-specific options that would cause an error in
+          // the backend linker (compiler).
 
           vector<string> originalCommandLine = argv;
           ROSE_ASSERT (!originalCommandLine.empty());
@@ -5025,13 +5040,14 @@ SgProject::compileOutput()
        // strip out any rose options before passing the command line.
           SgFile::stripRoseCommandLineOptions( argv );
 
-       // strip out edg specific options that would cause an error in the backend linker (compiler).
+          // strip out frontend-specific options that would cause an error in
+          // the backend linker (compiler).
 
-       // Skip the name of the ROSE translator (so that we can insert the backend compiler name, below)
-       // bool skipInitialEntry = true;
+          // Skip the name of the ROSE translator (so that we can insert the
+          // backend compiler name, below) bool skipInitialEntry = true;
 
-       // Include all the specified source files
-       // bool skipSourceFiles  = false;
+          // Include all the specified source files
+          // bool skipSourceFiles  = false;
 
           vector<string> originalCommandLine = argv;
           ROSE_ASSERT (!originalCommandLine.empty());
@@ -5053,17 +5069,6 @@ SgProject::compileOutput()
                     compilerNameString = "f77";
                   }
              }
-
-          // TOO1 (2014-10-09): Use the correct Boost version that ROSE was configured --with-boost
-#ifdef ROSE_BOOST_PATH
-          if (get_C_only() || get_Cxx_only())
-             {
-            // Search dir for header files, after all directories specified by -I but
-            // before the standard system directories.
-               originalCommandLine.push_back("-isystem");
-               originalCommandLine.push_back(std::string(ROSE_BOOST_PATH) + "/include");
-             }
-#endif
 
        // DQ (8/13/2006): Add a space to avoid building "g++-E" as output.
        // compilerNameString += " ";
@@ -5330,7 +5335,8 @@ int SgProject::link ( std::string linkerName )
   // strip out any rose options before passing the command line.
      SgFile::stripRoseCommandLineOptions( argcArgvList );
 
-  // strip out edg specific options that would cause an error in the backend linker (compiler).
+     // strip out frontend-specific options that would cause an error in the
+     // backend linker (compiler).
 
      SgFile::stripTranslationCommandLineOptions( argcArgvList );
 
@@ -5944,21 +5950,27 @@ SgFunctionCallExp::getAssociatedFunctionSymbol() const
 
      SgExpression* functionExp = this->get_function();
 
-     // schroder3 (2016-08-16): Moved the handling of SgPointerDerefExp and SgAddressOfOp above the switch. Due to this
-     //  all pointer dereferences and address-ofs are removed from the function expression before it is analyzed.
-     //  Member functions that are an operand of a pointer dereference or address-of are supported due to this now.
+     // schroder3 (2016-08-16): Moved the handling of SgPointerDerefExp and
+     // SgAddressOfOp above the switch. Due to this
+     //  all pointer dereferences and address-ofs are removed from the function
+     //  expression before it is analyzed. Member functions that are an operand
+     //  of a pointer dereference or address-of are supported due to this now.
      //
-     // schroder3 (2016-06-28): Added SgAddressOp (for example "(&f)()", "(*&***&**&*&f)()" or "(&***&**&*&f)()")
+     // schroder3 (2016-06-28): Added SgAddressOp (for example "(&f)()",
+     // "(*&***&**&*&f)()" or "(&***&**&*&f)()")
      //
-     // EDG3 removes all SgPointerDerefExp nodes from an expression like this
+     // Some frontends remove all SgPointerDerefExp nodes from an expression
+     // like this:
      //    void f() { (***f)(); }
-     // EDG4 does not.  Therefore, if the thing to which the pointers ultimately point is a SgFunctionRefExp then we
-     // know the function, otherwise Liao's comment below applies. [Robb Matzke 2012-12-28]
+     // Others do not. Therefore, if the thing to which the pointers ultimately
+     // point is a SgFunctionRefExp then we know the function, otherwise Liao's
+     // comment below applies. [Robb Matzke 2012-12-28]
      //
      // Liao, 5/19/2009
-     // A pointer to function can be associated to any functions with a matching function type
-     // There is no single function declaration which is associated with it.
-     // In this case return NULL should be allowed and the caller has to handle it accordingly
+     // A pointer to function can be associated to any functions with a matching
+     // function type There is no single function declaration which is
+     // associated with it. In this case return NULL should be allowed and the
+     // caller has to handle it accordingly
      //
      while (isSgPointerDerefExp(functionExp) || isSgAddressOfOp(functionExp)) {
        functionExp = isSgUnaryOp(functionExp)->get_operand();
@@ -6301,11 +6313,11 @@ void preventConstructionOnStack(SgNode* n)
 
   signed long dist = (char *)n - (char *)frameaddr;
 
-  // DQ (12/6/2009): This fails for the 4.0.4 compiler, but only in 64-bit when run with Hudson.
-  // I can't reporduce the problem using the 4.0.4 compiler, but it is uniformally a problem
-  // since it fails on all tests (via hudson) which are using Boost 1.40 and either minimal or
-  // full configurations (and also for the tests of the EDG binary).
-  // assert (dist < -10000 || dist > 10000);
+  // DQ (12/6/2009): This fails for the 4.0.4 compiler, but only in 64-bit when
+  // run with Hudson. I can't reporduce the problem using the 4.0.4 compiler,
+  // but it is uniformally a problem since it fails on all tests (via hudson)
+  // using older configurations (and also for the tests of the legacy frontend
+  // binary). assert (dist < -10000 || dist > 10000);
 
 #ifdef __GNUC__
   // Note that this is a test of the backend compiler, it seems that we don't track

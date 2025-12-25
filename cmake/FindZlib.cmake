@@ -13,7 +13,7 @@
 
 macro(find_zlib)
   if("${ZLIB_ROOT}" STREQUAL "no")
-    message(FATAL_ERROR "Zlib is required by Boost and cannot be disabled")
+    message(FATAL_ERROR "Zlib is required by libharu and cannot be disabled")
 
   else()
     # Header files.

@@ -429,7 +429,8 @@ bool FixupTemplateArguments::contains_private_type ( SgTemplateArgumentPtrList &
 bool
 FixupTemplateArguments::contains_private_type (SgTemplateArgument* templateArgument, SgScopeStatement* targetScope)
    {
-  // Note that within EDG and ROSE the template arguments may be shared so that we can support testing for equivalence.
+  // Note that within legacy frontend and ROSE the template arguments may be
+  // shared so that we can support testing for equivalence.
 
   // static std::list<SgTemplateArgument*> templateArgumentList;
   // templateArgumentList.push_back(templateArgument);
@@ -710,7 +711,9 @@ FixupTemplateArguments::contains_private_type (SgTemplateArgument* templateArgum
                          printf ("--- selecing instead : %s \n",suitableTypeAlias->unparseToString().c_str());
 #endif
 
-                      // TV (10/05/2018): (ROSE-1431) Traverse the chain of all associated template arguments (coming from the same EDG template argument)
+                         // TV (10/05/2018): (ROSE-1431) Traverse the chain of
+                         // all associated template arguments (coming from the
+                         // same legacy frontend template argument)
                          SgTemplateArgument * templateArgument_it = templateArgument;
                          while (templateArgument_it->get_previous_instance() != NULL) 
                             {

@@ -28,7 +28,7 @@ bin_PROGRAMS = loopInterchange loopUnrolling loopTiling loopCollapsingDirective 
 	    buildCpreprocessorDefineDeclaration instrumentEndOfFunction \
 	    buildLabelStatement buildSizeOfOp abiStuffTest buildNullStatement \
 	    buildForStmt canonicalLoop loopNormalization collectReadWriteVariables \
-	    typeTraits livenessAnalysis buildProcedureHeaderStatement replaceMacroCalls \
+	    typeTraits livenessAnalysis buildProcedureHeaderStatement \
 	    getDependentDecls buildStructDeclaration2 buildTypedefDeclaration \
 	    deepDelete insertStatementBeforeFunction removeStatementCommentRelocation \
 	    generateUniqueName annotateExpressionsWithUniqueNames buildExternalStatement \
@@ -76,7 +76,6 @@ collectReadWriteVariables_SOURCES        = collectReadWriteVariables.C
 typeTraits_SOURCES                       = typeTraits.C
 livenessAnalysis_SOURCES                 = livenessAnalysis.C
 buildProcedureHeaderStatement_SOURCES    = buildProcedureHeaderStatement.C
-replaceMacroCalls_SOURCES                = replaceMacroCalls.C
 buildTypedefDeclaration_SOURCES          = buildTypedefDeclaration.C
 loopUnrolling_SOURCES                    = loopUnrolling.C
 getDependentDecls_SOURCES                = getDependentDecls.C
@@ -135,7 +134,6 @@ LDADD =  $(ROSE_LIBS)
   rose_inputcollectReadWriteVariables.C \
   rose_inputtypeTraits.C \
   rose_inputlivenessAnalysis.C \
-  rose_inputreplaceMacroCalls.C \
   rose_inputbuildTypedefDeclaration.C \
   rose_inputloopUnrolling1.C \
   rose_inputloopUnrolling2.C \
@@ -191,7 +189,7 @@ if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
     rose_inputbuildLabelStatement2.f
 endif
 
-# turn off edg warnings such as "variable x declared but never referenced" for test input files
+# turn off frontend warnings such as "variable x declared but never referenced" for test input files
 TEST_CXXFLAGS = -rose:verbose 0  -g3
 
 # Many of these tests follow a very regular pattern and can be transformed into a testable command in the same way.  Some
@@ -477,13 +475,6 @@ rose_inputloopTiling.C: inputloopTiling.C loopTiling
 		INPUT=$(abspath $<) \
 		$(srcdir)/astInterface.conf $@.passed
 
-rose_inputreplaceMacroCalls.C: inputreplaceMacroCalls.C replaceMacroCalls
-	@$(RTH_RUN) \
-		DISABLED="boost:wave causes seg fault on 64-bit machines" \
-		EXE="$$(pwd)/replaceMacroCalls$(EXEEXT)" \
-		FLAGS="$(TEST_CXXFLAGS) -rose:wave" \
-		INPUT=$(abspath $<) \
-		$(srcdir)/astInterface.conf $@.passed
 
 # DQ (9/16/2010): Added this test code to demonstrate problem with adding statments around statments with comments or
 # CPP directives attached.
@@ -531,7 +522,7 @@ $(group3): rose_%: % $(group3_headers)
 	       inputbuildLabelStatement.C inputbuildSizeOfOp.C inputAbiStuffTest.c					\
 	       inputbuildNullStatement.C inputbuildForStmt.C inputcanonicalLoop.C					\
 	       inputloopNormalization.C inputcollectReadWriteVariables.C inputtypeTraits.C				\
-       inputlivenessAnalysis.C inputbuildProcedureHeaderStatement.f inputreplaceMacroCalls.C			\
+       inputlivenessAnalysis.C inputbuildProcedureHeaderStatement.f			\
        inputloopUnrolling.C inputgetDependentDecls.C					\
        inputloopInterchange.C inputloopTiling.C inputbuildStructDeclaration2.C					\
        inputbuildTypedefDeclaration.C inputdeepDelete.C								\

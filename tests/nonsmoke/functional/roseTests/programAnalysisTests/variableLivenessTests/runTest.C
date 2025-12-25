@@ -64,8 +64,9 @@ void testOneFunction( std::string funcParamName, // function in question
 
     NodeQuerySynthesizedAttributeType nodes = NodeQuery::querySubTree(func, V_SgNode);
 
-    // Edg3 mistakenly adds SgType nodes to the AST; Edg4 adds some also, but fewer.  So we just remove them all. They
-    // make no difference in the variable-liveness analysis anyway.
+    // Legacy frontend variants sometimes add SgType nodes to the AST; remove
+    // them all since they make no difference in the variable-liveness analysis
+    // anyway.
     nodes.erase(std::remove_if(nodes.begin(), nodes.end(), is_type_node), nodes.end());
 
     SgFunctionDeclaration* decl = isSgFunctionDeclaration(func->get_declaration());

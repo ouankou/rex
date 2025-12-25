@@ -21,12 +21,12 @@
  *      can be stored in an object. Such attributes are copied (by reallocating) whenever their container is copied so that
  *      they are never shared between two containers.  The AstAttributeMechanism container owns these attributes and deletes
  *      them when the container is destroyed.
- *  @li The Sawyer support library has a @ref Sawyer::Attribute namespace that provides a mechanism for storing values that
- *      are instances of POD types and 3rd-party types that the user cannot edit. It stores attributes by value, and uses the
- *      value's normal C++ constructors and destructor.
+ *  @li A value-based attribute interface provides a mechanism for storing values that are instances of POD types and
+ *      3rd-party types that the user cannot edit. It stores attributes by value and uses the value's normal C++
+ *      constructors and destructor.
  *
  *  Although there are three interfaces, they really all share the same basic mechanism. SgNode attributes are implemented in
- *  terms of the AstAttributeMechanism, which is implemented in terms of Sawyer::Attribute.
+ *  terms of the AstAttributeMechanism, which is implemented in terms of the value-based attribute interface.
  *
  *  @section attribute_comparison Comparison of attribute interfaces
  *
@@ -34,7 +34,7 @@
  *    <tr>
  *      <td><b>IR node attributes</b></td>
  *      <td><b>AstAttributeMechanism</b></td>
- *      <td><b>Sawyer::Attribute</b></td>
+ *      <td><b>Value-based attributes</b></td>
  *    </tr>
  *    <tr>
  *      <td>Applies only to IR nodes.</td>
@@ -80,16 +80,16 @@
  *          pointer</td>
  *      <td>Attempting to retrieve a non-existing attribute without providing a default value returns a null attribute
  *          pointer</td>
- *      <td>Attempting to retrieve a non-existing attribute without providing a default value throws a
- *          @ref Sawyer::Attribute::DoesNotExist exception.</td>
+ *      <td>Attempting to retrieve a non-existing attribute without providing a default value throws a dedicated
+ *          does-not-exist exception.</td>
  *    </tr>
  *    <tr>
  *      <td>%Attribute values types are runtime checked. A mismatch is discovered by the user when they perform a
  *          @c dynamic_cast from the AstAttribute base type to their subclass.</td>
  *      <td>%Attribute values types are runtime checked. A mismatch is discovered by the user when they perform a
  *          @c dynamic_cast from the AstAttribute base type to their subclass.</td>
- *      <td>%Attribute value types are runtime checked. A mismatch between writing and reading is reported by a
- *          @ref Sawyer::Attribute::WrongQueryType exception.</td>
+ *      <td>%Attribute value types are runtime checked. A mismatch between writing and reading is reported by a dedicated
+ *          wrong-query-type exception.</td>
  *    </tr>
  *    <tr>
  *      <td>Requires user to use C++ @c dynamic_cast from the AstAttribute pointer to the user's subclass pointer.</td>
@@ -100,7 +100,7 @@
  *
  *  Some examples may help illuminate the differences.  The examples show three methods of using attributes:
  *
- *  @li <b>Method 1</b> uses the Sawyer::Attribute interface directly.
+ *  @li <b>Method 1</b> uses the value-based attribute interface directly.
  *  @li <b>Method 2</b> uses the @ref AstAttributeMechanism interface.
  *  @li <b>Method 3</b> uses the @ref SgNode attribute interface.
  *

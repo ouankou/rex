@@ -11,11 +11,9 @@ This IR nodes contains list of files, etc. after internal command-line processin
 The original argc and argv are not modified and left in tact for processing by the 
 ROSE translator.  The SgProject node keeps a deep copy of the original argc and
 argv as an STL list of strings (representing the command-line arguments).
-Also, if ROSE and/or EDG specific command-line options are not wanted in the ROSE 
-translator, they may be stripped from argc and argv, using the member functions:
-     -# void stripRoseCommandLineOptions (int &argc, char **&argv), and\or
-     -# void stripEdgCommandLineOptions (int &argc, char **&argv).
-These functions will modify the input argc and argv values.
+Also, if ROSE and/or frontend-specific command-line options are not wanted in the ROSE
+translator, they may be stripped from the argument list using helper functions such as
+stripRoseCommandLineOptions and stripTranslationCommandLineOptions.
 
 \internal This IR node does not appear many times in an AST (typically only once).  
 
@@ -74,7 +72,7 @@ STL list of strings).
 
 /*!
 \var SgProject::p_frontendErrorCode
-\brief Error code returned from EDG front-end processing.
+\brief Error code returned from legacy frontend front-end processing.
 
 \internal  Value greater than 3 is an error, else just warnings.
 */

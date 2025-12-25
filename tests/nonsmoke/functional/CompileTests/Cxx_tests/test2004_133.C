@@ -87,7 +87,8 @@ class D
           class F;
         };
 
-  // DQ (11/18/2004): Note that g++ allows this but EDG does not!  I think that EDG is correct here!
+        // DQ (11/18/2004): Note that g++ allows this but legacy frontend does
+        // not!  I think that legacy frontend is correct here!
 #if 0
   // Definition of F with parent which is a class declaration (designed this test to trip up unparser 
   // which will in this specific case detect that the parent is a class definition and only use the 

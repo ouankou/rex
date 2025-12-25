@@ -7,7 +7,7 @@
 
 \todo Add Constant folding since we currently unfold all folded expressions in the code
     generation phase.  This would be something that could be verified as well since it
-    EDG has also computed the constant folded result and we have stored that explicitly as
+    legacy frontend has also computed the constant folded result and we have stored that explicitly as
     well as the expression tree from which it was folded.  The proposed constant folding
     would also work on AST fragments constructed explicitly in ROSE from lower level
     mechanisms.

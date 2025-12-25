@@ -29,8 +29,8 @@ else  # NOT USING_GNU_COMPILER
 	@echo "NOT USING_GCC_COMPILER (which can include CLANG and INTEL compilers)"
 if USING_GNU_COMPILER
 	@echo "USING_GCC_COMPILER == true"
-	@echo "Run tests using GNU 4.12 and EDG 5.1 and later compilers and CLANG and INTEL compilers (run all C++11 tests)"
-# DQ (2/22/2017): Break this up to first test the non C++11 support using the latest compilers and EDG 4.12.
+	@echo "Run tests using GNU 4.12 and legacy frontend 5.1 and later compilers and CLANG and INTEL compilers (run all C++11 tests)"
+# DQ (2/22/2017): Break this up to first test the non C++11 support using the latest compilers and legacy frontend 4.12.
 #	$(VALGRIND) ASAN_OPTIONS="$(VALGRIND)" TOOL2=$(TEST_TRANSLATOR) TOOL1=$(CXX) CPP11_STL_TESTS=yes $(top_srcdir)/tests/nonsmoke/functional/CompileTests/STL_tests/stl-eval.sh
 	$(VALGRIND) ASAN_OPTIONS="$(VALGRIND)" TOOL2=$(TEST_TRANSLATOR) TOOL1=$(CXX) CPP11_STL_TESTS=no $(top_srcdir)/tests/nonsmoke/functional/CompileTests/STL_tests/stl-eval.sh
 else  # NOT USING_GNU_COMPILER

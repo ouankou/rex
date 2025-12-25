@@ -5,7 +5,7 @@
 // int open (const char* name, int flags, int mode);
 extern "C" int open (const char* name, int flags, int mode);
 #else
-// C file support (non-boost)
+// C file support
 #include <unistd.h>
 #endif
 

@@ -1,4 +1,4 @@
-// DQ (7/22/2020): EDG 6.0 can't handl the STL string header file.
+// DQ (7/22/2020): legacy frontend 6.0 can't handl the STL string header file.
 #include <string>
 
 class Base {};

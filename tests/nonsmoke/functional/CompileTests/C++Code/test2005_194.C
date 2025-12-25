@@ -39,7 +39,7 @@ void Y::func2(const class X x)
 }
 
 As you can see the 'X::' disappears from 'X::none'. Normally I see that
-EDG replaces the enum value with an integer.
+legacy frontend replaces the enum value with an integer.
 
 Thanks
 Andreas

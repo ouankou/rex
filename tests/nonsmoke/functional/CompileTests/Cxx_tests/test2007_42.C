@@ -15,7 +15,8 @@ enum numbers;
 // This is the definition;
 enum numbers {};
 
-// It appears that this redundant enum declaration is present in EDG, built as an IR node
-// in the translation from EDG, but not output in the unparsed code in ROSE. This is not
-// a crisis, since it is redundant and meaningless (as best I can tell).
+// It appears that this redundant enum declaration is present in legacy
+// frontend, built as an IR node in the translation from legacy frontend, but
+// not output in the unparsed code in ROSE. This is not a crisis, since it is
+// redundant and meaningless (as best I can tell).
 enum numbers;

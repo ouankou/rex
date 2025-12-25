@@ -1,10 +1,10 @@
 
 // This is not required since I have added it to ROSE directly
 // The whole issue of how to support __restrict__ needs to be
-// visited since I can't get EDG to recognize it (though it says
+// visited since I can't get legacy frontend to recognize it (though it says
 // it is supported since 8/2002 and I have turned on all the required
 // support (I think).
-// #define __restrict__ 
+// #define __restrict__
 
 // #include<list>
 #include<vector>

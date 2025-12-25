@@ -15,5 +15,6 @@ bool somethingTrue = !false;
 
 char c1 = 'a' + 1;
 
-// This seems like it should be a bug, but it works fine (in EDG, at least)
+// This seems like it should be a bug, but it works fine (in legacy frontend, at
+// least)
 char c2 = 'a' + true;

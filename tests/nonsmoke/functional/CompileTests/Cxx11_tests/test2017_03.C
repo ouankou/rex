@@ -11,5 +11,4 @@ namespace Myspace {
 
 
 using Myspace::A;  //THIS WORKS.
-using Myspace::Alias; //THIS CAUSES EDG/ROSE TO FAIL.
-
+using Myspace::Alias; // THIS CAUSES legacy frontend/ROSE TO FAIL.

@@ -562,18 +562,6 @@ using ::std::tuple_size;
 
 # elif GTEST_OS_SYMBIAN
 
-// On Symbian, BOOST_HAS_TR1_TUPLE causes Boost's TR1 tuple library to
-// use STLport's tuple implementation, which unfortunately doesn't
-// work as the copy of STLport distributed with Symbian is incomplete.
-// By making sure BOOST_HAS_TR1_TUPLE is undefined, we force Boost to
-// use its own tuple implementation.
-#  ifdef BOOST_HAS_TR1_TUPLE
-#   undef BOOST_HAS_TR1_TUPLE
-#  endif  // BOOST_HAS_TR1_TUPLE
-
-// This prevents <boost/tr1/detail/config.hpp>, which defines
-// BOOST_HAS_TR1_TUPLE, from being #included by Boost's <tuple>.
-#  define BOOST_TR1_DETAIL_CONFIG_HPP_INCLUDED
 #  include <tuple>
 
 # elif defined(__GNUC__) && (GTEST_GCC_VER_ >= 40000)

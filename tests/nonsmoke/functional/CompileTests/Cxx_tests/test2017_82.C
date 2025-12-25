@@ -4,7 +4,7 @@ Dan,
 Some ECP proxy apps (AMG 2013 and QuickSilver) use macros within OpenMP pragmas.
 Right now somehow we do not see expanded macros within the pragmas in AST and the current OpenMP pragma parser cannot parse them properly.
 
-This could be some limitation of the preprocessor used by EDG.
+This could be some limitation of the preprocessor used by legacy frontend.
 For GCC, its preprocessor can expand macros within OpenMP pragmas if -fopenmp is turned on.
 
 For example:

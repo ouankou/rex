@@ -1,12 +1,11 @@
-// Error in EDG 6.0:
-// "/data1/ROSE_CompileTree/git-LINUX-64bit-6.1.0-EDG60-BOOST_1_60-dq-development-
+// Error in legacy frontend 6.0:
+// "/data1/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND60-LIB_1_60-dq-development-
 //          rc-cxx-only/include-staging/g++_HEADERS/hdrs5/bits/stl_bvector.h",
 //          line 958: internal error: assertion failed at: "overload.cc", line
 //          11162 in cast_pointer_for_field_selection
 //
 //          && __position == end())
 //                           ^
-
 
 #include <vector>
 #include <iostream>
@@ -33,5 +32,3 @@ int main()
     std::function<int(int)> func2 = [](int i) { return i + 4; };
     std::cout << "func2: " << func2(6) << '\n';
 }
-
-

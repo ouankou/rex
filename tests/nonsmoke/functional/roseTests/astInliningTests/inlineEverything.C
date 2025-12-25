@@ -66,7 +66,7 @@ void inlineFromRoot (SgFunctionDeclaration* func_decl, int& callSitesConsidered,
         inlined_calls.push_back(call);
         changed = true;
       }
-    } //end boost_foreach() 
+    } // end foreach()
   } while (changed);
 }
 
@@ -153,10 +153,12 @@ main (int argc, char* argv[]) {
     for (int count=0; count<10; ++count) 
     {
       bool changed = false;
-      //    for (SgFunctionCallExp *call: SageInterface::querySubTree<SgFunctionCallExp>(sageProject)) 
-      // interesting user loops are often located in the end of the source file    
-      //BOOST_REVERSE_FOREACH (SgFunctionCallExp *call, SageInterface::querySubTree<SgFunctionCallExp>(sageProject)) 
-      MLOG_WARN_C("astInliningTests", "reverse_foreach, e.g., BOOST_REVERSE_FOREACH should be used.\n"); 
+      //    for (SgFunctionCallExp *call:
+      //    SageInterface::querySubTree<SgFunctionCallExp>(sageProject))
+      // interesting user loops are often located in the end of the source file
+      // reverse_foreach (SgFunctionCallExp *call,
+      // SageInterface::querySubTree<SgFunctionCallExp>(sageProject))
+      MLOG_WARN_C("astInliningTests", "reverse_foreach should be used.\n");
       for (SgFunctionCallExp *call : SageInterface::querySubTree<SgFunctionCallExp>(sageProject)) 
       {
         call_count++; 

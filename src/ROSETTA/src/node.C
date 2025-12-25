@@ -602,11 +602,15 @@ Grammar::setUpNodes ()
                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
 
-  // QY:11/2/04 remove itemptr
-  //   InitializedName.setDataPrototype("SgInitializedName*","itemptr", "= NULL",
-  //                                  NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL);
-  // DQ (7/20/2004): The initptr in this SgInitializer object is NULL (set by EDG/SAGE connection)
-  //                 to fix previous cycle in these objects (previously fixed in ASTFixes.C.
+     // QY:11/2/04 remove itemptr
+     //   InitializedName.setDataPrototype("SgInitializedName*","itemptr", "=
+     //   NULL",
+     //                                  NO_CONSTRUCTOR_PARAMETER,
+     //                                  BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL);
+     // DQ (7/20/2004): The initptr in this SgInitializer object is NULL (set by
+     // legacy frontend/SAGE connection)
+     //                 to fix previous cycle in these objects (previously fixed
+     //                 in ASTFixes.C.
      InitializedName.setDataPrototype("SgInitializer*","initptr", "= NULL",
                                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
@@ -675,8 +679,11 @@ Grammar::setUpNodes ()
      InitializedName.setDataPrototype ( "SgInitializedName::asm_register_name_enum", "register_name_code", "= SgInitializedName::e_invalid_register",
                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (8/09/2006): Support for asm register names when defined via strings (more general than the EDG mapping to the GNU supported register names)
-  // This requirement comes from an Elsa test case: "int foo asm ("myfoo") = 2;" where the register name is unknown and so held as a string.
+     // DQ (8/09/2006): Support for asm register names when defined via strings
+     // (more general than the legacy frontend mapping to the GNU supported
+     // register names) This requirement comes from an Elsa test case: "int foo
+     // asm ("myfoo") = 2;" where the register name is unknown and so held as a
+     // string.
      InitializedName.setDataPrototype ( "std::string", "register_name_string", "= \"\"",
                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -808,7 +815,8 @@ Grammar::setUpNodes ()
      InitializedName.setDataPrototype("bool","using_device_keyword","= false",
                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/14/2016): This is C++11 syntax for direct brace initalization (e.g. int n{} for EDG 4.11 and greater).
+     // DQ (11/14/2016): This is C++11 syntax for direct brace initalization
+     // (e.g. int n{} for legacy frontend 4.11 and greater).
      InitializedName.setDataPrototype     ( "bool", "is_braced_initialized", "= false",
                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 

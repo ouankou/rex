@@ -6,7 +6,7 @@ REX targets Linux only; non-Linux builds are unsupported.
 
 ## Overview
 
-REX has transitioned from the proprietary EDG frontend to an experimental Clang/LLVM-based frontend. This new frontend supports:
+REX has transitioned from the proprietary legacy frontend frontend to an experimental Clang/LLVM-based frontend. This new frontend supports:
 - **C language analysis** (primary focus)
 - **LLVM 20.x** or later
 - **CMake-only build system** (Autotools deprecated)
@@ -50,16 +50,7 @@ REX has transitioned from the proprietary EDG frontend to an experimental Clang/
 
 #### Required Libraries
 
-5. **Boost libraries (1.47.0 or later)**
-   ```bash
-   # Ubuntu/Debian
-   sudo apt-get install libboost-all-dev
-
-   # Fedora/RHEL
-   sudo dnf install boost-devel
-   ```
-
-6. **Compression libraries**
+5. **Compression libraries**
    ```bash
    # Ubuntu/Debian
    sudo apt-get install zlib1g-dev libzstd-dev
@@ -93,7 +84,6 @@ For Ubuntu/Debian, install all dependencies at once:
 sudo apt-get update && sudo apt-get install -y \
     build-essential git cmake perl flex bison \
     llvm-20 clang-20 libclang-20-dev \
-    libboost-all-dev \
     zlib1g-dev libzstd-dev \
     libxml2-dev \
     ocl-icd-opencl-dev

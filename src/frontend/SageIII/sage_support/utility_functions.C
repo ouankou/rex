@@ -183,10 +183,11 @@ bool Rose::is_Fortran_language = false;
 bool Rose::is_Cuda_language       = false;
 bool Rose::is_OpenCL_language     = false;
 
-// DQ (3/24/2016): Adding Robb's message logging mechanism to contrl output debug message from the EDG/ROSE connection code.
+// DQ (3/24/2016): Adding Robb's message logging mechanism to contrl output
+// debug message from the legacy frontend/ROSE connection code.
 
-// DQ (4/17/2010): This function must be defined if C++ support in ROSE is disabled.
-// REX: EDG has been replaced with Clang/LLVM frontend
+// DQ (4/17/2010): This function must be defined if C++ support in ROSE is
+// disabled. REX: legacy frontend has been replaced with Clang/LLVM frontend
 std::string frontendVersionString()
    {
 #ifdef ROSE_BUILD_CXX_LANGUAGE_SUPPORT
@@ -375,12 +376,6 @@ outputPredefinedMacros()
       printf ("   macro: __GXX_EXPERIMENTAL_CXX0X__ = %d \n",__GXX_EXPERIMENTAL_CXX0X__);
 #endif
 
-#ifdef __EDG_VERSION__
-      printf ("   macro: __EDG_VERSION__ = %d \n",__EDG_VERSION__);
-#endif
-#ifdef __EDG__
-      printf ("   macro: __EDG__ = %d \n",__EDG__);
-#endif
 #ifdef XXX
       printf ("   macro: XXX = %d \n",XXX);
 #endif
@@ -515,35 +510,34 @@ frontendShell (const std::vector<std::string>& argv)
      return project;
    }
 
-/*! \brief Call to backend, generates either object file or executable.
+   /*! \brief Call to backend, generates either object file or executable.
 
-    This function operates in two modes:
-        1) If source files were specified on the command line, then it calls
-           unparser and compiles generated file.
-        2) If no source files are present then it operates as a linker processing
-           all specified object files.
-    If no source files or object files are specified then we return a error.
+       This function operates in two modes:
+           1) If source files were specified on the command line, then it calls
+              unparser and compiles generated file.
+           2) If no source files are present then it operates as a linker
+      processing all specified object files. If no source files or object files
+      are specified then we return a error.
 
-    This function represents a simple interface to the use of ROSE as a library.
+       This function represents a simple interface to the use of ROSE as a
+      library.
 
-     At this point in the control flow we have returned from the processing via the
-     EDG frontend (or skipped it if that option was specified).
-     The following has been done or explicitly skipped if such options were specified
-     on the commandline:
-        1) The application program has been parsed
-        2) All AST's have been build (one for each grammar)
-        3) The transformations have been edited into the C++ AST
-        4) The C++ AST has been unparsed to form the final output file (all code has
-           been generated into a different filename "rose_<original file name>.C")
+        At this point in the control flow we have returned from the processing
+      via the legacy frontend frontend (or skipped it if that option was
+      specified). The following has been done or explicitly skipped if such
+      options were specified on the commandline: 1) The application program has
+      been parsed 2) All AST's have been build (one for each grammar) 3) The
+      transformations have been edited into the C++ AST 4) The C++ AST has been
+      unparsed to form the final output file (all code has been generated into a
+      different filename "rose_<original file name>.C")
 
-    \internal The error code is returned, but it might be appropriate to make
-              it more similar to the frontend() function and its handling of
-              the error code.
- */
-int
-backend ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, UnparseDelegate* unparseDelegate )
-   {
-  // DQ (7/12/2005): Introduce tracking of performance of ROSE.
+       \internal The error code is returned, but it might be appropriate to make
+                 it more similar to the frontend() function and its handling of
+                 the error code.
+    */
+   int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
+               UnparseDelegate *unparseDelegate) {
+     // DQ (7/12/2005): Introduce tracking of performance of ROSE.
      TimingPerformance timer ("AST Object Code Generation (backend):");
 
      int finalCombinedExitStatus = 0;
@@ -625,9 +619,11 @@ backend ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, UnparseDeleg
           if ( SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL )
                printf ("   project->get_compileOnly() = %s \n",project->get_compileOnly() ? "true" : "false");
 
-       // DQ (5/20/2005): If we have not permitted templates to be instantiated during initial
-       // compilation then we have to do the prelink step (this is however still new and somewhat
-       // problematic (buggy?)).  It relies upon the EDG mechansisms which are not well understood.
+          // DQ (5/20/2005): If we have not permitted templates to be
+          // instantiated during initial compilation then we have to do the
+          // prelink step (this is however still new and somewhat problematic
+          // (buggy?)).  It relies upon the legacy frontend mechansisms which
+          // are not well understood.
           bool callTemplateInstantation = (project->get_template_instantiation_mode() == SgProject::e_none);
 
           if (callTemplateInstantation == true)
@@ -689,7 +685,6 @@ backend ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, UnparseDeleg
 
      return project->get_backendErrorCode();
    }
-
 
 int
 backendCompilesUsingOriginalInputFile ( SgProject* project, bool compile_with_USE_ROSE_macro )
@@ -1040,155 +1035,6 @@ void generateAstGraph ( const SgProject* project, int maxSize, std::string filen
                printf ("In generateAstGraph(): WHOLE AST graph too large to generate. (numberOfASTnodes=%d) > (maxSize=%d) \n",numberOfASTnodes,maxSize);
         }
    }
-
-
-
-
-
-#if 0
-
-// Include tree traversal for EDG abstract program tree
-// #include "../EDG/src/displayTree.h"
-#include "/frontend/EDG/EDG_3.3/src/displayTree.h"
-
-//! Generate PDF file representing EDG's Abstract Syntax Tree
-void
-pdfPrintAbstractSyntaxTreeEDG ( SgFile *file )
-   {
-     char filename[256];
-
-     printf ("## Dumping the EDG program tree to a PDF file ## \n");
-
-  // Use the PDF file declared in the EDG/src/displayTree.C
-     extern PDF* pdfGlobalFile;
-
-     printf ("Rose::getWorkingDirectory() = %s \n",Rose::getWorkingDirectory());
-     sprintf(filename,"%s/%s.edg.pdf",Rose::getWorkingDirectory(),Rose::utility_stripPathFromFileName(Rose::getFileName(file)));
-     printf ("filename = %s \n",filename);
-
-     ifstream sourceFile (Rose::getFileName(file));
-     if (!sourceFile)
-          cerr << "ERROR opening sourceFile" << endl;
-     ROSE_ASSERT (sourceFile);
-
-     fprintf(stderr, "Creating PDFlib file '%s'!\n", filename);
-
-#if 0
-     #define MAX_BUFFER_LENGTH 10000
-
-     char buffer[100][MAX_BUFFER_LENGTH];
-     int i = 0;
-
-     while (sourceFile.getline(buffer[i],100,'\n') && i < MAX_BUFFER_LENGTH)
-        {
-          printf ("string = %s \n",buffer[i]);
-          i++;
-        }
-
-  // printf ("Exting after printing source file \n");
-  // ROSE_ABORT();
-#endif
-
-  // Initialize the PDFLib library
-     PDF_boot();
-
-  // Build a PDF file
-     PDF* pdfFile = PDF_new();
-     ROSE_ASSERT (pdfFile != NULL);
-
-  // Open the pdf file for writing
-     if (PDF_open_file(pdfFile, filename) == -1)
-        {
-          printf("Couldn't open PDF file '%s'!\n", filename);
-          ROSE_ABORT();
-        }
-
-  // Initialize properties stored in PDF file
-     PDF_set_info(pdfFile, "Keywords", "Abstract Syntax Tree (AST) EDG");
-     PDF_set_info(pdfFile, "Subject", "Display of AST for EDG");
-     PDF_set_info(pdfFile, "Title", "AST for Program Code");
-     PDF_set_info(pdfFile, "Creator", "ROSE");
-     PDF_set_info(pdfFile, "Author", "Daniel Quinlan");
-
-//  unsigned char buf[64], tmp[64];
-//  int c, pos;
-//  int level1, level2=0, level3=0;
-    int font;
-
-    font = PDF_findfont(pdfFile, "Helvetica", "host", 0);
-
- // Specify the page size (can be much larger than letter size)
- // PDF_begin_page(pdfFile, a4_width, a4_height);
-    PDF_begin_page(pdfFile, letter_width, letter_height);
-
- // Specify a 10 pt font
-    int fontSize = 10;
-
- // setup the font to use in this file
-    PDF_setfont(pdfFile, font, fontSize);
-
- // start at a reasonable position on the page
-    int topMargin  = fontSize * 4;
-    int leftMargin = fontSize * 4;
-
- // Translate the orgin of the mapping to the top left corner of the page
- // with a little room for margins
-    PDF_translate(pdfFile,0+leftMargin,letter_height-topMargin);
-
-#if 0
-    strcpy (buffer[0], "abcdefg");
-    PDF_show(pdfFile, buffer[0]);
-    for (i=0; i < 20; i++)
-         PDF_continue_text(pdfFile, buffer[0]);
-#endif
-
-#if 0
-     while (sourceFile.getline(buffer[i],100,'\n') && i < MAX_BUFFER_LENGTH)
-        {
-          PDF_continue_text(pdfFile, buffer[i]);
-       // printf ("string = %s \n",buffer[i]);
-          i++;
-        }
-#endif
-
-  /* private Unicode info entry */
-     PDF_set_info(pdfFile, "Revision", "initial version 0.2");
-
-  // initialize the global PDF file
-     pdfGlobalFile = pdfFile;
-
-  // Print out the EDG AST
-     pdfOutput_complete_il();
-
-  // Need this to avoid a warning from PDFLIB
-     PDF_end_page(pdfFile);
-
-  // Now close the PDF file
-     PDF_close(pdfFile);
-     PDF_delete(pdfFile);
-
-  // finalize the last use of the PDF library
-     PDF_shutdown();
-
-     fprintf(stderr, "\nPDFlib EDG AST file '%s' finished!\n", filename);
-   }
-#endif
-
-#if 0
-void
-generatePDFofEDG ( const SgProject & project )
-   {
-#if 0
-  // Output the source code file (as represented by the SAGE AST) as a PDF file (with bookmarks)
-     int i = 0;
-     for (i=0; i < project.numberOfFiles(); i++)
-        {
-          SgFile & file = project.get_file(i);
-          pdfPrintAbstractSyntaxTreeEDG(&file);
-        }
-#endif
-   }
-#endif
 
 #if 1
 int

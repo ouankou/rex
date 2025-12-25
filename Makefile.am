@@ -132,7 +132,6 @@ rose-installer-rmc2: install-rose-library
 		--prjver=$(PACKAGE_VERSION)										\
 		$(prefix)/*												\
 		$(addsuffix /*, $(filter-out / /usr /usr/local,								\
-		    $(BOOST_ROOT)											\
 		    $(CMAKE_ROOT)											\
 		    $(DLIB_ROOT)											\
 		    $(GNU_COMPILERS_ROOT)										\
@@ -586,7 +585,7 @@ lcov_data_dirs = $(shell find $(top_builddir) -type d |sort)
 all-lcov.info:
 	lcov --capture --no-recursion $(patsubst %,-d %,$(lcov_data_dirs)) -o $@
 
-# Capture only coverage for the ROSE library source code (no tests, tutorials, projects, system headers, boost, etc).
+# Capture only coverage for the ROSE library source code (no tests, tutorials, projects, system headers, third-party headers, etc).
 # DQ (3/26/2017): Removed CodeThorn from being included in lcov results (CodeThorn testing is still done to test ROSE 
 # and those results are a part of the cover coverage for ROSE.
 # DQ (3/13/2017): Modified to remove specific directories of old code to be removed from ROSE and 3rd party code that we do not maintain.
@@ -617,7 +616,7 @@ librose-lcov.info: all-lcov.info
 #       DQ (3/30/2017): Removed src/midend/astProcessing/AstProcessing.h file because it's template use is not handled accurately by lcov (wildly incorrect).
 
 # DQ (4/9/2017): After getting better coverage, the ultimate limitation proved to be the poor template handling within LCOV to support more significant coverage results.
-# DQ (4/5/2017): This fails with GNU 6.1 and Boost 1.51 and Boost 1.52, but it is now called and should contribute to code coverage so let it back in as a test.
+# DQ (4/5/2017): This fails with GNU 6.1 and some third-party headers, but it is now called and should contribute to code coverage so let it back in as a test.
 #       "$(top_srcdir)/src/frontend/SageIII/sageInterface/sageGeneric.h" 
 
 

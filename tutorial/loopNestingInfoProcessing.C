@@ -152,23 +152,24 @@ LoopLevelProcessing::evaluateSynthesizedAttribute(SgNode* node,InhNestingLevel n
 }
 
 int main ( int argc, char** argv) {
-   // command line parameters are passed to EDG
-   // non-EDG parameters are passed (through) to ROSE (and the vendor compiler)
-   SgProject* root=frontend(argc,argv); 
-   LoopLevelProcessing t;
+  // command line parameters are passed to legacy frontend
+  // non-legacy frontend parameters are passed (through) to ROSE (and the vendor
+  // compiler)
+  SgProject *root = frontend(argc, argv);
+  LoopLevelProcessing t;
 
-   // traverse only C++ files specified on command line
-   // do not traverse included header files
-   cout << endl << "Output:" << endl;
-   t.traverseInputFiles(root,0);
-   cout << "Max loop nesting level: " << t.getMaxNestingLevel() << endl;
-   cout << endl;
+  // traverse only C++ files specified on command line
+  // do not traverse included header files
+  cout << endl << "Output:" << endl;
+  t.traverseInputFiles(root, 0);
+  cout << "Max loop nesting level: " << t.getMaxNestingLevel() << endl;
+  cout << endl;
 
-   // Generate a dot file showing the AST
-   AstDOTGeneration astdotgen;
-   astdotgen.generateInputFiles(root,AstDOTGeneration::PREORDER);
+  // Generate a dot file showing the AST
+  AstDOTGeneration astdotgen;
+  astdotgen.generateInputFiles(root, AstDOTGeneration::PREORDER);
 
-   // Generate a pdf file showing the AST
+  // Generate a pdf file showing the AST
 #if ROSE_WITH_LIBHARU
    AstPDFGeneration astpdfgen;
    astpdfgen.generateInputFiles(root);

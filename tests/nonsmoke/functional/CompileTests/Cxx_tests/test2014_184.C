@@ -1,6 +1,7 @@
 namespace internal {
 
-// Note that EDG does not require this to be declared in the namespace (but gnu g++ (version 4.4.7) does.
+// Note that legacy frontend does not require this to be declared in the
+// namespace (but gnu g++ (version 4.4.7) does.
 struct X
    {
      void foo();

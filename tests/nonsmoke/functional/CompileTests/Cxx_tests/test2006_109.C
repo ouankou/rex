@@ -1,4 +1,4 @@
-// This fails to parse properly in EDG even when using -rose:C_only 
+// This fails to parse properly in legacy frontend even when using -rose:C_only
 // mode because of the use of the "class" keyword (which is C++).
 #include <stdio.h>
 

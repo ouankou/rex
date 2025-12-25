@@ -54,9 +54,10 @@ Grammar::setUpExpressions ()
   // DQ (9/2/2014): Adding support for C++11 Lambda expressions.
      NEW_TERMINAL_MACRO (LambdaExp,      "LambdaExp",  "LAMBDA_EXP" );
 
-  // DQ (2/5/2004): EDG 3.3 now separates out vararg functions explicitly in the AST
-  // (something I always wanted to see done), so we will do the same in SAGE.
-  // This provides for the best possible vararg handling!
+     // DQ (2/5/2004): legacy frontend 3.3 now separates out vararg functions
+     // explicitly in the AST (something I always wanted to see done), so we
+     // will do the same in SAGE. This provides for the best possible vararg
+     // handling!
      NEW_TERMINAL_MACRO (VarArgStartOp,          "VarArgStartOp",          "VA_START_OP" );
      NEW_TERMINAL_MACRO (VarArgStartOneOperandOp,"VarArgStartOneOperandOp","VA_START_ONE_OPERAND_OP" );
      NEW_TERMINAL_MACRO (VarArgOp,               "VarArgOp",               "VA_OP" );
@@ -394,11 +395,14 @@ Grammar::setUpExpressions ()
           CudaKernelCallExp,
           "FunctionCallExp","FUNC_CALL", true);
 
-  // DQ (7/12/2013): Added new IR nodes to support new type of function call (builtin functions used for type trait support
-  // in later versions of GNU and other compilers).  For more details see: http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html
-  // These are required to be supported as part of bug fix for proper handling of Boost (but also some STL that was never a
-  // noticed problem).  These builtin functions take types as parameters and sometimes return types as well.  They will
-  // require an implementation in ROSE to support analysis.
+     // DQ (7/12/2013): Added new IR nodes to support new type of function call
+     // (builtin functions used for type trait support in later versions of GNU
+     // and other compilers).  For more details see:
+     // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html These are required to
+     // be supported as part of a bug fix for proper handling of template-heavy
+     // libraries (and some STL that was never a noticed problem).  These
+     // builtin functions take types as parameters and sometimes return types as
+     // well. require an implementation in ROSE to support analysis.
      NEW_NONTERMINAL_MACRO (CallExpression,FunctionCallExp,"CallExpression","CALL_EXPRESSION", true);
      NEW_TERMINAL_MACRO (TypeTraitBuiltinOperator, "TypeTraitBuiltinOperator", "TYPE_TRAIT_BUILTIN_OPERATOR");
   // NEW_NONTERMINAL_MACRO (CallExpression,FunctionCallExp | TypeTraitBuiltinOperator,"CallExpression","CALL_EXPRESSION", true);
@@ -436,15 +440,16 @@ Grammar::setUpExpressions ()
      // ***********************************************************************
 
 #if 1
-  // DQ (5/20/2004): Add need_paren to all expression objects so that we can trigger
-  // it for any expression and use the value as set in EDG.  See how this works!
-  // Added here to fix required paren in SgDotExp where it could not be set properly
-  // See test code abstract_op.C line 418:
-  //      Rhs.Array_Descriptor.Array_Domain.Push_Array_ID(rhsArrayID);
-  // which is translated to
-  //      (*(&(Rhs.Array_Descriptor).Array_Domain)).Push_Array_ID(rhsArrayID);
-  // That we have build generated the addess operator followed by the deref operator
-  // is a separate problem, I think!
+     // DQ (5/20/2004): Add need_paren to all expression objects so that we can
+     // trigger it for any expression and use the value as set in legacy
+     // frontend.  See how this works! Added here to fix required paren in
+     // SgDotExp where it could not be set properly See test code abstract_op.C
+     // line 418:
+     //      Rhs.Array_Descriptor.Array_Domain.Push_Array_ID(rhsArrayID);
+     // which is translated to
+     //      (*(&(Rhs.Array_Descriptor).Array_Domain)).Push_Array_ID(rhsArrayID);
+     // That we have build generated the addess operator followed by the deref
+     // operator is a separate problem, I think!
      Expression.setDataPrototype ( "bool", "need_paren", "= false",
                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE );
 #endif
@@ -1400,17 +1405,21 @@ Grammar::setUpExpressions ()
      ValueExp.setFunctionPrototype ( "HEADER_VALUE_EXPRESSION", "../Grammar/Expression.code" );
 
 #if 1
-  // DQ (9/23/2011): Modified this to not be traversed.  The traversal leads to an inconsistant AST (incrementally applying fixes).
-  // DQ (9/22/2011): Double checked and this was marked as DEF_TRAVERSAL in master (so we don't have to change this case).
-  // DQ (9/17/2011): Put back the traversal over the originalExpressionTree (because it will be set to NULL in post processing).
-  // DQ (9/16/2011): Modified this to not be traversed.  The traversal leads to an inconsistant AST
-  // We now want to select two modes of consistant AST (using or not use the originalExpressionTree).
-  // DQ (2/7/2011): Moved this to the SgExpression level in the IR node hierarchy because it requires
-  // more general support.
-  // DQ (6/19/2006): Changed name of data member to be consitant with more general use in SgCastExp
-  // DQ (11/9/2005): Added reference to expression tree for original unfolded constant expressions.
-  // Constant folding in EDG and ROSE allows us to ignore this subtree, but it is here to to permit
-  // the original source code to be faithfully represented.
+     // DQ (9/23/2011): Modified this to not be traversed.  The traversal leads
+     // to an inconsistant AST (incrementally applying fixes). DQ (9/22/2011):
+     // Double checked and this was marked as DEF_TRAVERSAL in master (so we
+     // don't have to change this case). DQ (9/17/2011): Put back the traversal
+     // over the originalExpressionTree (because it will be set to NULL in post
+     // processing). DQ (9/16/2011): Modified this to not be traversed.  The
+     // traversal leads to an inconsistant AST We now want to select two modes
+     // of consistant AST (using or not use the originalExpressionTree). DQ
+     // (2/7/2011): Moved this to the SgExpression level in the IR node
+     // hierarchy because it requires more general support. DQ (6/19/2006):
+     // Changed name of data member to be consitant with more general use in
+     // SgCastExp DQ (11/9/2005): Added reference to expression tree for
+     // original unfolded constant expressions. Constant folding in legacy
+     // frontend and ROSE allows us to ignore this subtree, but it is here to to
+     // permit the original source code to be faithfully represented.
      ValueExp.setDataPrototype ( "SgExpression*", "originalExpressionTree", "= NULL",
                                  NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
@@ -2042,7 +2051,7 @@ Grammar::setUpExpressions ()
 
 #if 0
   // DQ (5/20/2004): removed need_paren from this class and added it to the base class so that
-  // all expression could allow it to be set (so that we can use the value as set in EDG)!
+  // all expression could allow it to be set (so that we can use the value as set in legacy frontend)!
      CastExp.setDataPrototype     ( "bool"  , "need_paren", "= true",
                                     CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
@@ -2058,20 +2067,27 @@ Grammar::setUpExpressions ()
 
 
 #if 1
-  // DQ (9/23/2011): Modified this to not be traversed.  The traversal leads to an inconsistant AST (incrementally applying fixes).
-  // DQ (9/22/2011): Double checked and this was marked as DEF_TRAVERSAL in master (so we don't have to change this case).
-  // DQ (9/17/2011): Put back the traversal over the originalExpressionTree (because it will be set to NULL in post processing).
-  // DQ (9/16/2011): Modified this to not be traversed.  The traversal leads to an inconsistant AST
-  // We now want to select two modes of consistant AST (using or not use the originalExpressionTree).
-  // DQ (6/19/2006): Added reference to expression tree for unfolded constant expressions, where this happens
-  // in a cast it is because EDG has generated an alternative expression tree and yet holds the original one
-  // (similar to the unfolded constant expression) as an alternative.  We actually want the original tree
-  // in most cases and it has a SgCastExp as a root of the subexpression instead of a simple value.
-  // The unfoled constant expression is also availabel from the SgValue IR node. It does not appear to
-  // be required that we handle the more gneral case of adding this sort of support in the SgExpression
-  // and I would like to avoid the extra memory requirement of this design, since expressions are numerous
-  // within the AST and so they need to be kept as small as possible.  So we handle it in SgValue and SgCastExp
-  // explicitly instead of at the SgExpression level.
+     // DQ (9/23/2011): Modified this to not be traversed.  The traversal leads
+     // to an inconsistant AST (incrementally applying fixes). DQ (9/22/2011):
+     // Double checked and this was marked as DEF_TRAVERSAL in master (so we
+     // don't have to change this case). DQ (9/17/2011): Put back the traversal
+     // over the originalExpressionTree (because it will be set to NULL in post
+     // processing). DQ (9/16/2011): Modified this to not be traversed.  The
+     // traversal leads to an inconsistant AST We now want to select two modes
+     // of consistant AST (using or not use the originalExpressionTree). DQ
+     // (6/19/2006): Added reference to expression tree for unfolded constant
+     // expressions, where this happens in a cast it is because legacy frontend
+     // has generated an alternative expression tree and yet holds the original
+     // one (similar to the unfolded constant expression) as an alternative.  We
+     // actually want the original tree in most cases and it has a SgCastExp as
+     // a root of the subexpression instead of a simple value. The unfoled
+     // constant expression is also availabel from the SgValue IR node. It does
+     // not appear to be required that we handle the more gneral case of adding
+     // this sort of support in the SgExpression and I would like to avoid the
+     // extra memory requirement of this design, since expressions are numerous
+     // within the AST and so they need to be kept as small as possible.  So we
+     // handle it in SgValue and SgCastExp explicitly instead of at the
+     // SgExpression level.
      CastExp.setDataPrototype ( "SgExpression*", "originalExpressionTree", "= NULL",
                                  NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
@@ -2186,8 +2202,9 @@ Grammar::setUpExpressions ()
                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      DeleteExp.setDataPrototype     ( "short", "need_global_specifier", "= 0",
                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/21/2006): Added pointer to delete operator being used (there could be many implemented)
-  // At the moment this is always NULL, since I can't find the information in EDG!!!
+     // DQ (8/21/2006): Added pointer to delete operator being used (there could
+     // be many implemented) At the moment this is always NULL, since I can't
+     // find the information in legacy frontend!!!
      DeleteExp.setDataPrototype     ( "SgFunctionDeclaration*", "deleteOperatorDeclaration", "= NULL",
                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -2367,14 +2384,18 @@ Grammar::setUpExpressions ()
      AggregateInitializer.setDataPrototype ( "SgExpression*", "originalExpressionTree", "= NULL",
                                  NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-
-  // DQ (9/4/2013): This should be replaced by the use of SgCompoundLiteral since it is the concept trying to be expressed here
-  // but SgCompoundLiteral is derived from SgExpression, and there is no such thing as a CompoundInitializer.  This is
-  // a confusing topic and this IR nod represent partial support for where compound literals are used in initializers, but
-  // it is better to support a proper SgCompoundLiteral IR node (just being added today) since it can be used outside of
-  // the concept of initialization.  This SgCompoundInitializer is not used in the new EDG/ROSE connection, and the use of
-  // SgCompoundLiteral is being added currently.
-  // TV (03/04/2012) Compound initializer: for OpenCL (Vector type initializer): float4 a = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
+     // DQ (9/4/2013): This should be replaced by the use of SgCompoundLiteral
+     // since it is the concept trying to be expressed here but
+     // SgCompoundLiteral is derived from SgExpression, and there is no such
+     // thing as a CompoundInitializer.  This is a confusing topic and this IR
+     // nod represent partial support for where compound literals are used in
+     // initializers, but it is better to support a proper SgCompoundLiteral IR
+     // node (just being added today) since it can be used outside of the
+     // concept of initialization.  This SgCompoundInitializer is not used in
+     // the new legacy frontend/ROSE connection, and the use of
+     // SgCompoundLiteral is being added currently.
+     // TV (03/04/2012) Compound initializer: for OpenCL (Vector type
+     // initializer): float4 a = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
      CompoundInitializer.setFunctionPrototype ( "HEADER_COMPOUND_INITIALIZER_EXPRESSION", "../Grammar/Expression.code" );
      CompoundInitializer.editSubstitute       ( "HEADER_LIST_DECLARATIONS", "HEADER_LIST_FUNCTIONS", "../Grammar/Expression.code" );
      CompoundInitializer.editSubstitute       ( "LIST_NAME", "initializer" );
@@ -2402,10 +2423,13 @@ Grammar::setUpExpressions ()
   //                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      ConstructorInitializer.setDataPrototype     ( "SgType*", "expression_type", "= NULL",
                                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (5/20/2004): removed need_paren from this class and added it to the base class so that
-  // all expression could allow it to be set (so that we can use the value as set in EDG)!
-  // ConstructorInitializer.setDataPrototype     ( "int", "need_paren"    , "= false",
-  //                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     // DQ (5/20/2004): removed need_paren from this class and added it to the
+     // base class so that all expression could allow it to be set (so that we
+     // can use the value as set in legacy frontend)!
+     // ConstructorInitializer.setDataPrototype     ( "int", "need_paren"    ,
+     // "= false",
+     //                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+     //                 NO_TRAVERSAL, NO_DELETE);
      ConstructorInitializer.setDataPrototype     ( "bool", "need_name"     , "= false",
                                                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      ConstructorInitializer.setDataPrototype     ( "bool", "need_qualifier", "= false",
@@ -2461,7 +2485,7 @@ Grammar::setUpExpressions ()
 
 #if 0
   // DQ (5/20/2004): removed need_paren from this class and added it to the base class so that
-  // all expression could allow it to be set (so that we can use the value as set in EDG)!
+  // all expression could allow it to be set (so that we can use the value as set in legacy frontend)!
      AssignInitializer.setDataPrototype     ( "bool"    , "need_paren"     , "= true",
                                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
@@ -2504,8 +2528,10 @@ Grammar::setUpExpressions ()
      AsmOp.setDataPrototype     ( "SgExpression*", "expression", "= NULL",
                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE);
 
-  // DQ (1/8/2009): Added support for asm operand handling with EDG RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == TRUE
-  // This allows us to handle "asm" statements that reference non-x86 specific details (registers and instructions).
+     // DQ (1/8/2009): Added support for asm operand handling with legacy
+     // frontend RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == TRUE This allows us to
+     // handle "asm" statements that reference non-x86 specific details
+     // (registers and instructions).
      AsmOp.setDataPrototype     ( "bool", "recordRawAsmOperandDescriptions", "= false",
                                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      AsmOp.setDataPrototype     ( "bool", "isOutputOperand", "= false",

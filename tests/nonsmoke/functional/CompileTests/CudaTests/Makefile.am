@@ -38,9 +38,9 @@ CUDA_CODES_Objects = ${CUDA_CODES:.cu=.o}
 $(CUDA_CODES_Objects): ../../testTranslator
 	../../testTranslator -rose:skipfinalCompileStep -c $(srcdir)/$(@:.o=.cu)
 
-# DQ (1/25/2016): These are conditional upon EDG 4.9 which is the only version with the C++11 support.
+# DQ (1/25/2016): These are conditional upon legacy frontend 4.9 which is the only version with the C++11 support.
 if !ROSE_USING_GCC_VERSION_LATER_4_9
-# DQ (2/6/2017): We can't use C++11 mode on GNU 4.9 and greater with EDG 4.9 (requires EDG 4.12).
+# DQ (2/6/2017): We can't use C++11 mode on GNU 4.9 and greater with legacy frontend 4.9 (requires legacy frontend 4.12).
 testDeviceTransformation_01: deviceTranformation
 	./deviceTranformation -std=c++11 -rose:skipfinalCompileStep -c $(srcdir)/inputCode_01.cu
 

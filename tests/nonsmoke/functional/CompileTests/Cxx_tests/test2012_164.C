@@ -1,8 +1,8 @@
 namespace N {
 struct A
    {
-  // Note that EDG altomatically inserts a forward declaration for struct B.
-  // struct B;
+  // Note that legacy frontend altomatically inserts a forward declaration for
+  // struct B. struct B;
 
   // This is a declaration of a pointer to the global struct B (which is not declared in global scope).
      struct B *bp;

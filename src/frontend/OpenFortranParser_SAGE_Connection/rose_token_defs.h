@@ -2,10 +2,10 @@
 #ifndef ROSE_FORTRAN_TOKEN_DEFS
 #define ROSE_FORTRAN_TOKEN_DEFS 1
 //
-//Yes the values to the enums can be "cool" hex numbers. 
-//very similar to the one offered in WAVE.
-//The conversion can be done later.
-//the scripts are in place.
+// Yes the values to the enums can be "cool" hex numbers.
+// very similar to the one offered in the legacy lexer.
+// The conversion can be done later.
+// the scripts are in place.
 //
 enum ROSE_Fortran_Identifiers
 {

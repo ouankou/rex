@@ -2724,7 +2724,7 @@ nc4_pg_varm(NC_PG_T pg, NC_FILE_INFO_T *nc, int ncid, int varid, const size_t *s
          /*
           * The following code permutes through the variable s
           * external start-index space and it s internal address
-          * space.  At the UPC, this algorithm is commonly
+          * space.  At the center, this algorithm is commonly
           * called "odometer code".
           */
          idim = maxidim;

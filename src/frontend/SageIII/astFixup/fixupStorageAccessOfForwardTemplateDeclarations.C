@@ -9,7 +9,8 @@ void
 fixupStorageAccessOfForwardTemplateDeclarations( SgNode* node )
    {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
-     TimingPerformance timer ("Fixup storage access of forward template declarations (EDG bug):");
+  TimingPerformance timer("Fixup storage access of forward template "
+                          "declarations (legacy frontend bug):");
 
   // This simplifies how the traversal is called!
      FixupStorageAccessOfForwardTemplateDeclarations declarationFixupTraversal;

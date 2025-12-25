@@ -29,8 +29,8 @@ long double constant_long_double = CONSTANT;
 // Unparses to: "long double constant_alt_long_double = (0.66666666666666666668);"  (19 digits)
 long double constant_alt_long_double = ((long double) 2.0) / ((long double) 3.0);
 
-// Note: long long double is not supported in EDG
+// Note: long long double is not supported in legacy frontend
 // long long double pi_long_long_double = 3.14159265;
 
-// This is an internal error in EDG!
+// This is an internal error in legacy frontend!
 // void* nullPointer = ((void*)(&x_float_const))[0];

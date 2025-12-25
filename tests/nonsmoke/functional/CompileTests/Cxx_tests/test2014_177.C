@@ -2,7 +2,8 @@
 // class ExtensionInfo {};
 
 #if ( (__GNUC__ == 4) && (__GNUC_MINOR__ >= 10) )
-// This version of the code is supported by EDG, but not by at least GNU 4.4.7.
+// This version of the code is supported by legacy frontend, but not by at least
+// GNU 4.4.7.
 class GeneratedExtensionFinder
    {
      public:

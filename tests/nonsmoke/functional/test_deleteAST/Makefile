@@ -7,9 +7,6 @@
 
 top_srcdir =/home/nguyenthanh1/Rose_compile_tree
 
-# Location of Boost include directory
-BOOST_CPPFLAGS = -pthread -I/home/nguyenthanh1/boost/include
-
 #use -DPRE_ORDER for preorder and -DPOST_ORDER for postorder traversal
 export ORDER_FLAG = -DPOST_ORDER
 
@@ -22,7 +19,6 @@ export NODE_DELETE_FLAG = -DGLOBAL
 ROSE_INCLUDE_DIR = $(top_srcdir)/include
 
 ROSE_INCLUDES = \
-     $(ROSE_BOOST_PREINCLUDE_PATH) \
      -I$(top_srcdir)/src \
      -I$(top_srcdir)/src/frontend/SageIII \
      -I$(top_srcdir)/src/frontend/SageIII/astPostProcessing \
@@ -60,7 +56,7 @@ all: testDeepDelete
 
 # Compile the exampleTranslator using the file identityTranslator.C
 testDeepDelete.lo:
-	/bin/sh $(top_srcdir)/libtool --mode=compile $(CXX) $(CXXFLAGS)  $(CPPFLAGS) $(ROSE_INCLUDES) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) $(ORDER_FLAG) $(NODE_DELETE_FLAG)  -c -o testDeepDelete.lo testDeepDelete.C
+	/bin/sh $(top_srcdir)/libtool --mode=compile $(CXX) $(CXXFLAGS)  $(CPPFLAGS) $(ROSE_INCLUDES) -I$(ROSE_INCLUDE_DIR) $(ORDER_FLAG) $(NODE_DELETE_FLAG)  -c -o testDeepDelete.lo testDeepDelete.C
 
 testDeepDelete: testDeepDelete.lo
 	/bin/sh $(top_srcdir)/libtool --mode=link $(CXX) $(CXXFLAGS) $(LDFLAGS) $(ORDER_FLAG) $(NODE_DELETE_FLAG) -o testDeepDelete testDeepDelete.lo $(ROSE_LIBS)

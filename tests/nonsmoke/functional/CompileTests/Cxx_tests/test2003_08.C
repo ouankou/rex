@@ -12,7 +12,7 @@ Test_2nd_Part_Of_Type* Test_2nd_Part_Of_Type::PointerArray [10];
 class A { };
 typedef void (A::*PointerToMemberFunctionType)();
 
-// A tag is build internally by EDG
+// A tag is build internally by legacy frontend
 struct
    {
      int b;

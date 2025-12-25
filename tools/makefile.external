@@ -18,7 +18,6 @@ TRANSLATOR_SOURCE=$(TRANSLATOR).C
 ## Input testcode for your translator
 TESTCODE=hello.cpp
 
-# the Sawyer lib uses a long list of boost libs
 LINK_FLAGS=-Wl,-rpath=$(ROSE_INSTALL)/lib -L$(ROSE_INSTALL)/lib -lrose -pthread -lm
 #-------------------------------------------------------------
 # Makefile Targets
@@ -37,4 +36,3 @@ check: $(TRANSLATOR)
 
 clean:
 	rm -rf $(TRANSLATOR) *.o rose_* *.dot
-

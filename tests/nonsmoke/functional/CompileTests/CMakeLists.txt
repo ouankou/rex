@@ -2,9 +2,6 @@
 foreach(include ${ROSE_INCLUDES})
   list(APPEND ROSE_INCLUDE_FLAGS "-I${include}")
 endforeach()
-foreach(include ${Boost_INCLUDE_DIRS})
-  list(APPEND ROSE_INCLUDE_FLAGS "-I${include}")
-endforeach()
 
 # default values for our compile tests
 set(ROSE_FLAGS -w -rose:verbose 0)
@@ -77,9 +74,9 @@ if(enable-c)
 
 	  add_subdirectory(nameQualificationAndTypeElaboration_tests)
   
-  # NewEDGInterface_C_tests is obsolete
-  # if(enable-new-edg-interface)
-  #   add_subdirectory(NewEDGInterface_C_tests)
+  # Legacy frontend interface tests are obsolete
+  # if(enable-legacy-frontend-interface)
+  #   add_subdirectory(LegacyFrontendInterface_C_tests)
   # endif()
 
   add_subdirectory(UnparseHeadersTests)
@@ -93,4 +90,3 @@ if(enable-c)
     add_subdirectory(staticCFG_tests)
   endif()
 endif()
-

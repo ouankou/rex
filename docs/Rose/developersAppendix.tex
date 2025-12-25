@@ -221,11 +221,11 @@ Please configure this copy with your name and email before starting work.
           file:///nfs/casc/overture/ROSE/git/ROSE.git localRoseName} . A
           directory named localRoseName will show up after this 
            command. Type \textit{cd localRoseName} to operate within the private repository from now on.
-           \item Retrieve EDG source files: we use a separated git
-           repository for EDG to protect its proprietary source files. The
-           EDG git repository is linked to the ROSE git repository as a
+           \item Retrieve legacy frontend source files: we use a separated git
+           repository for legacy frontend to protect its proprietary source files. The
+           legacy frontend git repository is linked to the ROSE git repository as a
            submodule. You have to explicitly get the submodule if you want to
-           modify the EDG source files. Just type:
+           modify the legacy frontend source files. Just type:
            \\ \textit{git submodule init; git submodule update}
           \item list all branches in the central git repository: \textit{git branch -r}
           \item list all branches in the local copy of the git repository: \textit{git branch -l}
@@ -267,9 +267,9 @@ Please configure this copy with your name and email before starting work.
 \item Pulling and Merging the shared master branch: It is recommended to synchronize the master branches often and merge new commits from others to  your local branch. 
    \begin{itemize}
           \item Switch to and synchronize a local master branch: \textit{git checkout master; git pull origin master}
-          \item Don't forget to update the link to the EDG submodule: \textit{git submodule update}
+          \item Don't forget to update the link to the legacy frontend submodule: \textit{git submodule update}
           \item Switch to your local branch and merge with local master: \textit{git checkout your-local-branch-name; git merge master}
-    \item Alternatively, you can stay in your local branch and directly pull the remote master and update the EDG submodule: 
+    \item Alternatively, you can stay in your local branch and directly pull the remote master and update the legacy frontend submodule: 
            \textit{git pull origin master; git submodule update}
    \end{itemize}   
 
@@ -292,39 +292,39 @@ It is highly recommended to pull and merge the shared master branch before doing
 
    \end{itemize}
 
-\item Modifying the EDG submodule. In rare cases, you may have to modify the EDG files within the submodule and update the link between ROSE and the EDG module. Please be {\bf EXTREMELY cautious} when you have to do this and always
+\item Modifying the legacy frontend submodule. In rare cases, you may have to modify the legacy frontend files within the submodule and update the link between ROSE and the legacy frontend module. Please be {\bf EXTREMELY cautious} when you have to do this and always
 ask for help from senior LLNL developers for your first attempt. Here are some brief instructions about how to do this right.
      \begin{itemize}
 
-  \item First, make sure you have tried to pull the content from the EDG submodule. You can run \textit{git submodule init; git submodule update} again from the top level of your private ROSE git repository to be safe. 
-  \item By default, the EDG submodule files checked out via \textit{git submodule init; git submodule update} is not on any branch (You can verify this by typing \textit{git status} within \textit{src/frontend/CxxFrontend/EDG}.  
-You can create a local branch based on the current content before you modify the EDG related files. Just type \textit{git checkout -b local-branch-name} under \textit{src/frontend/CxxFrontend/EDG} so you can create a local branch off the current content and switch to the branch.
-   \item We have access control over the EDG git repo the same way we have
+  \item First, make sure you have tried to pull the content from the legacy frontend submodule. You can run \textit{git submodule init; git submodule update} again from the top level of your private ROSE git repository to be safe. 
+  \item By default, the legacy frontend submodule files checked out via \textit{git submodule init; git submodule update} is not on any branch (You can verify this by typing \textit{git status} within \textit{src/frontend/CxxFrontend/legacy frontend}.  
+You can create a local branch based on the current content before you modify the legacy frontend related files. Just type \textit{git checkout -b local-branch-name} under \textit{src/frontend/CxxFrontend/legacy frontend} so you can create a local branch off the current content and switch to the branch.
+   \item We have access control over the legacy frontend git repo the same way we have
    for the ROE git repo. You have to have your own remote branch in
-   the shared EDG git repo so you can push any contributions to your own
+   the shared legacy frontend git repo so you can push any contributions to your own
    branch. The initial content of your remote branch
-   MUST be the same as the current EDG version linked to ROSE. This
-   should be the default EDG version checked out and also the local branch
+   MUST be the same as the current legacy frontend version linked to ROSE. This
+   should be the default legacy frontend version checked out and also the local branch
    you just created from the previous step. To create a remote branch for
-   yourself based the latest linked EDG version, type 
-   \textit{git push origin HEAD:refs/heads/your\_LLNL\_OUN-main-rc} within \textit{src/frontend/CxxFrontend/EDG}.
-   \item You can then modify EDG files and commit changes to your private repository of the submodule. 
+   yourself based the latest linked legacy frontend version, type 
+   \textit{git push origin HEAD:refs/heads/your\_LLNL\_OUN-main-rc} within \textit{src/frontend/CxxFrontend/legacy frontend}.
+   \item You can then modify legacy frontend files and commit changes to your private repository of the submodule. 
          You should also be able to push your commits to your own branch
-         within the remote EDG repository.
-         Again, always be sure do all commits and push within \textit{src/frontend/CxxFrontend/EDG} for EDG related changes. 
+         within the remote legacy frontend repository.
+         Again, always be sure do all commits and push within \textit{src/frontend/CxxFrontend/legacy frontend} for legacy frontend related changes. 
    \item In the end, change ROSE git repository's link to the changed submodule. 
   \begin{verbatim}
   $ cd ROSE/src/frontend/CxxFrontend  # Go to submodule's parent repository's path 
-  $ git add EDG  # Do not type 'git add EDG/', 
-                 # which will add all files under EDG/ to the super project!!!
-  $ git commit -m "Updated submodule EDG."
+  $ git add legacy frontend  # Do not type 'git add legacy frontend/', 
+                 # which will add all files under legacy frontend/ to the super project!!!
+  $ git commit -m "Updated submodule legacy frontend."
   $ git push   # assuming you are on your local ROSE branch tracking your own remote branch 
                # and have set up the push mode by: git config push.default 'tracking'
   \end{verbatim}  
   \item Due to the limited support of submodule of Hudson's git plugin, a developer's branch
-  of the EDG repo will not automatically be merged into the master of the EDG repo. So
-  the EDG branch linked to the parent ROSE repo often is often the master of
-  the EDG repo. This should not be a problem since two repositories are
+  of the legacy frontend repo will not automatically be merged into the master of the legacy frontend repo. So
+  the legacy frontend branch linked to the parent ROSE repo often is often the master of
+  the legacy frontend repo. This should not be a problem since two repositories are
   linked through HASH numbers. 
    
    \end{itemize}
@@ -612,14 +612,14 @@ Git cheat sheet: \htmladdnormallink{http://cheat.errtheblog.com/s/git}{http://ch
 % DQ (2/4/2009): Added documentation for how to sync external version of ROSE
 \section{Resync-ing with a full version of ROSE}%{{{
    As part of work with external collaborators, where they have 
-access to the EDG source code, we sometime have to update their
+access to the legacy frontend source code, we sometime have to update their
 version of the parts of ROSE that are not released publicly
-(e.g. EDG and the EDG/ROSE translation work which uses EDG).
+(e.g. legacy frontend and the legacy frontend/ROSE translation work which uses legacy frontend).
 A typical reason why this is required is that the external
 collaborator has made a change to the ROSE IR that is incompatible
-with the binary distribution of the EDG and EDG/ROSE translation code,
+with the binary distribution of the legacy frontend and legacy frontend/ROSE translation code,
 and so they need a most recent version of the full distribution of
-ROSE so that they can build EDG and the EDG/ROSE translation fresh
+ROSE so that they can build legacy frontend and the legacy frontend/ROSE translation fresh
 and run the automated tests.
 
 We wish to outline this process:
@@ -647,8 +647,8 @@ with typical output:
 \end{verbatim}
 This builds the file: {\tt ROSE-svn-Feb03-2009-r4275.tar.gz}
 which we then send to you.  This is a full source code release of ROSE which includes the
-    protected EDG source code, we will know if you have a license for this.  
-    {\em You should not distribute this to anyone who does not have an EDG license.}
+    protected legacy frontend source code, we will know if you have a license for this.  
+    {\em You should not distribute this to anyone who does not have an legacy frontend license.}
    \item Then you update your branch with the trunk at the external revision number (in our
     example this would be revision {\em 243}). See the instructions in
     \verb\Working with The ROSE SVN repositories\ of this guide about
@@ -667,8 +667,8 @@ which we then send to you.  This is a full source code release of ROSE which inc
     in the exclusion list to regenerate a desired patch as needed.
     The final patch should only contains your contributions.
    \item Apply that patch to the tarball of the internal ROSE's trunk that we sent you (representing
-     the full source code for EDG and everything) and you how have a way to test
-     your work and recompile the EDG work for either a new machine or with the IR changes
+     the full source code for legacy frontend and everything) and you how have a way to test
+     your work and recompile the legacy frontend work for either a new machine or with the IR changes
      that you have added.
      \begin{verbatim}
       cd internal_ROSE_trunk
@@ -691,7 +691,7 @@ which we then send to you.  This is a full source code release of ROSE which inc
     with the full internal source tree. Please record the revision number
     of your branch associated with this patch. The number will be treated
     as a synchronization point between your branch and the main trunk. 
-% \item Apply that patch to your external branch.  This will update your branch with everything required, even though   it may not pass tests using the released binary of EDG.
+% \item Apply that patch to your external branch.  This will update your branch with everything required, even though   it may not pass tests using the released binary of legacy frontend.
 %   \item Let us know when your done and we can review and merge your branch into the trunk of the 
    \item Let us know when you are done and we can get your patch applicable to
    our internal SVN repository. At this point we can review and apply the
@@ -920,25 +920,25 @@ SOURCE_VARARG_OPERATOR_END
 
      \item Creating the new IR node at some point, such as somewhere within frontend, midend, or even backend if desired.
            This step is decided by the purpose of the newly added IR types.
-           If the new types of IR come from their counterparts in EDG, then modifications to the EDG/SAGE connection code are needed.
-           If you are trying to represent some pragma information, you don't need to touch EDG and its connection. 
+           If the new types of IR come from their counterparts in legacy frontend, then modifications to the legacy frontend/SAGE connection code are needed.
+           If you are trying to represent some pragma information, you don't need to touch legacy frontend and its connection. 
            You just parse the pragma string in the original AST and create your own nodes to get a new version of AST. 
            Then it should be done.
 
-           Here are the instructions if the new IR node is connected to EDG IR node.
-           Modify the EDG/SAGE connection code to have the new IR node built in the
-           translation from EDG to SAGE III.  This step often requires a bit of expertise
-           in working with the EDG/SAGE connection code. In general, it requires no great
-           depth of knowledge of EDG.
+           Here are the instructions if the new IR node is connected to legacy frontend IR node.
+           Modify the legacy frontend/SAGE connection code to have the new IR node built in the
+           translation from legacy frontend to SAGE III.  This step often requires a bit of expertise
+           in working with the legacy frontend/SAGE connection code. In general, it requires no great
+           depth of knowledge of legacy frontend.
 
            Two source files are usually involved: a)
-           \textit{src/frontend/CxxFrontend/EDG\_SAGE\_Connection/sage\_gen\_be.C}
-           which converts IL tree to SAGE III AST and is derived from EDG's 
+           \textit{src/frontend/CxxFrontend/legacy frontend\_SAGE\_Connection/sage\_gen\_be.C}
+           which converts IL tree to SAGE III AST and is derived from legacy frontend's 
            C++/C-generating back end \textit{cp\_gen\_be.c}; b)
            \textit{sage\_il\_to\_str.C} contains helper functions forming SAGE
-           III AST from various EDG IL entries. It is derived from EDG's
+           III AST from various legacy frontend IL entries. It is derived from legacy frontend's
            \textit{il\_to\_str.c}.  For the {\em SgVarArgOp} example, the
-           following EDG-SAGE connection code is needed in
+           following legacy frontend-SAGE connection code is needed in
            \textit{sage\_gen\_be.C}:
 {\indent
 {\mySmallFontSize
@@ -999,64 +999,6 @@ Unparse_ExprStmt::unparseVarArgOp(SgExpression* expr, SgUnparse_Info& info)
 
 \end{enumerate}
 
-%}}}
-
-\section{Separation of EDG Source Code from ROSE Distribution}%{{{
-
-    The EDG research license restricts the distribution of their source code.
-Working with EDG is still possible within an open source project such as ROSE because 
-EDG permits binaries of their work to be freely distributed (protecting their source 
-code).  As ROSE matured, we designed the autoconf/automake distribution mechanism
-to build distributions that exclude the EDG source code and alternatively distribute
-a Linux-based binary version of their code.
-
-   All releases of ROSE, starting with 0.8.4a, are done without the EDG source code
-by default.  An optional configure command line option is implemented to allow
-the construction of a distribution of ROSE which includes the EDG source code
-(see {\tt configure --help} for the {\tt --with-edg\_source\_code} option).
-
-   The default options for configure will build a distribution that contains
-no EDG source code (no source files or header files).  This is not a problem 
-for ROSE because it can still exist as an almost entirely open source project
-using only the ROSE source and the EDG binary version of the library.
-
-  Within this default configuration, ROSE can be freely distributed on the Web
-(eventually).  Importantly, this simplifies how we work with many different 
-research groups and avoid the requirement for a special research license from
-EDG for the use of their C and C++ front-end.  Our goal has been to simplify
-the use of ROSE.
-
-   Only the following command to configure with EDG source code is accepted:
-{\indent
-{\mySmallFontSize
-\begin{verbatim}
-     configure --with-edg_source_code=true
-\end{verbatim} 
-}}
-This particularly restrictive syntax is used to prevent it from ever being used
-by accident.  Note that the following will not work. They are equivalent to 
-not having specified the option at all:
-{\indent
-{\mySmallFontSize
-\begin{verbatim}
-     configure --with-edg_source_code
-     configure --with-edg_source_code=false
-     configure --with-edg_source_code=True
-     configure --with-edg_source_code=TRUE
-     configure --with-edg_source_code=xyz
-     configure 
-\end{verbatim} 
-}}
-
-To see how any configuration is set up, type {\tt make testEdgSourceRule}
-in the {\tt ROSE/src/frontend/CxxFrontend/EDG\_3.3/src} directory.
-
-To build a distribution without EDG source code:
-\begin{enumerate}
-   \item Configure to use the EDG source code and build normally, 
-   \item Then rerun configure to not use the EDG source code, and
-   \item Run {\tt make dist}.
-\end{enumerate}
 %}}}
 
 \section{How to Deprecate ROSE Features}%{{{
@@ -1257,54 +1199,6 @@ Details: \\
 
 %}}}
 
-\section{How To Build a ROSE Distribution with EDG Binaries}%{{{
-
-%Updated by Liao on 4/27/2009
-
-   The construction of a binary distribution is done as part of making
-ROSE available externally on the web to users who do not have an EDG
-license.  We make only the EDG part of ROSE available as a binary (library) 
-and the rest is left as source code (just as in an all source distribution).
-
-This step is automated in our daily regression test script in {\tt
-rose/script/roseFreshTest} and is turned on by a flag
-{\tt ENABLE\_BUILD\_BINARY\_EDG}. A simplified excerpt of the script is shown below:
-\begin{verbatim}
-if [ 0$ENABLE_BUILD_BINARY_EDG -ne 0 ]; then
-  cd ${ROSE_TOP}/build
-  make binary_edg_tarball || exit 1
-  ${ROSE_TOP}/sourcetree/scripts/copy_binary_edg_tarball_to_source_tree_svn 
-  ${ROSE_TOP}/sourcetree/scripts/copy_binary_edg_tarball_to_source_tree ${ROSE_TOP}/sourcetree 
-make $MAKEFLAGS source_with_binary_edg_dist DOT_SVNREV=-${svnversion}
-echo "############ make source_with_binary_edg_dist done"
-fi
-\end{verbatim}
-
-% DQ (7/11/2009): Added '$' so get the coloring correct in my emacs (an annoying issue).
-
-As shown in the script above, the steps to build a binary distribution of ROSE are:
-\begin{enumerate}
-   \item Configure and build ROSE normally, using configure (use all options that you
-    require in the binary distribution).  
-    \item Run {\tt make binary\_edg\_tarball}. This will make a binary tar
-    ball from EDG and EDG-SAGE connection source files. 
-    \item Copy the binary to the svn repository: {\tt copy\_binary\_edg\_tarball\_to\_source\_tree\_svn} 
-    \item Copy the binary to your local copy: {\tt copy\_binary\_edg\_tarball\_to\_source\_tree}
-     \item Make the ROSE distribution with EDG binaries: {\tt make source\_with\_binary\_edg\_dist}
-%   \item (optional) Run {\tt make dist}, this will build an {\em all source distribution} of ROSE.
-%   \item Rerun configure without the {\tt --with-edg\_source\_code=true} option.
-%   \item Run {\tt make dist}, this will build a binary distribution using the 
-%    binary libraries build in step one.
-\end{enumerate}
-To make sure the binaries are up to date for different platforms, 
-we generate a hash number from the source files within the EDG and EDG-SAGE connection source tree and 
-treat the number as a signature for the binary package. 
-Please see the makefile target {\tt rose\_binary\_compatibility\_signature} in {\tt rose/Makefile.am} for details.
-Our regression test script will check for the availability and consistency of the binaries for all supported platforms 
-before making an external ROSE release with EDG binaries.
-%-----------------------------------------------------------------------
-%}}}
-
 \section{Avoiding Nightly Backups of Unrequired ROSE Files at LLNL}%{{{
 
    If your at LLNL and participating in the nightly builds and
@@ -1387,7 +1281,7 @@ Directions for using a bash script (rose/scripts/roseFreshTest) to set up period
            ./roseFreshTest ./roseFreshTestStub-<your stub name>.sh \
            <extra configure options>
          Where <extra configure options> are things like
-         --enable-edg\_union\_struct\_debugging, --with-C\_DEBUG=..., etc.
+         --with-C\_DEBUG=..., etc.
 \end{verbatim}
       \end{enumerate}
    \end{enumerate}
@@ -1453,7 +1347,7 @@ To enable this feature, do the following:
    CXX          = identityTranslator
    FC           = identityTranslator
 
-  # compilation options: turn off ROSE 's EDG frontend warnings 
+  # compilation options: turn off ROSE frontend warnings 
   # since we are not interesting in fixing the benchmarks
   COPTIMIZE     = -O2 
   CXXOPTIMIZE  = -O2 
@@ -1504,25 +1398,13 @@ Here are the commands to update the rosecompiler.org website:
 \end{verbatim}
 
 \subsection{The External Repository}
-To build the binary file of the EDG frontend and the corresponding
-\textit{EDG\_SAGE\_CONNECTION} code for the current platform:
-
-\begin{itemize}
-  \item  \textit{make binary\_edg\_tarball} 
-  \item  add the binary into the internal SVN repository, remove any stale
-  binaries for other platforms as well. \\
-  \textit{make copy\_binary\_edg\_tarball\_to\_source\_tree\_svn} 
-   \item make a source release package with EDG binaries. \\
-   \textit{make source\_with\_binary\_edg\_dist  DOT\_SVNREV=-svnversion} 
-\end{itemize}   
-
 Finally, a dedicated script will import the release package into the
 external ROSE svn repository hosted at the SciDAC Outreach Center. You must
 have an active account with https://outreach.scidac.gov to do this!\\
 
 \textit{rose/scripts/importRoseDistributionToSVN ROSE\_TOP\_TEST\_DIR}
 
-It conducts a set of sanity checks and postprocessing before the actual importing. e.g. No EDG copyrighted files in the package, remove .svn and other undesired directories or files, make sure all EDG binaries for supported platforms are available.
+It conducts a set of sanity checks and postprocessing before the actual importing. e.g. remove .svn and other undesired directories or files, and verify the package contents.
 %------------------------------------------------------------
 %}}}
 
@@ -1540,7 +1422,7 @@ svn log --xml --verbose \
 /home/liao6/opt/svn2cl-0.11/svn2cl.xsl - > ChangeLog2
 \end{verbatim}
 The command above will include revision numbers into the change log and
-filter out the automatically generated commits updating EDG binary files.
+filter out the automatically generated commits updating legacy frontend binary files.
 
 %------------------------------------------------------------
 %}}}
@@ -1569,7 +1451,6 @@ path for your translator and rename it to textit{roseTranslator}.
 Then a configuration line likes like the following:
 
 \begin{verbatim}
-../sourcetree/configure --with-boost=/home/liao6/opt/boost_1_35_0 \
 --with-CXX_DEBUG="-g -DNDEBUG" --with-C_DEBUG="-g -DNDEBUG" \
 --prefix=/home/liao6/daily-test-rose/compass/install \ 
 CXX=roseTranslator CXXLD=g++
@@ -1582,7 +1463,7 @@ CXX=roseTranslator CXXLD=g++
 The NMI Build and Test Farm allows us to compile tests on ROSE on a variety of
 different Operating Systems. For more information on the compile farm see
 \url{http://nmi.cs.wisc.edu/}.  These tests can be run against an arbitrary
-tarball of ROSE source (with EDG binary), or against the HEAD revision of the
+tarball of ROSE source (with legacy frontend binary), or against the HEAD revision of the
 public svn repository.  The purpose of this section is to show how different
 build and test configurations can be implemented.  For a detailed introduction
 on how to submit jobs to the build system visit
@@ -1629,7 +1510,6 @@ Overview of the options:
                        and clicking on the platforms you want to use.
  \item {\tt CONFIGURE\_OPTIONS} - Define which options you want to pass to {\tt
                          configure}.  You will very likely need, at a minimum,
-                         to refer to the correct boost directory.
 
  \item {\tt JAVA\_HOME} - If the JVM runtime (used by the Fortran OFP frontend)
                          is included in the prereqs, {\tt JAVA\_HOME} should be
@@ -1648,8 +1528,6 @@ Example options file:
 \begin{verbatim}
 TITLE="testing default on all linux platforms"
 DESCRIPTION="minimal configuration options, gcc 4.2.4"
-PREREQS="gcc-4.2.4, boost-1.35.0"
-CONFIGURE_OPTIONS="--with-boost=/prereq/boost-1.35.0 --with-CXX_WARNINGS=-Wall"
 \end{verbatim}
 
 
@@ -3300,7 +3178,7 @@ class Value {
      virtual unsigned short getConcreteValueUnsignedShort() const;
 };
 
-typedef boost::shared_ptr<Value> ValueP;
+typedef std::shared_ptr<Value> ValueP;
 
 template <typename PrimType>
 class IntegralPrimTypeValue : public GenericPrimTypeValue<PrimType>
@@ -4032,16 +3910,6 @@ Other useful utility functions in ROSE
 \begin{lstlisting}
 
 <HEADER_GRAPH_START>
- //! Simple edge type used to input data to Boost algorithms
-     typedef std::pair<int, int> BoostEdgeType;
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-  // We need this local type so that the member access functions for data members of this type can be resolved.
-  // typedef std::vector<SgGraph::BoostEdgeType> SgBoostEdgeList;
-     typedef std::vector<BoostEdgeType> SgBoostEdgeList;
-  // typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-  // DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-     typedef std::vector<int> SgBoostEdgeWeightList;
-  // typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
      int hashCode( const char* p, int len) const; // hash a character array
   // void initialize_graph_id();
      void append_properties( int addr, const std::string & prop );
@@ -4055,8 +3923,7 @@ Other useful utility functions in ROSE
      SgGraphEdge* addEdge( SgGraphEdge* edge );
      void post_construction_initialization();
 
- //! Support for Boost Minimum Spanning Tree.
-  // std::vector <BoostEdgeDescriptor> generateSpanningTree();
+ //! Support for minimum spanning tree.
      std::vector <SgGraphEdge*> generateSpanningTree();
   // tps (4/30/2009): Added properties for nodes and edges
   // todo: this will be replaced with AstAttributes once the graph conversion is done.
@@ -4104,18 +3971,6 @@ Other useful utility functions in ROSE
 
 
 <HEADER_GRAPH_POSTDECLARATION_START>
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-// We need this global type so that the member access functions (defined outside the class)
-// for data members of this type can be resolved.
-typedef SgGraph::SgBoostEdgeList SgBoostEdgeList;
-typedef SgBoostEdgeList* SgBoostEdgeListPtr;
-// DQ (4/29/2009): Added support for boost edges to be used in boost graph library algorithms.
-typedef SgGraph::SgBoostEdgeWeightList SgBoostEdgeWeightList;
-typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
-// Supporting graph type required by Boost Graph Library.
-// typedef boost::graph_traits < SgGraph::BoostGraphType >::edge_descriptor BoostEdgeDescriptor;
-
-
 <HEADER_GRAPHNODE_START>
      void append_properties( int addr, const std::string & prop );	
      void post_construction_initialization();
@@ -4351,7 +4206,6 @@ directory):
    \item Run-time Error Detection (RTED)
    \item Mixed Static Dynamic Analysis
    \item Taint Check
-   \item UpcTranslation
    \item CERT Secure Code Project
    \item Data-Structure Graphing
    \item Documentation Generator

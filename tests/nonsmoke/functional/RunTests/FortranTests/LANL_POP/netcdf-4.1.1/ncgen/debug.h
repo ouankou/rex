@@ -6,7 +6,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/debug.h,v 1.2 2010/03/31 18:18:34 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/debug.h,v 1.2 2010/03/31 18:18:34 dmh
+ *Exp $
  *********************************************************************/
 
 #include <stdarg.h>

@@ -285,15 +285,15 @@ check-local:
 	@echo "Tests for AST merge mechanism."
 if USING_GNU_COMPILER
 if ROSE_USING_GCC_VERSION_LATER_4_8
-	@echo "C++11 tests require configuration with either EDG version 4.9 and GNU version 4.8 or backend compiler or EDG 4.12 and 4.8 or any later GNU compiler."
-	@echo "C++11 tests using EDG 4.12 and any supported backend compiler are allowed."
+	@echo "C++11 tests require configuration with either legacy frontend version 4.9 and GNU version 4.8 or backend compiler or legacy frontend 4.12 and 4.8 or any later GNU compiler."
+	@echo "C++11 tests using legacy frontend 4.12 and any supported backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Objects)
 endif # ROSE_USING_GCC_VERSION_LATER_4_8
 else
 if USING_CLANG_COMPILER
 # Exclude this list of files in the case of CLANG compiler.
 	@echo "USING_CLANG_COMPILER == true"
-	@echo "C++11 tests using EDG 4.9: Clang backend compiler using EDG 4.12 frontend."
+	@echo "C++11 tests using legacy frontend 4.9: Clang backend compiler using legacy frontend 4.12 frontend."
 # DQ (2/28/2017): Skip these files with Clang for now and come back to them later (when we understand the limits of portability better).
 #	@$(MAKE) $(PASSING_TEST_Objects)
 else # NOT USING_CLANG_COMPILER
@@ -301,7 +301,7 @@ else # NOT USING_CLANG_COMPILER
 if USING_INTEL_COMPILER
 # Exclude this list of files in the case of Intel compiler.
 	@echo "USING_INTEL_COMPILER == true"
-	@echo "C++11 tests using EDG 4.12 Intel backend compiler are allowed."
+	@echo "C++11 tests using legacy frontend 4.12 Intel backend compiler are allowed."
 	@$(MAKE) $(PASSING_TEST_Objects)
 else # NOT USING_INTEL_COMPILER
 # This is an unknown compiler.

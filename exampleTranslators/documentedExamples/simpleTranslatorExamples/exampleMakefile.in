@@ -9,9 +9,6 @@
 # Location of include directory after "make install"
 ROSE_INCLUDE_DIR = @prefix@/include
 
-# Location of Boost include directory
-BOOST_CPPFLAGS = @BOOST_CPPFLAGS@
-
 # Location of Dwarf include and lib (if ROSE is configured to use Dwarf)
 ROSE_DWARF_INCLUDES = @LIBDWARF_CPPFLAGS@
 ROSE_DWARF_LIBS_WITH_PATH = @DWARF_LINK@
@@ -42,7 +39,7 @@ all: exampleTranslator
 
 # Compile the exampleTranslator using the file identityTranslator.C
 exampleTranslator.lo:
-	/bin/sh @top_builddir@/libtool --mode=compile $(CXX) $(CXXFLAGS)  $(CPPFLAGS) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) -c -o exampleTranslator.lo $(ROSE_SOURCE_DIR)/identityTranslator.C
+	/bin/sh @top_builddir@/libtool --mode=compile $(CXX) $(CXXFLAGS)  $(CPPFLAGS) -I$(ROSE_INCLUDE_DIR) -c -o exampleTranslator.lo $(ROSE_SOURCE_DIR)/identityTranslator.C
 
 exampleTranslator: exampleTranslator.lo
 	/bin/sh @top_builddir@/libtool --mode=link $(CXX) $(CXXFLAGS) $(LDFLAGS) -o exampleTranslator exampleTranslator.lo $(ROSE_LIBS)
@@ -50,6 +47,4 @@ exampleTranslator: exampleTranslator.lo
 # Rule used by make installcheck to verify correctness of installed libraries
 check:
 	./exampleTranslator -c $(ROSE_SOURCE_DIR)/testCode.C
-
-
 

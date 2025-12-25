@@ -1,6 +1,6 @@
 // A gnu C extension found at:
 // http://gcc.gnu.org/onlinedocs/gcc-3.2.2/gcc/index.html#Top
-// Compiles with EDG, but not with ROSE.
+// Compiles with legacy frontend, but not with ROSE.
 
 void foo()
    {

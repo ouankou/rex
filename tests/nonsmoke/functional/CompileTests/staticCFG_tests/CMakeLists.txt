@@ -16,6 +16,12 @@ set(rex_test2025_issue148_system_header_dir
 
 set(ROSE_FLAGS  -w -rose:verbose 0 )
 
+function(rex_lock_test_for_input test_name input_file)
+  get_filename_component(lock_base ${input_file} NAME_WE)
+  set_tests_properties(${test_name}
+    PROPERTIES RESOURCE_LOCK "rose_output_${lock_base}")
+endfunction()
+
 # This populates the list ROSE__CXX_TESTS
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
@@ -31,6 +37,7 @@ if(REX_ENABLE_FAILING_TESTS)
         -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
         -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+    rex_lock_test_for_input(testStaticCFG_Cxx_failing_${file_to_test} ${file_to_test})
     set_tests_properties(testStaticCFG_Cxx_failing_${file_to_test} PROPERTIES LABELS STATICCFGTEST_FAILING)
 
     add_test(
@@ -39,6 +46,7 @@ if(REX_ENABLE_FAILING_TESTS)
         -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
         -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+    rex_lock_test_for_input(testInterproceduralCFG_Cxx_failing_${file_to_test} ${file_to_test})
 
     set_tests_properties(testInterproceduralCFG_Cxx_failing_${file_to_test}
       PROPERTIES DEPENDS testStaticCFG_Cxx_failing_${file_to_test} LABELS STATICCFGTEST_FAILING)
@@ -61,6 +69,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
       -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+  rex_lock_test_for_input(testStaticCFG_Cxx_${file_to_test} ${file_to_test})
   set_tests_properties(testStaticCFG_Cxx_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
   add_test(
@@ -69,6 +78,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
       -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+  rex_lock_test_for_input(testInterproceduralCFG_Cxx_${file_to_test} ${file_to_test})
 
   set_tests_properties(testInterproceduralCFG_Cxx_${file_to_test}
     PROPERTIES DEPENDS testStaticCFG_Cxx_${file_to_test} LABELS STATICCFGTEST)

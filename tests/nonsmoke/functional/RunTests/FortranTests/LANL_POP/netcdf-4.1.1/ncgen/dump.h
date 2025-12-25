@@ -6,7 +6,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/dump.h,v 1.2 2010/04/04 19:39:44 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/dump.h,v 1.2 2010/04/04 19:39:44 dmh
+ *Exp $
  *********************************************************************/
 
 extern void dumptransform(Datalist*);

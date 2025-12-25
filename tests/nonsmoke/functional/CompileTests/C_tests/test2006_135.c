@@ -6,7 +6,7 @@ struct test_struct
   // GNU gcc uses "__restrict__"
      char* __restrict__ p;
 #else
-  // EDG uses "restrict"
+     // legacy frontend uses "restrict"
      char* restrict p;
 #endif
    } test_struct_var;

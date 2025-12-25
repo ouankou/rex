@@ -1,13 +1,12 @@
 #ifndef ROSE_RTIHELPERS_H
 #define ROSE_RTIHELPERS_H
 
-#include <string>
-#include <vector>
+#include <iomanip>
 #include <list>
 #include <set>
 #include <sstream>
-#include <iomanip>
-#include <boost/lexical_cast.hpp>
+#include <string>
+#include <vector>
 
 // Helpful functions for Cxx_GrammarRTI.C
 // Probably should not be included anywhere else

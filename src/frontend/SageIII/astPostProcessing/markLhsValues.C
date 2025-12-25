@@ -80,8 +80,10 @@ MarkLhsValues::visit(SgNode* node)
                       // This is violated by the ROSE/tests/nonsmoke/functional/roseTests/astInliningTests/pass16.C test code!
                       // ROSE_ASSERT(lhs->get_lvalue() == true);
 
-                      // This is a value that I know has to be set, the AST generation in EDG/Sage and OFP/Sage
-                      // sets this properly, but some transformations of the AST do not, so we fix it up here.
+                         // This is a value that I know has to be set, the AST
+                         // generation in legacy frontend/Sage and OFP/Sage sets
+                         // this properly, but some transformations of the AST
+                         // do not, so we fix it up here.
                          lhs->set_lvalue(true);
                          rhs->set_lvalue(false);
                          break;
@@ -109,8 +111,10 @@ MarkLhsValues::visit(SgNode* node)
                          SgExpression* rhs = binaryOperator->get_rhs_operand();
                          ROSE_ASSERT(rhs != NULL);
 
-                      // This is a value that I know has to be set, the AST generation in EDG/Sage and OFP/Sage
-                      // sets this properly, but some transformations of the AST do not, so we fix it up here.
+                         // This is a value that I know has to be set, the AST
+                         // generation in legacy frontend/Sage and OFP/Sage sets
+                         // this properly, but some transformations of the AST
+                         // do not, so we fix it up here.
                          lhs->set_lvalue(false);
                          rhs->set_lvalue(false);
                          break;

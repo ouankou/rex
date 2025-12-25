@@ -195,7 +195,7 @@ CustomAstDOTGenerationData::additionalEdgeOptions(SgNode* from, SgNode* to, std:
 
      std::string returnString;
 #if 0
-  // This will find the edge in the edge list, but the edgList is always empty, unless we 
+  // This will find the edge in the edge list, but the edgeList is always empty, unless we
   // add edges explicitly.  So this code is not the way to identify edges. Instead we
   // should just have the base class generate an empty string.
 
@@ -525,7 +525,7 @@ CustomMemoryPoolDOTGenerationData::additionalEdgeOptions(SgNode* from, SgNode* t
 
      std::string returnString;
 #if 0
-  // This will find the edge in the edge list, but the edgList is always empty, unless we 
+  // This will find the edge in the edge list, but the edgeList is always empty, unless we
   // add edges explicitly.  So this code is not the way to identify edges. Instead we
   // should just have the base class generate an empty string.
 
@@ -1508,12 +1508,20 @@ CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode* node)
 
                case V_SgTemplateDeclaration:
                   {
-                 // This type is not supposed to be used in the new EDG 4.x work.
-                    SgTemplateDeclaration* templateDeclaration = isSgTemplateDeclaration(node);
-                    additionalNodeOptions = "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at \\N\",sides=8,peripheries=2,color=\"blue\",fillcolor=green,fontname=\"7x13bold\",fontcolor=black,style=filled";
-                    labelWithSourceCode = "\\n  " + templateDeclaration->get_name().getString() + 
-                                          "\\n  " + StringUtility::numberToString(templateDeclaration) + "  ";
-                    break;
+                 // This type is not supposed to be used in the new legacy
+                 // frontend 4.x work.
+                 SgTemplateDeclaration *templateDeclaration =
+                     isSgTemplateDeclaration(node);
+                 additionalNodeOptions =
+                     "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info "
+                     "at "
+                     "\\N\",sides=8,peripheries=2,color=\"blue\",fillcolor="
+                     "green,fontname=\"7x13bold\",fontcolor=black,style=filled";
+                 labelWithSourceCode =
+                     "\\n  " + templateDeclaration->get_name().getString() +
+                     "\\n  " +
+                     StringUtility::numberToString(templateDeclaration) + "  ";
+                 break;
                   }
 
             // DQ (7/22/2012): Distingish between these template class and non template class IR nodes.

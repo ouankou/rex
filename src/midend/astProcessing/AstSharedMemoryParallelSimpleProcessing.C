@@ -7,7 +7,7 @@
 # ifdef ROSE_HAVE_PTHREAD_H                                  // Do we have POSIX threads?
 #  include <pthread.h>
 # else
-// This should all be switched to Boost Threads instead, which is more portable.
+// This should all be switched to a portable threading abstraction instead.
 #warning "POSIX threads are unavailable on this platform" // blame initial commit
 # endif
 #endif

@@ -1,15 +1,14 @@
 // DQ (7/20/2004):
 // This code is derived from test2003_08.[hC] and demonstrates a bug in the
-// current version of the EDG/SAGE connection or elsewhere within ROSE.
-// We are fixing the island test and this is leading to several other problems,
-// like this one!
-
+// current version of the legacy frontend/SAGE connection or elsewhere within
+// ROSE. We are fixing the island test and this is leading to several other
+// problems, like this one!
 
 // This tests a member function pointer
 class A { };
 typedef void (A::*PointerToMemberFunctionType)();
 
-// A tag is build internally by EDG
+// A tag is build internally by legacy frontend
 struct
    {
      int b;

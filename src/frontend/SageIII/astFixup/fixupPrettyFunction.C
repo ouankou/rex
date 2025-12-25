@@ -3,9 +3,9 @@
 
 void fixupPrettyFunctionVariables ( SgNode* node )
    {
-     // PP (7/28/22): fix RC-1370: avoid updating AST nodes that look like
-     //               EDG's __PRETTY_FUNCTION__ representation.
-     TimingPerformance timer ("Fixup Pretty Print variables:");
+  // PP (7/28/22): fix RC-1370: avoid updating AST nodes that look like
+  //               legacy frontend's __PRETTY_FUNCTION__ representation.
+  TimingPerformance timer("Fixup Pretty Print variables:");
 
   // This simplifies how the traversal is called!
      FixupPrettyFunctionVariables astFixupTraversal;
@@ -39,11 +39,15 @@ FixupPrettyFunctionVariables::evaluateInheritedAttribute ( SgNode* node, FixupPr
      printf ("In FixupPrettyFunctionVariables::evaluateInheritedAttribute(): node = %p = %s \n",node,node->class_name().c_str());
 #endif
 
-  // We are looking for the variable "__assert_fail" which EDG has used instead of "__PRETTY_FUNCTION__".
-  // An example from CPP is:
-  // ((!"Inside of struct Y::foo1 (using assert)") ? static_cast<void> (0) : (__assert_fail ("!\"Inside of struct Y::foo1 (using assert)\"", "/home/dquinlan/ROSE/git-dq-main-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2010_07.C", 21, __PRETTY_FUNCTION__), static_cast<void> (0)));
-  // But EDG will substitute "__PRETTY_FUNCTION__" with "__assert_fail", as is clearly documented in the EDG_3.3/Changes file (EDG ChangeLog).
-  // So we have to back this out so that we can allow ROSE to generate the same code that GNU would (and other compilers).
+  // We are looking for the variable "__assert_fail" which the legacy frontend
+  // has used instead of "__PRETTY_FUNCTION__". An example from CPP is:
+  // ((!"Inside of struct Y::foo1 (using assert)") ? static_cast<void> (0) :
+  // (__assert_fail ("!\"Inside of struct Y::foo1 (using assert)\"",
+  // "/home/dquinlan/ROSE/git-dq-main-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2010_07.C",
+  // 21, __PRETTY_FUNCTION__), static_cast<void> (0))); The legacy frontend will
+  // substitute "__PRETTY_FUNCTION__" with "__assert_fail", as documented in its
+  // change log. So we have to back this out so that we can allow ROSE to
+  // generate the same code that GNU would (and other compilers).
 
   // Se we are looking for every function call.
      SgFunctionCallExp* functionCallExpression = isSgFunctionCallExp(node);
@@ -83,14 +87,14 @@ FixupPrettyFunctionVariables::evaluateInheritedAttribute ( SgNode* node, FixupPr
             // if (initializedName != NULL && initializedName->get_name() == functionName)
                   {
 #if 0
-                    printf ("Found EDG normalized name that is really supposed to be __PRETTY_FUNCTION__ \n");
+                    printf ("Found legacy frontend normalized name that is really supposed to be __PRETTY_FUNCTION__ \n");
 #endif
-                 // Now change the name to what is is supposed to be (before EDG normalized it).
-                    initializedName->set_name("__PRETTY_FUNCTION__");
+                 // Now change the name to what is is supposed to be (before
+                 // legacy frontend normalized it).
+                 initializedName->set_name("__PRETTY_FUNCTION__");
                   }
              }
         }
 
      return inheritedAttribute;
-   }
-
+}

@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/libncdap3/dapdebug.c,v 1.9 2009/09/23 22:26:00 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/dapdebug.c,v 1.9 2009/09/23
+ *22:26:00 dmh Exp $
  *********************************************************************/
 #include "config.h"
 #include "oc.h"

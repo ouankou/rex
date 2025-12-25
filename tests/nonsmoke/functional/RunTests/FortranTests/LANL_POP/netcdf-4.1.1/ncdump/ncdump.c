@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 2008, University Corporation for Atmospheric Research
  *   See netcdf/README file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncdump/ncdump.c,v 1.152 2010/02/04 16:49:12 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncdump/ncdump.c,v 1.152 2010/02/04 16:49:12
+ *russ Exp $
  *********************************************************************/
 
 #include <config.h>

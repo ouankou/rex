@@ -45,11 +45,10 @@ bin_SCRIPTS =  $(distributedScripts)
 # DQ (12/7/2009): Test for the ROSE example workspace generator.
 # Build the directory in the compile tree.
 ExampleRoseWorkspaceTestDirectory = tmpRoseWorkspace
-ExampleRoseWorkspaceConfigure=./configure --with-boost=$(ac_boost_path) --prefix=@prefix@
+ExampleRoseWorkspaceConfigure=./configure --prefix=@prefix@
 # This tests the new ROSE workspace
 testExampleRoseWorkspace:
 	echo "absolute_path_srcdir = $(absolute_path_srcdir)"
-	echo "ac_boost_path = $(ac_boost_path)"
 	echo "srcdir = $(srcdir)"
 	echo "PWD = $(PDW)"
 	rm -rf $(ExampleRoseWorkspaceTestDirectory)

@@ -4,9 +4,9 @@
 // but also included the test code that Andreas sent as an additional test code for ROSE.
 
 I think this is something which should be changed in the ROSE code rather
-than in the EDG parser. The function declaration overloaded in
+than in the legacy frontend parser. The function declaration overloaded in
 src/midend/programAnalysis/OAWrap/SAGE2OA.h does arguably have the wrong
-return type (char* instead of const char*), and both ICC and EDG gives the
+return type (char* instead of const char*), and both ICC and legacy frontend gives the
 same error.
 
 Compiling the following code with ROSE:
@@ -29,7 +29,7 @@ function
    char *GetSymNameFromSymHandle () {
          ^
 
-Errors in EDG Processing!
+Errors in legacy frontend Processing!
 #endif
 
 

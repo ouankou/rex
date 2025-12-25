@@ -30,8 +30,8 @@ void foo()
   // X_resultptr = new X ((X&)X_result);
 
   // Case using nested templates Y<Y<X> > does not compile because
-  // EDG generates typename of "Y<Y<X>>" instead of "Y<Y<X> >"
-     SwigValueWrapper< Y<Y<X> > > Y_result;
+  // legacy frontend generates typename of "Y<Y<X>>" instead of "Y<Y<X> >"
+  SwigValueWrapper<Y<Y<X>>> Y_result;
   // Y<Y<X> > *Y_resultptr;
 
   // Force the conversion operator to be called so that the copy constructor for Y<Y<X>> can be called with new!

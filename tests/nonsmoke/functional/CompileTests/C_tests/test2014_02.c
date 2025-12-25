@@ -1,7 +1,7 @@
-// This test code demonstrates the use of nested function 
-// and one defined as "auto" which is not allowed in EDG
+// This test code demonstrates the use of nested function
+// and one defined as "auto" which is not allowed in legacy frontend
 // (or at least I have to look into this further).
-// Without "auto" EDG still appears to now allow nested 
+// Without "auto" legacy frontend still appears to now allow nested
 // functions.  so I need to dig into this further.
 
 static int*** parse_params(char **argv)

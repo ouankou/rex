@@ -1,4 +1,5 @@
-// This fails the new test for unique entries in the type cache (new EDG/ROSE translation).
+// This fails the new test for unique entries in the type cache (new legacy
+// frontend/ROSE translation).
 
 template<typename, typename>
 struct __are_same

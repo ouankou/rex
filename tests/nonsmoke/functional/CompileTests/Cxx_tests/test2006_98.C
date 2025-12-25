@@ -41,7 +41,7 @@ void foo0()
   // DQ (7/23/2006): Note that this will be unparsed as: register int *result;
      register int *result asm ("cx");
 #if 0
-  // EDG does not appear to support this ("[name]" syntax), though it should be allowed in anything compatable with gnu past version 3.1.
+  // legacy frontend does not appear to support this ("[name]" syntax), though it should be allowed in anything compatable with gnu past version 3.1.
      asm ("cmoveq %1,%2,%[result]"
           : [result] "=r"(result)
           : "r" (test), "r"(new), "[result]"(old));
@@ -98,7 +98,7 @@ void foo4()
    {
   // Alternative example asm declarations (how to use the 68881's fsinx instruction):
 #if 0
-  // EDG does not appear to support this ("[name]" syntax), though it should be allowed in anything compatable with gnu past version 3.1.
+  // legacy frontend does not appear to support this ("[name]" syntax), though it should be allowed in anything compatable with gnu past version 3.1.
      asm ("fsinx %[angle],%[output]"
           : [output] "=f" (result)
           : [angle] "f" (angle));

@@ -42,18 +42,15 @@ template<> void AAA< int, XXX::allocator<int> >::foo()
      this->_M_impl._M_node;
    }
 
-// This is an error for GNU g++, but works fine for ROSE (EDG).
-// However, the generated ROSE code fails for GNU, because the
-// original code fails for GNU.
-// template<> class XXX::allocator<int> ;
-extern template class XXX::allocator<int> ;
+   // This is an error for GNU g++, but works fine for ROSE (legacy frontend).
+   // However, the generated ROSE code fails for GNU, because the
+   // original code fails for GNU.
+   // template<> class XXX::allocator<int> ;
+   extern template class XXX::allocator<int>;
 
-extern template class AAA< int, XXX::allocator<int> >;
+   extern template class AAA<int, XXX::allocator<int>>;
 
-
-void foobar()
-   {
+   void foobar() {
      AAA< int, XXX::allocator<int> > a;
      a.foo();
    }
-

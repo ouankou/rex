@@ -868,11 +868,11 @@ TESTCODE_CURRENTLY_FAILING += $(FAILING_TESTCODES_XEN)
 #    test_rtd_use: 
 #    test_m32_use: 
 # And test codes:
-#    test2015_87.c (demonstrated need for 32-bit mode for EDG front-end, waiting on fix from EDG)
+#    test2015_87.c (demonstrated need for 32-bit mode for legacy frontend front-end, waiting on fix from legacy frontend)
 #    test2015_88.c (may require edits to source code where this happens)
 #    test2015_89.c (only fails when tested using -m32 -mrtd options using makefile rule: test_rtd_use)
 #    test2015_93.c  (demonstrates use of GNU statement-expression in default case of switch statement)
-#    test2015_95.c  (demonstrates 32-bit mode requirement for EDG front-end)
+#    test2015_95.c  (demonstrates 32-bit mode requirement for legacy frontend front-end)
 #    test2015_100.c (demonstrates that the typeof operator not output in argument type for function type unparsing)
 #    test2015_102.c (demonstrates unparsing of alias attribute on non-defining declaration)
 #    test2015_103.c (demonstrates unparsing of CPP directive before closing ";" of expanded macro)
@@ -913,7 +913,7 @@ FILES_NOT_PASSING = \
 TESTCODE_CURRENTLY_FAILING += $(FILES_NOT_PASSING)
 
 # DQ (1/5/2014): Some failing test codes:
-#     test2014_03.c  (demonstrates nested functions (not supported in EDG))
+#     test2014_03.c  (demonstrates nested functions (not supported in legacy frontend))
 #     test2014_11.c  (simpler case of test2014_10.c)
 #     test2014_45.c  (inconsitant function declarations, but consistant through typedefs)
 #     test2014_54.c  (old-stype C function parameters in wrong order, appears to be legal C but a problem for ROSE)

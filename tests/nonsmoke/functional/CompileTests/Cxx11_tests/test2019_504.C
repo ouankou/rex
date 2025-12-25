@@ -11,6 +11,9 @@ extern __inline void
 // Error:
 // Case not handled! inner_kind = eok_vector_subscript
 // Rose[FATAL]: assertion failed:
-// Rose[FATAL]:   /export/tmp.rose-mgr/jenkins/edg4x/workspace/development-edg-binary-RMC/COMPILER/gcc-5.4.0-default/EDGVERSION/5.0/src/frontend/CxxFrontend/EDG/edgRose/edgRose.C:13263
-// Rose[FATAL]:   TranslatedExpression EDG_ROSE_Translation::convert_expression(an_expr_node_ptr)
-// Rose[FATAL]:   required: false
+// Rose[FATAL]:
+// /export/tmp.rose-mgr/jenkins/legacy_frontend/workspace/development-frontend-binary-RMC/COMPILER/gcc-5.4.0-default/FRONTEND_VERSION/5.0/src/frontend/CxxFrontend/legacy
+// frontend/frontend_bridge/frontend_bridge.C:13263 Rose[FATAL]:
+// TranslatedExpression
+// Frontend_Translation::convert_expression(an_expr_node_ptr) Rose[FATAL]:
+// required: false

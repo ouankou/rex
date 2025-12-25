@@ -1,7 +1,7 @@
-// It appears that char16_t is defined internally to EDG.
+// It appears that char16_t is defined internally to legacy frontend.
 // typedef unsigned short char16_t;
 
-  template<typename _Tp, _Tp __v> struct integral_constant {};
+template <typename _Tp, _Tp __v> struct integral_constant {};
 
 #if 1
   typedef integral_constant<bool, true>     true_type;

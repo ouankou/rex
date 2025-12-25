@@ -1,4 +1,5 @@
-// This is an interesting case of where EDG reports that cases 1-4 are unreachable.
+// This is an interesting case of where legacy frontend reports that cases 1-4
+// are unreachable.
 
 double H0( double v1, double v2, double v3 );
 double H1( double v1, double v2, double v3 );

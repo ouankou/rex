@@ -65,7 +65,6 @@ FILES_NOT_REQUIRED_FOR_DISTRIBUTIONS = \
      support-purify.m4 \
      support-rpath.m4 \
      support-visualization.m4 \
-     wave.m4 \
      config.guess \
      depend \
      install-sh \

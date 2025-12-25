@@ -5,7 +5,7 @@ Reported by:	Brian White
 
 Date:		June 13, 2007
 
-Occurs in:  	KOLAH src/boost/detail/shared_count.hpp throw_exception 
+Occurs in:  	KOLAH src/third_party/detail/shared_count.hpp throw_exception 
                     in add_ref
                 KOLAH src/geom/PolyMesh/Lite2PolyFace.hh operator== 
                     in Lite2PolyFace::polydID

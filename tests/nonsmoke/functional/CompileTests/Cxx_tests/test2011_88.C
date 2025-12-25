@@ -1,5 +1,5 @@
-// initialization is not allowed without "static" in g++, but is fine for EDG...
-// struct foo { const int bar = 7; };
+// initialization is not allowed without "static" in g++, but is fine for legacy
+// frontend... struct foo { const int bar = 7; };
 struct foo { static const int bar = 7; };
 
 template <int V>

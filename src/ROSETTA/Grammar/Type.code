@@ -146,7 +146,7 @@ HEADER_START
 
 #if 0
        // This codes was part of an experiment to distinguish struct tag { int x; } X; from struct tag X;
-       // It turns out that the declaration of the tag in this case in placed into the EDG orphan list
+       // It turns out that the declaration of the tag in this case in placed into the legacy frontend orphan list
        // as a type and that we don't require this mechanism (thought we might in the future so for now
        // it is just commented out.
 
@@ -634,7 +634,7 @@ HEADER_MODIFIER_TYPE_START
           int isUnspecified() const;
           void setUnspecified();
 
-       // This is not used (but is present in the EDG AST)
+       // This is not used (but is present in the legacy frontend AST)
           int isTypedef() const;
           void setTypedef();
 
@@ -1541,7 +1541,7 @@ SgType::isShort() const
 
 #if 0
 // This codes was part of an experiment to distinguish struct tag { int x; } X; from struct tag X;
-// It turns out that the declaration of the tag in this case in placed into the EDG orphan list
+// It turns out that the declaration of the tag in this case in placed into the legacy frontend orphan list
 // as a type and that we don't require this mechanism (thought we might in the future so for now
 // it is just commented out.
 bool
@@ -2318,7 +2318,7 @@ SgType::getCurrentScope()
   // of using either of a few (two) mechanisms durring the construction of the AST
   // from the frontend.  The mechanism is language dependent, or always returning
   // a NULL pointer (in the case of the AST Builder if the stack is not used, and we
-  // are not using the EDG 3.3 connection to ROSE...).
+  // are not using the legacy frontend 3.3 connection to ROSE...).
 
   // Note that this function is an alternative to the specification of the scope directly
   // in the construction of each IR node.  Though I like the direct specification better,
@@ -2344,7 +2344,7 @@ SgType::getCurrentScope()
 #ifdef ROSE_BUILD_CXX_LANGUAGE_SUPPORT
      if (SageBuilder::emptyScopeStack() == false)
         {
-       // C/C++ AST being generated (using new connection to EDG 4.x).
+       // C/C++ AST being generated (using new connection to legacy frontend 4.x).
           currentScope = SageBuilder::topScopeStack();
           ROSE_ASSERT(isSgScopeStatement(currentScope) != NULL);
         }
@@ -2693,7 +2693,7 @@ SgType::isEquivalentType (const SgType & Y) const;
 
      bool isSame = false;
 
-  // While debugging avoid infinte loops (most type chains in STL and boost are only a 3-4 long in test2015_127.C, nesting is how it goes wild).
+  // While debugging avoid infinte loops (most type chains in STL and template-heavy headers are only a 3-4 long in test2015_127.C, nesting is how it goes wild).
      static int counter = 0;
 
      const SgType & X = *this;
@@ -5293,7 +5293,7 @@ SgName SgMemberFunctionType::get_mangled(SgType* ret_type, SgFunctionParameterTy
   // DQ (12/6/2012): New version of this function using the input parameter (mfunc_specifier) so that we can
   // have this be a static member function.  The goal is to use this function to rewite the SageBuilder::buildMemberFunctionType()
   // to both be more clear and fix the handling of SgFunctionParameterTypeList which appears to be a problem for
-  // the AST File I/O and the graphs that we generate of the AST in the new EDG 4.x branch.
+  // the AST File I/O and the graphs that we generate of the AST in the new legacy frontend 4.x branch.
 
 #if 0
      printf ("mfunc_specifier = %u SgMemberFunctionType::e_const = %d SgMemberFunctionType::e_volatile = %d SgMemberFunctionType::e_restrict = %d \n",
@@ -7224,8 +7224,8 @@ SgClassType::createType(SgDeclarationStatement* cd, SgExpression* optional_fortr
 #endif
         }
 #if 0
-  // DQ (1/22/2013): We can't assert this when we have complex template handling as in Boost.
-  // This case is demonstrated in Boost as part of ROSE compiling ROSE in testRoseHeaders_01.C
+  // DQ (1/22/2013): We can't assert this when we have complex template handling.
+  // This case is demonstrated as part of ROSE compiling ROSE in testRoseHeaders_01.C
 
   // DQ (8/23/2012): Restoring the original code...
      ROSE_ASSERT(returnType->get_declaration() == cd);

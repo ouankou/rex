@@ -92,15 +92,12 @@ AttachPreprocessingInfoTreeTrav::~AttachPreprocessingInfoTreeTrav() {
     //do nothing
 }
 
-// DQ (11/30/2008): Refactored this code out of the simpler function to isolate the Wave specific handling.
+// DQ (11/30/2008): Refactored this code out of the simpler function to isolate
+// token stream handling.
 
 // AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav( SgSourceFile* file, bool includeDirectivesAndCommentsFromAllFiles )
-AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav( SgSourceFile* file, ROSEAttributesList* listOfAttributes )
-   {
-     use_Wave = file->get_wave();
-
-  // Wave will get all Preprocessor Diretives by default and it is therefore reasonable that it will attach all
-
+AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav(
+    SgSourceFile *file, ROSEAttributesList *listOfAttributes) {
   // DQ (6/5/2020): Adding back the original simile level of support for a single ROSEAttributesList data member.
      start_index = 0;
 
@@ -175,9 +172,7 @@ AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav( SgSourceFile* 
      printf ("Exiting as a test! \n");
      ROSE_ABORT();
 #endif
-
-   }
-
+}
 
 // #ifndef  CXX_IS_ROSE_CODE_GENERATION
 
@@ -188,9 +183,10 @@ AttachPreprocessingInfoTreeTrav::display(const std::string & label) const
    {
   // Output internal information
 
-     printf ("Inside of AttachPreprocessingInfoTreeTrav::display(%s) \n",label.c_str());
-     printf ("   use_Wave                      = %s \n",use_Wave ? "true" : "false");
-     printf ("   processAllIncludeFiles        = %s \n",processAllIncludeFiles ? "true" : "false");
+  printf("Inside of AttachPreprocessingInfoTreeTrav::display(%s) \n",
+         label.c_str());
+  printf("   processAllIncludeFiles        = %s \n",
+         processAllIncludeFiles ? "true" : "false");
 
   // DQ (4/30/2020): Changing the implementation to simplify header file unparsing.
      ROSE_ASSERT(currentListOfAttributes != NULL);
@@ -881,12 +877,14 @@ AttachPreprocessingInfoTreeTrav::setupPointerToPreviousNode (SgLocatedNode* curr
 // DQ (1/18/2021): Adding call to buildTokenStreamMapping.
 void buildTokenStreamMapping(SgSourceFile* sourceFile, vector<stream_element*> & tokenVector);
 
-
-// DQ (1/4/2021): Adding support for comments and CPP directives and tokens to use new_filename.
-// ROSEAttributesList* AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave, std::string fileNameForDirectivesAndComments )
-ROSEAttributesList*
-AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave, SgSourceFile* sourceFile, std::string fileNameForDirectivesAndComments, std::string new_filename )
-   {
+// DQ (1/4/2021): Adding support for comments and CPP directives and tokens to
+// use new_filename. ROSEAttributesList*
+// AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList (
+// std::string fileNameForDirectivesAndComments )
+ROSEAttributesList *
+AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
+    SgSourceFile *sourceFile, std::string fileNameForDirectivesAndComments,
+    std::string new_filename) {
   // This function abstracts the collection of comments and CPP directives into a list.
   // The list is then used to draw from as the AST is traversed and the list elements
   // are woven into the AST.
@@ -898,7 +896,10 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
 
 #if DEBUG_BUILD_COMMENT_AND_CPP_DIRECTIVE_LIST || 0
   // DQ (1/4/2021): adding debugging support.
-     printf ("Inside of AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(use_Wave = %s) file = %s \n",use_Wave ? "true" : "false",fileNameForDirectivesAndComments.c_str());
+     printf("Inside of "
+            "AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList "
+            "file = %s \n",
+            fileNameForDirectivesAndComments.c_str());
      printf (" --- sourceFile->getFileName() = %s \n",sourceFile->getFileName().c_str());
      printf (" --- new_filename = %s \n",new_filename.c_str());
 #endif
@@ -1314,24 +1315,21 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
   // SgSourceFile* currentFilePtr = sourceFile;
 
 #if 0
-     printf ("In buildCommentAndCppDirectiveList(): use_Wave = %s \n",use_Wave ? "true" : "false");
+     printf ("In buildCommentAndCppDirectiveList(): fileNameForDirectivesAndComments = %s \n",fileNameForDirectivesAndComments.c_str());
 #endif
 
-     if (use_Wave == false)
-        {
-       // std::cerr << "Not using wave" << std::endl;
-       // DQ (4/12/2007): Introduce tracking of performance of ROSE.
-          TimingPerformance timer ("AST evaluateInheritedAttribute (use_Wave == false):");
+        // DQ (4/12/2007): Introduce tracking of performance of ROSE.
+        TimingPerformance evaluate_timer("AST evaluateInheritedAttribute:");
 
-
-          //AS(4/3/09): FIXME: We are doing this quick fix because the fileNameForDirectivesAndComments is
-          //incorrect for Fortran
-          //PC(08/17/2009): Now conditional on the output language, otherwise breaks -rose:collectAllCommentsAndDirectives
-          if (sourceFile->get_outputLanguage() == SgFile::e_Fortran_language)
-             {
-               fileNameForDirectivesAndComments = sourceFile->get_sourceFileNameWithPath();
-               fileNameForTokenStream           = fileNameForDirectivesAndComments;
-             }
+        // AS(4/3/09): FIXME: We are doing this quick fix because the
+        // fileNameForDirectivesAndComments is incorrect for Fortran
+        // PC(08/17/2009): Now conditional on the output language, otherwise
+        // breaks -rose:collectAllCommentsAndDirectives
+        if (sourceFile->get_outputLanguage() == SgFile::e_Fortran_language) {
+          fileNameForDirectivesAndComments =
+              sourceFile->get_sourceFileNameWithPath();
+          fileNameForTokenStream = fileNameForDirectivesAndComments;
+        }
 
 #if 0
           printf ("In buildCommentAndCppDirectiveList(): sourceFile->get_Fortran_only() = %s \n",sourceFile->get_Fortran_only() ? "true" : "false");
@@ -1505,7 +1503,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
             // objects (so that we can test the function: collectPreprocessorDirectivesAndCommentsForAST()).
             // returnListOfAttributes = getPreprocessorDirectives( Sg_File_Info::getFilenameFromID(currentFileNameId) );
 #if 0
-               printf ("Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream:  fileNameForDirectivesAndComments = %s \n",
+               printf ("Calling lex-based mechanism for collecting CPP directives, comments, and token stream:  fileNameForDirectivesAndComments = %s \n",
                     fileNameForDirectivesAndComments.c_str());
 #endif
 
@@ -1513,7 +1511,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
             // CPP directives from this file and only do so later if we discover that we have to unparse this file.
                returnListOfAttributes = getPreprocessorDirectives(fileNameForDirectivesAndComments);
 #if 0
-               printf ("DONE: Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream \n");
+               printf ("DONE: Calling lex-based mechanism for collecting CPP directives, comments, and token stream \n");
 #endif
 #endif
 #if 0
@@ -1527,13 +1525,13 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
                   {
 #if 0
                     printf ("Found returnListOfAttributes == NULL, calling getPreprocessorDirectives() \n");
-                    printf ("Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream \n");
+                    printf ("Calling lex-based mechanism for collecting CPP directives, comments, and token stream \n");
 #endif
 #ifdef ROSE_BUILD_CPP_LANGUAGE_SUPPORT
                     returnListOfAttributes = getPreprocessorDirectives(fileNameForDirectivesAndComments);
 #endif
 #if 0
-                    printf ("DONE: Calling lex or wave based mechanism for collecting CPP directives, comments, and token stream \n");
+                    printf ("DONE: Calling lex-based mechanism for collecting CPP directives, comments, and token stream \n");
 #endif
 #if 0
                     printf ("########################################################### \n");
@@ -1546,37 +1544,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
                   }
 #endif
              }
-        }
-       else
-        {
-       // This is the case of: (use_Wave == true). This mode does NOT work for Fortran code!
-          ROSE_ASSERT(sourceFile->get_Fortran_only() == false);
-
-       // AS(011306) fetch the list of attributes from the Wave output
-       // int currentFileNameId = currentFilePtr->get_file_info()->get_file_id();
-       // std::string currentStringFilename = Sg_File_Info::getFilenameFromID(currentFileNameId);
-
-          delete returnListOfAttributes;
-          returnListOfAttributes = new ROSEAttributesList();
-
-       // Copy the ROSEAttributesList from the global mapFilenameToAttributes as the elments that are attached to
-       // the AST from the ROSEAttributesList is set to NULL by the attachment process
-
-          std::map<std::string,ROSEAttributesList* >::iterator currentFileItr = mapFilenameToAttributes.find(fileNameForTokenStream);
-          if (currentFileItr != mapFilenameToAttributes.end())
-             {
-            // If there already exists a list for the current file then get that list.
-               ROSE_ASSERT( currentFileItr->second != NULL);
-
-               ROSEAttributesList* existingReturnListOfAttributes = currentFileItr->second;
-
-               for (std::vector<PreprocessingInfo*>::iterator it_1 = existingReturnListOfAttributes->getList().begin(); it_1 != existingReturnListOfAttributes->getList().end(); ++it_1)
-                  {
-                    returnListOfAttributes->addElement(**it_1);
-                  }
-             }
-        }
-
      ROSE_ASSERT(returnListOfAttributes != NULL);
 
   // DQ (12/15/2012): Generate the list of file ids to be considered equivalent to the input source file's filename.
@@ -1625,7 +1592,10 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
 #endif
 
 #if DEBUG_BUILD_COMMENT_AND_CPP_DIRECTIVE_LIST
-     printf ("Leaving AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(use_Wave = %s) file = %s \n",use_Wave ? "true" : "false",fileNameForDirectivesAndComments.c_str());
+     printf("Leaving "
+            "AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList "
+            "file = %s \n",
+            fileNameForDirectivesAndComments.c_str());
 #endif
 
 #if 0
@@ -1637,12 +1607,11 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList ( bool use_Wave
         }
 #endif
 
-  // DQ (4/29/2020): Introduce test for recursive call.
+     // DQ (4/29/2020): Introduce test for recursive call.
      isRecursiveCall = false;
 
      return returnListOfAttributes;
-   }
-
+}
 
 ROSEAttributesList*
 AttachPreprocessingInfoTreeTrav::getListOfAttributes ( int currentFileNameId )
@@ -3636,7 +3605,6 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
 #if 0
                          printf ("Processing case: V_SgInitializedName \n");
 #endif
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
 #if 0
                          printf ("In AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(): Added new support for preprocessing info to be added after the SgInitializedName. \n");
 #endif

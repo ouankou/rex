@@ -2945,7 +2945,7 @@ buildDerivedTypeStatementAndDefinition (string name, SgScopeStatement* scope)
 
 #if 0
   // DQ (3/4/2013): Check that the access permission level is the same for the defining and nondefining 
-  // declarations (in new edg4x branch these are enforced to be set consistantly).
+  // declarations.
      printf ("Checking access privilege level for defining and not defining declarations: classDeclaration = %p nondefiningClassDeclaration = %p \n",classDeclaration,nondefiningClassDeclaration);
      classDeclaration->get_declarationModifier().get_accessModifier().display("classDeclaration");
      nondefiningClassDeclaration->get_declarationModifier().get_accessModifier().display("nondefiningClassDeclaration");

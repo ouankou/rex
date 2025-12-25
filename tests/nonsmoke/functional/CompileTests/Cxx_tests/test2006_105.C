@@ -1,8 +1,9 @@
-//URK: 08/01/06
-//This program tests for looong values of floats, doubles and long doubles.
+// URK: 08/01/06
+// This program tests for looong values of floats, doubles and long doubles.
 //
-//In EDG, the float_value_lexeme element of a_constant is now a character array 
-//of length 128. Once it is made into a string, more test cases needed to be added.
+// In legacy frontend, the float_value_lexeme element of a_constant is now a
+// character array of length 128. Once it is made into a string, more test cases
+// needed to be added.
 
 #include <stdio.h>
 float func_float(float a)

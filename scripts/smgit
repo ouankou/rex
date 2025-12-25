@@ -1685,9 +1685,10 @@ sub is_top_of_rose {
   my($dir) = @_;
   return unless -d $dir && -d "$dir/.git";
   return unless open MODULES, "$dir/.gitmodules";
-  my $has_edg = grep {m(^\[\s*submodule\s+\"src/frontend/CxxFrontend/EDG\"\s*]\s*$)} <MODULES>;
+  my $has_legacy_frontend =
+    grep {m(^\[\s*submodule\s+\"src/frontend/CxxFrontend/legacy frontend\"\s*]\s*$)} <MODULES>;
   close MODULES;
-  return $has_edg;
+  return $has_legacy_frontend;
 }
 
 # Returns absolute directory name for top of ROSE repo.  Your CWD must be somewhere inside ROSE to start with.

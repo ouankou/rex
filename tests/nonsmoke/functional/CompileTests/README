@@ -35,9 +35,6 @@ C99_std_gnu99_tests:
 C99_std_c99_tests:
    This directory has tests that use the -std=99 (without most gnu extensions).
 
-boost_tests:
-   This directory has tests that use the boost header files and applications.
-   A several of the boost specific tests are in the Cxx_tests directory.
    So this directory does not have many tests at present.
 
 CAF2_tests:
@@ -170,14 +167,11 @@ Thrifty installation:
 
 Environment setup:
 
-export ROSE_TEST_BOOST_PATH="/export/tmp.hudson-rose/opt/boost_1_40_0-inst"
 export THRIFTY_HOME="/nfs/casc/overture/ROSE/git/sescutils-ins/"
 
 Configure options:
 
   --prefix=$(pwd)/install
-  --with-boost=${ROSE_TEST_BOOST_PATH} 
-  --with-boost-libdir=${ROSE_TEST_BOOST_PATH}/lib 
   --with-CXX_DEBUG=-g 
   --with-C_DEBUG=-g 
   --with-CXX_WARNINGS=-Wall 
@@ -191,7 +185,5 @@ Build:
   $ make install
   $ make installcheck
 
-setenv ROSE_TEST_BOOST_PATH "/export/tmp.hudson-rose/opt/boost_1_40_0-inst"; setenv THRIFTY_HOME "/nfs/casc/overture/ROSE/git/sescutils-ins/"
 
 Configure command line for Thrifty:
-   /home/dquinlan/ROSE/git-dq-cxx-rc/configure --with-ROSE_LONG_MAKE_CHECK_RULE=yes --prefix=/home/dquinlan/ROSE/ROSE_CompileTree/git_LINUX-64bit-4.2.4-dq-cxx-rc-thrifty_install --with-boost=/home/dquinlan/local/boost_1_42_0_installTree-gxx-4.2.4 --with-alternate_backend_C_compiler=/nfs/casc/overture/ROSE/git/sescutils-ins//bin/gcc --with-alternate_backend_Cxx_compiler=/nfs/casc/overture/ROSE/git/sescutils-ins//bin/g++

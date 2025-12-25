@@ -65,7 +65,7 @@ else
      test2016_24.C
 endif
 
-# DQ (11/19/2016): This test is failing in the unparsed code (a RAJA example) at least for the GNU 6.1 compiler and using EDG 4.11).
+# DQ (11/19/2016): This test is failing in the unparsed code (a RAJA example) at least for the GNU 6.1 compiler and using legacy frontend 4.11).
 TESTCODE_CURRENTLY_FAILING += \
    test2016_06.C 
 

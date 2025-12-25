@@ -6,7 +6,7 @@
 \class SgSizeOfOp
 \brief This class represents the "sizeof()" operator (applied to any type).
 
-\todo Need to implement support in EDG/SageIII translation for this operator.
+\todo Need to implement support in legacy frontend/SageIII translation for this operator.
 
 \internal This operator is only seen in the AST within expression trees
 which came from constant folded expression.

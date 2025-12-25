@@ -17,17 +17,20 @@ markAsCompilerGenerated( SgNode* node )
      astFixupTraversal.traverse(node,preorder);
    }
 
-// DQ (12/23/2011): Template declarations are now derived from there associated non-template 
-// declarations (e.g. SgTemplateClassDeclaration is derived from SgClassDeclaration). It was
-// previously the case that SgTemplateClassDeclaration was derived from SgTemplateDeclaration
-// in the first attempt to put the template declarations into the AST.  Previous to this (within 
-// the EDG 3.3 support within ROSE there was only a SgTemplateDeclaration and there was no 
-// SgTemplateClassDeclaration.  The same story was the case for functions, member functions, 
-// and variable template declrations.
-bool
-MarkAsCompilerGenerated::templateDeclarationCanBeMarkedAsCompilerGenerated(SgDeclarationStatement* templateDeclaration)
-   {
-  // Note that this function uses and requires parent pointers to be previously set.
+   // DQ (12/23/2011): Template declarations are now derived from there
+   // associated non-template declarations (e.g. SgTemplateClassDeclaration is
+   // derived from SgClassDeclaration). It was previously the case that
+   // SgTemplateClassDeclaration was derived from SgTemplateDeclaration in the
+   // first attempt to put the template declarations into the AST.  Previous to
+   // this (within the legacy frontend 3.3 support within ROSE there was only a
+   // SgTemplateDeclaration and there was no SgTemplateClassDeclaration.  The
+   // same story was the case for functions, member functions, and variable
+   // template declrations.
+   bool
+   MarkAsCompilerGenerated::templateDeclarationCanBeMarkedAsCompilerGenerated(
+       SgDeclarationStatement *templateDeclaration) {
+     // Note that this function uses and requires parent pointers to be
+     // previously set.
 
      bool markAsCompilerGenerated = true;
 
@@ -110,12 +113,15 @@ MarkAsCompilerGenerated::visit(SgNode* node)
                   }
              }
 
-       // DQ (8/17/2005): Mark any compiler generated member function instatiations as non-specialied.
-       // EDG marks functions as specialization when they are just defined outside of their parent scope.
-          SgTemplateInstantiationMemberFunctionDecl* memberFunctionTemplateInstantiation = isSgTemplateInstantiationMemberFunctionDecl(node);
-          if (memberFunctionTemplateInstantiation != NULL)
-             {
-            // printf ("Found a memberFunctionTemplateInstantiation \n");
+             // DQ (8/17/2005): Mark any compiler generated member function
+             // instatiations as non-specialied. legacy frontend marks functions
+             // as specialization when they are just defined outside of their
+             // parent scope.
+             SgTemplateInstantiationMemberFunctionDecl
+                 *memberFunctionTemplateInstantiation =
+                     isSgTemplateInstantiationMemberFunctionDecl(node);
+             if (memberFunctionTemplateInstantiation != NULL) {
+               // printf ("Found a memberFunctionTemplateInstantiation \n");
                if (memberFunctionTemplateInstantiation->isSpecialization() == true)
                   {
                  // printf ("In AST Fixup: resetting memberFunctionTemplateInstantiation to be marked as non-specialized \n");

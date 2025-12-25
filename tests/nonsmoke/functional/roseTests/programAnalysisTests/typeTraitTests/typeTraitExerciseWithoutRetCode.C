@@ -6,12 +6,9 @@
 // #include <numeric>
 // #include <fstream>
 // #include <map>
-// #include <boost/tokenizer.hpp>
-// #include <boost/algorithm/string.hpp>
 
 using namespace std;
 
-// using namespace boost::algorithm;
 // using namespace SageInterface;
 
 #define DEBUG_QUADRATIC_BEHAVIOR 0

@@ -1,7 +1,7 @@
 include $(top_srcdir)/config/Makefile.for.ROSE.includes.and.libs
 
 #########################################################################
-# These are C testcodes that test the new EDG Interface (using EDG 4.0) #
+# These are C testcodes that test the new legacy frontend Interface (using legacy frontend 4.0) #
 #########################################################################
 
 bin_PROGRAMS = frontend_test

@@ -66,7 +66,7 @@ AC_ARG_WITH(WARNINGS, AS_HELP_STRING([--with-WARNINGS], [manually set the compil
 rose_basic_warnings="-Wall -Wextra"
 # Even more warnings
 rose_extra_warnings="-Wshadow -Wdouble-promotion -Wformat=2 -Wformat-truncation -Wundef -Wconversion"
-# Some warnings that cannot be made errors in ROSE (last 3 should get fixed in EDG -- probably with pragma)
+# Some warnings that cannot be made errors in ROSE (last 3 should get fixed in legacy frontend -- probably with pragma)
 rose_no_error_warnings="-Wno-error=cpp -Wno-error=multichar -Wno-error=shift-count-overflow -Wno-error=stringop-overflow="
 
 # Evolving list of warnings that we want to fix in ROSE

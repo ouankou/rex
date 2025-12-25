@@ -93,10 +93,12 @@ struct OnlyNonCompilerGenerated
      // Get the main function declaration
         SgFunctionDeclaration *mainDecl = SageInterface::findMain(project);
         ROSE_ASSERT (mainDecl->get_definingDeclaration () == mainDecl);
-     // Liao 1/23/2013
-     // Call graph generation will get the first nondefining declaration func as the function node by default, see CallGraph.h line 198.
-     // In ROSE using EDG 4.4, main() function has a hidden prototype, which will be stored in call graph.
-     // We have to use the prototype or it complains the defining main() does not exist in the call graph.
+        // Liao 1/23/2013
+        // Call graph generation will get the first nondefining declaration func
+        // as the function node by default, see CallGraph.h line 198. In ROSE
+        // using legacy frontend 4.4, main() function has a hidden prototype,
+        // which will be stored in call graph. We have to use the prototype or
+        // it complains the defining main() does not exist in the call graph.
         SgFunctionDeclaration * nondef_main = isSgFunctionDeclaration(mainDecl->get_firstNondefiningDeclaration());
         ROSE_ASSERT (nondef_main);
         computeCallGraphNodes(nondef_main, callGraph, processingOrder, order);

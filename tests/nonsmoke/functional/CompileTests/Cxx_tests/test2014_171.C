@@ -46,12 +46,15 @@ auto_ptr<MatOpCommand> parseCleanCommand()
   // return auto_ptr<MatOpCommand>(new CleanMatOpCommand(42)).operator auto_ptr_ref<MatOpCommand>();
   // return ((auto_ptr< MatOpCommand > ::auto_ptr((new CleanMatOpCommand (42))) . operator auto_ptr_ref<MatOpCommand>()));
 
-  // Failing code in g++ and EDG
-  // return auto_ptr< MatOpCommand > ::auto_ptr(new CleanMatOpCommand (42)) . operator auto_ptr_ref<MatOpCommand>();
+     // Failing code in g++ and legacy frontend
+     // return auto_ptr< MatOpCommand > ::auto_ptr(new CleanMatOpCommand (42)) .
+     // operator auto_ptr_ref<MatOpCommand>();
 
-  // This fails for GNU g++ version 4.4.7, but works fine for EDG. So we need to detect this as a bug in GNU
-  // and unparse this in operator form and supress the operator because it is implicit.
-  // return auto_ptr< MatOpCommand >(new CleanMatOpCommand (42)) . operator auto_ptr_ref<MatOpCommand>();
+     // This fails for GNU g++ version 4.4.7, but works fine for legacy
+     // frontend. So we need to detect this as a bug in GNU and unparse this in
+     // operator form and supress the operator because it is implicit. return
+     // auto_ptr< MatOpCommand >(new CleanMatOpCommand (42)) . operator
+     // auto_ptr_ref<MatOpCommand>();
 
 #if ( (__GNUC__ == 4) && (__GNUC_MINOR__ >= 10) )
   // This is the best example of why the operator form of unparsing is not equivalent to the non-operator form.

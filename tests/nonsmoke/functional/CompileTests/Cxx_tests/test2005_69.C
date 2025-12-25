@@ -45,16 +45,17 @@ class A
               
             }
 #endif
-      // non-template member functions are not represented in the templated class 
-      // (even though we have specified FRIEND_AND_MEMBER_DEFINITIONS_MAY_BE_MOVED_OUT_OF_CLASS 
-      // to be FALSE in EDG).
-         void f(int y)
+       // non-template member functions are not represented in the templated
+       // class (even though we have specified
+       // FRIEND_AND_MEMBER_DEFINITIONS_MAY_BE_MOVED_OUT_OF_CLASS to be FALSE in
+       // legacy frontend).
+       void f(int y)
 #ifdef DEFINE_FUNCTION_IN_CLASS
-            {
+       {
               x=x+y;
-            }
+       }
 #else
-            ;
+           ;
 #endif
    };
 

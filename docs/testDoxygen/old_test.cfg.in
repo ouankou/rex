@@ -356,10 +356,9 @@ WARN_LOGFILE           =
 # INPUT                  = @top_srcdir@/AST_RewriteMechanism/rewrite.h @top_srcdir@/AST_RewriteMechanism/extra.docs
 
 # The order of appearance determines the order of the modules in the generated
-# documentation Include EDG directory first (front-end documentation) and src/unparser
+# documentation Include frontend directory first (front-end documentation) and src/unparser
 # toward the end (back-end documentation).
-INPUT                  = @top_srcdir@/src/frontend/EDG/EDG_3.3 \
-                         @top_srcdir@ \
+INPUT                  = @top_srcdir@ \
                          @top_pwd@ \
                          @top_srcdir@/src/midend/astProcessing \
                          @top_srcdir@/src/midend/astQuery \

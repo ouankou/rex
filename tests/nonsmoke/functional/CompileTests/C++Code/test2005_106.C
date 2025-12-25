@@ -1,7 +1,7 @@
-// This test code generates a warning which should likely be eliminated within the 
-// EDG/Sage III translation.  There is a cast that in EDG is not represented within
-// the Sage III AST, I don't think this is a problem (the way that the other implicit
-// cast was a problem in test2005_37.C.
+// This test code generates a warning which should likely be eliminated within
+// the legacy frontend/Sage III translation.  There is a cast that in legacy
+// frontend is not represented within the Sage III AST, I don't think this is a
+// problem (the way that the other implicit cast was a problem in test2005_37.C.
 
 class X
    {

@@ -427,7 +427,7 @@ FixupAstDefiningAndNondefiningDeclarations::visit ( SgNode* node )
         {
           case V_SgEnumDeclaration:
              {
-            // This should be set in the EDG/Sage III translation!
+            // This should be set in the legacy frontend/Sage III translation!
 
             // DQ (6/26/2005): Special case of enum declarations (no forward enum declarations are allowed in the
             // C or C++ standard), support added for them because they are a common extension (except in gnu).
@@ -676,10 +676,10 @@ FixupAstDefiningAndNondefiningDeclarations::visit ( SgNode* node )
                        }
                       else
                        {
-                      // DQ (5/3/2012): Make it a warning to detect templateDeclaration == NULL.
-// #ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
+                         // DQ (5/3/2012): Make it a warning to detect
+                         // templateDeclaration == NULL.
 #if 0
-                    	  MLOG_WARN_C("astPostProcessing", "WARNING: In FixupAstDefiningAndNondefiningDeclarations: templateDeclaration == NULL (this is a recent EDG 4.3 issue). \n");
+                    	  MLOG_WARN_C("astPostProcessing", "WARNING: In FixupAstDefiningAndNondefiningDeclarations: templateDeclaration == NULL (this is a recent legacy frontend 4.3 issue). \n");
 #endif
                        }
                   }
@@ -725,6 +725,4 @@ FixupAstDefiningAndNondefiningDeclarations::visit ( SgNode* node )
 #endif
         }
 #endif
-   }
-
-
+}

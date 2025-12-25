@@ -1,4 +1,5 @@
-// This  is allowed for C++ (passes g++ and EDG), but fails for C (gcc and EDG using C98 mode).
+// This  is allowed for C++ (passes g++ and legacy frontend), but fails for C
+// (gcc and legacy frontend using C98 mode).
 void foobar()
    {
      int x;

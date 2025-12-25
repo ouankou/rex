@@ -181,7 +181,6 @@ readConfigFile(const Settings &settings) {
     return readConfigFile(settings.configFile);
 
   std::vector<std::string> dirs;
-  //boost::split(dirs, settings.searchDirs, boost::is_any_of(":;"));
   dirs = Rose::StringUtility::split(settings.searchDirs, ":;");
   for (const std::string &dir: dirs) {
     std::filesystem::path configFile = std::filesystem::path(dir) / CONFIG_NAME;

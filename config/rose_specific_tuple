@@ -563,7 +563,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	static constexpr bool __nothrow_constructible()
 	{
 #if 1
-       // DQ (7/26/2020): Fixup header files for EDG 6.0.
+       // DQ (7/26/2020): Fixup header files for legacy frontend 6.0.
           return true;
 #else
 	  return

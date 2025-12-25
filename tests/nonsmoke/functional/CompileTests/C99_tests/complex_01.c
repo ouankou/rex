@@ -50,7 +50,7 @@ int main (void)
   // a way to extract the real and imaginary parts of a complex number!
   // So this is a bad example of how to use the imaginary type.
 
-  // Note that currently within EDG, it appears the imaginary 
+  // Note that currently within legacy frontend, it appears the imaginary 
   // numbers are just regular floating point numbers.
      __imag__ float  x_imag = 0.0;
      __imag__ double y_imag = 0.0;
@@ -67,21 +67,21 @@ int main (void)
      double y_imag_extract_part = __imag__ y;
      double y_real_extract_part = __real__ y;
 
-  // This does not exist as a type in C99
-  // _Real float  x_edg_real = 0.0;
-  // _Real double y_edg_real = 0.0;
+     // This does not exist as a type in C99
+     // _Real float  x_real = 0.0;
+     // _Real double y_real = 0.0;
 
 #if 0
   // This causes a problem in ROSE when combined with the "__I__" statement.
   // I can't seem to figure out why!
 
-  // This is now to specify imaginary numbers in EDG, not supported in GNU, so
+  // This is now to specify imaginary numbers in legacy frontend, not supported in GNU, so
   // the code generation using GNU aas a backend drops the "_Imaginary" prefix.
-     _Imaginary float       x_edg_imaginary = 0.0;
-     _Imaginary double      y_edg_imaginary = 0.0;
-     _Imaginary long double z_edg_imaginary = 0.0;
+     _Imaginary float       x_imaginary = 0.0;
+     _Imaginary double      y_imaginary = 0.0;
+     _Imaginary long double z_imaginary = 0.0;
 
-     a_complex_value = 4.0 + x_edg_imaginary;
+     a_complex_value = 4.0 + x_imaginary;
 #endif
 
      float a = 1.0;
@@ -90,8 +90,8 @@ int main (void)
      int b = 1;
      b = -b; // this is the integer negate operator
 
-  // This does not appear to work with EDG, but works with gcc!
-  // x = ~x; // this is the complex conjugation operator
+     // This does not appear to work with legacy frontend, but works with gcc!
+     // x = ~x; // this is the complex conjugation operator
 
      x = -y; // this is the complex negate operator
      x = +y; // this is the complex unary plus operator

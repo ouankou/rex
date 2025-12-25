@@ -33,8 +33,6 @@ echo "Making all in END" >> filtered_example_make.out
 # the first occurance in th file (sed syntax I found at: 
 # http://stackoverflow.com/questions/148451/how-to-use-sed-to-replace-only-the-first-occurrence-in-a-file)
 sed -i "0,/Making all in src/s//Making all in (src\/ROSETTA's) src/" filtered_example_make.out
-sed -i "0,/Making all in src/s//Making all in (src\/frontend\/CxxFrontend\/EDG\/EDG_3.3's) src/" filtered_example_make.out
-sed -i "0,/Making all in src/s//Making all in (src\/frontend\/CxxFrontend\/EDG\/EDG_4.0's) src/" filtered_example_make.out
 sed -i "0,/Making all in src/s//Making all in (src\/3rdPartyLibraries\/libharu-x.x.x's) src/" filtered_example_make.out
 sed -i "0,/Making all in src/s//Making all in (src\/roseExtensions\/roseHPCToolkit's) src/" filtered_example_make.out
 

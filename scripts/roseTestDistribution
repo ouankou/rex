@@ -24,7 +24,7 @@ if (1) then
    touch CompileTreeAllConfigureOptions/tmp_file
    rm -rf CompileTreeAllConfigureOptions/*
    cd CompileTreeAllConfigureOptions
-   ../$1/configure --with-edg_source_code=true --enable-dq-developer-tests --with-ROSE_LONG_MAKE_CHECK_RULE=yes --enable-rosehpct --with-java=/usr/apps/java/jdk1.5.0_11 --with-openFortranParser=/home/dquinlan/ROSE/OpenFortranParser/fortran-parser --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-CXXFLAGS=-fPIC -with-CFLAGS=-fPIC --prefix=`pwd` |& tee configure.out
+   ../$1/configure --enable-dq-developer-tests --with-ROSE_LONG_MAKE_CHECK_RULE=yes --enable-rosehpct --with-java=/usr/apps/java/jdk1.5.0_11 --with-openFortranParser=/home/dquinlan/ROSE/OpenFortranParser/fortran-parser --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-CXXFLAGS=-fPIC -with-CFLAGS=-fPIC --prefix=`pwd` |& tee configure.out
    echo "*****************************************************"
    echo "**************   DONE with configure  ***************"
    echo "*****************************************************"
@@ -52,7 +52,7 @@ if (0) then
    chmod -R +w CompileTreeDefaultConfigureOptions_GNU_3x
    rm -rf CompileTreeDefaultConfigureOptions_GNU_3x/*
    cd CompileTreeDefaultConfigureOptions_GNU_3x
-   ../ROSE/configure --with-edg_source_code=true --prefix=`pwd` |& tee configure.out
+   ../ROSE/configure --prefix=`pwd` |& tee configure.out
    make -j4 |& tee make.out
  # Can't use -j is "make check" for AST_RewriteMechanism directory
    make check |& tee make_check.out
@@ -66,7 +66,7 @@ if (0) then
    chmod -R +w CompileTreeDefaultConfigureOptions
    rm -rf CompileTreeDefaultConfigureOptions/*
    cd CompileTreeDefaultConfigureOptions
-   ../ROSE/configure --with-edg_source_code=true --prefix=`pwd` |& tee configure.out
+   ../ROSE/configure --prefix=`pwd` |& tee configure.out
    make -j16 |& tee make.out
    make -j16 check |& tee make_check.out
    make -j16 distcheck |& tee make_distcheck.out
@@ -79,7 +79,7 @@ if (0) then
    chmod -R +w CompileTreeDevelopmentOptions
    rm -rf CompileTreeDevelopmentOptions/*
    cd CompileTreeDevelopmentOptions
-   ../ROSE/configure --with-edg_source_code=true --enable-dq-developer-tests --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=`pwd` |& tee configure.out
+   ../ROSE/configure --enable-dq-developer-tests --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=`pwd` |& tee configure.out
    make -j4 |& tee make.out
    make -j4 check |& tee make_check.out
    make -j4 distcheck |& tee make_distcheck.out
@@ -93,7 +93,7 @@ if (0) then
    chmod -R +w CompileTreeDataBaseOption
    rm -rf CompileTreeDataBaseOption/*
    cd CompileTreeDataBaseOption
-   ../ROSE/configure --with-edg_source_code=true --with-MySQL=/usr/casc/overture/MySQL/MySQL_Install \
+   ../ROSE/configure --with-MySQL=/usr/casc/overture/MySQL/MySQL_Install \
       --with-MySQL_username=dquinlan --with-MySQL_server=tux49 --with-MySQL_password=rosepwd \
       --with-MySQL_database_name=databasedq --with-CXX_DEBUG=-g --with-C_DEBUG=-g \
       --with-CXX_WARNINGS=-Wall --enable-dq-developer-tests \
@@ -110,7 +110,7 @@ if (0) then
    chmod -R +w CompileTreeDataBaseAndVisualizationOptions
    rm -rf CompileTreeDataBaseAndVisualizationOptions/*
    cd CompileTreeDataBaseAndVisualizationOptions
-   ../ROSE/configure --with-edg_source_code=true --with-FLTK_include=/home/thuerey1/local/include --with-FLTK_libs=/home/thuerey1/local/lib --with-GraphViz_include=/home/thuerey1/local/include/graphviz --with-GraphViz_libs=/home/thuerey1/local/lib/graphviz --with-MySQL=/home/thuerey1/local --with-MySQL_server=tux32.llnl.gov --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --enable-dq-developer-tests --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=`pwd` |& tee configure.out
+   ../ROSE/configure --with-FLTK_include=/home/thuerey1/local/include --with-FLTK_libs=/home/thuerey1/local/lib --with-GraphViz_include=/home/thuerey1/local/include/graphviz --with-GraphViz_libs=/home/thuerey1/local/lib/graphviz --with-MySQL=/home/thuerey1/local --with-MySQL_server=tux32.llnl.gov --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --enable-dq-developer-tests --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=`pwd` |& tee configure.out
    make -j4 |& tee make.out
    make -j4 check |& tee make_check.out
    make -j4 distcheck |& tee make_distcheck.out
@@ -125,7 +125,7 @@ if (0) then
    chmod -R +w CompileTreeQRoseAndVisualizationOptions
    rm -rf CompileTreeQRoseAndVisualizationOptions/*
    cd CompileTreeQRoseAndVisualizationOptions
-   ../ROSE/configure --enable-dq-developer-tests --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=/home/dquinlan2/ROSE/AndreasWork/CompilerTree --with-GraphViz_include=/usr/apps/graphviz/1.10/include/graphviz --with-GraphViz_libs=/usr/apps/graphviz/1.10/lib/graphviz --with-FLTK_include=/home/dquinlan/FLTK/fltk_install/include --with-GLUT_include=/home/dquinlan/FreeGlut/freeglut_install/include --with-FLTK_libs=/home/dquinlan/FLTK/fltk_install/lib --with-GLUT_libs=/home/dquinlan/FreeGlut/freeglut_install/lib --with-qt-includes=/home/jose/local/qt/include --with-qt-libraries=/home/jose/local/qt/lib --with-edg_source_code=true --prefix=`pwd` --with-QRose |& tee configure.out
+   ../ROSE/configure --enable-dq-developer-tests --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=/home/dquinlan2/ROSE/AndreasWork/CompilerTree --with-GraphViz_include=/usr/apps/graphviz/1.10/include/graphviz --with-GraphViz_libs=/usr/apps/graphviz/1.10/lib/graphviz --with-FLTK_include=/home/dquinlan/FLTK/fltk_install/include --with-GLUT_include=/home/dquinlan/FreeGlut/freeglut_install/include --with-FLTK_libs=/home/dquinlan/FLTK/fltk_install/lib --with-GLUT_libs=/home/dquinlan/FreeGlut/freeglut_install/lib --with-qt-includes=/home/jose/local/qt/include --with-qt-libraries=/home/jose/local/qt/lib --prefix=`pwd` --with-QRose |& tee configure.out
    make -j4 |& tee make.out
    make -j4 check |& tee make_check.out
    make -j4 distcheck |& tee make_distcheck.out

@@ -17,7 +17,7 @@ void foo()
      struct S x = {
        .b = 3.14,
 #if 0
-    // EDG doesn't produce the correct AST for these (not a ROSE issue)
+    // legacy frontend doesn't produce the correct AST for these (not a ROSE issue)
        .c.w = 8,
        .c.x = 7,
 #endif

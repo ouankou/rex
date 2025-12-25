@@ -49,12 +49,17 @@ FixupInClassDataInitialization::visit (SgNode* node)
                          SgModifierType* modifierType = isSgModifierType(variableType);
                          if (modifierType == NULL)
                             {
-                           // The EDG/Sage connection ignores the const when the type is non-integral
-                           // So "const double pi = 3.14;" will compile with EDG, but the EDG/Sage 
-                           // connection only generates "double pi = 3.14;" (dropping the const).
-                           // Since this is a bug in a non-standard usage, it is patch here, the dropping 
-                           // of the "const" could be fixed in the EDG/Sage connection but I have not done so.
-                           // It is not clear how seriously to treat a bug in a non-standard feature.
+                           // The legacy frontend/Sage connection ignores the
+                           // const when the type is non-integral So "const
+                           // double pi = 3.14;" will compile with legacy
+                           // frontend, but the legacy frontend/Sage connection
+                           // only generates "double pi = 3.14;" (dropping the
+                           // const). Since this is a bug in a non-standard
+                           // usage, it is patch here, the dropping of the
+                           // "const" could be fixed in the legacy frontend/Sage
+                           // connection but I have not done so. It is not clear
+                           // how seriously to treat a bug in a non-standard
+                           // feature.
 
                            // printf ("This is not a modifier type (so it is not const!) \n");
                            // variableDeclaration->get_file_info()->display("Error: this is not a modifier type (so it is not const!)");
@@ -109,10 +114,11 @@ FixupInClassDataInitialization::visit (SgNode* node)
           case V_SgFloatVal:
           case V_SgDoubleVal:
              {
-            // This whole subject is a non-standard feature of C++ which is allowed 
-            // by EDG but not handled correctly in the EDG/Sage connection.
-               SgValueExp* value = isSgValueExp(node);
-               ROSE_ASSERT(value != NULL);
+            // This whole subject is a non-standard feature of C++ which is
+            // allowed by legacy frontend but not handled correctly in the
+            // legacy frontend/Sage connection.
+            SgValueExp *value = isSgValueExp(node);
+            ROSE_ASSERT(value != NULL);
 
             // printf ("Found an float or double value expression ... \n");
                SgNode* parentOfValueExp = value->get_parent();
@@ -152,10 +158,12 @@ FixupInClassDataInitialization::visit (SgNode* node)
                     ROSE_ASSERT(parentOfProblemExpression != NULL);
                  // printf ("parentOfProblemExpression = %s \n",parentOfProblemExpression->sage_class_name());
 
-                 // Note that these two cases were all that were required to compile KULL, but one could 
-                 // imagine more cases being required.  Since this is support for a non-standard C++ feature 
-                 // in EDG and GNU g++ I don't feel compelled to handle it more robustly than is required to 
-                 // compile KULL.
+                    // Note that these two cases were all that were required to
+                    // compile KULL, but one could imagine more cases being
+                    // required.  Since this is support for a non-standard C++
+                    // feature in legacy frontend and GNU g++ I don't feel
+                    // compelled to handle it more robustly than is required to
+                    // compile KULL.
                     switch(parentOfProblemExpression->variantT())
                        {
                          case V_SgAssignInitializer:

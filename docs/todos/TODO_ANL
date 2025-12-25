@@ -7,7 +7,7 @@ New features:
 
 * Control Flow Graph
 
-* Make it possible to pass optional command line arguments to the EDG
+* Make it possible to pass optional command line arguments to the legacy frontend
   frontend.
 
 * It would be nice to use Bugzilla for ROSE. It is already installed and in 
@@ -43,7 +43,7 @@ Deficiencies:
   names and types of its fields) is not stored anywhere in the Sage tree
   (as far as I [BW] can tell).
  
-* EDG to Sage3 conversion fails, it is not possible to continue. "For"
+* legacy frontend to Sage3 conversion fails, it is not possible to continue. "For"
   statements with expression lists, parser causes a failed assertion:
 
   The input file looks like this:
@@ -70,7 +70,7 @@ Deficiencies:
   -I/home/winnicka/dan/dec20/compile/g++_HEADERS/hdrs1
   -I/home/winnicka/dan/dec20/compile/g++_HEADERS/hdrs2
   -I/home/winnicka/dan/dec20/compile/g++_HEADERS/hdrs3
-  Finished building EDG AST, now build the SAGE AST ...
+  Finished building legacy frontend AST, now build the SAGE AST ...
   rose: Cxx_Grammar.C:8793: Sg_File_Info *SgLocatedNode::get_file_info ()
   const: Assertion `this != __null' failed.
   Abort
@@ -85,7 +85,7 @@ Deficiencies:
   after unparsing.
   We would like to keep the original code unchanged as much as possible
   and hence preserve the names. Possibly, a command line argument to the
-  EDG front end would make this easier to implement.
+  legacy frontend front end would make this easier to implement.
 
 * Unparser issues. Back in February our plan was to use our own (i.e.,
   adic) unparser. We are now going to use Sage3's but it formats the
@@ -129,7 +129,7 @@ Deficiencies:
   right now what is saved is a float with value of 1.5, it would be nice
   to have the string "3./2." so that it would look the same as in the original
   code when unparsed.
-  I think this would require digging into EDG code, so it might not be
+  I think this would require digging into legacy frontend code, so it might not be
   worth the trouble.
 
 * The code 

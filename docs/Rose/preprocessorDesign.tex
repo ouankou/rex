@@ -245,11 +245,11 @@ example code for the complete translator definition.
 
 \section{Adding Command Line Processing}
 
-   ROSE passes all non-ROSE and non-EDG specific command line options to the backend
+   ROSE passes all non-ROSE and non-legacy frontend specific command line options to the backend
 compiler.  This simple model assures that any translator built using ROSE can be used
 in place of the vendors compiler. ROSE includes command line processing that is 
-specific to ROSE as well as some limited command line processing specific to EDG
-(EDG specific command line options will be expanded at some point).
+specific to ROSE as well as some limited command line processing specific to legacy frontend
+(legacy frontend specific command line options will be expanded at some point).
 
    The user can use the same mechanism that we use internally in ROSE to handle command
 line processing.  Specifically we use the SLA command line processing, built by Brian 

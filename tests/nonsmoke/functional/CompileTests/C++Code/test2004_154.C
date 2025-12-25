@@ -1,19 +1,28 @@
 Dan,
 
-On an unrelated note, I have found that if I have a C file that 
-includes a file "heap.h" (ie #include "heap.h") the heap.h that
-rose/edg pulls in is the heap.h under g++_HEADERS/hdrs3, even if you 
-have something like this:
+    On an unrelated note,
+    I have found that if I have a C file that includes a file
+        "heap.h"(ie #include "heap.h")
+            the heap.h that the ROSE frontend pulls in is the heap.h under g
+        ++ _HEADERS
+        / hdrs3,
+    even if you have something like this :
 
-mytool -c -rose:C  -I../include fileThatIncludesHeap.c 
+    mytool
+    -
+    c - rose : C -
+               I../
+                   include fileThatIncludesHeap
+                       .c
 
-where heap.h exists in the directory ../include.
+                   where heap.h exists in the directory../
+                   include.
 
 /*****fileThatIncludesHeap.c*********/
 #include "heap.h"
-/************************************/
-/*****************heap.h*************/
-int x;
+                   /************************************/
+                   /*****************heap.h*************/
+                   int x;
 /************************************/
 
 If I change the include line to be specific, ie '#include "../include/heap.h"',
@@ -38,4 +47,3 @@ to allow C code to contain C++ style comments.
 
 thanks,
 chadd
-

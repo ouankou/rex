@@ -149,7 +149,7 @@ pointer to an object derived from a SgTypedefDeclaration.
 This functions returns a pointer to the inner most SgScopeStatement where the current 
 statement is located.
 This is a function called after the parents have been set.  It is not called by the
-EDG/SAGE interface and is only called after the SAGE AST has been built and the parent
+legacy frontend/SAGE interface and is only called after the SAGE AST has been built and the parent
 pointers set within a separate phase.
 Improtant exception: The SgFunctionParameterList should have as it's scope the
 SgFunctionDefinition, but it is a sibling of the SgFunctionDefinition (both the

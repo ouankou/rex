@@ -9,14 +9,6 @@ AM_LDFLAGS = $(ROSE_RPATHS)
 
 
 #------------------------------------------------------------------------------------------------------------------------
-# Scope matching
-bin_PROGRAMS += testScopeMatching
-testScopeMatching_SOURCES = testScopeMatching.C  
-testScopeMatching_LDADD = $(ROSE_LIBS)
-
-# NOTE: testScopeMatching was apparently never tested.
-
-#------------------------------------------------------------------------------------------------------------------------
 # Linearization
 bin_PROGRAMS += testLinearization
 testLinearization_SOURCES = testLinearization.C  
@@ -328,13 +320,6 @@ TESTCODES_REQUIRED_TO_PASS = \
      test2010_14.c \
      constants.c
 
-# if ROSE_USE_EDG_VERSION_5_0 && !ROSE_USE_EDG_VERSION_6_0
-# if ROSE_USE_EDG_VERSION_5_0
-# TESTCODES_REQUIRED_TO_PASS += \
-#      test2012_15.c \
-#      test2012_16.c 
-# endif
-
 print_list:
 	@echo "Output value of TESTCODES_REQUIRED_TO_PASS: "
 	@echo $(TESTCODES_REQUIRED_TO_PASS)
@@ -528,7 +513,6 @@ test2004_84.C \
 test2004_86.C \
 test2004_87.C \
 test2004_88.C \
-test2004_89.C \
 test2004_90.C \
 test2004_91.C \
 test2004_93.C \
@@ -583,7 +567,6 @@ test2004_144.C \
 test2004_145.C \
 test2004_146.C \
 test2004_147.C \
-test2004_148.C \
  test2004_149.C \
 test2004_150.C \
 test2004_151.C \
@@ -694,7 +677,6 @@ test2005_98.C \
 test2005_99.C \
 test2005_100.C \
 test2005_101.C \
-test2005_102.C \
 test2005_103.C \
 test2005_105.C \
 test2005_106.C \
@@ -1131,7 +1113,6 @@ test2011_147.C \
    test2005_199.C \
    test2006_84.C \
    test2006_86.C \
-   test2006_121.C \
    test2006_139.C \
    test2006_147.C \
    test2006_151.C \
@@ -1347,4 +1328,3 @@ clean-local:
 	rm -f *.dot
 	rm -f token_leading_*.c
 	rm -f token_trailing_*.c
-

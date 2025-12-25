@@ -52,11 +52,13 @@
 // original expression trees.
 #include "fixupConstantFoldedValues.h"
 
-// DQ (5/1/2012): Added testing for marked transformations in the AST (should be none after EDG/ROSE translation).
+// DQ (5/1/2012): Added testing for marked transformations in the AST (should be
+// none after legacy frontend/ROSE translation).
 #include "detectTransformations.h"
 
-// DQ (8/12/2012): Fixup the SgModifiers used to hold type reference in EDG to types in instantiated templates that had not yet been seen).
-// This post processing effects test2012_190.C and test2007_141.C.
+// DQ (8/12/2012): Fixup the SgModifiers used to hold type reference in legacy
+// frontend to types in instantiated templates that had not yet been seen). This
+// post processing effects test2012_190.C and test2007_141.C.
 #include "fixupTypeReferences.h"
 
 // DQ (10/5/2012): Fixup known macros that might expand into a recursive mess in the unparsed code.
@@ -69,7 +71,8 @@
 // DQ (12/20/2012): Added support for testing the physical source position information.
 #include "checkPhysicalSourcePosition.h"
 
-// DQ (6/11/2013): This corrects where EDG can set the scope of a friend declaration to be different from the defining declaration.
+// DQ (6/11/2013): This corrects where legacy frontend can set the scope of a
+// friend declaration to be different from the defining declaration.
 #include "fixupDeclarationScope.h"
 
 // DQ (11/14/2015): This corrects inconstancies in the setting of flags in the Sg_File_Info objects.
@@ -90,7 +93,8 @@
 // DQ (8/25/2020): Added support to remove redundant include files used to initialize variable declarations.
 #include "fixupInitializers.h"
 
-/*! \brief Postprocessing that is not likely to be handled in the EDG/Sage III translation.
+/*! \brief Postprocessing that is not likely to be handled in the legacy
+ * frontend/Sage III translation.
  */
 void postProcessingSupport (SgNode* node);
 

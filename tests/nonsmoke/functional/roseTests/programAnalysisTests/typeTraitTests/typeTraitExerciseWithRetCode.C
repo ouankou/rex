@@ -1,14 +1,11 @@
 #include "rose.h"
-#include <iostream>
-#include <sstream>
-#include <functional>
-#include <numeric>
 #include <fstream>
+#include <functional>
+#include <iostream>
 #include <map>
-#include <boost/tokenizer.hpp>
-#include <boost/algorithm/string.hpp>
+#include <numeric>
+#include <sstream>
 using namespace std;
-using namespace boost::algorithm;
 using namespace SageInterface;
 
 class TypeTraitChecker : public AstSimpleProcessing {

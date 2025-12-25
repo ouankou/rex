@@ -190,7 +190,7 @@ Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression* expr, SgUnpars
           }
 
             // DQ (6/20/2013): Added alignof operator to support C/C++
-            // extensions (used in EDG 4.7).
+            // extensions (used in legacy frontend 4.7).
           case ALIGNOF_OP:            { unparseAlignOfOp(expr, info); break; }
 
        // DQ (2/5/2015): Added missing C++11 support.
@@ -478,7 +478,8 @@ Unparse_ExprStmt::unparseLambdaExpression(SgExpression* expr, SgUnparse_Info& in
               ASSERT_not_null(capt_var_expr);
 
               // TV (11/14/2018): ROSE-1525: Made a separated case when 'this'
-              // is captured to properly handle the changes in EDG 4.14
+              // is captured to properly handle the changes in legacy
+              // frontend 4.14
               if (isSgThisExp(capt_var_expr)) {
                 if (lambdaCapture->get_capture_by_reference() == false) {
                   curprint("*");
@@ -1768,8 +1769,9 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                // REX FIX: Add space after template parameter list (e.g., "> class")
                curprint(" ");
 
-               // TV (03/23/2018): could either be class or typename: where is the info in EDG? where to store it in the AST?
-               // REX FIX: Use stored keyword or default to class
+               // TV (03/23/2018): could either be class or typename: where is
+               // the info in legacy frontend? where to store it in the AST? REX
+               // FIX: Use stored keyword or default to class
                std::string kw = "class ";
                std::string stored_kw = SageInterface::getTemplateParameterKeyword(templateParameter);
                if (!stored_kw.empty()) {
@@ -1865,7 +1867,7 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
      ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
 #if 0
-  // DQ (1/21/2018): Using the logic set in EDG/ROSE connection to control output of template arguments.
+  // DQ (1/21/2018): Using the logic set in legacy frontend/ROSE connection to control output of template arguments.
   // I have tried this previously, and I think it got hung up on details of default template arguments, but
   // since it impacts the support for lambda functions and compiler generated classes holding capture 
   // variables it is worth another try to use this logic.
@@ -1990,7 +1992,7 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
                if (templateArgument->get_unparsable_type_alias() != NULL)
                   {
 #if 0
-                    printf ("In unparseTemplateArgument(): selected an alternative type to unparse to work waround a bug in EDG (this is likely the original type specified in the source code) \n");
+                    printf ("In unparseTemplateArgument(): selected an alternative type to unparse to work waround a bug in legacy frontend (this is likely the original type specified in the source code) \n");
                  // DQ (3/30/2018): Can't call this without infinite recursion!
                  // printf ("--- were going to use: %s \n",templateArgument->unparseToString().c_str());
                  // printf ("--- selecing instead : %s \n",templateArgument->get_unparsable_type_alias()->unparseToString().c_str());
@@ -2512,9 +2514,10 @@ Unparse_ExprStmt::unparseAsmOp (SgExpression* expr, SgUnparse_Info& info)
      curprint ( "\"");
      if (asmOp->get_recordRawAsmOperandDescriptions() == false)
         {
-       // This is only set to non-invalid state when RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == FALSE in EDG.
-          unparse_asm_operand_modifier(asmOp->get_modifiers());
-          curprint ( unparse_operand_constraint(asmOp->get_constraint()));
+       // This is only set to non-invalid state when
+       // RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == FALSE in legacy frontend.
+       unparse_asm_operand_modifier(asmOp->get_modifiers());
+       curprint(unparse_operand_constraint(asmOp->get_constraint()));
         }
        else
         {
@@ -2526,7 +2529,7 @@ Unparse_ExprStmt::unparseAsmOp (SgExpression* expr, SgUnparse_Info& info)
         }
 
 #if 0
-  // DQ (1/8/2009): Added support for case of asm operand handling with EDG RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == TRUE
+  // DQ (1/8/2009): Added support for case of asm operand handling with legacy frontend RECORD_RAW_ASM_OPERAND_DESCRIPTIONS == TRUE
   // (this case uses the constraintString instead of a constrant code)
   // curprint ( unparse_operand_constraint(asmOp->get_constraint()));
      if (asmOp->get_recordRawAsmOperandDescriptions() == false)
@@ -2785,10 +2788,11 @@ Unparse_ExprStmt::unparseVarRef(SgExpression* expr, SgUnparse_Info& info)
   // curprint (  var_ref->get_symbol()->get_name().str());
      if (theName->get_name() == "__assert_fail")
         {
-       // DQ (2/10/2010): For some reason, "__PRETTY_FUNCTION__" is replaced with "__assert_fail" by EDG?
-       // But only when the assert comes from a struct (see test2010_07.C).
-       // printf ("Warning: work around substitution of __PRETTY_FUNCTION__ for __assert_fail \n");
-          curprint ("__PRETTY_FUNCTION__");
+       // DQ (2/10/2010): For some reason, "__PRETTY_FUNCTION__" is replaced
+       // with "__assert_fail" by legacy frontend? But only when the assert
+       // comes from a struct (see test2010_07.C). printf ("Warning: work around
+       // substitution of __PRETTY_FUNCTION__ for __assert_fail \n");
+       curprint("__PRETTY_FUNCTION__");
         }
        else
         {
@@ -3428,11 +3432,11 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
           ROSE_ASSERT(parent->get_parent() == NULL);
         }
 
-  // DQ (10/16/2016): Fix for test2016_84.C and test2016_85.C (simpler code) specific to EDG 4.11 use.
-  // ASSERT_not_null(possibleFunctionCall);
-     bool uses_operator_syntax = false;
-     if (possibleFunctionCall != NULL)
-        {
+        // DQ (10/16/2016): Fix for test2016_84.C and test2016_85.C (simpler
+        // code) specific to legacy frontend 4.11 use.
+        // ASSERT_not_null(possibleFunctionCall);
+        bool uses_operator_syntax = false;
+        if (possibleFunctionCall != NULL) {
           SgFunctionCallExp* functionCallExp = isSgFunctionCallExp(possibleFunctionCall);
        // bool is_compiler_generated = false;
           if (functionCallExp != NULL)
@@ -3479,8 +3483,8 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
         }
 
      SgExpression* binary_op = isSgExpression(mfunc_ref->get_parent());
-  // TV (11/15/2018): With EDG 5.0, it happens inside some STL include (originating from <string>).
-  // ASSERT_not_null(binary_op);
+     // TV (11/15/2018): With legacy frontend 5.0, it happens inside some STL
+     // include (originating from <string>). ASSERT_not_null(binary_op);
      bool isPartOfArrowOperatorChain = binary_op != NULL ? partOfArrowOperatorChain(binary_op) : false;
 
 #if MFuncRefSupport_DEBUG
@@ -3791,12 +3795,14 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
           printf ("Case of unparsing \"operator[]\" \n");
           curprint ("\n /* Case of unparsing \"operator[]\" */ \n");
 #endif
-       // This is a special case, while the input code may be either expressed as "a[i]" or "a.operator[i]"
-       // (we can't tell which from the EDG AST, I think).
-       // often we want to unparse the code as "a[i]" but there is a case were this is not possible
-       // ("a->operator[](i)" is valid as is "(*a)[i]", but only if the operator-> is not defined for 
-       // the type of which "a" is a variable).  So here we check the lhs of the parent of the curprintrent
-       // expression so that we can detect this special case!
+       // This is a special case, while the input code may be either expressed
+       // as "a[i]" or "a.operator[i]" (we can't tell which from the legacy
+       // frontend AST, I think). often we want to unparse the code as "a[i]"
+       // but there is a case were this is not possible
+       // ("a->operator[](i)" is valid as is "(*a)[i]", but only if the
+       // operator-> is not defined for the type of which "a" is a variable). So
+       // here we check the lhs of the parent of the curprintrent expression so
+       // that we can detect this special case!
 
        // DQ (12/11/2004): We need to unparse the keyword "operator" in this special cases (see test2004_159.C)
           SgExpression* parentExpression = isSgExpression(expr->get_parent());
@@ -4525,8 +4531,9 @@ Unparse_ExprStmt::unparseFloatVal(SgExpression* expr, SgUnparse_Info& info)
         }
        else
         {
-       // Test for NaN value (famous test of to check for equality) or check for C++ definition of NaN.
-       // We detect C99 and C "__NAN__" in EDG, but translate to backend specific builtin function.
+          // Test for NaN value (famous test of to check for equality) or check
+          // for C++ definition of NaN. We detect C99 and C "__NAN__" in legacy
+          // frontend, but translate to backend specific builtin function.
           if ((float_value != float_value) || (float_value == std::numeric_limits<float>::quiet_NaN()) )
              {
             // curprint ( "std::numeric_limits<float>::quiet_NaN()";
@@ -4610,7 +4617,7 @@ Unparse_ExprStmt::unparseDoubleVal(SgExpression* expr, SgUnparse_Info& info)
        else
         {
        // Test for NaN value (famous test of to check for equality) or check for C++ definition of NaN.
-       // We detect C99 and C "__NAN__" in EDG, but translate to backend specific builtin function.
+       // We detect C99 and C "__NAN__" in legacy frontend, but translate to backend specific builtin function.
           if ( (double_value != double_value) || (dbl_val->get_value() == std::numeric_limits<double>::quiet_NaN()) )
              {
             // curprint ( "std::numeric_limits<double>::quiet_NaN()";
@@ -4658,8 +4665,9 @@ Unparse_ExprStmt::unparseLongDoubleVal(SgExpression* expr, SgUnparse_Info& info)
         }
        else
         {
-       // Test for NaN value (famous test of to check for equality) or check for C++ definition of NaN.
-       // We detect C99 and C "__NAN__" in EDG, but translate to backend specific builtin function.
+          // Test for NaN value (famous test of to check for equality) or check
+          // for C++ definition of NaN. We detect C99 and C "__NAN__" in legacy
+          // frontend, but translate to backend specific builtin function.
           if ( (longDouble_value != longDouble_value) || (longDouble_value == std::numeric_limits<long double>::quiet_NaN()) )
              {
             // curprint ( "std::numeric_limits<long double>::quiet_NaN()";
@@ -4785,10 +4793,12 @@ Unparse_ExprStmt::unparseTypeTraitBuiltinOperator(SgExpression* expr, SgUnparse_
             else
              {
 #if 1
-            // DQ (3/24/2015): Added case of "__builtin_offsetof" to make it consistant with the change in the EDG/ROSE translation.
-            // DQ (3/19/2015): For the case of the __offsetof() builtin function we have to avoid output of the structure (e.g. "(0*).field").
-            // unparseExpression(expression,info);
-            // if (functionNameString == "__offsetof")
+               // DQ (3/24/2015): Added case of "__builtin_offsetof" to make it
+               // consistant with the change in the legacy frontend/ROSE
+               // translation. DQ (3/19/2015): For the case of the __offsetof()
+               // builtin function we have to avoid output of the structure
+               // (e.g. "(0*).field"). unparseExpression(expression,info); if
+               // (functionNameString == "__offsetof")
                if (functionNameString == "__offsetof" || functionNameString == "__builtin_offsetof")
                   {
 #if 1
@@ -6923,10 +6933,12 @@ static bool isFromAnotherFile (SgLocatedNode* lnode)
      printf ("TOP of isFromAnotherFile(SgLocatedNode* lnode = %p = %s): result = %s \n",lnode,lnode->class_name().c_str(),result ? "true" : "false");
 #endif
 
-  // Liao 11/22/2010, a workaround for enum value constant assign initializer
-  // EDG passes the source location information of the original declaration of the enum value, not the location for the value's reference
-  // So SgAssignInitializer has wrong file info.
-  // In this case, we look down to the actual SgEnumVal for the file info instead of looking at its ancestor SgAssignInitializer  
+     // Liao 11/22/2010, a workaround for enum value constant assign initializer
+     // legacy frontend passes the source location information of the original
+     // declaration of the enum value, not the location for the value's
+     // reference So SgAssignInitializer has wrong file info. In this case, we
+     // look down to the actual SgEnumVal for the file info instead of looking
+     // at its ancestor SgAssignInitializer
      SgAssignInitializer *a_initor = isSgAssignInitializer (lnode);
      if (a_initor != NULL)
         {
@@ -6986,7 +6998,7 @@ static bool isFromAnotherFile (SgLocatedNode* lnode)
         }
 
 #if 0
-  // DQ (9/1/2013): Now that we have modified EDG to supported the source position information in constants in the 
+  // DQ (9/1/2013): Now that we have modified legacy frontend to supported the source position information in constants in the 
   // SgAssignInitializer (in the case of SgAggregateInitializers), we can use the code above (finally) to suppress 
   // the unparsing of the aggregate initializers when they were from a different include file (see test2013_05.c 
   // as an example).
@@ -8084,8 +8096,10 @@ Unparse_ExprStmt::isAssociatedWithCxx11_initializationList( SgConstructorInitial
 #if DEBUG_CXX11_INITIALIZATION_LIST
                printf ("In isAssociatedWithCxx11_initializationList(): memberFunctionDeclaration name = %s \n",name.c_str());
 #endif
-            // I don't feel comfortable with detecting the name of a specific class and having behavior depend upon this, 
-            // but this is actually the way in works in C++ (at least in EDG specifically).
+               // I don't feel comfortable with detecting the name of a specific
+               // class and having behavior depend upon this, but this is
+               // actually the way in works in C++ (at least in legacy frontend
+               // specifically).
                if (name == "initializer_list")
                   {
                  // Found special type used in C++ to indicate special syntax for C++11 initiazation list support.
@@ -8093,7 +8107,7 @@ Unparse_ExprStmt::isAssociatedWithCxx11_initializationList( SgConstructorInitial
                     printf ("In isAssociatedWithCxx11_initializationList(): Found special type used in C++ to indicate special syntax for C++11 initiazation list support \n");
 #endif
 #if 0
-                 // TV (07/18/18): happens in C++ 14 . With Kripke, EDG auto-detect C++14 (forcing C++11 causes C++14 related errors)
+                 // TV (07/18/18): happens in C++ 14 . With Kripke, legacy frontend auto-detect C++14 (forcing C++11 causes C++14 related errors)
                  // Check if this is a C++11 file (just to make sure).
                     SgSourceFile* sourceFile = info.get_current_source_file();
                     ASSERT_not_null(sourceFile);
@@ -8473,11 +8487,13 @@ Unparse_ExprStmt::unparseConInit(SgExpression* expr, SgUnparse_Info& info)
 #if DEBUG_CONSTRUCTOR_INITIALIZER
                     printf ("DONE: In unparseConInit(): unparseType() \n");
 #endif
-                  }
-              // DQ (8/4/2012): We need this case to handle tests such as test2012_162.C.
-              // DQ (3/29/2012): For EDG 4.x it appear we need a bit more since both con_init->get_declaration() and con_init->get_class_decl() can be NULL (see test2012_52.C).
-                 else
-                  {
+               }
+               // DQ (8/4/2012): We need this case to handle tests such as
+               // test2012_162.C. DQ (3/29/2012): For legacy frontend 4.x it
+               // appear we need a bit more since both
+               // con_init->get_declaration() and con_init->get_class_decl() can
+               // be NULL (see test2012_52.C).
+               else {
 #if DEBUG_CONSTRUCTOR_INITIALIZER
                     printf ("In unparseConInit(): Need to handle new case for where both con_init->get_declaration() and con_init->get_class_decl() can be NULL \n");
                     printf ("In unparseConInit(): Get name of type = %p = %s name = %s \n",con_init->get_type(),con_init->get_type()->class_name().c_str(),"NOT EVALUATED YET");
@@ -8491,7 +8507,7 @@ Unparse_ExprStmt::unparseConInit(SgExpression* expr, SgUnparse_Info& info)
                     unp->u_type->unparseType(con_init->get_type(),newinfo);
 
                  // ROSE_ASSERT ( nm.is_null() == false );
-                  }
+               }
              }
 
 #if DEBUG_CONSTRUCTOR_INITIALIZER
@@ -8581,7 +8597,7 @@ Unparse_ExprStmt::unparseConInit(SgExpression* expr, SgUnparse_Info& info)
           ( (con_init->get_need_parenthesis_after_name() == true) ) && 
             (process_using_cxx11_initialization_list_syntax == true))
 #else
-  // DQ (1/16/2019): Since the explicit caset data member is now set properly in the EDG/ROSE translation, we can't depend on it to always be true.
+  // DQ (1/16/2019): Since the explicit caset data member is now set properly in the legacy frontend/ROSE translation, we can't depend on it to always be true.
   // if ((con_init->get_is_explicit_cast() == true) && unp->u_sage->printConstructorName(con_init) == true)
   // if ((con_init->get_need_name() == true) && (con_init->get_is_explicit_cast() == true) && unp->u_sage->printConstructorName(con_init) == true)
      if ((con_init->get_need_name() == true) && unp->u_sage->printConstructorName(con_init) == true)
@@ -8921,13 +8937,16 @@ Unparse_ExprStmt::unparseAssnInit(SgExpression* expr, SgUnparse_Info& info)
 #endif
       if (assn_init->get_is_explicit_cast() == true)
         {
-       // TV (11/15/2018): fixing weird behavior introduced with EDG 5.0 on Cxx_tests/test2006_70.C
-       //                  happens when unparsing the "parameterList_syntax" for a parameter that has a default value
-          if (assn_init->get_operand()->get_originalExpressionTree() != NULL) {
-            unparseExpression(assn_init->get_operand()->get_originalExpressionTree(), info);
-          } else {
-            unparseExpression(assn_init->get_operand(), info);
-          }
+        // TV (11/15/2018): fixing weird behavior introduced with legacy
+        // frontend 5.0 on Cxx_tests/test2006_70.C
+        //                  happens when unparsing the "parameterList_syntax"
+        //                  for a parameter that has a default value
+        if (assn_init->get_operand()->get_originalExpressionTree() != NULL) {
+          unparseExpression(
+              assn_init->get_operand()->get_originalExpressionTree(), info);
+        } else {
+          unparseExpression(assn_init->get_operand(), info);
+        }
         }
        else
         {
@@ -9024,9 +9043,10 @@ Unparse_ExprStmt::unparseThrowOp(SgExpression* expr, SgUnparse_Info& info)
             // printf ("Case of SgThrowOp::throw_expression in unparseThrowOp() \n");
                curprint ( "throw ");
 
-            // DQ not sure if we want to have the extra parentheses, EDG accepts them, but g++ does not (so skip them)
-            // Nice example of where parenthesis are not meaningless.
-            // curprint ( "(";
+               // DQ not sure if we want to have the extra parentheses, legacy
+               // frontend accepts them, but g++ does not (so skip them) Nice
+               // example of where parenthesis are not meaningless. curprint (
+               // "(";
 
                ASSERT_not_null(throw_op->get_operand());
                unparseExpression(throw_op->get_operand(), info);
@@ -9613,12 +9633,15 @@ Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression* expr, SgUnparse_Inf
 
 #else
   // Liao, fixing bug 355, 6/16/2009
-  // for multidimensional array's designated initializer, don't emit '=' until it reaches the last dimension
-  // TODO this is not the ultimate fix: EDG uses nested tree for multidimensional array's designated initializer
-  // while ROSE's SgDesignatedInitializer is designed to have a flat list for designators 
-  // But the EDG_SAGE_connect part generated nested ROSE AST tree following EDG's IR tree.
-     bool lastDesignator           = true; 
-     bool isArrayElementDesignator = false;
+  // for multidimensional array's designated initializer, don't emit '=' until
+  // it reaches the last dimension
+  // TODO this is not the ultimate fix: legacy frontend uses nested tree for
+  // multidimensional array's designated initializer while ROSE's
+  // SgDesignatedInitializer is designed to have a flat list for designators The
+  // frontend adapter generated nested ROSE AST tree following the legacy IR
+  // tree.
+  bool lastDesignator = true;
+  bool isArrayElementDesignator = false;
 
 #error "DEAD CODE!"
 

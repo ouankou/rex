@@ -12,15 +12,11 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 using namespace std;
-using namespace boost;
 
-
-
-
-
-
-/* You need to use myGraph type here because the conversion of StaticCFG::InterproceduralCFG or StaticCFG::CFG needs to be
-in a boost form. The SgGraphTemplate.h file handles this conversion and myGraph is specific to that file */
+/* You need to use myGraph type here because the conversion of
+StaticCFG::InterproceduralCFG or StaticCFG::CFG needs to be in a graph form. The
+SgGraphTemplate.h file handles this conversion and myGraph is specific to that
+file */
 typedef myGraph CFGforT;
 
 
@@ -54,23 +50,25 @@ int main(int argc, char *argv[]) {
   SgFunctionDefinition* mainDef = mainDefDecl->get_definition(); 
 /* Instantiating the visitorTraversal */
    visitorTraversal* vis = new visitorTraversal();
-/* This creates the StaticCFG::InterproceduralCFG object to be converted to a boost graph */
-    StaticCFG::InterproceduralCFG cfg(mainDef);
-    stringstream ss;
-    SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
-    /* We got the necessary internal SgIncidenceDirectedGraph from the cfg */
-    g = cfg.getGraph();
-    myGraph* mg = new myGraph();
-/* Converting the cfg to a boost graph */
-    mg = instantiateGraph(g, cfg, mainDef);
-/* Set internal variables */
-    vis->paths = 0;
-    /* invoking the traversal, the first argument is the graph, the second is true if you
-    do not want bounds, false if you do, the third and fourth arguments are starting and stopping 
-    vertices respectively, if you are not bounding simply insert 0. Finally the last argument is
-    currently deprecated */
-    vis->constructPathAnalyzer(mg, true, 0, 0, true);
-    std::cout << "finished" << std::endl;
-    std::cout << " paths: " << vis->paths << std::endl;
-    delete vis;
+   /* This creates the StaticCFG::InterproceduralCFG object to be converted to a
+    * graph */
+   StaticCFG::InterproceduralCFG cfg(mainDef);
+   stringstream ss;
+   SgIncidenceDirectedGraph *g = new SgIncidenceDirectedGraph();
+   /* We got the necessary internal SgIncidenceDirectedGraph from the cfg */
+   g = cfg.getGraph();
+   myGraph *mg = new myGraph();
+   /* Converting the cfg to a graph */
+   mg = instantiateGraph(g, cfg, mainDef);
+   /* Set internal variables */
+   vis->paths = 0;
+   /* invoking the traversal, the first argument is the graph, the second is
+   true if you do not want bounds, false if you do, the third and fourth
+   arguments are starting and stopping vertices respectively, if you are not
+   bounding simply insert 0. Finally the last argument is currently deprecated
+ */
+   vis->constructPathAnalyzer(mg, true, 0, 0, true);
+   std::cout << "finished" << std::endl;
+   std::cout << " paths: " << vis->paths << std::endl;
+   delete vis;
 }

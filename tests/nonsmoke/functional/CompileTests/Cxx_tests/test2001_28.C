@@ -1,6 +1,7 @@
 // Bug associated with Overture code GenericGrid.h (line 105)
-// Assertion failed: get_symbol_ptr(type->source_corresp) != NULL, 
-//      file /home/dquinlan/ROSE/NEW_ROSE/EDG/src/sage_il_to_str.C, line 2160
+// Assertion failed: get_symbol_ptr(type->source_corresp) != NULL,
+//      file /home/dquinlan/ROSE/NEW_ROSE/legacy frontend/src/sage_il_to_str.C,
+//      line 2160
 
 class A
    {

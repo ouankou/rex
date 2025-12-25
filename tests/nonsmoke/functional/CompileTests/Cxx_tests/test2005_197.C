@@ -2,7 +2,7 @@
 This is a bug relating to the reintroduction of preprocessor directives,
 and the fact that these can currently not be put in the middle of an
 expression:
-/home/saebjornsen1/ROSE-October/ROSE-ROSE-Compile/ROSE/src/frontend/EDG/EDG_3.3/src/float_pt.c
+/home/saebjornsen1/ROSE-October/ROSE-ROSE-Compile/ROSE/src/frontend/legacy frontend/legacy_frontend/src/float_pt.c
 line 317:
   } 
   if (

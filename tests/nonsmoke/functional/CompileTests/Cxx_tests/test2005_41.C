@@ -12,16 +12,14 @@ int main () {return 0;}
 template <typename Mesh>
 struct MeshConcept
    {
-     void constraints()
-        {
-       // using namespace boost;
-       // Every model of MeshConcept must also model SpaceConcept.
-       // DQ (2/20/2010): I think that this only works with older GNU compilers.
+  void constraints() {
+    // Every model of MeshConcept must also model SpaceConcept.
+    // DQ (2/20/2010): I think that this only works with older GNU compilers.
 // #if (__GNUC__ == 3)
 #if ( defined(__clang__) == 0 && __GNUC__ == 3 )
           function_requires< SpaceConcept<Mesh> >();
 #endif
-        }
+  }
 
    }; // end struct MeshConcept
 

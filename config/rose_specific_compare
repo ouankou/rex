@@ -90,7 +90,7 @@ namespace std
     operator==(partial_ordering __v, __cmp_cat::__unspec) noexcept
     { return __v._M_value == 0; }
 
- // DQ (7/24/2020): Fixing header file for EDG 6.0 frontend.
+ // DQ (7/24/2020): Fixing header file for legacy frontend 6.0 frontend.
  // friend constexpr bool
  // operator==(partial_ordering, partial_ordering) noexcept = default;
     friend constexpr bool
@@ -179,7 +179,7 @@ namespace std
     operator==(weak_ordering __v, __cmp_cat::__unspec) noexcept
     { return __v._M_value == 0; }
 
- // DQ (7/24/2020): Fixing header file for EDG 6.0 frontend.
+ // DQ (7/24/2020): Fixing header file for legacy frontend 6.0 frontend.
  // friend constexpr bool
  // operator==(weak_ordering, weak_ordering) noexcept = default;
     friend constexpr bool
@@ -263,7 +263,7 @@ namespace std
     operator==(strong_ordering __v, __cmp_cat::__unspec) noexcept
     { return __v._M_value == 0; }
 
- // DQ (7/24/2020): Fixing header file for EDG 6.0 frontend.
+ // DQ (7/24/2020): Fixing header file for legacy frontend 6.0 frontend.
  // friend constexpr bool
  // operator==(strong_ordering, strong_ordering) noexcept = default;
     friend constexpr bool

@@ -19,8 +19,9 @@ void foobar()
         {
         }
 #else
-  // DQ (8/30/2014): The handling of multiple variables depends upon the source sequence numbering; and this is sensative to white space in EDG.
-  // So we need a better way to handle this.
+     // DQ (8/30/2014): The handling of multiple variables depends upon the
+     // source sequence numbering; and this is sensative to white space in
+     // legacy frontend. So we need a better way to handle this.
      for (X* a = point_a->getParentNode(), 
             *b = point_b->getParentNode(); 
              a != b; 

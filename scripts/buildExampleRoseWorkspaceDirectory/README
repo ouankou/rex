@@ -8,7 +8,7 @@ Two step build of ROSE specific workspace
 
 2) Configure command (using the local configure use the same options as 
 used to build the version of ROSE installed in the prefix directory):
-   /home/dquinlan/ROSE/backstroke/configure --with-ROSE_LONG_MAKE_CHECK_RULE=yes --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --prefix=/home/dquinlan/ROSE/ROSE_CompileTree/git_LINUX-64bit-4.2.4-dq-main-rc_install --with-boost=/home/dquinlan/local/boost_1_37_0.gxx-4.2.4
+   /home/dquinlan/ROSE/backstroke/configure --with-ROSE_LONG_MAKE_CHECK_RULE=yes --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --prefix=/home/dquinlan/ROSE/ROSE_CompileTree/git_LINUX-64bit-4.2.4-dq-main-rc_install
 3) To cleanup the source tree after running build run:
    rm -rf aclocal.m4 autom4te.cache configure internal_rose_config.h.in libltdl Makefile.in rose_workspace_config.h.in stamp-h1.in stamp-h.in
 
@@ -52,5 +52,4 @@ are tested for the workspace which don't make since and can be avoided:
 Using make install to update ROSE can likely be spead up by avoiding
 the relink that libtool does.  More information is available at:
    http://sourceware.org/autobook/autobook/autobook_85.html
-
 

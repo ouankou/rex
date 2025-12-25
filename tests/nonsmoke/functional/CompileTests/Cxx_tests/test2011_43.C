@@ -13,7 +13,8 @@ struct A
 
 namespace C
    {
-  // Name qualification is required here (though GNU 4.2 does not appear to require it, EDG does).
-     A::B::C foo();
+// Name qualification is required here (though GNU 4.2 does not appear to
+// require it, legacy frontend does).
+A::B::C foo();
    }
 

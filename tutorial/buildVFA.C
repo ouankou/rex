@@ -26,7 +26,7 @@ struct keepFunction : public unary_function<bool,SgFunctionDeclaration*>{
         returnValue=false;
 #if 0
       //Filter out prototypes when defining function declarations exist at the same time
-      // This is now necessary since we always generate the first nondefining declaration in ROSE using EDG 4.4.
+      // This is now necessary since we always generate the first nondefining declaration in ROSE using legacy frontend 4.4.
       //  We cannot do this since the call graph generator always tries to use first nondefining decl whenenver possible.
       //  This non-defining decl filter will essentially zero out the call graph.
       //Liao 1/23/2013

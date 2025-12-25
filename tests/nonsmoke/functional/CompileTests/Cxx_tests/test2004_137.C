@@ -1,6 +1,7 @@
 
-// Since EDG normalizes the AST to move all member function definitions outside of 
-// the class these separate clases are really the same case internally to ROSE.
+// Since legacy frontend normalizes the AST to move all member function
+// definitions outside of the class these separate clases are really the same
+// case internally to ROSE.
 #define DEFINE_LOCAL_TO_CLASS 0
 
 class X

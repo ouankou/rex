@@ -31,6 +31,7 @@ void foobar()
   // A simple static member function call
      b.foo();
 
-  // The following is output as "b.foo()" (so there is some normalization internally in EDG)
+     // The following is output as "b.foo()" (so there is some normalization
+     // internally in legacy frontend)
      (*(b.foo))();
    }

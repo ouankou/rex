@@ -98,15 +98,13 @@
     
     The solution:
     
-    1. Merge the rose/scratch/edg.git branches into the
-       rose/edg4x/edg.git repository.
+    1. Merge the rose/scratch/tools.git branches into the
+       rose/tools.git repository.
     
-    2. Update .gitmodules to point to the rose/edg4x/edg.git
-       release repository.
+    2. Update .gitmodules to point to the release repository.
     
-    3. Remove the rose/scratch/edg.git repository once it
-       has been entirely merged into the rose/edg4x/edg.git
-       repository.
+    3. Remove the rose/scratch/tools.git repository once it
+       has been entirely merged into the release repository.
 
     ROSE-123
     JENKINS-456

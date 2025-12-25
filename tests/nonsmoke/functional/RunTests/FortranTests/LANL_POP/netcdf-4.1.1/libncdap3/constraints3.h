@@ -1,8 +1,9 @@
- /*********************************************************************
-  *   Copyright 1993, UCAR/Unidata
-  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
-  *   $Header: /upc/share/CVS/netcdf-3/libncdap3/constraints3.h,v 1.9 2010/04/10 20:56:37 dmh Exp $
-  *********************************************************************/
+/*********************************************************************
+ *   Copyright 1993, UCAR/Unidata
+ *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
+ *   $Header: /shared/CVS/netcdf-3/libncdap3/constraints3.h,v 1.9 2010/04/10
+ *20:56:37 dmh Exp $
+ *********************************************************************/
 #ifndef CONSTRAINTS3_H
 #define CONSTRAINTS3_H 1
 

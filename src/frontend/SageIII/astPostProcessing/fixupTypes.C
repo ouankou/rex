@@ -14,9 +14,9 @@ resetTypesInAST()
 void
 ResetTypes::visit(SgNode* node)
    {
-  // The purpose of this traversal is to fixup the AST to share types more uniformally shared.
-  // It appears that in the EDG/Sage translation some types are not shared properly, particularly 
-  // SgNamedTypes.
+  // The purpose of this traversal is to fixup the AST to share types more
+  // uniformally shared. It appears that in the legacy frontend/Sage translation
+  // some types are not shared properly, particularly SgNamedTypes.
 
 #if 0
      printf ("##### ResetTypes::visit(node = %p = %s) \n",node,node->class_name().c_str());

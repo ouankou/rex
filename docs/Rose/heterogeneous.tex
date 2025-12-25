@@ -16,17 +16,10 @@ an open standard to program heterogeneous system, managed by the Khronos Group}.
 	Both CUDA and OpenCL are enable in ROSE from two configuration options.
 \begin{itemize}
 	\item \emph{--enable-(cuda/opencl)}: to enable the internal support of these languages.
-	\item \emph{--enable-edg-(cuda/opencl)}: to enable the frontend support (parsing)
 \end{itemize}
-	As the support of CUDA/OpenCL parsing have been developt in EDG 4.0, you also need to use the option \emph{--enable-edg-version=4.0}.\\
-	\\
-	If you use the binary version of EDG (most common case for external users), you do not need the option \emph{--enable-edg-(cuda/opencl)} as to avoid 
-	multiple versions of the binaries we directly distribute EDG 4.0 with CUDA/OpenCL support (the option may still be needed to build some sub-project using CUDA/OpenCL support).\\
-	\\
 	To build and test the CUDA/OpenCL support with your version of ROSE: \\
-	\$ ROSE\_SRC\_TREE/configure --enable-edg-version=4.0 --enable-cuda --enable-edg-cuda --enable-opencl --enable-edg-opencl [...] \\
+	\$ ROSE\_SRC\_TREE/configure --enable-cuda --enable-opencl [...] \\
 	\$ make \\
-	\$ make -Ctests/nonsmoke/functional/CompileTests/NewEDGInterface\_C\_tests check \# tests EDG 4.0 \\
 	\$ make -Ctests/nonsmoke/functional/CompileTests/CudaTests check \# tests CUDA support \\
 	\$ make -Ctests/nonsmoke/functional/CompileTests/OpenCLTests check \# tests OpenCL support \\
 	\\
@@ -90,7 +83,7 @@ We catched it by adding two new nodes in the IR:
 
 			\subsubsection{Build-in Types, Variables and Functions}
 			
-All built-in CUDA objects are defined in ROSE/config/rose\_edg\_required\_macros\_and\_functions.h.in .
+All built-in CUDA objects are defined in ROSE/config/rose\_required\_macros\_and\_functions.h.in .
 			
 				\paragraph{Types}
 			

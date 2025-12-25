@@ -215,14 +215,15 @@ Grammar::setUpTypes ()
      Type.setDataPrototype("bool","isCoArray","= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/7/2004): This functionality was added to EDG 1.4 (and has not yet been added to EDG_3.3)
-  // The purpose it to allow types to be marked internally as being associated with a template
-  // argument.  There may be more information required to nail down more details in this mapping
-  // (pointer to the template, the template argument (in the instantiation), the matching template
-  // parameter (in the template), etc.  IR nodes specific to template parameters and template
-  // arguments have not yet been added and will be added incrementally as more of the template
-  // support is brought on line.
-  // [DT] 8/14/2000 -- substitutedForTemplateParam
+     // DQ (3/7/2004): This functionality was added to the legacy frontend.
+     // The purpose it to allow types to be marked internally as being
+     // associated with a template argument.  There may be more information
+     // required to nail down more details in this mapping (pointer to the
+     // template, the template argument (in the instantiation), the matching
+     // template parameter (in the template), etc.  IR nodes specific to
+     // template parameters and template arguments have not yet been added and
+     // will be added incrementally as more of the template support is brought
+     // on line. [DT] 8/14/2000 -- substitutedForTemplateParam
      Type.setDataPrototype("int","substitutedForTemplateParam","= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // MK: Type.excludeDataPrototype ("int","substitutedForTemplateParam","= 0");
@@ -245,7 +246,8 @@ Grammar::setUpTypes ()
   //                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
      Type.setDataPrototype("SgModifierNodes*","modifiers","= NULL",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // Reference to typedef type \attention{(need to check that these are fully resolved within mapping from EDG)}
+     // Reference to typedef type \attention{(need to check that these are fully
+     // resolved within mapping from legacy frontend)}
 #if 1
   // DQ (4/23/2014): I would like to make this just NO_TRAVERSAL so that we can debug the type traversal through base_type data members.
   // Type.setDataPrototype("SgTypedefSeq*","typedefs","= NULL",
@@ -734,8 +736,9 @@ Grammar::setUpTypes ()
      ClassType.setFunctionPrototype ("HEADER_CLASS_TYPE", "../Grammar/Type.code" );
      ClassType.setFunctionPrototype ("HEADER_GET_NAME", "../Grammar/Type.code" );
 
-  // DQ (3/20/2017): We need to support a flag to indicate packing in template parameters.
-  // This is required only for the RoseExample tests using Boost 1.56 (no where else that I know of so far).
+     // DQ (3/20/2017): We need to support a flag to indicate packing in
+     // template parameters. This is required only for the RoseExample tests
+     // with template-heavy headers (no where else that I know of so far).
      ClassType.setDataPrototype     ("bool","packed","= false",NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      NonrealType.setFunctionPrototype ( "HEADER_NONREAL_TYPE", "../Grammar/Type.code" );
@@ -959,7 +962,7 @@ Grammar::setUpTypes ()
   // DQ (8/12/2012): I need a mechanism to store references to types (typically in template instantiations)
   // that have not been seen yet and will be fixed up later.  I will use a SgDefaultType (used similarly in
   // the Fortran support) and then fixed up in a seperate pass of AST post-processing.  At this point the
-  // type_translation_cache map (of EDG types to ROSE types) should have a valid entry (because all of the
+  // type_translation_cache map (of legacy frontend types to ROSE types) should have a valid entry (because all of the
   // template instantiations will have been processed).  Note that this need not confuse the name mangling
   // since that can alternatively be done with either the typedef type of the typedef's base type.  It is
   // more important to support this where types are output (e.g as part of variable declarations) so that

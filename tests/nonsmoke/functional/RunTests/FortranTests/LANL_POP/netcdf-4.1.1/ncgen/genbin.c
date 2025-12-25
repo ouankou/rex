@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, UCAR/Unidata
  *   See netcdf/COPYRIGHT file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncgen/genbin.c,v 1.1 2010/04/04 20:13:20 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncgen/genbin.c,v 1.1 2010/04/04 20:13:20 dmh
+ *Exp $
  *********************************************************************/
 
 #include <ctype.h>	/* for isprint() */

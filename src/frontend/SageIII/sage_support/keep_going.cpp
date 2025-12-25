@@ -142,8 +142,8 @@ namespace KeepGoing {
 // 2. The frontend encountered any errors, and the user specified to
 //    "keep going" with -rose:keep_going.
 //
-//    Warning: Apparently, a frontend error code <= 3 indicates an EDG
-//    frontend warning; however, existing logic says nothing about the
+//    Warning: Apparently, a frontend error code <= 3 indicates an legacy
+//    frontend frontend warning; however, existing logic says nothing about the
 //    other language frontends' exit statuses.
 bool
 Rose::KeepGoing::Backend::UseOriginalInputFile(SgFile* file)

@@ -35,12 +35,14 @@ main ( int argc, char * argv[] )
                   }
                  else
                   {
-                 // Call the front-end (which will internally call EDG).
-                 // Note: The commandline can be reset by using set_originalCommandLineArgumentList().
-                    int EDG_FrontEndErrorCode = (*fileIterator)->callFrontEnd();
+                    // Call the front-end (which will internally call legacy
+                    // frontend). Note: The commandline can be reset by using
+                    // set_originalCommandLineArgumentList().
+                    int frontendErrorCode = (*fileIterator)->callFrontEnd();
 
-                 // Warnings from EDG processing are OK, but not errors (EDG detail)
-                    ROSE_ASSERT (EDG_FrontEndErrorCode <= 3);
+                    // Warnings from legacy frontend processing are OK, but not
+                    // errors (legacy frontend detail)
+                    ROSE_ASSERT(frontendErrorCode <= 3);
                   }
 
             // increment the file list iterator
@@ -57,5 +59,4 @@ main ( int argc, char * argv[] )
   // directly by the backend (vendor) compiler. The SgFile objects here would also be 
   // looped over and unparsed and or compiled separately.
      return backend(project);
-   }
-
+}

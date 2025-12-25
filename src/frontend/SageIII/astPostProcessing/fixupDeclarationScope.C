@@ -143,8 +143,10 @@ void fixupAstDeclarationScope( SgNode* node )
 void
 FixupAstDeclarationScope::visit ( SgNode* node )
    {
-  // DQ (6/11/2013): This corrects where EDG can set the scope of a friend declaration to be different from the defining declaration.
-  // We need it to be a rule in ROSE that the scope of the declarations are consistant between defining and all non-defining declaration).
+  // DQ (6/11/2013): This corrects where legacy frontend can set the scope of a
+  // friend declaration to be different from the defining declaration. We need
+  // it to be a rule in ROSE that the scope of the declarations are consistant
+  // between defining and all non-defining declaration).
 
 #if 0
      printf ("In FixupAstDeclarationScope::visit(node = %p = %s) \n",node,node->class_name().c_str());

@@ -9,7 +9,8 @@
 #include <complex.h>
 
 #ifdef __INTEL_COMPILER
-// DQ (2/4/2017): I think this needs to be defined to map to EDG's representation of complex type.
+// DQ (2/4/2017): I think this needs to be defined to map to legacy frontend's
+// representation of complex type.
 #define complex _Complex
 #endif
 

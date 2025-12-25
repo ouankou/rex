@@ -1,4 +1,4 @@
-include_directories(${ROSE_INCLUDES} ${Boost_INCLUDE_DIRS})
+include_directories(${ROSE_INCLUDES})
 
 set(minimal_input_code "")
 if(enable-c)

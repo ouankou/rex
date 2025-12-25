@@ -321,9 +321,10 @@ SgLocatedNode::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
   // ROSE_ASSERT(this->get_parent() != NULL);
   // ROSE_ASSERT(copyStatement->get_parent() != NULL);
 
-  // DQ (10/15/2007): If the parent of the original AST is not set then we will not process the parent in the copy,
-  // thus the AST copy mechanism can handle incompletely setup AST (as required for use in the EDG/Sage translation)
-  // yet only return an AST of similar quality.
+     // DQ (10/15/2007): If the parent of the original AST is not set then we
+     // will not process the parent in the copy, thus the AST copy mechanism can
+     // handle incompletely setup AST (as required for use in the legacy
+     // frontend/Sage translation) yet only return an AST of similar quality.
      if (this->get_parent() != NULL)
         {
           FixupCopyDataMemberMacro(copyLocatedNode,SgNode,get_parent,set_parent)
@@ -1258,7 +1259,7 @@ SgTemplateInstantiationDecl::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) c
                if (nondefiningDeclaration->get_templateDeclaration() != NULL)
                   {
                  // DQ (3/7/2015): This is not the correct place to set this, but this is debugging code.
-                 // Also this is only an issue to EDG 4.7 and not EDG 4.9; and we are about retire EDG 4.7 support.
+                 // Also this is only an issue to legacy frontend 4.7 and not legacy frontend 4.9; and we are about retire legacy frontend 4.7 support.
                  // printf ("WARNING: setting templateDeclaration in SgTemplateInstantiationDecl::fixupCopy_scopes(): this = %p = %s name = %s \n",this,this->class_name().c_str(),this->get_name().str());
                  // SgTemplateInstantiationDecl* nondefiningDeclaration = isSgTemplateInstantiationDecl(this->get_firstNondefiningDeclaration());
                  // this->set_templateDeclaration(nondefiningDeclaration->get_templateDeclaration());

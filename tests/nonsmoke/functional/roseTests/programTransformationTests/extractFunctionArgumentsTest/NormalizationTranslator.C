@@ -14,7 +14,7 @@ int main(int argc, char** argv)
       {
         ExtractFunctionArguments e;
 #if 0
-     // DQ (5/20/2014): This results in an untolerable amount of output spew from Boost test codes.
+     // DQ (5/20/2014): This results in an untolerable amount of output spew from large test codes.
      // Check IsNormalizable()
         std::cout << "\n e.IsNormalizable:" << e.IsNormalizable(function);
      // Check IsNormalized()
@@ -28,7 +28,7 @@ int main(int argc, char** argv)
         e.GetTemporariesIntroduced();
 
 #if 0
-     // DQ (5/20/2014): This results in an untolerable amount of output spew from Boost test codes.
+     // DQ (5/20/2014): This results in an untolerable amount of output spew from large test codes.
      // Check IsNormalizable()
         std::cout << "\n e.IsNormalizable:" << e.IsNormalizable(function);
      // Check IsNormalized()

@@ -17,8 +17,8 @@
 
 // ifndef USE_ROSE
 #ifndef ROSE_H
-// We don't want the EDG front-end to see this (since it supports bool properly)
-// typedef int Boolean;
+// We don't want the legacy frontend front-end to see this (since it supports
+// bool properly) typedef int Boolean;
 #endif
 
 // added preprocessor code #ifndef .... BP : 10/16/2001

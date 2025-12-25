@@ -3,7 +3,7 @@
 
 the attached code gives the following error when compiled with ROSE:
 lt-identityTranslator:
-/home/andreas/REPOSITORY-SRC/ROSE/June-14a-2007/NEW_ROSE/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:20916:
+/home/andreas/REPOSITORY-SRC/ROSE/June-14a-2007/NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:20916:
 SgExpression* sage_gen_expr(an_expr_node*, a_boolean,
 DataRequiredForComputationOfSourcePostionInformation*): Assertion
 operand_1->kind == (an_expr_node_kind)enk_variable_address failed.

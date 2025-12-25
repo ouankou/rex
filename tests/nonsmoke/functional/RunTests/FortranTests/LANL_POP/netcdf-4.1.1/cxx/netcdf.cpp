@@ -4,7 +4,8 @@
  *
  *   Purpose:	Implements class interface for netCDF over C interface
  *
- *   $Header: /upc/share/CVS/netcdf-3/cxx/netcdf.cpp,v 1.18 2009/03/10 15:20:54 russ Exp $
+ *   $Header: /shared/CVS/netcdf-3/cxx/netcdf.cpp,v 1.18 2009/03/10 15:20:54
+ *russ Exp $
  *********************************************************************/
 
 #include <config.h>

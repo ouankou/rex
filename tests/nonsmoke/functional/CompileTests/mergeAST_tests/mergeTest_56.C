@@ -5,14 +5,14 @@
 template<typename T>
 struct template_class
    {
-  // In EDG this will be of kind: templk_member_function
-     void assign(int parameter_a) {}
+  // In legacy frontend this will be of kind: templk_member_function
+  void assign(int parameter_a) {}
 
-  // In EDG this will be of kind: templk_function
-     template<typename S> void assign(int parameter_b) {}
+  // In legacy frontend this will be of kind: templk_function
+  template <typename S> void assign(int parameter_b) {}
 
-  // In EDG this will be of kind: templk_member_function
-     void assign(int parameter_c, int parameter_d) {}
+  // In legacy frontend this will be of kind: templk_member_function
+  void assign(int parameter_c, int parameter_d) {}
    };
 
 template_class<int> class_x;

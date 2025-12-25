@@ -363,8 +363,7 @@ WARN_LOGFILE           =
 # directories like "/usr/src/myproject". Separate the files or directories 
 # with spaces.
 
-INPUT                  = @top_srcdir@/src/frontend/EDG/EDG_3.3 \
-                         @top_srcdir@ \
+INPUT                  = @top_srcdir@ \
                          @top_pwd@ \
                          @top_srcdir@/src/midend/astProcessing \
                          @top_srcdir@/src/midend/astQuery \

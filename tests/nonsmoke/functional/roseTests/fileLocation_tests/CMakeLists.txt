@@ -39,8 +39,8 @@ install(TARGETS fileLocation DESTINATION bin)
 #fileLocation_SOURCES = fileLocation.C
 #
 ## DQ (8/14/2004) Developer's Note:
-## This permits the use of the pair of libraries -lrose -ledg OR the longer 
-## list of libraries (the later option is much faster for development work).
+## This permits the use of the short ROSE library list or the longer
+## list of libraries (the latter option is much faster for development work).
 #
 ## Turn on GNU Coverage Tool (gcov)
 ## CXX += -fprofile-arcs -ftest-coverage
@@ -206,7 +206,6 @@ install(TARGETS fileLocation DESTINATION bin)
 #test2004_86.C \
 #test2004_87.C \
 #test2004_88.C \
-#test2004_89.C \
 #test2004_90.C \
 #test2004_91.C \
 #test2004_93.C \
@@ -263,7 +262,6 @@ install(TARGETS fileLocation DESTINATION bin)
 #test2004_145.C \
 #test2004_146.C \
 #test2004_147.C \
-#test2004_148.C \
 #test2004_149.C \
 #test2004_150.C \
 #test2004_151.C \
@@ -377,7 +375,6 @@ install(TARGETS fileLocation DESTINATION bin)
 #test2005_99.C \
 #test2005_100.C \
 #test2005_101.C \
-#test2005_102.C \
 #test2005_103.C \
 #test2005_104.C \
 #test2005_105.C \
@@ -573,7 +570,6 @@ install(TARGETS fileLocation DESTINATION bin)
 #test2006_118.C \
 #test2006_119.C \
 #test2006_120.C \
-#test2006_121.C \
 #test2006_122.C \
 #test2006_123.C \
 #test2006_124.C \

@@ -10,7 +10,7 @@ TESTCODES = testHeaderFiles.C
 TESTCODES2 = test2009_515.c
 
 # codes used to isolate bugs (not very interesting)
-# testUnparser.C findNullBlockInEDG.C
+# testUnparser.C findNullBlockInFrontend.C
 
 # Files which don't compile (but used to do so) (this has been isolated as test2001_23.C)
 # f_op_all.C i_op_all.C d_op_all.C
@@ -50,7 +50,7 @@ distclean-local:
 
 clean-local:
 	rm -f *.o rose_*.C *.sage.C rose_*.c test2001_??.C.show outputFile \
-              *.C.pdf *.C.edg.pdf *.pdf *.int.C rose_directives_list.txt core
+              *.C.pdf *.pdf *.int.C rose_directives_list.txt core
 	rm -rf ti_files
 
 

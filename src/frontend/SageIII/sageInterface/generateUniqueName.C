@@ -78,17 +78,19 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                case V_SgTypedefType:
                case V_SgNamedType:
                   {
-                 // Handle case of named types which should be shared within the merged AST.
-                 // These are multiply represented within the generated AST from EDG.
-                 // Note that a fixup pass on the AST (fixupTypes.[hC]) forces the same declaration
-                 // (defining or nondefining) to be used for all SgNamedType objects referencing
-                 // the same declaration.
-                    const SgNamedType* namedType = isSgNamedType(node);
-                    ROSE_ASSERT(namedType != NULL);
-                    SgDeclarationStatement* declaration = namedType->get_declaration();
-                    ROSE_ASSERT(declaration != NULL);
-                    key = generateUniqueName(declaration,true);
-                    additionalSuffix = "__namedType";
+                 // Handle case of named types which should be shared within the
+                 // merged AST. These are multiply represented within the
+                 // generated AST from legacy frontend. Note that a fixup pass
+                 // on the AST (fixupTypes.[hC]) forces the same declaration
+                 // (defining or nondefining) to be used for all SgNamedType
+                 // objects referencing the same declaration.
+                 const SgNamedType *namedType = isSgNamedType(node);
+                 ROSE_ASSERT(namedType != NULL);
+                 SgDeclarationStatement *declaration =
+                     namedType->get_declaration();
+                 ROSE_ASSERT(declaration != NULL);
+                 key = generateUniqueName(declaration, true);
+                 additionalSuffix = "__namedType";
 #if 0
                  // If we can make all SgClassTypes for an associated definition equivalent then
                  // we can merge them using the AST merge mechanism.
@@ -616,7 +618,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                case V_SgTemplateClassDeclaration:
                   {
                  // This used to share an implementation with the case V_SgTemplateDeclaration, but that is
-                 // not appropriate with the newer IR design for template support in the EDG 4.x interface.
+                 // not appropriate with the newer IR design for template support in the legacy frontend 4.x interface.
 
                  // DQ (3/28/2012): I think that we can assert this here! No, key.empty() == true at least sometimes.
                  // ROSE_ASSERT (key.empty() == false);
@@ -634,10 +636,12 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                     break;
                   }
 #endif
-            // DQ (3/28/2012): We have a new design for the EDG 4.x support and the IR design no longer
-            // derives a SgTemplateClassDeclaration from a SgTemplateDeclaration, so this code does not work.
-            // DQ (6/11/2011): Added support for new template IR nodes.
-            // case V_SgTemplateClassDeclaration:
+                    // DQ (3/28/2012): We have a new design for the legacy
+                    // frontend 4.x support and the IR design no longer derives
+                    // a SgTemplateClassDeclaration from a
+                    // SgTemplateDeclaration, so this code does not work. DQ
+                    // (6/11/2011): Added support for new template IR nodes.
+                    // case V_SgTemplateClassDeclaration:
                case V_SgTemplateDeclaration:
                   {
                     const SgTemplateDeclaration* declaration = isSgTemplateDeclaration(statement);
@@ -645,13 +649,18 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                  // DQ (3/28/2012): Added assertion test.
                     ROSE_ASSERT(declaration != NULL);
 
-                 // DQ (2/18/2007): Note that for template declarations built for member functions of a templated
-                 // class (EDG kind: templk_member_function) the declaration only has the template name (or the member
-                 // function and not its mangled name so we can't distinguish multiple overloaded functions of a
-                 // templated class.  This causes a bug for the AST merge (since the symbols are different, and all
-                 // but the first is orphaned).  The only way through this, that I can think of, is to number the
-                 // functions in the template delcarations and permit the mangled names to reflect this!
-                 // for now we will only add this feature to the "generateUniqueName()" function.
+                    // DQ (2/18/2007): Note that for template declarations built
+                    // for member functions of a templated class (legacy
+                    // frontend kind: templk_member_function) the declaration
+                    // only has the template name (or the member function and
+                    // not its mangled name so we can't distinguish multiple
+                    // overloaded functions of a templated class.  This causes a
+                    // bug for the AST merge (since the symbols are different,
+                    // and all but the first is orphaned).  The only way through
+                    // this, that I can think of, is to number the functions in
+                    // the template delcarations and permit the mangled names to
+                    // reflect this! for now we will only add this feature to
+                    // the "generateUniqueName()" function.
                     key = declaration->get_mangled_name();
                     if (declaration->get_template_kind() == SgTemplateDeclaration::e_template_m_function)
                        {
@@ -765,22 +774,32 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                             }
                        }
 
-                 // DQ (2/4/2007): To distinguish between template forward declaration and a template definition
-                 // I think we need the string to be appended.  Else we have to find something in EDG that will
-                 // help us identify this more explicitly.
+                       // DQ (2/4/2007): To distinguish between template forward
+                       // declaration and a template definition I think we need
+                       // the string to be appended.  Else we have to find
+                       // something in legacy frontend that will help us
+                       // identify this more explicitly.
 
-                 // DQ (2/24/2007): To force overloaded non-defining declarations of templates to be distinct we
-                 // add the template string and have modified the IR so that even non-defining declaration carry
-                 // the template string of the defining declaration.
-                 // printf ("declaration = %p declaration->get_string() = %s \n",declaration,declaration->get_string().str());
-                    if (declaration->get_template_kind() == SgTemplateDeclaration::e_template_m_function)
-                       {
-                      // DQ (2/24/2007): If this is a member function of a templated class then we don't have the
-                      // template string and we have a counter based approach implemented above (best I could do
-                      // under the circumstances).  However, if the template declaration is outside of the class
-                      // then the string is available (precisely the case that might not be handled well by the
-                      // mechanism that counts the location in the template scope, but likely redundant.
-                      // In this case we can (and to be uniform should) include the template string.
+                       // DQ (2/24/2007): To force overloaded non-defining
+                       // declarations of templates to be distinct we add the
+                       // template string and have modified the IR so that even
+                       // non-defining declaration carry the template string of
+                       // the defining declaration. printf ("declaration = %p
+                       // declaration->get_string() = %s
+                       // \n",declaration,declaration->get_string().str());
+                       if (declaration->get_template_kind() ==
+                           SgTemplateDeclaration::e_template_m_function) {
+                         // DQ (2/24/2007): If this is a member function of a
+                         // templated class then we don't have the template
+                         // string and we have a counter based approach
+                         // implemented above (best I could do under the
+                         // circumstances).  However, if the template
+                         // declaration is outside of the class then the string
+                         // is available (precisely the case that might not be
+                         // handled well by the mechanism that counts the
+                         // location in the template scope, but likely
+                         // redundant. In this case we can (and to be uniform
+                         // should) include the template string.
 #if 0
                          if (declaration->get_string().is_null() == false)
                             {
@@ -790,11 +809,11 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                          ROSE_ASSERT(declaration->get_string().is_null() == true);
 #endif
                          additionalSuffix += string("_member_function_template_string_not always_available_") + declaration->get_string();
-                       }
-                      else
-                       {
-                      // All other case we hold the template string in both the defining and non-defining declarations
-                      // so that we can have the function parameters required to distinguish overloaded functions.
+                       } else {
+                         // All other case we hold the template string in both
+                         // the defining and non-defining declarations so that
+                         // we can have the function parameters required to
+                         // distinguish overloaded functions.
                          if (declaration->get_string().is_null() == true)
                             {
                               printf ("Error: declaration->get_string().is_null() == true declaration = %p = %s \n",declaration,declaration->class_name().c_str());

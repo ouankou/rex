@@ -47,7 +47,7 @@ class Z : public Y
 #if 0
          ::numberType foo ( numberType numberValue, int x );
 
-      // The code generation will output a redundant "::" (global qualifier) becuase EDG things it is required.
+      // The code generation will output a redundant "::" (global qualifier) becuase legacy frontend things it is required.
          ::numberType foo ( Y::numberType numberValue, int x );
 
       // The global qualifier for the function parameter is marked as required, but is not REALLY needed.

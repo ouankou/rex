@@ -9,7 +9,8 @@ class _Rb_tree
 
           typedef _Rb_tree_iterator<value_type>       iterator_rb_tree;
 
-       // This is the first point at which the "pair<iterator_rb_tree, bool >" type is built, so it is reused from here within EDG.
+          // This is the first point at which the "pair<iterator_rb_tree, bool
+          // >" type is built, so it is reused from here within legacy frontend.
           pair<iterator_rb_tree, bool > _M_insert_unique();
    };
 

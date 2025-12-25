@@ -68,7 +68,4 @@ class LinearizeAST : public SgTopDownProcessing<LinearizeInheritedAttribute>
 std::vector<SgNode*>
 linearize_subtree( SgNode* node );
 
-// extern bool VERBOSE_MESSAGES_OF_WAVE;
-
-
 #endif

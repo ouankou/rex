@@ -12,11 +12,6 @@ SUBDIRS = util ROSETTA frontend midend backend \
 AM_CPPFLAGS = -Winvalid-pch $(ROSE_INCLUDES)
 
 
-# DQ (7/23/2008): New handling of EDG builds a single library instead of two.
-# Binary distributions of ROSE store the binary for EDG related code in the source tree.
-# JJW (8/3/2008): See src/frontend/CxxFrontend/Makefile.am.forBinaryEDG for
-# more information on this process.
-# TV (08/2012): changed 'libroseEDGlibraries' to 'libroseCxxlibraries' while adding Clang support to ROSE
 libroseCxxlibraries = frontend/CxxFrontend/Clang/libroseClangFrontend.la
 
 if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
@@ -215,7 +210,7 @@ check-dynload:
 	${AM_V_at}if ! ./rose-compiler --version; then                                           \
 	  echo "error: You cannot run a program linked with ROSE. Please be sure that your" >&2; \
 	  echo "error: LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (Mac OSX) contains the" >&2; \
-	  echo "error: correct libraries (JVM, Boost, librose.so, etc.)" >&2;                    \
+	  echo "error: correct libraries (JVM, librose.so, etc.)" >&2;                           \
 	  exit 1;                                                                                \
 	fi
 
@@ -283,7 +278,7 @@ endif
 bin_SCRIPTS += ../libtool
 
 
-# DQ (1/10/2004): remove the librose.a and libedg.a files so that distclean will work cleanly
+# DQ (1/10/2004): remove the librose.a file so that distclean will work cleanly
 # Do not remove libraries indiscriminately with wildcards [Matzke, 2017-06-19]
 clean-local:
 	rm -rf librose.a librose.so testSharedRoseLib testMultiRoseLib $(CXX_TEMPLATE_OBJECTS) Templates.DB ii_files ti_files

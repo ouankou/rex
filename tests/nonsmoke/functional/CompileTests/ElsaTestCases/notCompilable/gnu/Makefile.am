@@ -135,7 +135,7 @@ EXTRA_DIST = \
 
 clean-local:
 	rm -f  *.o C/rose_*.c rose_*.C rose_*.c rose_*.cc *.sage.C test2001_??.C.show *.dot *.ps \
-              *.C.pdf *.C.edg.pdf *.pdf *.int.C core test2005_56
+              *.C.pdf *.pdf *.int.C core test2005_56
 	rm -rf ti_files *.ti *.et
 
 check-local: $(TRANSLATOR_EXECUTABLE) 

@@ -51,28 +51,28 @@ int main() {
    enum E1 e1_enum_var;
 
        // using B::E2; // causes error :
-/*
-Building a sourcePositionData using the type in sage_gen_tag_reference()
-ERROR: Default reached in sage_gen_using_declaration(): symbol = SgEnumSymbol
-HiddenList: ../../../../NEW_ROSE_MAY7/src/frontend/EDG_SAGE_Connection/sage_gen_be.C:33608: SgUsingDeclarationStatement* sage_gen_using_declaration(a_using_decl*): Assertion `false' failed.
-Aborted
-*/
+   /*
+   Building a sourcePositionData using the type in sage_gen_tag_reference()
+   ERROR: Default reached in sage_gen_using_declaration(): symbol = SgEnumSymbol
+   HiddenList:
+   ../../../../NEW_ROSE_MAY7/src/frontend/legacy_frontend/sage_gen_be.C:33608:
+   SgUsingDeclarationStatement* sage_gen_using_declaration(a_using_decl*):
+   Assertion `false' failed. Aborted
+   */
 
-        using B::b;
+   using B::b;
 
-        using B::D;
+   using B::D;
 
-        using B::roo;
+   using B::roo;
 
-        using B::MyInt;
+   using B::MyInt;
 
-        {
-        	int b, B, E2, en21, D, roo, MyInt;
+   {
+     int b, B, E2, en21, D, roo, MyInt;
+   }
 
-        }
-
-	return 0;
-
+   return 0;
 }
 
 void foo()

@@ -27,8 +27,8 @@ unparsed code.
 \todo Need to mark function declarations appearing in the file
 rose_required_macros_and_functions.h as compiler generated
 since they are either builtin functions for gcc and g++ or those those
-builtin function that gcc and g++ required and which EDG fails to include
-as builtin when compiling with EDG's GNU_COMPATABILITY_MODE (current 
+builtin function that gcc and g++ required and which legacy frontend fails to include
+as builtin when compiling with legacy frontend's GNU_COMPATABILITY_MODE (current 
 default for ROSE).
 
 \todo Need to better handle fiend injection rules, currently the SgFunctionSymbol

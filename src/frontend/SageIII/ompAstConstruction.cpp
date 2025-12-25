@@ -1620,7 +1620,6 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     for (iter = all_pragmas.begin(); iter != all_pragmas.end(); iter++) {
       SgPragmaDeclaration *pragmaDeclaration = isSgPragmaDeclaration(*iter);
       ROSE_ASSERT(pragmaDeclaration != NULL);
-      SageInterface::replaceMacroCallsWithExpandedStrings(pragmaDeclaration);
       string pragmaString = pragmaDeclaration->get_pragma()->get_pragma();
       istringstream istr(pragmaString);
       std::string key;

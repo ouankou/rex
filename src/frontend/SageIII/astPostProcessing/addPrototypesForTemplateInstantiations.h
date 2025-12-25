@@ -1,11 +1,11 @@
 #ifndef ADD_PROTOTYPES_FOR_TEMPLATE_INSTANTIATIONS_H
 #define ADD_PROTOTYPES_FOR_TEMPLATE_INSTANTIATIONS_H
 
-// This post processing step is build to support the testTemplates translator which
-// forces all instantations to be output and demonstrates that some template instantaitions 
-// require prototypes that EDG has not already placed into the AST; and so they are not
-// showing up in the ROSE AST after translation.
-
+// This post processing step is build to support the testTemplates translator
+// which forces all instantations to be output and demonstrates that some
+// template instantaitions require prototypes that legacy frontend has not
+// already placed into the AST; and so they are not showing up in the ROSE AST
+// after translation.
 
 // DQ (5/18/2017):
 /*! \brief Fixups transformations that have added template instantiations or caused template instantiations to be output so that there is a proper prototype declaration before the template instantation is called.

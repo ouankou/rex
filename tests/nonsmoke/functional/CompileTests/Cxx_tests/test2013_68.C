@@ -1,5 +1,5 @@
 #if 0
-// based on a rose edg4x pulled yesterday, I have a edg version dependent problem.
+// based on a rose legacy frontend pulled yesterday, I have a frontend version dependent problem.
 // Am I misusing something in sage and just got lucky in the older rose?
 
 // my code:
@@ -17,14 +17,14 @@ void rewriteFunctionCallExp(SgFunctionCallExp* fce)
    }
 
 // is victim to an assert inside getAssociatedFunctionDeclaration
-// which under edg3 returns null as documented.
+// which under legacy_frontend returns null as documented.
 
 // rewriteFunctionCallExp <-- printed from my code
 
 // printed from rose -->
 
 // Error: There should be no other cases functionExp = 0x10a84bf0 = SgVarRefExp 
-// mungeArglists: ../../../../edg4x-rose/src/frontend/SageIII/sage_support/sage_support.cpp:5534: SgFunctionSymbol* SgFunctionCallExp::getAssociatedFunctionSymbol() const: Assertion `false' failed.
+// mungeArglists: ../../../../legacy_frontend-rose/src/frontend/SageIII/sage_support/sage_support.cpp:5534: SgFunctionSymbol* SgFunctionCallExp::getAssociatedFunctionSymbol() const: Assertion `false' failed.
 
 // Here's the inputs below.
 

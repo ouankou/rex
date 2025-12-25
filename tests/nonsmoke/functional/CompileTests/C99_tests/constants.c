@@ -15,8 +15,8 @@ void foo()
      a_complex_value = 1.0 * an_i;
      a_complex_value = 0.0 + 1.0 * __I__;
 
-  // EDG does not recognize the "i" suffix.
-  // const double _Complex a_complex_value = 3.0f + 4.0fi;
+     // legacy frontend does not recognize the "i" suffix.
+     // const double _Complex a_complex_value = 3.0f + 4.0fi;
 
      float  a_nan_float  = __NAN__;
      double a_nan_double = __NAN__;

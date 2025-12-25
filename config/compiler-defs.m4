@@ -515,7 +515,7 @@ AC_MSG_NOTICE([START: Setup characteristics of the frontend compiler])
     BACKEND_CXX_VENDOR_AND_VERSION2="$BACKEND_CXX_COMPILER_VENDOR-$BACKEND_CXX_VERSION_MAJOR.$BACKEND_CXX_VERSION_MINOR"
     AC_SUBST(BACKEND_CXX_VENDOR_AND_VERSION2)
 
-    AC_DEFINE_UNQUOTED([CXX_SPEC_DEF], $macroString, [-D options to hand to EDG C++ front-end.])
+    AC_DEFINE_UNQUOTED([CXX_SPEC_DEF], $macroString, [-D options to hand to legacy frontend C++ front-end.])
 
     dnl DQ (2/1/2016): Fixed compiler vendor names to be consistatenyl lower case.
     dnl DQ (1/9/2010): Detect the type of compiler being used. This is used to add the library libimf with libm to support use of

@@ -119,7 +119,8 @@ main()
      fptr = new foo;  // __nw
      delete fptr;     // __dl
 
-  // EDG does not appear to distinguish "array_new" from "new" as it does for "array_delete" and "delete"
+     // legacy frontend does not appear to distinguish "array_new" from "new" as
+     // it does for "array_delete" and "delete"
      fptr = new foo[10]; // __na
      delete[] fptr;      // __da
 
@@ -137,7 +138,8 @@ main()
      gptr = new templateFoo<int>;  // __nw
      delete gptr;     // __dl
 
-  // EDG does not appear to distinguish "array_new" from "new" as it does for "array_delete" and "delete"
+     // legacy frontend does not appear to distinguish "array_new" from "new" as
+     // it does for "array_delete" and "delete"
      gptr = new templateFoo<int>[10]; // __na
      delete[] gptr;      // __da
 

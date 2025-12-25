@@ -1,4 +1,4 @@
-include_directories(${ROSE_INCLUDES} ${Boost_INCLUDE_DIRS})
+include_directories(${ROSE_INCLUDES})
 
 add_executable(basicLinkTest basicLinkTest.C)
 target_link_libraries(basicLinkTest ROSE_DLL ${link_with_libraries})

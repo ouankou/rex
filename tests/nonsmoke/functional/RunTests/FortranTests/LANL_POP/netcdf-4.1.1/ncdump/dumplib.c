@@ -1,7 +1,8 @@
 /*********************************************************************
  *   Copyright 1993, University Corporation for Atmospheric Research
  *   See netcdf/README file for copying and redistribution conditions.
- *   $Header: /upc/share/CVS/netcdf-3/ncdump/dumplib.c,v 1.83 2009/10/20 04:51:05 dmh Exp $
+ *   $Header: /shared/CVS/netcdf-3/ncdump/dumplib.c,v 1.83 2009/10/20 04:51:05
+ *dmh Exp $
  *********************************************************************/
 
 /*

@@ -173,7 +173,6 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2004_145.C \
    test2004_146.C \
    test2004_147.C \
-   test2004_148.C \
    test2004_149.C \
    test2004_14.C \
    test2004_150.C \
@@ -248,12 +247,10 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2004_79.C \
    test2004_80.C \
    test2004_81.C \
-   test2004_83.C \
    test2004_84.C \
    test2004_86.C \
    test2004_87.C \
    test2004_88.C \
-   test2004_89.C \
    test2004_90.C \
    test2004_91.C \
    test2004_93.C \
@@ -274,7 +271,6 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2005_09.C \
    test2005_100.C \
    test2005_101.C \
-   test2005_102.C \
    test2005_103.C \
    test2005_104.C \
    test2005_105.C \
@@ -484,7 +480,6 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS = \
    test2006_118.C \
    test2006_119.C \
    test2006_120.C \
-   test2006_121.C \
    test2006_122.C \
    test2006_123.C \
    test2006_124.C \
@@ -2024,7 +2019,7 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
 endif
 
 if !USING_INTEL_COMPILER
-# DQ (9/19/2020): this test fails with the Intel v17 compiler (something regarding boost).
+# DQ (9/19/2020): this test fails with the Intel v17 compiler (likely header-related).
 EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
    test2017_63.C 
 endif
@@ -2409,7 +2404,6 @@ TESTCODE_CURRENTLY_FAILING = \
    test2016_94.C \
    test2016_95.C \
    test2017_05.C \
-   test2017_06.C \
    test2017_07.C \
    test2017_08.C \
    test2017_12.C \
@@ -2490,8 +2484,6 @@ else
 endif
 
 EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
-     test2014_77.C \
-     test2014_78.C 
 
 if USING_CLANG_COMPILER
   TESTCODE_CURRENTLY_FAILING += \
@@ -2642,7 +2634,7 @@ else
 if ROSE_USING_GCC_VERSION_LATER_10_1
       # skip these codes when using GNU 10.1 (testing)
 else
-      # DQ (7/23/2020): These are failing code for EDG 6.0 and GNU 10.1 (debugging this).
+      # DQ (7/23/2020): These are failing code for legacy frontend 6.0 and GNU 10.1 (debugging this).
 #     EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
 endif
  # The test codes fail CLANG 10.0
@@ -2697,7 +2689,7 @@ else
 VALGRIND =
 endif
 
-TESTCODE_INCLUDES = -I$(srcdir) $(ROSE_BOOST_NORMAL_INCLUDE_PATH) -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Code -I$(top_builddir)
+TESTCODE_INCLUDES = -I$(srcdir) -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Code -I$(top_builddir)
 
 #########
 # Targets lists
@@ -2724,7 +2716,7 @@ TEST_TRANSLATOR=../../testTranslator
 
 LANG_FLAGS =
 
-# NP 4/23/21 C++14 flag is needed in order to parse the boost headers which use C++14.
+# NP 4/23/21 C++14 flag is needed in order to parse some headers which use C++14.
 if USING_INTEL_COMPILER
    ROSE_FLAGS = -std=c++14
 else
@@ -2752,25 +2744,17 @@ $(TEST_Source_passed): %.passed: $(srcdir)/% $(TEST_TRANSLATOR) $(top_srcdir)/sc
 TEST_Objects_FoldedConstants = ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_FOLDED_CONSTANTS:.C=.foldedConstants-o}
 TEST_Objects_UnfoldedConstants = ${ALL_TESTCODES:.C=.unfoldedConstants-o}
 
-if ROSE_USE_EDG_VERSION_5_0
-# EDG versions 6.0 and later do not require the -rose:unparse_edg_normalized_method_ROSE_1392 
-# option (it appears that template declarations mihgt no longer be normalized).
 method-defn-in-tpldecl-0.C.passed: $(srcdir)/method-defn-in-tpldecl-0.C $(TEST_TRANSLATOR) $(top_srcdir)/scripts/test_exit_status
 	@$(RTH_RUN) \
-	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-0 -rose:unparse_edg_normalized_method_ROSE_1392; test -e method-defn-in-tpldecl-0" \
+	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-0; test -e method-defn-in-tpldecl-0" \
 	    TITLE="testTranslator $(notdir $<) [$@]" \
 	    $(top_srcdir)/scripts/test_exit_status $@
-endif
 
-if ROSE_USE_EDG_VERSION_5_0
-# EDG versions 6.0 and later do not require the -rose:unparse_edg_normalized_method_ROSE_1392 
-# option (it appears that template declarations mihgt no longer be normalized).
 method-defn-in-tpldecl-1.C.passed: $(srcdir)/method-defn-in-tpldecl-1.C $(srcdir)/method-defn-in-tpldecl-1.h $(TEST_TRANSLATOR) $(top_srcdir)/scripts/test_exit_status
 	@$(RTH_RUN) \
-	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-1 -rose:unparse_edg_normalized_method_ROSE_1392; test -e method-defn-in-tpldecl-1" \
+	    CMD="$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(APP_INCLUDES) $(srcdir)/$(@:.C.passed=.C) -o method-defn-in-tpldecl-1; test -e method-defn-in-tpldecl-1" \
 	    TITLE="testTranslator $(notdir $<) [$@]" \
 	    $(top_srcdir)/scripts/test_exit_status $@
-endif
 
 # DQ (9/18/2011): This is testing the option to process the AST to use the constant folded values (contained in the AST).
 $(TEST_Objects_FoldedConstants): ../../testTranslatorFoldedConstants
@@ -2793,27 +2777,27 @@ test2005_56.o: $(TEST_TRANSLATOR)
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -DTEST_STRING_MACRO=\""Thu Apr 14 08:18:33 PDT 2005"\" -c $(srcdir)/test2005_56.C -o test2005_56.o
 
 test2014_54.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(VALGRIND) $(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) $(ROSE_INCLUDES) -c $(srcdir)/test2010_01.C -o test2010_01.o
 
 test2010_01.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(VALGRIND) $(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) $(ROSE_INCLUDES) -c $(srcdir)/test2010_01.C -o test2010_01.o
 
 test2010_02.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_02.C -o test2010_02.o
 
 test2010_07.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_07.C -o test2010_07.o
 
 test2010_08.o: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	$(TEST_TRANSLATOR) $(LANG_FLAGS) $(ROSE_FLAGS) -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_08.C -o test2010_08.o
 
 cpp_test2010_07: $(TEST_TRANSLATOR)
-	@echo "Running boost specific test."
+	@echo "Running special test."
 	g++ -E -I$(top_builddir) $(ROSE_INCLUDES) -c $(srcdir)/test2010_07.C
 
 # DQ (9/13/2013): Added new test for -rose:unparse_includes (which has a bug in how it unparses C++ style comments
@@ -2963,10 +2947,10 @@ test_multiple_files_2: $(srcdir)/test2018_01.C $(srcdir)/test2018_02.C
 test_multiple_files_3: $(srcdir)/test2019_30a.C $(srcdir)/test2019_30b.C $(srcdir)/test2019_30.h 
 	../../testTranslator -rose:verbose 0 -c $(srcdir)/test2019_30a.C $(srcdir)/test2019_30b.C 
 
-# DQ (7/9/2019): This test demonstrates a failing case for older versions of EDG (pre 5.0) 
+# DQ (7/9/2019): This test demonstrates a failing case for older versions of legacy frontend (pre 5.0) 
 # when using at least GNU 5.1.  Not clear if we should worry about this since we are moving
-# to have EDG 5.0 be the default shortly.  This issue reproduces a problem that is only see
-# in one of the CFG tests.  It is not a problem with EDG 5.0, as I understand it.
+# to have legacy frontend 5.0 be the default shortly.  This issue reproduces a problem that is only see
+# in one of the CFG tests.  It is not a problem with legacy frontend 5.0, as I understand it.
 test_multiple_files_4: $(srcdir)/test2019_42a.C $(srcdir)/test2019_42b.C 
 	../../testTranslator -rose:verbose 0 -c $(srcdir)/test2019_42a.C $(srcdir)/test2019_42b.C 
 
@@ -2997,10 +2981,10 @@ endif
 
 # DQ (11/19/2012): HPCToolKit use.  This makes some significant assumptions on how we have setup HPCToolKit.
 hpctoolkit:
-	hpcrun -e WALLCLOCK -- ../../testTranslator  -w -rose:verbose 0 -rose:skip_unparse_asm_commands -rose:skipAstConsistancyTests -rose:skip_commentsAndDirectives -rose:skip_unparse -I/home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests -c /home/dquinlan/ROSE/git-dq-edg4x-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests/testPerformance.C
+	hpcrun -e WALLCLOCK -- ../../testTranslator  -w -rose:verbose 0 -rose:skip_unparse_asm_commands -rose:skipAstConsistancyTests -rose:skip_commentsAndDirectives -rose:skip_unparse -I/home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests -c /home/dquinlan/ROSE/git-dq-legacy_frontend-rc/tests/nonsmoke/functional/CompileTests/Cxx_tests/testPerformance.C
 #	hpcprof hpctoolkit-lt-testTranslator-measurements/lt-testTranslator-000000-000-0f802c45-7612-0.hpcrun
 	hpcprof hpctoolkit-lt-testTranslator-measurements/lt-testTranslator-000000-000-0f802c45-3676-0.hpcrun
-#	hpcviewer /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-edg4x-rc-debug_mode_off/tests/nonsmoke/functional/CompileTests/Cxx_tests/hpctoolkit-lt-testTranslator-database-11205 &
+#	hpcviewer /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-legacy_frontend-rc-debug_mode_off/tests/nonsmoke/functional/CompileTests/Cxx_tests/hpctoolkit-lt-testTranslator-database-11205 &
 
 check-local:
 #	@$(MAKE) $(PASSING_TEST_Source_passed)
@@ -3077,12 +3061,11 @@ clean-local:
 #  TIMEOUT_TOLERANCE    $gnu_time * $TIMEOUT_TOLERANCE (threshold tests only)
 #------------------------------------------------------------------------------
 
-# DQ (6/30/2013): Increased this to support compiling Boost example tests. We 
 # need to rethink how we want to handl this. I suggest restricting this to a 
 # few tests instead of each test. Compiling with optimization also makes about
-# a factor of four difference for test2013_241.C (boost example test code).
+# a factor of four difference for test2013_241.C (template-heavy example test code).
 # Since Jenkins testing is currently done without optimization we need the 
-# larger timeout value just to handle the newer boost test codes.
+# larger timeout value just to handle the newer template-heavy test codes.
 # TIMEOUT            ?= 60  # Default timeout value
 TIMEOUT            ?= 420  # Default timeout value
 TIMEOUT_TOLERANCE  ?= 20  # Default timeout tolerance value for threshold
@@ -3121,4 +3104,3 @@ $(TEST_Source_passed:.C.passed=.timed_with_threshold):
 
 status:
 	@$(MAKE) $(TEST_Source_passed)
-

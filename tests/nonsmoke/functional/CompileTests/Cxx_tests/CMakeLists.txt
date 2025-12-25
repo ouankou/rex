@@ -1,4 +1,4 @@
-# this defines ROSE__CXX_TESTS and ROSE__CXX_TESTS__BOOST
+# this defines ROSE__CXX_TESTS
 # include(${CMAKE_CURRENT_SOURCE_DIR}/Cxx_Testcodes_bk.cmake)
 
 include(Cxx_Testcodes.cmake)
@@ -18,14 +18,24 @@ set(ROSE_FLAGS
   -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
   )
 
+function(rex_lock_test_for_input test_name input_file)
+  get_filename_component(lock_base ${input_file} NAME_WE)
+  set_tests_properties(${test_name}
+    PROPERTIES RESOURCE_LOCK "rose_output_${lock_base}")
+endfunction()
+
 if(REX_ENABLE_FAILING_TESTS)
   foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
     compile_test(${file_to_test} "Cxx_tests_failing")
+    get_filename_component(lock_base ${file_to_test} NAME_WE)
+    rex_lock_test_for_input(Cxx_tests_failing_${lock_base} ${file_to_test})
   endforeach()
 endif()
 
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
+  get_filename_component(lock_base ${file_to_test} NAME_WE)
+  rex_lock_test_for_input(Cxx_tests_${lock_base} ${file_to_test})
 endforeach()
 
 # Issue 99: Friend function template lookup requires error-tolerant mode today.
@@ -41,6 +51,7 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue99
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(Cxx_tests_rex_test2025_issue99 rex_test2025_issue99.cpp)
 
 # Issue 91: Declaration chains must not emit "firstNondefiningDeclaration == NULL"
 set_tests_properties(Cxx_tests_rex_test2025_issue91_decl_chain PROPERTIES
@@ -91,6 +102,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue160_axpy_roundtrip_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue160_axpy_roundtrip_unparse
+  rex_test2025_issue160_axpy_roundtrip.cpp)
 
 # Issue 163: Round-trip axpy.cpp must match exactly.
 string(CONCAT rex_test2025_issue163_axpy_roundtrip_unparse_command
@@ -114,6 +128,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue163_axpy_roundtrip_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue163_axpy_roundtrip_unparse
+  rex_test2025_issue163_axpy_roundtrip.cpp)
 
 # Issue 164: Preserve explicit const on constexpr declarations.
 string(CONCAT rex_test2025_issue164_constexpr_const_unparse_command
@@ -138,6 +155,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue164_constexpr_const_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue164_constexpr_const_unparse
+  rex_test2025_issue164_constexpr_const.cpp)
 
 # Issue 160: Preserve explicit qualifiers, casts, and list-init for std headers.
 string(CONCAT rex_test2025_issue160_axpy_system_headers_unparse_command
@@ -173,6 +193,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue160_axpy_system_headers_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue160_axpy_system_headers_unparse
+  rex_test2025_issue160_axpy_system_headers.cpp)
 
 # Issue 160: Preserve explicit instantiation keyword for struct templates.
 string(CONCAT rex_test2025_issue160_explicit_struct_instantiation_unparse_command
@@ -197,6 +220,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue160_explicit_struct_instantiation_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue160_explicit_struct_instantiation_unparse
+  rex_test2025_issue160_explicit_struct_instantiation.cpp)
 
 # Issue 160: Explicit class template instantiation must unparse as a directive.
 string(CONCAT rex_test2025_issue160_explicit_class_instantiation_unparse_command
@@ -221,6 +247,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue160_explicit_class_instantiation_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue160_explicit_class_instantiation_unparse
+  rex_test2025_issue160_explicit_class_instantiation.cpp)
 
 # Issue 160: Extern class template instantiation must unparse with "extern".
 string(CONCAT rex_test2025_issue160_extern_class_instantiation_unparse_command
@@ -245,6 +274,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue160_extern_class_instantiation_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue160_extern_class_instantiation_unparse
+  rex_test2025_issue160_extern_class_instantiation.cpp)
 
 # Issue 62: Mangled qualifiers must never contain template syntax.
 set_tests_properties(Cxx_tests_rex_test2025_mangle_qualifiers_no_template_syntax PROPERTIES
@@ -268,6 +300,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue113_instantiation_spelling_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue113_instantiation_spelling_unparse
+  rex_test2025_issue113_instantiation_spelling.cpp)
 
 # Issue 115: Dependent/unresolved name refs must use SgNonrealRefExp.
 add_executable(
@@ -299,6 +334,9 @@ foreach(
     Cxx_tests_${test_name}_nonreal_refexp
     PROPERTIES LABELS Cxx_tests
   )
+  rex_lock_test_for_input(
+    Cxx_tests_${test_name}_nonreal_refexp
+    ${file_to_test})
 endforeach()
 
 # Issue 115 Phase C: Instantiated bodies must use resolved refs.
@@ -331,6 +369,9 @@ foreach(
     Cxx_tests_${test_name}_phaseC_resolution
     PROPERTIES LABELS Cxx_tests
   )
+  rex_lock_test_for_input(
+    Cxx_tests_${test_name}_phaseC_resolution
+    ${file_to_test})
 endforeach()
 
 # Issue 147: Dependent template types must use SgNonrealType.
@@ -356,6 +397,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_dependent_template_specialization_type_nonreal_type
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_dependent_template_specialization_type_nonreal_type
+  rex_test2025_dependent_template_specialization_type.cpp)
 
 # Issue 148: Mutating system-header declarations must preserve AST invariants.
 add_executable(
@@ -383,6 +427,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue148_system_header_mutation
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue148_system_header_mutation
+  rex_test2025_issue148_system_header_mutation.cpp)
 
 # Issue 151: LinkageSpecDecl (extern "C") must not drop declarations and must
 # preserve linkage in the generated output.
@@ -401,6 +448,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_extern_c_roundtrip_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_extern_c_roundtrip_unparse
+  rex_test2025_extern_c_roundtrip.cpp)
 
 # Issue 151: Preserve extern "C" brace form without flattening.
 add_test(
@@ -418,6 +468,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_extern_c_brace_roundtrip_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_extern_c_brace_roundtrip_unparse
+  rex_test2025_extern_c_brace_roundtrip.cpp)
 
 # Issue 123: Function refs must not emit duplicated qualification (e.g. std::::get).
 add_test(
@@ -435,6 +488,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue123_std_double_colon_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue123_std_double_colon_unparse
+  rex_test2025_issue123_std_double_colon.cpp)
 
 # Issue 146: Namespace-scope template instantiations must not emit std::::iota.
 add_test(
@@ -452,6 +508,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue146_std_iota_quad_colon_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue146_std_iota_quad_colon_unparse
+  rex_test2025_issue146_std_iota_quad_colon.cpp)
 
 # Issue 146: Global function template instantiations must keep :: under shadowing.
 add_test(
@@ -469,6 +528,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue146_shadowed_function_template_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue146_shadowed_function_template_unparse
+  rex_test2025_issue146_shadowed_function_template.cpp)
 
 # Issue 149: Parameter lists must not be reported as unsupported declarations.
 add_test(
@@ -484,6 +546,9 @@ set_tests_properties(
     LABELS Cxx_tests
     FAIL_REGULAR_EXPRESSION "Unsupported declaration = .*SgFunctionParameterList"
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue149_param_list_unique_name_interface_function_coverage
+  rex_test2025_issue149_param_list_unique_name.cpp)
 
 # Issue 144: Clang diagnostic errors must be fatal by default.
 add_test(
@@ -498,6 +563,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_cfe_error_exit_code
   PROPERTIES LABELS Cxx_tests WILL_FAIL TRUE
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_cfe_error_exit_code
+  rex_test2025_cfe_error_exit_code.cpp)
 
 # Issue 144: Allow backend when explicitly opted in.
 add_test(
@@ -516,6 +584,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
+  rex_test2025_cfe_error_exit_code.cpp)
 
 # Issue 124: System header template specializations must preserve template args.
 add_test(
@@ -533,6 +604,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
+  rex_test2025_issue124_system_header_specialization_args.cpp)
 
 # Issue 125: Declarations must not be missing from their owning scope child list.
 set_tests_properties(Cxx_tests_rex_test2025_issue125_fixup_child_list_warning PROPERTIES
@@ -556,6 +630,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue126_default_template_args_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue126_default_template_args_unparse
+  rex_test2025_issue126_default_template_args.cpp)
 
 # Issue 59: Template-template arguments must preserve required global
 # qualification (no string stripping in the unparser).
@@ -574,6 +651,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue59_template_template_arg_global_qual_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue59_template_template_arg_global_qual_unparse
+  rex_test2025_issue59_template_template_arg_global_qual.cpp)
 
 # Issue 60: Friend free functions declared/defined inside a class must keep
 # their lexical placement (inside the class) without emitting extra namespace
@@ -593,6 +673,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue60_friend_function_symbol_scope_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue60_friend_function_symbol_scope_unparse
+  rex_test2025_issue60_friend_function_symbol_scope.cpp)
 
 # Issue 64: Unparser must preserve required global qualification for template
 # instantiations when a global template is shadowed by a nested-scope template.
@@ -611,6 +694,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue64_shadow_template_global_qual_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue64_shadow_template_global_qual_unparse
+  rex_test2025_issue64_shadow_template_global_qual.cpp)
 
 # Issue 118: EmptyDecl must translate to SgEmptyDeclaration (preserve stray ';').
 set_tests_properties(Cxx_tests_rex_test2025_issue118_empty_decl PROPERTIES
@@ -633,6 +719,9 @@ set_tests_properties(
   Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
+  rex_test2025_namespace_reopenings_preserve_blocks.cpp)
 
 # Issue 93: Class-scope static_assert must preserve source order vs fields.
 add_test(
@@ -647,6 +736,9 @@ add_test(
 set_tests_properties(Cxx_tests_rex_test2025_issue93_static_assert_order_unparse
   PROPERTIES LABELS Cxx_tests
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue93_static_assert_order_unparse
+  rex_test2025_issue93_static_assert_order.cpp)
 
 # Issue 94: Template argument lists must not introduce a space before commas.
 add_test(
@@ -659,6 +751,9 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue94_template_arg_spacing.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_issue94_template_arg_spacing_unparse PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue94_template_arg_spacing_unparse
+  rex_test2025_issue94_template_arg_spacing.cpp)
 
 # Issue 145: Preserve explicit = default and avoid implicit-body placeholders.
 add_test(
@@ -676,6 +771,9 @@ set_tests_properties(
   PROPERTIES LABELS Cxx_tests
   FAIL_REGULAR_EXPRESSION "Cannot resolve Field member;using placeholder"
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_defaulted_special_members_anon_union_unparse
+  rex_test2025_defaulted_special_members_anon_union.cpp)
 
 # Verify explicit template arguments are preserved in calls
 add_test(
@@ -688,6 +786,9 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_template_call.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_template_call_explicit_args PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_template_call_explicit_args
+  rex_test2025_template_call.cpp)
 
 add_test(
   NAME Cxx_tests_rex_test2025_member_template_call_explicit_args
@@ -699,6 +800,9 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_member_template_call.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_member_template_call_explicit_args PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_member_template_call_explicit_args
+  rex_test2025_member_template_call.cpp)
 
 add_test(
   NAME Cxx_tests_rex_test2025_variadic_template_params_unparse
@@ -710,6 +814,9 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_variadic_template_params.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_variadic_template_params_unparse PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_variadic_template_params_unparse
+  rex_test2025_variadic_template_params.cpp)
 
 add_test(
   NAME Cxx_tests_rex_test2025_template_argument_pack_unparse
@@ -721,6 +828,9 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_template_argument_pack.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_template_argument_pack_unparse PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_template_argument_pack_unparse
+  rex_test2025_template_argument_pack.cpp)
 
 # REX: This test intentionally fails (it contains a function-try-block which is currently
 # not fully supported and triggers an assertion failure or error). We want to ensure
@@ -733,6 +843,9 @@ add_test(
   NAME Cxx_tests_rex_test2025_issue99_failure_propagation
   COMMAND sh -c "\"$@\" && exit 1 || exit 0" dummy $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp
 )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue99_failure_propagation
+  rex_test2025_issue99_failure_propagation.cpp)
 
 # REX: New test for Issue 87 (Functions inside namespaces lost)
 # We verify that "void bar()" is present in the output associated with namespace behavior.
@@ -746,6 +859,9 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue87_namespace.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_issue87_namespace PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue87_namespace
+  rex_test2025_issue87_namespace.cpp)
 
 add_test(
   NAME Cxx_tests_rex_test2025_issue89_type_alias_template_args
@@ -757,6 +873,9 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue89_alias.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_issue89_type_alias_template_args PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue89_type_alias_template_args
+  rex_test2025_issue89_alias.cpp)
 
 add_test(
   NAME Cxx_tests_rex_test2025_issue90_array_dim_template_param
@@ -768,3 +887,6 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue90_array_dim.cpp
 )
 set_tests_properties(Cxx_tests_rex_test2025_issue90_array_dim_template_param PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue90_array_dim_template_param
+  rex_test2025_issue90_array_dim.cpp)

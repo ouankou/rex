@@ -16,7 +16,7 @@
 #        define ALLOC_MUTEX(CLASS_NAME, HOW)
 #    endif
 #    ifdef _REENTRANT
-        // User wnats multi-thread support, but POSIX is unavailable. Consider using Boost Threads which are more portable.
+        // User wants multi-thread support, but POSIX is unavailable. Consider a portable threading library.
 #       warning "POSIX threads are not available; synchronization being skipped"
 #    endif
 #endif
@@ -248,8 +248,8 @@ void $CLASSNAME::operator delete(void *Pointer, size_t Size)
 // Also, note comment below from Robb (copied from the Common.code file).
 //
 // Matzke (2018-02-16): We don't need to provide both operator delete(void*) and operator delete(void*,size_t) because the C++
-// runtime calls exactly one of them (whichever is defined). Futhermore, the Boost serialization library assumes that classes
-// don't provide both versions at once (doing so causes compile errors in boost header files that try to invoke the
+// runtime calls exactly one of them (whichever is defined). Futhermore, some serialization libraries assume that classes
+// don't provide both versions at once (doing so causes compile errors in headers that try to invoke the
 // destructor).  Therefore, I'm commenting out operator delete(void*). See [http://en.cppreference.com/w/cpp/language/delete].
 #if 0
 void $CLASSNAME::operator delete(void* pointer) { $CLASSNAME::operator delete (pointer, sizeof($CLASSNAME)); };

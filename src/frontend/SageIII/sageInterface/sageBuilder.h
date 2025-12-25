@@ -1250,8 +1250,10 @@ ROSE_DLL_API SgRangeBasedForStatement* buildRangeBasedForStatement_nfi(
      SgExpression* not_equal_expression, SgExpression* increment_expression,
      SgStatement* body);
 
-// EDG 4.8 handled the do-while statement differently (more similar to a block scope than before in EDG 4.7 (i.e. with an end-of-construct statement).
-// So we need an builder function that can use the existing SgDoWhileStatement scope already on the stack.
+// legacy frontend 4.8 handled the do-while statement differently (more similar
+// to a block scope than before in legacy frontend 4.7 (i.e. with an
+// end-of-construct statement). So we need an builder function that can use the
+// existing SgDoWhileStatement scope already on the stack.
 ROSE_DLL_API void buildDoWhileStatement_nfi(SgDoWhileStmt* result, SgStatement * body, SgStatement * condition);
 
 //! Build while statement
@@ -1370,8 +1372,11 @@ ROSE_DLL_API SgNamespaceDefinitionStatement * buildNamespaceDefinition(SgNamespa
 // SgClassDeclaration * buildClassDeclaration_nfi(const SgName& name, SgClassDeclaration::class_types kind, SgScopeStatement* scope, SgClassDeclaration* nonDefiningDecl, bool buildTemplateInstantiation);
 ROSE_DLL_API SgClassDeclaration* buildClassDeclaration_nfi(const SgName& name, SgClassDeclaration::class_types kind, SgScopeStatement* scope, SgClassDeclaration* nonDefiningDecl, bool buildTemplateInstantiation, SgTemplateArgumentPtrList* templateArgumentsList);
 
-// DQ (8/11/2013): I think that the specification of both SgTemplateParameterPtrList and SgTemplateArgumentPtrList is redundant with the nonDefiningDecl (which is a required parameter).
-// DQ (11/19/2011): Added to support template class declaration using EDG 4.x support (to support the template declarations directly in the AST).
+// DQ (8/11/2013): I think that the specification of both
+// SgTemplateParameterPtrList and SgTemplateArgumentPtrList is redundant with
+// the nonDefiningDecl (which is a required parameter). DQ (11/19/2011): Added
+// to support template class declaration using legacy frontend 4.x support (to
+// support the template declarations directly in the AST).
 ROSE_DLL_API SgTemplateClassDeclaration* buildTemplateClassDeclaration_nfi(const SgName& name, SgClassDeclaration::class_types kind, SgScopeStatement* scope, SgTemplateClassDeclaration* nonDefiningDecl,
                                                                            SgTemplateParameterPtrList* templateParameterList, SgTemplateArgumentPtrList* templateSpecializationArgumentList );
 //! Build tempplate class declaration

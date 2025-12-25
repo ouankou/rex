@@ -14,7 +14,8 @@ struct my_char_traits
 template<class _CharT> struct char_traits : public my_char_traits<_CharT> { };
 
 #if 1
-// Specialization allows GNU to to compile test code, but failes for EDG.
+// Specialization allows GNU to to compile test code, but failes for legacy
+// frontend.
 template<> struct char_traits <unsigned int>
    {
      typedef unsigned int int_type;

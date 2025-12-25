@@ -123,8 +123,8 @@ int main( int argc, char * argv[] )
 
 #if 0
   // DQ (5/11/2017): Adding support for detection of template specializations that will be output and building there forward 
-  // declarations as required. Note that EDG does not always build the forward declarations that are required for the output
-  // of template specializations (see test2017_22.C and test2017_23.C for examples where EDG does and does not build the 
+  // declarations as required. Note that legacy frontend does not always build the forward declarations that are required for the output
+  // of template specializations (see test2017_22.C and test2017_23.C for examples where legacy frontend does and does not build the 
   // forward declarations.
      markTemplateInstantiationsForOutput(project);
 #endif
