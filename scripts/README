@@ -14,13 +14,3 @@ ROSE/exampleTranslators/graphicalUserInterfaceExamples/slicing
 ROSE/exampleTranslators/graphicalUserInterfaceExamples/query
 etc.
 
-
-Gary Yuan's work on Graphs of ROSE Performance data:
-   graph.py: is the Python script to process the performance data output file from ROSE
-   Use command line such as:
-      graph.py -fgnuplot -ofile -H4 -W4 -P4 -wlines --ylabel="time (seconds)" -Fpng --ymin=0 -x"number of AST nodes" -efilename -ememory --rehash="true" -g75000 -r Cxx_ROSE_PERFORMANCE_DATA.csv
-   to rune the script.
-   to view the pgn formated file use:
-      eog file.png
-
-

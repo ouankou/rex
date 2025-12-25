@@ -458,9 +458,6 @@ TESTCODES = \
 # DQ (6/30/2005): Removed to compile Kull (submitted by Jeremiah Willcock)
 #    test2005_85.C (Duff's Device)
 
-# Moved to explicit rule below so that we could include -I<pythonDir>
-#     test2005_18.C
-#     test2005_54.C
 #     test2005_24.C
 #     test2004_62.C 
 #     test2004_63.C 
@@ -478,8 +475,6 @@ TESTCODES = \
 #     test2004_30.C
 #     test2004_41.C
 
-# DQ (8/8/2005): requires use od Python.h not included in ROSE distribution
-#     test2004_92.C
 
 # Build the list of object files
 TEST_Objects = ${TESTCODES:.C=.o}
@@ -522,16 +517,10 @@ test2004_30.o: $(srcdir)/test2004_30.C $(TRANSLATOR_EXECUTABLE)
 test2004_41.o: $(srcdir)/test2004_41.C $(TRANSLATOR_EXECUTABLE)
 	$(TEST_TRANSLATOR)   -I../g++_HEADERS/hdrs1/bits -c $(srcdir)/test2004_41.C 
 
-# Test for STL example code
-# test2004_92.o: $(srcdir)/test2004_92.C $(TRANSLATOR_EXECUTABLE)
-#	$(VALGRIND) $(TEST_TRANSLATOR) -rose:verbose 2 -I$(srcdir)/pythonDir -c $(srcdir)/test2004_92.C 
 
 #test2005_56.o: $(srcdir)/test2005_56.C
 #	$(TEST_TRANSLATOR) -DTEST_STRING_MACRO=\""Thu Apr 14 08:18:33 PDT 2005"\" $(srcdir)/test2005_56.C -o test2005_56
 
-# This code requires access to Python.h (in the $(srcdir)/pythonDir directory)
-test2005_54.o: $(srcdir)/test2005_54.C 
-	$(VALGRIND) $(TEST_TRANSLATOR) -I$(srcdir)/pythonDir -c $(srcdir)/test2005_54.C 
 
 test2005_56.o:
 	$(VALGRIND) $(TEST_TRANSLATOR) -DTEST_STRING_MACRO=\""Thu Apr 14 08:18:33 PDT 2005"\" $(srcdir)/test2005_56.C -o test2005_56

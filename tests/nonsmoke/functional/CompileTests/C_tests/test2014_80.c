@@ -6593,8 +6593,7 @@ typedef enum
 extern
 GQuark g_regex_error_quark (void);
 // # 296 "/home/dquinlan/local/glib-2.38.2-install/include/glib-2.0/glib/gregex.h"
-typedef enum
-{
+typedef enum {
   G_REGEX_CASELESS = 1 << 0,
   G_REGEX_MULTILINE = 1 << 1,
   G_REGEX_DOTALL = 1 << 2,

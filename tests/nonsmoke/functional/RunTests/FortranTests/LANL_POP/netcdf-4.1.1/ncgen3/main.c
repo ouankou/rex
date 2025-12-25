@@ -133,26 +133,25 @@ main(
 			 strcmp(lang_name, "fortran77") == 0 ||
 			 strcmp(lang_name, "Fortran77") == 0) {
 		    fortran_flag = 1;
-		} else {	/* Fortran90, Java, C++, Perl, Python, Ruby, ... */
-		    derror("%s: output language %s not implemented", 
-			   progname, lang_name);
-		    return(1);
-		}
-	    }
-	  break;
-	case 'n':		/* old version of -b, uses ".cdf" extension */
-	  netcdf_flag = -1;
-	  break;
-	case 'o':		/* to explicitly specify output name */
-	  netcdf_flag = 1;
-	  netcdf_name = (char *) emalloc(strlen(optarg)+1);
-	  if (! netcdf_name) {
-	      derror ("%s: out of memory", progname);
-	      return(1);
-	  }
-	  (void)strcpy(netcdf_name,optarg);
-	  break;
-	case 'x':		/* set nofill mode to speed up creation of large files */
+                } else { /* Fortran90, Java, C++, Perl, Python, Ruby, ... */
+                  derror("%s: output language %s not implemented", progname,
+                         lang_name);
+                  return (1);
+                }
+        } break;
+        case 'n': /* old version of -b, uses ".cdf" extension */
+          netcdf_flag = -1;
+          break;
+        case 'o': /* to explicitly specify output name */
+          netcdf_flag = 1;
+          netcdf_name = (char *)emalloc(strlen(optarg) + 1);
+          if (!netcdf_name) {
+            derror("%s: out of memory", progname);
+            return (1);
+          }
+          (void)strcpy(netcdf_name, optarg);
+          break;
+        case 'x':		/* set nofill mode to speed up creation of large files */
 	  nofill_flag = 1;
 	  break;
         case 'v':		/* a deprecated alias for "kind" option */

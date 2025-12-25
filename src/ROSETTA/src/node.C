@@ -675,10 +675,6 @@ Grammar::setUpNodes ()
      InitializedName.setDataPrototype ( "SgInitializedName::asm_register_name_enum", "register_name_code", "= SgInitializedName::e_invalid_register",
                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // This is python specific support (added by Michael Driscoll 2011-08-04).
-     InitializedName.setDataPrototype ( "SgInitializedName::excess_specifier_enum", "excess_specifier", "= SgInitializedName::e_excess_specifier_none",
-               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // DQ (8/09/2006): Support for asm register names when defined via strings (more general than the EDG mapping to the GNU supported register names)
   // This requirement comes from an Elsa test case: "int foo asm ("myfoo") = 2;" where the register name is unknown and so held as a string.
      InitializedName.setDataPrototype ( "std::string", "register_name_string", "= \"\"",

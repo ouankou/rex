@@ -57,7 +57,9 @@ int main (int argc, char *argv[])
      SgFunctionParameterList* parameter_list = buildFunctionParameterList();
 
   // Note that specification of scope determins the scope of the function and not where it could be located (must be explicitly added to the target scope).
-     SgFunctionDeclaration* functionDeclaration = buildDefiningFunctionDeclaration(functionName,return_type,parameter_list,globalScopeOfNewFile);
+     SgFunctionDeclaration *functionDeclaration =
+         buildDefiningFunctionDeclaration(functionName, return_type,
+                                          parameter_list, globalScopeOfNewFile);
      ROSE_ASSERT(functionDeclaration != NULL);
 
   // Add the function declearation to the target scope (global scope).
@@ -98,5 +100,4 @@ int main (int argc, char *argv[])
 
   // Outout the unparsed code from the input AST.
      project->unparse();
-   }
-
+}

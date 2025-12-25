@@ -5096,15 +5096,6 @@ HEADER_INITIALIZED_NAME_START
                e_last_gnu_variable_attribute /*!< last value (upper bound on range of values, used in error checking) */
              };
 
-        // driscoll6 (8/4/11): support for excess specifiers in python (*args and **kwargs)
-          enum excess_specifier_enum
-             {
-               e_excess_specifier_none = 0,
-               e_excess_specifier_positionals,
-               e_excess_specifier_keywords,
-               e_excess_specifier_last /* sentry */
-             };
-
           bool checkBit ( unsigned int bit ) const;
           void setBit ( unsigned int bit );
           void unsetBit ( unsigned int bit );
@@ -7327,10 +7318,6 @@ HEADER_UNPARSE_INFO_START
           bool outputFortranModFile() const;
           void set_outputFortranModFile();
           void unset_outputFortranModFile();
-
-       // driscoll6 (6/6/2011) Mutators for p_nestingLevel
-          void inc_nestingLevel();
-          void dec_nestingLevel();
 
        // DQ (8/16/2020): Record when we are in an extern "C" so that we can avoid nesting (see Cxx_tests/test2020_28.C).
        // We need to build the access functions directly because of the static data member.
@@ -11983,7 +11970,6 @@ SgInitializedName::SgInitializedName() ROSE_DEPRECATED_FUNCTION
      p_preinitialization(e_unknown_preinitialization),
      p_isCoArray(false),
      p_register_name_code(SgInitializedName::e_invalid_register),
-     p_excess_specifier(SgInitializedName::e_excess_specifier_none),
      p_register_name_string(""),
      p_requiresGlobalNameQualificationOnType(false),
      p_shapeDeferred(false),
@@ -12202,7 +12188,6 @@ SgInitializedName::SgInitializedName (
      p_preinitialization(e_unknown_preinitialization),
      p_isCoArray(false),
      p_register_name_code(SgInitializedName::e_invalid_register),
-     p_excess_specifier(SgInitializedName::e_excess_specifier_none),
      p_register_name_string(""),
      p_requiresGlobalNameQualificationOnType(false),
      p_shapeDeferred(false),
@@ -12253,7 +12238,6 @@ SgInitializedName::SgInitializedName(
      p_preinitialization(e_unknown_preinitialization),
      p_isCoArray(false),
      p_register_name_code(SgInitializedName::e_invalid_register),
-     p_excess_specifier(SgInitializedName::e_excess_specifier_none),
      p_register_name_string(""),
      p_requiresGlobalNameQualificationOnType(false),
      p_shapeDeferred(false),
@@ -19289,8 +19273,6 @@ SgUnparse_Info::SgUnparse_Info ()
   // Test the isSgUnparse_Info() function since it has been problematic
      assert(isSgUnparse_Info(this) != NULL);
 
-  // Initialize the nesting level to 0 (for python).
-     p_nestingLevel = 0;
    }
 
 // DQ (1/5/2008): I think this is a redundant function with the one in sageInterface.C
@@ -19314,8 +19296,6 @@ SgUnparse_Info::SgUnparse_Info ( const SgUnparse_Info & X )
      assert (p_unparse_attribute.size() == UNPARSE_TYPE_LAST);
   // assert (SgNO_UNPARSE_INFO.p_unparse_attribute.size() == UNPARSE_TYPE_LAST);
 
-  // Copy nesting level (for python).
-     p_nestingLevel = X.p_nestingLevel;
 
   // DQ (1/10/2014): Added to support token based unparsing.
      ROSE_ASSERT(p_current_source_file == X.p_current_source_file);
@@ -19492,9 +19472,6 @@ SgUnparse_Info::post_construction_initialization()
      p_name_qualification_length     = 0;
      p_type_elaboration_required     = false;
      p_global_qualification_required = false;
-
-  // DQ (12/26/2019): Added initialization.
-     p_nestingLevel = 0;
 
   // DQ (12/26/2019): Added initialization.
      p_language = SgFile::e_default_language;
@@ -20658,19 +20635,6 @@ SgUnparse_Info::getStructureTagList ()
   // Access function for internal STL list
      return p_structureTagProcessingList;
    }
-
-void
-SgUnparse_Info::inc_nestingLevel() {
-    p_nestingLevel += 1;
-}
-
-void
-SgUnparse_Info::dec_nestingLevel() {
-    p_nestingLevel -= 1;
-    if (p_nestingLevel < 0) {
-        cerr << "warning: SgUnparse_Info.p_nestingLevel decremented below zero." << endl;
-    }
-}
 
 SOURCE_UNPARSE_INFO_END
 

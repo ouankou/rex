@@ -21,17 +21,25 @@ int main (int argc, char *argv[])
   SgInitializedName* arg1 = buildInitializedName(SgName("x"),buildIntType());
   SgInitializedName* arg2 = buildInitializedName(SgName(""),buildFloatType());
   SgFunctionParameterList * paraList = buildFunctionParameterList();
-  appendArg(paraList, arg1);  
-  appendArg(paraList, arg2);  
+  appendArg(paraList, arg1);
+  appendArg(paraList, arg2);
 
-  // DQ (8/28/2012): Modified the call to support the new API (need to think about if this is what we want as a new API).
-  // build defining function declaration 
-  // SageBuilder::buildDefiningFunctionDeclaration(const SgName& name, SgType* return_type, SgFunctionParameterList* paralist, SgScopeStatement* scope, SgExprListExp* decoratorList, bool buildTemplateInstantiation, SgFunctionDeclaration* first_nondefining_declaration, SgTemplateArgumentPtrList* templateArgumentsList)
-  // SgFunctionDeclaration * func1 = buildDefiningFunctionDeclaration ("foo",buildVoidType(),paraList,NULL,NULL,false,NULL,NULL);
-  // SgFunctionDeclaration * func1 = buildDefiningFunctionDeclaration (SgName("foo"),buildVoidType(),paraList);
-  SgFunctionDeclaration * func1 = buildDefiningFunctionDeclaration ("foo",buildVoidType(),paraList,NULL);
+  // DQ (8/28/2012): Modified the call to support the new API (need to think
+  // about if this is what we want as a new API). build defining function
+  // declaration SageBuilder::buildDefiningFunctionDeclaration(const SgName&
+  // name, SgType* return_type, SgFunctionParameterList* paralist,
+  // SgScopeStatement* scope, SgExprListExp* decoratorList, bool
+  // buildTemplateInstantiation, SgFunctionDeclaration*
+  // first_nondefining_declaration, SgTemplateArgumentPtrList*
+  // templateArgumentsList) SgFunctionDeclaration * func1 =
+  // buildDefiningFunctionDeclaration
+  // ("foo",buildVoidType(),paraList,NULL,NULL,false,NULL,NULL);
+  // SgFunctionDeclaration * func1 = buildDefiningFunctionDeclaration
+  // (SgName("foo"),buildVoidType(),paraList);
+  SgFunctionDeclaration *func1 =
+      buildDefiningFunctionDeclaration("foo", buildVoidType(), paraList, NULL);
 
-	  // build a statement inside the function body
+  // build a statement inside the function body
   SgBasicBlock *func_body = func1->get_definition ()->get_body ();
   ROSE_ASSERT (func_body);
   pushScopeStack (isSgScopeStatement (func_body));
@@ -50,4 +58,3 @@ int main (int argc, char *argv[])
   AstTests::runAllTests(project);
   return backend (project);
 }
-

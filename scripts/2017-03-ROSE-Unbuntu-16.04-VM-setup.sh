@@ -6,7 +6,7 @@
 
 apt-get update 
 apt-get -y upgrade
-apt-get -y install git wget build-essential libtool automake flex bison python3-dev
+apt-get -y install git wget build-essential libtool automake flex bison
 
 #---------- change gcc to 4.9.3 ----------
 
@@ -125,7 +125,7 @@ cd rose-develop
 cd ..
 mkdir build-rose
 cd build-rose
-CC=/usr/bin/gcc-4.9 CXX=g++-4.9 FC=/usr/bin/gfortran-4.9 CXXFLAGS='-g -rdynamic -Wall -Wno-unused-local-typedefs -Wno-attributes' /home/demo/rose-develop/configure --enable-assertion-behavior=abort --prefix=/home/demo/opt/rose_inst --with-CFLAGS=-fPIC --with-CXXFLAGS=-fPIC --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --with-C_DEBUG='-g -rdynamic' --with-CXX_DEBUG='-g -rdynamic' --with-C_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-CXX_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-ROSE_LONG_MAKE_CHECK_RULE=yes --with-boost=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default --with-gfortran='/usr/bin/gfortran-4.9' --with-python='/usr/bin/python3' --with-java=/home/demo/opt/jvm/jdk1.7.0_51/bin/javac --enable-languages=all --enable-projects-directory --with-doxygen --without-sqlite3 --without-libreadline --without-magic --without-yaml --with-dlib='/home/demo/opt/dlib/18.18' --without-wt --without-yices --without-pch --enable-rosehpct --with-gomp_omp_runtime_library=/usr/lib/gcc/x86_64-linux-gnu/4.9/ --without-haskell --enable-edg_version=4.12
+CC=/usr/bin/gcc-4.9 CXX=g++-4.9 FC=/usr/bin/gfortran-4.9 CXXFLAGS='-g -rdynamic -Wall -Wno-unused-local-typedefs -Wno-attributes' /home/demo/rose-develop/configure --enable-assertion-behavior=abort --prefix=/home/demo/opt/rose_inst --with-CFLAGS=-fPIC --with-CXXFLAGS=-fPIC --with-C_OPTIMIZE=-O0 --with-CXX_OPTIMIZE=-O0 --with-C_DEBUG='-g -rdynamic' --with-CXX_DEBUG='-g -rdynamic' --with-C_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-CXX_WARNINGS='-Wall -Wno-unused-local-typedefs -Wno-attributes' --with-ROSE_LONG_MAKE_CHECK_RULE=yes --with-boost=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default --with-gfortran='/usr/bin/gfortran-4.9' --with-java=/home/demo/opt/jvm/jdk1.7.0_51/bin/javac --enable-languages=all --enable-projects-directory --with-doxygen --without-sqlite3 --without-libreadline --without-magic --without-yaml --with-dlib='/home/demo/opt/dlib/18.18' --without-wt --without-yices --without-pch --enable-rosehpct --with-gomp_omp_runtime_library=/usr/lib/gcc/x86_64-linux-gnu/4.9/ --without-haskell --enable-edg_version=4.12
 make core
 make install-core
 

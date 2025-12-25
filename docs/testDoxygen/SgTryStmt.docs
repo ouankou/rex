@@ -27,16 +27,6 @@ sequence of catch statements within the support of exception handling.
 
 */
 
-/*! \var SgTryStmt::p_else_body
-\brief This pointer points to a SgBasicBlock containing the statements to be executed when
-control flows off the end of the try clause. This member is intended for use with Python,
-and is NULL otherwise.
-
-/*! \var SgTryStmt::p_finally_body
-\brief This pointer points to a SgBasicBlock containing the statements to be executed when
-an unhandled exception occurs. This member is intended for use with Python, and is NULL
-otherwise.
-
 //////////////////////////////////////////////////////////////////////////
 // Documentation for class SgTryStmt member functions (methods)
 /////////////////////////////////////////////////////////////////////////
@@ -108,5 +98,4 @@ pointer to an object derived from a SgTryStmt.
 
 \return Returns void.
 */
-
 

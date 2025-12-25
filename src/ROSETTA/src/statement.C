@@ -174,12 +174,6 @@ Grammar::setUpStatements ()
   // TV (04/11/2018): Introducing representation for non-real "stuff" (template parameters)
      NEW_TERMINAL_MACRO ( NonrealDecl, "NonrealDecl", "NONREAL_DECL" );
 
-  // driscoll6 (6/27/11): Support for Python
-     NEW_TERMINAL_MACRO (WithStatement,             "WithStatement",             "WITH_STATEMENT" );
-     NEW_TERMINAL_MACRO (PassStatement,             "PassStatement",             "PASS_STATEMENT" );
-     NEW_TERMINAL_MACRO (AssertStmt,                "AssertStmt",                "ASSERT_STMT" );
-     NEW_TERMINAL_MACRO (ExecStatement,             "ExecStatement",             "EXEC_STMT" );
-
 #if USE_FORTRAN_IR_NODES
   // Fortran language constructs that map directly to C/C++ IR nodes:
   //    Fortran: cycle        --> C: continue
@@ -562,8 +556,7 @@ Grammar::setUpStatements ()
              NullifyStatement | ArithmeticIfStatement | AssignStatement |
              ComputedGotoStatement | AssignedGotoStatement |
              /* FortranDo                 | */ AllocateStatement |
-             DeallocateStatement | SequenceStatement | WithStatement |
-             PassStatement | AssertStmt | ExecStatement | OmpExecStatement |
+             DeallocateStatement | SequenceStatement | OmpExecStatement |
              ImageControlStatement,
          "Statement", "StatementTag", false);
 
@@ -909,11 +902,11 @@ Grammar::setUpStatements ()
      ForStatement.setDataPrototype ( "SgExpression*", "increment", "= NULL",
                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
 
-     ForStatement.setDataPrototype ( "SgStatement*", "loop_body",        "= NULL",
-                                     CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     ForStatement.setDataPrototype ( "SgStatement*", "else_body",        "= NULL",
-                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-  // DQ (11/16/2007): Added support for string labels (for Fortran and Ada (PP)).
+     ForStatement.setDataPrototype(
+         "SgStatement*", "loop_body", "= NULL", CONSTRUCTOR_PARAMETER,
+         BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+     // DQ (11/16/2007): Added support for string labels (for Fortran and Ada
+     // (PP)).
      ForStatement.setDataPrototype ( "std::string", "string_label", "= \"\"",
                                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -1051,10 +1044,6 @@ Grammar::setUpStatements ()
      FunctionDeclaration.setDataPrototype ( "std::string", "binding_label", "=\"\"",
                                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
-
-     /* driscoll6 (7/14/11) support for python decorators */
-     FunctionDeclaration.setDataPrototype ( "SgExprListExp*", "decoratorList", "= NULL",
-                                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
      // MS (01/24/22) support for Ada formal subprogram declarations */
      FunctionDeclaration.setDataPrototype ( "bool", "ada_formal_subprogram_decl", "= false",
@@ -1691,10 +1680,6 @@ Grammar::setUpStatements ()
 
      ClassDeclaration.setDataPrototype ( "bool", "explicit_anonymous", "= false",
                                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     /* driscoll6 (7/19/11) support for python decorators */
-     ClassDeclaration.setDataPrototype ( "SgExprListExp*", "decoratorList", "= NULL",
-                                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // DQ (6/11/2015): Skip building of access functions (because it sets the isModified flag, not wanted for the name qualification step).
   // DQ (6/5/2011): Added support for name qualification.
@@ -2357,10 +2342,6 @@ Grammar::setUpStatements ()
      WhileStmt.setDataPrototype     ( "SgStatement*", "body", "= NULL",
                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
-  // driscoll6 (7/21/11) support for python
-     WhileStmt.setDataPrototype ( "SgStatement*", "else_body",  "= NULL",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
   // DQ (8/24/2007): Added to support Fortran specific use of do ... while construct.
   // WhileStmt.setDataPrototype ( "int", "end_numeric_label", "= -1",
   //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2486,12 +2467,10 @@ Grammar::setUpStatements ()
 
      TryStmt.setDataPrototype     ( "SgStatement*", "body", "= NULL",
                                     CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     TryStmt.setDataPrototype ( "SgCatchStatementSeq*", "catch_statement_seq_root", "= NULL",
-                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     TryStmt.setDataPrototype     ( "SgStatement*", "else_body", "= NULL",
-                                    NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     TryStmt.setDataPrototype     ( "SgStatement*", "finally_body", "= NULL",
-                                    NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+     TryStmt.setDataPrototype("SgCatchStatementSeq*",
+                              "catch_statement_seq_root", "= NULL",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              DEF_TRAVERSAL, NO_DELETE);
 
      CatchStatementSeq.setFunctionPrototype ( "HEADER_CATCH_STATEMENT_SEQ", "../Grammar/Statement.code" );
      CatchStatementSeq.editSubstitute   ( "HEADER_LIST_DECLARATIONS", "HEADER_LIST_DECLARATIONS", "../Grammar/Statement.code" );
@@ -2951,14 +2930,6 @@ Grammar::setUpStatements ()
                                                     "../Grammar/Statement.code" );
      UsingDirectiveStatement.setDataPrototype     ( "SgNamespaceDeclarationStatement*", "namespaceDeclaration", "= NULL",
                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     WithStatement.setFunctionPrototype      ( "HEADER_WITH_STATEMENT", "../Grammar/Statement.code" );
-     WithStatement.setDataPrototype("SgExpression*", "expression", "= NULL",
-                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     WithStatement.setDataPrototype("SgStatement*", "body", "= NULL",
-                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     PassStatement.setFunctionPrototype  ( "HEADER_PASS_STATEMENT", "../Grammar/Statement.code" );
 
   // DQ (6/11/2015): Skip building of access functions (because it sets the isModified flag, not wanted for the name qualification step).
   // DQ (5/12/2011): Added support for name qualification.
@@ -4007,25 +3978,6 @@ Grammar::setUpStatements ()
   // greater precision to the global scope and permit the unparsing via the token stream to be used as well.
      EmptyDeclaration.setFunctionSource      ( "SOURCE_EMPTY_DECLARATION", "../Grammar/Statement.code" );
 
-     PassStatement.setFunctionSource        ( "SOURCE_PASS_STATEMENT", "../Grammar/Statement.code" );
-
-     AssertStmt.setFunctionPrototype        ( "HEADER_ASSERT_STMT", "../Grammar/Statement.code" );
-     AssertStmt.setFunctionSource           ( "SOURCE_ASSERT_STMT", "../Grammar/Statement.code" );
-     AssertStmt.setDataPrototype("SgExpression*", "test", "= NULL",
-                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                 DEF_TRAVERSAL, NO_DELETE);
-     AssertStmt.setDataPrototype            ( "SgExpression*", "exception_argument", "= NULL",
-             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-     ExecStatement.setFunctionSource           ( "SOURCE_EXEC_STATEMENT", "../Grammar/Statement.code" );
-     ExecStatement.setFunctionSource ( "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
-     ExecStatement.setDataPrototype            ( "SgExpression*", "executable", "= NULL",
-             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     ExecStatement.setDataPrototype            ( "SgExpression*", "globals", "= NULL",
-             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     ExecStatement.setDataPrototype            ( "SgExpression*", "locals", "= NULL",
-             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
   // ClinkageStatement.setFunctionSource       ( "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
   // ClinkageStartStatement.setFunctionSource  ( "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
 
@@ -4066,10 +4018,6 @@ Grammar::setUpStatements ()
   // DQ (4/16/2005): Added support for explicit template instantiation to IR (required to address template linking issues)
      TemplateInstantiationDirectiveStatement.setFunctionSource ( "SOURCE_TEMPLATE_INSTANTIATION_DIRECTIVE_STATEMENT", "../Grammar/Statement.code" );
      TemplateInstantiationDirectiveStatement.setFunctionSource (
-          "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
-
-     WithStatement.setFunctionSource            ("SOURCE_WITH_STATEMENT", "../Grammar/Statement.code" );
-     WithStatement.setFunctionSource (
           "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
 
 #if USE_FORTRAN_IR_NODES

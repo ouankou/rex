@@ -60,10 +60,6 @@ nodes).
 
 \todo Change "loop_body" to "body" to be consistant with other scopes that contain a SgBasicBlock.
 
-/*! \var SgForStatement::p_else_body
-\brief Holds the statements in the else body of the loop. Currently, only Python supports for loops with else bodies.
-*/
-
 //////////////////////////////////////////////////////////////////////////
 // Documentation for class SgForStatement member functions (methods)
 /////////////////////////////////////////////////////////////////////////
@@ -173,4 +169,3 @@ pointer to an object derived from a SgForStatement.
 \param loop_body SgBasicBlock pointer
 \return Returns void.
 */
-

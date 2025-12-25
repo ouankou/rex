@@ -20,7 +20,11 @@ void SimpleInstrumentation::visit(SgNode* astNode)
 
           SgScopeStatement *scope = getGlobalScope(funcdef);
 #if 1
-          SgFunctionDeclaration *func_defn = buildDefiningFunctionDeclaration(SgName("testFunc"),buildVoidType(),buildFunctionParameterList(buildInitializedName(SgName("param1"),buildIntType(),NULL)),scope);
+          SgFunctionDeclaration *func_defn = buildDefiningFunctionDeclaration(
+              SgName("testFunc"), buildVoidType(),
+              buildFunctionParameterList(
+                  buildInitializedName(SgName("param1"), buildIntType(), NULL)),
+              scope);
 #endif
 #if 1
           SgFunctionDeclaration *func_decl = buildNondefiningFunctionDeclaration(func_defn, scope);
@@ -83,8 +87,4 @@ int main(int argc, char *argv[])
      treeTraversal.traverseInputFiles(project, preorder);
 
      return backend(project);
-   }
-
-
-
-
+}

@@ -10529,12 +10529,6 @@ SgFunctionDeclaration::post_construction_initialization()
      p_type_elaboration_required_for_return_type     = false;
      p_global_qualification_required_for_return_type = false;
 
-#if 0 // awaiting resolution of abstract handle bug
-  // driscoll6 (6/15/11) Support for python function decorators.
-     SgExprListExp* decorators = SageBuilder::buildExprListExp();
-     set_decoratorList(decorators);
-     decorators->set_parent(this);
-#endif
    }
 
 SgType*
@@ -15835,25 +15829,6 @@ SgNullStatement::post_construction_initialization()
    {}
 
 SOURCE_NULL_STATEMENT_END
-
-SOURCE_PASS_STATEMENT_START
-
-void
-SgPassStatement::post_construction_initialization()
-   {}
-
-SOURCE_PASS_STATEMENT_END
-
-SOURCE_ASSERT_STMT_START
-
-void
-SgAssertStmt::post_construction_initialization()
-   {}
-
-SOURCE_ASSERT_STMT_END
-
-SOURCE_EXEC_STATEMENT_START
-SOURCE_EXEC_STATEMENT_END
 
 SOURCE_VARIANT_STATEMENT_START
 

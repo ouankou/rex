@@ -4,7 +4,7 @@ include $(top_srcdir)/config/Makefile.for.ROSE.includes.and.libs
 # This should make the testing of ROSE more meaningful for users.
 # SUBDIRS = \
 #      C_tests Cxx_tests C_subset_of_Cxx_tests C99_tests Fortran_tests UPC_tests \
-#      copyAST_tests RoseExample_tests PythonExample_tests \
+#      copyAST_tests RoseExample_tests \
 #      colorAST_tests mergeAST_tests unparseToString_tests \
 #      sourcePosition_tests OpenMP_tests \
 #      virtualCFG_tests uninitializedField_tests \
@@ -168,4 +168,3 @@ status:
 	@$(srcdir)/status.sh compiler
 	@$(srcdir)/status.sh backend
 	@$(srcdir)/status.sh translator
-

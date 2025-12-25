@@ -547,10 +547,6 @@ Grammar::setUpSupport ()
      Unparse_Info.setDataPrototype("bool","global_qualification_required","= false",
                                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // driscoll6 (6/6/2011): Added nesting level information for Python unparsing.
-     Unparse_Info.setDataPrototype("int","nestingLevel","= 0",
-                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
-
   // DQ (29/8/2017): changed the language enum name so that we could use it for both input and output language specifications.
   // DQ (9/15/2012): Added support to specify the language directly (required to unparse SgBoolVal in some cases where
   // they are used in SgTemplateParameters in a SgTemplateInstantiation which would be constrcuted before having its

@@ -350,7 +350,7 @@ The Clang frontend in REX is **highly experimental**:
    - ❌ **C++ templates** - **not supported** (causes hangs/failures)
    - ❌ **C++ STL** - **not supported** (uses templates extensively)
    - ❌ **C++11/14/17/20 features** - **not supported**
-   - ❌ **Fortran, Python** - **not applicable**
+   - ❌ **Fortran** - **not applicable**
 
 2. **Known C++ Template Issues:**
    - Processing STL headers (`<iostream>`, `<vector>`, `<string>`) causes extreme slowness

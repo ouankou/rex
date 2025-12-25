@@ -63,8 +63,6 @@ We welcome patches.  If you plan to contribute a patch, you need to
 build Google Test and its own tests from an SVN checkout (described
 below), which has further requirements:
 
-  * Python version 2.3 or newer (for running some of the tests and
-    re-generating certain source files from templates)
   * CMake 2.6.4 or newer
 
 Getting the Source
@@ -392,36 +390,12 @@ For that you can use CMake:
   cd mybuild
   cmake -Dgtest_build_tests=ON ${GTEST_DIR}
 
-Make sure you have Python installed, as some of Google Test's tests
-are written in Python.  If the cmake command complains about not being
-able to find Python ("Could NOT find PythonInterp (missing:
-PYTHON_EXECUTABLE)"), try telling it explicitly where your Python
-executable can be found:
-
-  cmake -DPYTHON_EXECUTABLE=path/to/python -Dgtest_build_tests=ON ${GTEST_DIR}
-
 Next, you can build Google Test and all of its own tests.  On *nix,
 this is usually done by 'make'.  To run the tests, do
 
   make test
 
 All tests should pass.
-
-### Regenerating Source Files ###
-
-Some of Google Test's source files are generated from templates (not
-in the C++ sense) using a script.  A template file is named FOO.pump,
-where FOO is the name of the file it will generate.  For example, the
-file include/gtest/internal/gtest-type-util.h.pump is used to generate
-gtest-type-util.h in the same directory.
-
-Normally you don't need to worry about regenerating the source files,
-unless you need to modify them.  In that case, you should modify the
-corresponding .pump files instead and run the pump.py Python script to
-regenerate them.  You can find pump.py in the scripts/ directory.
-Read the Pump manual [2] for how to use it.
-
-  [2] http://code.google.com/p/googletest/wiki/PumpManual
 
 ### Contributing a Patch ###
 

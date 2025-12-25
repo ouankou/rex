@@ -28,7 +28,6 @@ cd ${ROSE_TOP}
 set +e
 
 source /usr/apps/graphviz/2.6/setup.sh
-source /usr/apps/python/2.5/setup.sh
 export PATH="/usr/apps/java/jdk1.5.0_11/bin:$PATH"
 export LD_LIBRARY_PATH="/usr/apps/java/jdk1.5.0_11/lib:/usr/apps/java/jdk1.5.0_11/jre/lib/i386/client:$LD_LIBRARY_PATH"
 export JAVA_HOME=/usr/apps/java/jdk1.5.0_11

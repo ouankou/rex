@@ -109,12 +109,6 @@ OvertureCode:
 P++Tests:
    These are subsets of the P++ project which is a target for ROSE work.
 
-Python_tests:
-PythonExample_tests:
-   These are test code that demonstrate and test the Python language support in ROSE.
-   ROSE can built the AST for Python code and permit both analysis and transformation
-   of Python code.
-
 RoseExample_tests:
    These are subset of the ROSE project that can be compiled using ROSE as a test for ROSE
    compiling itself.
