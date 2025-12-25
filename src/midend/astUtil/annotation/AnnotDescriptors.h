@@ -191,7 +191,7 @@ class NameDescriptor : public StringDescriptor {
 public:
   NameDescriptor() {}
   NameDescriptor(int i) {
-    char buf[10];
+    char buf[24];
     snprintf(buf, sizeof(buf), "%d", i);
     get_name() = "par__" + std::string(buf);
   }
