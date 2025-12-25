@@ -252,57 +252,52 @@ if(enable-cuda)
   set(ROSE_BUILD_CUDA_LANGUAGE_SUPPORT 1)
 endif()
 
-# Java
-option(enable-java "Enable Java analysis" ON)
-
 # Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
 option(enable-fortran "Enable Fortran analysis." OFF)
-if(enable-fortran AND NOT enable-java)
-  message(STATUS "Fortran analysis requires Java; enabling Java automatically.")
-  set(enable-java ON CACHE BOOL "Enable Java analysis" FORCE)
+
+# JVM-based Open Fortran Parser (OFP) dependency (required until Flang integration)
+option(enable-fortran-ofp "Enable JVM-based Open Fortran Parser (OFP) support." ON)
+if(enable-fortran AND NOT enable-fortran-ofp)
+  message(FATAL_ERROR "Fortran analysis currently requires the JVM-based Open Fortran Parser (OFP). Set -Denable-fortran-ofp=ON or disable Fortran.")
 endif()
 
-if(enable-java)
-  message(STATUS "Looking for JAVA ...")
+if(enable-fortran AND enable-fortran-ofp)
+  message(STATUS "Looking for JVM (Fortran OFP dependency) ...")
   # The FindJava script is different than all our others--it doesn't consult JAVA_ROOT. Therefore, the only
   # value of JAVA_ROOT that we can support is the empty string.
   if("${JAVA_ROOT}" STREQUAL "")
   elseif("${JAVA_ROOT}" STREQUAL "no")
-    message(FATAL_ERROR "Java cannot be both disabled (-DJAVA_ROOT=FALSE) and enabled (-Denable-java=TRUE)")
+    message(FATAL_ERROR "Fortran OFP cannot be enabled when JAVA_ROOT is disabled (-DJAVA_ROOT=FALSE).")
   else()
     message(FATAL_ERROR "Java location cannot be explicit (-DJAVA_ROOT=...)")
   endif()
 
-  include(FindJava)
-  find_program(GCJ gcj)
-  find_program(GCJH gcjh)
-  find_package(JNI)
-  set(ROSE_BUILD_JAVA_LANGUAGE_SUPPORT 1)
-  set(USE_ROSE_INTERNAL_JAVA_SUPPORT 1)
-  get_filename_component(BACKEND_JAVA_COMPILER ${Java_JAVAC_EXECUTABLE} NAME)
-  install(FILES ${JAVA_JVM_LIBRARY} DESTINATION ${ROSE_LIB_DIR_NAME})
+  find_package(Java REQUIRED)
+  find_package(JNI REQUIRED)
+  set(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT 1)
+  set(OFP_JAVA_RUNTIME "${Java_JAVA_EXECUTABLE}")
 
   # Ensure CTest inherits a usable JAVA_HOME and libjvm path even when shell
-  # init scripts are not sourced (e.g., Codex sandboxes).  Prefer the existing
+  # init scripts are not sourced (e.g., Codex sandboxes). Prefer the existing
   # JAVA_HOME environment variable, otherwise derive it from the detected Java
   # runtime or fall back to the system default symlink if available.
-  set(_rose_java_home "$ENV{JAVA_HOME}")
-  if(_rose_java_home STREQUAL "" AND Java_JAVA_EXECUTABLE)
-    get_filename_component(_rose_java_bin "${Java_JAVA_EXECUTABLE}" DIRECTORY)
-    get_filename_component(_rose_java_home "${_rose_java_bin}" DIRECTORY)
-  elseif(_rose_java_home STREQUAL "" AND EXISTS "/usr/lib/jvm/default-java")
-    set(_rose_java_home "/usr/lib/jvm/default-java")
+  set(_rose_ofp_java_home "$ENV{JAVA_HOME}")
+  if(_rose_ofp_java_home STREQUAL "" AND Java_JAVA_EXECUTABLE)
+    get_filename_component(_rose_ofp_java_bin "${Java_JAVA_EXECUTABLE}" DIRECTORY)
+    get_filename_component(_rose_ofp_java_home "${_rose_ofp_java_bin}" DIRECTORY)
+  elseif(_rose_ofp_java_home STREQUAL "" AND EXISTS "/usr/lib/jvm/default-java")
+    set(_rose_ofp_java_home "/usr/lib/jvm/default-java")
   endif()
-  if(_rose_java_home AND EXISTS "${_rose_java_home}/lib/server")
-    set(_rose_ctest_env "${CMAKE_BINARY_DIR}/CTestJavaEnv.cmake")
+  if(_rose_ofp_java_home AND EXISTS "${_rose_ofp_java_home}/lib/server")
+    set(_rose_ctest_env "${CMAKE_BINARY_DIR}/CTestFortranOFPEnv.cmake")
     file(WRITE "${_rose_ctest_env}"
       "if(\"\$ENV{JAVA_HOME}\" STREQUAL \"\")\n"
-      "  set(ENV{JAVA_HOME} \"${_rose_java_home}\")\n"
+      "  set(ENV{JAVA_HOME} \"${_rose_ofp_java_home}\")\n"
       "endif()\n"
       "if(\"\$ENV{LD_LIBRARY_PATH}\" STREQUAL \"\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server\")\n"
-      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_java_home}/lib/server(:|$)\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server:\$ENV{LD_LIBRARY_PATH}\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_ofp_java_home}/lib/server\")\n"
+      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_ofp_java_home}/lib/server(:|$)\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_ofp_java_home}/lib/server:\$ENV{LD_LIBRARY_PATH}\")\n"
       "endif()\n")
     set_property(DIRECTORY PROPERTY TEST_INCLUDE_FILE "${_rose_ctest_env}")
   endif()
@@ -319,9 +314,6 @@ endif()
 
 # Fortran
 if(enable-fortran)
-  if(NOT enable-java)
-    message(FATAL_ERROR "Fortran analysis requires Java support; enable-java must remain ON when enable-fortran is set.")
-  endif()
   # Detect Fortran compiler using the same helper function
   detect_compiler(Fortran CMAKE_Fortran_COMPILER FC "Fortran" "flang-20" "flang-new;flang")
   set(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT 1)
@@ -479,9 +471,9 @@ if(enable-microsoft-extensions)
   set(ROSE_SUPPORT_MICROSOFT_EXTENSIONS TRUE)
 endif()
 
-if(enable-fortran)
+if(enable-fortran AND enable-fortran-ofp)
   set(enable-ofp-version "20200704" CACHE STRING "version number for OFP")
-  set($ENV{CLASSPATH} ${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar::${CMAKE_SOURCE_DIR}/rc/3rdPartyLibraries/fortran-parser/OpenFortranParser-${enable-ofp-version}.jar)
+  set(ENV{CLASSPATH} "${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar:${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/fortran-parser/OpenFortranParser-${enable-ofp-version}.jar")
 endif()
 
 # To use Bison, set BISON_ROOT to the Bison installation prefix. To avoid Bison, use BISON_ROOT=no
@@ -570,15 +562,6 @@ if(with-alternate_backend_fortran_compiler)
     set(BACKEND_FORTRAN_COMPILER ${with-alternate_backend_fortran_compiler})
   else()
     message(WARNING "${with-alternate_backend_fortran_compiler} does not exist; specify an absolute path to the compiler")
-  endif()
-endif()
-
-set(with-alternate_backend_java_compiler "" CACHE STRING "Specify an alternative java back-end compiler")
-if(with-alternate_backend_java_compiler)
-  if(EXISTS ${with-alternate_backend_java_compiler})
-    set(BACKEND_JAVA_COMPILER ${with-alternate_backend_java_compiler})
-  else()
-    message(WARNING "${with-alternate_backend_java_compiler} does not exist; specify an absolute path to the compiler")
   endif()
 endif()
 

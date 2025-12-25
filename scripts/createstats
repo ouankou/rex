@@ -52,12 +52,6 @@ for dir in rose_evaluation/$STATS_DATE/c/*;
 do
 printresult "C" $dir
 done
-for dir in rose_evaluation/$STATS_DATE/java/*;
-do
-printresult "JAVA" $dir
-done
-
-
 sort --field-separator=, --key=6 -n -r $RESULTS_CSV_FILE -o $RESULTS_SORTED_CSV_FILE
 
 echo "-------------------------------------------------------------------------------"

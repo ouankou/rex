@@ -24,7 +24,7 @@ class AstAttributeMechanism;
 #include <semaphore.h>
 class mutex
    {
-  // This class was added by Valentin David (summer of 2007) as part of support for Stratego using a Java interface.
+  // This class was added by Valentin David (summer of 2007) as part of support for Stratego.
 
      private:
           sem_t mut;

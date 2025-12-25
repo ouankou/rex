@@ -327,7 +327,7 @@ Grammar::setUpSupport ()
      TypeTable.setDataPrototype    ( "SgSymbolTable*","type_table","= NULL",
                                                      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
 
-  // DQ (3/29/2014): data member to force search of base classes (for Java).
+     // DQ (3/29/2014): data member to force search of base classes.
      SymbolTable.setDataPrototype("static bool","force_search_of_base_classes","= false",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
@@ -1760,12 +1760,6 @@ Grammar::setUpSupport ()
   Project.setDataPrototype("int", "frontendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-  Project.setDataPrototype("int", "javacErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-  Project.setDataPrototype("int", "ecjErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
   Project.setDataPrototype("int", "midendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -1775,13 +1769,11 @@ Grammar::setUpSupport ()
      Project.setDataPrototype("int","backendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     File.setDataPrototype("int","frontendErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype("int","javacErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     File.setDataPrototype("int","ecjErrorCode", "= 0",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  //Liao 4/26/2017, enable exception/signal handling of midend processing of each file
+     File.setDataPrototype("int", "frontendErrorCode", "= 0",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
+     // Liao 4/26/2017, enable exception/signal handling of midend processing of
+     // each file
      File.setDataPrototype("int","midendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      File.setDataPrototype("int","unparserErrorCode", "= 0",
@@ -1957,38 +1949,34 @@ Grammar::setUpSupport ()
      Project.setDataPrototype ( "bool", "Cxx14_only", "= false",
             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-     Project.setDataPrototype ( "bool", "Fortran_only", "= false",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     Project.setDataPrototype("bool", "Fortran_only", "= false",
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
 
-     Project.setDataPrototype ("std::list<std::string>", "Fortran_ofp_jvm_options", "",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     Project.setDataPrototype("std::list<std::string>",
+                              "Fortran_ofp_jvm_options", "",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
+     Project.setDataPrototype("std::list<std::string>", "Fortran_ofp_classpath",
+                              "", NO_CONSTRUCTOR_PARAMETER,
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-
-  // Liao 6/29/2012: support using rose translator to act like a linker wrapper if -rose:openmp:lowering is specified
-  // Add a flag to indicate if this is a linking involved in the lowered OpenMP input program.
-  // The openmp_lowering flag at SgFile level won't exist when there are no input source files at the linking stage
-  //
-  // Simply using OpenMP_Only is not sufficient for OpenMP since OpenMP input files can be handled in three different ways in ROSE:
-  // 1) parsing only 2) generating dedicated AST 3) actual OpenMP lowering
-  // Only the one with lowering will need special linking support to connect to libxomp.a and pthreads.
-     Project.setDataPrototype ( "bool", "openmp_linking", "= false",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     Project.setDataPrototype ("std::list<std::string>", "Java_ecj_jvm_options", "",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     Project.setDataPrototype ("bool", "Java_batch_mode", "= false",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     Project.setDataPrototype ("std::list<std::string>", "Java_classpath", "",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype ("std::list<std::string>", "Java_sourcepath", "",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("std::string", "Java_destdir", "= Rose::getWorkingDirectory()",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     Project.setDataPrototype("std::string", "Java_source_destdir", "= Rose::getWorkingDirectory()",
-            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (10/3/2010): Adding support for having CPP directives explicitly in the AST (as IR nodes instead of handled similar to comments).
+     // Liao 6/29/2012: support using rose translator to act like a linker
+     // wrapper if -rose:openmp:lowering is specified Add a flag to indicate if
+     // this is a linking involved in the lowered OpenMP input program. The
+     // openmp_lowering flag at SgFile level won't exist when there are no input
+     // source files at the linking stage
+     //
+     // Simply using OpenMP_Only is not sufficient for OpenMP since OpenMP input
+     // files can be handled in three different ways in ROSE: 1) parsing only 2)
+     // generating dedicated AST 3) actual OpenMP lowering Only the one with
+     // lowering will need special linking support to connect to libxomp.a and
+     // pthreads.
+     Project.setDataPrototype(
+         "bool", "openmp_linking", "= false", NO_CONSTRUCTOR_PARAMETER,
+         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     // DQ (10/3/2010): Adding support for having CPP directives explicitly in
+     // the AST (as IR nodes instead of handled similar to comments).
      Project.setDataPrototype ( "bool", "addCppDirectivesToAST", "= false",
             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -2019,8 +2007,8 @@ Grammar::setUpSupport ()
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
 
-  // DQ (6/12/2013): Added Java support for a global scope spanning files. Might be
-  // useful in the future for multiple file handling in other languages.
+     // DQ (6/12/2013): Added support for a global scope spanning files. Might
+     // be useful in the future for multiple file handling in other languages.
      Project.setDataPrototype("SgGlobal*", "globalScopeAcrossFiles", "= NULL",
             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
 

@@ -1464,7 +1464,7 @@ HEADER_DECLARATION_MODIFIER_START
                e_export        = 4,  /*!< Export qualifier */
                e_throw         = 5,  /*!< Exception handling support (throw) */
                e_bind          = 6,  /*!< Fortran bind attribute for declarations (functions, variable, and classes) */
-               e_final         = 7,  /*!< PHP, Java, and C++11 support for specification to not be extended */
+               e_final         = 7,  /*!< PHP and C++11 support for specification to not be extended */
                e_override      = 8,  /*!< C++11 support for specification to not be extended */
 
                e_ms_declspec_align        = 10, /*!< Microsoft declspec() attributes */
@@ -1555,7 +1555,7 @@ HEADER_DECLARATION_MODIFIER_START
           void setBind();
           void unsetBind();
 
-       // PHP, Java, and C++11 specific attribute
+       // PHP and C++11 specific attribute
           bool isFinal() const;
           void setFinal();
           void unsetFinal();
@@ -4837,13 +4837,10 @@ HEADER_SYMBOL_TABLE_START
           bool isCaseInsensitive() const;
           void setCaseInsensitive(bool b);
 
-       // DQ (3/30/2014): This is a mode introduced to match the C++ handling of symbols of base classes with that of Java.
-       // This might be temporary, but is at least a part of how we are sorting out the differences between C++ and Java
-       // for symbols data members in base classes.  In C++ these are represented as SgAliasSymbols in the derived classes
-       // (permitting access issues to be addressed).  In Java this is less sophisticated and one has to seach the base
-       // classes explicitly.  This mode permits the semantics of searching for symbols to be handled from the derived class
-       // directly.  It might be a better design to have the Java symbol handling be a bit more like that of C++, but this
-       // must be discussed in some detail before we go that far.
+       // DQ (3/30/2014): This mode is introduced to reconcile symbol handling for base classes.
+       // In C++, base-class symbols are represented as SgAliasSymbols in derived classes. Some
+       // frontends require explicit base-class searches. This mode permits searching from the
+       // derived class directly.
           static bool get_force_search_of_base_classes();
           static void set_force_search_of_base_classes( bool value );
 
@@ -6641,15 +6638,6 @@ HEADER_APPLICATION_PROJECT_START
           bool get_F2018_only   (void) const;
           bool get_CoArrayFortran_only (void) const;
 
-
-          std::list<std::string> get_Java_classpath (void) const;
-          void set_Java_classpath (std::list<std::string> param);
-          std::list<std::string> get_Java_sourcepath (void) const;
-          void set_Java_sourcepath (std::list<std::string> param);
-          std::string get_Java_destdir (void) const;
-          void set_Java_destdir (std::string param);
-          std::string get_Java_source_destdir (void) const;
-          void set_Java_source_destdir (std::string param);
 
           void display ( const std::string & label ) const;
 
@@ -10747,10 +10735,8 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
 #if 1
      if (this->get_force_search_of_base_classes() == true)
         {
-       // DQ (3/28/2014): If we reach this point, then in the case of Java, we have to search the
-       // base class definitions (since the representation of Java base class does not presently
-       // inject the base class symbols into the derived class symbol table.  There are pros and
-       // const to this design.  But this function will at least make the API semantics that same.
+       // DQ (3/28/2014): If we reach this point, we have to search base class definitions because
+       // symbols are not injected into the derived class symbol table.
           SgNode* parentNode = this->get_parent();
           ROSE_ASSERT(parentNode != NULL);
           SgClassDefinition* classDefinition = isSgClassDefinition(parentNode);
@@ -18087,8 +18073,6 @@ SgProject::initialization()
   // DQ (10/16/2005): This function initializes default values (until we use an automatically generated version)
 
   // Matzke (12/06/2016): Added missing initializations identified by valgrind and code inspection
-     p_javacErrorCode = 0;
-     p_ecjErrorCode = 0;
      p_midendErrorCode = 0;
      p_openmp_linking = false;
 
@@ -18237,7 +18221,7 @@ SgProject::operator[]( unsigned int i )
    }
 
 // DQ (6/13/2013): Access function for retriving a SgFile object from the list stored internally,
-// but using the filename with full path.  This is part of the new Java performance support and
+// but using the filename with full path. This is part of a design change that first builds all
 // a design change that first builds all of the SgFile IR nodes and then calls the frontend for
 // each of them.  This permits a more sophisticated level of command line multiple file support.
 SgFile* SgProject::operator[]( std::string filename )
@@ -18416,7 +18400,6 @@ SgProject::get_files_with_errors() const
   {
       SgFile* file = *it;
       bool has_errors =
-          file->get_javacErrorCode()            != 0 ||
           file->get_frontendErrorCode()         != 0 ||
           file->get_midendErrorCode()           != 0 ||
           file->get_unparserErrorCode()         != 0 ||
@@ -18441,7 +18424,6 @@ SgProject::get_files_without_errors() const
   {
       SgFile* file = *it;
       bool has_no_errors =
-          file->get_javacErrorCode()            == 0 &&
           file->get_frontendErrorCode()         == 0 &&
           file->get_midendErrorCode()         == 0 &&
           file->get_unparserErrorCode()         == 0 &&
@@ -19007,61 +18989,6 @@ SgProject::get_CoArrayFortran_only (void) const
         }
      return result;
    }
-
-void
-SgProject::set_Java_classpath (std::list<std::string> param)
-   {
-     p_Java_classpath = param;
-   }
-
-std::list<std::string>
-SgProject::get_Java_classpath (void) const
-   {
-     return p_Java_classpath;
-   }
-
-void
-SgProject::set_Java_sourcepath (std::list<std::string> param)
-   {
-     p_Java_sourcepath = param;
-   }
-
-std::list<std::string>
-SgProject::get_Java_sourcepath (void) const
-   {
-     return p_Java_sourcepath;
-   }
-
-void
-SgProject::set_Java_destdir (std::string param)
-   {
-     p_Java_destdir = param;
-   }
-
-std::string
-SgProject::get_Java_destdir (void) const
-   {
-    if (p_Java_destdir == "") {
-      return Rose::getWorkingDirectory();
-    }
-    return p_Java_destdir;
-   }
-
-void
-SgProject::set_Java_source_destdir (std::string param)
-   {
-     p_Java_source_destdir = param;
-   }
-
-std::string
-SgProject::get_Java_source_destdir (void) const
-   {
-    if (p_Java_source_destdir == "") {
-      return Rose::getWorkingDirectory();
-    }
-    return p_Java_source_destdir;
-  }
-
 
 void
 SgProject::skipfinalCompileStep(bool value)

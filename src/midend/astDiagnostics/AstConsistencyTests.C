@@ -932,10 +932,8 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
   // Test all traversed nodes to make sure that they have a valid file info object
   // Note that SgFile and SgProject nodes don't have file info objects (so skip them)
 
-  // DQ (11/20/2013): Added SgJavaImportStatementList and SgJavaClassDeclarationList to the exception list since they don't have a source position field.
-  // if ( !isSgFile(node) && !isSgProject(node) )
-  // if ( !isSgFile(node) && !isSgProject(node) && !isSgAsmNode(node))
-  // if ( !isSgFile(node) && !isSgProject(node) && !isSgFileList(node) && !isSgDirectory(node) ) //&& !isSgJavaImportStatementList(node) && !isSgJavaClassDeclarationList(node) )
+     // if ( !isSgFile(node) && !isSgProject(node) )
+     // if ( !isSgFile(node) && !isSgProject(node) && !isSgAsmNode(node))
      bool isFileNode = isSgFile(node) || isSgProject(node) || isSgFileList(node) || isSgDirectory(node);
      if (!isFileNode)
         {
@@ -1910,39 +1908,7 @@ TestAstForProperlyMangledNames::visit ( SgNode* node )
                printf ("In TestAstForProperlyMangledNames::visit(SgNode*): \n           unmangled name = %s \n check mangled class name = %s \n",
                     name.c_str(),mangledName.c_str());
              }
-          ROSE_ASSERT(mangledName.find('>') == string::npos);
-/*
-       // DQ (4/3/2011): This is a fix to permit Java names that can include '$' to be handled properly.
-       // When the simpler test fails we compute what the current langauge is (relatively expensive so
-       // we don't want to do so for each IR node) and the rerun the test with java specified explicitly.
-          bool anErrorHasOccured = false;
-          if (isValidMangledName(mangledName) != true)
-             {
-             // Check first if this is for a Java file and if so then '$' is allowed.
-                file = SageInterface::getEnclosingFileNode(classDeclaration);
-                ROSE_ASSERT(file != NULL);
-
-                if (file->get_Java_only() == false)
-                   {
-                     anErrorHasOccured = true;
-                   }
-                  else
-                   {
-                  // printf ("Rerun the test for isValidMangledName() with java langauge specified \n");
-                     bool javaInUse = true;
-                     anErrorHasOccured = !isValidMangledName(mangledName,javaInUse);
-                   }
-
-               if (anErrorHasOccured == true)
-                  {
-                    printf ("Error: failed isValidMangledName() test classDeclaration = %p = %s = %s --- mangledName = %s \n",
-                         classDeclaration,classDeclaration->get_name().str(),classDeclaration->class_name().c_str(),mangledName.c_str());
-                    classDeclaration->get_file_info()->display("Error: failed isValidMangledName() test");
-                  }
-             }
-       // ROSE_ASSERT(isValidMangledName(mangledName) == true);
-          ROSE_ASSERT(anErrorHasOccured == false);
-*/
+             ROSE_ASSERT(mangledName.find('>') == string::npos);
         }
 
   // DQ (4/27/2005): Check out the mangled name for functions
@@ -1971,34 +1937,6 @@ TestAstForProperlyMangledNames::visit ( SgNode* node )
      ROSE_ASSERT(mangledName.find('@') == string::npos);
 
      ROSE_ASSERT(mangledName.find('#') == string::npos);
-
-/*
-  // DQ (4/3/2011): Java allows for '$' so we have to exclude this test when Java is used.
-  // note that if it was isValidMangledName() failed (could be many reasons) then file has
-  // been computed and is available.
-  // ROSE_ASSERT(mangledName.find('$') == string::npos);
-     if (file == NULL || (file != NULL && file->get_Java_only() == false) )
-        {
-           ROSE_ASSERT(mangledName.find('$') == string::npos);
-        }
-       else
-        {
-       // If this is a Java file and there is a '$' is fould then assert using a weaker test.
-          if (mangledName.find('$') != string::npos)
-             {
-            // A '$' was found, check using a more expensive test.
-               ROSE_ASSERT(file->get_Java_only() == true);
-
-               bool javaInUse = true;
-               ROSE_ASSERT(isValidMangledName(mangledName,javaInUse) == true);
-             }
-        }
-
-     ROSE_ASSERT(mangledName.find('%') == string::npos);
-     ROSE_ASSERT(mangledName.find('^') == string::npos);
-     ROSE_ASSERT(mangledName.find('&') == string::npos);
-     ROSE_ASSERT(mangledName.find('*') == string::npos);
-*/
 
   // DQ (8/13/2005): this is an error in KULL (use of siloswigtypecheck.cc)
   // Commented out this tests so that I can defer it to later!
@@ -2077,26 +2015,20 @@ TestAstForProperlyMangledNames::TestAstForProperlyMangledNames()
 bool
 TestAstForProperlyMangledNames::isValidMangledName (string name)
    {
-  // DQ (4/3/2011): This function has been modified to permit Java specific weakened restrictions
-  // on names. The default for java_lang is false.  If a test fails the current language is
-  // determined and java_lang set to true if the current langage is Java for the associated SgFile.
+  // DQ (4/3/2011): This function enforces ROSE's mangled-name identifier rules.
 
-     bool result = true;
+  bool result = true;
 
-     if (name.empty () || isdigit (name[0]))
-        {
-          result = false;
-        }
+  if (name.empty() || isdigit(name[0])) {
+    result = false;
+  }
 
         {
-          for (string::size_type i = 0; i < name.size (); ++i)
-             {
-            // printf ("java_lang == false: isalnum (name = %s name[i] = %c) = %s \n",name.c_str(),name[i],isalnum (name[i]) ? "true" : "false");
-               if (!isalnum (name[i]) && name[i] != '_')
-                  {
-                    result = false;
-                  }
-             }
+          for (string::size_type i = 0; i < name.size(); ++i) {
+            if (!isalnum(name[i]) && name[i] != '_') {
+              result = false;
+            }
+          }
         }
 
 #if 0

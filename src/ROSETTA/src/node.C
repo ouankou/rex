@@ -202,7 +202,6 @@ Grammar::setUpNodes ()
   //                              END of Untyped IR Node Support
   // ***************************************************************************************
 
-  // DQ(1/13/2014): Added Java support for JavaMemberValuePair
   // DQ (11/26/2013): Added UntypedNode to be derived from LocatedNodeSupport.
   // DQ (10/6/2008): Migrate some of the SgSupport derived IR nodes, that truly have a position in the
   // source code, to SgLocatedNode.  Start with some of the newer IR nodes which are traversed and thus
@@ -784,7 +783,7 @@ Grammar::setUpNodes ()
      InitializedName.setDataPrototype("bool","global_qualification_required_for_type","= false",
                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #if 0
-  // DQ (11/18/2013): Added final to support Java (which can use it to represent const function parameters in function declarations).
+  // DQ (11/18/2013): Added final to represent const function parameters in function declarations.
   // This support is represented as a declaration modifier (but that is not sufficient for use in function parameters).
   // As supported in declaration modifiers, this use is semantically different than its use in function parameters.
      InitializedName.setDataPrototype("bool","isFinal","= false",

@@ -4140,32 +4140,35 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
                  // printf ("In SageInterface::rebuildSymbolTable(): functionDefinition = %p functionDeclaration = %p \n",functionDefinition,functionDeclaration);
 
                  // DQ (10/8/2007): It turns out that this is always NULL, because the parent of the functionDeclaration has not yet been set in the copy mechanism!
-                    if (functionDeclaration != NULL)
-                       {
-                      // DQ (3/28/2014): After a call with Philippe, this Java specific issues is fixed and we don't seem to see this problem any more.
-                         if (functionDeclaration->isForward() == true)
-                            {
-                              printf ("ERROR: functionDeclaration = %p = %s = %s \n",functionDeclaration,functionDeclaration->class_name().c_str(),functionDeclaration->get_name().str());
-                              printf ("   --- functionDeclaration (get_name())   = %s \n",get_name(functionDeclaration).c_str());
-                              printf ("   --- functionDeclaration (mangled name) = %s \n",functionDeclaration->get_mangled_name().str());
-                              SgMemberFunctionDeclaration* memberFunctionDeclaration = isSgMemberFunctionDeclaration(functionDeclaration);
-                              if (memberFunctionDeclaration != NULL)
-                                 {
-                                   printf ("memberFunctionDeclaration != NULL \n");
-                                 }
-                            }
-                         ROSE_ASSERT(functionDeclaration->isForward() == false);
-                         SgInitializedNamePtrList & argumentList = functionDeclaration->get_args();
-                         supportForVariableLists(scope,symbolTable,argumentList);
-                       }
-                      else
-                       {
+                    if (functionDeclaration != NULL) {
+                      if (functionDeclaration->isForward() == true) {
+                        printf("ERROR: functionDeclaration = %p = %s = %s \n",
+                               functionDeclaration,
+                               functionDeclaration->class_name().c_str(),
+                               functionDeclaration->get_name().str());
+                        printf(
+                            "   --- functionDeclaration (get_name())   = %s \n",
+                            get_name(functionDeclaration).c_str());
+                        printf(
+                            "   --- functionDeclaration (mangled name) = %s \n",
+                            functionDeclaration->get_mangled_name().str());
+                        SgMemberFunctionDeclaration *memberFunctionDeclaration =
+                            isSgMemberFunctionDeclaration(functionDeclaration);
+                        if (memberFunctionDeclaration != NULL) {
+                          printf("memberFunctionDeclaration != NULL \n");
+                        }
+                      }
+                      ROSE_ASSERT(functionDeclaration->isForward() == false);
+                      SgInitializedNamePtrList &argumentList =
+                          functionDeclaration->get_args();
+                      supportForVariableLists(scope, symbolTable, argumentList);
+                    } else {
                       // This happens in the copy function because the function definition is copied from the SgFunctionDeclaration
                       // and only after the copy is made is the parent of the definition set to be the function declaration.  Thus
                       // the get_declaration() member function returns NULL.
                       // printf ("There is no function declaration associated with this function definition! \n");
                       // ROSE_ASSERT(functionDeclaration->isForward() == true);
-                       }
+                    }
                   }
 
             // DQ (10/25/2007): Label symbols are now places into the SgFunctionDefinition (they have to be collected from the function).
@@ -6286,7 +6289,7 @@ SageInterface::addTextForUnparser ( SgNode* astNode, string s, AstUnparseAttribu
 
 #if 0
 // DQ (7/20/2011): Resolving conflict, this was added in previous work in dq-cxx-rc branch.
-// DQ (7/17/2011): Added function from cxx branch that I need here for the Java support.
+// DQ (7/17/2011): Added function from cxx branch that I need here.
 SgClassSymbol *
 SageInterface::lookupClassSymbolInParentScopes (const SgName &  name, SgScopeStatement *cscope)
    {
@@ -9367,15 +9370,10 @@ SageInterface::isAddressTaken(SgExpression* refExp)
 
 SgFile * SageInterface::getEnclosingFileNode(SgNode* astNode)
    {
-  // DQ (3/4/2014): This new version of this function supports both C/C++ and also Java.
-  // If the SgJavaPackageDeclaration is noticed then the previous parent is a
-  // SgClassDefinition and the previous previous parent is a SgClassDeclaration whose
-  // name can be used to match the filename in the SgProject's list of files.
-  // A better implementation usign an attribute (not in place until tomorrow) and
-  // from the attribute the pointer to the associated file is directly available.
-  // The later implementation is as fast as possible.
+  // DQ (3/4/2014): This new version of this function supports both C/C++ and
+  // other frontends.
 
-     ROSE_ASSERT (astNode != NULL);
+  ROSE_ASSERT(astNode != NULL);
 
   // Make sure this is not a project node (since the SgFile exists below
   // the project and could not be found by a traversal of the parent list)
@@ -9397,9 +9395,7 @@ SgFile * SageInterface::getEnclosingFileNode(SgNode* astNode)
           parent = parent->get_parent();
         }
 
-     if (previous_previous_parent != NULL && previous_parent != NULL )
-        {
-       // This is for a Java program and is contained within a SgJavaPackageDeclaration
+        if (previous_previous_parent != NULL && previous_parent != NULL) {
 #if 0
           printf ("parent                   = %p = %s \n",parent,parent->class_name().c_str());
           printf ("previous_parent          = %p = %s \n",previous_parent,previous_parent->class_name().c_str());
@@ -9411,7 +9407,6 @@ SgFile * SageInterface::getEnclosingFileNode(SgNode* astNode)
 #if 0
                printf ("Class name = %p = %s = %s \n",classDeclaration,classDeclaration->class_name().c_str(),classDeclaration->get_name().str());
 #endif
-            // Find the associated Java class file.
 #if 0
             // DQ (3/4/2014): This is the code we want to use until we get Philippe's branch in place with the attribute.
                SgProject* project = SageInterface::getProject(parent);
@@ -9454,8 +9449,6 @@ SgFile * SageInterface::getEnclosingFileNode(SgNode* astNode)
             // DQ (3/4/2014): This is the code we want to use when the attribute is in place (philippe's branch).
                AstSgNodeAttribute *attribute = (AstSgNodeAttribute *) classDeclaration->getAttribute("sourcefile");
 
-               // "This simpler and more efficent code requires the latest work in Java support (3/6/2014)"
-
                if (attribute)
                   {
                  // true for all user-specified classes and false for all classes fom libraries
@@ -9465,9 +9458,7 @@ SgFile * SageInterface::getEnclosingFileNode(SgNode* astNode)
                   }
 #endif
              }
-        }
-       else
-        {
+        } else {
         }
 
   // This is where we handle the C/C++ files.
@@ -9574,8 +9565,6 @@ SgStatement* SageInterface::getEnclosingStatement(SgNode* n) {
   while (n && !isSgStatement(n)) n = n->get_parent();
   return isSgStatement(n);
 }
-
-
 
 #if 1
 // DQ (11/19/2020): We need to expand the use of this to cover deffered transformations of common SageInterface transformations (e.g. replaceStatement).
@@ -10376,7 +10365,6 @@ SageInterface::findSurroundingStatementFromSameFile(SgStatement* targetStmt, boo
 
      return surroundingStatement;
    }
-
 
 #ifndef USE_ROSE
 //! Deep delete a sub AST tree. It uses postorder traversal to delete each child node.
@@ -11293,7 +11281,6 @@ void SageInterface::myRemoveStatement(SgStatement* stmt) {
     parent->replace_statement(stmt, new SgNullStatement(TRANS_FILE));
   }
 }
-
 
 #ifndef USE_ROSE
 std::set<SgLabelStatement*> SageInterface::findUnusedLabels (SgNode* top)

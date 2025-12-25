@@ -1100,10 +1100,14 @@ SgFunctionDeclaration::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
             // Reset this!
                functionDeclaration_copy->unsetForward();
 
-            // DQ (3/15/2014): This is a Java specific issue. I don't want to be changing the original
-            // version of the statement we are copying. This needs to be fixed properly in the Java AST.
-               printf ("TODO (Java): isForward() status is being reset for the original SgFunctionDeclaration as part of SgFunctionDeclaration::fixupCopy_scopes(): this = %p = %s = %s \n",this,this->class_name().c_str(),this->get_name().str());
-            // this->unsetForward();
+               // DQ (3/15/2014): I don't want to change the original version of
+               // the statement we are copying.
+               printf("TODO: isForward() status is being reset for the "
+                      "original SgFunctionDeclaration as part of "
+                      "SgFunctionDeclaration::fixupCopy_scopes(): this = %p = "
+                      "%s = %s \n",
+                      this, this->class_name().c_str(), this->get_name().str());
+               // this->unsetForward();
                this->get_definition()->get_declaration()->unsetForward();
              }
           ROSE_ASSERT(isForward() == false);

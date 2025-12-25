@@ -257,9 +257,6 @@
 /* Minor version number of backend Fortran compiler. */
 #define BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER}
 
-/* Name of backend Java compiler including path */
-#define BACKEND_JAVA_COMPILER_NAME_WITH_PATH "${BACKEND_JAVA_COMPILER}"
-
 /* Name of backend Python interpreter including path */
 #define BACKEND_PYTHON_INTERPRETER_NAME_WITH_PATH "${BACKEND_PYTHON_INTERPRETER_NAME_WITH_PATH}"
 
@@ -414,8 +411,8 @@
 /* Prefix path for use of IDA. */
 #define IDA_PRO_PATH "${with_ida}"
 
-/* Path to JVM executable */
-#define JAVA_JVM_PATH "${JAVA_RUNTIME}"
+/* Path to JVM executable used by the Fortran OFP frontend */
+#define OFP_JVM_PATH "${OFP_JAVA_RUNTIME}"
 
 /* Define if the OS needs help to load dependent libraries for dlopen(). */
 //AS Don't know what to do with this
@@ -561,12 +558,6 @@
 //AS Don't know what to do with this
 #undef USE_ROSE_INTEL_PIN_SUPPORT
 
-/* Controls use of ROSE support for Java. */
-#cmakedefine JAVA_RUNTIME
-#ifdef JAVA_RUNTIME
-  #define USE_ROSE_JAVA_SUPPORT
-#endif
-
 /* Controls use of ROSE support for Maple Symbolic Algebra Package. */
 //AS Don't know what to do with this
 #undef USE_ROSE_MAPLE_SUPPORT
@@ -575,9 +566,8 @@
 //AS Don't know what to do with this
 #undef USE_ROSE_OMNI_OPENMP_SUPPORT
 
-/* Always enable Fortran support whenever Java and gfortran are present */
-//AS don't know what to do with this
-#undef USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
+/* Controls use of ROSE Open Fortran Parser (OFP) support. */
+#cmakedefine USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
 
 /* Version number of package */
 //AS Don't know what to do with this
@@ -651,10 +641,6 @@
 
 /* Build ROSE to support the Fortran langauge */
 #cmakedefine ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-
-/* Build ROSE to support the Java langauge */
-#cmakedefine ROSE_BUILD_JAVA_LANGUAGE_SUPPORT
-#cmakedefine USE_ROSE_INTERNAL_JAVA_SUPPORT
 
 /* Build ROSE to support the OpenCL langauge */
 #cmakedefine ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT

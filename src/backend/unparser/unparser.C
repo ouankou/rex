@@ -646,8 +646,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
           (file->get_outputLanguage() == SgFile::e_Cxx_language) )
        {
          isCxxFile = true;
-       }
-     // What about all the others?  X10, Java, ...?
+     }
      // Can only be parsing to one language!
      ROSE_ASSERT(((int)isFortranFile + (int)isCfile + (int)isCxxFile) <= 1);
 
@@ -1988,9 +1987,6 @@ resetSourcePositionToGeneratedCode( SgFile* file, UnparseFormatHelp *unparseHelp
      file->set_unparse_output_filename(outputFilename);
      ROSE_ASSERT (file->get_unparse_output_filename().empty() == false);
 
-     printf ("Exiting output file name of generated Java code is same as input file name but must be but into a separate directory. \n");
-     ROSE_ABORT();
-
   // Name the file with a separate extension.
      outputFilename += ".resetSourcePosition";
 
@@ -2938,177 +2934,6 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
   // DQ (4/22/2006): This can be true when the "-E" option is used, but then we should not have called unparse()!
      ROSE_ASSERT(file->get_skip_unparse() == false);
 
-#if 0
-     // OLD CODE: before adding more general support for more languages.
-
-#error "DEAD CODE!"
-
-  // If we did unparse an intermediate file then we want to compile that file instead of the original source file.
-     if (file->get_unparse_output_filename().empty() == true)
-        {
-          string outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
-#if 0
-          printf ("In unparseFile(SgFile* file): outputFilename not set using default: outputFilename = %s \n",outputFilename.c_str());
-#endif
-       // DQ (9/15/2013): Added support for generated file to be placed into the same directory as the source file.
-          SgProject* project = SageInterface::getProject(file);
-       // ASSERT_not_null(project);
-          if (project != NULL)
-             {
-#if 0
-               printf ("project->get_unparse_in_same_directory_as_input_file() = %s \n",project->get_unparse_in_same_directory_as_input_file() ? "true" : "false");
-#endif
-               if (project->get_unparse_in_same_directory_as_input_file() == true)
-                  {
-                    outputFilename = Rose::getPathFromFileName(file->get_sourceFileNameWithPath()) + "/rose_" + file->get_sourceFileNameWithoutPath();
-#if 0
-                    printf ("Using filename for unparsed file into same directory as input file: outputFilename = %s \n",outputFilename.c_str());
-#endif
-#if 0
-                    printf("Exiting as test! \n");
-                    ROSE_ABORT();
-#endif
-                  }
-             }
-            else
-             {
-               printf ("WARNING: In unparseFile(): file = %p has no associated project \n",file);
-             }
-
-
-#error "DEAD CODE!"
-
-        if (file->get_binary_only() == true)
-        {
-            // outputFilename = file->get_sourceFileNameWithoutPath();
-               outputFilename += ".s";
-        }
-        // DQ (4/2/2011): Added Java support which requires that the filename for Java match the input file.
-// TODO: Remove this !!!
-/*
-        else if (file->get_Java_only() == true)
-        {
-                // We try to get the package information back to output the translated source file
-                   // in the correct folder structure.
-                   ROSE_ASSERT(isSgSourceFile(file) && "Try to unparse an SgFile not being an SgSourceFile using the java unparser");
-                   SgGlobal * gs = ((SgSourceFile *) file)->get_globalScope();
-                   SgClassDeclaration * packageDecl = NULL;
-                   string packageName = "";
-                   const SgDeclarationStatementPtrList& globalDecls = gs->get_declarations();
-                   for(SgDeclarationStatementPtrList::const_iterator it = globalDecls.begin();
-                                   ((it != globalDecls.end()) && (packageDecl == NULL)); it ++) {
-                           packageDecl = isSgClassDeclaration(*it);
-                           SgClassDefinition * packageDef = packageDecl->get_definition();
-                           ASSERT_not_null(packageDef);
-                           AstRegExAttribute * attribute = (AstRegExAttribute *) packageDef->getAttribute("translated_package");
-                           if (attribute == NULL) {
-                                   packageDecl = NULL;
-                           } else {
-                                   packageName = attribute->expression;
-                           }
-                   }
-                   //NOTE: Default package equals the empty string ""
-                   //ROSE_ASSERT((packageDecl != NULL) && "Couldn't find the package definition of the java source file");
-                   string outFolder = "";
-                   SgProject *project = file->get_project();
-                   string ds = project->get_Java_source_destdir();
-                   if (ds != "") {
-                           outFolder = ds;
-                           outFolder += "/";
-                   }
-                   outFolder += "rose-output/";
-                   boost::replace_all(packageName, ".", "/");
-                   outFolder += packageName;
-                   outFolder += "/";
-                   // Create package folder structure
-                   string mkdirCommand = string("mkdir -p ") + outFolder;
-                   int status = system (mkdirCommand.c_str());
-                   ROSE_ASSERT(status == 0);
-                   outputFilename = outFolder + file->get_sourceFileNameWithoutPath();
-        }
-*/
-
-#error "DEAD CODE!"
-
-        else if (file -> get_Java_only() == true) {
-            // We try to get the package information back to output the translated source file
-            // in the correct folder structure.
-            SgSourceFile *sourcefile = isSgSourceFile(file);
-            ROSE_ASSERT(sourcefile && "Try to unparse an SgFile not being an SgSourceFile using the java unparser");
-
-            SgProject *project = sourcefile -> get_project();
-            ASSERT_not_null(project);
-
-            SgJavaPackageStatement *package_statement = sourcefile -> get_package();
-            string package_name = (package_statement ? package_statement -> get_name().getString() : "");
-            //NOTE: Default package equals the empty string ""
-            //ROSE_ASSERT((packageDecl != NULL) && "Couldn't find the package definition of the java source file");
-            string outFolder = "";
-            string ds = project -> get_Java_source_destdir();
-            if (ds != "") {
-                outFolder = ds;
-                outFolder += "/";
-            }
-            outFolder += "rose-output/";
-            boost::replace_all(package_name, ".", "/");
-            outFolder += package_name;
-            outFolder += (package_name.size() > 0 ? "/" : "");
-            // Create package folder structure
-            std::filesystem::create_directories(outFolder);
-            ROSE_ASSERT(std::filesystem::exists(outFolder));
-            outputFilename = outFolder + file -> get_sourceFileNameWithoutPath();
-            // Normalize path separators to POSIX-style.
-            boost::replace_all(outputFilename, "\\", "/");
-#if 0
-            printf ("In unparseFile(): generated Java outputFilename = %s \n",outputFilename.c_str());
-#endif
-        }
-
-#error "DEAD CODE!"
-
-        // Liao 12/29/2010, generate cuda source files
-        else if (file->get_Cuda_only() == true)
-        {
-            outputFilename = StringUtility::stripFileSuffixFromFileName (outputFilename);
-            outputFilename += ".cu";
-        }
-        else
-        {
-            //ROSE_ASSERT (! "Not implemented, or unknown file type");
-        }
-
-
-#error "DEAD CODE!"
-
-       // DQ (9/15/2013): Added assertion.
-          ROSE_ASSERT (file->get_unparse_output_filename().empty() == true);
-
-        // TOO1 (3/20/2014): Clobber the original input source file X_X
-        //
-        //            **CAUTION**RED*ALERT**CAUTION**
-        //
-        SgSourceFile* source_file = isSgSourceFile(file);
-        if (source_file != NULL)
-        {
-            if (project->get_unparser__clobber_input_file())
-            {
-                outputFilename = source_file->get_sourceFileNameWithPath();
-                std::cout
-                    << "[WARN] [Unparser] Clobbering the original input file: "
-                    << outputFilename
-                    << std::endl;
-            }
-        }
-
-#error "DEAD CODE!"
-
-        file->set_unparse_output_filename(outputFilename);
-        ROSE_ASSERT (file->get_unparse_output_filename().empty() == false);
-     }
-
-#error "DEAD CODE!"
-
-#else
   // DQ (9/7/2017): This is new code to introduce more general language handling to ROSE.
 
   // Output prefix (typically "rose_").
@@ -3278,9 +3103,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
 
           ROSE_ASSERT (file->get_unparse_output_filename().empty() == false);
        // assert(file->get_unparse_output_filename().empty() == false);
-        }
-#endif
-
+     }
   // DQ (2/23/2021): Added assertion.
      ROSE_ASSERT (file->get_unparse_output_filename().empty() == false);
 

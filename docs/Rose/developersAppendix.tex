@@ -1389,8 +1389,7 @@ Directions for using a bash script (rose/scripts/roseFreshTest) to set up period
            ./roseFreshTest ./roseFreshTestStub-<your stub name>.sh \
            <extra configure options>
          Where <extra configure options> are things like
-         --enable-edg\_union\_struct\_debugging, --with-C\_DEBUG=...,
-         --with-java, etc.
+         --enable-edg\_union\_struct\_debugging, --with-C\_DEBUG=..., etc.
 \end{verbatim}
       \end{enumerate}
    \end{enumerate}
@@ -1762,9 +1761,10 @@ Overview of the options:
                          configure}.  You will very likely need, at a minimum,
                          to refer to the correct boost directory.
 
- \item {\tt JAVA\_HOME} - If {\tt java} is included in the prereqs, {\tt
-						 JAVA\_HOME} should be specified.  This will be passed
-						 to the environment of the running test.
+ \item {\tt JAVA\_HOME} - If the JVM runtime (used by the Fortran OFP frontend)
+                         is included in the prereqs, {\tt JAVA\_HOME} should be
+                         specified. This will be passed to the environment of
+                         the running test.
 
  \item {\tt ACLOCAL\_INCLUDES} - Some prereqs may have {\tt m4} macros in
  nonstandard locations.  This can be passed to the build script (and
@@ -1777,9 +1777,9 @@ Overview of the options:
 Example options file:
 \begin{verbatim}
 TITLE="testing default on all linux platforms"
-DESCRIPTION="minimal configuration options, gcc 4.2.4, without java"
+DESCRIPTION="minimal configuration options, gcc 4.2.4"
 PREREQS="gcc-4.2.4, boost-1.35.0"
-CONFIGURE_OPTIONS="--with-boost=/prereq/boost-1.35.0 --with-CXX_WARNINGS=-Wall --without-java"
+CONFIGURE_OPTIONS="--with-boost=/prereq/boost-1.35.0 --with-CXX_WARNINGS=-Wall"
 \end{verbatim}
 
 
@@ -4658,7 +4658,6 @@ directory):
    \item Assembly To Source AST
    \item Auto Tuning
    \item Haskell port
-   \item Java port
    \item MPI Code Motion
    \item Reverse Computation
    \item Qt Designer Plugins

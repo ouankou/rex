@@ -65,17 +65,6 @@ public:
      * Convert a unicode character into its Utf8 representation.
      */
     static string getUtf8String(int value);
-
-    /**
-     * Convert the Unicode "value" into a printable Unicode character.
-     *
-     */
-    static string getPrintableJavaUnicodeCharacter(int value);
-
-    /**
-     * Construct a printable unicode string for Java from a given Utf8 string of characters.
-     */
-    static string getPrintableJavaUnicodeString(const char *str);
 };
 
 #endif

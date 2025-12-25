@@ -6,14 +6,9 @@
 // (in the associated input code) is in the base class "new_allocate"
 // and thus appears in the symbol table of the class "allocate"
 
-// This is related to a problem pointed out for Java, but was fixed
-// when the implementation of the import statement in Java was
-// fixed to not redundantly incert the associated package's symbols
-// into the scope.  This combined with the new organization of the 
-// Java AST to include a SgGlobal (global scope) in the SgProject
-// was redundnat and the root cause of the problem.  Still we incert
-// SgAliasSymbols into the derived class definition for each symbol
-// in the base class's class definition.
+// This was traced to redundant symbol insertion when handling imports.
+// We still insert SgAliasSymbols into the derived class definition for each
+// symbol in the base class's class definition.
 
 #include "rose.h"
 
@@ -80,6 +75,4 @@ int main(int argc, char *argv[])
      AstTests::runAllTests(project);
 
      return backend(project);
-   }
-
-
+}

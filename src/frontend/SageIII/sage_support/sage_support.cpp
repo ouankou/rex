@@ -1075,33 +1075,38 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
 #if 0
                                    printf ("In determineFileType(): Processing as a CUDA file \n");
 #endif
-                                 }
-                                else if ( CommandlineProcessing::isOpenCLFileNameSuffix(filenameExtension) == true )
-                                 {
-                                   SgSourceFile* sourceFile = new SgSourceFile ( argv,  project );
-                                   file = sourceFile;
-                                   file->set_OpenCL_only(true);
+                           } else if (CommandlineProcessing::
+                                          isOpenCLFileNameSuffix(
+                                              filenameExtension) == true) {
+                             SgSourceFile *sourceFile =
+                                 new SgSourceFile(argv, project);
+                             file = sourceFile;
+                             file->set_OpenCL_only(true);
 
-                                // DQ (11/25/2020): Add support to set this as a specific language kind file (there is at least one language kind file processed by ROSE).
-                                   Rose::is_OpenCL_language = true;
+                             // DQ (11/25/2020): Add support to set this as a
+                             // specific language kind file (there is at least
+                             // one language kind file processed by ROSE).
+                             Rose::is_OpenCL_language = true;
 
-                                // DQ (12/23/2008): This is the eariliest point where the global scope can be set.
-                                // Note that file->get_requires_C_preprocessor() should be false.
-                                   ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
-                                   sourceFile->initializeGlobalScope();
-                                 }
-                              else
-                               {
-                                   file = new SgUnknownFile ( argv,  project );
+                             // DQ (12/23/2008): This is the eariliest point
+                             // where the global scope can be set. Note that
+                             // file->get_requires_C_preprocessor() should be
+                             // false.
+                             ROSE_ASSERT(file->get_requires_C_preprocessor() ==
+                                         false);
+                             sourceFile->initializeGlobalScope();
+                           } else {
+                             file = new SgUnknownFile(argv, project);
 
-                                // This should have already been setup!
-                                // file->initializeSourcePosition();
+                             // This should have already been setup!
+                             // file->initializeSourcePosition();
 
-                                   ASSERT_not_null(file->get_parent());
-                                   ROSE_ASSERT(file->get_parent() == project);
+                             ASSERT_not_null(file->get_parent());
+                             ROSE_ASSERT(file->get_parent() == project);
 
-                                // If all else fails, then output the type of file and exit.
-                                   file->set_sourceFileTypeIsUnknown(true);
+                             // If all else fails, then output the type of file
+                             // and exit.
+                             file->set_sourceFileTypeIsUnknown(true);
 
 #if 0
                                    printf ("@@@@@@@@@@@@@@ Set requires_C_preprocessor to false (test 3) \n");
@@ -1115,7 +1120,7 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
                                 // outputTypeOfFileAndExit(sourceFilename);
                                    printf ("Warning: This is an unknown file type, not being processed by ROSE: sourceFilename = %s \n",sourceFilename.c_str());
                                    outputTypeOfFileAndExit(sourceFilename);
-                                 }
+                           }
                          }
                        }
                   }
@@ -1143,9 +1148,8 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
         }
 
 #if 0
-  // DQ (6/12/2013): I think this is required to support having all of the SgSourceFile
-  // IR nodes pre-built as part of the new Java support required to be better performance
-  // in the Java frontend AST translation.
+  // DQ (6/12/2013): This is required to support having all of the SgSourceFile
+  // IR nodes pre-built for improved frontend performance.
      printf ("***************************************************************************************************************************************************************************** \n");
      printf ("***************************************************************************************************************************************************************************** \n");
      printf ("Disabling the call to the frontend so that we can setup the SgSourceFile IR nodes once at the start and then call the frontend on each of them as we process all of the files \n");
@@ -1233,10 +1237,8 @@ SgFile::runFrontend(int & nextErrorCode)
     ROSE_ASSERT(nextErrorCode <= 3);
 }
 
-
-// DQ (10/20/2010): Note that Java support can be enabled just because Java internal support was found on the
-// current platform.  But we only want to inialize the JVM server if we require Fortran or Java language support.
-// So use the explicit macros defined in rose_config header file for this level of control.
+// DQ (10/20/2010): Only initialize the JVM server when Fortran OFP support is
+// enabled.
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 namespace Rose {
 namespace Frontend {
@@ -1315,8 +1317,8 @@ SgProject::parse(const vector<string>& argv)
 
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 
-                    //Rose::Frontend::Fortran::Ofp::jserver_init(); //jserver_init is not defined since it does not need, thus of this call.
-                    //Rose::Frontend::Java::Ecj::jserver_init();
+                 // Rose::Frontend::Fortran::Ofp::jserver_init(); //jserver_init
+                 // is not defined since it does not need, thus of this call.
 #endif
                     errorCode = parse();
                   }
@@ -1396,8 +1398,9 @@ SgSourceFile::SgSourceFile ( vector<string> & argv , SgProject* project )
   // DQ (6/15/2011): Added scope to hold unhandled declarations (see test2011_80.C).
      set_temp_holding_scope(nullptr);
 
-  // This constructor actually makes the call to EDG/OFP/ECJ to build the AST (via callFrontEnd()).
-  // printf ("In SgSourceFile::SgSourceFile(): Calling doSetupForConstructor() \n");
+     // This constructor makes the frontend call to build the AST (via
+     // callFrontEnd()). printf ("In SgSourceFile::SgSourceFile(): Calling
+     // doSetupForConstructor() \n");
      doSetupForConstructor(argv,  project);
     }
 
@@ -1570,10 +1573,11 @@ SgProject::parse()
      Rose_STL_Container<string>::iterator nameIterator = p_sourceFileNameList.begin();
      unsigned int i = 0;
 
-  // The goal in this version of the code is to seperate the construction of the SgFile objects
-  // from the invocation of the frontend on each of the SgFile objects.  In general this allows
-  // the compilation to reference the other SgFile objects on an as needed basis as part of running
-  // the frontend.  This is important for the optimization of Java.
+     // The goal in this version of the code is to seperate the construction of
+     // the SgFile objects from the invocation of the frontend on each of the
+     // SgFile objects.  In general this allows the compilation to reference the
+     // other SgFile objects on an as needed basis as part of running the
+     // frontend.
      std::vector<SgFile*> vectorOfFiles;
      while (nameIterator != p_sourceFileNameList.end())
         {
@@ -2143,16 +2147,13 @@ SgFile::generate_C_preprocessor_intermediate_filename( string sourceFilename )
 
 
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-// This is the "C" function implemented in:
-//    ROSE/src/frontend/OpenFortranParser_SAGE_Connection/openFortranParser_main.c
-// This function calls the Java JVM to load the Java implemented parser (written
-// using ANTLR, a parser generator).
-int openFortranParser_main(int argc, char **argv );
+   // This is the "C" function implemented in:
+   //    ROSE/src/frontend/OpenFortranParser_SAGE_Connection/openFortranParser_main.c
+   // This function calls the JVM to load the OFP parser (written using ANTLR).
+   int openFortranParser_main(int argc, char **argv);
 #endif
 
-int
-SgFile::callFrontEnd()
-   {
+   int SgFile::callFrontEnd() {
      if (SgProject::get_verbose() > 0)
         {
           std::cout << "[INFO] [SgFile::callFrontEnd]" << std::endl;
@@ -2396,8 +2397,6 @@ SgFile::callFrontEnd()
   // return the error code associated with the call to the C++ Front-end
      return frontendErrorLevel;
    }
-
-
 
 void
 SgFile::secondaryPassOverSourceFile()
@@ -3220,19 +3219,21 @@ int
 SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputCommandLine )
    {
   // Rasmussen (1/24/2022): Transitioning to using Flang as the Fortran parser.
-  // The variable ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION will be defined at configuration
-  // but not ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT.  Unfortunately the latter variable is
-  // too tightly coupled with Java usage at the moment. The Flang parser doesn't require Java.
-     if (get_experimental_flang_frontend() == true) {
-       int status{-1};
-       int flangArgc{0};
-       char** flangArgv{nullptr};
+  // The variable ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION will be defined at
+  // configuration but not ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT.  Unfortunately
+  // the latter variable is too tightly coupled with JVM usage at the moment.
+  // The Flang parser doesn't require the JVM.
+  if (get_experimental_flang_frontend() == true) {
+    int status{-1};
+    int flangArgc{0};
+    char **flangArgv{nullptr};
 
-       vector<string> flangCommandLine;
-       flangCommandLine.push_back("f18");
-       flangCommandLine.push_back("-fexternal-builder");
-       flangCommandLine.push_back(get_sourceFileNameWithPath());
-       CommandlineProcessing::generateArgcArgvFromList(flangCommandLine, flangArgc, flangArgv);
+    vector<string> flangCommandLine;
+    flangCommandLine.push_back("f18");
+    flangCommandLine.push_back("-fexternal-builder");
+    flangCommandLine.push_back(get_sourceFileNameWithPath());
+    CommandlineProcessing::generateArgcArgvFromList(flangCommandLine, flangArgc,
+                                                    flangArgv);
 
     // SG (7/9/2015) In case of a mixed language project, force case sensitivity here.
        SageBuilder::symbol_table_case_insensitive_semantics = true;
@@ -3245,7 +3246,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                      "error: ROSE was not configured to support the Fortran Flang frontend.");
 #endif
        return status;
-     }
+  }
 
 #if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT)
   // This is how we pass the pointer to the SgFile created in ROSE before the Open
@@ -3278,8 +3279,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
      extern SgSourceFile* OpenFortranParser_globalFilePointer;
 
-  // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the stack will
-  // be empty when processing Java language support (not Fortran).
+     // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the
+     // stack is empty before running the OFP frontend.
      FortranParserState* currStks = new FortranParserState();
 
   // printf ("######################### Inside of SgSourceFile::build_Fortran_AST() ############################ \n");
@@ -3667,145 +3668,150 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
         ROSE_ASSERT(returnValueForSyntaxCheckUsingBackendCompiler == 0);
       } // Terminates if (syntaxCheckInputCode == true)
 
-    // Build the classpath list for Fortran support.
-    string classpath = Rose::Cmdline::Fortran::Ofp::GetRoseClasspath();
+      // Build the classpath list for Fortran OFP support.
+      string classpath = Rose::Cmdline::Fortran::Ofp::GetRoseClasspath(
+          get_project()->get_Fortran_ofp_classpath());
 
-  //
-  // In the case of Javam add the paths specified for the input program, if any.
-  //
-     list<string> classpath_list = get_project() -> get_Java_classpath();
-     for (list<string>::iterator i = classpath_list.begin(); i != classpath_list.end(); i++) {
-         classpath += ":";
-         classpath += (*i);
-     }
+      // This is part of debugging output to call OFP and output the list of
+      // parser actions that WOULD be called. printf
+      // ("get_output_parser_actions() = %s \n",get_output_parser_actions() ?
+      // "true" : "false");
+      if (get_output_parser_actions() == true) {
+        // DQ (1/19/2008): New version of OFP requires different calling syntax.
+        // string OFPCommandLineString = std::string("java
+        // parser.java.FortranMain") + " --dump " +
+        // get_sourceFileNameWithPath();
+        vector<string> OFPCommandLine;
+        OFPCommandLine.push_back(OFP_JVM_PATH);
+        OFPCommandLine.push_back(classpath);
+        OFPCommandLine.push_back("fortran.ofp.FrontEnd");
+        OFPCommandLine.push_back("--dump");
+        // OFPCommandLine.push_back("--tokens");
 
+        // DQ (5/18/2008): Added support for include paths as required for
+        // relatively new Fortran specific include mechanism in OFP.
+        const SgStringList &includeList =
+            get_project()->get_includeDirectorySpecifierList();
+        for (size_t i = 0; i < includeList.size(); i++) {
+          OFPCommandLine.push_back(includeList[i]);
+        }
 
-  // This is part of debugging output to call OFP and output the list of parser actions that WOULD be called.
-  // printf ("get_output_parser_actions() = %s \n",get_output_parser_actions() ? "true" : "false");
-     if (get_output_parser_actions() == true)
-        {
-       // DQ (1/19/2008): New version of OFP requires different calling syntax.
-       // string OFPCommandLineString = std::string("java parser.java.FortranMain") + " --dump " + get_sourceFileNameWithPath();
-          vector<string> OFPCommandLine;
-          OFPCommandLine.push_back(JAVA_JVM_PATH);
-          OFPCommandLine.push_back(classpath);
-          OFPCommandLine.push_back("fortran.ofp.FrontEnd");
-          OFPCommandLine.push_back("--dump");
-       // OFPCommandLine.push_back("--tokens");
-
-       // DQ (5/18/2008): Added support for include paths as required for relatively new Fortran specific include mechanism in OFP.
-          const SgStringList & includeList = get_project()->get_includeDirectorySpecifierList();
-          for (size_t i = 0; i < includeList.size(); i++)
-             {
-               OFPCommandLine.push_back(includeList[i]);
-             }
-
-       // DQ (5/19/2008): Support for C preprocessing
-          if (requires_C_preprocessor == true)
-             {
-            // If C preprocessing was required then we have to provide the generated filename of the preprocessed file!
-            // Note that OFP has no support for CPP directives and will ignore them all.
-               string sourceFilename              = get_sourceFileNameWithPath();
-               string sourceFileNameOutputFromCpp = generate_C_preprocessor_intermediate_filename(sourceFilename);
-               OFPCommandLine.push_back(sourceFileNameOutputFromCpp);
-             }
-            else
-             {
-            // Build the command line using the original file (to be used by OFP).
-               OFPCommandLine.push_back(get_sourceFileNameWithPath());
-             }
+        // DQ (5/19/2008): Support for C preprocessing
+        if (requires_C_preprocessor == true) {
+          // If C preprocessing was required then we have to provide the
+          // generated filename of the preprocessed file! Note that OFP has no
+          // support for CPP directives and will ignore them all.
+          string sourceFilename = get_sourceFileNameWithPath();
+          string sourceFileNameOutputFromCpp =
+              generate_C_preprocessor_intermediate_filename(sourceFilename);
+          OFPCommandLine.push_back(sourceFileNameOutputFromCpp);
+        } else {
+          // Build the command line using the original file (to be used by OFP).
+          OFPCommandLine.push_back(get_sourceFileNameWithPath());
+        }
 
 #if 1
-          printf ("output_parser_actions: OFPCommandLine = %s \n",CommandlineProcessing::generateStringFromArgList(OFPCommandLine,false,false).c_str());
+        printf("output_parser_actions: OFPCommandLine = %s \n",
+               CommandlineProcessing::generateStringFromArgList(OFPCommandLine,
+                                                                false, false)
+                   .c_str());
 #endif
 
 #if 1
-       // Some security checking here could be helpful!!!
-       // Run OFP with the --dump option so that we can get the parset actions (used only for internal debugging support).
-          int errorCode = systemFromVector(OFPCommandLine);
+        // Some security checking here could be helpful!!!
+        // Run OFP with the --dump option so that we can get the parset actions
+        // (used only for internal debugging support).
+        int errorCode = systemFromVector(OFPCommandLine);
 
-          if (errorCode != 0)
-             {
-               printf ("Running OFP ONLY causes an error (errorCode = %d) \n",errorCode);
+        if (errorCode != 0) {
+          printf("Running OFP ONLY causes an error (errorCode = %d) \n",
+                 errorCode);
 #if 1
-            // DQ (10/4/2008): Need to work with Liao to see why this passes for me but fails for him (and others).
-            // for now we can comment out the error checking on the running of OFP as part of getting the
-            // output_parser_actions option (used for debugging).
-               ROSE_ABORT();
+          // DQ (10/4/2008): Need to work with Liao to see why this passes for
+          // me but fails for him (and others). for now we can comment out the
+          // error checking on the running of OFP as part of getting the
+          // output_parser_actions option (used for debugging).
+          ROSE_ABORT();
 #else
-               printf ("Skipping enforcement of exit after running OFP ONLY as (part of output_parser_actions option) \n");
+          printf("Skipping enforcement of exit after running OFP ONLY as (part "
+                 "of output_parser_actions option) \n");
 #endif
-             }
+        }
 #else
 
 #error "REMOVE THIS CODE"
 
-       // This fails, I think because we can't call the openFortranParser_main twice.
-       // DQ (11/30/2008):  Does the work by Rice fix this now?
-          int openFortranParser_dump_argc    = 0;
-          char** openFortranParser_dump_argv = nullptr;
-          CommandlineProcessing::generateArgcArgvFromList(OFPCommandLine,openFortranParser_dump_argc,openFortranParser_dump_argv);
-          frontendErrorLevel = openFortranParser_main (openFortranParser_dump_argc, openFortranParser_dump_argv);
+        // This fails, I think because we can't call the openFortranParser_main
+        // twice. DQ (11/30/2008):  Does the work by Rice fix this now?
+        int openFortranParser_dump_argc = 0;
+        char **openFortranParser_dump_argv = nullptr;
+        CommandlineProcessing::generateArgcArgvFromList(
+            OFPCommandLine, openFortranParser_dump_argc,
+            openFortranParser_dump_argv);
+        frontendErrorLevel = openFortranParser_main(
+            openFortranParser_dump_argc, openFortranParser_dump_argv);
 
 #endif
-       // If this was selected as an option then we can stop here (rather than call OFP again).
-       // printf ("--- get_exit_after_parser() = %s \n",get_exit_after_parser() ? "true" : "false");
-          if (get_exit_after_parser() == true)
-             {
-               printf ("Exiting after parsing... \n");
-               exit(0);
-             }
-
-       // End of option handling to generate list of OPF parser actions.
+        // If this was selected as an option then we can stop here (rather than
+        // call OFP again). printf ("--- get_exit_after_parser() = %s
+        // \n",get_exit_after_parser() ? "true" : "false");
+        if (get_exit_after_parser() == true) {
+          printf("Exiting after parsing... \n");
+          exit(0);
         }
 
-  // Option to just run the parser (not constructing the AST) and quit.
-  // printf ("get_exit_after_parser() = %s \n",get_exit_after_parser() ? "true" : "false");
-     if (get_exit_after_parser() == true)
-        {
-       // DQ (1/19/2008): New version of OFP requires different calling syntax.
-       // string OFPCommandLineString = std::string("java parser.java.FortranMain") + " " + get_sourceFileNameWithPath();
-          vector<string> OFPCommandLine;
-          OFPCommandLine.push_back(JAVA_JVM_PATH);
-          OFPCommandLine.push_back(classpath);
-          OFPCommandLine.push_back("fortran.ofp.FrontEnd");
+        // End of option handling to generate list of OPF parser actions.
+      }
 
-          bool foundSourceDirectoryExplicitlyListedInIncludePaths = false;
+      // Option to just run the parser (not constructing the AST) and quit.
+      // printf ("get_exit_after_parser() = %s \n",get_exit_after_parser() ?
+      // "true" : "false");
+      if (get_exit_after_parser() == true) {
+        // DQ (1/19/2008): New version of OFP requires different calling syntax.
+        // string OFPCommandLineString = std::string("java
+        // parser.java.FortranMain") + " " + get_sourceFileNameWithPath();
+        vector<string> OFPCommandLine;
+        OFPCommandLine.push_back(OFP_JVM_PATH);
+        OFPCommandLine.push_back(classpath);
+        OFPCommandLine.push_back("fortran.ofp.FrontEnd");
 
-       // DQ (5/18/2008): Added support for include paths as required for relatively new Fortran specific include mechanism in OFP.
-          const SgStringList & includeList = get_project()->get_includeDirectorySpecifierList();
-          for (size_t i = 0; i < includeList.size(); i++)
-             {
-               OFPCommandLine.push_back(includeList[i]);
+        bool foundSourceDirectoryExplicitlyListedInIncludePaths = false;
 
-            // printf ("includeList[%d] = %s \n",i,includeList[i].c_str());
+        // DQ (5/18/2008): Added support for include paths as required for
+        // relatively new Fortran specific include mechanism in OFP.
+        const SgStringList &includeList =
+            get_project()->get_includeDirectorySpecifierList();
+        for (size_t i = 0; i < includeList.size(); i++) {
+          OFPCommandLine.push_back(includeList[i]);
 
-            // I think we have to permit an optional space between the "-I" and the path
-               if ("-I" + getSourceDirectory() == includeList[i] || "-I " + getSourceDirectory() == includeList[i])
-                  {
-                 // The source file path is already included!
-                    foundSourceDirectoryExplicitlyListedInIncludePaths = true;
-                  }
-             }
+          // printf ("includeList[%d] = %s \n",i,includeList[i].c_str());
 
-          if (foundSourceDirectoryExplicitlyListedInIncludePaths == false)
-             {
-            // Add the source directory to the include list so that we reproduce the semantics of gfortran
-               OFPCommandLine.push_back("-I" + getSourceDirectory() );
-             }
+          // I think we have to permit an optional space between the "-I" and
+          // the path
+          if ("-I" + getSourceDirectory() == includeList[i] ||
+              "-I " + getSourceDirectory() == includeList[i]) {
+            // The source file path is already included!
+            foundSourceDirectoryExplicitlyListedInIncludePaths = true;
+          }
+        }
 
-       // DQ (8/24/2010): Detect the use of CPP on the fortran file and use the correct generated file from CPP, if required.
-       // OFPCommandLine.push_back(get_sourceFileNameWithPath());
-          if (requires_C_preprocessor == true)
-             {
-               string sourceFilename = get_sourceFileNameWithoutPath();
-               string sourceFileNameOutputFromCpp = generate_C_preprocessor_intermediate_filename(sourceFilename);
-               OFPCommandLine.push_back(sourceFileNameOutputFromCpp);
-             }
-            else
-             {
-               OFPCommandLine.push_back(get_sourceFileNameWithPath());
-             }
+        if (foundSourceDirectoryExplicitlyListedInIncludePaths == false) {
+          // Add the source directory to the include list so that we reproduce
+          // the semantics of gfortran
+          OFPCommandLine.push_back("-I" + getSourceDirectory());
+        }
+
+        // DQ (8/24/2010): Detect the use of CPP on the fortran file and use the
+        // correct generated file from CPP, if required.
+        // OFPCommandLine.push_back(get_sourceFileNameWithPath());
+        if (requires_C_preprocessor == true) {
+          string sourceFilename = get_sourceFileNameWithoutPath();
+          string sourceFileNameOutputFromCpp =
+              generate_C_preprocessor_intermediate_filename(sourceFilename);
+          OFPCommandLine.push_back(sourceFileNameOutputFromCpp);
+        } else {
+          OFPCommandLine.push_back(get_sourceFileNameWithPath());
+        }
 
 #if 1
        // Some security checking here could be helpful!!!
@@ -3832,7 +3838,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
           ROSE_ASSERT(errorCode == 0);
           return errorCode;
-       }
+      }
 
   // DQ (1/19/2008): New version of OFP requires different calling syntax; new lib name is: libfortran_ofp_parser_java_FortranParserActionJNI.so old name: libparser_java_FortranParserActionJNI.so
   // frontEndCommandLineString = std::string(argv[0]) + " --class parser.java.FortranParserActionJNI " + get_sourceFileNameWithPath();
@@ -3916,9 +3922,11 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
      char** openFortranParser_argv = nullptr;
      CommandlineProcessing::generateArgcArgvFromList(frontEndCommandLine,openFortranParser_argc,openFortranParser_argv);
 
-  // DQ (8/19/2007): Setup the global pointer used to pass the SgFile to which the Open Fortran Parser
-  // should attach the AST.  This is a bit ugly, but the parser interface only takes a commandline so it
-  // would be more ackward to pass a pointer to a C++ object through the commandline or the Java interface.
+     // DQ (8/19/2007): Setup the global pointer used to pass the SgFile to
+     // which the Open Fortran Parser should attach the AST.  This is a bit
+     // ugly, but the parser interface only takes a commandline so it would be
+     // more ackward to pass a pointer to a C++ object through the commandline
+     // or the JVM interface.
      OpenFortranParser_globalFilePointer = const_cast<SgSourceFile*>(this);
      ASSERT_not_null(OpenFortranParser_globalFilePointer);
 
@@ -3950,9 +3958,10 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
           printf ("Calling openFortranParser_main(): OpenFortranParser_globalFilePointer = %p \n",OpenFortranParser_globalFilePointer);
 
 #if USE_ROSE_SSL_SUPPORT
-  // The use of the JVM required to support Java is a problem when linking to the SSL library (either -lssl or -lcrypto)
-  // this may be fixed in Java version 6, but this is a hope, it has not been tested.  Java version 6 does
-  // appear to fix the problem with zlib (we think) and this appears to be a similar problem).
+     // The use of the JVM required for OFP is a problem when linking to the SSL
+     // library (either -lssl or -lcrypto). This may be fixed in JVM version 6,
+     // but it has not been tested. JVM version 6 appears to fix the problem
+     // with zlib (we think) and this appears to be a similar problem).
      int frontendErrorLevel = 1;
 
      printf ("********************************************************************************************** \n");
@@ -4103,13 +4112,12 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
   // printf ("######################### Leaving SgSourceFile::build_Fortran_AST() ############################ \n");
 
+        // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the
+        // stack is empty before running the OFP frontend.
+        delete currStks;
+        currStks = nullptr;
 
-  // DQ (10/26/2010): Moved from SgSourceFile::callFrontEnd() so that the stack will
-  // be empty when processing Java language support (not Fortran).
-     delete  currStks;
-     currStks = nullptr;
-
-     return frontendErrorLevel;
+        return frontendErrorLevel;
 #else
      fprintf(stderr, "Fortran parser not supported \n");
      ROSE_ABORT();
@@ -4737,12 +4745,11 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
         }
 #endif
 
-     ROSE_ASSERT (get_unparse_output_filename().empty() == false); // TODO: may need to add condition:  "&& (! get_Java_only())"  here
+        ROSE_ASSERT(get_unparse_output_filename().empty() == false);
 
-  // Now call the compiler that rose is replacing
-  // if (get_useBackendOnly() == false)
-     if ( SgProject::get_verbose() >= 1 )
-        {
+        // Now call the compiler that rose is replacing
+        // if (get_useBackendOnly() == false)
+        if (SgProject::get_verbose() >= 1) {
           printf ("Now call the backend (vendor's) compiler compilerNameOrig = %s for file = %s \n",compilerNameOrig.c_str(),get_unparse_output_filename().c_str());
         }
 
@@ -5203,10 +5210,9 @@ SgProject::compileOutput()
 #endif
        // case 3: linking at the project level
 
-       // DQ (1/9/2017): Only proceed with linking step if the compilation step finished without error.
-       // DQ (30/8/2017): Note that Csharp does not use linking the same way that C/C++ does (as I understand it).
-       // if (! (get_Java_only() || get_Python_only() || get_X10_only()) )
-       // if (! (get_Java_only() || get_Python_only() || get_X10_only() || get_Csharp_only() ) )
+          // DQ (1/9/2017): Only proceed with linking step if the compilation
+          // step finished without error. DQ (30/8/2017): Note that Csharp does
+          // not use linking the same way that C/C++ does (as I understand it).
           if (errorCode == 0)
              {
 

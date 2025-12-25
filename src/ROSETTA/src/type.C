@@ -514,9 +514,6 @@ Grammar::setUpTypes ()
   // DQ (11/28/2011): Adding template declaration support.
   // TemplateType.setDataPrototype         ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
-  // DQ (8/18/2011): Java specific support for generics.
-  // JavaParameterizedType.setDataPrototype             ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
   // DQ (8/25/2006): We can't specify an initializer if this is a static pointer type
   // (since this triggers the output of the initialization code in the constructor).
   // DQ (8/10/2006): Added support for different kinds of complex types (float,double, and long double)

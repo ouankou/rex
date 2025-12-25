@@ -18,7 +18,7 @@ int main( int argc, char * argv[] )
   // AstTests::runAllTests(project);
 
 #if 0
-  // DQ (11/20/2013): Test using support for multiple files for Java testing.
+  // DQ (11/20/2013): Test using support for multiple files.
   // Output an optional graph of the AST (just the tree, when active)
   // generateDOT ( *project );
      generateDOTforMultipleFile(*project);
@@ -83,5 +83,4 @@ int main( int argc, char * argv[] )
         }
 
      return exit_status;
-   }
-
+}

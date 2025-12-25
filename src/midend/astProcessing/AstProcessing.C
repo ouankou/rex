@@ -41,7 +41,6 @@ SgTreeTraversal_inFileToTraverse(SgNode* node, bool traversalConstraint, SgFile*
        //      printf ("What node is this: node = %p = %s \n",node,node->class_name().c_str()); // SageInterface::get_name(node).c_str());
        // ROSE_ASSERT(isSgProject(node) != NULL);
 
-       // DQ (11/20/2013): Added SgJavaImportStatementList and SgJavaClassDeclarationList to the exception list since they don't have a source position field.
        // if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
           if (isSgProject(node) == NULL )
              {
@@ -50,12 +49,12 @@ SgTreeTraversal_inFileToTraverse(SgNode* node, bool traversalConstraint, SgFile*
              }
 
 #if 0
-       // DQ (11/19/2013): Allow this to pass while we are evaluating the AST traversal for Java.
+       // DQ (11/19/2013): Allow this to pass while we are evaluating AST traversal behavior.
        // ROSE_ASSERT(isSgProject(node) != NULL || isSgAsmNode(node) != NULL);
        // if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
-          if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL && isSgJavaImportStatementList(node) == NULL && isSgJavaClassDeclarationList(node) == NULL)
+          if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
              {
-               printf ("WARNING: isSgProject(node) == NULL && isSgAsmNode(node) == NULL: this could be Java code using an incomplete AST: node = %p = %s \n",node,node->class_name().c_str());
+               printf ("WARNING: isSgProject(node) == NULL && isSgAsmNode(node) == NULL: node = %p = %s \n",node,node->class_name().c_str());
              }
 #endif
 

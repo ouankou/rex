@@ -157,7 +157,6 @@ cmake .. \
     -Denable-clang-frontend=ON \
     -Denable-c=ON \
     -Denable-fortran=OFF \
-    -Denable-java=OFF \
     -DCMAKE_CXX_STANDARD=17
 ```
 
@@ -351,7 +350,7 @@ The Clang frontend in REX is **highly experimental**:
    - ❌ **C++ templates** - **not supported** (causes hangs/failures)
    - ❌ **C++ STL** - **not supported** (uses templates extensively)
    - ❌ **C++11/14/17/20 features** - **not supported**
-   - ❌ **Fortran, Java, PHP, Python** - **not applicable**
+   - ❌ **Fortran, PHP, Python** - **not applicable**
 
 2. **Known C++ Template Issues:**
    - Processing STL headers (`<iostream>`, `<vector>`, `<string>`) causes extreme slowness

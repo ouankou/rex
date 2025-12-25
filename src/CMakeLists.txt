@@ -25,11 +25,15 @@ add_custom_target(
 ########################################################################################################################
 
 # Header files needed to build ROSETTA
+set(ROSE_JNI_INCLUDES "")
+if(enable-fortran AND enable-fortran-ofp)
+  list(APPEND ROSE_JNI_INCLUDES ${JNI_INCLUDE_DIRS})
+endif()
+
 include_directories(
   ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/transformationTracking
   ${CMAKE_BINARY_DIR}/src/3rdPartyLibraries/fortran-parser
-  ${JAVA_INCLUDE_PATH}
-  ${JAVA_INCLUDE_PATH2}
+  ${ROSE_JNI_INCLUDES}
   ${CMAKE_SOURCE_DIR}/src/util
   ${CMAKE_SOURCE_DIR}/src/frontend
   ${ROSE_INCLUDES})
@@ -175,7 +179,7 @@ if(enable-fortran)
   list(APPEND LINK_FILES roseFortran)
 endif()
 
-if (enable-java)
+if(enable-fortran AND enable-fortran-ofp)
   list(APPEND LINK_FILES ${JAVA_JVM_LIBRARY})
 endif()
 

@@ -58,29 +58,6 @@ export LD_LIBRARY_PATH=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default/lib:$LD_LIB
 # add to .bashrc
 sed -i '$ a export LD_LIBRARY_PATH=/home/demo/opt/boost/1.61.0/gcc-4.9.3-default/lib:$LD_LIBRARY_PATH\n' $HOME/.bashrc
 
-#---------- install zgrviewer ----------
-
-apt-get -y install graphviz
-
-#Download and untar the ZGRViewer distribution.
-cd ~/Downloads
-wget -O zgrviewer-0.10.0.zip https://sourceforge.net/projects/zvtm/files/zgrviewer/0.10.0/zgrviewer-0.10.0.zip/download
-
-cd ~/opt/
-unzip ~/Downloads/zgrviewer-0.10.0.zip 
-cd zgrviewer-0.10.0
-
-# Edit it's "run.sh" script so that the ZGRV_HOME variable has the correct value. 
-# The scripts/zgrviewerExampleScript has some additional java switches that are useful.
-# ZGRV_HOME=/home/demo/opt/zgrviewer-0.10.0
-sed -i "/ZGRV_HOME=\./c\ZGRV_HOME=/home/demo/opt/zgrviewer-0.10.0/" run.sh
-
-# Edit ~/.bashrc and add an alias that allows you to run ZGRViewer by typing "zgrviewer":
-# alias zgrviewer='/home/demo/opt/zgrviewer-0.10.0/run.sh'
-sed -i '$ a alias zgrviewer='/home/demo/opt/zgrviewer-0.10.0/run.sh'\n' $HOME/.bashrc
-
-#---------------------------
-
 # doxygen
 apt-get -y install doxygen 
 
@@ -167,4 +144,3 @@ cd tests/
 echo -e "void foo()\n{\n        int a = 0;\n        a += 1;\n        return a;\n}\n" > sample.c
 identityTranslator -c sample.c
 dotGenerator -c sample.c 
-

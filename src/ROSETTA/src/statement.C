@@ -564,7 +564,7 @@ Grammar::setUpStatements ()
              /* FortranDo                 | */ AllocateStatement |
              DeallocateStatement | SequenceStatement | WithStatement |
              PassStatement | AssertStmt | ExecStatement | OmpExecStatement |
-             ImageControlStatement /* | JavaPackageDeclaration */,
+             ImageControlStatement,
          "Statement", "StatementTag", false);
 
      // DQ (11/24/2007): These have been moved to be declarations, so they can
@@ -1737,12 +1737,6 @@ Grammar::setUpStatements ()
   //                 e.g., type Manager is new Employee with private;
      ClassDeclaration.setDataPrototype("SgBaseClass*","adaParentType","= NULL",
                                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-#if 0
-  // DQ (11/18/2013): Adding Java specific support
-     ClassDeclaration.setDataPrototype("bool","java_annonomous","= false",
-                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
 
   // This class contains two lists (we don't know if this edit/substitution mechanism for work for two lists)
      ClassDefinition.setFunctionPrototype ( "HEADER_CLASS_DEFINITION_STATEMENT", "../Grammar/Statement.code" );
@@ -3127,7 +3121,7 @@ Grammar::setUpStatements ()
      NamelistStatement.setDataPrototype     ( "SgNameGroupPtrList", "group_list", "",
                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/16/2011): This is the Fortran specific import statment IR node, there is also a Java specific SgJavaImportStatement (which is a declaration).
+     // DQ (4/16/2011): This is the Fortran-specific import statement IR node.
      ImportStatement.setFunctionPrototype ( "HEADER_IMPORT_STATEMENT", "../Grammar/Statement.code" );
   // Implement this as a list of strings for now, since it is not clear that it is limited to variables.
   // If it is limited to variable then use an expression list of variable references, or a list of initialized name objects.
@@ -4017,9 +4011,9 @@ Grammar::setUpStatements ()
 
      AssertStmt.setFunctionPrototype        ( "HEADER_ASSERT_STMT", "../Grammar/Statement.code" );
      AssertStmt.setFunctionSource           ( "SOURCE_ASSERT_STMT", "../Grammar/Statement.code" );
-     AssertStmt.setDataPrototype            ( "SgExpression*", "test", "= NULL",
-             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-  // DQ (9/2/2011): Added support for Java (which uses this IR node but requires an additional argument.
+     AssertStmt.setDataPrototype("SgExpression*", "test", "= NULL",
+                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                 DEF_TRAVERSAL, NO_DELETE);
      AssertStmt.setDataPrototype            ( "SgExpression*", "exception_argument", "= NULL",
              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 

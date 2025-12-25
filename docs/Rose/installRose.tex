@@ -170,10 +170,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%      versions) right now due to resource limits. 
 %%      {\em Installation of Boost is such a common issue that we include simple directions for how to install Boost in section~\ref{gettingStarted:BOOST}}
 %% 
-%%    \item {\bf JAVA} : version $>$1.5.0\_11 \\
-%%      A SUN Java virtual machine (JVM) is needed. A Java compiler (JDK) is also
-%%      required for development versions.  
-%% 
 %%     \item {\bf Autoconf} : version $>=$ 2.59. Needed \emph{ONLY} for development versions. \\
 %%      Autoconf is an extensible package of M4 macros that produce shell scripts to automatically configure software source code packages. 
 %% 
@@ -215,16 +211,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%      LaTeX is used for a significant portion of the ROSE documentation. LaTex is 
 %%      included on most Unix systems. There are no ROSE specific configure options 
 %%      to use LaTeX; it must only be available within your path.
-%% 
-%%    \item {\bf zgrviewer}: This is needed for ROSE Demos. We use it to
-%%    visualize the AST tree saved in dot format. \\
-%%      Zgrviewer is a dot file viewer that allows simple zooming, panning, etc. It is
-%%      available on SourceForge.  Zgerviewer is a java program and installs easily.
-%%      however the detail memory setting for java are insufficient for large dot files
-%%      generated within ROSE (and by the ROSE demos).  We suggest a number of options
-%%      to execute zgrviewer with more memory using java.  A zgrviewer script (called
-%%      zgrviewerExampleScript) is available in the ROSE/scripts directory (see the 
-%%      script for details).
 %% 
 %% \end{itemize}
 %% 
@@ -544,7 +530,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %%      \item Change directory to the new compile tree directory. \\
 %%            Type {\tt cd compileTree; }. This changes the current directory to the newly
 %%            created directory.
-%%      \item Add JAVA environment variables if you platform is a Linux box. \\
+%%      \item Add JVM environment variables for OFP if your platform is Linux. \\
 %%            For example:\\
 %%            {\tt export JAVA\_HOME=/usr/apps/java/jdk1.5.0\_11} \\
 %%            {\tt export LD\_LIBRARY\_PATH=\$JAVA\_HOME/jre/lib/i386/server:\$LD\_LIBRARY\_PATH}
@@ -636,13 +622,12 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
     Save yourself some trouble and build a separate compile tree.  This will also allow
     you to build a number of different versions of ROSE with different options.
 
-    \item Message: {\bf configure: error: Unable to find path to JVM library} \\
+   \item Message: {\bf configure: error: Unable to find path to JVM library} \\
    This message from running the {\tt configure} command in ROSE (an initial step in building
-   ROSE) indicates either that your {\tt LD\_LIBRARY\_PATH} (environment variable) is not set to 
-   to the location of the {\em libjvm.so} or that your machines java is not one that we
-   support (e.g. non-Sun Java).  If you don't require Java (e.g. don't need Fortran
-   support) then consider skipping the java support by using {\em --without-java} on the
-   configure command line.
+   ROSE) indicates that your {\tt LD\_LIBRARY\_PATH} (environment variable) is not set to 
+   the location of {\em libjvm.so} or that {\tt JAVA\_HOME} points to a JVM installation that
+   does not provide the required runtime libraries. The JVM dependency exists only for the
+   Open Fortran Parser (OFP) frontend; REX does not support Java as a source language.
    Alternatively, your {\tt LD\_LIBRARY\_PATH} should contain the path to the file 
    {\em libjvm.so}.  The likely path is specified in the lines just before the message.  
    The full message will appear as:
@@ -661,12 +646,11 @@ of Boost lags by several years.  ROSE now attempts to detect this and use the
 {\quote{-isystem}} g++ option to have the explicitly specified version of boost from
 the configure command-line be search before the system include directories.  This works
 well where a machine has a previously installed version of Boost, but it will fail when
-used with SWIG (so don't use {\tt --with-javaport} where a previous system installation
-of Boost is detected).  The ROSE configure scripts will detect the presence of a
-previously installed version of Boost and issue a warning message to not use 
-{\tt --with-javaport}.  Also if no previously installed version of Boost is detected
-the configuration will report this as well and make clear that it will use the Boost
-include directory with a {\tt -I} option.
+used with SWIG if a previous system installation of Boost is detected. The ROSE
+configure scripts will detect the presence of a previously installed version of
+Boost and issue a warning message accordingly. Also if no previously installed
+version of Boost is detected the configuration will report this as well and make
+clear that it will use the Boost include directory with a {\tt -I} option.
 
    \item libtoolize not available (or old version) \\
   The problem is that ROSE is calling {\tt libtoolize} or {\tt glibtoolize} and 
@@ -766,10 +750,8 @@ make: *** [all] Error 2
 %% %          Note that if you compile ROSE with \verb!_GLIBCXX_DEBUG!, you should also compile
 %% %         boost with the same debug flag (Section \ref{gettingStarted:BOOST}). 
 %%    \item Adding Fortran support \\
-%%          {\tt ../ROSE/configure --prefix=`pwd` --with-boost=[BOOST\_installTree] --with-java} \\
 %%          The Open Fortran Parser will also be enabled, allowing ROSE to process Fortran
-%%          code.  The programs {\tt java}, {\tt javac}, and {\tt jar} must be either in your 
-%%          PATH or in {\tt \$JAVA\_HOME/bin}.
+%%          code. The JVM runtime must be available so the OFP frontend can run.
 %%    \item Adding SQLite support \\
 %%          {\tt ../ROSE/configure --with-sqlite3=/home/dquinlan/SQLite/sqliteCompileTree --prefix=`pwd` --with-boost=[BOOST\_installTree]} \\
 %%          Configure as above, but permit use of SQLite database for storage of analysis
@@ -783,10 +765,6 @@ make: *** [all] Error 2
 %%          {\tt ../ROSE/configure --prefix=`pwd` --with-binarysql --with-boost=[BOOST\_installTree]} \\
 %%          The binarysql flag allows ROSE to read a binary file previously stored as a sql file (e.g. fetched from
 %%          IDA Pro). 
-%%    \item Adding support for SWIG (Python connection) \\
-%%          {\tt ../ROSE/configure --prefix=`pwd` --with-javaport=yes SWIG=swig --with-boost=[BOOST\_installTree] --with-java} \\
-%%          This allows ROSE to be build with javaport, a support that connects ROSE to Java via SWIG.
-%%          The Eclipse plug-in to ROSE is based on this work.
 %%    \item Additional Examples \\ 
 %%          More detailed documentation on configure options can be found by typing 
 %%          {\tt configure --help}, or see figure
@@ -1139,7 +1117,7 @@ In order to have Hudson test ROSE under Windows, we have additional tools set up
 
 \begin{itemize}
 \item pegeant.exe : Allows to avoid entering ssh keys when connecting to git repository
-\item Hudson client : The client can be started through the web page. All that is required is Java to be installed.
+\item Hudson client : The client can be started through the web page. All that is required is a JVM runtime.
 \end{itemize}
 
 Currently under tux270-0 Flex, cmake, boost and Bison are installed under c:/ROSE. In
@@ -1261,6 +1239,3 @@ will be about 25\% smaller (about 30 Meg).
 but it is the judgment of the ROSE team that current work work is sufficient to
 generate small enough executables.  If users have need for smaller executables
 for ROSE based tools, please contact the ROSE team directly.
-
-
-

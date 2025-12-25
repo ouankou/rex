@@ -32,6 +32,8 @@ const char *licenseText =
  *---------------------------------------------------------------------------*/
 ROSE_DLL_API int Rose::Cmdline::verbose = 0;
 ROSE_DLL_API std::list<std::string> Rose::Cmdline::Fortran::Ofp::jvm_options;
+ROSE_DLL_API std::list<std::string>
+    Rose::Cmdline::Fortran::Ofp::classpath_entries;
 
 /*-----------------------------------------------------------------------------
  *  namespace Rose::Cmdline {
@@ -358,7 +360,6 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
          // namespaces
          Rose::Cmdline::Unparser::OptionRequiresArgument(argument) ||
          Rose::Cmdline::Fortran::OptionRequiresArgument(argument) ||
-         // Rose::Cmdline::Java::OptionRequiresArgument(argument) ||
 
          // negara1 (08/16/2011)
          argument == "-rose:unparseHeaderFilesRootFolder" ||
@@ -371,7 +372,7 @@ CommandlineProcessing::isOptionTakingSecondParameter( string argument )
          argument == "-annot" || argument == "-bs" ||
          isOptionTakingThirdParameter(argument) ||
 
-         // DQ (9/30/2008): Added support for java class specification required
+         // DQ (9/30/2008): Added support for JVM class specification required
          // for Fortran use of OFP.
          argument == "--class" ||
 
@@ -1662,14 +1663,12 @@ ProcessClobberInputFile (SgProject* project, std::vector<std::string>& argv)
 //                                  Fortran
 //------------------------------------------------------------------------------
 
-bool
-Rose::Cmdline::Fortran::
-OptionRequiresArgument (const std::string& option)
-{
+bool Rose::Cmdline::Fortran::OptionRequiresArgument(const std::string &option) {
   return
       // ROSE Options
-      option == "-rose:fortran:ofp:jvm_options";
-}// Cmdline:Fortran:::OptionRequiresArgument
+      option == "-rose:fortran:ofp:jvm_options" ||
+      option == "-rose:fortran:ofp:classpath";
+} // Cmdline:Fortran:::OptionRequiresArgument
 
 void
 Rose::Cmdline::Fortran::
@@ -1714,10 +1713,12 @@ StripRoseOptions (std::vector<std::string>& argv)
   Cmdline::Fortran::Ofp::StripRoseOptions(argv);
 }// Cmdline::Fortran::StripRoseOptions
 
-std::string
-Rose::Cmdline::Fortran::Ofp::
-GetRoseClasspath ()
-{
+std::string Rose::Cmdline::Fortran::Ofp::GetRoseClasspath() {
+  return GetRoseClasspath(Cmdline::Fortran::Ofp::classpath_entries);
+}
+
+std::string Rose::Cmdline::Fortran::Ofp::GetRoseClasspath(
+    const std::list<std::string> &classpath_entries) {
   string classpath = "-Djava.class.path=";
 
   // CER (6/6/2011): Added support for OFP version 0.8.3 which requires antlr-3.3-complete.jar.
@@ -1735,9 +1736,20 @@ GetRoseClasspath ()
   // Open Fortran Parser (OFP) support (this is the jar file)
   // CER (10/4/2011): Switched to using date-based version for OFP jar file.
   //
-  string ofp_jar_file_name = string("OpenFortranParser-") + ROSE_OFP_VERSION_STRING + string(".jar");
-  string ofp_class_path = "src/3rdPartyLibraries/fortran-parser/" + ofp_jar_file_name;
-  classpath += findRoseSupportPathFromBuild(ofp_class_path, string("lib/") + ofp_jar_file_name) + ":";
+  string ofp_jar_file_name =
+      string("OpenFortranParser-") + ROSE_OFP_VERSION_STRING + string(".jar");
+  string ofp_class_path =
+      "src/3rdPartyLibraries/fortran-parser/" + ofp_jar_file_name;
+  classpath += findRoseSupportPathFromBuild(
+                   ofp_class_path, string("lib/") + ofp_jar_file_name) +
+               ":";
+
+  for (const std::string &entry : classpath_entries) {
+    if (!entry.empty()) {
+      classpath += entry;
+      classpath += ":";
+    }
+  }
 
   // Everything else?
   classpath += ".";
@@ -1775,17 +1787,16 @@ StripRoseOptions (std::vector<std::string>& argv)
           "-");     // New prefix
 
   // TOO1 (2/13/2014): Skip ALL ROSE-specific OFP options;
-  //                   at this stage, we only have "-rose:fortran:ofp:jvm_options",
-  //                   and this is only inteded for the OFP frontend's JVM.
-  for(std::string ofp_option: ofp_options)
-  {
-      if (SgProject::get_verbose() > 1)
-      {
-          std::cout
-              << "[INFO] "
-              << "Stripping OFP JVM commandline argument '" << ofp_option << "'"
-              << std::endl;
-      }
+  //                   at this stage, we only have
+  //                   "-rose:fortran:ofp:jvm_options" and
+  //                   "-rose:fortran:ofp:classpath", and these are only inteded
+  //                   for the OFP frontend's JVM.
+  for (std::string ofp_option : ofp_options) {
+    if (SgProject::get_verbose() > 1) {
+      std::cout << "[INFO] "
+                << "Stripping OFP JVM commandline argument '" << ofp_option
+                << "'" << std::endl;
+    }
   }
 }// Cmdline::Fortran::StripRoseOptions
 
@@ -1829,48 +1840,82 @@ Process (SgProject* project, std::vector<std::string>& argv)
       std::cout << "[INFO] Processing Fortran's OFP frontend commandline options" << std::endl;
 
   ProcessJvmOptions(project, argv);
+  ProcessClasspath(project, argv);
   ProcessEnableRemoteDebugging(project, argv);
 }
 
-void
-Rose::Cmdline::Fortran::Ofp::
-ProcessJvmOptions (SgProject* project, std::vector<std::string>& argv)
-{
+void Rose::Cmdline::Fortran::Ofp::ProcessJvmOptions(
+    SgProject *project, std::vector<std::string> &argv) {
   if (SgProject::get_verbose() > 1)
-      std::cout << "[INFO] Processing Fortran's ofp frontend JVM commandline options" << std::endl;
+    std::cout
+        << "[INFO] Processing Fortran's ofp frontend JVM commandline options"
+        << std::endl;
 
   std::string ofp_jvm_options = "";
 
   bool has_ofp_jvm_options =
       // -rose:fortran:ofp:jvm_options
       CommandlineProcessing::isOptionWithParameter(
-          argv,
-          Fortran::option_prefix,
-          "ofp:jvm_options",
-          ofp_jvm_options,
+          argv, Fortran::option_prefix, "ofp:jvm_options", ofp_jvm_options,
           Cmdline::REMOVE_OPTION_FROM_ARGV);
 
-  if (has_ofp_jvm_options)
-  {
-      if (SgProject::get_verbose() > 1)
-      {
-          std::cout
-              << "[INFO] Processing ofp JVM options: "
-              << "'" << ofp_jvm_options << "'"
+  if (has_ofp_jvm_options) {
+    if (SgProject::get_verbose() > 1) {
+      std::cout << "[INFO] Processing ofp JVM options: "
+                << "'" << ofp_jvm_options << "'" << std::endl;
+    }
+
+    std::list<std::string> ofp_jvm_options_list =
+        StringUtility::tokenize(ofp_jvm_options, ' ');
+
+    project->set_Fortran_ofp_jvm_options(ofp_jvm_options_list);
+
+    Cmdline::Fortran::Ofp::jvm_options.insert(
+        Cmdline::Fortran::Ofp::jvm_options.begin(),
+        ofp_jvm_options_list.begin(), ofp_jvm_options_list.end());
+  } // has_ofp_jvm_options
+} // Cmdline::Fortran::ProcessJvmOptions
+
+void Rose::Cmdline::Fortran::Ofp::ProcessClasspath(
+    SgProject *project, std::vector<std::string> &argv) {
+  if (SgProject::get_verbose() > 1)
+    std::cout << "[INFO] Processing Fortran's OFP classpath options"
               << std::endl;
-      }
 
-      std::list<std::string> ofp_jvm_options_list =
-          StringUtility::tokenize(ofp_jvm_options, ' ');
+  Cmdline::Fortran::Ofp::classpath_entries.clear();
+  std::list<std::string> project_classpath_entries =
+      project->get_Fortran_ofp_classpath();
+  if (!project_classpath_entries.empty()) {
+    Cmdline::Fortran::Ofp::classpath_entries.insert(
+        Cmdline::Fortran::Ofp::classpath_entries.end(),
+        project_classpath_entries.begin(), project_classpath_entries.end());
+  }
 
-      project->set_Fortran_ofp_jvm_options(ofp_jvm_options_list);
+  std::string ofp_classpath = "";
 
-      Cmdline::Fortran::Ofp::jvm_options.insert(
-          Cmdline::Fortran::Ofp::jvm_options.begin(),
-          ofp_jvm_options_list.begin(),
-          ofp_jvm_options_list.end());
-  }// has_ofp_jvm_options
-}// Cmdline::Fortran::ProcessJvmOptions
+  bool has_ofp_classpath =
+      // -rose:fortran:ofp:classpath
+      CommandlineProcessing::isOptionWithParameter(
+          argv, Fortran::option_prefix, "ofp:classpath", ofp_classpath,
+          Cmdline::REMOVE_OPTION_FROM_ARGV);
+
+  if (has_ofp_classpath) {
+    if (SgProject::get_verbose() > 1) {
+      std::cout << "[INFO] Processing OFP classpath: "
+                << "'" << ofp_classpath << "'" << std::endl;
+    }
+
+    std::list<std::string> ofp_classpath_entries =
+        StringUtility::tokenize(ofp_classpath, ':');
+
+    project->set_Fortran_ofp_classpath(ofp_classpath_entries);
+
+    Cmdline::Fortran::Ofp::classpath_entries.clear();
+    Cmdline::Fortran::Ofp::classpath_entries.insert(
+        Cmdline::Fortran::Ofp::classpath_entries.end(),
+        ofp_classpath_entries.begin(), ofp_classpath_entries.end());
+  } // has_ofp_classpath
+} // Cmdline::Fortran::ProcessClasspath
 
 void
 Rose::Cmdline::Fortran::Ofp::
@@ -1907,14 +1952,10 @@ ProcessEnableRemoteDebugging (SgProject* project, std::vector<std::string>& argv
 //                                  Gnu
 //------------------------------------------------------------------------------
 //
-bool
-Rose::Cmdline::Gnu::
-OptionRequiresArgument (const std::string& option)
-{
-  return
-      option == "--param"    ||   // --param variable=value
-      false;
-}// Cmdline:Java:::OptionRequiresArgument
+bool Rose::Cmdline::Gnu::OptionRequiresArgument(const std::string &option) {
+  return option == "--param" || // --param variable=value
+         false;
+} // Rose::Cmdline::Gnu::OptionRequiresArgument
 
 void
 Rose::Cmdline::Gnu::
@@ -2055,6 +2096,9 @@ SgFile::usage ()
            "implemented yet)\n"
            "     -rose:fortran:ofp:jvm_options\n"
            "                             Specifies the JVM startup options\n"
+           "     -rose:fortran:ofp:classpath\n"
+           "                             Additional JVM classpath entries for "
+           "OFP\n"
            "     -rose:strict            strict enforcement of ANSI/ISO "
            "standards\n"
            "     -rose:compilationPerformance\n"
@@ -4536,8 +4580,9 @@ findIndexForFirstIncludeDirectiveInArgumentList(vector<string> & argv, string fi
 vector<string>
 SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameIndex, const string& compilerName )
    {
-  // This function assembles the commandline that will be passed to the backend (vendor) C++/C, Fortran, or Java compiler
-  // (using the new generated source code from the ROSE unparser).
+  // This function assembles the commandline that will be passed to the backend
+  // (vendor) C/C++ or Fortran compiler (using the new generated source code
+  // from the ROSE unparser).
 
   // DQ (4/21/2006): I think we can now assert this!
      ROSE_ASSERT(fileNameIndex == 0);
@@ -4632,7 +4677,6 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
      printf ("   --- get_F2003_only()          = %s \n",(get_F2003_only() == true) ? "true" : "false");
      printf ("   --- get_F2008_only()          = %s \n",(get_F2008_only() == true) ? "true" : "false");
      printf ("   --- get_CoArrayFortran_only() = %s \n",(get_CoArrayFortran_only() == true) ? "true" : "false");
-     printf ("   --- get_Java_only()           = %s \n",(get_Java_only() == true) ? "true" : "false");
 #endif
 
   // For now let's enforce this, for internal testing, but translators will fail for this assertion in the future.
@@ -5876,7 +5920,6 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
      printf ("In buildCompilerCommandLineOptions: test 3: compilerNameString = \n%s\n",CommandlineProcessing::generateStringFromArgList(compilerNameString,false,false).c_str());
 #endif
 
-  // DQ (4/2/2011): Java does not have -I as an accepted option.
      if (get_C_only() || get_Cxx_only())
         {
        // DQ (12/8/2004): Add -Ipath option so that source file's directory will be searched for any
@@ -6023,11 +6066,7 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
 #if DEBUG_COMPILER_COMMAND_LINE
           printf ("In buildCompilerCommandLineOptions: objectNameSpecified = %s objectFileName = %s \n",objectNameSpecified ? "true" : "false",objectFileName.c_str());
 #endif
-       // DQ (4/2/2011): Java does not have -o as an accepted option, though the "-d <dir>" can be used to specify where class files are put.
-       // Currently we explicitly output "-d ." so that generated class files will be put into the current directory (build tree), but this
-       // is not standard semantics for Java (though it makes the Java support in ROSE consistent with other languages supported in ROSE).
-          if (get_C_only() || get_Cxx_only() || get_Fortran_only())
-             {
+          if (get_C_only() || get_Cxx_only() || get_Fortran_only()) {
             // DQ (7/14/2004): Suggested fix from Andreas, make the object file name explicit
                if (objectNameSpecified == false)
                   {
@@ -6149,7 +6188,7 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
 #endif
                        }
                }
-             }
+          }
         }
        else
         {
