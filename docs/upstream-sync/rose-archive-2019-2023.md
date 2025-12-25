@@ -1,63 +1,91 @@
-# rose-archive 2019-2023 selective sync (astUtil + side-effect interface)
+# rose-archive 2019-2023 selective sync (full REX scope)
+
+## Support target (REX)
+- Platform: Linux only (Windows/mac support dropped).
+- Languages/features: C/C++, Fortran, OpenMP, OpenCL, CUDA.
+- Hard dropped: PHP, JavaScript, EDG, Java, UPC, binary analysis, and any other legacy frontends not in use by REX.
 
 ## Scope for this sync
-- Focused paths: `src/midend/astUtil/**` plus dependent callers in:
-  - `src/midend/programAnalysis/bitvectorDataflow/**`
-  - `src/midend/programAnalysis/pointerAnal/**`
-  - `src/midend/programAnalysis/valuePropagation/ValuePropagate.C`
-  - `src/midend/programTransformation/loopProcessing/**`
-  - `tests/nonsmoke/functional/roseTests/programAnalysisTests/**`
-- Excluded (inventory only): Autotools/Tup (`configure.ac`, `config/`, `Makefile.am`, `Tupfile`).
-- Not touched: dropped frontends/components (EDG, Java, UPC, binary analysis, etc.).
+- Full repo coverage for all kept REX components (not limited to astUtil).
+- Inventory only: Autotools/Tup (`configure.ac`, `config/`, `acmacros/`, `Makefile.am`, `Tupfile`). Track changes for parity/purge, do not port into CMake.
+- Exclude dropped components and platform-specific code (Windows/mac).
+
+## Components in REX to keep (sync coverage)
+Top-level repo components:
+- Build system: `cmake/`, `CMakeLists.txt`, `build-rex.sh`, `rose_config.h.in.cmake`, `ROSE_VERSION`, `CMakeFiles/` (generated, ignore), `build/` (generated, ignore).
+- Docs and guides: `docs/`, `README.md`, `BUILDING_WITH_CLANG.md`, `OPENMP_SUPPORT.md`, `FORTRAN_TESTING_GUIDE.md`, `CLANG_FRONTEND_FIXES.md`, `CLANG_FRONTEND_IMPROVEMENTS.md`.
+- Scripts and tooling: `scripts/`, `tools/`, `tutorial/`, `exampleTranslators/`.
+- Licensing and metadata: `LicenseInformation/`, `COPYRIGHT`.
+- Tests: `tests/` (C/C++/Fortran/OpenMP/OpenCL/CUDA only).
+- Source tree: `src/` (see below).
+
+`src/` subcomponents:
+- `src/3rdPartyLibraries/` (existing third-party deps used by REX).
+- `src/frontend/`
+  - `CxxFrontend/Clang/`
+  - `OpenFortranParser_SAGE_Connection/`
+  - `SageIII/`
+- `src/midend/`
+  - `abstractLayer/`, `astDiagnostics/`, `astDump/`, `astProcessing/`, `astQuery/`, `astUtil/`
+  - `programAnalysis/` (bitvectorDataflow, CFG, CallGraphAnalysis, dataflowAnalysis, defUseAnalysis, dominanceAnalysis, genericDataflow, OAWrap, OpenAnalysis, pointerAnal, staticInterproceduralSlicing, valuePropagation, variableRenaming, VirtualFunctionAnalysis)
+  - `programTransformation/` (astInlining, astOutlining, constantFolding, extractFunctionArgumentsNormalization, finiteDifferencing, functionCallNormalization, implicitCodeGeneration, loopProcessing, ompLowering, partialRedundancyElimination, singleStatementToBlockNormalization, transformationTracking)
+- `src/backend/unparser/`
+- `src/ROSETTA/` (Grammar, ROSETTA tools)
+- `src/util/` (commandlineProcessing, graphs, StringUtility, support)
+- `src/Rose/` (small shared headers like `SourceLocation.h`)
 
 ## Keep/drop lists
 - Keep (candidate paths):
-  - `src/midend/astUtil/**`
-  - `src/midend/programAnalysis/bitvectorDataflow/**`
-  - `src/midend/programAnalysis/pointerAnal/**`
-  - `src/midend/programTransformation/loopProcessing/**`
-  - `tests/nonsmoke/functional/roseTests/**` (only those tied to astUtil interfaces)
-- Drop (never reintroduce): EDG, Java, UPC, binary analysis, other dropped frontends.
-- Inventory only: Autotools/Tup build metadata.
+  - `cmake/**`, `CMakeLists.txt`, `build-rex.sh`, `rose_config.h.in.cmake`, `ROSE_VERSION`
+  - `docs/**`, `scripts/**`, `tools/**`, `tutorial/**`, `exampleTranslators/**`, `LicenseInformation/**`
+  - `src/**` (excluding dropped components)
+  - `tests/**` (only tests relevant to supported languages/features)
+- Drop (never reintroduce): EDG, Java, UPC, PHP, JavaScript, binary analysis, Windows/mac-specific code paths, and other removed frontends.
+- Inventory only: Autotools/Tup build metadata and generated build directories (`build/`, `CMakeFiles/`).
 
 ## Repeatable sync workflow
-1) Add upstream remote and fetch:
+1) Fetch upstream:
    ```bash
-   git remote add rose-archive https://github.com/rose-compiler/rose-archive.git
    git fetch rose-archive develop
    ```
-2) Build a candidate commit list for kept paths:
+2) Build a candidate commit list for all kept paths:
    ```bash
    git log --since=2019-01-01 --name-only --pretty=format:'%H %cs %s' \
-     rose-archive/develop -- src/midend/astUtil
+     rose-archive/develop -- \
+     cmake CMakeLists.txt build-rex.sh rose_config.h.in.cmake ROSE_VERSION \
+     docs scripts tools tutorial exampleTranslators LicenseInformation \
+     src tests
    ```
-3) Generate path-filtered patches per commit:
+3) Generate path-filtered patches per commit (drop-list filtered):
    ```bash
    git format-patch -1 <upstream_commit> -- \
-     src/midend/astUtil \
-     src/midend/programAnalysis/bitvectorDataflow \
-     src/midend/programAnalysis/pointerAnal \
-     src/midend/programTransformation/loopProcessing \
-     tests/nonsmoke/functional/roseTests
+     cmake CMakeLists.txt build-rex.sh rose_config.h.in.cmake ROSE_VERSION \
+     docs scripts tools tutorial exampleTranslators LicenseInformation \
+     src tests
    ```
 4) Apply and resolve:
    - Use `git am -3` or `git apply`, then resolve conflicts.
    - If a commit mixes kept/dropped hunks within a file, use `git add -p` to keep only relevant hunks.
 5) REX-specific adjustments (avoid reintroducing dropped deps):
+   - Keep Clang/LLVM-only frontend.
+   - Avoid Windows/mac-specific branches.
    - Keep `mlog.h`/`ASSERT_require` usage where REX has standardized diagnostics.
-   - Do not add `ROSE_ASSERT.h`/`ROSE_ABORT.h` includes (not present in REX).
-   - Keep `std::unordered_map` in `PtrAnal` to avoid reintroducing Boost.
-   - Update `CMakeLists.txt` for new/removed sources only; ignore Autotools/Tup files.
+   - Do not add EDG/Java/UPC/PHP/JS/binary analysis code paths.
+   - Update CMake sources only; ignore Autotools/Tup files.
 6) Validate:
    ```bash
    cmake --build build -j32
    ctest --test-dir build --output-on-failure -R astInterface
    ctest --test-dir build --output-on-failure -R rex
    ```
-7) Record provenance (see table below).
+7) Record provenance (see tables below).
 
-## Upstream provenance for this sync
-The following rose-archive commits (2019-01-01 through 2023-10-20) are reflected in the synced paths listed above. They were applied as a path-filtered sync to the astUtil surface and its direct callers.
+## Triage artifacts
+- `docs/upstream-sync/rose-archive-2019-2023-triage.tsv`: full commit triage output for kept paths (2019-01-01 → 2023-10-26).
+
+## Upstream provenance
+### Phase 1: astUtil + side-effect interface (completed)
+The following rose-archive commits (2019-01-01 through 2023-10-20) are reflected in the astUtil sync.
 
 | Upstream commit | Summary | REX commit | Notes |
 | --- | --- | --- | --- |
@@ -91,3 +119,5 @@ The following rose-archive commits (2019-01-01 through 2023-10-20) are reflected
 | 3f7f4553bb865af343dd83273c9051d1cbd158b8 | Warning fixes | d0d9388faf4aabdb97298cac5180e32c8b8e7c76 | Path-filtered only |
 | eca7c1047172b53c66f95ab5faef9db4b963991f | Warning fixes | d0d9388faf4aabdb97298cac5180e32c8b8e7c76 | Path-filtered only |
 
+### Phase 2: full repo sync (in progress)
+- Provenance for the full-repo sync will be recorded here as commits are applied.
