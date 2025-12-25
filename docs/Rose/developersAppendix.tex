@@ -490,12 +490,11 @@ Git cheat sheet: \htmladdnormallink{http://cheat.errtheblog.com/s/git}{http://ch
         Here's an example specific to a commit on the internal SVN or an SVN branch:
         {\indent
           \begin{verbatim}
-          Adjusted test case for new binary function detection
+          Adjusted test case for new function detection
 
-            This test case assumed that the only functions in a binary executable
-            were those that had symbols in the symbol table.  This is no longer
-            true since we now determine function boundaries with a wider variety of
-            heuristics.
+            This test case assumed that the only functions were those with explicit
+            definitions in the translation unit. This is no longer true since we now
+            include declarations from headers.
             \end{verbatim} 
         }
   \end{itemize}
@@ -512,12 +511,11 @@ Git cheat sheet: \htmladdnormallink{http://cheat.errtheblog.com/s/git}{http://ch
     {\indent
       \begin{verbatim}
       svn merge -r 402:428
-        Adjusted test case for new binary function detection
+        Adjusted test case for new function detection
 
-        This test case assumed that the only functions in a binary executable
-        were those that had symbols in the symbol table.  This is no longer
-        true since we now determine function boundaries with a wider variety of
-        heuristics.
+        This test case assumed that the only functions were those with explicit
+        definitions in the translation unit. This is no longer true since we now
+        include declarations from headers.
         \end{verbatim} 
     }
   \end{enumerate}
@@ -1579,134 +1577,6 @@ CXX=roseTranslator CXXLD=g++
 %------------------------------------------------------------
 %}}}
 
-\section{Enabling PHP Support}%{{{
-
-\begin{enumerate}
-\item
-Fetch and install PHP (tested with 5.2.6) from
-\texttt{http://www.php.net/downloads.php}.  PHC requires a few
-specific configure flags in order to be able to use PHP properly.
-Fill in your choice of PHP install location where appropriate in place
-of \texttt{/usr/local/php}.
-\begin{verbatim}
-./configure  --enable-debug --enable-embed --prefix=/usr/local/php
-make && make install
-\end{verbatim}
-
-\item
-Fetch and install PHC (tested with svn version r1487).  Currently only
-the development release works with ROSE.
-\begin{verbatim}
-svn checkout http://phc.googlecode.com/svn/trunk/ phc-read-only
-cd phc-read-only
-touch src/generated/*                                                       
-./configure --prefix=/usr/local/php --with-php=/usr/local/php
-make && make install
-\end{verbatim}
-
-\item
-Finally, due to an incongruence in the class hierarchies of PHC and
-ROSE the following changes have to be made to the installed
-\texttt{/usr/local/php/include/phc/AST\_fold.h}.  Hopefully this can be
-resolved soon so that ROSE works with an unmodified upstream PHC.
-
-\begin{verbatim}
---- src/generated/AST_fold.h    2008-07-30 10:35:32.000000000 -0700
-+++ src/generated/AST_fold.h.rose       2008-08-13 15:30:37.000000000 -0700
-@@ -1037,7 +1037,7 @@
-                        case Nop::ID:
-                                return fold_nop(dynamic_cast<Nop*>(in));
-                        case Foreign::ID:
--                               return fold_foreign(dynamic_cast<Foreign*>(in));
-+                               return 0;
-                }
-                assert(0);
-        }
-@@ -1271,7 +1271,7 @@
-                        case Nop::ID:
-                                return fold_nop(dynamic_cast<Nop*>(in));
-                        case Foreign::ID:
--                               return fold_foreign(dynamic_cast<Foreign*>(in));
-+                               return 0;
-                        case Switch_case::ID:
-                                return fold_switch_case(dynamic_cast<Switch_case*>(in));
-                        case Catch::ID:
-\end{verbatim}
-
-\item
-Once both packages have been installed ROSE must be configured with
-the additional \texttt{--with-php=/usr/local/php} option.
-\end{enumerate}
-
-%}}}
-
-\section{Binary Analysis}%{{{
-
-\fixme{Move this binary analysis documentation into the ROSE Manual Binary Analysis chapter.}
-
-   The documentation for the binary analysis can be found in the ROSE manual at
-\ref{binaryAnalysis::overview}.  There are also examples in the ROSE Tutorial.
-However, there are a collection of details 
-that we need to document about the design; so for now these details can go here.
-   The design behind the support for binary analysis in ROSE has caused a number of
-design meetings to discuss details.  This section is specific to the support
-in ROSE for binary analysis and the development of the support in ROSE for the 
-binary analysis.
-
-\subsection{Design of the Binary AST}
-
-This subsection is specific to the design of the binary executable file format
-and specifically the representation of the binary file format in the Binary AST 
-as a tree (in the graph sense) instead of as a directed graph, so that ti can be 
-traversed using the mechanisms available in ROSE.
-
-\begin{itemize}
-   \item Symbols \\
-Their are multiple references to symbols (as shown in the Whole Graph view of the AST with 
-the binary format).  We have selected the SgAsmELFSymbolTable and the SgAsmCoffSymbolTable
-instead of the SgAsmGenericSymbolTable because it points to the most derived type.
-An alternative reasoning is that in stripped binariiies that require DLL support
-the required symbols in the SgAsmELFSymbolTable and the SgAsmCoffSymbolTable are 
-left in place to support the DLL mechanism where as all entries in the
-SgAsmGenericSymbolTable are removed (get more details from Robb). 
-\fixme{We should get a reference for the details of what symbols are left in stripped
-       binaries and what symbols are required to support dynamic linking and where they
-       are stored.}
-
-   \item Checking the symbols in the executable using {\tt nm} \\
-ROSE permits a programmable interface to the binary executable file format,
-but unix utility functions provide text output of such details. For example,
-use {\tt nm -D .libs/librose.so | c++filt | less } to generate a list of
-all the symbols in an executable (text output).  In this case {\tt c++filt }
-resolved the original names from the mangled names for executables built from 
-C++ applications.  The C++ symbols appear at the bottom of the listing.
-
-\end{itemize}
-
-
-\subsection{Output from {\bf AC\_CANONICAL\_BUILD} Autoconf macro}
-
-   The ROSE {\em configure.in} calls the {\bf AC\_CANONICAL\_BUILD} Autoconf 
-macro as a way to determine some details about the target machine.  The
-results of these for the machines commonly used for development are:
-\begin{verbatim}
-Linux (tux270, 64 bit):
-   build_cpu    = x86_64
-   build_vendor = redhat
-   build_os     = linux-gnu
-
-OSX (ninjai: 64bit Mac Desktop):
-   build_cpu    = i386
-   build_vendor = apple
-   build_os     = darwin9.6.0
-
-Cygwin (tux245: 32 bit Windows XP running Cygwin):
-   build_cpu    = i686
-   build_vendor = pc
-   build_os     = cygwin
-\end{verbatim}
-%}}}
-
 \section{Testing on the NMI Build and Test Farm}%{{{
 
 The NMI Build and Test Farm allows us to compile tests on ROSE on a variety of
@@ -2016,7 +1886,7 @@ centralize it and make ROSE more clear to users.
 There are four levels:
 \begin{enumerate}
    \item ROSE Frontend \\
-      Generation of Abstract Syntax Tree (AST) from source code or binary executable.
+      Generation of Abstract Syntax Tree (AST) from source code.
       The AST holds structural representations of the input software.
 
    \item ROSE Midend \\
@@ -2025,7 +1895,6 @@ There are four levels:
       \item ROSE Analysis API \\
          This would include intra-procedural analysis, inter-procedural analysis, 
          and whole program analysis (which over comes the issues of separate compilation).
-         This analysis can handle either source code analysis, binary analysis, or both.
          Program analysis on source code includes:
          \begin{enumerate}
             \item Program analysis on source code includes:
@@ -2045,17 +1914,6 @@ There are four levels:
                \item Liveness Analysis
                \item Dependence Analysis
                \item AST Interpreter (Interpretation of Concrete Semantics using AST)
-            \end{enumerate}
-            \item Program analysis on binaries includes:
-            \begin{enumerate}
-               \item Call graph Analysis
-               \item Control Flow Analysis
-               \item Constant Propogation
-               \item Data Flow Analysis
-               \item InstructionSemantics
-               \item Library Identification (FLIRT)
-               \item Dwarf Debug Format
-               \item Analysis of the Binary File Format
             \end{enumerate}
          \end{enumerate}
 
@@ -2082,8 +1940,7 @@ There are four levels:
                \item ImplicitCodeGeneration \\
                   This work makes C++ implicit semantics explicit for C style analysis.
                \item FunctionCallNormalization \\
-                  This is a library of function call normizations to support binary
-                  analysis.
+                  This is a library of function call normalizations to support analysis.
                \item AST Copy support \\
                   This support permits arbitrary subtrees (or the whole AST) to be copied
                   with control over deep or shallow copying via a single function.
@@ -2091,9 +1948,6 @@ There are four levels:
                   This work permits the merging of separate AST's and the sharing of their
                   identically names language declarations to support whole program
                   analysis. Duplicate parts of the merged AST are deleted.
-               \item Static Binary Rewriting \\
-                  A restricted set of transformations are possible on a binary executable,
-                  this section details this work.
             \end{enumerate}
          \end{enumerate}
 %        \end{enumerate}
@@ -2162,9 +2016,6 @@ There are four levels:
 
       \item GUI Support \\
          This section contains the support for building GUI based tools using ROSE.
-
-      \item Binary Analysis connection to IDA PRO \\
-         This section contains the support for using IDA Pro with ROSE for Binary Analysis.
 
       \item Database Support \\
          This section contains the support for building tools that use SQLite Database.
@@ -2420,7 +2271,7 @@ sageinterface
 
    The ROSE User Application Program Interface (API) is the subset of ROSE that is
 typically required by users to write ROSE based applications for the general
-processing of software (source code or executable).  Specialized projects may
+processing of source code.  Specialized projects may
 require deeper levels of the ROSE software than present in this API and many
 project may not use but a small part of this API.  This documentation is
 to present ROSE at a high level while covering enough detail to make it
@@ -2437,10 +2288,10 @@ aliases that would permit alternative shorter names (an option).
 \subsubsection{Frontend (Yi)}
 {\bf Interm proposed namespace name: {\em ROSE\_Frontend}} \\
 \fixme{Liao will be proposing namespace names for us to agree upon separately.}
-    The frontend of ROSE takes the source code or binary executable 
-and generates an Abstract Syntax Tree (AST), which for the basis of 
+    The frontend of ROSE takes the source code
+and generates an Abstract Syntax Tree (AST), which for the basis of
 further work. The AST forms a structural representation of the source
-code or binary executable.
+code.
 \fixme{We might discover that the frontend and backend are too simple to 
 deserve their own namespaces.}
 \begin{enumerate}
@@ -2464,28 +2315,6 @@ deserve their own namespaces.}
    compiled later.
 \end{enumerate}
 
-\paragraph{Notes from Robb}
-\fixme{These might be too low level for the proposed API.}
-\begin{enumerate}
-	\item Parsing functions \\
-   These methods parse a particular entity from a binary file and
-   fill in an existing IR node that was recently constructed.
-   See parse() methods in src/frontend/BinaryFormats/*.C
-   \item Disassembly \\
-   Disassembling a buffer into a std::map of instructions.  ROSE
-   normally calls this automatically, does a little analysis to
-   organize instructions into basic blocks and basic blocks into
-   functions, and links everything into the AST. However, its
-   also useful to call the disassembler explicitly. Disassemblers
-   can be specialized by derivation. There's a number of
-   functions and full doxygen documentation (the actual functions
-   that disassemble a \_single\_ x86, ARM, or PowerPC instruction
-   are only lightly documented). \\
-   See doxygen for Disassembler class. \\
-   See Rose/BinaryAnalysis/Disassembler.h
-\end{enumerate}
-
-
 \subsubsection{Midend (All)}
 {\bf Interm proposed namespace name: {\em ROSE\_Midend}} \\
    The midend of ROSE is typically where the user interacts with the AST
@@ -2505,7 +2334,7 @@ separately.
 \subparagraph{Construct (TP \& DQ)}
    This covers the construction of various data structures that are part of
 specific forms of analysis or are used in subsequent forms of analysis.
-We separate out the API that is specific for source code and binary executable.
+We separate out the API that is specific for source code.
 \lstset{language={C++},basicstyle=\small} 
 \begin{enumerate}
    \item Source (TP) \\
@@ -3066,8 +2895,7 @@ string getQualifiedFunctionName(SgFunctionDeclaration *astNode);
 \subparagraph{Use (TP \& DQ)}
    The use of the data structures built to some forms of analysis (e.g. call graph)
 can be used to support subsequent forms of analysis that operate on the generated
-data structures. We separate out the API that is specific for source code and 
-binary executable.
+data structures. We separate out the API that is specific for source code.
 \begin{enumerate}
    \item Source (TP) \\
    \begin{enumerate}
@@ -3526,69 +3354,6 @@ class StackFrame {
 \end{lstlisting}
    \end{enumerate}
 
-   \item Binary (DQ) \\
-   \begin{enumerate}
-      \item InstructionSemantics \\
-      See doxygen documentation for the
-      Rose::BinaryAnalysis::InstructionSemantics namespace.
-      \item Library Identification (FLIRT) \\
-      This has not yet been moved from {\tt developersScratchSpace/Dan/libraryIdentification\_tests}
-      to a more useful location in ROSE.  Likely should be put in the {\em midend} as part
-      of {\em analysis}.
-
-      \item Analysis of the Binary File Format \\
-      This has not yet been moved from {\tt developersScratchSpace/Dan/astEquivalence\_tests}
-      to a more useful location in ROSE.  Likely should be put in the {\em midend} as part
-      of {\em analysis}.
-
-      \item Dynamic Analysis of Instruction Execution \\
-      There are three interfaces:
-      \begin{enumerate}
-         \item Ptrace: Uses the Unix ptrace() system call to trace over 
-               the network a binary executing on a remote linux machine.
-         \item Pin: Traces an executable running on the same machine as ROSE.
-         \item Ether: Traces an executable running in Windows XP on 
-               a Xen virtual machine on the same hardware as ROSE.
-      \end{enumerate}
-
-      \item General Dynamic Analysis \\
-      Uses Ether/Xen to execute the specimen in Windows XP on a
-      virtual machine and adds new SgAsmGenericSections containing
-      disassembled instructions to the AST as those areas
-      are discovered.  Can then unparse the AST to a new executable.
-      {\em This is work in progress.}
-
-      \item Detecting unreferenced regions \\
-      Finding what regions of the binary were never referenced
-      during parsing.  The binary I/O utilities keep track of
-      everything that was read during parsing and this information
-      is available through an ExtentMap (see utilities below). The
-      inverse of the ExtentMap will show what hasn't been
-      referenced.\\
-      See doxygen for ExtentMap class.
-
-      \item Basic block detection \\
-      Organize instructions into basic blocks.  The Partitioner
-      class is reponsible for taking a set of instructions and
-      deciding which instructions belong together in a basic
-      block. This analysis is normally called automatically by ROSE
-      as part of its disassembly procedure, but it's also useful to
-      call this explicitly (especially if you also called the
-      Disassembler explicitly, since the disassemlber doesn't
-      actually put things into basic blocks).
-      Fully documented in doxygen. See Partitioner class. \\
-      See src/frontend/Disassembler/Partitioner.h
-
-      \item Function boundary detection \\
-      Organize basic blocks into functions. The Partitioner class is
-      responsible for taking a set of basic blocks and figuring out
-      how to organize them into functions. It can look at other
-      parts of a binary AST (like symbol tables), is fully
-      configurable, and can be specialized by derivation.
-      See doxygen for Partitioner class. \\
-      See src/frontend/Disassembler/Partitioner.h
-
-   \end{enumerate}
 \end{enumerate}
 
 \paragraph{Transformation}
@@ -3863,15 +3628,6 @@ Most API functions take SgNode* instead of SgForStatement* to be compatible for 
        \end{enumerate} % end of general transformation
    \end{enumerate}  % end of transformation
 
-\subparagraph{Binary (DQ)}
-\begin{enumerate}
-   \item Static Binary Rewriting \\
-         A restricted set of transformations are possible on a binary executable.
-         Existing work supports moving and/or resizing a section. We don't handle 
-         all cases since this is incredibly complicated. \\
-         See {\bf SgAsmGenericFile::shift\_extend()}.
-\end{enumerate}
-
 \subsubsection{Backend (DQ)}
 {\bf Interm proposed namespace name: {\em ROSE\_Backend}} \\
    The backend part of ROSE generates the code and produces a final executable
@@ -3882,38 +3638,11 @@ the backend; thus is has a simple API.
    This function generates source code from the AST and calls the backend
    compiler. The integer error code from the backend compiler is returned.
    UnparseFormatHelp permits limited control over the formatting of the 
-   generated source code. UnparseDelegate is currently ignored. For binaries,
-   this function generates an assembler listing with section information and
-   a reassembled binary executable.
+   generated source code. UnparseDelegate is currently ignored.
 
    \item {\bf int backendUsingOriginalInputFile ( SgProject* project );} \\
    This is useful as a test code for testing ROSE for use on projects that target Compass or any
    other analysis only tool using ROSE. Called in tests/nonsmoke/functional/testAnalysis.C for example.
-
-   \item Assembler \\
-   Generating machine code from SgAsmInstruction nodes. The
-   Assembler class is reponsible for taking SgAsmInstruction
-   nodes and generating machine code, placing the result in a
-   buffer.  The assembler can be specialized by derivation.
-
-   Note: currently we only have an x86-64 assembler. The 32-bit
-   needs a bit more work.  The x86 assembler is generated
-   automatically from the Intel Instruction Set Reference
-   documentation and is thus substantially smaller than the x86
-   disassembler. \\
-   See doxygen Assembler class. \\
-   See src/frontend/Disassembler/Assembler.h
-
-   \item Control of Assembler \\
-   Various aspects of assembly can be controlled through
-   properties of the Assembler object.  For instance, should the
-   assembler use smallest possible data encodings or honor the
-   sizes of the instruction operands in the AST; should
-   instruction prefixes be emitted in the same order and
-   cardinality as the original parse, or in the order recommended
-   by Intel; etc. \\
-   See doxygen Assembler class. \\
-   See src/frontend/Disassembler/Assembler.h
 
 \end{enumerate}
 
@@ -4528,51 +4257,6 @@ typedef SgBoostEdgeWeightList* SgBoostEdgeWeightListPtr;
       Returns the name of file associated the specific statement or expression of the AST.
       The returned string is the absolute path plus file name.
    \end{enumerate}
-
-   \item ExtentMap \\
-   A class for keeping track of contiguous regions of an address
-   space. Can be used to manage free lists, or keep track what
-   parts of a file have been referenced. Similar to std::map but
-   having different lookup functions and able to combine adjacent
-   regions into single entries in its data structure. \\
-   See doxygen ExecMap class. \\
-   See src/frontend/BinaryFormats/ExtentMap.C.
-
-   \item Debug dumps \\
-   The dump() methods scattered throughout
-   src/frontend/BinaryFormats/*.C generate human-readable tables
-   describing all details of the SgAsm* nodes. They all take the
-   same arguments. These are what produce the *.dump files. \\
-   See src/frontend/BinaryFormats/*.C
-
-   \item String Management \\
-   Functions that manage strings that might be stored in various
-   kinds of string tables in a binary file.  Modifying strings,
-   sharing storage, repacking tables, reallocating individual
-   strings, avoidance of certain file regions, etc. \\
-   See src/frontend/BinaryFormats/GenericString.C
-
-   \item Section I/O \\
-   A variety of functions for reading the original content of a
-   binary section either by file offset or through a
-   MemoryMap. Also functions for writing back to the file. \\
-   Defined for SgAsmGenericFile and SgAsmGenericSection. \\
-   See src/frontend/BinaryFormats/GenericFile.C src/frontendBinaryFormats/GenericSection.C
-
-   \item MemoryMap \\
-   A data structure similar to std::map that maps one address
-   space into another (typically a virtual memory address space
-   into a file address space).  This allows ROSE to create a
-   memory address space separate from its own and manage it as a
-   program loader would do. \\
-   See doxygen MemoryMap class. \\
-   See Rose/BinaryAnalysis/MemoryMap.h
-
-   \item Data conversion \\
-   Functions for converting data from file format to memory
-   format. Most of these are to handle byte order, but there are
-   some other encodings as well. \\
-   See src/frontend/BinaryFormats/ExecGeneric.C
 
    \item Miscellaneous Support (DQ) \\
          Output of usage information, ROSE version number support, etc.

@@ -12,7 +12,7 @@ SUBDIRS =
 noinst_PROGRAMS =
 TEST_TARGETS =
 
-# Must have this guard, otherwise binary analysis without C++ enabled will fail.
+# Must have this guard, otherwise C++-only tests without C++ enabled will fail.
 # TODO: move this into a subdirectory
 if ROSE_BUILD_CXX_LANGUAGE_SUPPORT
 

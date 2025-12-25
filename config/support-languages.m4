@@ -133,13 +133,6 @@ AC_ARG_ENABLE([fortran],
                 fi
                 case "$enableval" in
                   [yes)]
-                        if test "x$with_java" = "xno" ; then
-                          [AC_MSG_FAILURE([[[Fortran Support]] you specified conflicting configure flags: --enable-fortran="$enableval" enables Fortran-language support, which requires Java, and --with-java="$with_java" disables Java])]
-                        fi
-                        if test "x$USE_JAVA" = "x0" ; then
-                          [AC_MSG_FAILURE([[[Fortran Support]] you requested to build Fortran language support with --enable-fortran="$enableval", which requires Java, but Java was not found. Do you need to explicitly specify your Java using the --with-java configure-switch? (See ./configure --help)])]
-                        fi
-
                   	if test "x$list_has_fortran" != "xyes" ; then
                           # --enable-languages does not include Fortran, but --enable-fortran=yes
                   	  LANGUAGES_TO_SUPPORT+=" fortran"
@@ -237,8 +230,6 @@ fortran)
           AC_MSG_FAILURE([[[Fortran support]] gfortran not found: required for syntax checking and semantic analysis.
                            Do you need to explicitly specify gfortran using the --with-gfortran=path/to/gfortran configure-switch? (See ./configure --help)])
         fi
-        # Java (JDK and JVM) is required for Fortran OFP parser
-        USE_JAVA=1
         support_fortran_frontend=yes
         support_fortran_language=yes
         AC_DEFINE([ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT], [], [Build ROSE to support the Fortran langauge])
@@ -400,17 +391,6 @@ if test "x$support_opencl_frontend" = "xyes"; then
   AC_MSG_RESULT([yes])
 else
   AC_MSG_RESULT([no])
-fi
-
-#Turn off java unless explicitly needed/requested [Rasmussen 2022.01.21]
-if test "x$support_fortran_frontend" = "xyes"; then
-  with_java=yes
-else
-  if test "x$support_java_frontend" = "xyes"; then
-    with_java=yes
-  else
-    with_java=no
-  fi
 fi
 
 # End macro ROSE_SUPPORT_LANGUAGES.

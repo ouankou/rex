@@ -113,8 +113,6 @@ install-rose-library: install-data-local
 #
 # It installs whatever is in the ROSE installation prefix, but at least the ROSE library and supporting header files.
 #
-# We cannot distribute Oracle Java because it requires the user to agree to a license. The user must download it themselves.
-#
 # We cannot distribute CXX_ROOT or C_ROOT because it might be pointing to an Intel compiler, which needs to be purchased
 # by the user.
 #
@@ -238,31 +236,6 @@ install-data-local: uninstall-local
 	@echo '*****************************************************************'
 
 DISTCHECK_CONFIGURE_FLAGS =
-
-# DQ (7/25/2008): If ROSE was originallly configured with Fortran (by tuning 
-# on the java support) then make sure it is tested as part of the distcheck rule.
-# if ROSE_USE_OPEN_FORTRAN_PARSER
-if ROSE_USE_INTERNAL_JAVA_SUPPORT
-# DISTCHECK_CONFIGURE_FLAGS += --with-java
-  DISTCHECK_CONFIGURE_FLAGS += --with-java=$(JAVA_PATH)
-else
-# DQ (10/22/2010): Added specification of --without-java to distcheck rule.
-# If we have first built without java then we have had to build some of the
-# Fortran language supporting files as empty files and thus we don't want to
-# run distcheck in a way that would use those files. However the problem
-# when this is not used has more to do with the Java langauge support.
-# A better reason why this is required might be so that we can run the NMI tests.
-  DISTCHECK_CONFIGURE_FLAGS += --without-java
-# TOO (3/24/2011): TODO: the new language-support configuration that I've
-# implemented does not automatically disable fortran, whereas the previous
-# implementation did. Since we now have Java-language support, the
-# --without-java flag is confusing. I thought it meant "without java-language
-# support". Speaking with Dan, we concluded that we need to look at renaming
-# --without-java to something else like --without-jvm or --without-java-components
-# This flag is suppose to turn off all parts of ROSE that use Java: 
-# projects/javaports, java- and fortran-language support, etc.
-  DISTCHECK_CONFIGURE_FLAGS += --disable-fortran
-endif
 
 # SRIRAM (8/2/2010): changing distcheck configuration for LLVM translator
 if ROSE_USE_LLVM

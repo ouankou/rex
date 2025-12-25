@@ -58,9 +58,8 @@ configure_date=`date '+%A %B %e %H:%M:%S %Y'`
 AC_SUBST(configure_date)
 # echo "In ROSE/con figure: configure_date = $configure_date"
 
-# DQ (1/27/2008): Added based on suggestion by Andreas.  This allows
-# the binary analysis to have more specific information. However, it
-# appears that it requires version 2.61 of autoconf and we are using 2.59.
+# DQ (1/27/2008): Added based on suggestion by Andreas. It appears to require
+# version 2.61 of autoconf and we are using 2.59.
 # echo "$host_cpu"
 # echo "host_cpu = $host_cpu"
 # echo "host_vendor = $host_vendor"
@@ -81,8 +80,8 @@ if test "$prefix" = NONE; then
    prefix="$PWD"
 fi
 
-# Call supporting macro for the Java path required by the Open Fortran Parser (for Fortran 2003 support)
-# Use our classpath in case the user's is messed up
+# Call supporting macro for the JDK required by the Open Fortran Parser (OFP).
+# Use our classpath in case the user's is messed up.
 AS_SET_CATFILE([ABSOLUTE_SRCDIR], [`pwd`], [${srcdir}])
 
 ROSE_CONFIGURE_SECTION([Checking GNU Fortran])
@@ -111,9 +110,9 @@ AC_MSG_NOTICE([GFORTRAN_PATH = "$GFORTRAN_PATH"])
   AC_CHECK_LIB([curl], [Curl_connect], [HAVE_CURL=yes], [HAVE_CURL=no])
   AM_CONDITIONAL([HAS_LIBRARY_CURL], [test "x$HAVE_CURL" = "xyes"])
 
-# Rasmussen (01/13/2021): Moved checking for Java until after language configuration
-# options are set.  Otherwise configure fails if jdk libraries aren't found even if not used.
-  ROSE_SUPPORT_JAVA # This macro uses JAVA_HOME
+# Rasmussen (01/13/2021): Moved JVM checks until after language configuration
+# options are set. Otherwise configure fails if JDK libraries aren't found even if not used.
+  ROSE_SUPPORT_JAVA
 
 # ****************************************************
 # ROSE/tests directory compilation & testing

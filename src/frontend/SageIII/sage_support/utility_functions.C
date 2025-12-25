@@ -247,7 +247,7 @@ std::string version_message() {
 #endif
 
     //-----------------------------------------------------------------------
-    // Information related to any source language analysis (not binary analysis).
+    // Information related to source language analysis.
     //-----------------------------------------------------------------------
 
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
@@ -1291,8 +1291,8 @@ Rose::utility_stripPathFromFileName ( const std::string& fileNameWithPath )
 std::string
 Rose::stripFileSuffixFromFileName ( const std::string& fileNameWithSuffix )
    {
-  // This function is not sophisticated enough to handle binaries with paths such as:
-  //    ROSE/ROSE_CompileTree/svn-LINUX-64bit-4.2.2/tutorial/inputCode_binaryAST_1
+  // This function is not sophisticated enough to handle paths such as:
+  //    ROSE/ROSE_CompileTree/svn-LINUX-64bit-4.2.2/tutorial/inputCode_example_1
 #if 1
      size_t lastDotPos = fileNameWithSuffix.rfind('.');
      return fileNameWithSuffix.substr(0, lastDotPos);

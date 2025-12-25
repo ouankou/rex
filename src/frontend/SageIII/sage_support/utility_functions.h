@@ -260,22 +260,29 @@ namespace Rose
   // DQ (10/29/2018): Build a map for the unparser to use to locate SgIncludeFile IR nodes.
      extern std::map<std::string, SgIncludeFile*> includeFileMapForUnparsing;
 
-  // DQ (11/25/2020): These are the boolean variables that are computed in the function compute_language_kind() 
-  // and inlined via the SageInterface::is_<language kind>_language() functions.  This fixes a significant 
-  // performacne bug that was identified by Matt Sottile. First indications of this problem were from HPCToolKit,
-  // when it reported that there were large ammounts of time spent in the memory pool traversals, but the results 
-  // were not clear since we could not trace that to the SageInterface::is_<language kind>_language() functions 
-  // directly.  Matt was able to identify the root cause of the problem.  It turns out the that the
-  // SageInterface::is_<language kind>_language() functions are implemented using a memory pool traversal of the 
-  // SgSourceFile (and SgBinaryFile, when binary analysis is enabled at configure time).  The new implementation
-  // supports these boolean values to be inlined via the SageInterface::is_<language kind>_language() functions.
-  // And the compute_language_kind() function is called from the:
-  //    SgFile* determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project );
-  // contained in the sage_support.cpp file.  This function is the single point at whcuh all of the SgFile IR nodes
-  // (including SgSourceFile, and SgBinaryFile) are generated.
+     // DQ (11/25/2020): These are the boolean variables that are computed in
+     // the function compute_language_kind() and inlined via the
+     // SageInterface::is_<language kind>_language() functions.  This fixes a
+     // significant performacne bug that was identified by Matt Sottile. First
+     // indications of this problem were from HPCToolKit, when it reported that
+     // there were large ammounts of time spent in the memory pool traversals,
+     // but the results were not clear since we could not trace that to the
+     // SageInterface::is_<language kind>_language() functions directly.  Matt
+     // was able to identify the root cause of the problem.  It turns out the
+     // that the SageInterface::is_<language kind>_language() functions are
+     // implemented using a memory pool traversal of the SgSourceFile nodes. The
+     // new implementation supports these boolean values to be inlined via the
+     // SageInterface::is_<language kind>_language() functions.
+     // And the compute_language_kind() function is called from the:
+     //    SgFile* determineFileType ( vector<string> argv, int & nextErrorCode,
+     //    SgProject* project );
+     // contained in the sage_support.cpp file. This function is the single
+     // point at which all of the SgFile IR nodes (including SgSourceFile) are
+     // generated.
 
-  // Note: the semantics is that there is at least one of the language kind files processed by ROSE, across all 
-  // SgFile objects across all SgProject objects.
+     // Note: the semantics is that there is at least one of the language kind
+     // files processed by ROSE, across all SgFile objects across all SgProject
+     // objects.
      extern bool is_C_language;
      extern bool is_OpenMP_language;
      extern bool is_C99_language;

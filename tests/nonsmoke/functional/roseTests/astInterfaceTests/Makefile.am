@@ -34,7 +34,6 @@ bin_PROGRAMS = loopInterchange loopUnrolling loopTiling loopCollapsingDirective 
 	    generateUniqueName annotateExpressionsWithUniqueNames buildExternalStatement \
     buildCommonBlock doLoopNormalization buildLabelStatement2 replaceWithPattern \
     insertBeforeUsingCommaOp insertAfterUsingCommaOp deepCopy fixVariableReferences \
-    buildJavaPackage \
     getArrayElementType interfaceFunctionCoverage buildTemplateClass buildUsingDirectiveStatement
 
 VALGRIND_OPTIONS = --tool=memcheck -v --num-callers=30 --leak-check=no --error-limit=no --show-reachable=yes --trace-children=yes --suppressions=$(top_srcdir)/scripts/rose-suppressions-for-valgrind
@@ -94,7 +93,6 @@ replaceWithPattern_SOURCES               = replaceWithPattern.C
 insertBeforeUsingCommaOp_SOURCES         = insertBeforeUsingCommaOp.C
 insertAfterUsingCommaOp_SOURCES          = insertAfterUsingCommaOp.C
 deepCopy_SOURCES                         = deepCopy.C
-buildJavaPackage_SOURCES                 = buildJavaPackage.C           
 loopCollapsing_SOURCES                    = loopCollapsing.C
 loopCollapsingDirective_SOURCES           = loopCollapsingDirective.C
 interfaceFunctionCoverage_SOURCES         = interfaceFunctionCoverage.C
@@ -158,7 +156,6 @@ LDADD =  $(ROSE_LIBS)
   rose_inputloopCollapsing_3.C\
   rose_inputloopCollapsing_4.C\
   rose_inputloopCollapsing_5.C\
-  buildJavaPackage.passed
 
 # DQ (7/7/2019): This is failing for at least GNU 5.1, and I can't debug it 
 # (need to discuss with Robb, everything else appears to pass).
@@ -520,10 +517,8 @@ $(group3): rose_%: % $(group3_headers)
 		$(srcdir)/astInterface.conf $@.passed
 
 # Doesn't produce any output source files
-buildJavaPackage.passed: inputbuildJavaPackage.C buildJavaPackage
 	@$(RTH_RUN) \
 		USE_SUBDIR=yes \
-		CMD="$$(pwd)/buildJavaPackage$(EXEEXT) $(TEST_CXXFLAGS) -I$(abs_srcdir) -c $(abspath $<)"  \
 		$(TEST_EXIT_STATUS) $@
 
 	# MUST keep this up-to-date!!
@@ -554,7 +549,6 @@ buildJavaPackage.passed: inputbuildJavaPackage.C buildJavaPackage
        inputbuildLabelStatement2.f inputreplaceWithPattern.C inputinsertBeforeUsingCommaOp.C			\
        inputinsertAfterUsingCommaOp.C inputdeepCopy.C inputfixVariableReferences.C                              \
        inputloopCollapsing_2.C  inputloopCollapsing_3.C  inputloopCollapsing_4.C  inputloopCollapsing_5.C \
-       inputbuildJavaPackage.C inputloopCollapsing_1.C inputinterfaceFunctionCoverage.C  \
        inputbuildTemplateClass.C inputUsingDirectiveStatement.C
 
 # JP (10/4/14): Added the unit tests

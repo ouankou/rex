@@ -1,5 +1,5 @@
 dnl
-dnl This file contains local autoconf functions (borrowed from PHP).
+dnl This file contains local autoconf functions.
 dnl
 dnl echo "${1}..............." | awk '{ printf("%s", substr([$]$0, 0, 15)); }'"
 
@@ -238,4 +238,3 @@ AC_ARG_ENABLE($1,AS_HELP_STRING([--enable-$1],[$3]),
 ])
 AC_MSG_RESULT([[$]$5])
 ])
-

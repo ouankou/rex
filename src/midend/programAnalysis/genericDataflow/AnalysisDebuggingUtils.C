@@ -449,7 +449,7 @@ void dbgStream::printDetailFileHeader(string title)
         *(this) << "\t.hidden { display: none; }\n";
         *(this) << "\t.unhidden { display: block; }\n";
         *(this) << "\t</style>\n";
-        *(this) << "\t<script type=\"text/javascript\">\n";
+        *(this) << "\t<script>\n";
         *(this) << "\tfunction unhide(divID) {\n";
         *(this) << "\t  var parentDiv = document.getElementById(\"div\"+divID);\n";
         *(this) << "\t\tif (parentDiv) {\n";
@@ -521,7 +521,11 @@ void dbgStream::enterFunc(string funcName/*, string indent*/)
         *(this) << "\t\t\t"<<tabs(buf.funcs.size())<<"</td></tr>\n";
         *(this) << "\t\t\t"<<tabs(buf.funcs.size())<<"<tr width=\"100%\"><td width=50></td><td width=\"100%\">\n";
         *(this) << "\t\t\t"<<tabs(buf.funcs.size()+1)<<"<table bgcolor=\"#"<<colors[(buf.funcs.size()-1)%colors.size()]<<"\" width=\"100%\" id=\"table"<<divName.str()<<"\" style=\"border:1px solid white\" onmouseover=\"this.style.border='1px solid black'; highlightLink('"<<divName.str()<<"', '#F4FBAA');\" onmouseout=\"this.style.border='1px solid white'; highlightLink('"<<divName.str()<<"', '#FFFFFF');\" onclick=\"focusLink('"<<divName.str()<<"', event);\">\n";
-        *(this) << "\t\t\t"<<tabs(buf.funcs.size()+1)<<"<tr width=\"100%\"><td width=50></td><td width=\"100%\"><h2><a name=\""<<divName.str()<<"\" href=\"javascript:unhide('"<<divName.str()<<"');\">";
+        *(this) << "\t\t\t" << tabs(buf.funcs.size() + 1)
+                << "<tr width=\"100%\"><td width=50></td><td "
+                   "width=\"100%\"><h2><a name=\""
+                << divName.str() << "\" href=\"#\" onclick=\"unhide('"
+                << divName.str() << "'); return false;\">";
         buf.userAccessing();
         *(this) << funcName;
         buf.ownerAccessing();
@@ -662,16 +666,7 @@ void dbgStream::addDOT(string imgFName, string graphName, string dot, ostream& r
         ret << "\t\t\t"<<tabs(buf.funcs.size()+1)<<"image_"<<numImages<<":<img src=\""<<imgFName<<"\" "; // <a href=\"image_" << numImages << ".dot\">
         //usemap=\""<<graphName.str()<<"\"
         ret << "><br>\n"; // </a>
-        
-        //ret << "<a href=\"javascript:showNodes("<<numImages<<", '";
-        //for(set<string>::iterator n=nodes.begin(); n!=nodes.end(); ) {
-        //      ret << "" << *n << "";
-        //      n++;
-        //      if(n!=nodes.end())
-        //              ret << " ";
-        //}
-        //ret << "')\">Subset</a><iframe height=0 width=0 id=\"imgFrame_"<<numImages<<"\"></iframe><br>\n";
-        
+
         //ret << "\t\t\t"<<tabs(buf.funcs.size()+1)<<"<embed height=\"100%\" width=\"100%\" pluginspage=\"http://www.adobe.com/svg/viewer/install\" src=\""<<imgFName<<"\">"<<endl;
         //ret << "\t\t\t"<<tabs(buf.funcs.size()+1)<<"<object height=\"100%\" width=\"100%\" data=\""<<imgFName<<"\" type=\"image/svg+xml\"></object>"<<endl;
         

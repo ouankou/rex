@@ -27,8 +27,7 @@ Different ROSE Translators (for testing different levels of infrastructure):
    is a comprehensive of the base level ROSE infrastructure.  This translator is
    used for ALL of internal testing using ROSE on the regression test codes in
    the CompileTests directory. This is the most complete test of the base level
-   of compiler infrastructure for ROSE (on C, C++, Fortran, PHP, OpenMP,
-   and for binary analysis).
+   of compiler infrastructure for ROSE (on C, C++, Fortran, OpenMP).
 
    (partial test) testParser.C:
       This translator only tests the ability to parse the input application.
@@ -95,4 +94,3 @@ Directories:
 
    translatorTests:
       This directory contains test translators and their input codes for regression tests of ROSE.
-

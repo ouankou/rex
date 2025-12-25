@@ -472,7 +472,7 @@ CommandlineProcessing::addListToCommandLine ( vector<string> & argv , string pre
 
 #if 0
 Rose_STL_Container<string>
-CommandlineProcessing::generateSourceFilenames ( Rose_STL_Container<string> argList, bool binaryMode )
+CommandlineProcessing::generateSourceFilenames ( Rose_STL_Container<string> argList )
    {
      Rose_STL_Container<string> sourceFileList;
 

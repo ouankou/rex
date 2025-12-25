@@ -15995,18 +15995,20 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
   // arglist.push_back("-rose:verbose 2");
 
   // This handles the case where the original command line may have referenced multiple files.
-     Rose_STL_Container<string> fileList = CommandlineProcessing::generateSourceFilenames(arglist,/* binaryMode = */ false);
-     CommandlineProcessing::removeAllFileNamesExcept(arglist,fileList,sourceFilename);
+        Rose_STL_Container<string> fileList =
+            CommandlineProcessing::generateSourceFilenames(arglist);
+        CommandlineProcessing::removeAllFileNamesExcept(arglist, fileList,
+                                                        sourceFilename);
 
-  // DQ (9/3/2008): Added support for SgSourceFile IR node
-  // SgFile* result = new SgFile (arglist, nextErrorCode, 0, project);
-  // AS(10/04/08) Because of refactoring we require the determineFileType function to be called
-  // to construct the node.
-  // SgSourceFile* result = new SgSourceFile (arglist, nextErrorCode, 0, project);
-  // SgSourceFile* result = isSgSourceFile(determineFileType(arglist, nextErrorCode, project));
-  // TH (2009-07-15): changed to more generig isSgFile, this also supports SgBinaryComposite
-     SgFile* result = determineFileType(arglist, nextErrorCode, project);
-     ROSE_ASSERT(result != NULL);
+        // DQ (9/3/2008): Added support for SgSourceFile IR node
+        // SgFile* result = new SgFile (arglist, nextErrorCode, 0, project);
+        // AS(10/04/08) Because of refactoring we require the determineFileType
+        // function to be called to construct the node. SgSourceFile* result =
+        // new SgSourceFile (arglist, nextErrorCode, 0, project); SgSourceFile*
+        // result = isSgSourceFile(determineFileType(arglist, nextErrorCode,
+        // project)); TH (2009-07-15): changed to generic isSgFile.
+        SgFile *result = determineFileType(arglist, nextErrorCode, project);
+        ROSE_ASSERT(result != NULL);
 
 #if 0
      printf ("In SageBuilder::buildFile(): project = %p project->get_fileList_ptr()->get_listOfFiles().size() = %" PRIuPTR " \n",project,project->get_fileList_ptr()->get_listOfFiles().size());

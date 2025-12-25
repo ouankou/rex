@@ -1679,7 +1679,7 @@ Grammar::setUpStatements ()
                                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
 
-  // DQ (7/30/2008): Added support suggested by Ryan for PHP interface specification.
+     // DQ (7/30/2008): Added support for explicit interface annotations.
      ClassDeclaration.setDataPrototype ( "bool", "explicit_annotation_interface", "= false",
                                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 

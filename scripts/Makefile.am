@@ -45,11 +45,7 @@ bin_SCRIPTS =  $(distributedScripts)
 # DQ (12/7/2009): Test for the ROSE example workspace generator.
 # Build the directory in the compile tree.
 ExampleRoseWorkspaceTestDirectory = tmpRoseWorkspace
-if ROSE_USE_INTERNAL_JAVA_SUPPORT
-        ExampleRoseWorkspaceConfigure=./configure --with-boost=$(ac_boost_path) --prefix=@prefix@
-else
-        ExampleRoseWorkspaceConfigure=./configure --with-boost=$(ac_boost_path) --prefix=@prefix@ --without-java
-endif
+ExampleRoseWorkspaceConfigure=./configure --with-boost=$(ac_boost_path) --prefix=@prefix@
 # This tests the new ROSE workspace
 testExampleRoseWorkspace:
 	echo "absolute_path_srcdir = $(absolute_path_srcdir)"

@@ -103,7 +103,6 @@ OUTPUT_TEXT_DIRECTION  = None
 
 # If the BRIEF_MEMBER_DESC tag is set to YES, doxygen will include brief member
 # descriptions after the members that are listed in the file and class
-# documentation (similar to Javadoc). Set to NO to disable this.
 # The default value is: YES.
 
 BRIEF_MEMBER_DESC      = YES
@@ -188,24 +187,16 @@ STRIP_FROM_INC_PATH    =
 
 SHORT_NAMES            = NO
 
-# If the JAVADOC_AUTOBRIEF tag is set to YES then doxygen will interpret the
-# first line (until the first dot) of a Javadoc-style comment as the brief
-# description. If set to NO, the Javadoc-style will behave just like regular Qt-
 # style comments (thus requiring an explicit @brief command for a brief
 # description.)
 # The default value is: NO.
 
-JAVADOC_AUTOBRIEF      = NO
 
-# If the JAVADOC_BANNER tag is set to YES then doxygen will interpret a line
 # such as
 # /***************
-# as being the beginning of a Javadoc-style comment "banner". If set to NO, the
-# Javadoc-style will behave just like regular comments and it will not be
 # interpreted by doxygen.
 # The default value is: NO.
 
-JAVADOC_BANNER         = NO
 
 # If the QT_AUTOBRIEF tag is set to YES then doxygen will interpret the first
 # line (until the first dot) of a Qt-style comment as the brief description. If
@@ -279,13 +270,11 @@ ALIASES                =
 
 OPTIMIZE_OUTPUT_FOR_C  = NO
 
-# Set the OPTIMIZE_OUTPUT_JAVA tag to YES if your project consists of Java or
 # Python sources only. Doxygen will then generate output that is more tailored
 # for that language. For instance, namespaces will be presented as packages,
 # qualified scopes will look different, etc.
 # The default value is: NO.
 
-OPTIMIZE_OUTPUT_JAVA   = NO
 
 # Set the OPTIMIZE_FOR_FORTRAN tag to YES if your project consists of Fortran
 # sources. Doxygen will then generate output that is tailored for Fortran.
@@ -311,13 +300,10 @@ OPTIMIZE_OUTPUT_SLICE  = NO
 # parses. With this tag you can assign which parser to use for a given
 # extension. Doxygen has a built-in mapping, but you can override or extend it
 # using this tag. The format is ext=language, where ext is a file extension, and
-# language is one of the parsers supported by doxygen: IDL, Java, JavaScript,
-# Csharp (C#), C, C++, D, PHP, md (Markdown), Objective-C, Python, Slice, VHDL,
 # Fortran (fixed format Fortran: FortranFixed, free formatted Fortran:
 # FortranFree, unknown formatted Fortran: Fortran. In the later case the parser
 # tries to guess whether the code is fixed or free formatted code, this is the
 # default for Fortran type files). For instance to make doxygen treat .inc files
-# as Fortran files (default is PHP), and .f files as C (default is Fortran),
 # use: inc=Fortran f=C.
 #
 # Note: For files without extension you can use no_extension as a placeholder.
@@ -514,7 +500,6 @@ EXTRACT_STATIC         = @DOXYGEN_EXTRACT_STATIC@
 # If the EXTRACT_LOCAL_CLASSES tag is set to YES, classes (and structs) defined
 # locally in source files will be included in the documentation. If set to NO,
 # only classes defined in header files are included. Does not have any effect
-# for Java sources.
 # The default value is: YES.
 
 EXTRACT_LOCAL_CLASSES  = YES
@@ -888,8 +873,6 @@ INPUT_ENCODING         = UTF-8
 # default file extension mappings.
 #
 # If left blank the following patterns are tested:*.c, *.cc, *.cxx, *.cpp,
-# *.c++, *.java, *.ii, *.ixx, *.ipp, *.i++, *.inl, *.idl, *.ddl, *.odl, *.h,
-# *.hh, *.hxx, *.hpp, *.h++, *.cs, *.d, *.php, *.php4, *.php5, *.phtml, *.inc,
 # *.m, *.markdown, *.md, *.mm, *.dox (to be provided as doxygen C comment),
 # *.py, *.pyw, *.f90, *.f95, *.f03, *.f08, *.f18, *.f, *.for, *.vhd, *.vhdl,
 # *.ucf, *.qsf and *.ice.
@@ -1182,7 +1165,6 @@ GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 
 # The HTML_FILE_EXTENSION tag can be used to specify the file extension for each
-# generated HTML page (for example: .htm, .php, .asp).
 # The default value is: .html.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
@@ -1294,9 +1276,7 @@ HTML_TIMESTAMP         = NO
 
 # If the HTML_DYNAMIC_MENUS tag is set to YES then the generated HTML
 # documentation will contain a main index with vertical navigation menus that
-# are dynamically created via JavaScript. If disabled, the navigation index will
 # consists of multiple levels of tabs that are statically embedded in every HTML
-# page. Disable this option to support browsers that do not have JavaScript,
 # like the Qt help browser.
 # The default value is: YES.
 # This tag requires that the tag GENERATE_HTML is set to YES.
@@ -1529,7 +1509,6 @@ DISABLE_INDEX          = NO
 # structure should be generated to display hierarchical information. If the tag
 # value is set to YES, a side panel will be generated containing a tree-like
 # index structure (just like the one that is generated for HTML Help). For this
-# to work a browser that supports JavaScript, DHTML, CSS and frames is required
 # (i.e. any modern browser). Windows users are probably better off using the
 # HTML help feature. Via custom style sheets (see HTML_EXTRA_STYLESHEET) one can
 # further fine-tune the look of the index. As an example, the default style
@@ -1604,7 +1583,6 @@ FORMULA_TRANSPARENT    = YES
 FORMULA_MACROFILE      =
 
 # Enable the USE_MATHJAX option to render LaTeX formulas using MathJax (see
-# https://www.mathjax.org) which uses client side JavaScript for the rendering
 # instead of using pre-rendered bitmaps. Use this if you do not have LaTeX
 # installed or if you want to formulas look prettier in the HTML output. When
 # enabled you may also need to install MathJax separately and configure the path
@@ -1644,7 +1622,6 @@ MATHJAX_RELPATH        = https://cdn.jsdelivr.net/npm/mathjax@2
 
 MATHJAX_EXTENSIONS     =
 
-# The MATHJAX_CODEFILE tag can be used to specify a file with javascript pieces
 # of code that will be used on startup of the MathJax code. See the MathJax site
 # (see:
 # http://docs.mathjax.org/en/v2.7-latest/output.html) for more details. For an
@@ -1654,11 +1631,9 @@ MATHJAX_EXTENSIONS     =
 MATHJAX_CODEFILE       =
 
 # When the SEARCHENGINE tag is enabled doxygen will generate a search box for
-# the HTML output. The underlying search engine uses javascript and DHTML and
 # should work on any modern browser. Note that when using HTML help
 # (GENERATE_HTMLHELP), Qt help (GENERATE_QHP), or docsets (GENERATE_DOCSET)
 # there is already a search function so this one should typically be disabled.
-# For large projects the javascript based search engine can be slow, then
 # enabling SERVER_BASED_SEARCH may provide a better solution. It is possible to
 # search using the keyboard; to jump to the search box use <access key> + S
 # (what the <access key> is depends on the OS and browser, but it is typically
@@ -1675,9 +1650,7 @@ MATHJAX_CODEFILE       =
 SEARCHENGINE           = NO
 
 # When the SERVER_BASED_SEARCH tag is enabled the search engine will be
-# implemented using a web server instead of a web client using JavaScript. There
 # are two flavors of web server based searching depending on the EXTERNAL_SEARCH
-# setting. When disabled, doxygen will generate a PHP script for searching and
 # an index file used by the script. When EXTERNAL_SEARCH is enabled the indexing
 # and searching needs to be provided by external tools. See the section
 # "External Indexing and Searching" for details.
@@ -1686,7 +1659,6 @@ SEARCHENGINE           = NO
 
 SERVER_BASED_SEARCH    = NO
 
-# When EXTERNAL_SEARCH tag is enabled doxygen will no longer generate the PHP
 # script for searching. Instead the search results are written to an XML file
 # which needs to be processed by an external indexer. Doxygen will invoke an
 # external search engine pointed to by the SEARCHENGINE_URL option to obtain the
@@ -2544,7 +2516,6 @@ MSCFILE_DIRS           =
 DIAFILE_DIRS           =
 
 # When using plantuml, the PLANTUML_JAR_PATH tag should be used to specify the
-# path where java can find the plantuml.jar file. If left blank, it is assumed
 # PlantUML is not used or called during a preprocessing step. Doxygen will
 # generate a warning when it encounters a \startuml command in this case and
 # will not generate output for the diagram.

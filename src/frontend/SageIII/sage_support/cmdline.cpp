@@ -179,16 +179,15 @@ CommandlineProcessing::initExecutableFileSuffixList ( )
         }
    }
 
-// DQ (1/16/2008): This function was moved from the commandling_processing.C file to support the debugging specific to binary analysis
-/* This function not only looks at the file name, but also checks that the file exists, can be opened for reading, and has
- * specific values for its first two bytes. Checking the first two bytes here means that each time we add support for a new
- * magic number in the binary parsers we have to remember to update this list also.  Another problem is that the binary
- * parsers understand a variety of methods for neutering malicious binaries -- transforming them in ways that make them
- * unrecognized by the operating system on which they're intended to run (and thus unrecongizable also by this function).
- * Furthermore, CommandlineProcessing::isBinaryExecutableFile() contains similar magic number checking. [RPM 2010-01-15] */
-bool
-CommandlineProcessing::isExecutableFilename ( string name )
-   {
+   // DQ (1/16/2008): This function was moved from the commandling_processing.C
+   // file for centralized handling.
+   /* This function not only looks at the file name, but also checks that the
+    * file exists, can be opened for reading, and has specific values for its
+    * first two bytes. Checking the first two bytes here means that each time we
+    * add support for a new magic number we have to remember to update this list
+    * also. Furthermore, CommandlineProcessing::isBinaryExecutableFile()
+    * contains similar magic number checking. [RPM 2010-01-15] */
+   bool CommandlineProcessing::isExecutableFilename(string name) {
      initExecutableFileSuffixList();
 
      if (SgProject::get_verbose() > 0)
@@ -246,17 +245,15 @@ CommandlineProcessing::isExecutableFilename ( string name )
      return false;
    }
 
-
 bool
 CommandlineProcessing::isValidFileWithExecutableFileSuffixes ( string name )
    {
   // DQ (8/20/2008):
-  // There may be files that are marked as appearing as an executable but are not
-  // (we want to process them so that they fail in the binary file format tests
-  // rather then here).  so we need to add them to the list of sourceFiles (executable
-  // counts as source for binary analysis in ROSE).
+  // There may be files that are marked as appearing as an executable but are
+  // not (we want to process them so that they fail in later file format checks
+  // rather than here). So we add them to the list of source files.
 
-     initExecutableFileSuffixList();
+  initExecutableFileSuffixList();
 
   // printf ("CommandlineProcessing::isValidFileWithExecutableFileSuffixes(): name = %s validExecutableFileSuffixes.size() = %" PRIuPTR " \n",name.c_str(),validExecutableFileSuffixes.size());
      ROSE_ASSERT(validExecutableFileSuffixes.empty() == false);
@@ -304,11 +301,10 @@ CommandlineProcessing::isValidFileWithExecutableFileSuffixes ( string name )
      return false;
    }
 
-// DQ (1/16/2008): This function was moved from the commandling_processing.C file to support the debugging specific to binary analysis
-// bool CommandlineProcessing::isOptionTakingFileName( string argument )
-bool
-CommandlineProcessing::isOptionTakingSecondParameter( string argument )
-   {
+   // DQ (1/16/2008): This function was moved from the commandling_processing.C
+   // file for centralized handling. bool
+   // CommandlineProcessing::isOptionTakingFileName( string argument )
+   bool CommandlineProcessing::isOptionTakingSecondParameter(string argument) {
      bool result = false;
   // printf ("In CommandlineProcessing::isOptionTakingFileName(): argument = %s \n",argument.c_str());
 
@@ -463,10 +459,10 @@ CommandlineProcessing::isOptionTakingThirdParameter( string argument )
   return (argument == "-unroll");
    }
 
-// DQ (1/16/2008): This function was moved from the commandling_processing.C file to support the debugging specific to binary analysis
-Rose_STL_Container<string>
-CommandlineProcessing::generateSourceFilenames ( Rose_STL_Container<string> argList, bool binaryMode )
-   {
+   // DQ (1/16/2008): This function was moved from the commandling_processing.C
+   // file for centralized handling.
+   Rose_STL_Container<string> CommandlineProcessing::generateSourceFilenames(
+       Rose_STL_Container<string> argList) {
      Rose_STL_Container<string> sourceFileList;
 
      bool isSourceCodeCompiler = false;
@@ -523,15 +519,14 @@ CommandlineProcessing::generateSourceFilenames ( Rose_STL_Container<string> argL
              {
             // printf ("In CommandlineProcessing::generateSourceFilenames(): Look for file names:  argv[%d] = %s length = %" PRIuPTR " \n",counter,(*i).c_str(),(*i).size());
 
-                 if (!isSourceFilename(*i) &&
-                     (binaryMode || !isObjectFilename(*i)) &&
-                     (binaryMode || isExecutableFilename(*i))) {
-                     // printf ("This is an executable file: *i = %s \n",(*i).c_str());
-                     // executableFileList.push_back(*i);
-                     if(isSourceCodeCompiler == false || binaryMode == true)
-                         sourceFileList.push_back(*i);
-                     goto incrementPosition;
-                  }
+            if (!isSourceFilename(*i) && !isObjectFilename(*i) &&
+                isExecutableFilename(*i)) {
+              // printf ("This is an executable file: *i = %s \n",(*i).c_str());
+              // executableFileList.push_back(*i);
+              if (isSourceCodeCompiler == false)
+                sourceFileList.push_back(*i);
+              goto incrementPosition;
+            }
 
             // PC (4/27/2006): Support for custom source file suffixes
             // if ( isSourceFilename(*i) )
@@ -548,10 +543,9 @@ CommandlineProcessing::generateSourceFilenames ( Rose_STL_Container<string> argL
                   {
                  // printf ("This is at least an existing file of some kind: *i = %s \n",(*i).c_str());
                  // foundSourceFile = true;
-                    if(isSourceCodeCompiler == false || binaryMode == true)
-                      sourceFileList.push_back(*i);
-                    goto incrementPosition;
-
+                 if (isSourceCodeCompiler == false)
+                   sourceFileList.push_back(*i);
+                 goto incrementPosition;
                   }
 #endif
 #if 0
@@ -1292,23 +1286,12 @@ SgProject::processCommandLine(const vector<string>& input_argv)
   // DQ (12/8/2007): This leverages existing support in commandline processing
   // printf ("In SgProject::processCommandLine(): Calling CommandlineProcessing::generateSourceFilenames(argv) \n");
 
-  // Note that we need to process this option before the interpretation of the filenames (below).
-  // DQ (2/4/2009): Data member was moved to SgProject from SgFile.
-  // DQ (12/27/2007): Allow defaults to be set based on filename extension.
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(binary|binary_only)",true) == true )
-        {
-          if ( SgProject::get_verbose() >= 1 )
-               printf ("Binary mode ON \n");
-          set_binary_only(true);
-        }
-
-  // DQ (2/4/2009): The specification of "-rose:binary" causes filenames to be interpreted
-  // differently if they are object files or libary archive files.
   // p_sourceFileNameList = CommandlineProcessing::generateSourceFilenames(argv);
-     p_sourceFileNameList = CommandlineProcessing::generateSourceFilenames(argv,get_binary_only());
+     p_sourceFileNameList =
+         CommandlineProcessing::generateSourceFilenames(argv);
 
-  // Build a list of source, object, and library files on the command line
-  // int sourceFileNameCounter = 0;
+     // Build a list of source, object, and library files on the command line
+     // int sourceFileNameCounter = 0;
      for (unsigned int i = 1; i < argv.size(); i++)
         {
        // find the source code filenames and modify them to be the output filenames
@@ -1324,16 +1307,13 @@ SgProject::processCommandLine(const vector<string>& input_argv)
 
        // printf ("In SgProject::processCommandLine(): p_sourceFileNameList.size() = %" PRIuPTR " \n",p_sourceFileNameList.size());
 
-       // DQ (2/4/2009): Only put *.o files into the objectFileNameList is they are not being
-       // processed as binary source files (targets for analysis, as opposed to linking).
-       // DQ (1/16/2008): This is a better (simpler) implementation
-       // if (CommandlineProcessing::isObjectFilename(argv[i]) == true)
-       // printf ("get_binary_only() = %s \n",get_binary_only() ? "true" : "false");
-          if ( (get_binary_only() == false) && (CommandlineProcessing::isObjectFilename(argv[i]) == true) )
-             {
+          // DQ (2/4/2009): Only put *.o files into the objectFileNameList for
+          // linking. DQ (1/16/2008): This is a better (simpler) implementation
+          // if (CommandlineProcessing::isObjectFilename(argv[i]) == true)
+          if (CommandlineProcessing::isObjectFilename(argv[i]) == true) {
             // printf ("Adding argv[%u] = %s to p_objectFileNameList \n",i,argv[i].c_str());
                p_objectFileNameList.push_back(argv[i]);
-             }
+          }
 
        // look only for .a files (library files)
           if ( (length > 2) &&
@@ -1342,14 +1322,6 @@ SgProject::processCommandLine(const vector<string>& input_argv)
              {
                std::string libraryFile = argv[i];
                p_libraryFileList.push_back(libraryFile);
-
-            // DQ (2/4/2009): Make sure that this is not handled incorrectly is we wanted it to be a target for binary analysis.
-            // If so, then is should end up on the source code list (target list for analysis).
-               if (get_binary_only() == true)
-                  {
-                    printf ("This may be an error, since the library archive should be treated as a source file for binary analysis. \n");
-                    //ROSE_ASSERT(false);
-                  }
              }
 
        // look only for -l library files (library files)
@@ -2179,10 +2151,6 @@ SgFile::usage ()
            "     -rose:instantiation XXX control template instantiation\n"
            "                             XXX is one of (none, used, all, "
            "local)\n"
-           "     -rose:read_executable_file_format_only\n"
-           "                             ignore disassemble of instructions "
-           "(helps debug binary \n"
-           "                             file format for binaries)\n"
            "     -rose:skipAstConsistancyTests\n"
            "                             skip AST consitancy testing (for "
            "better performance)\n"
@@ -2321,17 +2289,6 @@ SgFile::usage ()
            "C++ only (default\n"
            "                               is to reproduce use defined by the "
            "input code).\n"
-           "     -rose:unparse_instruction_addresses\n"
-           "                               Outputs the addresses in left "
-           "column (output\n"
-           "                               inappropriate as input to "
-           "assembler)\n"
-           "     -rose:unparse_raw_memory_contents\n"
-           "                               Outputs memory contents in left "
-           "column\n"
-           "     -rose:unparse_binary_file_format\n"
-           "                               Outputs binary executable file "
-           "format information\n"
            "     -rose:unparse_includes\n"
            "                               unparse all include files into the "
            "source file.\n"
@@ -3673,33 +3630,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
         }
 
   //
-  // unparse_instruction_addresses option (added 8/30/2008).
-  //
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(unparse_instruction_addresses)",true) == true )
-        {
-       // printf ("option -rose:unparse_instruction_addresses found \n");
-          set_unparse_instruction_addresses(true);
-        }
-
-  //
-  // unparse_raw_memory_contents option (added 8/30/2008).
-  //
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(unparse_raw_memory_contents)",true) == true )
-        {
-       // printf ("option -rose:unparse_raw_memory_contents found \n");
-          set_unparse_raw_memory_contents(true);
-        }
-
-  //
-  // unparse_binary_file_format option (added 8/30/2008).
-  //
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(unparse_binary_file_format)",true) == true )
-        {
-       // printf ("option -rose:unparse_binary_file_format found \n");
-          set_unparse_binary_file_format(true);
-        }
-
-  //
   // collectAllCommentsAndDirectives option: operates across all files (include files) and significantly slows the compilation.
   //
      if ( CommandlineProcessing::isOption(argv,"-rose:","(collectAllCommentsAndDirectives)",true) == true )
@@ -3763,32 +3693,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
         {
           printf ("option -rose:translateCommentsAndDirectivesIntoAST found \n");
           set_translateCommentsAndDirectivesIntoAST(true);
-        }
-
-  // DQ (8/16/2008): parse binary executable file format only (some uses of ROSE may only do analysis of
-  // the binary executable file format and not the instructions).  This is also useful for testing.
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(read_executable_file_format_only)",true) == true )
-        {
-       // printf ("option -rose:read_executable_file_format_only found \n");
-          set_read_executable_file_format_only(true);
-        }
-
-  // DQ (11/11/2008): parse binary executable file format only and add attributes to the symbols so that
-  // they will not be output in the generation of DOT files.  They will still be present for all other
-  // forms of analysis.
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(visualize_executable_file_format_skip_symbols)",true) == true )
-        {
-       // printf ("option -rose:visualize_executable_file_format_skip_symbols found \n");
-          set_visualize_executable_file_format_skip_symbols(true);
-        }
-
-  // DQ (11/11/2008): parse binary executable file format only and add attributes to the symbols and most
-  // other binary file format IR nodes so that they will not be output in the generation of DOT files.
-  // They will still be present for all other forms of analysis.
-     if ( CommandlineProcessing::isOption(argv,"-rose:","(visualize_dwarf_only)",true) == true )
-        {
-       // printf ("option -rose:visualize_dwarf_only found \n");
-          set_visualize_dwarf_only(true);
         }
 
   // DQ (1/10/2009): The C language ASM statements are providing significant trouble, they are
@@ -4152,10 +4056,6 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
      optionCount = sla(argv, "-rose:", "($)", "(unparse_function_calls_using_operator_syntax)",1);
      optionCount = sla(argv, "-rose:", "($)", "(unparse_function_calls_using_operator_names)",1);
 
-     optionCount = sla(argv, "-rose:", "($)", "(unparse_instruction_addresses)",1);
-     optionCount = sla(argv, "-rose:", "($)", "(unparse_raw_memory_contents)",1);
-     optionCount = sla(argv, "-rose:", "($)", "(unparse_binary_file_format)",1);
-
      optionCount = sla(argv, "-rose:", "($)", "(collectAllCommentsAndDirectives)",1);
      optionCount = sla(argv, "-rose:", "($)", "(unparseHeaderFiles)",1);
      optionCount = sla(argv, "-rose:", "($)", "(skip_commentsAndDirectives)",1);
@@ -4215,15 +4115,6 @@ SgFile::stripRoseCommandLineOptions ( vector<string> & argv )
      optionCount = sla(argv, "-rose:", "($)^", "(excludePath)", pathname,1);
      optionCount = sla(argv, "-rose:", "($)^", "(excludeFile)", filename,1);
      optionCount = sla(argv, "-rose:", "($)^", "(includeFile)", filename,1);
-
-  // DQ (8/16/2008): parse binary executable file format only (some uses of ROSE may only do analysis of
-  // the binary executable file format and not the instructions).  This is also useful for testing.
-     optionCount = sla(argv, "-rose:", "($)", "(read_executable_file_format_only)",1);
-     optionCount = sla(argv, "-rose:", "($)", "(visualize_executable_file_format_skip_symbols)",1);
-     optionCount = sla(argv, "-rose:", "($)", "(visualize_dwarf_only)",1);
-
-  // DQ (10/18/2009): Sometimes we need to skip the parsing of the file format
-     optionCount = sla(argv, "-rose:", "($)", "(read_instructions_only)",1);
 
      optionCount = sla(argv, "-rose:", "($)", "(skip_unparse_asm_commands)",1);
      optionCount = sla(argv, "-rose:", "($)", "(skip_unparse_cc_commands)",1);
@@ -4703,7 +4594,7 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
           case SgFile::e_default_language:
              {
 #if 0
-            // DQ (11/13/2017): This fails for the case of binaries.
+            // DQ (11/13/2017): This fails for non-source inputs.
                printf ("Error: SgFile::e_default_language detected in SgFile::buildCompilerCommandLineOptions() \n");
                ROSE_ABORT();
 #endif
@@ -5539,14 +5430,17 @@ SgFile::buildCompilerCommandLineOptions ( vector<string> & argv, int fileNameInd
           printf ("In buildCompilerCommandLineOptions: test 1.04: argcArgvList       = \n%s\n",CommandlineProcessing::generateStringFromArgList(argcArgvList,false,false).c_str());
 #endif
 
-            // DQ (9/25/2007): Moved to std::vector from std::list uniformally within ROSE.
-            // printf ("Skipping test for absolute path removing the source filename as it appears in the source file name list file = % \n",i->c_str());
-            // argcArgvList.remove(*i);
-            // The if here is to skip binaries that don't appear on the command line for those cases when a single project has both binaries and source code
-               if (find(argcArgvList.begin(),argcArgvList.end(),*i) != argcArgvList.end())
-                  {
-                    argcArgvList.erase(find(argcArgvList.begin(),argcArgvList.end(),*i));
-                  }
+          // DQ (9/25/2007): Moved to std::vector from std::list uniformally
+          // within ROSE. printf ("Skipping test for absolute path removing the
+          // source filename as it appears in the source file name list file = %
+          // \n",i->c_str()); argcArgvList.remove(*i); The if here is to skip
+          // files that don't appear on the command line for those cases when a
+          // single project has multiple inputs.
+          if (find(argcArgvList.begin(), argcArgvList.end(), *i) !=
+              argcArgvList.end()) {
+            argcArgvList.erase(
+                find(argcArgvList.begin(), argcArgvList.end(), *i));
+          }
 #endif
              }
         }

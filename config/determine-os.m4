@@ -170,7 +170,7 @@ AC_DEFUN([DETERMINE_OS_VENDOR],
     AM_CONDITIONAL([OS_VENDOR_CENTOS],[ test "x$CENTOS" = xyes ])
     AM_CONDITIONAL([OS_VENDOR_APPLE],[ test "x$APPLE"  = xyes ])
 
-    # Conditionals for 32-bit vs. 64-bit OS (used only in the binary analysis work -- and rarely).
+    # Conditionals for 32-bit vs. 64-bit OS.
     AM_CONDITIONAL([OS_32BIT],[ test "x$build_cpu" = xi686 ])
     AM_CONDITIONAL([OS_64BIT],[ test "x$build_cpu" = xx86_64 ])
 

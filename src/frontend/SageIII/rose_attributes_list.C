@@ -2456,9 +2456,9 @@ ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST( const string
                   {
                     bool isComment = false;
 
-                 // Used switch to provide room for PHP, and pernaps C, C++ if we wanted
-                 // to handle then this way.  Note that C permits multiple comments on a
-                 // single line, this is not addressed here.
+                    // Used switch to provide room for additional frontends if
+                    // needed. Note that C permits multiple comments on a single
+                    // line, this is not addressed here.
                     switch (languageType)
                        {
                       // case e_Cxx_language: /* C and C++ cases are already handled via the lex based pass. */

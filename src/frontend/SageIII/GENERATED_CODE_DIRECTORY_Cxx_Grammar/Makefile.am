@@ -150,7 +150,6 @@ SgBaseClass.C                              SgFloatVal.C                         
 SgBaseClassModifier.C                      SgFlushStatement.C                    SgNamespaceAliasDeclarationStatement.C  SgStringKeyedBidirectionalGraph.C            SgVarArgStartOp.C \
 SgBasicBlock.C                             SgForAllStatement.C                   SgNamespaceDeclarationStatement.C       SgStringVal.C                                SgVariableDeclaration.C \
 SgBidirectionalGraph.C                     SgForInitStatement.C                  SgNamespaceDefinitionStatement.C        SgSubscriptExpression.C                      SgVariableDefinition.C \
-SgBinaryComposite.C                        SgFormatItem.C                        SgNamespaceSymbol.C                     SgSubtractOp.C                               SgVariableSymbol.C \
 SgBinaryOp.C                               SgFormatItemList.C                    SgNewExp.C                              SgSupport.C                                  SgVariantExpression.C \
 SgBitAndOp.C                               SgFormatStatement.C                   SgNode.C                                SgSwitchStatement.C                          SgVariantStatement.C \
 SgBitAttribute.C                           SgForStatement.C                      SgNotEqualOp.C                          SgSymbol.C                                   SgVarRefExp.C \
@@ -164,7 +163,6 @@ SgCaseOptionStmt.C                         SgFunctionDefinition.C               
 SgOmpForStatement.C \
 SgCastExp.C                                SgFunctionModifier.C                  SgOmpClauseBodyStatement.C              SgTemplateInstantiationFunctionDecl.C        SgHeaderFileBody.C \
 SgOmpExecStatement
-
 
 
 

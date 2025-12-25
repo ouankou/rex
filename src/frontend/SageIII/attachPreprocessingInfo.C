@@ -194,9 +194,10 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
   // printf ("tokenVector.size() = %zu using filename     = %s \n",getTokenStream(sageFilePtr).size(),filename.c_str());
 #endif
 
-  // DQ (1/4/2021): Adding support for comments and CPP directives and tokens to use new_filename.
-  // DQ (7/4/2020): This function should not be called for binaries (only for C/C++ code).
-  // commentAndCppDirectiveList = getPreprocessorDirectives(filename);
+     // DQ (1/4/2021): Adding support for comments and CPP directives and tokens
+     // to use new_filename. DQ (7/4/2020): This function should be called only
+     // for C/C++ source code. commentAndCppDirectiveList =
+     // getPreprocessorDirectives(filename);
      bool usingWave = false;
   // commentAndCppDirectiveList = AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(usingWave,filename);
   // commentAndCppDirectiveList = AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(usingWave,sageFilePtr,filename);

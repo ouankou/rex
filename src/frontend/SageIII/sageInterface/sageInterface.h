@@ -1517,20 +1517,18 @@ NodeType* getEnclosingNode(const SgNode* astNode, const bool includingSelf = fal
      printf ("reset: previouslySeenParent = %p = %s \n",previouslySeenParent,previouslySeenParent->class_name().c_str());
 #endif
 
-  // DQ (10/19/2012): This branch is just to document the cycle that was previously detected, it is for
-  // debugging only. Thus it ony make sense for it to be executed when "(foundCycle == true)".  However,
-  // this will have to be revisited later since it appears clear that it is a problem for the binary analysis
-  // work when it is visited for this case.  Since the cycle is detected, but there is no assertion on the
-  // cycle, we don't exit when a cycle is identified (which is the point of the code below).
-  // Note also that I have fixed the code (above and below) to only chase pointers through defining
-  // declarations (where they exist), this is important since non-defining declarations can be almost
-  // anywhere (and thus chasing them can make it appear that there are cycles where there are none
-  // (I think); test2012_234.C demonstrates an example of this.
-  // DQ (10/9/2012): Robb has suggested this change to fix the binary analysis work.
-  // if (foundCycle == true)
-     if (foundCycle == false)
-        {
-
+        // DQ (10/19/2012): This branch is just to document the cycle that was
+        // previously detected, it is for debugging only. Thus it only makes
+        // sense for it to be executed when "(foundCycle == true)". Since the
+        // cycle is detected, but there is no assertion on the
+        // cycle, we don't exit when a cycle is identified (which is the point
+        // of the code below). Note also that I have fixed the code (above and
+        // below) to only chase pointers through defining declarations (where
+        // they exist), this is important since non-defining declarations can be
+        // almost anywhere (and thus chasing them can make it appear that there
+        // are cycles where there are none (I think); test2012_234.C
+        // demonstrates an example of this. if (foundCycle == true)
+        if (foundCycle == false) {
 
           while ( (parent != nullptr) && (!dynamic_cast<const NodeType*>(parent)) )
              {

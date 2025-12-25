@@ -780,16 +780,15 @@ namespace sg
     GEN_VISIT(SgClassExp)
 //    GEN_VISIT(SgClassPropertyList)
 
-/*
-    GEN_VISIT(SgBinaryComposite)
-    GEN_VISIT(SgComprehensionList)
-    *
-    GEN_VISIT(SgDirectedGraph)
-    GEN_VISIT(SgDirectedGraphEdge)
-    GEN_VISIT(SgDirectedGraphNode)
+    /*
+        GEN_VISIT(SgComprehensionList)
+        *
+        GEN_VISIT(SgDirectedGraph)
+        GEN_VISIT(SgDirectedGraphEdge)
+        GEN_VISIT(SgDirectedGraphNode)
 
-    GEN_VISIT(SgUnknownMemberFunctionType)
-*/
+        GEN_VISIT(SgUnknownMemberFunctionType)
+    */
 
     RoseVisitor rv;
   };

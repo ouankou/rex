@@ -13,8 +13,7 @@ average hardware.
 A "test" is a pair consisting of a "checker" (some program that
 verifies some ROSE functionality) and an optional "specimen" (some
 input to the checker). Specimens for source analysis checkers are
-usually small source code files, and specimens for binary analysis
-checkers are usually small executables. Another compatible definition
+usually small source code files. Another compatible definition
 of test is: the basic unit of work done by a makefile, i.e., a make
 target and its rules.
 
@@ -81,11 +80,8 @@ Q2. If I create a new checker, where should I put it?
 
     Finally, decide what namespace, class, analysis, etc. the checker
     is validating and put it in a subdirectory that reflects its scope
-    in the library. E.g., functional non-smoke checkers that validate the
-    host of things in Rose::BinaryAnalysis might go in
-    tests/nonsmoke/functional/BinaryAnalysis. Use the same
-    capitalization as the source code, but beware that some
-    filesystems are case insensitive.
+    in the library. Use the same capitalization as the source code,
+    but beware that some filesystems are case insensitive.
 
 
 Q3. If I create a new specimen, where should I put it?

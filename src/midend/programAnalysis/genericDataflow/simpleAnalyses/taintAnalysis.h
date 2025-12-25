@@ -7,18 +7,20 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Tainted flow analysis.
 //
-// The original version of this tainted flow analysis was written 2012-09 by someone other than the author of the
-// genericDataflow framework.  It is based on the sign analysis (sgnAnalysis.[Ch]) in this same directory since documentation
-// for the genericDataflow framework is fairly sparse: 5 pages in the tutorial, not counting the code listings) and no doxygen
-// documentation.
+// The original version of this tainted flow analysis was written 2012-09 by
+// someone other than the author of the genericDataflow framework.  It is based
+// on the sign analysis (sgnAnalysis.[Ch]) in this same directory since
+// documentation for the genericDataflow framework is fairly sparse: 5 pages in
+// the tutorial, not counting the code listings) and no doxygen documentation.
 //
 // This file contains two types of comments:
-//    1. Comments that try to document some of the things I've discovered through playing with the genericDataflow framework.
-//    2. Comments and suggestions about usability, consistency, applicability to binary analysis, etc.
+//    1. Comments that try to document some of the things I've discovered
+//    through playing with the genericDataflow framework.
+//    2. Comments and suggestions about usability, consistency, and
+//    applicability.
 //
 // [RPM 2012-09]
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // USABILITY: Names of header files aren't consistent across the genericDataflow files. E.g., in the "lattice" directory we
 // have "lattice.h" that defines the Lattice class, but "ConstrGraph.h" that defines "ConstrGraph" (and apparently no
@@ -153,25 +155,30 @@ public:
     void set_debug(std::ostream *os) { debug = os; }
     /** @} */
 
-    // BINARIES:  The "Function" type is a wrapper around SgFunctionDeclaration and the data flow traversals depend on this
-    //            fact.  Binaries don't have SgFunctionDeclaration nodes (they have SgAsmFunction, which is a bit different).
+    // NOTE: The "Function" type is a wrapper around SgFunctionDeclaration and
+    // the data flow traversals depend on this fact.
     //
-    // NOTE:      The "DataflowNode" is just a VirtualCFG::DataflowNode that contains a VirtualCFG::CFGNode pointer and a
-    //            "filter". I didn't find any documentation for how "filter" is used.
+    // NOTE:      The "DataflowNode" is just a VirtualCFG::DataflowNode that
+    // contains a VirtualCFG::CFGNode pointer and a
+    //            "filter". I didn't find any documentation for how "filter" is
+    //            used.
     //
-    // USABILITY: The "initLattices" and "initFacts" are not documented. They're apparently only outputs for this function
-    //            since they seem to be empty on every call and are not const.  They're apparently not parallel arrays since
-    //            the examples I was looking at don't push the same number of items into each vector.
+    // USABILITY: The "initLattices" and "initFacts" are not documented. They're
+    // apparently only outputs for this function
+    //            since they seem to be empty on every call and are not const.
+    //            They're apparently not parallel arrays since the examples I
+    //            was looking at don't push the same number of items into each
+    //            vector.
     //
-    // USABILITY: Copied from src/midend/programAnalysis/genericDataflow/simpleAnalyses/sgnAnalysis.C.  I'm not sure what
-    //            it's doing yet since there's no doxygen documentation for FiniteVarsExprsProductLattice or any of its
-    //            members.
+    // USABILITY: Copied from
+    // src/midend/programAnalysis/genericDataflow/simpleAnalyses/sgnAnalysis.C.
+    // I'm not sure what
+    //            it's doing yet since there's no doxygen documentation for
+    //            FiniteVarsExprsProductLattice or any of its members.
     //
-    // BINARIES:  This might not work for binaries because FiniteVarsExprsProductLattice seems to do things in terms of
-    //            variables.  Variables are typically lacking from binary specimens and most existing binary analysis
-    //            describes things in terms of static register names or dynamic memory locations.
-    /** Generate initial lattice state.  Generates the initial lattice state for the given dataflow node, in the given
-     *  function, with the given node state. */
+    /** Generate initial lattice state.  Generates the initial lattice state for
+     * the given dataflow node, in the given function, with the given node
+     * state. */
     void genInitState(const Function& func, const DataflowNode& node, const NodeState& state,
                       std::vector<Lattice*>& initLattices, std::vector<NodeFact*>& initFacts);
 

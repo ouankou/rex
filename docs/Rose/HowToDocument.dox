@@ -109,8 +109,8 @@
  *  should restate the title in different words or else the table of contents looks awkward:
  *
  *  @code
- *  * @page binary_tutorial Getting started with binary analysis
- *  * @brief Overview showing how to write binary analysis tools.
+ *  * @page source_tutorial Getting started with source analysis
+ *  * @brief Overview showing how to write source analysis tools.
  *  @endcode
  *
  *  Modules, on the other hand, are created with Doxygen's @c @@defgroup directives and the hierarchy is formed by declaring one
