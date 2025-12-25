@@ -13,6 +13,21 @@
 
 using namespace std;
 
+namespace {
+bool ParseIntStrict(const std::string &text, int &value) {
+  char *end = nullptr;
+  errno = 0;
+  long parsed = std::strtol(text.c_str(), &end, 10);
+  if (errno != 0 || end == text.c_str() || *end != '\0')
+    return false;
+  if (parsed < std::numeric_limits<int>::min() ||
+      parsed > std::numeric_limits<int>::max())
+    return false;
+  value = static_cast<int>(parsed);
+  return true;
+}
+} // namespace
+
 template class CloseDescriptor<SymbolicValDescriptor, '{', '}'>;
 
 // DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not
@@ -303,24 +318,14 @@ bool ExtendibleParamDescriptor ::get_extension(int &l, int &u) const {
       ub.GetValType() == VAL_CONST && ub.GetTypeName() == "int") {
     const std::string lb_text = lb.toString();
     const std::string ub_text = ub.toString();
-    char *end = nullptr;
-    errno = 0;
-    long lb_value = std::strtol(lb_text.c_str(), &end, 10);
-    if (errno != 0 || end == lb_text.c_str() || *end != '\0' ||
-        lb_value < std::numeric_limits<int>::min() ||
-        lb_value > std::numeric_limits<int>::max()) {
+    int lb_value = 0;
+    int ub_value = 0;
+    if (!ParseIntStrict(lb_text, lb_value) ||
+        !ParseIntStrict(ub_text, ub_value)) {
       return false;
     }
-    end = nullptr;
-    errno = 0;
-    long ub_value = std::strtol(ub_text.c_str(), &end, 10);
-    if (errno != 0 || end == ub_text.c_str() || *end != '\0' ||
-        ub_value < std::numeric_limits<int>::min() ||
-        ub_value > std::numeric_limits<int>::max()) {
-      return false;
-    }
-    l = static_cast<int>(lb_value);
-    u = static_cast<int>(ub_value);
+    l = lb_value;
+    u = ub_value;
     return true;
   }
   return false;
