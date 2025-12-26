@@ -2467,58 +2467,6 @@ SgFile::processRoseCommandLineOptions ( vector<string> & argv )
         }
 
   //
-  // Diagnostic logging.  We need all of the '-rose:log WHAT' command-line switches in the order they appear, which seems to
-  // mean that we need to parse the argv vector ourselves. CommandlineParsing doesn't have a suitable function, and the sla
-  // code in sla++.C is basically unreadable and its minimal documentation doesn't seem to match its macro-hidden API,
-  // specifically the part about being able to return an array of values.
-  //
-     static const std::string removalString = "(--REMOVE_ME--)";
-     for (size_t i=0; i<argv.size(); ++i) {
-         if ((0==strcmp(argv[i].c_str(), "-rose:log")) && i+1 < argv.size()) {
-             argv[i] = removalString;
-             std::string switchValue = argv[++i];
-             argv[i] = removalString;
-
-             // This is a bit of a roundabout way to do this, but it supports "help", "list", etc and keeps ROSE's capabilities
-             // up to date with the latest documentation in Sawyer.
-             using namespace Sawyer::CommandLine;
-             SwitchGroup switches;
-             switches.insert(Switch("rose:log")
-                             .resetLongPrefixes("-")    // ROSE switches only support single hyphens
-                             .action(configureDiagnostics("rose:log", Diagnostics::mfacilities))
-                             .argument("config"));
-             std::vector<std::string> args;
-             args.push_back("-rose:log");
-             args.push_back(switchValue);
-             Parser parser;
-             parser.with(switches).parse(args).apply(); // causes configureDiagnostics to be called
-         }
-     }
-     argv.erase(std::remove(argv.begin(), argv.end(), removalString), argv.end());
-
-  //
-  // -rose:assert abort|exit|throw
-  //
-     for (size_t i=0; i<argv.size(); ++i) {
-         if (argv[i] == std::string("-rose:assert") && i+1 < argv.size()) {
-             std::string switchValue = argv[i+1];
-             Sawyer::Assert::AssertFailureHandler handler = NULL;
-             if (switchValue == "abort") {
-                 handler = Rose::abortOnFailedAssertion;
-             } else if (switchValue == "exit") {
-                 handler = Rose::exitOnFailedAssertion;
-             } else if (switchValue == "throw") {
-                 handler = Rose::throwOnFailedAssertion;
-             }
-             if (handler != NULL) {
-                 argv[i] = argv[i+1] = removalString;
-                 Rose::failedAssertionBehavior(handler);
-             }
-         }
-     }
-     argv.erase(std::remove(argv.begin(), argv.end(), removalString), argv.end());
-
-  //
   // markGeneratedFiles option
   //
      set_markGeneratedFiles(false);

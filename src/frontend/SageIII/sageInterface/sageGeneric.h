@@ -158,9 +158,7 @@ namespace sg
 #define GEN_VISIT(X) \
     void visit(X * n) { rv.handle(*n); }
 
-  template <class RoseVisitor>
-  struct VisitDispatcher : ROSE_VisitorPatternDefaultBase
-  {
+  template <class RoseVisitor> struct VisitDispatcher : ROSE_VisitorPattern {
     // rvalue ctor
     VisitDispatcher(RoseVisitor&& rosevisitor, std::false_type)
     : rv(std::move(rosevisitor))
@@ -318,7 +316,6 @@ namespace sg
     GEN_VISIT(SgFormatStatement)
     GEN_VISIT(SgFortranDo)
     GEN_VISIT(SgOmpMetadirectiveStatement)
-    GEN_VISIT(SgUpirSpmdStatement)
     GEN_VISIT(SgOmpTeamsStatement)
     GEN_VISIT(SgOmpCancellationPointStatement)
     GEN_VISIT(SgOmpDeclareMapperStatement)
@@ -360,13 +357,10 @@ namespace sg
     GEN_VISIT(SgOmpMasterTaskloopStatement)
     GEN_VISIT(SgOmpParallelLoopStatement)
     GEN_VISIT(SgOmpSingleStatement)
-    GEN_VISIT(SgUpirSimdStatement)
     GEN_VISIT(SgOmpTaskStatement)
-    GEN_VISIT(SgUpirLoopParallelStatement)
     GEN_VISIT(SgOmpForSimdStatement)
     GEN_VISIT(SgOmpDoStatement)
     GEN_VISIT(SgOmpSectionsStatement)
-    GEN_VISIT(SgUpirFieldBodyStatement)
     GEN_VISIT(SgOmpAtomicStatement)
     GEN_VISIT(SgOmpMasterStatement)
     GEN_VISIT(SgOmpTaskyieldStatement)
@@ -375,7 +369,6 @@ namespace sg
     GEN_VISIT(SgOmpOrderedDependStatement)
     GEN_VISIT(SgOmpWorkshareStatement)
     GEN_VISIT(SgOmpCriticalStatement)
-    GEN_VISIT(SgUpirBaseStatement)
     GEN_VISIT(SgFortranIncludeLine)
     GEN_VISIT(SgFortranNonblockedDo)
     GEN_VISIT(SgFuncDecl_attr)
@@ -508,11 +501,8 @@ namespace sg
     GEN_VISIT(SgOmpDynamicAllocatorsClause)
     GEN_VISIT(SgOmpAtomicDefaultMemOrderClause)
     GEN_VISIT(SgOmpExtImplementationDefinedRequirementClause)
-    GEN_VISIT(SgOmpWriteClause)
     GEN_VISIT(SgOmpThreadsClause)
     GEN_VISIT(SgOmpSimdClause)
-    GEN_VISIT(SgOmpUpdateClause)
-    GEN_VISIT(SgOmpCaptureClause)
     GEN_VISIT(SgOmpSeqCstClause)
     GEN_VISIT(SgOmpAcqRelClause)
     GEN_VISIT(SgOmpReleaseClause)
@@ -525,7 +515,6 @@ namespace sg
     GEN_VISIT(SgOmpIfClause)
     GEN_VISIT(SgOmpFinalClause)
     GEN_VISIT(SgOmpPriorityClause)
-    GEN_VISIT(SgUpirNumUnitsField)
     GEN_VISIT(SgOmpParallelClause)
     GEN_VISIT(SgOmpSectionsClause)
     GEN_VISIT(SgOmpForClause)

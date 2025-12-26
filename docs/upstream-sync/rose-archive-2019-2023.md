@@ -1,47 +1,55 @@
 # rose-archive 2019-2023 selective sync (full REX scope)
 
 ## Support target (REX)
-- Platform: Linux only (Windows/mac support dropped).
+- Platform: Linux only (Windows/mac support dropped entirely).
 - Languages/features: C/C++, Fortran, OpenMP, OpenCL, CUDA.
-- Hard dropped: PHP, JavaScript, EDG, Java, UPC, binary analysis, and any other legacy frontends not in use by REX.
+- Hard dropped: PHP, JavaScript, EDG, Java, UPC, Python, X10, binary analysis, and any other legacy frontends not in use by REX.
 
 ## Scope for this sync
-- Full repo coverage for all kept REX components (not limited to astUtil).
-- Inventory only: Autotools/Tup (`configure.ac`, `config/`, `acmacros/`, `Makefile.am`, `Tupfile`). Track changes for parity/purge, do not port into CMake.
+- Full repo coverage for all kept REX components (every non-generated directory in the repo, not limited to astUtil).
+- Inventory only: Autotools/Tup (`configure.ac`, `config/`, `acmacros/`, `Makefile.am`, `stamp-h*.in`, `Tupfile`). Track changes for parity/purge, do not port into CMake.
 - Exclude dropped components and platform-specific code (Windows/mac).
 
 ## Components in REX to keep (sync coverage)
 Top-level repo components:
-- Build system: `cmake/`, `CMakeLists.txt`, `build-rex.sh`, `rose_config.h.in.cmake`, `ROSE_VERSION`, `CMakeFiles/` (generated, ignore), `build/` (generated, ignore).
-- Docs and guides: `docs/`, `README.md`, `BUILDING_WITH_CLANG.md`, `OPENMP_SUPPORT.md`, `FORTRAN_TESTING_GUIDE.md`, `CLANG_FRONTEND_FIXES.md`, `CLANG_FRONTEND_IMPROVEMENTS.md`.
+- Repo metadata and CI: `.github/`, `.claude/`, `.gemini/`.
+- Build system (CMake): `cmake/`, `CMakeLists.txt`, `build-rex.sh`, `rose_config.h.in.cmake`, `ROSE_VERSION`.
+- Build inventory (Autotools/Tup; record only): `configure.ac`, `config/`, `acmacros/`, `Makefile.am`, `stamp-h*.in`, `Tupfile`.
+- Docs and guides: `docs/`, `README.md`, `BUILDING_WITH_CLANG.md`, `OPENMP_SUPPORT.md`, `FORTRAN_TESTING_GUIDE.md`, `FORTRAN_EVALUATION_STATUS.md`, `CLANG_FRONTEND_FIXES.md`, `CLANG_FRONTEND_IMPROVEMENTS.md`, `ROSE_COMPILER_FIXES.md`, `TEMPLATE_INSTANTIATION_ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and other root `*.md` project notes.
 - Scripts and tooling: `scripts/`, `tools/`, `tutorial/`, `exampleTranslators/`.
 - Licensing and metadata: `LicenseInformation/`, `COPYRIGHT`.
-- Tests: `tests/` (C/C++/Fortran/OpenMP/OpenCL/CUDA only).
+- Tests: `tests/` (C/C++/Fortran/OpenMP/OpenCL/CUDA only), plus root-level OpenMP parser fixtures (`test_omp_*.c`).
 - Source tree: `src/` (see below).
+- Generated output (ignore): `build/`, `CMakeFiles/`, `lib/`, and `src/**/CMakeFiles/`.
 
 `src/` subcomponents:
 - `src/3rdPartyLibraries/` (existing third-party deps used by REX).
+  - `libharu-2.1.0/`, `antlr-jars/`, `fortran-parser/`
 - `src/frontend/`
   - `CxxFrontend/Clang/`
   - `OpenFortranParser_SAGE_Connection/`
   - `SageIII/`
+    - `accparser/`, `ompparser/`
+    - `astFixup/`, `astHiddenTypeAndDeclarationLists/`, `astPostProcessing/`, `astTokenStream/`
+    - `includeDirectivesProcessing/`, `sage_support/`, `sageInterface/`, `virtualCFG/`
+    - `docs/`, `GENERATED_CODE_DIRECTORY_Cxx_Grammar/`
 - `src/midend/`
   - `abstractLayer/`, `astDiagnostics/`, `astDump/`, `astProcessing/`, `astQuery/`, `astUtil/`
   - `programAnalysis/` (bitvectorDataflow, CFG, CallGraphAnalysis, dataflowAnalysis, defUseAnalysis, dominanceAnalysis, genericDataflow, OAWrap, OpenAnalysis, pointerAnal, staticInterproceduralSlicing, valuePropagation, variableRenaming, VirtualFunctionAnalysis)
   - `programTransformation/` (astInlining, astOutlining, constantFolding, extractFunctionArgumentsNormalization, finiteDifferencing, functionCallNormalization, implicitCodeGeneration, loopProcessing, ompLowering, partialRedundancyElimination, singleStatementToBlockNormalization, transformationTracking)
-- `src/backend/unparser/`
+- `src/backend/unparser/` (CxxCodeGeneration, FortranCodeGeneration, formatSupport, languageIndependenceSupport)
 - `src/ROSETTA/` (Grammar, ROSETTA tools)
-- `src/util/` (commandlineProcessing, graphs, StringUtility, support)
+- `src/util/` (commandlineProcessing, graphs, Sawyer, StringUtility, support)
 - `src/Rose/` (small shared headers like `SourceLocation.h`)
 
 ## Keep/drop lists
 - Keep (candidate paths):
   - `cmake/**`, `CMakeLists.txt`, `build-rex.sh`, `rose_config.h.in.cmake`, `ROSE_VERSION`
-  - `docs/**`, `scripts/**`, `tools/**`, `tutorial/**`, `exampleTranslators/**`, `LicenseInformation/**`
+  - `docs/**`, `scripts/**`, `tools/**`, `tutorial/**`, `exampleTranslators/**`, `LicenseInformation/**`, root `*.md`
+  - `tests/**`, `test_omp_*.c`
   - `src/**` (excluding dropped components)
-  - `tests/**` (only tests relevant to supported languages/features)
 - Drop (never reintroduce): EDG, Java, UPC, PHP, JavaScript, binary analysis, Windows/mac-specific code paths, and other removed frontends.
-- Inventory only: Autotools/Tup build metadata and generated build directories (`build/`, `CMakeFiles/`).
+- Inventory only: Autotools/Tup build metadata (`configure.ac`, `config/`, `acmacros/`, `Makefile.am`, `stamp-h*.in`, `Tupfile`) and generated build output (`build/`, `CMakeFiles/`, `lib/`, `src/**/CMakeFiles/`).
 
 ## Repeatable sync workflow
 1) Fetch upstream:

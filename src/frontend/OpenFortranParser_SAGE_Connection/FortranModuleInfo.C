@@ -308,7 +308,7 @@ FortranModuleInfo::createSgSourceFile(string modName)
      newFile->set_skipfinalCompileStep(true);
      newFile->set_skip_unparse(true);
 
-     project->get_fileList->push_back(*newFile);
+     project->get_fileList().push_back(newFile);
 
      if (SgProject::get_verbose() > 1)
           printf ("END FortranModuleInfo::createSgSourceFile(%s): nestedSgFile = %d \n",rmodFileName.c_str(),nestedSgFile);
@@ -334,6 +334,5 @@ FortranModuleInfo::dumpMap()
 
      cout << "Module Statement*  map::" << endl;
      for(iter = moduleNameAstMap.begin(); iter != moduleNameAstMap.end(); iter++)
-           cout <<"FIRST : " << (*iter).first << " SECOND : " << (*iter).second << endl;    
-   }
-
+           cout <<"FIRST : " << (*iter).first << " SECOND : " << (*iter).second << endl;
+}

@@ -2182,6 +2182,56 @@ std::vector<CFGEdge> SgPragmaDeclaration::cfgInEdges(unsigned int idx) {
   return result;
 }
 
+unsigned int SgOmpBodyStatement::cfgIndexForEnd() const {
+  ROSE_ASSERT(get_body() != NULL);
+  return 1;
+}
+
+std::vector<CFGEdge> SgOmpBodyStatement::cfgOutEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  ROSE_ASSERT(get_body() != NULL);
+  switch (idx) {
+  case 0:
+    makeEdge(CFGNode(this, idx), this->get_body()->cfgForBeginning(), result);
+    break;
+  case 1:
+    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    break;
+  default:
+    ROSE_ASSERT(!"Bad index for SgOmpBodyStatement");
+  }
+  return result;
+}
+
+std::vector<CFGEdge> SgOmpBodyStatement::cfgInEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  addIncomingFortranGotos(this, idx, result);
+  ROSE_ASSERT(get_body() != NULL);
+  switch (idx) {
+  case 0:
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+    break;
+  case 1:
+    makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
+    break;
+  default:
+    ROSE_ASSERT(!"Bad index for SgOmpBodyStatement");
+  }
+  return result;
+}
+
+unsigned int SgOmpClauseBodyStatement::cfgIndexForEnd() const {
+  return SgOmpBodyStatement::cfgIndexForEnd();
+}
+
+std::vector<CFGEdge> SgOmpClauseBodyStatement::cfgOutEdges(unsigned int idx) {
+  return SgOmpBodyStatement::cfgOutEdges(idx);
+}
+
+std::vector<CFGEdge> SgOmpClauseBodyStatement::cfgInEdges(unsigned int idx) {
+  return SgOmpBodyStatement::cfgInEdges(idx);
+}
+
 // DQ (3/22/2019): Adding EmptyDeclaration to support addition of comments and CPP directives that will permit
 // token-based unparsing to work with greater precision. For example, used to add an include directive with
 // greater precission to the global scope and permit the unparsing via the token stream to be used as well.
@@ -5186,61 +5236,6 @@ SgInitializedName::cfgInEdges(unsigned int idx) {
   }
   return result;
 }
-// Liao, 6/11/2009 support for OpenMP nodes
-unsigned int
-SgUpirBaseStatement::cfgIndexForEnd() const {
-  return 1;
-}
-
-std::vector<CFGEdge> SgUpirBaseStatement::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  switch (idx) {
-    case 0: makeEdge(CFGNode(this, idx), this->get_body()->cfgForBeginning(), result); break;
-    case 1: makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result); break;
-    default: ROSE_ASSERT (!"Bad index for SgUpirBaseStatement");
-  }
-  return result;
-}
-
-std::vector<CFGEdge> SgUpirBaseStatement::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  switch (idx) {
-    case 0: makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result); break;
-    case 1: makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result); break;
-    default: ROSE_ASSERT (!"Bad index for SgUpirBaseStatement");
-  }
-  return result;
-}
-//----------------------------------------
- unsigned int
-SgUpirFieldBodyStatement::cfgIndexForEnd() const {
-  return 2;
-}
-
-std::vector<CFGEdge> SgUpirFieldBodyStatement::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  switch (idx) {
-    case 0: makeEdge(CFGNode(this, idx), this->get_body()->cfgForBeginning(), result); break;
-    case 1: break; // we don't build edges for OpenMP clause list for now //TODO  not sure if the code is correct
-    case 2: makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result); break;
-    default: ROSE_ASSERT (!"Bad index for SgUpirFieldBodyStatement");
-  }
-  return result;
-}
-
-std::vector<CFGEdge> SgUpirFieldBodyStatement::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  switch (idx) {
-    case 0: makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result); break;
-    case 1: break; // we don't build edges for OpenMP clause list for now //TODO  not sure if the code is correct here
-    case 2: makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result); break;
-    default: ROSE_ASSERT (!"Bad index for SgUpirFieldBodyStatement");
-  }
-  return result;
-}
-
 // case of ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 #endif
 

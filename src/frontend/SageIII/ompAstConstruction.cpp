@@ -123,6 +123,15 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
   return result;
 }
 
+void replaceOmpPragmaWithOmpStatement(SgPragmaDeclaration *pragma_decl,
+                                      SgStatement *omp_stmt) {
+  ROSE_ASSERT(pragma_decl != NULL);
+  ROSE_ASSERT(omp_stmt != NULL);
+  ROSE_ASSERT(pragma_decl->get_scope() != NULL);
+  moveUpPreprocessingInfo(omp_stmt, pragma_decl);
+  replaceStatement(pragma_decl, omp_stmt);
+}
+
 namespace OmpSupport {
 // an internal data structure to avoid redundant AST traversal to find OpenMP
 // pragmas
