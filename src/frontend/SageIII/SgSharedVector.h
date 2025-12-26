@@ -57,17 +57,23 @@ public:
     /**** Iterators ****/
     class iterator {
         public:
-            iterator operator++() { return (this->p)++; }
-            bool operator!=( const iterator & x ) const { return (this->p != x->p); }
-            value_type & operator*() const { return *(this->p); }
-            iterator(pointer x) : p(x) {}
+          iterator &operator++() {
+            ++p;
+            return *this;
+          }
+          bool operator!=(const iterator &x) const { return p != x.p; }
+          value_type &operator*() const { return *(this->p); }
+          iterator(pointer x) : p(x) {}
         private:          
             value_type *p;
     };
 
     class const_iterator {
         public:
-            const_iterator operator++() { return (this->p)++; }
+          const_iterator &operator++() {
+            ++p;
+            return *this;
+          }
             bool operator!=( const const_iterator & x ) const { return (this->p != x.p); }
             const value_type & operator*() const { return *(this->p); }
             const_iterator(pointer x) : p(x) {}
@@ -126,27 +132,17 @@ public:
         p_size = 0;
         p_capacity = 0;
     }
-    void erase(iterator position) {
-        abort(); //FIXME
-    }
-    void erase(iterator start, iterator finish) {
-        abort(); //FIXME
-    }
+    void erase(iterator position) = delete;
+    void erase(iterator start, iterator finish) = delete;
     void pop_back() {
         assert(p_size>0);
         --p_size;
     }
 
     /**** Insertion ****/
-    void insert(iterator position, const_reference x) {
-        abort(); //FIXME
-    }
-    void insert(iterator position, size_type n, const_reference x) {
-        abort(); //FIXME
-    }
-    void insert(iterator position, iterator start, iterator finish) {
-        abort(); //FIXME
-    }
+    void insert(iterator position, const_reference x) = delete;
+    void insert(iterator position, size_type n, const_reference x) = delete;
+    void insert(iterator position, iterator start, iterator finish) = delete;
     void push_back(const_reference x) {
         assert(p_size<p_capacity);
         p_pool[p_size++] = x;
