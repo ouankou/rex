@@ -8,6 +8,7 @@
 #include <boost/serialization/nvp.hpp>
 #include <boost/serialization/split_member.hpp>
 #endif
+#include <memory>
 
 /* An SgSharedVector is like an STL vector except for two things:
  *
@@ -31,6 +32,7 @@ private:
     pointer p_pool;               // backing store managed externally to this class
     size_type p_capacity;         // number of bytes in pool
     size_type p_size;             // current size of vector (never greater than capacity)
+    std::shared_ptr<value_type> p_owner;
 
 #ifdef ROSE_HAVE_BOOST_SERIALIZATION_LIB
 private:
@@ -46,7 +48,9 @@ private:
     void load(S &s, const unsigned /*version*/) {
         s & BOOST_SERIALIZATION_NVP(p_size);
         p_capacity = p_size;
-        p_pool = new value_type[p_capacity];
+        p_owner = std::shared_ptr<value_type>(
+            new value_type[p_capacity], std::default_delete<value_type[]>());
+        p_pool = p_owner.get();
         s & boost::serialization::make_nvp("p_pool", boost::serialization::make_array(p_pool, p_size));
     }
 
@@ -85,18 +89,19 @@ public:
 
     // constructs a vector having no data
     explicit SgSharedVector()
-        : p_pool(0), p_capacity(0), p_size(0) {}
+        : p_pool(0), p_capacity(0), p_size(0), p_owner() {}
     // constructs a non-extendible vector of particular size
     explicit SgSharedVector(pointer pool, size_type n)
-        : p_pool(pool), p_capacity(n), p_size(n) {}
+        : p_pool(pool), p_capacity(n), p_size(n), p_owner() {}
     // constructs an extendible vector of specified capacity and size
     explicit SgSharedVector(pointer pool, size_type n, size_type nres)
-        : p_pool(pool), p_capacity(nres), p_size(0) {
-        resize(n);
+        : p_pool(pool), p_capacity(nres), p_size(0), p_owner() {
+      resize(n);
     }
     // constructs a new vector pointing to same data as initializer vector
     SgSharedVector(const SgSharedVector &x)
-        : p_pool(x.pool()), p_capacity(x.capacity()), p_size(x.size()) {}
+        : p_pool(x.pool()), p_capacity(x.capacity()), p_size(x.size()),
+          p_owner(x.p_owner) {}
     // new vector points to offset in initializer vector
     SgSharedVector(const SgSharedVector &x, size_type offset) {
 
@@ -107,6 +112,7 @@ public:
         p_pool = x.pool() + offset;
         p_capacity = x.capacity() - offset;
         p_size = x.size() - offset;
+        p_owner = x.p_owner;
     }
     // new vector points to subset of initializer vector
     SgSharedVector(const SgSharedVector &x, size_type offset, size_type size) {
@@ -114,6 +120,7 @@ public:
         p_pool = x.pool() + offset;
         p_capacity = x.capacity() - offset;
         p_size = size;
+        p_owner = x.p_owner;
     }
     // pool memory is managed externally
     ~SgSharedVector() {}
@@ -123,6 +130,7 @@ public:
         p_pool = x.pool();
         p_capacity = x.capacity();
         p_size = x.size();
+        p_owner = x.p_owner;
         return *this;
     }
 
@@ -131,6 +139,7 @@ public:
         p_pool = NULL;
         p_size = 0;
         p_capacity = 0;
+        p_owner.reset();
     }
     void erase(iterator position) = delete;
     void erase(iterator start, iterator finish) = delete;

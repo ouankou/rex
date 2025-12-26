@@ -89,6 +89,20 @@ static std::string toStringForRTI(const std::list<T>& x) {
   for (typename std::list<T>::const_iterator i = x.begin(); i != x.end(); ++i) {
     if (i != x.begin())
       ss << ", ";
+    ss << (*i);
+  }
+  ss << "]";
+  return ss.str();
+}
+
+template <typename T>
+static std::string toStringForRTI(const std::list<std::list<T>> &x) {
+  std::ostringstream ss;
+  ss << "[";
+  for (typename std::list<std::list<T>>::const_iterator i = x.begin();
+       i != x.end(); ++i) {
+    if (i != x.begin())
+      ss << ", ";
     ss << toStringForRTI(*i);
   }
   ss << "]";
