@@ -1,7 +1,6 @@
 set(SAGE_BUILDER_TESTS
   CaseSensitivtyUnitTests
   SgExpressionBuildersUnitTests
-  MatlabNodeBuildersUnitTests
   SgTypeBuildersUnitTests
   SgStatementBuildersUnitTests
   SupportNodesUnitTests

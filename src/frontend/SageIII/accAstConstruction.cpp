@@ -99,7 +99,7 @@ convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   }
   default: {
     printf("Unknown directive is found.\n");
-    assert(0);
+    ROSE_ABORT();
   }
   }
   body->set_parent(result);
@@ -130,7 +130,7 @@ convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
     }
     default: {
       printf("Unknown OpenACC clause is found.\n");
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
     };
   };
@@ -236,7 +236,7 @@ convertOpenACCClause(SgStatement *directive,
   }
   default: {
     printf("Unknown OpenACC Clause!\n");
-    ROSE_ASSERT(0);
+    ROSE_ABORT();
   }
   }
 
@@ -267,7 +267,7 @@ convertOpenACCClause(SgStatement *directive,
     ROSE_ASSERT(data_fields.size() == 1);
     upir_data = isSgUpirDataField(data_fields[0]);
     if (isInUpirDataList(upir_data, data_item->get_symbol())) {
-      ROSE_ASSERT(0);
+      ROSE_ABORT();
       return upir_data;
     }
   };

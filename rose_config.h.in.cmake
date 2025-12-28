@@ -45,9 +45,6 @@
 /* Define if z3_version.h is available. */
 #cmakedefine ROSE_HAVE_Z3_VERSION_H
 
-/* Define if YAML-CPP library is available. */
-#cmakedefine ROSE_HAVE_YAMLCPP
-
 /* Define if Dlib is available. */
 #cmakedefine ROSE_HAVE_DLIB
 
@@ -257,9 +254,6 @@
 /* Minor version number of backend Fortran compiler. */
 #define BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER}
 
-
-/* Name of backend X10 compiler, including path */
-#define BACKEND_X10_COMPILER_NAME_WITH_PATH "${BACKEND_X10_COMPILER_NAME_WITH_PATH}"
 
 /* REX: legacy frontend-specific consistency tests removed - not applicable to Clang frontend */
 

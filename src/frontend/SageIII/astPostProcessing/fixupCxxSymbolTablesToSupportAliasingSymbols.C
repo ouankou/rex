@@ -628,7 +628,7 @@ FixupAstSymbolTablesToSupportAliasedSymbols::isDefinedThroughPrivateBaseClass ( 
                             {
 #if DEBUG_PRIVATE_BASE_CLASS_ALIAS_SYMBOL_SUPPORT
                               printf ("Default reached in switch: Symbol = %p = %s name = %s is not handled in switch \n",symbol,symbol->class_name().c_str(),name.str());
-                           // ROSE_ASSERT(false);
+                           // ROSE_ABORT();
 #endif
                             }
                        }

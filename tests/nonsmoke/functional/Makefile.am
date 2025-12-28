@@ -133,7 +133,6 @@ AM_CPPFLAGS = $(ROSE_INCLUDES)
 # AM_LDFLAGS  = $(ROSE_RPATHS)
 # AM_LDFLAGS  = $(ROSE_RPATHS) --Wl,--no-undefined
 
-# DQ (11/15/2017): Mac OSX can't take the -Wl,--no-undefined as a linker option.
 # AM_LDFLAGS  = $(ROSE_RPATHS) -Wl,--no-undefined
 AM_LDFLAGS  = $(ROSE_RPATHS)
 

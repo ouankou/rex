@@ -2,6 +2,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   Area-01.C
   X.C
   dynamic_cast.C
+  cpp_vector.C
   fstream.C
   inputBug317.C
   inputBug327.C
@@ -2050,6 +2051,31 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2021_11.C
   test2021_12.C
   test2021_13.C
+  test2021_14.C
+  test2021_15.C
+  test2021_16.C
+  test2021_17.C
+  test2022_01.C
+  test2022_02.C
+  test2022_03.C
+  test2022_04.C
+  test2022_05.C
+  test2022_06.C
+  test2022_07.C
+  test2022_08.C
+  test2022_09.C
+  test2022_10.C
+  test2022_11.C
+  test2022_12.C
+  test2022_13.C
+  test2022_14.C
+  test2022_15.C
+  test2022_16.C
+  test2022_17.C
+  test2022_22.C
+  test2022_23.C
+  test2022_24.C
+  test2022_25.C
   test_CplusplusMacro_Cpp.C
   test_int_lexemes.C
   test_int_lexemes_donot_pass.C

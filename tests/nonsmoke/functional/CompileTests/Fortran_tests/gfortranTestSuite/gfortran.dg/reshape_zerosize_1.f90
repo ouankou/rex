@@ -5,7 +5,7 @@
       program try_gf1065
 
 
-! fails on Windows XP
+! fails on some targets
 ! gcc version 4.4.0 20080312 (experimental) [trunk revision 133139]
 
 

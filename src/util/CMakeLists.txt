@@ -72,9 +72,13 @@ target_sources(roseUtil INTERFACE
   $<TARGET_OBJECTS:util_StringUtility>
   $<TARGET_OBJECTS:util_support>
   $<TARGET_OBJECTS:util_graphs>)
+if(SQLITE3_FOUND_LIB)
+  target_link_libraries(roseUtil INTERFACE ${SQLITE3_LIBRARY})
+endif()
 
 ########### install files ###############
 install(FILES
-  processSupport.h rose_paths.h mlog.h FileSystem.h Unique.h
-  timing.h rose_getline.h rose_strtoull.h rose_isnan.h
+  processSupport.h rose_paths.h mlog.h ROSE_ASSERT.h ROSE_ABORT.h FileSystem.h
+  Unique.h timing.h rose_getline.h rose_strtoull.h rose_isnan.h
+  rose_pragma_message.h
   DESTINATION ${INCLUDE_INSTALL_DIR})

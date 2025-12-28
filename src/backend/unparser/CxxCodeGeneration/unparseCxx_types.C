@@ -63,6 +63,47 @@ static std::map<SgNode*, std::string>::const_iterator find_scoped_type_name(
 
   return scoped_map.end();
 }
+
+static std::vector<const char*>
+memberFunctionQualifiers(const SgMemberFunctionType* mfnType,
+                         bool trailingSpace = false) {
+  static const char* TEXT_CONST = " const";
+  static const char* TEXT_VOLATILE = " volatile";
+  static const char* TEXT_LVALUE_REF = " &";
+  static const char* TEXT_RVALUE_REF = " &&";
+  static const char* TEXT_SPACE = " ";
+
+  ASSERT_not_null(mfnType);
+
+  std::vector<const char*> res;
+  bool addSpace = false;
+
+  if (mfnType->isConstFunc()) {
+    res.push_back(TEXT_CONST);
+    addSpace = trailingSpace;
+  }
+
+  if (mfnType->isVolatileFunc()) {
+    res.push_back(TEXT_VOLATILE);
+    addSpace = trailingSpace;
+  }
+
+  if (mfnType->isLvalueReferenceFunc()) {
+    res.push_back(TEXT_LVALUE_REF);
+    addSpace = false;
+  }
+
+  if (mfnType->isRvalueReferenceFunc()) {
+    res.push_back(TEXT_RVALUE_REF);
+    addSpace = false;
+  }
+
+  if (addSpace) {
+    res.push_back(TEXT_SPACE);
+  }
+
+  return res;
+}
 } // unnamed namespace
 
 // If this is turned on then we get the message to the
@@ -142,32 +183,6 @@ string get_type_name(SgType* t)
           case T_FLOAT80:                 return "__float80";
           case T_FLOAT128:                return "__float128";
 
-        case T_MATRIX:                    return "Matrix<" + get_type_name(isSgTypeMatrix(t)->get_base_type()) + ">";
-
-        case T_TUPLE:
-          {
-            SgTypeTuple *typeTuple = isSgTypeTuple(t);
-            SgTypePtrList typeList = typeTuple->get_types();
-
-            SgTypePtrList::iterator typeIterator = typeList.begin();
-
-            std::string typeString = "std::tuple<";
-            if(typeList.size() != 0)
-              {
-                typeString += get_type_name(*typeIterator);
-                ++typeIterator;
-              }
-
-            for(; typeIterator != typeList.end(); ++typeIterator)
-              {
-                typeString += "," + get_type_name(*typeIterator);
-              }
-
-            typeString += ">";
-
-            return typeString;
-
-          }
        // DQ (3/24/2014): Added support for 128-bit integers.
           case T_SIGNED_128BIT_INTEGER:   return "__int128";
           case T_UNSIGNED_128BIT_INTEGER: return "unsigned __int128";
@@ -264,7 +279,7 @@ string get_type_name(SgType* t)
                printf ("In get_type_name(): case T_MEMBER_POINTER: I think this is not called here! \n");
                printf ("Exting as a test! \n");
 // Liao 10/16/2019. We do see code reaches this point now.
-//               ROSE_ASSERT(false);
+//               ROSE_ABORT();
 #endif
 
                if ( (ftype = isSgMemberFunctionType(btype)) != NULL)
@@ -290,14 +305,8 @@ string get_type_name(SgType* t)
                     printf ("In get_type_name(): ftype != NULL: after unparsing function arguments: unparse modifiers \n");
 #endif
 
-                    if (ftype->isConstFunc()) {
-                         res = res + " const";
-                       }
-
-                    if (ftype->get_ref_qualifiers() == 1) {
-                         res = res + " &";
-                       } else if (ftype->get_ref_qualifiers() == 2) {
-                         res = res + " &&";
+                    for (auto qual : memberFunctionQualifiers(ftype)) {
+                         res = res + qual;
                        }
 
                     return res;
@@ -563,14 +572,8 @@ string get_type_name(SgType* t)
                   }
                res = res + ")";
 
-               if (mfunc_type->isConstFunc()) {
-                 res = res + " const";
-               }
-
-               if (mfunc_type->get_ref_qualifiers() == 1) {
-                 res = res + " &";
-               } else if (mfunc_type->get_ref_qualifiers() == 2) {
-                 res = res + " &&";
+               for (auto qual : memberFunctionQualifiers(mfunc_type)) {
+                 res = res + qual;
                }
 
                return res;
@@ -888,9 +891,6 @@ Unparse_Type::unparseType(SgType* type, SgUnparse_Info& info)
                case T_SIGNED_128BIT_INTEGER:
                case T_UNSIGNED_128BIT_INTEGER:
 
-            // SK: Matrix type for Matlab
-               case T_MATRIX:
-               case T_TUPLE:
                case T_LONG_DOUBLE:
                case T_STRING:
                case T_BOOL:
@@ -2074,29 +2074,9 @@ void Unparse_Type::unparseMemberPointerType(SgType* type, SgUnparse_Info& info)
                        curprint(" &&");
                      }
 #endif
-                 // Liao, 2/27/2009, add "const" specifier to fix bug 327
-                    if (ftype->isConstFunc())
-                       {
-                         curprint(" const ");
-                       }
-
-                 // DQ (1/11/2020): Adding support for volatile.
-                    if (ftype->isVolatileFunc())
-                       {
-                         curprint(" volatile ");
-                       }
-
-                 // DQ (1/11/2020): Adding support for lvalue reference member function modifiers.
-                    if (ftype->isLvalueReferenceFunc())
-                       {
-                         curprint(" &");
-                       }
-
-                 // DQ (1/11/2020): Adding support for rvalue reference member function modifiers.
-                    if (ftype->isRvalueReferenceFunc())
-                       {
-                         curprint(" &&");
-                       }
+                    for (auto qual : memberFunctionQualifiers(ftype, true)) {
+                      curprint(qual);
+                    }
                   }
                  else
                   {
@@ -4518,28 +4498,9 @@ Unparse_Type::unparseMemberFunctionType(SgType* type, SgUnparse_Info& info)
                printf ("In unparseMemberFunctionType(): after unparseType() second part: unparse modifiers \n");
 #endif
 
-               if (mfunc_type->isConstFunc()) {
-                 curprint (" const");
+               for (auto qual : memberFunctionQualifiers(mfunc_type)) {
+                 curprint(qual);
                }
-
-            // DQ (1/11/2020): Adding missing support for volatile and const-volatile.
-               if (mfunc_type->isVolatileFunc())
-                  {
-                 // curprint (" /* adding volatile */ ");
-                    curprint (" volatile");
-                  }
-
-            // DQ (1/11/2020): Adding support for lvalue reference member function modifiers.
-               if (mfunc_type->isLvalueReferenceFunc())
-                  {
-                    curprint(" &");
-                  }
-
-            // DQ (1/11/2020): Adding support for rvalue reference member function modifiers.
-               if (mfunc_type->isRvalueReferenceFunc())
-                  {
-                    curprint(" &&");
-                  }
 #if 0
                if (mfunc_type->get_ref_qualifiers() == 1) {
                  curprint (" &");

@@ -1,6 +1,3 @@
-
-
-
 // DQ (3/6/2003): added from AstProcessing.h to avoid referencing
 // the traversal classes in AstFixes.h before they are defined.
 #include "sage3basic.h"
@@ -506,6 +503,7 @@ void AstNodeMemoryPoolStatistics::visit ( SgNode* node)
           IR_NODE_VISIT_CASE(SgDefaultOptionStmt)
           IR_NODE_VISIT_CASE(SgBreakStmt)
           IR_NODE_VISIT_CASE(SgContinueStmt)
+          IR_NODE_VISIT_CASE(SgFortranContinueStmt)
           IR_NODE_VISIT_CASE(SgReturnStmt)
           IR_NODE_VISIT_CASE(SgGotoStatement)
           IR_NODE_VISIT_CASE(SgSpawnStmt)
@@ -711,7 +709,7 @@ AstNodeStatistics::IRnodeUsageStatistics()
 
   // s = "AstNodeStatistics::IRnodeUsageStatistics(): Not finished being implemented \n";
 
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
      return s;
 }

@@ -929,59 +929,27 @@ TESTCODE_CURRENTLY_FAILING += $(FILES_NOT_PASSING)
 # DQ (1/16/2017): This file name is already mentioned previously (need not be repeated).
 # test2010_12.c 
 
-# DQ (12/3/2016): Moved test2012_09.c to not be tested withon Mac OSX OS.
-# Note that these might just be an issue specific to Clang version 3.8
-# or we don't have the correct emulation of the clang compiler since on Mac
-# we are detecting clang as GNU 4.2, where as on Linux we can correctly 
-# detect it as clang 3.8 (with some trouble).
-# Also, the only file previously in the list below was test2009_19.c.
-# DQ (9/26/2009): Conditionally compile this file (fails in OSX due to lack of OSX
-# support for thread local storage). Liao know more about the details of this test.
-# test2009_19.c
-if !OS_MACOSX
-   TESTCODES_REQUIRED_TO_PASS += \
-      test2009_19.c \
-      test2012_10.c \
-      test2012_12.c \
-      test2012_64.c \
-      test2012_72.c \
-      test2012_73.c \
-      test2012_74.c \
-      test2012_151.c \
-      test2012_152.c \
-      test2013_21.c \
-      test2013_32.c \
-      test2013_104.c \
-      test2013_113.c \
-      test2014_12.c \
-      test2014_13.c \
-      test2014_83.c \
-      test2014_93.c \
-      test2015_05.c \
-      test2015_34.c \
-      test2012_09.c
-else
-   TESTCODE_CURRENTLY_FAILING += \
-      test2009_19.c \
-      test2012_10.c \
-      test2012_12.c \
-      test2012_64.c \
-      test2012_72.c \
-      test2012_73.c \
-      test2012_74.c \
-      test2012_151.c \
-      test2012_152.c \
-      test2013_21.c \
-      test2013_32.c \
-      test2013_104.c \
-      test2013_113.c \
-      test2014_12.c \
-      test2014_13.c \
-      test2014_83.c \
-      test2014_93.c \
-      test2015_34.c \
-      test2012_09.c
-endif
+TESTCODES_REQUIRED_TO_PASS += \
+   test2009_19.c \
+   test2012_10.c \
+   test2012_12.c \
+   test2012_64.c \
+   test2012_72.c \
+   test2012_73.c \
+   test2012_74.c \
+   test2012_151.c \
+   test2012_152.c \
+   test2013_21.c \
+   test2013_32.c \
+   test2013_104.c \
+   test2013_113.c \
+   test2014_12.c \
+   test2014_13.c \
+   test2014_83.c \
+   test2014_93.c \
+   test2015_05.c \
+   test2015_34.c \
+   test2012_09.c
 
 #Liao, 5/16/2009 add a set of self-verifiable test code with main() 
 # and let them run during make check
@@ -1280,10 +1248,8 @@ print:
 check-local: check-pthread.passed
 	@echo "Tests for C."
 	@$(MAKE) $(PASSING_TEST_Source_passed)
-if !OS_MACOSX
 	@$(MAKE) test_link_using_asm_symbol_injection
 	@$(MAKE) test_link_using_alias_attribute
-endif
 	@$(MAKE) test_build_generated_file_in_same_directory_as_input_file.passed
 	@$(MAKE) test_unparse_includes_option.passed
 	@$(MAKE) test_unparse_includes_option_with_link.passed
@@ -1317,4 +1283,3 @@ clean-local:
 
 status:
 	@$(MAKE) $(TEST_Source_passed)
-

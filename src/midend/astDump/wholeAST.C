@@ -1021,7 +1021,7 @@ CustomMemoryPoolDOTGeneration::edgeFilter(SgNode* nodeSource, SgNode* nodeSink, 
              {
             // printf ("CustomMemoryPoolDOTGeneration::edgeFilter(): Skipping this edge since it is to a node that is skipped nodeSink = %p = %s \n",nodeSink,nodeSink->class_name().c_str());
 
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
             // skipEdge(nodeSource,nodeSink,edgeName);
                EdgeType edge(nodeSource,nodeSink,edgeName);
@@ -1388,7 +1388,7 @@ CustomMemoryPoolDOTGeneration::defaultFilter(SgNode* node)
   // Default fileter to simplify the whole AST graph
 
   // printf ("Exiting in CustomMemoryPoolDOTGeneration::defaultFilter() \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 #if 0
      frontendCompatibilityFilter(node);
 #endif

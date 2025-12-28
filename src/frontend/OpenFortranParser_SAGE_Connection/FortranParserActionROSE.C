@@ -615,7 +615,7 @@ void c_action_label(Token_t * lbl)
             setSourcePosition(asteriskExpression);
             astTypeParameterStack.push_front(asteriskExpression);
 
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
         }
         else
         {
@@ -1613,7 +1613,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param keyword The type-attr-spec keyword token (null if an access_spec)
      * @param id Identifier if extends or bind. Otherwise, null.
-     * @param specType "Enum"  on type: access_spec, extnds, abstrct, or bind. (Weird spelling of extnds and abstrct avoids overrriding java keywords.)
+     * @param specType "Enum"  on type: access_spec, extnds, abstrct, or bind. (Weird spelling avoids overriding reserved keywords in generator code.)
      */
     void c_action_type_attr_spec(Token_t * keyword, Token_t * id, int specType)
     {
@@ -3120,7 +3120,7 @@ void c_action_label(Token_t * lbl)
                 // This marks the type in a declaration to be one of the primative types, not really used in ROSE.
                 // printf ("In c_action_declaration_type_spec(type = %d = DeclarationTypeSpec_INTRINSIC) \n",type);
                 // printf ("Sorry, not implemented: c_action_declaration_type_spec(DeclarationTypeSpec_INTRINSIC) \n");
-                // ROSE_ASSERT(false);
+                // ROSE_ABORT();
 
                 // Modify the type that was previously built
                 if (!astTypeStack.empty())
@@ -4009,7 +4009,7 @@ void c_action_label(Token_t * lbl)
         astExpressionStack.push_front(integerValue);
 
         // printf ("***** Need to build a NULL() value IR node ***** \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
     }
 
     /** R508
@@ -5271,7 +5271,7 @@ void c_action_label(Token_t * lbl)
 
         // DQ (1/18/2011): This detects where we have used the semantics of implicitly building symbols for implicit variables.
         // printf ("WARNING: This use of trace_back_through_parent_scopes_lookup_variable_symbol() used the side effect of building a symbol if the reference is not found! \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
 
         // We need to get a base type for the array.
         SgVariableSymbol* arraySymbol =
@@ -5496,7 +5496,7 @@ void c_action_label(Token_t * lbl)
 
         // DQ (1/18/2011): This detects where we have used the semantics of implicitly building symbols for implicit variables.
         // printf ("WARNING: This use of trace_back_through_parent_scopes_lookup_variable_symbol() used the side effect of building a symbol if the reference is not found! \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
 
         SgVariableSymbol* variableSymbol =
         trace_back_through_parent_scopes_lookup_variable_symbol(name,
@@ -7176,9 +7176,9 @@ void c_action_label(Token_t * lbl)
                             // printf ("Test #1 variableSymbolList.size() = %" PRIuPTR " \n",variableSymbolList.size());
 
                             // printf ("Error: This is an implicit variable that has a name matching an implicit function, but isImplicitNoneScope() == true (so this is an inconsistancy).\n");
-                            // ROSE_ASSERT(false);
+                            // ROSE_ABORT();
                         }
-                        // ROSE_ASSERT(false);
+                        // ROSE_ABORT();
                     }
                     else
                     {
@@ -7296,7 +7296,7 @@ void c_action_label(Token_t * lbl)
                         outputState("DONE: Build the non-implicit function call in R612 c_action_data_ref()");
 #endif
                         // printf ("Found an function call (but NOT an implicit function): not implemented yet! \n");
-                        // ROSE_ASSERT(false);
+                        // ROSE_ABORT();
                     }
                 }
             }
@@ -7917,7 +7917,7 @@ void c_action_label(Token_t * lbl)
                 // Maybe this should be handled in R613 more directly!!!
 
                 // printf ("Finish this tomorrow \n");
-                // ROSE_ASSERT(false);
+                // ROSE_ABORT();
             }
 
             ROSE_ASSERT(astExpressionStack.empty() == false);
@@ -8857,7 +8857,7 @@ void c_action_label(Token_t * lbl)
             astExpressionStack.push_front(result);
 
             // printf ("Exiting after building user defined unary operator... \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
         }
 
 #if 0
@@ -9735,7 +9735,7 @@ void c_action_label(Token_t * lbl)
                     "Before EXIT of R717 c_action_level_5_expr__defined_binary_op()");
 
             // printf ("Exiting after building the user-defined binary operator... \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
         }
 #endif
 
@@ -10512,7 +10512,7 @@ void c_action_label(Token_t * lbl)
 
         // DQ (1/18/2011): This detects where we have used the semantics of implicitly building symbols for implicit variables.
         // printf ("WARNING: This use of trace_back_through_parent_scopes_lookup_variable_symbol() used the side effect of building a symbol if the reference is not found! \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
 
         SgVariableSymbol* variableSymbol =
         trace_back_through_parent_scopes_lookup_variable_symbol(name,
@@ -10658,7 +10658,8 @@ void c_action_label(Token_t * lbl)
         SgScopeStatement* currentScope = getTopOfScopeStack();
         currentScope->append_statement(forAllStatement);
         forAllStatement->set_parent(currentScope);
-        forAllStatement->set_forall_statement_kind(SgForAllStatement::e_forall_statement);
+        // Rasmussen (1/8/2019): To be added in future
+        // forAllStatement->set_forall_statement_kind(SgForAllStatement::e_forall_statement);
 
         // Push the if scope (it is a scope in C/C++, even if not in Fortran)
         // treating it as a scope will allow it to be consistent across C,C++, and Fortran.
@@ -11391,7 +11392,7 @@ void c_action_label(Token_t * lbl)
                printf("Set the named label: %s (in switchStatement = %p) \n",
                        id->text, switchStatement);
             }
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
         }
 
         body->set_parent(switchStatement);
@@ -11779,7 +11780,7 @@ void c_action_case_value()
 #endif
 
         // printf ("Exiting at end of rule R817 \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
     }
 
     /**
@@ -11871,7 +11872,7 @@ void c_action_case_value()
 #endif
 
         // printf ("Exiting at end of rule R818 \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
     }
 
     /**
@@ -12063,7 +12064,7 @@ void c_action_case_value()
 
                 // DQ (1/18/2011): This detects where we have used the semantics of implicitly building symbols for implicit variables.
                 // printf ("WARNING: This use of trace_back_through_parent_scopes_lookup_variable_symbol() used the side effect of building a symbol if the reference is not found! \n");
-                // ROSE_ASSERT(false);
+                // ROSE_ABORT();
 
                 SgVariableSymbol* variableSymbol =
                 trace_back_through_parent_scopes_lookup_variable_symbol(
@@ -12584,7 +12585,7 @@ void c_action_case_value()
 #endif
 
         // printf ("Should this label be set before or after astScopeStack.pop_front() \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
 #endif //=======================================================================================================
     }
 
@@ -12964,7 +12965,7 @@ void c_action_case_value()
         astLabelSymbolStack.clear();
 
         // printf ("c_action_arithmetic_if_stmt() not implemented \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
     }
 
     /** R848
@@ -14888,7 +14889,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 
         // DQ (1/18/2011): This detects where we have used the semantics of implicitly building symbols for implicit variables.
         // printf ("WARNING: This use of trace_back_through_parent_scopes_lookup_variable_symbol() used the side effect of building a symbol if the reference is not found! \n");
-        // ROSE_ASSERT(false);
+        // ROSE_ABORT();
 
         SgVariableSymbol* variableSymbol =
         trace_back_through_parent_scopes_lookup_variable_symbol(
@@ -17818,7 +17819,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
             case GenericSpec_ASSIGNMENT:
             {
                 // printf ("Operator definition not yet implemented type = GenericSpec_ASSIGNMENT \n");
-                // ROSE_ASSERT(false);
+                // ROSE_ABORT();
                 ROSE_ASSERT(keyword != NULL);
                 astNameStack.push_front(keyword);
                 break;
@@ -18488,7 +18489,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 
         // DQ (12/3/2010): This is called by test2010_119.f90.
         // printf ("I don't think that this is ever called! c_action_actual_arg_spec_list__begin() \n");
-        // FMZ ROSE_ASSERT(false);
+        // FMZ ROSE_ABORT();
     }
 
     void c_action_actual_arg_spec_list(int count)
@@ -18498,7 +18499,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 
         // DQ (12/3/2010): This is called by test2010_119.f90.
         // printf ("I don't think that this is ever called! c_action_actual_arg_spec_list() \n");
-        // FMZ ROSE_ASSERT(false);
+        // FMZ ROSE_ABORT();
 
 #if 0
         // Output debugging information about saved state (stack) information.
@@ -19384,7 +19385,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
                         returnVariableSymbol);
 
                 printf("Processing the return var in a SgEntryStatement \n");
-                // ROSE_ASSERT(false);
+                // ROSE_ABORT();
             }
         }
 

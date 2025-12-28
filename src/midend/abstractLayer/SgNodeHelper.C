@@ -1860,18 +1860,20 @@ namespace
 
 
 SgNodeHelper::ExtendedCallInfo
-SgNodeHelper::matchExtendedNormalizedCall(SgNode* n)
+SgNodeHelper::matchExtendedNormalizedCall(SgNode* n, bool matchExtended)
 {
   static constexpr bool TEST_EXTENDED_NORMALIZED_CALL = true;
 
-  SgNodeHelper::ExtendedCallInfo res = sg::dispatch(ExtendedCallMatcherOuter(), n);
+  if (matchExtended) {
+    SgNodeHelper::ExtendedCallInfo res = sg::dispatch(ExtendedCallMatcherOuter(), n);
 
-  // for every match of matchFunctionCall, res should also match.
-  ROSE_ASSERT(  !TEST_EXTENDED_NORMALIZED_CALL
-             || !SgNodeHelper::Pattern::matchFunctionCall(n)
-             || res
-             );
-  return res;
+    // for every match of matchFunctionCall, res should also match.
+    ROSE_ASSERT(!TEST_EXTENDED_NORMALIZED_CALL ||
+                !SgNodeHelper::Pattern::matchFunctionCall(n) || res);
+    return res;
+  }
+
+  return SgNodeHelper::ExtendedCallInfo();
 }
 
 std::list<SgVariableDeclaration*> SgNodeHelper::memberVariableDeclarationsList(SgClassType* sgType) {

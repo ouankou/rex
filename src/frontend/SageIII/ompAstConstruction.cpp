@@ -307,7 +307,7 @@ SgExpression *checkOmpExpressionClause(SgExpression *clause_expression,
     } else {
       printf("error in checkOmpExpressionClause(): no expression found in an "
              "expression clause\n");
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
   }
 
@@ -367,7 +367,7 @@ toSgOmpClauseIfModifier(OpenMPIfClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for if modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -390,7 +390,7 @@ toSgOmpClauseLastprivateModifier(OpenMPLastprivateClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for lastprivate modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -417,7 +417,7 @@ toSgOmpClauseDeviceModifier(OpenMPDeviceClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for device modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -448,7 +448,7 @@ toSgOmpClauseScheduleModifier(OpenMPScheduleClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for schedule modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -487,7 +487,7 @@ toSgOmpClauseScheduleKind(OpenMPScheduleClauseKind kind) {
     printf("error: unacceptable omp construct enum for schedule kind "
            "conversion:%d\n",
            kind);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -530,7 +530,7 @@ toSgOmpClauseDefaultmapBehavior(OpenMPDefaultmapClauseBehavior behavior) {
     printf("error: unacceptable omp construct enum for defaultmap behavior "
            "conversion:%d\n",
            behavior);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -560,7 +560,7 @@ toSgOmpClauseMapOperator(OpenMPMapClauseType at_op) {
   default: {
     // printf("error: unacceptable omp construct enum for map operator
     // conversion:%s\n", OmpSupport::toString(at_op).c_str());
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -597,7 +597,7 @@ toSgOmpClauseDefaultmapCategory(OpenMPDefaultmapClauseCategory category) {
     printf("error: unacceptable omp construct enum for defaultmap category "
            "conversion:%d\n",
            category);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -616,7 +616,7 @@ toSgOmpClauseDistScheduleKind(OpenMPDistScheduleClauseKind kind) {
     printf("error: unacceptable omp construct enum for dist_schedule kind "
            "conversion:%d\n",
            kind);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -647,7 +647,7 @@ toSgOmpClauseLinearModifier(OpenMPLinearClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for linear modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -679,7 +679,7 @@ toSgOmpClauseReductionModifier(OpenMPReductionClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for reduction modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
   return result;
@@ -749,7 +749,7 @@ toSgOmpClauseReductionIdentifier(OpenMPReductionClauseIdentifier identifier) {
     printf("error: unacceptable omp construct enum for reduction operator "
            "conversion:%d\n",
            identifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -822,7 +822,7 @@ toSgOmpClauseInReductionIdentifier(
     printf("error: unacceptable omp construct enum for in_reduction operator "
            "conversion:%d\n",
            identifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -895,7 +895,7 @@ toSgOmpClauseTaskReductionIdentifier(
     printf("error: unacceptable omp construct enum for task_reduction operator "
            "conversion:%d\n",
            identifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -954,7 +954,7 @@ toSgOmpClauseAllocateAllocator(OpenMPAllocateClauseAllocator allocator) {
     printf("error: unacceptable omp construct enum for allocate modifier "
            "conversion:%d\n",
            allocator);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1012,7 +1012,7 @@ toSgOmpClauseAllocatorAllocator(OpenMPAllocatorClauseAllocator allocator) {
     printf("error: unacceptable omp construct enum for allocator modifier "
            "conversion:%d\n",
            allocator);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1037,7 +1037,7 @@ toSgOmpClauseToKind(OpenMPToClauseKind kind) {
   default: {
     printf("error: unacceptable omp construct enum for TO kind conversion:%d\n",
            kind);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1063,7 +1063,7 @@ toSgOmpClauseFromKind(OpenMPFromClauseKind kind) {
     printf(
         "error: unacceptable omp construct enum for FROM kind conversion:%d\n",
         kind);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1122,7 +1122,7 @@ toSgOmpClauseUsesAllocatorsAllocator(
     printf("error: unacceptable omp construct enum for allocator modifier "
            "conversion:%d\n",
            allocator);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1167,7 +1167,7 @@ toSgOmpClauseDepobjModifierType(OpenMPDepobjUpdateClauseDependeceType type) {
     printf("error: unacceptable omp construct enum for dependence type "
            "conversion:%d\n",
            type);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1211,7 +1211,7 @@ toSgOmpClauseDependenceType(OpenMPDependClauseType type) {
     printf("error: unacceptable omp construct enum for dependence type "
            "conversion:%d\n",
            type);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1235,7 +1235,7 @@ toSgOmpClauseDependModifier(OpenMPDependClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for depend modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1259,7 +1259,7 @@ toSgOmpClauseAffinityModifier(OpenMPAffinityClauseModifier modifier) {
     printf("error: unacceptable omp construct enum for affinity modifier "
            "conversion:%d\n",
            modifier);
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     break;
   }
   }
@@ -1381,7 +1381,7 @@ void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
               "directive for: "
            << endl;
       cerr << decl->get_pragma()->get_pragma() << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     } else
       return; // There is nothing further to do if the optional end directives
               // do not exist
@@ -1571,7 +1571,7 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       cerr << "ompAstConstruction.cpp , illegal "
               "PreprocessingInfo::RelativePositionType:"
            << position << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
   } // end for omp_comment_list
 
@@ -2026,7 +2026,7 @@ convertSimpleClause(SgStatement *directive,
   }
   default: {
     cerr << "error: unknown clause " << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   };
   setOneSourcePositionForTransformation(sg_clause);
@@ -2132,7 +2132,7 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     }
     default: {
       cerr << "error: unknown clause " << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
     };
   };
@@ -3429,7 +3429,7 @@ convertDefaultClause(SgOmpClauseBodyStatement *clause_body,
     cerr << "error: buildOmpDefaultClase() Unacceptable default option from "
             "OpenMPIR:"
          << default_kind;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }; // end switch
   SgOmpDefaultClause *result = new SgOmpDefaultClause(sg_dv, variant_directive);
@@ -3505,7 +3505,7 @@ convertProcBindClause(SgOmpClauseBodyStatement *clause_body,
     cerr << "error: buildOmpProcBindClause () Unacceptable default option from "
             "OpenMPIR:"
          << proc_bind_kind;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }; // end switch
   SgOmpProcBindClause *result = new SgOmpProcBindClause(sg_dv);
@@ -4649,7 +4649,7 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     cerr << "error: unacceptable directive type in "
             "convertOmpParallelStatementFromCombinedDirectives() "
          << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   }
 
@@ -4725,7 +4725,7 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     default: {
       cerr << "error: unacceptable clause for combined parallel for directive"
            << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
     };
   };

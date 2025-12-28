@@ -72,6 +72,7 @@ set_source_files_properties(${ROSETTA_SRC} ${ROSETTA_HEADERS} PROPERTIES GENERAT
 
 # Build in the subdirectories that make up the ROSE source code
 add_subdirectory(util)
+add_subdirectory(Rose)
 add_subdirectory(ROSETTA)
 add_subdirectory(3rdPartyLibraries)
 
@@ -80,6 +81,7 @@ add_definitions(-DROSE_DLL_EXPORTS)
 add_subdirectory(frontend)
 add_subdirectory(midend)
 add_subdirectory(backend)
+add_subdirectory(AstNodes)
 
 ########################################################################################################################
 # The ROSE library
@@ -95,6 +97,7 @@ set(rose_LIB_SRCS
   $<TARGET_OBJECTS:util_graphs>
   $<TARGET_OBJECTS:unparser>
   $<TARGET_OBJECTS:sage3>
+  $<TARGET_OBJECTS:roseAstNodesExpression>
   $<TARGET_OBJECTS:virtualCFG>
   $<TARGET_OBJECTS:astFixup>
   $<TARGET_OBJECTS:midend>
@@ -125,6 +128,13 @@ if(enable-c)
     $<TARGET_OBJECTS:libroseClangFrontend>)
 endif()
 
+if(enable-fortran AND enable-fortran-flang)
+  list(APPEND rose_LIB_SRCS
+    $<TARGET_OBJECTS:general_language_support>
+    $<TARGET_OBJECTS:flang_frontend>
+    $<TARGET_OBJECTS:flang_parser>)
+endif()
+
 ########################################################################################################################
 # The ROSE library itself (librose.so, librose.a)
 ########################################################################################################################
@@ -140,6 +150,10 @@ if(enable-c)
   target_link_libraries(ROSE_DLL ${CLANG_LIBS} ${LLVM_LIBS} ${link_with_libraries})
 else()
   target_link_libraries(ROSE_DLL ${link_with_libraries})
+endif()
+
+if(enable-fortran AND enable-fortran-flang)
+  target_link_libraries(ROSE_DLL ${FLANG_LIBS})
 endif()
 
 set_target_properties(ROSE_DLL PROPERTIES

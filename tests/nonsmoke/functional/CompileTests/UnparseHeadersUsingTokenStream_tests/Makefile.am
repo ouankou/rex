@@ -63,11 +63,11 @@ $(TEST_TARGETS): %.passed: $(srcdir)/% %/config TestUnparseHeadersUsingTokens
 	mkdir -p "$(@:.passed=)"
 	$(RTH_RUN) ROSE_SWITCHES="$(ROSE_SWITCHES)" HDR_ROOT_SWITCHES="$(HDR_ROOT_SWITCHES)" "$</config" "$@"
 
-# DQ (12/27/2018): This is a test using the Windows line endings (previously failing case).
+# DQ (12/27/2018): This is a test using CRLF line endings (previously failing case).
 testTransformVariable: transformVariable $(srcdir)/badInput.c
 	./transformVariable -rose:unparse_tokens -c $(srcdir)/badInput.c
 
-# DQ (12/30/2018): This is a test using the Windows line endings (CPP directives were missing there windows line endings).
+# DQ (12/30/2018): This is a test using CRLF line endings (CPP directives were missing there CRLF line endings).
 # cat -v rose_badInput_with_cpp_directives.c | grep -v "\^M" should report zero lines of difference, so we could test this.
 testTransformVariable2: transformVariable $(srcdir)/badInput2.c
 	./transformVariable -rose:unparse_tokens -c $(srcdir)/badInput2.c

@@ -102,6 +102,80 @@ bool fileHasRelevantModifications(SgSourceFile *file) {
 
   return false;
 }
+
+void insertIncludeFileMapEntry(const std::string &filename,
+                               SgIncludeFile *includeFile) {
+  if (includeFile == nullptr || filename.empty()) {
+    return;
+  }
+
+  std::pair<std::map<std::string, SgIncludeFile *>::iterator, bool> insertResult =
+      Rose::includeFileMapForUnparsing.insert(
+          std::make_pair(filename, includeFile));
+  if (!insertResult.second) {
+    SgIncludeFile *existing = insertResult.first->second;
+    if (existing == nullptr) {
+      insertResult.first->second = includeFile;
+      return;
+    }
+
+    if (existing != includeFile &&
+        existing->get_can_be_supported_using_token_based_unparsing() == true &&
+        includeFile->get_can_be_supported_using_token_based_unparsing() ==
+            false) {
+      insertResult.first->second = includeFile;
+    }
+  }
+}
+
+void populateIncludeFileMapForUnparsingFromIncludeTree(
+    SgIncludeFile *includeTreeRoot) {
+  if (includeTreeRoot == nullptr) {
+    return;
+  }
+
+  std::vector<SgIncludeFile *> worklist;
+  std::set<SgIncludeFile *> visited;
+  worklist.push_back(includeTreeRoot);
+
+  while (!worklist.empty()) {
+    SgIncludeFile *includeFile = worklist.back();
+    worklist.pop_back();
+    if (includeFile == nullptr) {
+      continue;
+    }
+    if (!visited.insert(includeFile).second) {
+      continue;
+    }
+
+    const std::string filename = includeFile->get_filename();
+    insertIncludeFileMapEntry(filename, includeFile);
+
+    SgSourceFile *includedSourceFile = includeFile->get_source_file();
+    if (includedSourceFile != nullptr) {
+      insertIncludeFileMapEntry(includedSourceFile->getFileName(), includeFile);
+    }
+
+    const SgIncludeFilePtrList &includeFileList =
+        includeFile->get_include_file_list();
+    for (size_t i = 0; i < includeFileList.size(); ++i) {
+      worklist.push_back(includeFileList[i]);
+    }
+  }
+}
+
+SgIncludeFile *lookupIncludeFileForUnparsing(const std::string &filename) {
+  if (filename.empty()) {
+    return nullptr;
+  }
+
+  std::map<std::string, SgIncludeFile *>::const_iterator it =
+      Rose::includeFileMapForUnparsing.find(filename);
+  if (it == Rose::includeFileMapForUnparsing.end()) {
+    return nullptr;
+  }
+  return it->second;
+}
 } // namespace
 
 // DQ (12/31/2005): This is OK if not declared in a header file
@@ -113,15 +187,21 @@ using namespace Rose;
 // DQ (6/25/2011): Forward declaration for new name qualification support.
 void generateNameQualificationSupport( SgNode* node, std::set<SgNode*> & referencedNameSet );
 
-// DQ (12/6/2014): The call to this function has been moved to the sage_support.cpp file
+// DQ (12/6/2014): The call to this function has been moved to the sage_support.C file
 // so that it can be called on the AST before transformations.  However it is now
 // split into two parts so that the token stream can be mapped to the AST before
 // transformations, and then the token stream frontier can be computed after
 // transformations have been done in the AST.
 // DQ (10/27/2013): Added forward declaration for new token stream support.
 // void buildTokenStreamMapping(SgSourceFile* sourceFile);
-void buildTokenStreamFrontier(SgSourceFile* sourceFile);
 
+#if 0
+// DQ (5/2/2021): This is the version from 5/1/2021.
+void buildTokenStreamFrontier(SgSourceFile* sourceFile);
+#else
+// DQ (5/9/2021): Activate this code.
+void buildTokenStreamFrontier(SgSourceFile* sourceFile, bool traverseHeaderFiles);
+#endif
 
 //-----------------------------------------------------------------------------------
 //  Unparser::Unparser
@@ -440,13 +520,6 @@ Unparser::computeNameQualification(SgSourceFile* file)
                printf ("Calling name qualification support \n");
              }
 
-       // DQ (10/17/2020): I have discovered that this was added by Tristan, and it is not clear to me what it is about.
-       // After discussion with Tristan, this is specific to Jovial to C++ translator, and supports the development of
-       // separate header files that are built, instead of using the single translation unit and the unparse header file
-       // support that has been recently built into ROSE (last year).  This is fine, but it brings up a possible somewhat
-       // philosophical discussion about how to defaine a translation unit in C and C++, nameily that the SgFile and SgSourceFile
-       // is really a translation unit for the source code in any source file (and does not refer to only the source file
-       // to the exclusion of associated included file via CPP #include directives.
           SgNodePtrList & nodes_for_namequal_init = file->get_extra_nodes_for_namequal_init();
           for (SgNodePtrList::iterator it = nodes_for_namequal_init.begin(); it != nodes_for_namequal_init.end(); ++it) {
             generateNameQualificationSupport(*it, referencedNameSet);
@@ -515,7 +588,11 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 
      ASSERT_not_null(file);
 
-  // DQ (10/29/2018): I now think we need to support this mechanism of specifying the scope to be unparsed separately.
+  // DQ (6/5/2021): Save the previous statement that was just unparsed (at this point we just want to clear the value from any other file).
+     SgUnparse_Info::set_previouslyUnparsedStatement(NULL);
+     SgUnparse_Info::set_previousStatementUnparsedFromTokenStream(false);
+
+  // DQ (10/29/2018): I now think we need to support this mechanism of specifying the scope to be unparsed seperately.
   // This is essential to the support for header files representing nested scopes inside of the global scope.
   // Traversing the global scope does not permit these inner nested scopes to be traversed using the unparser.
 
@@ -526,7 +603,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
   // DQ (10/22/2019): I think we can specify this (and later cleanup some of the code below).
   // ROSE_ASSERT(unparseScope == NULL);
 
-#if DEBUG_UNPARSE_FILE
+#if DEBUG_UNPARSE_FILE || 0
      printf ("\n\n");
      printf ("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ \n");
      printf ("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ \n");
@@ -541,6 +618,10 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
      printf ("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ \n");
      printf ("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ \n");
 #endif
+
+  // DQ (5/22/2021): Set the current_source_file in the SgUnparse_Info object.
+     SgSourceFile* sourceFile = info.get_current_source_file();
+     ROSE_ASSERT(sourceFile != NULL);
 
   // DQ (4/24/2021): Sorting out the header file optimization, so that we can correctly handle when both ON or OFF.
   // This data member appears to always be false.
@@ -697,7 +778,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 
 #if 0
      printf ("In Unparser::unparseFile(): SageInterface::is_C_language() = %s \n",SageInterface::is_C_language() ? "true" : "false");
-     printf ("In Unparser::unparseFile(): file->get_unparse_tokens()      = %s \n",file->get_unparse_tokens() ? "true" : "false");
+     printf ("In Unparser::unparseFile(): file->get_unparse_tokens()     = %s \n",file->get_unparse_tokens() ? "true" : "false");
 #endif
 
 #if 0
@@ -753,12 +834,13 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 
 #endif
 
-#if 0
+#if DEBUG_UNPARSE_FILE || 0
      printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
      printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
      printf ("In Unparser::unparseFile(): file->get_unparse_tokens() = %s \n",file->get_unparse_tokens() ? "true" : "false");
-     printf ("isCfile   = %s \n",isCfile ? "true" : "false");
-     printf ("isCxxFile = %s \n",isCxxFile ? "true" : "false");
+     printf ("isCfile                    = %s \n",isCfile ? "true" : "false");
+     printf ("isCxxFile                  = %s \n",isCxxFile ? "true" : "false");
+     printf ("file->get_unparse_tokens() = %s \n",file->get_unparse_tokens() ? "true" : "false");
      printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
      printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
 #endif
@@ -851,10 +933,63 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 
        // *** Next we have to attached the data base ***
        // buildTokenStreamMapping(file);
-          buildTokenStreamFrontier(file);
 
 #if DEBUG_UNPARSE_TOKENS
-          printf ("DONE: In Unparser::unparseFile(): Building token stream mapping frontier! \n");
+          printf ("file->get_unparseHeaderFiles() = %s \n",file->get_unparseHeaderFiles() ? "true" : "false");
+#endif
+
+#if 0
+  // DQ (5/10/2021): Moved to be called once one for each file in the Sgproject (instead of for each file).
+#if 0
+       // DQ (5/2/2021): This is the version from 5/1/2021.
+          buildTokenStreamFrontier(file);
+#else
+       // DQ (5/9/2021): Activate this code.
+          ROSE_ASSERT(file->get_unparseHeaderFiles() == true);
+       // DQ (5/2/2021): When unparsing header files, we need to do this once for the whole translation unit (not once per file).
+#if 0
+       // DQ (5/10/2021): We don't need both cases.
+          if (file->get_unparseHeaderFiles() == false)
+             {
+#if DEBUG_UNPARSE_TOKENS
+               printf ("In Unparser::unparseFile(): calling buildTokenStreamFrontier(): filename = %s \n",file->getFileName().c_str());
+#endif
+               bool traverseHeaderFiles = false;
+               buildTokenStreamFrontier(file,traverseHeaderFiles);
+
+#error "DEAD CODE"
+
+#if DEBUG_UNPARSE_TOKENS
+               printf ("DONE: In Unparser::unparseFile(): Building token stream mapping frontier! \n");
+#endif
+#if 1
+            // DQ (5/9/2021): Testing support for unparsing headers.
+               printf ("Exiting as a test! \n");
+               ROSE_ABORT();
+#endif
+             }
+            else
+             {
+               bool traverseHeaderFiles = true;
+               buildTokenStreamFrontier(file,traverseHeaderFiles);
+#if 0
+            // DQ (5/9/2021): Testing support for unparsing headers.
+               printf ("Exiting as a test! \n");
+               ROSE_ABORT();
+#endif
+             }
+#else
+       // We only need to support the case of file->get_unparseHeaderFiles() == true.
+          bool traverseHeaderFiles = true;
+          buildTokenStreamFrontier(file,traverseHeaderFiles);
+#if 0
+       // DQ (5/9/2021): Testing support for unparsing headers.
+          printf ("Exiting as a test! \n");
+          ROSE_ABORT();
+#endif
+#endif
+#endif
+  // DQ (5/10/2021): Moved to be called once one for each file in the SgProject.
 #endif
 
 #if 0
@@ -862,7 +997,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
           SageInterface::reportModifiedStatements("After buildTokenStreamFrontier",file);
 #endif
 
-#if 0
+#if DEBUG_UNPARSE_FILE
           printf ("In Unparser::unparseFile(): END: this->currentFile = %p this->currentFile->getFileName() = %s \n",this->currentFile,this->currentFile->getFileName().c_str());
 #endif
 #if 0
@@ -958,7 +1093,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
           case SgFile::e_default_language:
              {
             // printf ("Error: SgFile::e_default_language detected in unparser \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 #if 0
                printf ("Warning: SgFile::e_default_language detected in unparser \n");
 #endif
@@ -968,9 +1103,9 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
           case SgFile::e_Cxx_language:
              {
             // printf ("Error: SgFile::e_C_language or SgFile::e_Cxx_language detected in unparser (unparser not implemented, unparsing ignored) \n");
-#if 0
-               printf ("Unparse using C/C++ unparser by default: unparseScope = %p \n",unparseScope);
-               printf ("In Unparser::unparseFile(): case SgFile::e_Cxx_language: this->currentFile->getFileName() = %s \n",this->currentFile->getFileName().c_str());
+#if DEBUG_UNPARSE_FILE
+               printf ("case SgFile::e_C/Cxx_language: Unparse using C/C++ unparser by default: unparseScope = %p \n",unparseScope);
+               printf ("In Unparser::unparseFile(): case SgFile::e_C/Cxx_language: this->currentFile->getFileName() = %s \n",this->currentFile->getFileName().c_str());
 #endif
             // DQ (10/29/2018): I now think we need to support this mechanism of specifying the scope to be unparsed separately.
             // This is essential to the support for header files representing nested scopes inside of the global scope.
@@ -982,7 +1117,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
             // negara1 (06/29/2011): If unparseScope is provided, unparse it. Otherwise, unparse the global scope (the default behavior).
                if (unparseScope != NULL)
                   {
-#if 0
+#if DEBUG_UNPARSE_FILE
                     printf ("In Unparser::unparseFile(): unparseScope = %p = %s \n",unparseScope,unparseScope->class_name().c_str());
 #endif
 #if 0
@@ -1050,7 +1185,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
                     SgStatementPtrList statements = unparseScope->generateStatementList();
                     for (SgStatementPtrList::iterator statement = statements.begin(); statement != statements.end(); statement++)
                        {
-#if 0
+#if DEBUG_UNPARSE_FILE
                          printf ("Unparsing the statements on the unparseScope statement by statement (what about comments) statement = %p = %s \n",*statement,(*statement)->class_name().c_str());
 #endif
                          u_exprStmt -> unparseStatement(*statement, info);
@@ -1071,11 +1206,13 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
                   }
                  else
                   {
+                 // DQ (5/15/2021): This characterizes this false branch.
+                    ROSE_ASSERT (unparseScope == NULL);
 #if 0
                  // DQ (10/23/2018): Output report of AST nodes marked as modified!
                     SageInterface::reportModifiedStatements("In Unparser::unparseFile():",globalScope);
 #endif
-#if DEBUG_UNPARSE_FILE
+#if DEBUG_UNPARSE_FILE || 0
                     printf ("In Unparser::unparseFile(): case C/C++: unparseStatement(globalScope, info): globalScope = %p \n",globalScope);
                     printf ("globalScope->getDeclarationList().size() = %zu \n",globalScope->getDeclarationList().size());
                     SgGlobal* temp_globalScope = isSgGlobal(globalScope);
@@ -1112,20 +1249,24 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 #if DEBUG_UNPARSE_FILE
                     if (this->currentFile == globalScope->get_parent())
                        {
-                         printf ("Unparsing a header file of an AST from a given source file \n");
+                      // DQ (5/15/2021): Swapped the true and false debug statements (I think they were in reverse order).
+                      // printf ("Unparsing a header file of an AST from a given source file \n");
+                         printf ("Unparsing a source file (different from all other source files) \n");
                        }
                       else
                        {
-                         printf ("Unparsing a source file (different from all other source files) \n");
+                      // printf ("Unparsing a source file (different from all other source files) \n");
+                         printf ("Unparsing a header file of an AST from a given source file \n");
                        }
                  // ROSE_ASSERT(this->currentFile != globalScope->get_parent());
 #endif
                     SgSourceFile* currentSourceFile = isSgSourceFile(this->currentFile);
                     ROSE_ASSERT(currentSourceFile != NULL);
 
-#if 0
-                    printf ("globalScope_from_currentFile = %p \n",globalScope_from_currentFile);
-                    printf ("globalScope                  = %p \n",globalScope);
+#if DEBUG_UNPARSE_FILE
+                 // printf ("globalScope_from_currentFile     = %p \n",globalScope_from_currentFile);
+                    printf ("globalScope                      = %p \n",globalScope);
+                    printf ("currentSourceFile->getFileName() = %s \n",currentSourceFile->getFileName().c_str());
 #endif
                     SgGlobal* globalScope_from_currentFile = currentSourceFile->get_globalScope();
 
@@ -1271,9 +1412,40 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
 #endif
 
 #if 0
-  // DQ (12/2/2019): Testing for predicate statements failing to be unparsed when sharing IR nodes.
+  // DQ (7/17/2021): Testing for predicate statements failing to be unparsed when sharing IR nodes.
      printf ("In unparseFile(): unparsedFile->get_output_filename() = %s \n",file->get_unparse_output_filename().c_str());
-     if (file->get_unparse_output_filename() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/BAtest_32./rose_BAtest_32_lib.cpp")
+     if (file->get_unparse_output_filename() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/sources/test_177.h")
+        {
+          printf ("Exiting as a test! \n");
+          ROSE_ABORT();
+        }
+#endif
+#if 0
+  // DQ (7/17/2021): Testing for predicate statements failing to be unparsed when sharing IR nodes.
+     printf ("In unparseFile(): unparsedFile->get_output_filename() = %s \n",file->get_unparse_output_filename().c_str());
+     if (file->getFileName() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/sources/test_177.h")
+        {
+          printf ("Exiting as a test! \n");
+          ROSE_ABORT();
+        }
+#endif
+
+#if 0
+  // DQ (7/17/2021): Testing for predicate statements failing to be unparsed when sharing IR nodes.
+     printf ("In unparseFile(): unparsedFile->getFileName() = %s \n",file->getFileName().c_str());
+     if (file->getFileName() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/multifile_tests/sources/test_01/test_01.h")
+        {
+          printf ("Exiting as a test! \n");
+          ROSE_ABORT();
+        }
+#endif
+
+#if 0
+  // DQ (7/22/2021): Testing for predicate statements failing to be unparsed when sharing IR nodes.
+     printf ("In unparseFile(): unparsedFile->getFileName()         = %s \n",file->getFileName().c_str());
+     printf ("In unparseFile(): unparsedFile->get_output_filename() = %s \n",file->get_unparse_output_filename().c_str());
+  // if (file->getFileName() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/multifile_tests/test_01a/test_01/test_01a.cpp")
+     if (file->get_unparse_output_filename() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/multifile_tests/test_01a/test_01/test_01a.cpp")
         {
           printf ("Exiting as a test! \n");
           ROSE_ABORT();
@@ -1520,7 +1692,7 @@ Unparser::getColumnNumberOfEndOfString( std::string internalString )
 
             // DQ (1/4/2014): Commented this assertion out as part of debugging tests/nonsmoke/functional/roseTests/astInterfaceTests/inputmoveDeclarationToInnermostScope_test2015_18.C when using the "-rose:verbose 2" option.
             // Note that "}" that is a part of an "extern \"C\" {" fails this test (is classified as CPP_PREPROCESSING_INFO).
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
 
           current_line_number += lines;
@@ -2433,7 +2605,7 @@ globalUnparseToString_OpenMPSafe ( const SgNode* astNode, const SgTemplateArgume
              {
             // debugging code!
             // printf ("Exiting to debug case of SgTemplateArgument \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 #if 0
             // DQ (9/15/2012): Commented this out since while we build the AST we don't have parents of classes set (until the class declaration is attached to the AST).
                SgScopeStatement* scope = templateArgument->get_scope();
@@ -2449,7 +2621,7 @@ globalUnparseToString_OpenMPSafe ( const SgNode* astNode, const SgTemplateArgume
 #endif
              }
        // stmt->get_startOfConstruct()->display("In unparseStatement(): info.get_current_scope() == NULL: debug");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
   // ASSERT_not_null(info.get_current_scope());
 
@@ -2967,7 +3139,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
                case SgFile::e_default_language:
                   {
                  // printf ("Error: SgFile::e_default_language detected in unparser \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 #if 0
                     printf ("Warning: SgFile::e_default_language detected in unparser \n");
 #endif
@@ -3125,7 +3297,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
           file->set_unparse_tokens(true);
 
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
 #endif
 
@@ -3186,7 +3358,7 @@ unparseFile ( SgFile* file, UnparseFormatHelp *unparseHelp, UnparseDelegate* unp
                     printf ("Error: the output file already exists, cannot overwrite (-rose:noclobber_output_file option specified) \n");
                     printf ("   --- outputFilename = %s \n",outputFilename.c_str());
                     printf ("****************************************************************************************************** \n\n\n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                     ROSE_ABORT();
                   }
                  else
@@ -3515,7 +3687,7 @@ void prependIncludeOptionsToCommandLine(SgProject* project, const list<string>& 
    {
      SgStringList argumentList = project -> get_originalCommandLineArgumentList();
 
-#if 1
+#if 0
   // DQ (4/4/2020): Added header file unparsing feature specific debug level.
      if (SgProject::get_unparseHeaderFilesDebug() >= 4)
         {
@@ -3541,21 +3713,134 @@ void prependIncludeOptionsToCommandLine(SgProject* project, const list<string>& 
    }
 
 // DQ (3/14/2021): Output include saved in the SgIncludeFile about first and last computed statements in each header file.
-void outputFirstAndLastIncludeFileInfo()
-   {
-     int counter = 0;
+void outputFirstAndLastIncludeFileInfo(SgSourceFile *sourceFile) {
+  int counter = 0;
 
-#if 0
+#define DEBUG_OUTPUT_FIRST_LAST_DATA 1
+
+  ROSE_ASSERT(sourceFile != NULL);
+
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+  printf("In outputFirstAndLastIncludeFileInfo(): "
+         "Rose::includeFileMapForUnparsing.size() = %zu \n",
+         Rose::includeFileMapForUnparsing.size());
 #endif
 
-#define DEBUG_FIRST_LAST_DATA 1
-
-#if DEBUG_FIRST_LAST_DATA
-     printf ("Output collected information about first and last statements for each include file \n");
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+  printf("\nOutput collected information about first and last statements for "
+         "each include file \n");
+  printf("\nOutput information on sourceFile = %s \n",
+         sourceFile->getFileName().c_str());
+  printf(" --- sourceFile->get_isDynamicLibrary() = %s \n",
+         sourceFile->get_isDynamicLibrary() ? "true" : "false");
 #endif
 
-     // while (i != statementBoundsMap.end())
-   }
+#if DEBUG_OUTPUT_FIRST_LAST_DATA || 0
+  // DQ (5/20/2021): Adding support to the input source file to compute first
+  // and last statements for the unparser.
+  if (sourceFile->get_firstStatement() != NULL) {
+    printf(" --- sourceFile->get_firstStatement() = %p = %s name = %s \n",
+           sourceFile->get_firstStatement(),
+           sourceFile->get_firstStatement()->class_name().c_str(),
+           SageInterface::get_name(sourceFile->get_firstStatement()).c_str());
+  } else {
+    printf(" --- sourceFile->get_firstStatement() = %p \n",
+           sourceFile->get_firstStatement());
+  }
+
+  if (sourceFile->get_lastStatement() != NULL) {
+    printf(" --- sourceFile->get_lastStatement()  = %p = %s name = %s \n",
+           sourceFile->get_lastStatement(),
+           sourceFile->get_lastStatement()->class_name().c_str(),
+           SageInterface::get_name(sourceFile->get_lastStatement()).c_str());
+  } else {
+    printf(" --- sourceFile->get_lastStatement()  = %p \n",
+           sourceFile->get_lastStatement());
+  }
+#endif
+
+  // DQ (5/22/2021): Only output the information about headers if we have set
+  // sourceFile->get_unparseHeaderFiles() to TRUE on the command line.
+  if (sourceFile->get_unparseHeaderFiles() == true) {
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+    printf("\nOutput information on header files: \n");
+#endif
+
+    for (std::map<std::string, SgIncludeFile *>::iterator i =
+             Rose::includeFileMapForUnparsing.begin();
+         i != Rose::includeFileMapForUnparsing.end(); ++i) {
+      string filename = i->first;
+      SgIncludeFile *includeFile = i->second;
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+      printf(" --- filename = %s includeFile = %p \n", filename.c_str(),
+             includeFile);
+#endif
+      ROSE_ASSERT(includeFile != NULL);
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+      printf("\ncounter = %d \n", counter);
+      printf(" --- includeFile = %p filename = %s \n", includeFile,
+             includeFile->get_filename().str());
+      printf(" --- --- includeFile->get_first_source_sequence_number() = %u \n",
+             includeFile->get_first_source_sequence_number());
+      printf(" --- --- includeFile->get_last_source_sequence_number()  = %u \n",
+             includeFile->get_last_source_sequence_number());
+#endif
+
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+      printf(" --- --- includeFile->get_firstStatement() = %p \n",
+             includeFile->get_firstStatement());
+      printf(" --- --- includeFile->get_lastStatement()  = %p \n",
+             includeFile->get_lastStatement());
+#endif
+      // New design puts the first and last directly into the SgIncludeFile.
+      SgStatement *firstStatement = includeFile->get_firstStatement();
+      SgStatement *lastStatement = includeFile->get_lastStatement();
+
+      if (firstStatement != NULL) {
+        Sg_File_Info *first_file_info = firstStatement->get_file_info();
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+        printf(" --- firstStatement = %p = %s \n", firstStatement,
+               firstStatement->class_name().c_str());
+        printf(" --- firstStatement = %s \n",
+               SageInterface::get_name(firstStatement).c_str());
+        printf(
+            " --- firstStatement: line = %d column = %d filename = %s \n",
+            first_file_info->get_line(), first_file_info->get_col(),
+            first_file_info->get_filenameString().c_str());
+#endif
+      } else {
+        // Not all include files have a valid statement (some just include other
+        // include files, or define macros).
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+        printf(" --- firstStatement == NULL: filename = %s \n",
+               includeFile->get_filename().str());
+#endif
+      }
+
+      if (lastStatement != NULL) {
+        Sg_File_Info *last_file_info = lastStatement->get_file_info();
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+        printf(" --- lastStatement  = %p = %s \n", lastStatement,
+               lastStatement->class_name().c_str());
+        printf(" --- lastStatement = %s \n",
+               SageInterface::get_name(lastStatement).c_str());
+        printf(" --- lastStatement: line = %d column = %d filename = %s \n",
+               last_file_info->get_line(), last_file_info->get_col(),
+               last_file_info->get_filenameString().c_str());
+#endif
+      } else {
+        // Not all include files have a valid statement (some just include other
+        // include files, or define macros).
+#if DEBUG_OUTPUT_FIRST_LAST_DATA
+        printf(" --- lastStatement == NULL: filename = %s \n",
+               includeFile->get_filename().str());
+#endif
+      }
+
+      counter++;
+    }
+  }
+}
 
 
 void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
@@ -3573,7 +3858,7 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
 
 #define DEBUG_FIRST_LAST_STMTS 0
 
-#if DEBUG_FIRST_LAST_STMTS
+#if DEBUG_FIRST_LAST_STMTS || 0
      printf ("###################################################### \n");
      printf ("###################################################### \n");
      printf ("####  buildFirstAndLastStatementsForIncludeFiles  #### \n");
@@ -3598,7 +3883,7 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
             // to handle this pathological case.
                SgScopeStatement* target_scope = NULL;
 
-            // SgSourceFile* sourceFile = NULL;
+               SgSourceFile* sourceFile = NULL;
 
                void visit (SgNode* node)
                   {
@@ -3607,20 +3892,24 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
                     printf ("In IncludeFileStatementTraversal::visit(): node = %p = %s name = %s \n",node,node->class_name().c_str(),SageInterface::get_name(node).c_str());
                     printf (" --- filename = %s \n",node->get_file_info()->get_filenameString().c_str());
 #endif
-#if 0
                     SgSourceFile* tmp_sourceFile = isSgSourceFile(node);
                     if (tmp_sourceFile != NULL)
                        {
                          sourceFile = tmp_sourceFile;
-                       }
+
+#if DEBUG_FIRST_LAST_STMTS
+                         printf ("Found the input source file: sourceFile->getFileName() \n",sourceFile->getFileName().c_str());
 #endif
-                 // ROSE_ASSERT(sourceFile != NULL);
+                         populateIncludeFileMapForUnparsingFromIncludeTree(
+                             sourceFile->get_associated_include_file());
+                       }
+                    ROSE_ASSERT(sourceFile != NULL);
 
                  // DQ (4/25/2021): I forget why this is a SgDeclarationStatement instead of a SgStatement.
                  // SgStatement*             statement             = isSgStatement(node);
                  // SgStatement*             statement             = isSgDeclarationStatement(node);
 #if 1
-                 // DQ (4/28/2021): I think this is the better solution, since we make sure that the last statement is in the same scope (asI recall) below.
+                 // DQ (4/28/2021): I think this is the better solution, since we make sure that the last statement is in the same scope (as I recall) below.
                     SgStatement*             statement             = isSgStatement(node);
 #else
                     SgStatement*             statement             = isSgDeclarationStatement(node);
@@ -3647,7 +3936,30 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
                  //                         templateTypedefDeclaration == NULL;
                     bool processStatement = globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL &&
                                             templateInstantiationDecl == NULL && templateInstantiationMemberFunctionDecl == NULL;
+#if 0
+                 // DQ (5/22/2021): Just added this, but I think we don't need it now.
+                    if (statement != NULL && processStatement == true)
+                       {
+                         Sg_File_Info* file_info = statement->get_file_info();
+                         ROSE_ASSERT(file_info != NULL);
+                         string processStatement_filename = file_info->get_physical_filename();
+                         int    processStatement_physical_file_id  = file_info->get_physical_file_id();
+
+#if DEBUG_FIRST_LAST_STMTS || 0
+                         printf ("processStatement_physical_file_id = %d \n",processStatement_physical_file_id);
+#endif
+                         if (processStatement_physical_file_id < 0)
+                            {
+#if DEBUG_FIRST_LAST_STMTS || 0
+                              printf ("physical_file_id < 0: processStatement_physical_file_id = %d so setting processStatement = false \n",processStatement_physical_file_id);
+#endif
+                              processStatement = false;
+                            }
+                       }
+#endif
+
 #if DEBUG_FIRST_LAST_STMTS
+                    printf ("statement        = %p \n",statement);
                     printf ("processStatement = %s \n",processStatement ? "true" : "false");
 #endif
                  // if (statement != NULL && globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL && templateInstantiationDecl == NULL)
@@ -3662,7 +3974,7 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
                          printf (" --- statement: (physical) line = %d column = %d filename = %s \n",file_info->get_physical_line(),file_info->get_col(),file_info->get_physical_filename().c_str());
 #endif
 #if 0
-                      // DQ (3/10/2021): Debugging this specific case. Some of these have not valid source position (are listed as compiler generated).
+                      // DQ (3/10/2021): Debugging this specific case. Some of these have no valid source position (are listed as compiler generated).
                          SgTemplateTypedefDeclaration*              templateTypedefDeclaration              = isSgTemplateTypedefDeclaration(node);
                          if (templateTypedefDeclaration != NULL)
                             {
@@ -3684,6 +3996,250 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
 #if DEBUG_FIRST_LAST_STMTS
                          printf ("after reset filename: physical_file_id  = %d filename = %s \n",physical_file_id,filename.c_str());
 #endif
+                         SgIncludeFile* includeFile =
+                             lookupIncludeFileForUnparsing(filename);
+                         if (includeFile == NULL) {
+                           populateIncludeFileMapForUnparsingFromIncludeTree(
+                               sourceFile->get_associated_include_file());
+                           includeFile = lookupIncludeFileForUnparsing(filename);
+                         }
+
+                         if (includeFile != NULL)
+                            {
+                              SgSourceFile* header_file_asssociated_source_file = includeFile->get_source_file();
+
+#if DEBUG_FIRST_LAST_STMTS
+                              printf ("Found an SgIncludeFile: includeFile = %p header_file_asssociated_source_file = %p \n",includeFile,header_file_asssociated_source_file);
+#endif
+                           // DQ (3/14/2021): This is null for rose_edg_required_macros_and_functions.h (pre-included for all ROSE processed code).
+                           // ROSE_ASSERT(header_file_asssociated_source_file != NULL);
+                              if (header_file_asssociated_source_file != NULL)
+                                 {
+#if DEBUG_FIRST_LAST_STMTS
+                                   printf ("header_file_asssociated_source_file = %s \n",header_file_asssociated_source_file->getFileName().c_str());
+                                   printf ("Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() = %s \n",
+                                        Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() ? "true" : "false");
+#endif
+                                   if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+                                      {
+                                     // DQ (3/13/2021): Adding support to filter out collecting references to statements that don't have a corresponding token subsequence.
+                                        std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap = header_file_asssociated_source_file->get_tokenSubsequenceMap();
+#if DEBUG_FIRST_LAST_STMTS
+                                        printf (" --- tokenStreamSequenceMap.size() = %zu \n",tokenStreamSequenceMap.size());
+#endif
+                                     // ROSE_ASSERT(statementBoundsMap.find(includeFile) != statementBoundsMap.end());
+
+                                        if (includeFile->get_firstStatement() == NULL)
+                                           {
+#if DEBUG_FIRST_LAST_STMTS
+                                             printf ("Previously NULL: first time seeing a statement for includeFile->get_filename() = %s \n",includeFile->get_filename().str());
+#endif
+                                          // DQ (3/13/2021): We need to make sure that the first and last statements that we select correspond
+                                          // to a collected token subsequence. In codeSegregation test_141_1.h, demonstrates such a case.
+                                          // includeFile->set_firstStatement(statement);
+                                          // target_scope = isSgScopeStatement(statement->get_parent());
+
+                                          // TokenStreamSequenceToNodeMapping* tokenSubsequence = tokenStreamSequenceMap[stmt];
+                                             if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                                {
+                                                  ROSE_ASSERT(statement != NULL);
+
+                                                  includeFile->set_firstStatement(statement);
+
+                                                  ROSE_ASSERT(statement->get_parent() != NULL);
+
+                                                  target_scope = isSgScopeStatement(statement->get_parent());
+
+#if DEBUG_FIRST_LAST_STMTS
+                                                  printf (" --- target_scope = %p = %s \n",target_scope,target_scope->class_name().c_str());
+#endif
+                                                }
+                                               else
+                                                {
+#if DEBUG_FIRST_LAST_STMTS
+                                                  printf ("We can't record this as a first statement becuae it does not correspond to a token subsequence \n");
+#endif
+                                                }
+                                           }
+
+#if DEBUG_FIRST_LAST_STMTS
+                                        printf (" --- (before testing statement parent) statement = %p = %s \n",statement,statement->class_name().c_str());
+#endif
+                                        ROSE_ASSERT(statement->get_parent() != NULL);
+#if DEBUG_FIRST_LAST_STMTS
+                                        if (target_scope != NULL)
+                                           {
+                                             printf (" --- (before testing statement parent) target_scope            = %p = %s \n",target_scope,target_scope->class_name().c_str());
+                                           }
+                                        printf (" --- (before testing statement parent) statement->get_parent() = %p = %s \n",statement->get_parent(),statement->get_parent()->class_name().c_str());
+#endif
+                                     // includeFile->set_lastStatement(statement);
+                                     // if (statement->get_parent() == target_scope)
+                                        if (target_scope != NULL && statement->get_parent() == target_scope)
+                                           {
+                                           // DQ (3/13/2021): We need to make sure that the first and last statements that we select correspond
+                                           // to a collected token subsequence. In codeSegregation test_141_1.h, demonstrates such a case.
+                                           // includeFile->set_lastStatement(statement);
+                                              if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                                 {
+#if DEBUG_FIRST_LAST_STMTS
+                                                  printf ("This can be a last statement (it has an associated token subsequence) \n");
+#endif
+                                                  includeFile->set_lastStatement(statement);
+                                                }
+                                               else
+                                                {
+#if DEBUG_FIRST_LAST_STMTS
+                                               // printf ("We can't record this as a last statement because it does not correspond to a token subsequence \n");
+                                                  printf ("This can be a last statement even if it does not have an associated token subsequence (e.g. it may be a transforamtion) \n");
+#endif
+                                               // DQ (23/2021): I think we should because it might be that a transformation is a last statement of a
+                                               // header file and in which case it is still the last statement independent of if it is unparsed via
+                                               // the token stream or from the AST.
+                                                  includeFile->set_lastStatement(statement);
+                                                }
+
+                                             SgStatement* computedLastStatement = SageInterface::getLastStatement(target_scope);
+
+                                          // It might be better to make sure that the last "}" is in the current file.
+                                          // if (statement == computedLastStatement && includeFile->get_firstStatement() == target_scope)
+                                             if (statement == computedLastStatement && target_scope->get_endOfConstruct() )
+                                                {
+                                               // Then make the scope the last statement.
+#if DEBUG_FIRST_LAST_STMTS
+                                                  printf ("Since this is the last statement of the scope, then make the scope the last statement \n");
+#endif
+                                                  includeFile->set_lastStatement(target_scope);
+                                                }
+                                           }
+                                          else
+                                           {
+#if DEBUG_FIRST_LAST_STMTS
+                                          // printf ("Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) == Rose::tokenSubsequenceMapOfMapsBySourceFile.end() \n");
+                                             printf ("This is a different scope: statement->get_parent() == target_scope (first and last statements must be in the same scope) \n");
+#endif
+                                           }
+                                      }
+                                 }
+                            }
+                           else
+                            {
+                           // Not all statements will be in the header files, however this could be the input source file, 
+                           // so we need to support computing the first and last statements in that file as well.
+#if DEBUG_FIRST_LAST_STMTS
+                              printf ("filename not found in includeFileMapForUnparsing: filename = %s \n",filename.c_str());
+#endif
+                              ROSE_ASSERT(sourceFile != NULL);
+
+                           // DQ (3/13/2021): Adding support to filter out collecting references to statements that don't have a corresponding token subsequence.
+                              std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
+#if DEBUG_FIRST_LAST_STMTS
+                              printf (" --- tokenStreamSequenceMap.size() = %zu \n",tokenStreamSequenceMap.size());
+#endif
+
+                           // DQ (5/20/2021): The firstStatment and lastStatement in the source file are only used for the 
+                           // input source file (the include files used their own data member).
+                              if (sourceFile->get_firstStatement() == NULL)
+                                 {
+#if DEBUG_FIRST_LAST_STMTS
+                                   printf ("Previously NULL: first time seeing a statement for sourceFile->get_filename() = %s \n",sourceFile->getFileName().c_str());
+#endif
+                                // DQ (3/13/2021): We need to make sure that the first and last statements that we select correspond
+                                // to a collected token subsequence. In codeSegregation test_141_1.h, demonstrates such a case.
+                                // includeFile->set_firstStatement(statement);
+                                // target_scope = isSgScopeStatement(statement->get_parent());
+
+                                // TokenStreamSequenceToNodeMapping* tokenSubsequence = tokenStreamSequenceMap[stmt];
+                                   if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                      {
+                                        sourceFile->set_firstStatement(statement);
+                                        target_scope = isSgScopeStatement(statement->get_parent());
+
+#if DEBUG_FIRST_LAST_STMTS
+                                        printf (" --- target_scope = %p = %s \n",target_scope,target_scope->class_name().c_str());
+#endif
+                                      }
+                                     else
+                                      {
+#if DEBUG_FIRST_LAST_STMTS
+                                        printf ("We can't record this as a first statement becuase it does not correspond to a token subsequence \n");
+#endif
+                                      }
+                                 }
+
+
+                              ROSE_ASSERT(statement->get_parent() != NULL);
+#if DEBUG_FIRST_LAST_STMTS
+                              printf (" --- (before testing statement parent) target_scope            = %p = %s \n",target_scope,target_scope->class_name().c_str());
+                              printf (" --- (before testing statement parent) statement->get_parent() = %p = %s \n",statement->get_parent(),statement->get_parent()->class_name().c_str());
+#endif
+                           // includeFile->set_lastStatement(statement);
+                              if (target_scope != NULL && statement->get_parent() == target_scope)
+                                 {
+                                // DQ (5/20/2021): We can't have the last statement be the global scope in the input source file.
+                                // DQ (3/13/2021): We need to make sure that the first and last statements that we select correspond
+                                // to a collected token subsequence. In codeSegregation test_141_1.h, demonstrates such a case.
+                                // includeFile->set_lastStatement(statement);
+                                // if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                   if (isSgGlobal(statement) == NULL)
+                                      {
+                                        if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                           {
+#if DEBUG_FIRST_LAST_STMTS
+                                             printf ("This can be a last statement (it has an associated token subsequence) \n");
+#endif
+                                             sourceFile->set_lastStatement(statement);
+                                           }
+                                          else
+                                           {
+#if DEBUG_FIRST_LAST_STMTS
+                                          // printf ("We can't record this as a last statement because it does not correspond to a token subsequence \n");
+                                             printf ("This can be a last statement even if it does not have an associated token subsequence (e.g. it may be a transforamtion) \n");
+#endif
+                                          // DQ (23/2021): I think we should because it might be that a transformation is a last statement of a
+                                          // header file and in which case it is still the last statement independent of if it is unparsed via
+                                          // the token stream or from the AST.
+                                          // sourceFile->set_lastStatement(statement);
+                                             if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                                {
+                                                  sourceFile->set_lastStatement(statement);
+                                                }
+                                               else
+                                                {
+#if DEBUG_FIRST_LAST_STMTS
+                                                  printf ("We can't record this as a last statement becuase it does not correspond to a token subsequence \n");
+#endif
+                                                }
+                                           }
+                                      }
+
+                                   SgStatement* computedLastStatement = SageInterface::getLastStatement(target_scope);
+#if DEBUG_FIRST_LAST_STMTS
+                                   printf ("computedLastStatement = %p = %s \n",computedLastStatement,computedLastStatement->class_name().c_str());
+#endif
+                                // It might be better to make sure that the last "}" is in the current file.
+                                // if (statement == computedLastStatement && includeFile->get_firstStatement() == target_scope)
+                                // if (statement == computedLastStatement && target_scope->get_endOfConstruct() )
+                                // if (isSgGlobal(statement) == NULL && statement == computedLastStatement && target_scope->get_endOfConstruct() )
+                                // if (statement == computedLastStatement && target_scope->get_endOfConstruct() )
+                                   if (isSgGlobal(target_scope) == NULL && statement == computedLastStatement && target_scope->get_endOfConstruct() )
+                                      {
+                                     // Then make the scope the last statement.
+#if DEBUG_FIRST_LAST_STMTS
+                                        printf ("Since this is the last statement of the scope, then make the scope the last statement (except for SgGlobal) \n");
+#endif
+                                        sourceFile->set_lastStatement(target_scope);
+                                      }
+                                 }
+                                else
+                                 {
+#if DEBUG_FIRST_LAST_STMTS
+                                // printf ("Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) == Rose::tokenSubsequenceMapOfMapsBySourceFile.end() \n");
+                                   printf ("This is a different scope: statement->get_parent() == target_scope (first and last statements must be in the same scope) \n");
+#endif
+                                 }
+
+                            }
                     }
                }
      };
@@ -3701,75 +4257,591 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
   // for each source file, but this would be more complex and error prone, and hard to debug)).
   // traversal.traverse(project,preorder);
   // SgFilePtrList & fileList = project->get_files();
-#if 1
      SgFilePtrList & fileList = project->get_fileList();
      for (size_t i = 0; i < fileList.size(); i++)
         {
           SgSourceFile* sourceFile = isSgSourceFile(fileList[i]);
-          ROSE_ASSERT(sourceFile != NULL);
-#if DEBUG_FIRST_LAST_STMTS
-          printf ("\nLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL \n");
-          printf ("Testing for isDynamicLibrary before calling traversal for filename = %s \n",sourceFile->getFileName().c_str());
-#endif
-#if DEBUG_FIRST_LAST_STMTS
-          printf ("sourceFile->get_isDynamicLibrary() = %s \n",sourceFile->get_isDynamicLibrary() ? "true" : "false");
-#endif
-          if (sourceFile->get_isDynamicLibrary() == false)
+
+       // DQ (8/23/2021): If this is a binary file then sourceFile == NULL (see tests in 
+       // tests/nonsmoke/functional/CompilerOptionsTests/testGenerateSourceFileNames)
+       // ROSE_ASSERT(sourceFile != NULL);
+          if (sourceFile != NULL)
              {
-#if DEBUG_FIRST_LAST_STMTS
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+               printf ("\nFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n");
+               printf ("Testing for isDynamicLibrary before calling traversal for filename = %s \n",sourceFile->getFileName().c_str());
+#endif
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+               printf ("sourceFile->get_isDynamicLibrary() = %s \n",sourceFile->get_isDynamicLibrary() ? "true" : "false");
+#endif
+            // DQ (5/24/2021): Since we have to unparse all the files, we need to compute first and last on all of the files.
+            // What is less clear is what to do with the information about shared header files. I think that at worst it is 
+            // redundant information.
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
                printf ("Calling traversal for filename = %s \n",sourceFile->getFileName().c_str());
 #endif
                traversal.traverse(sourceFile,preorder);
+
+            // Copy the information of first and last statement per scope for each file to store it in the source file.
+            // Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile] = traversal.firstAndLastStatementsToUnparseInScopeMap;
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+               printf ("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n\n");
+#endif
              }
-
-#if DEBUG_FIRST_LAST_STMTS
-          printf ("LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL \n\n");
-#endif
         }
-#else
-#if DEBUG_FIRST_LAST_STMTS
-     printf ("sourceFile->get_isDynamicLibrary() = %s \n",sourceFile->get_isDynamicLibrary() ? "true" : "false");
-#endif
 
-#error "DEAD CODE!"
-
-     if (sourceFile->get_isDynamicLibrary() == false)
-        {
-#if DEBUG_FIRST_LAST_STMTS
-          printf ("Calling traversal for filename = %s \n",sourceFile->getFileName().c_str());
-#endif
-          traversal.traverse(sourceFile,preorder);
-        }
-#endif
-
-#if DEBUG_FIRST_LAST_STMTS
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
      printf ("After call to traversal \n");
 #endif
 
-#if DEBUG_FIRST_LAST_STMTS || 0
+#if DEBUG_FIRST_LAST_STMTS_SCOPES || 0
   // DQ (3/14/2021): Output include saved in the SgIncludeFile about first and last computed statements in each header file.
   // void outputFirstAndLastIncludeFileInfo();
-     outputFirstAndLastIncludeFileInfo();
+  // outputFirstAndLastIncludeFileInfo();
+
+  // for (size_t i = 0; i < fileList.size(); i++)
+  //    {
+  //      SgSourceFile* sourceFile = isSgSourceFile(fileList[i]);
+  //      ROSE_ASSERT(sourceFile != NULL);
+
+  //      printf ("In buildFirstAndLastStatementsForScopes(): iteration i = %d \n",i);
+
+       // DQ (5/24/2021): Since we have to unparse all the files, we need to compute first and last on all of the files.
+       // What is less clear is what to do with the information about shared header files. I think that at worst it is 
+       // redundant information.
+       // if (sourceFile->get_isDynamicLibrary() == false)
+       //    {
+            // Only output once... some tools (e.g. codeSegregation tool) will build an additional file, in which case we don't want to output info for that file.
+            // outputFirstAndLastIncludeFileInfo(sourceFile);
+            // outputFirstAndLastStatementsInScope(sourceFile);
+
+            // ROSE_ASSERT(Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(sourceFile) != Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end());
+
+               std::map<SgSourceFile*,std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> > >::iterator j = Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.begin();
+
+               printf ("Output Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile (size = %zu): \n",Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.size());
+               while (j != Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end())
+                  {
+                    SgSourceFile* tmp_sourceFile = j->first;
+                    printf ("tmp_sourceFile = %p name = %s \n",tmp_sourceFile,tmp_sourceFile->getFileName().c_str());
+
+                 // std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> > firstAndLastStatements = Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile];
+                    std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> > firstAndLastStatements = j->second;
+
+                    printf (" --- firstAndLastStatements (size() = %zu): \n",firstAndLastStatements.size());
+                    std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> >::iterator i = firstAndLastStatements.begin();
+                    while (i != firstAndLastStatements.end())
+                       {
+                         SgScopeStatement* scope = i->first;
+                         ROSE_ASSERT(scope != NULL);
+                         printf (" --- --- scope              = %p = %s name = %s \n",scope,scope->class_name().c_str(),SageInterface::get_name(scope).c_str());
+
+                         SgStatement* firstStatement = i->second.first;
+                         printf (" --- --- --- firstStatement  = %p \n",firstStatement);
+                         if (firstStatement != NULL)
+                            {
+                              printf (" --- --- --- firstStatement = %p = %s name = %s \n",firstStatement,firstStatement->class_name().c_str(),SageInterface::get_name(firstStatement).c_str());
+                            }
+
+                         SgStatement* lastStatement = i->second.second;
+                         printf (" --- --- --- lastStatement  = %p \n",lastStatement);
+                         if (lastStatement != NULL)
+                            {
+                              printf (" --- --- --- lastStatement  = %p = %s name = %s \n",lastStatement,lastStatement->class_name().c_str(),SageInterface::get_name(lastStatement).c_str());
+                            }
+
+                         printf ("\n");
+
+                         i++;
+                       }
+
+                    printf ("\n");
+
+                    j++;
+                  }
+          // }
+     // }
 #endif
 
-#if DEBUG_FIRST_LAST_STMTS
-     printf ("Leaving buildFirstAndLastStatementsForIncludeFiles(): project = %p \n",project);
-  // printf ("Leaving buildFirstAndLastStatementsForIncludeFiles(): sourceFile = %p \n",sourceFile);
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+     printf ("Leaving buildFirstAndLastStatementsForScopes(): project = %p \n",project);
 #endif
 
 #if 0
      if (sourceFile->getFileName() == "/home/quinlan1/ROSE/ROSE_GARDEN/codeSegregation/tests/sources/test_141_1.h")
         {
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
 #endif
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
    }
+
+
+void buildFirstAndLastStatementsForScopes ( SgProject* project )
+   {
+  // DQ (5/27/2021): We need a more comprehensive handling of identifing first and last statements specific
+  // to each scope and for each file.  It is similar to the function above that computed the first and last
+  // statement for each file (source files and header files that have been transformed).
+
+
+  // This function build the mapping of the first and last statements associated with each SgScopeStatement.
+  // It is required to support the token-based unparsing so that we can know when the last statement in
+  // the SgIncludeFile has been reached, so that we can output the trailing whitespace tokens properly.
+  // The function uses the source sequence limits for the file, and computes which statements in the AST
+  // are associated with these limits.  It uses a traversal to evaluate the statements (and the associated
+  // source sequence number for each statement) against the limits for each file.
+
+  // DQ (3/10/2021): Add performance analysis support.
+     TimingPerformance timer ("AST buildFirstAndLastStatementsForScopes:");
+
+#define DEBUG_FIRST_LAST_STMTS_SCOPES 0
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES || 0
+     printf ("################################################ \n");
+     printf ("################################################ \n");
+     printf ("####  buildFirstAndLastStatementsForScopes  #### \n");
+     printf ("################################################ \n");
+     printf ("################################################ \n");
+#endif
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+     printf ("In buildFirstAndLastStatementsForScopes(): project = %p \n",project);
+#endif
+
+     class StatementTraversal : public AstSimpleProcessing
+        {
+          public:
+            // We need to recorde the first and last statement that are in the same scope.
+
+               SgSourceFile* sourceFile = NULL;
+
+            // DQ (6/1/2021): Added to handle.
+               int physical_file_id_from_source_file = -1;
+
+               void visit (SgNode* node)
+                  {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                 // printf ("In StatementTraversal::visit(): node = %p = %s \n",node,node->class_name().c_str());
+                    printf ("In StatementTraversal::visit(): node = %p = %s name = %s \n",node,node->class_name().c_str(),SageInterface::get_name(node).c_str());
+                    printf (" --- filename = %s \n",node->get_file_info()->get_filenameString().c_str());
+#endif
+                    SgSourceFile* tmp_sourceFile = isSgSourceFile(node);
+                    if (tmp_sourceFile != NULL)
+                       {
+                         sourceFile = tmp_sourceFile;
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                         printf ("Found the input source file: sourceFile->getFileName() = %s \n",sourceFile->getFileName().c_str());
+#endif
+
+                         SgGlobal* globalScope = sourceFile->get_globalScope();
+                         physical_file_id_from_source_file = globalScope->get_file_info()->get_physical_file_id();
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                         printf ("setting physical_file_id_from_source_file = %d \n",physical_file_id_from_source_file);
+#endif
+                         populateIncludeFileMapForUnparsingFromIncludeTree(
+                             sourceFile->get_associated_include_file());
+                       }
+                    ROSE_ASSERT(sourceFile != NULL);
+
+                 // DQ (4/25/2021): I forget why this is a SgDeclarationStatement instead of a SgStatement.
+                 // SgStatement*             statement             = isSgStatement(node);
+                 // SgStatement*             statement             = isSgDeclarationStatement(node);
+#if 1
+                 // DQ (4/28/2021): I think this is the better solution, since we make sure that the last statement is in the same scope (as I recall) below.
+                    SgStatement*             statement             = isSgStatement(node);
+#else
+                    SgStatement*             statement             = isSgDeclarationStatement(node);
+                 // DQ (4/25/2021): Handle case of a simple expression statement.
+                    if (statement == NULL)
+                       {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                         printf ("Handle the case of an SgExprStatement \n");
+#endif
+                         statement = isSgExprStatement(node);
+                       }
+#endif
+                    SgGlobal*                globalScope           = isSgGlobal(statement);
+                    SgFunctionParameterList* functionParameterList = isSgFunctionParameterList(node);
+                    SgCtorInitializerList*   ctorInitializerList   = isSgCtorInitializerList(node);
+
+                    SgTemplateInstantiationDecl*               templateInstantiationDecl               = isSgTemplateInstantiationDecl(node);
+                    SgTemplateInstantiationMemberFunctionDecl* templateInstantiationMemberFunctionDecl = isSgTemplateInstantiationMemberFunctionDecl(node);
+                 // SgTemplateTypedefDeclaration*              templateTypedefDeclaration              = isSgTemplateTypedefDeclaration(node);
+
+                 // IR nodes for which we don't want to identify as the first or last statement of a file (header file).
+                 // bool processStatement = globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL &&
+                 //                         templateInstantiationDecl == NULL && templateInstantiationMemberFunctionDecl == NULL &&
+                 //                         templateTypedefDeclaration == NULL;
+                    bool processStatement = globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL &&
+                                            templateInstantiationDecl == NULL && templateInstantiationMemberFunctionDecl == NULL;
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                    printf ("statement        = %p \n",statement);
+                    printf ("processStatement = %s \n",processStatement ? "true" : "false");
+#endif
+
+                 // DQ (5/27/2021): Add an entry for the global scope (even through we don't process the global scope directly
+                 // (see definition of processStatement), we store information specific to the parent of the statements that
+                 // we process and so we store information in the entry for the global scope).
+                    if (globalScope != NULL)
+                       {
+                      // firstAndLastStatementsToUnparseInScopeMap[globalScope] = std::pair<SgStatement*,SgStatement*>(NULL,NULL);
+                      // firstAndLastStatementsToUnparseInScopeMap->[sourceFile][globalScope] = std::pair<SgStatement*,SgStatement*>(NULL,NULL);
+                         if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(sourceFile) == Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end())
+                            {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                              printf ("A map for this file already exists \n");
+#endif
+                              Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile] = std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> >();
+                            }
+                           else
+                            {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                              printf ("A map for this file already exists \n");
+#endif
+                            }
+                       }
+
+                 // if (statement != NULL && globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL && templateInstantiationDecl == NULL)
+                    if (statement != NULL && processStatement == true)
+                       {
+                         Sg_File_Info* file_info = statement->get_file_info();
+                         ROSE_ASSERT(file_info != NULL);
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                         printf ("\nIn StatementTraversal::visit(): statement = %p = %s \n",node,node->class_name().c_str());
+                         printf (" --- statement = %s \n",SageInterface::get_name(statement).c_str());
+                         printf (" --- statement: line = %d column = %d filename = %s \n",file_info->get_line(),file_info->get_col(),file_info->get_filenameString().c_str());
+                         printf (" --- statement: (physical) line = %d column = %d filename = %s \n",file_info->get_physical_line(),file_info->get_col(),file_info->get_physical_filename().c_str());
+#endif
+                         SgScopeStatement* parentScope = isSgScopeStatement(statement->get_parent());
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                         printf ("parentScope = %p \n",parentScope);
+                         if (parentScope != NULL)
+                            {
+                              printf ("parentScope = %p = %s \n",parentScope,parentScope->class_name().c_str());
+                            }
+#endif
+                      // DQ (5/27/2021): Filter out some scopes that don't have lists of children.
+                         bool skipScope = (isSgFunctionDefinition(statement) != NULL);
+                         (void)skipScope;
+
+                      // DQ (5/27/2021): Filter out some scopes that don't have lists of children.
+                         bool skipParentScope = (isSgFunctionDefinition(parentScope) != NULL);
+                         if (skipParentScope == true)
+                            {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                              printf ("setting parentScope = NULL \n");
+#endif
+                              parentScope = NULL;
+                            }
+
+                      // DQ (3/23/2021): The physical_filename of a transformation needs to be derived directly
+                      // from the physical file id, instead of computed by the get_physical_filename() function.
+                      // This could be using the file_id instead of the filename as a string.
+                         string filename = file_info->get_physical_filename();
+                         int    physical_file_id  = file_info->get_physical_file_id();
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                         printf ("before reset filename: physical_file_id = %d filename = %s \n",physical_file_id,filename.c_str());
+#endif
+                         filename = Sg_File_Info::getFilenameFromID(physical_file_id);
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                         printf ("after reset filename: physical_file_id  = %d filename = %s \n",physical_file_id,filename.c_str());
+#endif
+                         SgIncludeFile* includeFile = lookupIncludeFileForUnparsing(filename);
+                         if (includeFile == NULL) {
+                           populateIncludeFileMapForUnparsingFromIncludeTree(
+                               sourceFile->get_associated_include_file());
+                           includeFile = lookupIncludeFileForUnparsing(filename);
+                         }
+
+                         if (includeFile != NULL)
+                            {
+                              SgSourceFile* header_file_asssociated_source_file = includeFile->get_source_file();
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                              printf ("Found an SgIncludeFile: includeFile = %p header_file_asssociated_source_file = %p \n",includeFile,header_file_asssociated_source_file);
+#endif
+                           // DQ (3/14/2021): This is null for rose_edg_required_macros_and_functions.h (pre-included for all ROSE processed code).
+                           // ROSE_ASSERT(header_file_asssociated_source_file != NULL);
+                              if (header_file_asssociated_source_file != NULL)
+                                 {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                   printf ("header_file_asssociated_source_file = %s \n",header_file_asssociated_source_file->getFileName().c_str());
+                                   printf ("Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() = %s \n",
+                                        Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() ? "true" : "false");
+#endif
+                                   if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(header_file_asssociated_source_file) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+                                      {
+                                     // DQ (3/13/2021): Adding support to filter out collecting references to statements that don't have a corresponding token subsequence.
+                                        std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap = header_file_asssociated_source_file->get_tokenSubsequenceMap();
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                        printf (" --- tokenStreamSequenceMap.size() = %zu \n",tokenStreamSequenceMap.size());
+#endif
+                                     // DQ (5/27/2021): Add an entry for the global scope (even through we don't process the global scope directly
+                                     // (see definition of processStatement), we store information specific to the parent of the statements that
+                                     // we process and so we store information in the entry for the global scope).
+                                           {
+                                             if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(header_file_asssociated_source_file) ==
+                                                 Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end())
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("Add map for this file is it does NOT already exists \n");
+#endif
+                                                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file] = std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> >();
+                                                }
+                                               else
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("A map for this file ALREADY exists \n");
+#endif
+                                                }
+                                           }
+
+                                             ROSE_ASSERT(Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(header_file_asssociated_source_file) !=
+                                                         Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end());
+
+                                             if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(header_file_asssociated_source_file) ==
+                                                 Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end())
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("A map for this file already exists \n");
+#endif
+                                                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file] =
+                                                       std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> >();
+                                                }
+                                               else
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("A map for this file already exists \n");
+#endif
+                                                }
+
+
+                                          // Need to add the global scope to support children of the global scope that are in the inlcude files.
+                                          // SgGlobal* globalScope = isSgGlobal(parentScope);
+                                             if (parentScope != NULL)
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("parentScope != NULL \n");
+#endif
+                                                  if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].find(parentScope) ==
+                                                      Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].end())
+                                                     {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                       printf ("Adding parentScope = %p = %s \n",parentScope,parentScope->class_name().c_str());
+#endif
+                                                       Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file][parentScope] = std::pair<SgStatement*,SgStatement*>(NULL,NULL);
+                                                     }
+                                                    else
+                                                     {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                       printf ("Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file][parentScope] is initialized \n");
+#endif
+                                                     }
+                                                }
+
+                                        if (parentScope != NULL)
+                                           {
+                                             ROSE_ASSERT (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(header_file_asssociated_source_file) !=
+                                                          Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end());
+                                             if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].find(parentScope) ==
+                                                 Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].end())
+                                                {
+                                                  printf ("Error: (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].find(parentScope) == Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].end()) == true \n");
+                                                  printf (" --- statement   = %p = %s = %s \n",statement,statement->class_name().c_str(),SageInterface::get_name(statement).c_str());
+                                                  printf (" --- parentScope = %p = %s = %s \n",parentScope,parentScope->class_name().c_str(),SageInterface::get_name(parentScope).c_str());
+                                                }
+                                             ROSE_ASSERT (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].find(parentScope) !=
+                                                          Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file].end());
+
+                                             if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file][parentScope].first == NULL)
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("Previously NULL: first time seeing a statement for includeFile->get_filename() = %s \n",includeFile->get_filename().str());
+#endif
+                                                  if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                                     {
+                                                       ROSE_ASSERT(statement != NULL);
+
+                                                       Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file][parentScope].first = statement;
+
+                                                       ROSE_ASSERT(statement->get_parent() != NULL);
+                                                     }
+                                                    else
+                                                     {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                       printf ("We can't record this as a first statement becuae it does not correspond to a token subsequence \n");
+#endif
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                       printf ("physical_file_id_from_source_file = %d \n",physical_file_id_from_source_file);
+                                                       printf ("physical_file_id                  = %d \n",physical_file_id);
+#endif
+                                                       if (physical_file_id == physical_file_id_from_source_file)
+                                                          {
+                                                            Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file][parentScope].first = statement;
+                                                          }
+                                                     }
+                                                }
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                             printf (" --- (before testing statement parent) statement = %p = %s \n",statement,statement->class_name().c_str());
+#endif
+                                             ROSE_ASSERT(statement->get_parent() != NULL);
+
+                                          // DQ (3/13/2021): We need to make sure that the first and last statements that we select correspond
+                                          // to a collected token subsequence. In codeSegregation test_141_1.h, demonstrates such a case.
+                                             if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("This can be a last statement (it has an associated token subsequence) \n");
+#endif
+                                                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file][parentScope].second = statement;
+                                                }
+                                               else
+                                                {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("We can't record this as a last statement because it does not correspond to a token subsequence \n");
+#endif
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                                  printf ("physical_file_id_from_source_file = %d \n",physical_file_id_from_source_file);
+                                                  printf ("physical_file_id                  = %d \n",physical_file_id);
+#endif
+                                                  if (physical_file_id == physical_file_id_from_source_file)
+                                                     {
+                                                       Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[header_file_asssociated_source_file][parentScope].second = statement;
+                                                     }
+                                                }
+                                           }
+                                      }
+                                 }
+                            }
+                           else
+                            {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                              printf ("filename not found in includeFileMapForUnparsing: filename = %s \n",filename.c_str());
+#endif
+                              ROSE_ASSERT(sourceFile != NULL);
+
+                           // DQ (3/13/2021): Adding support to filter out collecting references to statements that don't have a corresponding token subsequence.
+                              std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                              printf (" --- tokenStreamSequenceMap.size() = %zu \n",tokenStreamSequenceMap.size());
+#endif
+
+                              if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(sourceFile) ==
+                                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end())
+                                 {
+                                   Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile] =
+                                       std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> >();
+                                 }
+
+                              if (parentScope != NULL)
+                                 {
+                                   if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile].find(parentScope) ==
+                                       Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile].end())
+                                      {
+                                        Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile][parentScope] =
+                                            std::pair<SgStatement*,SgStatement*>(NULL,NULL);
+                                      }
+
+                                   ROSE_ASSERT (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile].find(parentScope) !=
+                                                Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile].end());
+
+                                   if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile][parentScope].first == NULL)
+                                      {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                        printf ("Previously NULL: first time seeing a statement for sourceFile->get_filename() = %s \n",sourceFile->getFileName().c_str());
+#endif
+                                        if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                           {
+                                             Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile][parentScope].first = statement;
+                                           }
+                                          else
+                                           {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                             printf ("We can't record this as a first statement becuae it does not correspond to a token subsequence \n");
+#endif
+                                             if (physical_file_id == physical_file_id_from_source_file)
+                                                {
+                                                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile][parentScope].first = statement;
+                                                }
+                                           }
+                                      }
+
+                                   if (tokenStreamSequenceMap.find(statement) != tokenStreamSequenceMap.end())
+                                      {
+                                        Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile][parentScope].second = statement;
+                                      }
+                                     else
+                                      {
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+                                        printf ("We can't record this as a last statement because it does not correspond to a token subsequence \n");
+#endif
+                                        if (physical_file_id == physical_file_id_from_source_file)
+                                           {
+                                             Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile][parentScope].second = statement;
+                                           }
+                                      }
+                                 }
+                            }
+                       }
+                  }
+        };
+
+
+     StatementTraversal traversal;
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+     printf ("Before call to traversal \n");
+#endif
+
+     SgFilePtrList & fileList = project->get_fileList();
+     for (size_t i = 0; i < fileList.size(); i++)
+        {
+          SgSourceFile* sourceFile = isSgSourceFile(fileList[i]);
+          ROSE_ASSERT(sourceFile != NULL);
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+          printf ("\nFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n");
+          printf ("Testing for isDynamicLibrary before calling traversal for filename = %s \n",sourceFile->getFileName().c_str());
+#endif
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+          printf ("sourceFile->get_isDynamicLibrary() = %s \n",sourceFile->get_isDynamicLibrary() ? "true" : "false");
+#endif
+       // DQ (5/24/2021): Since we have to unparse all the files, we need to compute first and last on all of the files.
+       // What is less clear is what to do with the information about shared header files. I think that at worst it is
+       // redundant information.
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+          printf ("Calling traversal for filename = %s \n",sourceFile->getFileName().c_str());
+#endif
+          traversal.traverse(sourceFile,preorder);
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+          printf ("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n\n");
+#endif
+        }
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+     printf ("After call to traversal \n");
+#endif
+
+#if DEBUG_FIRST_LAST_STMTS_SCOPES
+     printf ("Leaving buildFirstAndLastStatementsForScopes(): project = %p \n",project);
+#endif
+   }
+
 
 
 // DQ (11/10/2018): Move this ot a more common location.
@@ -3778,6 +4850,8 @@ void generateGraphOfIncludeFiles( SgProject* project, std::string filename );
 void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, UnparseDelegate* unparseDelegate)
    {
      ASSERT_not_null(project);
+
+#define DEBUG_UNPARSE_INCLUDE_FILES 0
 
   // DQ (3/10/2021): Add performance analysis support.
      TimingPerformance timer ("AST unparseIncludedFiles:");
@@ -3800,13 +4874,9 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
   // building the include list for each file we can first (or second) include the paths from the SgProject's extra
   // include paths list before adding those specific to the SgSourceFile.
 
-#if 0
+#if DEBUG_UNPARSE_INCLUDE_FILES
      printf ("In unparseIncludedFiles(): project = %p \n",project);
 #endif
-#if 0
-#endif
-
-#define DEBUG_UNPARSE_INCLUDE_FILES 0
 
 #if DEBUG_UNPARSE_INCLUDE_FILES
      printf ("In unparseIncludedFiles(): Output include_file_graph_from_top_of_unparseIncludedFiles DOT graph \n");
@@ -3828,7 +4898,7 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 #if 0
      printf ("project->get_fileList().empty() = %s \n",project->get_fileList().empty() ? "true" : "false");
@@ -3838,8 +4908,26 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
         }
 #endif
 
-  // Proceed only if there are input files and they require header files unparsing.
+  // DQ (5/2/2021): Get the file so that we can get the data member for unparseHeaderFiles.
+  // NOTE: An improvement would be to make the data member for unparseHeaderFiles a static data member.
+     SgFile* file = NULL;
      if (!project -> get_fileList().empty() && (*(project -> get_fileList()).begin()) -> get_unparseHeaderFiles())
+        {
+          file = *((project -> get_fileList()).begin());
+        }
+  // ROSE_ASSERT(file != NULL);
+
+#if 0
+     printf ("In unparseIncludedFiles(): file = %p \n",file);
+     if (file != NULL)
+        {
+          printf ("In unparseIncludedFiles(): file = %p file->get_unparseHeaderFiles() = %s \n",file,file->get_unparseHeaderFiles() ? "true" : "false");
+        }
+#endif
+
+  // Proceed only if there are input files and they require header files unparsing.
+  // if (!project -> get_fileList().empty() && (*(project -> get_fileList()).begin()) -> get_unparseHeaderFiles())
+     if (file != NULL && file->get_unparseHeaderFiles() == true)
         {
           if (SgProject::get_verbose() >= 1)
              {
@@ -3849,15 +4937,29 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 #endif
 
           IncludedFilesUnparser includedFilesUnparser(project);
-#if 0
+
+#if DEBUG_UNPARSE_INCLUDE_FILES
           printf ("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB \n");
           printf ("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB \n");
           printf ("In unparseIncludedFiles(): calling buildFirstAndLastStatementsForIncludeFiles() \n");
           printf ("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB \n");
           printf ("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB \n");
 #endif
+
        // DQ (3/14/2021): Moved to be after includedFilesUnparser(). Build a map of the first and last statement in each include file.
-          buildFirstAndLastStatementsForIncludeFiles(project);
+       // buildFirstAndLastStatementsForIncludeFiles(project);
+          SgSourceFile* sourceFile = isSgSourceFile(file);
+          ROSE_ASSERT(sourceFile != NULL);
+          if (sourceFile->get_unparse_tokens() == true)
+             {
+               buildFirstAndLastStatementsForIncludeFiles(project);
+
+#if 1
+            // DQ (5/27/2021): We need to debug the collection of first and last statements associated with each scope 
+            // (actually we just need the last statement for each scope). This only important for the token-based unarpsing.
+               buildFirstAndLastStatementsForScopes(project);
+#endif
+             }
 
 #if 0
        // Output the DOT graph for debugging.
@@ -3911,9 +5013,10 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
           SageInterface::reportModifiedStatements("After prependIncludeOptionsToCommandLine()",project);
 #endif
 
+#if 0
        // #if DEBUG_UNPARSE_INCLUDE_FILES
        // DQ (4/4/2020): Added header file unparsing feature specific debug level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 4)
+          if (SgProject::get_unparseHeaderFilesDebug() >= 2)
              {
                printf ("In unparseIncludedFiles(): \n");
                for (map<string, string>::const_iterator unparseMapEntry = unparseMap.begin(); unparseMapEntry != unparseMap.end(); unparseMapEntry++)
@@ -3926,13 +5029,14 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 
                     const string & outputFileName = FileHelper::concatenatePaths(unparseRootPath, unparseMapEntry -> second);
 
-                    printf ("   ---  originalFileName = %s \n",originalFileName.c_str());
+                    printf ("   ---  originalFileName   = %s \n",originalFileName.c_str());
                     printf ("   ---  --- outputFileName = %s \n",outputFileName.c_str());
 
                  // DQ (9/7/2018): Get the SgSourceFile for the associated filename.
                   }
              }
           // #endif
+#endif
 #if 0
        // DQ (9/7/2018): Looking for a connection to the original SgSourceFile.
           for (map<string, SgScopeStatement*>::const_iterator scope = unparseScopesMap.begin(); scope != unparseScopesMap.end(); scope++)
@@ -3942,7 +5046,7 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 #endif
        // #if DEBUG_UNPARSE_INCLUDE_FILES
        // DQ (4/4/2020): Added header file unparsing feature specific debug level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 8)
+          if (SgProject::get_unparseHeaderFilesDebug() >= 2)
              {
                const map<string, SgSourceFile*> & temp_unparseSourceFileMap = includedFilesUnparser.getUnparseSourceFileMap();
                printf ("Output the temp_unparseSourceFileMap: \n");
@@ -4180,6 +5284,10 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
                copySetInterator++;
              }
 
+#if DEBUG_UNPARSE_INCLUDE_FILES
+          printf ("DONE: In unparseIncludedFiles(): before while loop over unparseMap (files to copy): EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",
+               EDG_ROSE_Translation::edg_include_file_map.size());
+#endif
 #if 0
           printf ("Exiting as a test! \n");
           ROSE_ABORT();
@@ -4188,7 +5296,40 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 #if 0
           printf ("In unparseIncludedFiles(): unparseMap.size() = %zu \n",unparseMap.size());
 #endif
+
+#if DEBUG_UNPARSE_INCLUDE_FILES
+          printf ("file->get_unparseHeaderFiles() = %s \n",file->get_unparseHeaderFiles() ? "true" : "false");
+#endif
+
+       // DQ (5/2/2021): We can assert this because of the predicate for this true case (above).
+          ROSE_ASSERT(file->get_unparseHeaderFiles() == true);
+
+
+#if DEBUG_UNPARSE_INCLUDE_FILES
+          printf ("In Unparser::unparseFile(): calling buildTokenStreamFrontier(): filename = %s \n",file->getFileName().c_str());
+#endif
+#if 1
+       // DQ (5/2/2021): This is the version from 5/1/2021.
+       // buildTokenStreamFrontier(file);
+#else
+       // DQ (5/2/2021): When unparsing header files, we need to do this once for the whole translation unit (not once per file).
+          SgSourceFile* sourceFile = isSgSourceFile(file);
+          ROSE_ASSERT(sourceFile != NULL);
+
+          bool traverseHeaderFiles = true;
+          buildTokenStreamFrontier(sourceFile,traverseHeaderFiles);
+#endif
+
+#if DEBUG_UNPARSE_INCLUDE_FILES
+          printf ("DONE: In Unparser::unparseFile(): Building token stream mapping frontier! \n");
+#endif
+
 #if 0
+       // DQ (5/2/2021): Generate the dot file as a test!
+       // Output the DOT graph for debugging.
+       // Output an optional graph of the AST (just the tree, when active)
+          printf ("Generating a dot file... (debugging token based unparsing of header file unparsing) \n");
+          generateDOT_withIncludes ( *project , "dot_file_graph_from_token_frontier_of_unparseIncludedFiles" );
 #endif
 
           for (map<string, string>::const_iterator unparseMapEntry = unparseMap.begin(); unparseMapEntry != unparseMap.end(); unparseMapEntry++)
@@ -4200,10 +5341,10 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 
             // DQ (3/7/2020): Save the path so that we can include it in the list of include paths that we need to add.
                string originalFileNamePath = Rose::getPathFromFileName(originalFileName);
-#if 0
+
+#if DEBUG_UNPARSE_INCLUDE_FILES
                printf ("Use this path when compiling generated code: originalFileNamePath = %s \n",originalFileNamePath.c_str());
 #endif
-
             // #if DEBUG_UNPARSE_INCLUDE_FILES
             // DQ (4/4/2020): Added header file unparsing feature specific debug level.
                if (SgProject::get_unparseHeaderFilesDebug() >= 4)
@@ -4754,17 +5895,44 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
                  // This might be a better solution.
                     if (isSgGlobal(header_file_associated_scope) != NULL)
                        {
-#if 0
+#if DEBUG_UNPARSE_INCLUDE_FILES
                          printf ("isSgGlobal(header_file_associated_scope) != NULL: calling unparseFile() \n");
 #endif
                          unparseFile(unparsedFile, unparseFormatHelp, unparseDelegate, NULL);
-#if 0
+#if DEBUG_UNPARSE_INCLUDE_FILES
                          printf ("DONE: isSgGlobal(header_file_associated_scope) != NULL: calling unparseFile() \n");
 #endif
                        }
                       else
                        {
+#if DEBUG_UNPARSE_INCLUDE_FILES
+                         printf ("calling unparseFile(): using header_file_associated_scope %p = %s : calling unparseFile() \n",header_file_associated_scope,header_file_associated_scope->class_name().c_str());
+#endif
+#if DEBUG_UNPARSE_INCLUDE_FILES
+                         printf ("header_file_associated_scope->get_containsTransformation() = %s \n",header_file_associated_scope->get_containsTransformation() ? "true" : "false");
+#endif
+                         bool marking_the_header_file_associated_scope = false;
+                         if (header_file_associated_scope->get_containsTransformation() == false)
+                            {
+#if DEBUG_UNPARSE_INCLUDE_FILES
+                              printf ("Resetting the scope as containing a transformation, since it should contain one somewhere inside \n");
+#endif
+                              marking_the_header_file_associated_scope = true;
+                           // header_file_associated_scope->set_containsTransformation(true);
+                            }
+
                          unparseFile(unparsedFile, unparseFormatHelp, unparseDelegate, header_file_associated_scope);
+
+#if DEBUG_UNPARSE_INCLUDE_FILES
+                         printf ("DONE: calling unparseFile(): using header_file_associated_scope %p = %s : calling unparseFile() \n",header_file_associated_scope,header_file_associated_scope->class_name().c_str());
+#endif
+                         if (marking_the_header_file_associated_scope == true)
+                            {
+#if DEBUG_UNPARSE_INCLUDE_FILES
+                              printf ("Resetting the scope as containing a transformation to FALSE, so we can leave it the way it was \n");
+#endif
+                              // header_file_associated_scope->set_containsTransformation(false);
+                            }
                        }
 #endif
 
@@ -4822,6 +5990,7 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
                     printf ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
                   }
             // #endif
+
              }
 
 #if 0
@@ -4831,10 +6000,15 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 
        // DQ (11/18/2018): For any include file that is unparsed, it can cause a nested include file to be missed if it used a
        // relative path (common).  This step detects child include files that are not unparsed and explicitly provides a path
-       // for the origninal child include file to be found in the backend compile step.  This is less about the unparsing of
+       // for the original child include file to be found in the backend compile step.  This is less about the unparsing of
        // include files than the testing of the include files that are being generated (but the testing is essential).
-          SgSourceFile* sourceFile = isSgSourceFile(project->operator[](0));
+
+       // DQ (5/22/2021): This is computed above.
+       // DQ (5/2/2021): Reverting back to the version from May 1st.
+       // DQ (5/2/2021): This is already built above.
+       // SgSourceFile* sourceFile = isSgSourceFile(project->operator[](0));
           ASSERT_not_null(sourceFile);
+
           SgIncludeFile* includeFile = sourceFile->get_associated_include_file();
           if (includeFile != NULL)
              {
@@ -4935,6 +6109,29 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
           ROSE_ABORT();
 #endif
         }
+       else
+        {
+          printf ("This may be where we need to compute the first and last statements for each scope \n");
+
+       // DQ (5/22/2021): This should be called only when we are using the token based unparsing.
+       // DQ (5/20/2021): Need to support this here where we have only a source file with no header files.
+       // buildFirstAndLastStatementsForIncludeFiles(project);
+          ROSE_ASSERT(file != NULL);
+          SgSourceFile* sourceFile = isSgSourceFile(file);
+       // ROSE_ASSERT(sourceFile != NULL);
+
+       // if (sourceFile->get_unparse_tokens() == true)
+          if (sourceFile != NULL && sourceFile->get_unparse_tokens() == true)
+             {
+               buildFirstAndLastStatementsForIncludeFiles(project);
+
+#if 1
+            // DQ (5/27/2021): We need to debug the collection of first and last statements associated with each scope 
+            // (actually we just need the last statement for each scope). This only important for the token-based unarpsing.
+               buildFirstAndLastStatementsForScopes(project);
+#endif
+             }
+        }
 
   // DQ (9/14/2018): At this point we have unparsed the include files, and skipped the unparsing of the
   // source file (since they will be unparsed using the usual memchanism which ignores include files).
@@ -4959,6 +6156,7 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
    }
 
 
+
 // DQ (10/11/2007): I think this is redundant with the Unparser::unparseProject() member function
 // But it is allowed to call it directly from the user's translator if compilation using the backend
 // is not required!  So we have to allow it to be here.
@@ -4966,6 +6164,8 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
 void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, UnparseDelegate* unparseDelegate)
    {
      ASSERT_not_null(project);
+
+#define DEBUG_UNPARSE_PROJECT 0
 
   // #if 1
   // DQ (4/4/2020): Added header file unparsing feature specific debug level.
@@ -4976,7 +6176,7 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
   // #endif
 
   // Put the call to support name qualification here!
-#if 0
+#if DEBUG_UNPARSE_PROJECT || 0
      printf ("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! \n");
      printf ("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! \n");
      printf ("In unparseProject(): calling computeNameQualification() for the whole AST \n");
@@ -4984,28 +6184,57 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
      printf ("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! \n");
 #endif
 
+#if DEBUG_UNPARSE_PROJECT
+     printf ("In unparseProject(): Calling buildFirstAndLastStatementsForScopes(): Testing for robustness ... \n");
+#endif
+
+     if (project->get_unparse_tokens() == true)
+        {
+          buildFirstAndLastStatementsForScopes(project);
+        }
+
+#if DEBUG_UNPARSE_PROJECT
+     printf ("DONE: In unparseProject(): Calling buildFirstAndLastStatementsForScopes(): Testing for robustness ... \n");
+#endif
+
   // DQ (8/7/2018): Added assertion.
      ASSERT_not_null(project->get_fileList_ptr());
 
+     SgSourceFile* sourceFile = NULL;
   // DQ (8/7/2018): Call the name qualification support on each file in the project.
      for (size_t i=0; i < project->get_fileList_ptr()->get_listOfFiles().size(); ++i)
         {
        // These are actually separate translation units.
           SgFile* file = project->get_fileList_ptr()->get_listOfFiles()[i];
           ASSERT_not_null(file);
-          SgSourceFile* sourceFile = isSgSourceFile(file);
+       // SgSourceFile* sourceFile = isSgSourceFile(file);
+          sourceFile = isSgSourceFile(file);
        // ASSERT_not_null(sourceFile);
+#if 0
+          printf ("In unparseProject(): sourceFile = %p \n",sourceFile);
+#endif
+       // DQ (8/7/2018): We might want to allow mixed collections of binaries and source files.
 
-          if (sourceFile != NULL) {
+          if (sourceFile != NULL)
+             {
             // #if 1
             // DQ (4/4/2020): Added header file unparsing feature specific debug level.
-               if (SgProject::get_unparseHeaderFilesDebug() >= 4)
+               if (SgProject::get_unparseHeaderFilesDebug() >= 2)
                   {
                     printf ("In unparseProject(): loop over all files: calling computeNameQualification() for sourceFile = %p = %s \n",sourceFile,sourceFile->getFileName().c_str());
                   }
             // #endif
 
+#if 0
+               printf ("In unparseProject(): calling Unparser::computeNameQualification(): sourceFile = %p name = %s \n",sourceFile,sourceFile->getFileName().c_str());
+#endif
                Unparser::computeNameQualification(sourceFile);
+
+            // DQ (4/4/2020): Added header file unparsing feature specific debug level.
+               if (SgProject::get_unparseHeaderFilesDebug() >= 2)
+                  {
+                    printf ("DONE: In unparseProject(): loop over all files: calling computeNameQualification() for sourceFile = %p = %s \n",sourceFile,sourceFile->getFileName().c_str());
+                  }
 #if 0
                SgHeaderFileReport* reportData = sourceFile->get_headerFileReport();
 
@@ -5036,11 +6265,36 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
                printf ("Exiting as a test (after call to display header file report) \n");
                ROSE_ABORT();
 #endif
-          } else {
+#if 0
+               printf ("In unparseProject(): Calling buildTokenStreamFrontier(): project = %p sourceFile = %p (calling once for the whole projct) \n",project,sourceFile);
+               printf (" --- sourceFile->getFileName()            = %s \n",sourceFile->getFileName().c_str());
+               printf (" --- sourceFile->get_unparseHeaderFiles() = %s \n",sourceFile->get_unparseHeaderFiles() ? "true" : "false");
+               printf (" --- sourceFile->get_unparse_tokens()     = %s \n",sourceFile->get_unparse_tokens() ? "true" : "false");
+#endif
+            // DQ (5/10/2021): We only need to support the case of file->get_unparseHeaderFiles() == true.
+               bool traverseHeaderFiles = false;
+               if (sourceFile->get_unparseHeaderFiles() == true)
+                  {
+                    traverseHeaderFiles = true;
+                  }
+
+            // DQ (5/22/2021): We only want to compute the token stream if we will be using it (must be specified from the command line (or activated directly by a tool)).
+            // buildTokenStreamFrontier(sourceFile,traverseHeaderFiles);
+               if (sourceFile->get_unparse_tokens() == true)
+                  {
+                    buildTokenStreamFrontier(sourceFile,traverseHeaderFiles);
+                  }
+#if 0
+               printf ("In unparseProject(): DONE: Calling buildTokenStreamFrontier(): project = %p sourceFile = %p (calling once for the whole projct) \n",project,sourceFile);
+               printf (" --- sourceFile->getFileName() = %s \n",sourceFile->getFileName().c_str());
+#endif
+             }
+            else
+             {
 #if 0
                printf ("project->get_fileList_ptr()->get_listOfFiles()[%zu] is not a SgSourceFile \n",i);
 #endif
-          }
+             }
 #if 0
           printf ("Exiting after computing the name qualification on the first file (as a test for debugging codeSegregation tool) \n");
           ROSE_ABORT();
@@ -5052,9 +6306,12 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
      ROSE_ABORT();
 #endif
 
-
 #if 0
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
      printf ("In unparseProject(): Calling unparseIncludedFiles(): project = %p (unparse any required header files) \n",project);
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
 #endif
 
 #if 0
@@ -5062,8 +6319,14 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
      ROSE_ABORT();
 #endif
 
-  // negara1 (06/27/2011)
-     unparseIncludedFiles(project, unparseFormatHelp, unparseDelegate);
+  // DQ (5/10/2021): We only need to support the case of file->get_unparseHeaderFiles() == true.
+  // unparseIncludedFiles(project, unparseFormatHelp, unparseDelegate);
+  // if (sourceFile->get_unparseHeaderFiles() == true)
+     if (sourceFile != NULL && sourceFile->get_unparseHeaderFiles() == true)
+        {
+       // negara1 (06/27/2011)
+          unparseIncludedFiles(project, unparseFormatHelp, unparseDelegate);
+        }
 
 #if 0
      printf ("Exiting as a test: AFTER call to unparseIncludedFiles() \n");
@@ -5071,8 +6334,12 @@ void unparseProject ( SgProject* project, UnparseFormatHelp *unparseFormatHelp, 
 #endif
 
 #if 0
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
      printf ("In unparseProject(): DONE: Calling unparseIncludedFiles(): project = %p (unparse any required header files) \n",project);
      printf ("In unparseProject(): project = %p (unparse the input source file) \n",project);
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
+     printf ("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII \n");
 #endif
 
 #if 0

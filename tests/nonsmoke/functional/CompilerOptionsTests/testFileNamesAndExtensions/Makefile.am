@@ -81,8 +81,8 @@ specimen_strange_paths =						\
 #
 #   Filesystem		Max name length			Max path length (*1)
 #  ------------------- ------------------------------  ----------------------------
-#   NTFS (Windows)	255 characters			32767 unicode characters
-#   HFS Plus (OS X)	255 UTF-16 characters		unlimited
+#   NTFS		255 characters			32767 unicode characters
+#   HFS Plus		255 UTF-16 characters		unlimited
 #   UFS1 & 2 (BSDs)	255 bytes			not defined
 #   ext 1-4 (Linux)	255 bytes			not defined
 #   Lustre (SCF/OCF)	255 bytes			not defined

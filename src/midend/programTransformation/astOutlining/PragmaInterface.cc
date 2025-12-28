@@ -97,7 +97,7 @@ processFortranComment(SgLocatedNode* node)
         if (target==NULL)
         {
           cerr<<"Unhandled case when a Fortran statement is attached to a non-statement node!!"<<endl;
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
         removeList.push_back(*i);
       }

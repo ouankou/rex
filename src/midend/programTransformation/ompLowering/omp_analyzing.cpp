@@ -273,7 +273,7 @@ static bool isSharedInEnclosingConstructs(SgInitializedName *init_var,
            << endl;
       dumpInfo(init_var);
       init_var->get_file_info()->display("tttt");
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
   }
   return result;

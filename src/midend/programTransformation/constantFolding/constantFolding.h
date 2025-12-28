@@ -217,7 +217,7 @@ T calculate_float_t (SgBinaryOp* binaryOperator, T lhsValue, T rhsValue)
    default:
       {
         std::cerr<<"warning: calculuate - unhandled operator type:"<<binaryOperator->class_name()<<std::endl;
-        //ROSE_ASSERT(false); // not every binary operation type can be evaluated
+        //ROSE_ABORT(); // not every binary operation type can be evaluated
       }
 
   } // end switch
@@ -408,7 +408,7 @@ T calculate_t (SgBinaryOp* binaryOperator, T lhsValue, T rhsValue)
    default:
       {
         std::cerr<<"warning: calculuate - unhandled binary operator type:"<<binaryOperator->class_name()<<std::endl;
-        //ROSE_ASSERT(false); // not every binary operation type can be evaluated
+        //ROSE_ABORT(); // not every binary operation type can be evaluated
       }
   }
   return foldedValue;

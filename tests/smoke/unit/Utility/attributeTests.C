@@ -544,4 +544,5 @@ main() {
     test_self_copy();
     test_exception_safety();
     test_ast_attributes();
+    return 0;
 }

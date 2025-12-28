@@ -194,9 +194,7 @@ Grammar::setUpNodes ()
   // based untyped ASTs into ROSE so that we will have tools (inherited attribute and synthizied
   // attribute traversals) from which to build the ROSE AST (typed AST) and define a proper frontend.
 
-  // Rasmussen (08/25/2022): Removed all untyped Sage nodes. Ultimately it proved easier to
-  // construct regular IR nodes from the Jovial parser. Using the untyped system just led to an
-  // unnecessary step and wasted effort.
+  // Rasmussen (08/25/2022): Removed all untyped Sage nodes.
 
   // ***************************************************************************************
   //                              END of Untyped IR Node Support
@@ -307,7 +305,12 @@ Grammar::setUpNodes ()
   // DQ (12/3/2014): We need a concept of contains modified code so that we can support the unparsing from the token stream.
      Node.setDataPrototype("bool","containsTransformation","= false",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
+#if 0
+  // DQ (5/2/2021): We need a concept of contains modified code relative to the parent node so that we can support file 
+  // the unparsing from the token stream when header files are nested.
+     Node.setDataPrototype("bool","containsTransformationRelativeToPresentNodeFile","= false",
+                           NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+#endif
 #if 0
   // DQ (7/23/2005): Remove this flag since it is no longer used.  It is not particularly eligant to store
   // the state associated with the traversal within the AST. Some state is required to avoid retraversal
@@ -478,9 +481,7 @@ Grammar::setUpNodes ()
   // based untyped ASTs into ROSE so that we will have tools (inherited attribute and synthizied
   // attribute traversals) from which to build the ROSE AST (typed AST) and define a proper frontend.
 
-  // Rasmussen (08/25/2022): Removed all untyped Sage nodes. Ultimately it proved easier to
-  // construct regular IR nodes from the Jovial parser. Using the untyped system just led to an
-  // unnecessary step and wasted effort.
+  // Rasmussen (08/25/2022): Removed all untyped Sage nodes.
 
   // DQ (10/6/2008): Moved to SgLocatedNodeSupport.
      RenamePair.setFunctionPrototype ( "HEADER_RENAME_PAIR", "../Grammar/LocatedNode.code");
@@ -919,9 +920,7 @@ Grammar::setUpNodes ()
   // based untyped ASTs into ROSE so that we will have tools (inherited attribute and synthizied
   // attribute traversals) from which to build the ROSE AST (typed AST) and define a proper frontend.
 
-  // Rasmussen (08/25/2022): Removed all untyped Sage nodes. Ultimately it proved easier to
-  // construct regular IR nodes from the Jovial parser. Using the untyped system just led to an
-  // unnecessary step and wasted effort.
+  // Rasmussen (08/25/2022): Removed all untyped Sage nodes.
 
   // DQ (10/6/2008): Moved from SgSupport.
      RenamePair.setFunctionSource ( "SOURCE_RENAME_PAIR", "../Grammar/LocatedNode.code");

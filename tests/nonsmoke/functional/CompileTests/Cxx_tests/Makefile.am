@@ -2575,27 +2575,15 @@ else
      test2006_37.C
 endif
 
-if OS_MACOSX
-  TESTCODE_CURRENTLY_FAILING += \
-     test2004_77.C \
-     test2006_20.C \
-     test2011_141.C \
-     test2011_142.C \
-     test2012_09.C \
-     test2013_09.C \
-     test2013_164.C \
-     test2013_212.C 
-else
-  EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
-     test2004_77.C \
-     test2006_20.C \
-     test2011_141.C \
-     test2011_142.C \
-     test2012_09.C \
-     test2013_09.C \
-     test2013_164.C \
-     test2013_212.C 
-endif
+EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
+   test2004_77.C \
+   test2006_20.C \
+   test2011_141.C \
+   test2011_142.C \
+   test2012_09.C \
+   test2013_09.C \
+   test2013_164.C \
+   test2013_212.C 
 
 
 # DQ (9/17/2020): This is a new organization of the files that are passing only specific compilers.
@@ -2625,11 +2613,6 @@ if USING_CLANG_COMPILER
    test2017_50.C 
 
 else
-if OS_MACOSX
-#      EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
-else
-#  EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
-
 # GNU compiler
 if ROSE_USING_GCC_VERSION_LATER_10_1
       # skip these codes when using GNU 10.1 (testing)
@@ -2651,7 +2634,6 @@ endif
    test2016_89.C \
    test2017_50.C \
    test2020_02.C 
-endif
 endif
 endif
 

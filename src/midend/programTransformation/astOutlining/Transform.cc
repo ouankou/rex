@@ -137,7 +137,7 @@ SgClassDeclaration* Outliner::generateParameterStructureDeclaration(
     if( global_scoped_ancestor->get_parent( ) != func_scope )
     {   //TODO 
         cout << "Outliner::generateParameterStructureDeclaration() separated file case is not yet handled." << endl;
-        ROSE_ASSERT( false );
+        ROSE_ABORT();
     }
     return result;
 }
@@ -214,6 +214,14 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
   printf ("Inside of Outliner::outlineBlock() \n");
 #endif
 
+#if 0
+   {
+     SgProject* project = SageInterface::getProject();
+  // DQ (7/12/2021): Testing the AST for a specific node marked as a transformation.
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(project,"testing start of outlineBlock()") == false);
+   }
+#endif
+
   //---------step 1. Preparations-----------------------------------
   //new file, cut preprocessing information, collect variables
   // Generate a new source file for the outlined function, if requested
@@ -224,6 +232,7 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
         new_file = getLibSourceFile(s);
       else
         new_file = generateNewSourceFile(s,func_name_str);
+      ROSE_ASSERT(new_file);
   }
 
   // Save some preprocessing information for later restoration. 
@@ -319,6 +328,11 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
   }
 
 #if 0
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(s,"testing start of outlineBlock()") == false);
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(glob_scope,"testing start of outlineBlock()") == false);
+#endif
+
+#if 0
   printf ("Calling generateFunction(): func_name_str = %s \n",func_name_str.c_str());
 #endif
 
@@ -326,6 +340,9 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
 
 #if 0
   printf ("DONE: Calling generateFunction(): func_name_str = %s \n",func_name_str.c_str());
+#endif
+#if 0
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing start of outlineBlock()") == false);
 #endif
 
   ROSE_ASSERT (func != NULL);
@@ -360,9 +377,27 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
   printf ("Calling insert() (func = %p to global scope) \n",func);
 #endif
 
+#if 0
+   {
+     SgProject* project = SageInterface::getProject();
+  // DQ (7/12/2021): Testing the AST for a specific node marked as a transformation.
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(project,"testing start of outlineBlock()") == false);
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing start of outlineBlock()") == false);
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(s,"testing start of outlineBlock()") == false);
+   }
+#endif
+
   // DQ (8/15/2019): Adding support to defere the transformations in header files (a performance improvement).
   // insert (func, glob_scope, s); //Outliner::insert() 
      DeferredTransformation headerFileTransformation = insert (func, glob_scope, s); //Outliner::insert() 
+
+#if 0
+   {
+     SgProject* project = SageInterface::getProject();
+  // DQ (7/12/2021): Testing the AST for a specific node marked as a transformation.
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(project,"testing start of outlineBlock()") == false);
+   }
+#endif
 
   // Liao 2/4/2020   
   // Some comments and #include directives may be attached after the global scope for an otherwise empty input file.
@@ -442,7 +477,14 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
     if (Outliner::copy_origFile)
     {
       string lib_file_base_name = StringUtility::stripFileSuffixFromFileName(StringUtility::stripPathFromFileName(generateLibSourceFileName (s))); 
-      lib_name = output_path+"/"+ lib_file_base_name +".so"; 
+      lib_name = output_path+"/"+ lib_file_base_name +".so";
+      if (MASTER_SHARED_LIB_NAME.size()==0)
+      {
+        string lib_file_base_name = StringUtility::stripFileSuffixFromFileName(StringUtility::stripPathFromFileName(generateLibSourceFileName (s))); 
+        lib_name = output_path+"/"+ lib_file_base_name +".so"; 
+      }
+      else
+        lib_name = output_path+"/"+ MASTER_SHARED_LIB_NAME;
     }
     else 
       lib_name = output_path+"/"+func_name_str+".so"; 
@@ -540,13 +582,13 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
 // DQ (11/9/2019): When used in conjunction with header file unparsing we need to set the physical file id on entirety of the subtree being inserted.
    int physical_file_id = func->get_startOfConstruct()->get_physical_file_id();
 
-#if 1
+#if 0
    printf ("physical_file_id = %d \n",physical_file_id);
 #endif
 
    string physical_filename_from_id = Sg_File_Info::getFilenameFromID(physical_file_id);
 
-#if 1
+#if 0
    printf ("physical_filename_from_id = %d \n",physical_filename_from_id);
 #endif
 
@@ -555,7 +597,7 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
 
 #if 0
   printf ("Exiting as a test! \n");
-  ROSE_ASSERT(false);
+  ROSE_ABORT();
 #endif
 
   ROSE_ASSERT(s != NULL);
@@ -640,8 +682,11 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
      printf ("In Outliner::outlineBlock(): Generate the dot output of the SAGE III AST \n");
      SgProject* project = SageInterface::getProject();
   // generateDOT ( *project );
-     generateDOTforMultipleFile ( *project );
+     generateDOTforMultipleFile ( *project , "from_outlineBlock" );
      printf ("DONE: In Outliner::outlineBlock(): Generate the dot output of the SAGE III AST \n");
+
+  // DQ (7/12/2021): Testing the AST for a specific node marked as a transformation.
+     ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(project,"testing end of outlineBlock()") == false);
 #endif
 
 #if 1
@@ -666,9 +711,9 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
     // This fails for moreTest3.cpp
     // Run the AST fixup on the AST for the separate file of outlined code.
     SgSourceFile* separateOutlinedSourceFile = SageInterface::getEnclosingSourceFile(glob_scope);
-    //          printf ("##### Calling AstPostProcessing() on SgFile = %s \n",separateOutlinedSourceFile->getFileName().c_str());
+ // printf ("##### Calling AstPostProcessing() on SgFile = %s \n",separateOutlinedSourceFile->getFileName().c_str());
     AstPostProcessing (separateOutlinedSourceFile);
-    //          printf ("##### DONE: Calling AstPostProcessing() on SgFile = %s \n",separateOutlinedSourceFile->getFileName().c_str());
+ // printf ("##### DONE: Calling AstPostProcessing() on SgFile = %s \n",separateOutlinedSourceFile->getFileName().c_str());
 #else
     printf ("Skipping call to AstPostProcessing (separateOutlinedSourceFile); \n");
 #endif
@@ -677,8 +722,11 @@ Outliner::outlineBlock (SgBasicBlock* s, const string& func_name_str)
 #if 0
   // DQ (8/7/2019): Tracing down how to get function prototype information into the return result of this function.
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
+
+  // DQ (7/12/2021): Testing the AST for a specific node marked as a transformation.
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(project,"testing end of outlineBlock()") == false);
 
   // DQ (8/15/2019): Adding support to defere the transformations in header files (a performance improvement).
   // return Result (func, func_call, new_file);
@@ -985,6 +1033,11 @@ SgSourceFile* Outliner::getLibSourceFile(SgBasicBlock* target) {
     if (enable_debug) 
       printf ("Before strip path: new_file_name = %s \n",new_file_name.c_str());
 
+#if 0
+    printf ("QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ \n");
+    printf ("QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ \n");
+#endif
+
     new_file_name = Rose::utility_stripPathFromFileName(new_file_name);
 
     if (enable_debug) 
@@ -1035,11 +1088,6 @@ SgSourceFile* Outliner::getLibSourceFile(SgBasicBlock* target) {
         // to simplify the lib file generation, we copy entire original source file to it, then later append outlined functions
       new_file = isSgSourceFile(buildSourceFile(input_file_name, new_file_name, project)); //TODO: should we pass false as the last parameter?
 
-#if 0
-      printf ("DONE: In Outliner::getLibSourceFile(): Calling buildSourceFile(): input_file_name = %s \n",input_file_name.c_str());
-      printf (" --- new_file_name = %s \n",new_file_name.c_str());
-#endif
-
       if (enable_debug)
       {
         printf ("DONE: In Outliner::getLibSourceFile(): Calling buildSourceFile(): input_file_name = %s \n",input_file_name.c_str());
@@ -1078,7 +1126,7 @@ SgSourceFile* Outliner::getLibSourceFile(SgBasicBlock* target) {
 
 #if 0
       printf ("Exiting as a test! \n");
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
 #endif
 
     }
@@ -1090,7 +1138,25 @@ SgSourceFile* Outliner::getLibSourceFile(SgBasicBlock* target) {
     }
 #endif
 
-    //new_file = isSgSourceFile(buildFile(new_file_name, new_file_name));
+#if 0
+    printf ("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO \n");
+    printf ("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO \n");
+    printf ("DONE: In Outliner::getLibSourceFile(): Calling buildSourceFile(): input_file_name = %s \n",input_file_name.c_str());
+    printf (" --- new_file_name = %s \n",new_file_name.c_str());
+    printf ("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO \n");
+    printf ("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO \n");
+#endif
+
+#if 0
+    printf ("Exiting as a test! \n");
+    ROSE_ABORT();
+#endif
+
+ // DQ (7/13/2021): Save the dynamic library file so that we can reference it elsewhere.
+    saved_source_file_for_dynamic_library = new_file;
+    ROSE_ASSERT(saved_source_file_for_dynamic_library != NULL);
+
+ // new_file = isSgSourceFile(buildFile(new_file_name, new_file_name));
     ROSE_ASSERT(new_file != NULL);
     return new_file;
 }

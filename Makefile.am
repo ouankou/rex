@@ -28,7 +28,7 @@ if ROSE_BUILD_TUTORIAL_DIRECTORY_SUPPORT
 endif
 SUBDIRS += tools scripts 
 
-# Pei-Hung (12/06/2016) use "aclocal --print-ac-dir" to specify the include path to support both Linux and Mac
+# Pei-Hung (12/06/2016) use "aclocal --print-ac-dir" to specify the include path on Linux.
 ACLOCAL_INCLUDE = "$$(aclocal --print-ac-dir)"
 ACLOCAL_AMFLAGS = -I ./config -I ./acmacros -I ./libltdl -I $(ACLOCAL_INCLUDE)
 
@@ -144,7 +144,6 @@ rose-installer-rmc2: install-rose-library
 		    $(LIBTIFF_ROOT)											\
 		    $(SPOT_ROOT)											\
 		    $(WT_ROOT)												\
-		    $(YAMLCPP_ROOT)											\
 		    $(ZLIB_ROOT)											\
 		))
 	rm -rf $@.tmp
@@ -172,7 +171,7 @@ remove_sage3basic_h_pch:
 	rm    $(top_builddir)/src/frontend/SageIII/sage3basic.h.pch
 
 # These are policies that we'd like to enforce for ROSE developers.  Things like:
-#    1. source files should not use CR+LF line termination common on Windows platforms
+#    1. source files should not use CR+LF line termination
 #    2. header files should not include certain ROSE headers like "rose.h"
 #    3. file names must be unique on a case-insensitive file system
 #    4. header files must not have names that conflict with headers in other directories
@@ -586,11 +585,8 @@ all-lcov.info:
 	lcov --capture --no-recursion $(patsubst %,-d %,$(lcov_data_dirs)) -o $@
 
 # Capture only coverage for the ROSE library source code (no tests, tutorials, projects, system headers, third-party headers, etc).
-# DQ (3/26/2017): Removed CodeThorn from being included in lcov results (CodeThorn testing is still done to test ROSE 
-# and those results are a part of the cover coverage for ROSE.
 # DQ (3/13/2017): Modified to remove specific directories of old code to be removed from ROSE and 3rd party code that we do not maintain.
 # (04/26/2016) Pei-Hung lcov has issue to output extracted result to librose-lcov.info with -o option. Using piping instead.
-#	lcov --extract $< "$(top_srcdir)/src/*" "$(top_srcdir)/projects/CodeThorn/*" > $@
 librose-lcov.info: all-lcov.info
 	lcov --extract $< "$(top_srcdir)/src/*" > $@
 	lcov --remove librose-lcov.info \

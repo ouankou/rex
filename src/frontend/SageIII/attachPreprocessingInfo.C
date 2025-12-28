@@ -153,7 +153,7 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
      if (new_filename != "")
         {
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
 #endif
 
@@ -203,7 +203,7 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr, const std::string & new_
      if (new_filename != "")
         {
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
 #endif
 

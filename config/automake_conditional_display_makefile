@@ -49,26 +49,6 @@ if OS_LINUX
 else
 	@echo "Automake conditional OS_LINUX: NOT defined"
 endif
-if OS_MACOSX
-	@echo "Automake conditional OS_MACOSX: DEFINED"
-else
-	@echo "Automake conditional OS_MACOSX: NOT defined"
-endif
-if OS_MINGW
-	@echo "Automake conditional OS_MINGW: DEFINED"
-else
-	@echo "Automake conditional OS_MINGW: NOT defined"
-endif
-if OS_MSDOS
-	@echo "Automake conditional OS_MSDOS: DEFINED"
-else
-	@echo "Automake conditional OS_MSDOS: NOT defined"
-endif
-if OS_VENDOR_APPLE
-	@echo "Automake conditional OS_VENDOR_APPLE: DEFINED"
-else
-	@echo "Automake conditional OS_VENDOR_APPLE: NOT defined"
-endif
 if OS_VENDOR_CENTOS
 	@echo "Automake conditional OS_VENDOR_CENTOS: DEFINED"
 else
@@ -113,16 +93,6 @@ if ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT
 	@echo "Automake conditional ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT: DEFINED"
 else
 	@echo "Automake conditional ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT: NOT defined"
-endif
-if ROSE_BUILD_OS_IS_CYGWIN
-	@echo "Automake conditional ROSE_BUILD_OS_IS_CYGWIN: DEFINED"
-else
-	@echo "Automake conditional ROSE_BUILD_OS_IS_CYGWIN: NOT defined"
-endif
-if ROSE_BUILD_OS_IS_OSX
-	@echo "Automake conditional ROSE_BUILD_OS_IS_OSX: DEFINED"
-else
-	@echo "Automake conditional ROSE_BUILD_OS_IS_OSX: NOT defined"
 endif
 if ROSE_BUILD_TESTS_DIRECTORY_SUPPORT
 	@echo "Automake conditional ROSE_BUILD_TESTS_DIRECTORY_SUPPORT: DEFINED"

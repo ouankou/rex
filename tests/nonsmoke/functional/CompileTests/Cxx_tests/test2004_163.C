@@ -1,7 +1,7 @@
 #include<stdio.h>
 
 #if 0
-// Common example from web (also from http://developer.apple.com/documentation/DeveloperTools/gcc-3.3/gcc/Variable-Length.html)
+// Common example from the web.
 FILE *concat_fopen (char *s1, char *s2, char *mode)
 {
   char str[strlen (s1) + strlen (s2) + 1];
@@ -18,7 +18,7 @@ class foo
 };
 
 
-// From: http://developer.apple.com/documentation/DeveloperTools/gcc-3.3/gcc/Variable-Length.html
+// From the same source as above.
 struct entry
      tester (int len, char data[len][len])
      {
@@ -47,4 +47,3 @@ struct entry
 // forward declarations. 
 
 #endif
-

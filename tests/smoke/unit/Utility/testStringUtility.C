@@ -1,7 +1,7 @@
 // Test code for string utility library
 #include <rose.h>
 
-#include <StringUtility.h>
+#include <Rose/StringUtility.h>
 #include <StringUtility/StringToNumber.h>
 #include <algorithm>
 #include <iostream>
@@ -539,7 +539,7 @@ test_fixLineTermination() {
     check(fixLineTermination("\n\ra\n\rb")              == "\na\nb");
     check(fixLineTermination("\n\ra\n\rb\n\r")          == "\na\nb\n");
 
-    // Mac OS up to version 9
+    // CR-only line endings
     check(fixLineTermination("")                        == "");
     check(fixLineTermination("\r")                      == "\n");
     check(fixLineTermination("\r\r")                    == "\n\n");

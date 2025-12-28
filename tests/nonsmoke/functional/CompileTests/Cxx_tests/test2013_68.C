@@ -24,7 +24,7 @@ void rewriteFunctionCallExp(SgFunctionCallExp* fce)
 // printed from rose -->
 
 // Error: There should be no other cases functionExp = 0x10a84bf0 = SgVarRefExp 
-// mungeArglists: ../../../../legacy_frontend-rose/src/frontend/SageIII/sage_support/sage_support.cpp:5534: SgFunctionSymbol* SgFunctionCallExp::getAssociatedFunctionSymbol() const: Assertion `false' failed.
+// mungeArglists: ../../../../legacy_frontend-rose/src/frontend/SageIII/sage_support/sage_support.C:5534: SgFunctionSymbol* SgFunctionCallExp::getAssociatedFunctionSymbol() const: Assertion `false' failed.
 
 // Here's the inputs below.
 

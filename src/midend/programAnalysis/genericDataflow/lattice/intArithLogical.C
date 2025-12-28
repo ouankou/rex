@@ -642,7 +642,7 @@ IntArithLogical::logicNode::logicNode(logOps logOp): logOp(logOp)
 IntArithLogical::logicNode::logicNode(logOps logOp, exprLeafOrNode* child): logOp(logOp)
 {
         // Currently not supporting not nodes
-        //ROSE_ASSERT(0);
+        //ROSE_ABORT();
         //ROSE_ASSERT(logOp==notOp);
         children.push_back(child);
         level = exprKnown;
@@ -1276,7 +1276,7 @@ bool IntArithLogical::logicNode::andUpd(logicNode& that)
                         normalize();
                 }
                 /*else if(logOp.isOp(SpearOp::NotOp))
-                        ROSE_ASSERT(0);*/
+                        ROSE_ABORT();*/
                 else
                         ROSE_ABORT();
         }
@@ -1317,10 +1317,10 @@ bool IntArithLogical::logicNode::andUpd(logicNode& that)
                         level = exprKnown;
                 }
                 else
-                        ROSE_ASSERT(0);
+                        ROSE_ABORT();
         }
         else
-                ROSE_ASSERT(0);*/
+                ROSE_ABORT();*/
                 
         ROSE_ASSERT((level == exprKnown && children.size()>0) || 
          ((level == isTrue || level == isFalse) && children.size() == 0));

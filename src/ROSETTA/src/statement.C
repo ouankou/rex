@@ -118,6 +118,8 @@ Grammar::setUpStatements ()
      NEW_TERMINAL_MACRO (DefaultOptionStmt,         "DefaultOptionStmt",         "DEFAULT_STMT" );
      NEW_TERMINAL_MACRO (BreakStmt,                 "BreakStmt",                 "BREAK_STMT" );
      NEW_TERMINAL_MACRO (ContinueStmt,              "ContinueStmt",              "CONTINUE_STMT" );
+  // Fortran continue statement has different semantics from C/C++ continue statement [Rasmussen 6/10/2023]
+     NEW_TERMINAL_MACRO (FortranContinueStmt,       "FortranContinueStmt",       "FORTRAN_CONTINUE_STMT");
      NEW_TERMINAL_MACRO (ReturnStmt,                "ReturnStmt",                "RETURN_STMT" );
      NEW_TERMINAL_MACRO (GotoStatement,             "GotoStatement",             "GOTO_STMT" );
      NEW_TERMINAL_MACRO (SpawnStmt,                 "SpawnStmt",                 "SPAWN_STMT" );
@@ -444,7 +446,6 @@ Grammar::setUpStatements ()
 
   // Note that the associate statement is really a scope, with its own declarations of variables declared by reference to
   // other variables or expressions.  They are only l-values if and only if the rhs is a l-value (I think).
-  // Rasmussen (10/22/2018): Added JovialForThenStatement
      NEW_NONTERMINAL_MACRO(
          ScopeStatement,
          Global | BasicBlock | IfStmt | ForStatement | FunctionDefinition |
@@ -557,11 +558,12 @@ Grammar::setUpStatements ()
              DefaultOptionStmt | BreakStmt | ContinueStmt | ReturnStmt |
              GotoStatement | SpawnStmt | NullStatement | VariantStatement |
              ForInitStatement | CatchStatementSeq | ProcessControlStatement |
-             IOStatement | WhereStatement | ElseWhereStatement |
-             NullifyStatement | ArithmeticIfStatement | AssignStatement |
+             IOStatement | FortranContinueStmt | WhereStatement |
+             ElseWhereStatement | NullifyStatement |
+             ArithmeticIfStatement | AssignStatement |
              ComputedGotoStatement | AssignedGotoStatement |
-             /* FortranDo                 | */ AllocateStatement |
-             DeallocateStatement | SequenceStatement | OmpExecStatement |
+             AllocateStatement | DeallocateStatement |
+             SequenceStatement | OmpExecStatement |
              ImageControlStatement,
          "Statement", "StatementTag", false);
 
@@ -657,6 +659,14 @@ Grammar::setUpStatements ()
   //                                      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, NO_COPY_DATA);
      ScopeStatement.setDataPrototype    ( "SgPragma*","pragma","= NULL",
                                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, NO_COPY_DATA);
+
+  // DQ (5/9/2021): Added to support token-based unparsing with unparsing of headers.  Each scope records which header files are included in that scope.
+  // This is done so that we can determine which scopes are characterized by only included files and which ones also have other statements.
+  // ScopeStatement.setDataPrototype    ( "std::set<SgIncludeFile*>","includeFileSet","",
+  //                                      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+  // DQ (5/9/2021): Support for token-based unparsing when used with header file unparsing.
+  // ScopeStatement.setDataPrototype   ( "bool", "allStatementsAreFromHeaderFiles", "= false",
+  //                                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      FunctionTypeTable.setFunctionPrototype( "HEADER_FUNCTION_TYPE_TABLE", "../Grammar/Statement.code" );
      FunctionTypeTable.setDataPrototype    ( "SgSymbolTable*","function_type_table","= NULL",
@@ -818,7 +828,7 @@ Grammar::setUpStatements ()
      BasicBlock.setDataPrototype ( "std::string", "asm_function_body", "= \"\"",
                                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // PP (06/04/20) - block label for ADA (in analogy to for and while labels)
+  // PP (06/04/20) - block label support (in analogy to for and while labels)
      BasicBlock.setDataPrototype ( "std::string", "string_label", "= \"\"",
                                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -910,8 +920,6 @@ Grammar::setUpStatements ()
      ForStatement.setDataPrototype(
          "SgStatement*", "loop_body", "= NULL", CONSTRUCTOR_PARAMETER,
          BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-     // DQ (11/16/2007): Added support for string labels (for Fortran and Ada
-     // (PP)).
      ForStatement.setDataPrototype ( "std::string", "string_label", "= \"\"",
                                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -960,7 +968,6 @@ Grammar::setUpStatements ()
                    CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
 
-// Rasmussen (09/24/2020): Finishing implementation of SgFunctionParameterScope for Jovial
      FunctionParameterScope.setFunctionPrototype( "HEADER_FUNCTION_PARAMETER_SCOPE", "../Grammar/Statement.code" );
      FunctionParameterScope.editSubstitute      ( "HEADER_LIST_DECLARATIONS", "HEADER_LIST_DECLARATIONS", "../Grammar/Statement.code" );
      FunctionParameterScope.editSubstitute      ( "LIST_DATA_TYPE", "SgDeclarationStatementPtrList" );
@@ -972,7 +979,6 @@ Grammar::setUpStatements ()
                                   NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // DQ (7/17/2017): Added to support concept of scope in nondefining declarations (required for more sophisticated level of template useage).
-  // PP (8/03/20): Note, DeclarationScope is also used by the AdaDiscriminatedTypeDecl decorator
      DeclarationScope.setFunctionPrototype ( "HEADER_DECLARATION_SCOPE", "../Grammar/Statement.code" );
 
 
@@ -1049,10 +1055,6 @@ Grammar::setUpStatements ()
      FunctionDeclaration.setDataPrototype ( "std::string", "binding_label", "=\"\"",
                                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
-
-     // MS (01/24/22) support for Ada formal subprogram declarations */
-     FunctionDeclaration.setDataPrototype ( "bool", "ada_formal_subprogram_decl", "= false",
-                                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      FunctionParameterList.setFunctionPrototype ( "HEADER_FUNCTION_PARAMETER_LIST", "../Grammar/Statement.code" );
 
@@ -1726,13 +1728,6 @@ Grammar::setUpStatements ()
      ClassDeclaration.setDataPrototype("bool","isRepresentingTemplateParameterInTemplateDeclaration","= false",
                                 NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // PP (2/22/2021): To support declarations of Ada private types (aka forward declarations).
-  //                 In Ada, programmers can specify the base record as part of the public portion of
-  //                 a private type.
-  //                 e.g., type Manager is new Employee with private;
-     ClassDeclaration.setDataPrototype("SgBaseClass*","adaParentType","= NULL",
-                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // This class contains two lists (we don't know if this edit/substitution mechanism for work for two lists)
      ClassDefinition.setFunctionPrototype ( "HEADER_CLASS_DEFINITION_STATEMENT", "../Grammar/Statement.code" );
      ClassDefinition.editSubstitute       ( "HEADER_LIST_DECLARATIONS_1", "HEADER_LIST_DECLARATIONS", "../Grammar/Statement.code" );
@@ -2223,13 +2218,6 @@ Grammar::setUpStatements ()
      EnumDeclaration.setDataPrototype ( "SgEnumType*", "type", "= NULL",
                                         CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, CLONE_PTR);
 
-  // PP (10/28/2021): Added link to the parent type of a derived enum. Other derived types are represented by (TypedefDeclaration -> AdaDerivedType).
-  //                  For enums this is insufficient, because the inherited enumerators (elements) get different type and different scope.
-  //                  Thus, a derived enum is represented as normal enum, but its adaParentType points to the base type of the derived type.
-  //                  \todo should this always be a SgAdaDerivedType to better indicate the relationship?
-     EnumDeclaration.setDataPrototype ( "SgType*", "adaParentType", "= NULL",
-                                        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
 #if 0
      EnumDeclaration.setDataPrototype ( "SgInitializedNamePtrList", "enumerators", "= NULL",
                                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2540,10 +2528,11 @@ Grammar::setUpStatements ()
                                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      ContinueStmt.setFunctionPrototype ( "HEADER_CONTINUE_STATEMENT", "../Grammar/Statement.code" );
+     FortranContinueStmt.setFunctionPrototype ( "HEADER_FORTRAN_CONTINUE_STATEMENT", "../Grammar/Statement.code" );
 
-  // DQ (11/17/2007): Fortran support requires string label target ("continue" in C == "cycle" in Fortran)
-     ContinueStmt.setDataPrototype     ( "std::string", "do_string_label", "= \"\"",
-                                      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // Fortran requires string label target ("continue" in C == "cycle" in Fortran)
+     ContinueStmt.setDataPrototype ( "std::string", "do_string_label", "= \"\"",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      ReturnStmt.setFunctionPrototype ( "HEADER_RETURN_STATEMENT", "../Grammar/Statement.code" );
 
@@ -3946,6 +3935,7 @@ Grammar::setUpStatements ()
      DefaultOptionStmt.setFunctionSource    ( "SOURCE_DEFAULT_OPTION_STATEMENT", "../Grammar/Statement.code" );
      BreakStmt.setFunctionSource            ( "SOURCE_BREAK_STATEMENT", "../Grammar/Statement.code" );
      ContinueStmt.setFunctionSource         ( "SOURCE_CONTINUE_STATEMENT", "../Grammar/Statement.code" );
+     FortranContinueStmt.setFunctionSource  ( "SOURCE_FORTRAN_CONTINUE_STATEMENT", "../Grammar/Statement.code" );
 
      ReturnStmt.setFunctionSource           ( "SOURCE_RETURN_STATEMENT", "../Grammar/Statement.code" );
      GotoStatement.setFunctionSource        ( "SOURCE_GOTO_STATEMENT", "../Grammar/Statement.code" );

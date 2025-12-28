@@ -12,11 +12,9 @@
 //   Unparsed code:
 //      ((Array_Domain_Type & )(*this).IndexBase)[i] = ((((*(this -> Index_Array)[i]).Array_Descriptor).Array_Domain).Base)[i];
 
-// DQ (1/15/2017): This is not a matching prototype on a Mac OSX system.
-#ifndef __APPLE__
+// DQ (1/15/2017): Prototype for glibc __assert used by aterm support.
 // DQ (10/26/2013): added to support debuging of aterm support.
 extern void __assert (const char *__assertion, const char *__file, int __line) __THROW __attribute__ ((__noreturn__));
-#endif
 
 int main()
    {
@@ -26,4 +24,3 @@ int main()
      // printf ("Program Terminated Normally! \n");
      return 0;
    }
-

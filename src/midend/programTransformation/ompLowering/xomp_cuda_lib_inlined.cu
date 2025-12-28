@@ -52,7 +52,7 @@ __device__ void xomp_inner_block_reduction_##dtype(dtype local_value, dtype * gr
               /* TODO: add assertion or set cudaError with an error code */ \
               /* cannot call a host function */ \
               /* fprintf (stderr, "Error. xomp_inner_block_reduction() unhandled reduction operation:%d\n",reduction_op); */ \
-              /* assert (false); */ \
+              /* ROSE_ABORT(); */ \
              } \
       } /* end switch */ \
     } \
@@ -70,7 +70,7 @@ __device__ void xomp_inner_block_reduction_##dtype(dtype local_value, dtype * gr
             /* TODO: add assertion or set cudaError with an error code */  \
             /* cannot call a host function */ \
             /* fprintf (stderr, "Error. xomp_inner_block_reduction() unhandled reduction operation:%d\n",reduction_op); */ \
-            /* assert (false); */ \
+            /* ROSE_ABORT(); */ \
           } \
       } /* end switch */ \
     } \
@@ -123,7 +123,7 @@ __device__ void XOMP_cuda_loop_default_internal(int lower, int upper, int stride
     {
 /*  TODO: assertion and error code  
       printf("Error: in XOMP_loop_default() of xomp.c: stride must be negative for decremental iteration. stride = %d \n ", stride);
-      assert (0);
+      ROSE_ABORT();
 */
     }
   }
@@ -134,7 +134,7 @@ __device__ void XOMP_cuda_loop_default_internal(int lower, int upper, int stride
     {
 /* TODO assertion and error code
       printf("Error: in XOMP_loop_default() of xomp.c: stride must be positive for incremental iteration. stride = %d \n ", stride);
-      assert (0);
+      ROSE_ABORT();
 */
     }
   }
@@ -309,7 +309,7 @@ __device__ int getLoopIndexFromCUDAVariables(int dimension_no)
   else
   {
     //printf("getLoopIndexFromCUDAVariables() accept a parameter of range from 1 to 3 only\n");
-    //assert (false);
+    //ROSE_ABORT();
   }
    return -1; 
 }
@@ -326,7 +326,7 @@ __device__ int getCUDABlockThreadCount(int dimension_no)
   else
   {
     //printf("getCUDABlockThreadCount() accept a parameter of range from 1 to 3 only\n");
-    //assert (false);
+    //ROSE_ABORT();
   }
    return -1; 
 }

@@ -165,7 +165,7 @@ void foo()
      int i = 0;
 #if 0
 // DQ (8/27/2005): temporarily commented out 
-// JJW 5-22-2008 Commented this out again because it fails on Mac
+// JJW 5-22-2008 Commented this out again because it fails on some platforms
 
      std::vector< SwigValueWrapper<X> > result;
 
@@ -178,4 +178,3 @@ void foo()
      SP< Y< Y<X> > > spObjyy ( new Y< Y<X> > (((std::vector< Y< Y<X> > > &)result)[i]) );
 #endif
    }
-

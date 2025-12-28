@@ -262,7 +262,7 @@ getAffectedForLoops(SgOmpClauseBodyStatement *forOrSimd) {
     if (ival == NULL) {
       cerr << "Error. Expecting SgIntVal of Collapse(exp), seeing "
            << exp->class_name() << " instead." << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
     loop_count = ival->get_value();
   } else if (exp_ordered != NULL) {
@@ -970,7 +970,7 @@ string toString(SgOmpClause::omp_schedule_kind_enum s_kind) {
     result = "auto";
   } else {
     cerr << "Error: illegal or unhandled schedule kind:" << s_kind << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   return result;
 }
@@ -1177,7 +1177,7 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     cerr << "error! transOmpLoop_others(). loop is neither for_loop nor "
             "do_loop. Aborting.."
          << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   ROSE_ASSERT(is_canonical == true);
 
@@ -1785,7 +1785,7 @@ void transOmpTargetLoop(SgNode *node) {
     cerr << "error! transOmpLoop(). loop is neither for_loop nor do_loop. "
             "Aborting.."
          << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
 
   SgInitializedName *orig_index = NULL;
@@ -1885,7 +1885,7 @@ void transOmpTargetLoop(SgNode *node) {
   } else {
     cerr << "error. transOmpTargetLoop(): decremental case is not yet handled !"
          << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   SgIfStmt *if_stmt = buildIfStmt(cond_stmt, true_body, NULL);
   appendStatement(if_stmt, bb1);
@@ -1996,7 +1996,7 @@ void transOmpTargetLoop_RoundRobin(SgNode *node) {
     cerr << "error! transOmpLoop(). loop is neither for_loop nor do_loop. "
             "Aborting.."
          << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
 
   SgInitializedName *orig_index = NULL;
@@ -2151,7 +2151,7 @@ Rose_STL_Container<SgOmpClause *> getClause(SgStatement *clause_stmt,
   } else if (isSgOmpClauseStatement(clause_stmt)) {
     clauses = (isSgOmpClauseStatement(clause_stmt))->get_clauses();
   } else {
-    ROSE_ASSERT(0);
+    ROSE_ABORT();
   };
   Rose_STL_Container<SgOmpClause *> p_clause =
       NodeQuery::queryNodeList<SgOmpClause>(clauses, vvt);
@@ -2173,7 +2173,7 @@ bool hasClause(SgStatement *clause_stmt, const VariantT &vt) {
   } else if (isSgOmpClauseStatement(clause_stmt)) {
     clauses = (isSgOmpClauseStatement(clause_stmt))->get_clauses();
   } else {
-    ROSE_ASSERT(0);
+    ROSE_ABORT();
   };
   Rose_STL_Container<SgOmpClause *> p_clause =
       NodeQuery::queryNodeList<SgOmpClause>(clauses, vt);
@@ -2984,7 +2984,7 @@ void extractMapClauses(
       cerr << "Error. transOmpMapVariables() from omp_lowering.cpp: found "
               "unacceptable map operator type:"
            << map_operator << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
   } // end for
 }
@@ -3714,7 +3714,6 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
             SgExpression* newsubscript =
   buildSubtractOp(deepCopy(subscript),deepCopy(*ir));
             replaceExpression(subscript,newsubscript,true);
-            pntrArrRef = isSgPntrArrRefExp(pntrArrRef->get_parent());
           }
         }
         // collapsed case
@@ -3741,7 +3740,6 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
             irsize++;
           }
           replaceExpression(subscript,newsubscript,true);
-          pntrArrRef = isSgPntrArrRefExp(pntrArrRef->get_parent());
         }
       }
     }
@@ -4148,7 +4146,7 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
     if (per_block_declarations.size() > 1) {
       cerr << "Error. multiple reduction variables are not yet handled."
            << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
       // threadsPerBlock.x*sizeof(REAL)  //TODO: how to handle multiple shared
       // data blocks, each for a reduction variable??
     }
@@ -4645,7 +4643,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
     if (per_block_declarations.size() > 1) {
       cerr << "Error. multiple reduction variables are not yet handled."
            << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
       // threadsPerBlock.x*sizeof(REAL)  //TODO: how to handle multiple shared
       // data blocks, each for a reduction variable??
     }
@@ -5842,7 +5840,7 @@ SgExpression *getClauseExpression(SgStatement *clause_stmt,
   } else if (isSgOmpClauseStatement(clause_stmt)) {
     clauses = (isSgOmpClauseStatement(clause_stmt))->get_clauses();
   } else {
-    ROSE_ASSERT(0);
+    ROSE_ABORT();
   }
   Rose_STL_Container<SgOmpClause *> p_clause =
       NodeQuery::queryNodeList<SgOmpClause>(clauses, vvt);
@@ -5954,7 +5952,7 @@ createInitialValueExp(SgOmpClause::omp_reduction_identifier_enum r_operator) {
   default:
     cerr << "Illegal or unhandled reduction operator kind: " << r_operator
          << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
 
   return result;
@@ -6092,7 +6090,7 @@ static void insertOmpLastprivateCopyBackStmts(
          << ompStmt->class_name() << endl;
     cerr << "lastprivate variable is:" << orig_var->get_name().getString()
          << endl;
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
   }
   end_stmt_list.push_back(save_stmt);
 }
@@ -6825,7 +6823,7 @@ buildOmpVariableClause(SgOmpClauseBodyStatement *clause_stmt,
       cerr << "Unacceptable clause type in "
               "OmpSupport::buildOmpVariableClause(): "
            << vt << endl;
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
     }
   } else {
     result = isSgOmpVariablesClause(clauses[0]);
@@ -6911,7 +6909,7 @@ int patchUpPrivateVariables(SgStatement *omp_loop) {
   default:
     std::cout << "Unexpected statement: " << omp_loop->sage_class_name()
               << "\n";
-    ROSE_ASSERT(0);
+    ROSE_ABORT();
   }
 
   if (do_node)
@@ -6956,7 +6954,7 @@ int patchUpPrivateVariables(SgStatement *omp_loop) {
             getEnclosingNode<SgOmpParallelStatement>(omp_loop));
         break;
       default:
-        ROSE_ASSERT(0);
+        ROSE_ABORT();
       }
       isPrivateInRegion = isInClauseVariableList(
           index_var, isSgOmpClauseBodyStatement(omp_stmt),
@@ -7176,7 +7174,7 @@ void lower_omp(SgSourceFile *file) {
                        isSgOmpDefaultClause(node->get_parent());
       if (isVariant) {
         std::cout << "It is a variant, which should have been transformed.\n";
-        ROSE_ASSERT(0);
+        ROSE_ABORT();
       }
 
       if (!isVariant)
@@ -7344,7 +7342,7 @@ void lower_omp(SgSourceFile *file) {
         default: {
           std::cout << "Unexpected OpenMP construct: "
                     << node->sage_class_name() << "\n";
-          ROSE_ASSERT(0);
+          ROSE_ABORT();
         }
         } // switch
     }

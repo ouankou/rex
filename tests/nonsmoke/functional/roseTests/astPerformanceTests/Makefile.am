@@ -22,9 +22,7 @@ MOSTLYCLEANFILES =
 bin_PROGRAMS += testPerformance
 testPerformance_SOURCES = testPerformance.C
 testPerformance_LDADD = $(ROSE_SEPARATE_LIBS)
-if !ROSE_BUILD_OS_IS_CYGWIN
-    ROSE_TESTS += testPerformance
-endif
+ROSE_TESTS += testPerformance
 testPerformance.passed: testPerformance
 	@$(RTH_RUN) EXE=./$< $(srcdir)/tests.conf $@
 
@@ -34,9 +32,7 @@ testPerformance.passed: testPerformance
 bin_PROGRAMS += rosePerformanceTest
 rosePerformanceTest_SOURCES = rosePerformanceTest.C
 rosePerformanceTest_LDADD = $(ROSE_SEPARATE_LIBS)
-if !ROSE_BUILD_OS_IS_CYGWIN
-    ROSE_TESTS += rosePerformanceTest
-endif
+ROSE_TESTS += rosePerformanceTest
 rosePerformanceTest.passed: rosePerformanceTest
 	@$(RTH_RUN) EXE=./$< ARGS="-rose:compilationPerformanceFile ROSE_PERFORMANCE_DATA.csv -c $(srcdir)/input.C" \
 		$(srcdir)/tests.conf $@

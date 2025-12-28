@@ -354,7 +354,7 @@ void parseOpenMPFortran(SgSourceFile *sageFilePtr) {
             if (previter != comments->end()) {
               printf("error: Found a none-OpenMP comment after a pending "
                      "OpenMP comment with a line continuation\n");
-              assert(false);
+              ROSE_ABORT();
             }
             continue;
           }

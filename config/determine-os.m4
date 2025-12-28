@@ -19,27 +19,11 @@ AC_DEFUN([DETERMINE_OS],
         linux*)
             LINUX=yes;
             ;;
-        cygwin)
-            MINGW=yes
-            ;;
-        mingw*)
-            MINGW32=yes
-            ;;
-        darwin*)
-            MACOSX=yes
-            ;;
-        msdos*)
-            MSDOS=yes
-            ;;
-        solaris*)
-            SOLARIS=yes;
+        *)
+            AC_MSG_ERROR([REX supports Linux only (build_os = $build_os)])
             ;;
     esac
-    AM_CONDITIONAL([OS_MACOSX], [ test "x$MACOSX"  = xyes ] )
     AM_CONDITIONAL([OS_LINUX],  [ test "x$LINUX"   = xyes ] )
-    AM_CONDITIONAL([OS_MINGW],  [ test "x$MINGW"   = xyes ] )
-    AM_CONDITIONAL([OS_MSDOS],  [ test "x$MSDOS"   = xyes ] )
-    AM_CONDITIONAL([OS_SOLARIS],[ test "x$SOLARIS" = xyes ] )
 ])
 
 
@@ -68,60 +52,8 @@ AC_DEFUN([DETERMINE_OS_VENDOR],
         dnl  cat /etc/issue
         dnl  echo "***************************";
 
-        # PP (05/14/2019) add solaris
-        dnl Fix the case of Apple OSX and Sun/Oracle Solaris support.
-        dnl
-        dnl For at least Apple Mac OSX and Solaris, there is no lsb_release program or /etc/*-release /etc/*-version
-        dnl files but autoconf will guess the vendor and the OS release correctly (so use those values).
-        case $build_vendor in
-            apple)
-                OS_vendor=$build_vendor
-                case $build_os in
-                    darwin13*)
-                        OS_release=10.9
-                        ;;
-                    darwin14*)
-                        OS_release=10.10
-                        ;;
-                    darwin15*)
-                        OS_release=10.11
-                        ;;
-                    darwin16*)
-                        OS_release=10.12
-                        ;;
-                    darwin17*)
-                        OS_release=10.13
-                        ;;
-                    darwin18*)
-                        OS_release=10.14
-                        ;;
-                    darwin19*)
-                        OS_release=10.15
-                        ;;
-                    darwin20*)
-                        OS_release=11.3
-                        ;;
-                    darwin21*)
-                        OS_release=12.3
-                        ;;
-                    *)
-                        AC_MSG_ERROR([Apple macOS X minor version not recognized as either darwin13 through darwin21 (macOS 10.9-12.3) ... (build_os = $build_os)])
-                        ;;
-                esac
-                ;;
-
-            sun) 
-                OS_vendor=$build_vendor
-                case $build_os in
-                    solaris2.10)                 
-                        OS_release=2.10
-                        ;;
-                    *)
-                        AC_MSG_ERROR([Solaris version not supported (only solaris-2.10 is supported, build_os = $build_os)])
-                        ;;
-                esac
-                ;;
-        esac  
+        dnl lsb_release is expected on supported Linux distros. If it's missing,
+        dnl keep the default ROSE_unknown_OS values.
     else
         OS_vendor=`lsb_release -is`
         OS_release=`lsb_release -rs`
@@ -147,10 +79,6 @@ AC_DEFUN([DETERMINE_OS_VENDOR],
             CENTOS=yes
             AC_DEFINE([ROSE_CENTOS_OS_VENDOR], [] , [CentOS Operating System (OS) being used to build ROSE])
             ;;
-        apple*)
-            APPLE=yes
-            AC_DEFINE([ROSE_APPLE_OS_VENDOR], [] , [apple Operating System (OS) being used to build ROSE])
-            ;;
     esac
 
 
@@ -168,8 +96,6 @@ AC_DEFUN([DETERMINE_OS_VENDOR],
     AM_CONDITIONAL([OS_VENDOR_REDHAT],[ test "x$REDHAT" = xyes ])
     AM_CONDITIONAL([OS_VENDOR_UBUNTU],[ test "x$UBUNTU" = xyes ])
     AM_CONDITIONAL([OS_VENDOR_CENTOS],[ test "x$CENTOS" = xyes ])
-    AM_CONDITIONAL([OS_VENDOR_APPLE],[ test "x$APPLE"  = xyes ])
-
     # Conditionals for 32-bit vs. 64-bit OS.
     AM_CONDITIONAL([OS_32BIT],[ test "x$build_cpu" = xi686 ])
     AM_CONDITIONAL([OS_64BIT],[ test "x$build_cpu" = xx86_64 ])

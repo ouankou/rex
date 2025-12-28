@@ -102,11 +102,7 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
    fi
    
    ${srcdir}/scripts/builtinLlvmFunctions.pl --constexpr=${srcdir}/config/constexpr_builtins.def ${srcdir}/config/Builtins.def > ./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h
-   if test "x$build_vendor" = "xapple"; then
-     sed -i ".original" "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerName}_HEADERS/rose_required_macros_and_functions.h"
-   else
-     sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerName}_HEADERS/rose_required_macros_and_functions.h"
-   fi
+   sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerName}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerName}_HEADERS/rose_required_macros_and_functions.h"
 ])
 
 
@@ -124,7 +120,6 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 
    chmod u+x "${srcdir}/$ROSE_HOME/config/dirincludes"
 
- #Mac OS X (and possibly other BSD-distros) does not support the echo -n option.
  #We need to detect this special case and use a "\c" in the end of the echo to not print a
  #newline.
    er=`echo -n ""`
@@ -165,13 +160,7 @@ compilerNameCxx="`basename ${BACKEND_CXX_COMPILER}`"
    fi
 
    includeString="{\"${compilerNameCxx}_HEADERS\"`${srcdir}/$ROSE_HOME/config/dirincludes "./include-staging/" "${compilerNameCxx}_HEADERS"`, $compilerHeaderDirs"
-
-   if test "x$build_vendor" = "xapple"; then
-     xcodeSDKPath=`xcrun --show-sdk-path`
-     includeString="$includeString \"$xcodeSDKPath/usr/include\"}"
-   else
-     includeString="$includeString \"/usr/include\"}"
-   fi
+   includeString="$includeString \"/usr/include\"}"
 
    AC_MSG_NOTICE([includeString = "$includeString"])
    AC_DEFINE_UNQUOTED([CXX_INCLUDE_STRING],$includeString,[Include path for backend C++ compiler.])
@@ -268,7 +257,6 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 
    chmod u+x ${srcdir}/$ROSE_HOME/config/dirincludes
 
- #Mac OS X (and possibly other BSD-distros) does not support the echo -n option.
  #We need to detect this special case and use a "\c" in the end of the echo to not print a
  #newline.
    er=`echo -n ""`
@@ -311,12 +299,7 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
  # echo "\n\n"
 
    includeString="{\"${compilerNameC}_HEADERS\"`${srcdir}/$ROSE_HOME/config/dirincludes "./include-staging/" "${compilerNameC}_HEADERS"`, $compilerHeaderDirs"
-   if test "x$build_vendor" = "xapple"; then
-     xcodeSDKPath=`xcrun --show-sdk-path`
-     includeString="$includeString \"$xcodeSDKPath/usr/include\"}"
-   else
-     includeString="$includeString \"/usr/include\"}"
-   fi
+   includeString="$includeString \"/usr/include\"}"
 
    AC_MSG_NOTICE([includeString = "$includeString"])
    AC_DEFINE_UNQUOTED([C_INCLUDE_STRING],$includeString,[Include path for backend C compiler.])
@@ -332,9 +315,5 @@ dnl it depends upon the CHOOSE BACKEND COMPILER macro to have already been calle
 # echo "Exiting as a test in SETUP BACKEND C COMPILER SPECIFIC REFERENCES: BACKEND_CXX_COMPILER_VENDOR = $BACKEND_CXX_COMPILER_VENDOR"
 # exit 1
    ${srcdir}/scripts/builtinLlvmFunctions.pl --constexpr=${srcdir}/config/constexpr_builtins.def ${srcdir}/config/Builtins.def > ./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h
-   if test "x$build_vendor" = "xapple"; then
-     sed -i ".original" "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_required_macros_and_functions.h"
-   else
-     sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_required_macros_and_functions.h"
-   fi
+   sed -i "/REPLACE_ME_WITH_GENERATED_BUILTIN_FUNCTIONS/r./include-staging/${compilerNameC}_HEADERS/rose_generated_builtin_functions.h" "./include-staging/${compilerNameC}_HEADERS/rose_required_macros_and_functions.h"
 ])

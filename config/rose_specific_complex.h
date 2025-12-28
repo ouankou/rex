@@ -3,8 +3,8 @@
 
 /*
 Pei-Hung (03/08/2021) This file is no longer needed as legacy frontend can
-handle the complex type Also the /usr/include/ is removed by Mac OSX since
-version 10.15.
+handle the complex type. Some environments no longer expose /usr/include by
+default.
 */
 
 /* Note that /usr/include/complex.h defines _Complex_I as (__extension__ 1.0iF)

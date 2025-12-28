@@ -71,7 +71,7 @@ DOTGeneration<Node>::evaluateSynthesizedAttribute(Node node, DOTInheritedAttribu
                dotrep.addNode(node,dotrep.traceFormat(buTrace)+nodelabel,nodeoption);
                break;
           default:
-               assert(false);
+               ROSE_ABORT();
         }
   
      ++tdbuTrace;
@@ -110,7 +110,7 @@ DOTGeneration<Node>::evaluateSynthesizedAttribute(Node node, DOTInheritedAttribu
                          dotrep.addEdge(node,edgelabel,(*iter).node,edgeoption + "dir=back");
                          break;
                     default:
-                         assert(false);
+                         ROSE_ABORT();
                   }
              }
           testnum++;

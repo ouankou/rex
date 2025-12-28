@@ -1,4 +1,4 @@
-#if 0 /* JJW 5-22-2008 commented out because this is not portable to Mac */
+#if 0 /* JJW 5-22-2008 commented out because this is not portable to all platforms */
 
 // define __flexarr
 

@@ -71,13 +71,6 @@ my $status = 0;                 # exit status
 #
 # More details:
 #   1. The _Complex ("X") is part of the following type, as in "_Complex double"
-#   2. CFString, as far as I can tell, means "Core Foundation String" and is part of Mac OS X and IOS. Apple's
-#      documentation for __builtin__CFStringMakeConstantString says it returns "const void*". However, using it
-#      in a clang++ input gives an error message saying the return type is "const NSConstantString*", as in:
-#        xx.C:2:8: error: cannot initialize a variable of type 'int' with an rvalue of type 'const NSConstantString *'
-#        int x = __builtin___CFStringMakeConstantString("");
-#      Adding "-fconstant-string-class=NSConstantString" to the clang++ command-line doesn't help. Neither does
-#      CFConstantString or CFString work.
 
 sub parseTypes {
     local($_) = @_;             # a string containing the return type and argument type specifications

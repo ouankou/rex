@@ -1443,7 +1443,7 @@ SgVariableDeclaration::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
        // I think that calling get_baseTypeDefiningDeclaration() is a problem because it calls compute_baseTypeDefiningDeclaration()
        // which uses the symbol table and other infor which is not setup correctly.
        // printf ("Need to compute the baseTypeDeclaration_copy better (perhaps we shoul look into the map of copies? \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 
           ROSE_ASSERT(baseTypeDeclaration_original != NULL);
           ROSE_ASSERT(baseTypeDeclaration_copy != NULL);

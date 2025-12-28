@@ -112,7 +112,7 @@ appendSingleWrapperArgument(const ASTtools::VarSymSet_t& syms,  std::string arg_
   else
   {
     cerr<<"Error. unreachable branch reached in GenerateCall.cc: appendSingleWrapperArgument()"<<endl;
-    ROSE_ASSERT (false);  
+    ROSE_ABORT();  
   }
 #endif  
 }

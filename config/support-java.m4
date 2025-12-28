@@ -36,13 +36,6 @@ else
         fi
         AS_SET_CATFILE(JAVA_PATH, "`pwd`", "`dirname ${JAVAC}`/..")
 
-        # On macOS, javac under /System/Library/Frameworks/JavaVM.framework/Versions/Current/Commands
-        # is a wrapper. Point to the actual JDK when this layout is detected.
-        if test "x$build_vendor" = xapple; then
-          if (( `echo ${JAVA_PATH} | grep -c "/Commands/.."` > 0 )); then
-            AS_SET_CATFILE(JAVA_PATH, "`pwd`", "`dirname ${JAVAC}`/../../CurrentJDK/Home")
-          fi
-        fi
       elif test "x$javasetting" = "xyes"; then
         AC_MSG_ERROR([--with-java was given but javac is not in PATH and JAVA_HOME was not set])
       else
@@ -92,29 +85,22 @@ else
   fi
 
   AC_MSG_CHECKING([for JVM include and link options])
-  if test -x /usr/bin/javaconfig; then
-    JAVA_JVM_LINK="-framework JavaVM"
-    JAVA_JVM_INCLUDE="-I`/usr/bin/javaconfig Headers`"
-  else
-    JAVA_JVM_FULL_PATH="`env _JAVA_LAUNCHER_DEBUG=x ${JAVA} 2>/dev/null | grep '^JVM path is' | cut -c 13-`"
-    JAVA_JVM_PATH=`dirname "${JAVA_JVM_FULL_PATH}"`
-    if test "x$JAVA_JVM_FULL_PATH" = x; then
-      JAVA_JVM_PATH="`env _JAVA_LAUNCHER_DEBUG=x ${JAVA} 2>&1 | grep '^JavaJVMDir  = ' | cut -c 15-`"
-      if test "x$JAVA_JVM_PATH" = x; then
-        AC_MSG_ERROR([unable to find path to JVM library])
-      fi
+  JAVA_JVM_FULL_PATH="`env _JAVA_LAUNCHER_DEBUG=x ${JAVA} 2>/dev/null | grep '^JVM path is' | cut -c 13-`"
+  JAVA_JVM_PATH=`dirname "${JAVA_JVM_FULL_PATH}"`
+  if test "x$JAVA_JVM_FULL_PATH" = x; then
+    JAVA_JVM_PATH="`env _JAVA_LAUNCHER_DEBUG=x ${JAVA} 2>&1 | grep '^JavaJVMDir  = ' | cut -c 15-`"
+    if test "x$JAVA_JVM_PATH" = x; then
+      AC_MSG_ERROR([unable to find path to JVM library])
     fi
-    JAVA_JVM_LINK="-L${JAVA_JVM_PATH} -ljvm"
-    AM_COND_IF([OS_MACOSX],[JAVA_JVM_INCLUDE="-I${JAVA_PATH}/include -I${JAVA_PATH}/include/darwin"],[JAVA_JVM_INCLUDE="-I${JAVA_PATH}/include -I${JAVA_PATH}/include/linux"])
   fi
+  JAVA_JVM_LINK="-L${JAVA_JVM_PATH} -ljvm"
+  JAVA_JVM_INCLUDE="-I${JAVA_PATH}/include -I${JAVA_PATH}/include/linux"
   AC_MSG_RESULT([${JAVA_JVM_INCLUDE} and ${JAVA_JVM_LINK}])
 
   AC_CHECK_HEADERS([jni.h], [have_jni=yes], [have_jni=no])
   if test "x$have_jni" = "xyes"; then
     AC_MSG_WARN([found a default jni.h; ensure it matches the selected JDK if build issues occur])
   fi
-
-  AM_COND_IF([OS_MACOSX],[LDFLAGS="-Xlinker -rpath ${JAVA_PATH}/jre/lib/server $LDFLAGS"],[])
 
   USE_JAVA=1
 fi

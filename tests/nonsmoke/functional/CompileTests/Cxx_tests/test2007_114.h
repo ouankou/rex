@@ -652,7 +652,7 @@ typedef PRUint64 uint64;
  */
 
 #if !defined(XP_BEOS) && !defined(VMS)
-#if !defined(XP_MAC) && !defined(_WIN32) && !defined(XP_OS2) && !defined(NTO)
+#if !defined(XP_OS2) && !defined(NTO)
 typedef PRUint32 uint32;
 #else
 typedef unsigned long uint32;
@@ -691,7 +691,7 @@ typedef PRInt64 int64;
 #if !defined(XP_BEOS) && !defined(VMS) \
     && !defined(_PR_AIX_HAVE_BSD_INT_TYPES) \
     && !defined(HPUX)
-#if !defined(XP_MAC) && !defined(_WIN32) && !defined(XP_OS2) && !defined(NTO)
+#if !defined(XP_OS2) && !defined(NTO)
 typedef PRInt32 int32;
 #else
 typedef long int32;
@@ -779,15 +779,6 @@ typedef PRWord prword_t;
 #define PR_CompareStrings PL_CompareStrings
 #define PR_CompareValues PL_CompareValues
 
-#if defined(XP_MAC)
-#ifndef TRUE				/* Mac standard is lower case true */
-	#define TRUE 1
-#endif
-#ifndef FALSE				/* Mac standard is lower case false */
-	#define FALSE 0
-#endif
-#endif
-
 #endif /* !defined(PROTYPES_H) */
 
 PR_END_EXTERN_C
@@ -827,5 +818,3 @@ NSPR_API(PRStatus) PR_NotifyCondVar(PRCondVar *cvar);
 NSPR_API(PRStatus) PR_NotifyAllCondVar(PRCondVar *cvar);
 
 PR_END_EXTERN_C
-
-

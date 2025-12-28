@@ -1,6 +1,3 @@
-// DQ (3/21/2009): The header file "complex.h" is not available in Cygwin.
-#if !defined(__CYGWIN__)
-
 #include <complex.h>
 
 int main (void)
@@ -31,7 +28,6 @@ int main (void)
      _Imaginary long double z_imaginary = 0.0;
 
      a_complex_value = 4.0 + x_imaginary;
-#endif
    }
 
 #endif

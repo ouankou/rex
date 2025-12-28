@@ -137,11 +137,6 @@ virtualCFG_tests:
    This direcotry uses tests codes to test the virtual Control Flow Graph (CFG) 
    in ROSE.
 
-x10_tests:
-   This directory is where X10 tests codes will be place when ROSE X10 support is in
-   place (current work in DTEC project).
-
-
 A++Tests: 
     This directory contains the A++ source code with header files and is used
     to test the parsing, construction of AST's, and unparsing.  If the tests pass

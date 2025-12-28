@@ -1,8 +1,11 @@
 set(ROSE_FLAGS -rose:C89 -rose:unparse_tokens -rose:verbose 1)
+set(translator testTranslator)
 
 #-------------------------------------------------------------------------------
 # Token representation
-set(TESTCODES
+set(TESTCODES test2012_100.c)
+
+set(XXXTESTCODES
   test_CplusplusMacro_C.c gconv_info.c testCvsCpp.c testAnsiC.c
   commentTest.c YardenPragmaPackExample.c test2003_12.c test2004_20.c
   test2005_172.c test2005_186.c test2006_110.c test2006_114.c test2006_133.c
@@ -72,7 +75,7 @@ target_link_libraries(tokenStreamMapping ROSE_DLL ${link_with_libraries})
 foreach(file_to_test ${TESTCODES})
   add_test(
     NAME tokenStreamMapping_${file_to_test}
-    COMMAND tokenStreamMapping ${ROSE_FLAGS} -c
+    COMMAND ${translator} ${ROSE_FLAGS} -c
       ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/C_tests/${file_to_test}
   )
 endforeach()

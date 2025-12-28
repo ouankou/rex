@@ -234,7 +234,7 @@ TESTCODE_INCLUDES = -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/A++Co
 $(TEST_Objects): $(TESTCODES)
 	$(TEST_TRANSLATOR) $(AM_CPPFLAGS) $(TESTCODE_INCLUDES) -c $(srcdir)/$(@:.o=.cc)
 
-EXTRA_DIST = $(TESTCODES) c c99 msvc
+EXTRA_DIST = $(TESTCODES) c c99
 
 clean-local:
 	rm -f C/*.o *.o C/rose_*.c rose_*.C rose_*.c rose_*.cc *.sage.C test2001_??.C.show *.dot *.ps \
@@ -247,6 +247,5 @@ check-local: $(TRANSLATOR_EXECUTABLE)
 	@echo "*********************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/CompileTests/C++Code: make check rule complete (terminated normally) ******"
 	@echo "*********************************************************************************************"
-
 
 

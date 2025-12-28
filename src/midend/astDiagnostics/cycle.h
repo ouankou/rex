@@ -43,7 +43,7 @@
    is intended only for *comparisons* of time intervals.
 
    (In order to use some of the OS-dependent timer routines like
-   Solaris' gethrtime, you need to paste the autoconf snippet below
+   gethrtime, you need to paste the autoconf snippet below
    into your configure.ac file and #include "config.h" before cycle.h,
    or define the relevant macros manually if you are not using autoconf.)
 */
@@ -103,7 +103,7 @@
 }
 
 /*----------------------------------------------------------------*/
-/* Solaris */
+/* gethrtime */
 #if defined(HAVE_GETHRTIME) && defined(HAVE_HRTIME_T) && !defined(HAVE_TICK_COUNTER)
 typedef hrtime_t ticks;
 

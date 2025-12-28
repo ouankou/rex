@@ -617,10 +617,8 @@ fileLocation_test_targets = $(addprefix fileLocation_, $(addsuffix .passed, $(TE
 fileLocation_test_flags =  -w -rose:verbose 0 -I$(TESTCODES_DIRECTORY)/../A++Code -I$(TESTCODES_DIRECTORY)
 EXTRA_DIST += fileLocation.conf
 
-# The original makefile had all these commented out for Mac OS X, but no explanation as to why
-if !OS_MACOSX
+# The original makefile skipped these tests on some platforms; run them on Linux.
 TEST_TARGETS += $(fileLocation_test_targets)
-endif
 
 $(fileLocation_test_targets): fileLocation_%.passed: $(TESTCODES_DIRECTORY)/% fileLocation fileLocation.conf
 	@$(RTH_RUN) \

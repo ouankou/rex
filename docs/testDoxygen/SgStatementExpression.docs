@@ -10,7 +10,7 @@ non-standard C and C++).
 The statement expression is a GNU extension that is helpful in the implementation of
 macros and expressions.  In most cases an alternative construction of code is possible.
 More information is at: \n
-http://developer.apple.com/documentation/developertools/gcc-4.0.1/gcc/Statement-Exprs.html \n
+https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html \n
 In g++, the result value of a statement expression undergoes array and function pointer
 decay, and is returned by value to the enclosing expression. For instance, if A is a
 class, then: \n
@@ -105,4 +105,3 @@ pointer to an object derived from a SgStatementExpression.
 \return Returns valid pointer to SgStatementExpression if input is derived from a
 SgStatementExpression.
 */
-

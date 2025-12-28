@@ -183,10 +183,6 @@ ROSE_DLL_API SgTypeShort*    buildShortType();
 ROSE_DLL_API SgTypeFloat80*  buildFloat80Type();
 ROSE_DLL_API SgTypeFloat128* buildFloat128Type();
 
-// CR (2/20/2020): Added builder for Jovial fixed type
-//! Build a Jovial fixed type with a fraction specifier and a scale specifier
-ROSE_DLL_API SgTypeFixed* buildFixedType(SgExpression* fraction, SgExpression* scale);
-
 //! DQ (8/21/2010): We want to move to the new buildStringType( SgExpression*,size_t) function over the older buildStringType() function.
 ROSE_DLL_API SgTypeString* buildStringType();
 // SgTypeString* buildStringType( SgExpression* stringLengthExpression, size_t stringLengthLiteral );
@@ -219,7 +215,7 @@ ROSE_DLL_API SgTypeUnknown * buildUnknownType();
 
 ROSE_DLL_API SgAutoType * buildAutoType();
 
-// CR (2/20/2020): Added builder functions for type size (kind) expressions for Fortran and Jovial
+// CR (2/20/2020): Added builder functions for type size (kind) expressions for Fortran
 //! Builder functions for primitive types with type size (kind) expressions
 ROSE_DLL_API SgTypeBool * buildBoolType(SgExpression* kind_expr);
 ROSE_DLL_API SgTypeInt * buildIntType(SgExpression* kind_expr);
@@ -256,9 +252,6 @@ ROSE_DLL_API SgModifierType* buildModifierType(SgType* base_type = NULL);
 //! Build a const type.
 ROSE_DLL_API SgModifierType* buildConstType(SgType* base_type = NULL);
 
-//! Build an aliased type for Ada.
-ROSE_DLL_API SgModifierType* buildAliasedType(SgType* base_type = NULL);
-
 //! Build a volatile type.
 ROSE_DLL_API SgModifierType* buildVolatileType(SgType* base_type = NULL);
 
@@ -294,14 +287,17 @@ ROSE_DLL_API SgFunctionType* buildFunctionType(SgType* return_type, SgFunctionPa
 // DQ (1/10/2020): removed the default argument since we need to make sure it is used.
 //! DQ (1/16/2009): Added to support member function in C++ (for new interface)
 // ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList * typeList, SgScopeStatement *struct_name, unsigned int mfunc_specifier, unsigned int ref_qualifiers = 0);
-ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList * typeList, SgScopeStatement *struct_name, unsigned int mfunc_specifier, unsigned int ref_qualifiers = 0);
+ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList * typeList, SgScopeStatement *struct_name, unsigned int mfunc_specifier);
 
 // DQ (3/20/2017): This function is not used (so let's see if we can remove it).
 //! DQ (12/2/2011): Added for symetry with other functios to generate SgFunctionType
 // ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterList* argList = NULL, SgClassDefinition *struct_name = NULL, unsigned int mfunc_specifier = 0);
 
 //! DQ (8/19/2012): Refactored some of the code supporting construction of the SgMemberFunctionType.
-ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList* typeList, SgType *classType, unsigned int mfunc_specifier, unsigned int ref_qualifiers = 0);
+ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList* typeList, SgType *classType, unsigned int mfunc_specifier);
+
+//! Pei-Hung (06/30/2023): support for SgPointerMemberType
+ROSE_DLL_API SgPointerMemberType* buildPointerMemberType(SgType* base_type, SgType* classType);
 
 // PP (07/14/2016):
 //! Some support for building class template instantiation declarations.
@@ -343,12 +339,6 @@ ROSE_DLL_API SgTypeImaginary* buildImaginaryType(SgType *base_type = NULL);
 
 //! Build a const/volatile type qualifier
 ROSE_DLL_API SgConstVolatileModifier * buildConstVolatileModifier (SgConstVolatileModifier::cv_modifier_enum mtype=SgConstVolatileModifier::e_unknown);
-
-//! Build a Matlab Matrix Type
-ROSE_DLL_API SgTypeMatrix* buildMatrixType();
-
-//! Build a tuple of types. Useful for a function returning multiple variables of different types
-ROSE_DLL_API SgTypeTuple* buildTupleType(SgType *t1 = NULL, SgType *t2 = NULL, SgType *t3 = NULL, SgType *t4 = NULL, SgType *t5 = NULL, SgType *t6 = NULL, SgType *t7 = NULL, SgType *t8 = NULL, SgType *t9 = NULL, SgType *t10 = NULL);
 
 //! Build a non real type used for template parameter. Internally a SgNorealDecl is also built.
 ROSE_DLL_API SgNonrealType* buildNonrealType(const SgName & name,  SgDeclarationScope* scope);
@@ -541,9 +531,6 @@ BUILD_UNARY_PROTO(ConjugateOp)
 BUILD_UNARY_PROTO(VarArgStartOneOperandOp)
 BUILD_UNARY_PROTO(VarArgEndOp)
 
-//Matlab transpose op
-BUILD_UNARY_PROTO(MatrixTransposeOp)
-
 //! Build a type casting expression
 ROSE_DLL_API SgCastExp * buildCastExp(SgExpression *  operand_i = NULL,
                 SgType * expression_type = NULL,
@@ -644,15 +631,6 @@ BUILD_BINARY_PROTO(XorAssignOp)
 
 BUILD_BINARY_PROTO(VarArgCopyOp)
 BUILD_BINARY_PROTO(VarArgStartOp)
-
-BUILD_BINARY_PROTO(PowerOp);
-BUILD_BINARY_PROTO(ElementwisePowerOp);
-BUILD_BINARY_PROTO(ElementwiseMultiplyOp);
-BUILD_BINARY_PROTO(ElementwiseDivideOp);
-BUILD_BINARY_PROTO(LeftDivideOp);
-BUILD_BINARY_PROTO(ElementwiseLeftDivideOp);
-BUILD_BINARY_PROTO(ElementwiseAddOp);
-BUILD_BINARY_PROTO(ElementwiseSubtractOp);
 
 // DQ (7/25/2020): Adding C++20 support
 BUILD_BINARY_PROTO(SpaceshipOp)
@@ -772,8 +750,7 @@ buildFunctionCallExp(const SgName& name, SgType* return_type, SgExprListExp* par
  *  functionName: member function name: size
  *  params: function parameter list
  *  scope: the scope this function call expression will be inserted into.
- * Credit to Peter's previous work at:
- * projects/MatlabTranslation/src/transformations/MatlabSimpleTransformer.cc
+ * Credit to prior transformer prototypes.
  */
 ROSE_DLL_API SgFunctionCallExp*
 buildMemberFunctionCall (std::string className, SgExpression *objectExpression, std::string functionName, SgExprListExp *params, SgScopeStatement *scope);
@@ -879,26 +856,10 @@ ROSE_DLL_API SgChooseExpression * buildChooseExpression_nfi();
 //@}
 
 //@{
-/*! @name Builders for Matlab nodes
+/*! @name Builders for range expressions
  */
-//! Build a Matlab range expression like start:end or start:stride:end
- ROSE_DLL_API SgRangeExp* buildRangeExp(SgExpression *start);
-
-
- //! Build a Matlab Matrix
- ROSE_DLL_API SgMatrixExp* buildMatrixExp(SgExprListExp *firstRow);
-
- //! Build a Matlab colon expression :
- ROSE_DLL_API SgMagicColonExp* buildMagicColonExp();
-
-//@}
-
-//@{
-/*! @name Builders for Ada nodes
- */
-
-// ! Build a range expression using start:end:stride for Ada
- ROSE_DLL_API SgRangeExp* buildRangeExp(SgExpression *start, SgExpression *end, SgExpression *stride);
+ROSE_DLL_API SgRangeExp* buildRangeExp(SgExpression *start);
+ROSE_DLL_API SgRangeExp* buildRangeExp(SgExpression *start, SgExpression *end, SgExpression *stride);
 
 //@}
 //
@@ -984,16 +945,12 @@ buildTypedefDeclaration_nfi(const std::string& name, SgType* base_type, SgScopeS
 ROSE_DLL_API SgTemplateTypedefDeclaration*
 buildTemplateTypedefDeclaration_nfi(const SgName & name, SgType* base_type, SgScopeStatement* scope = NULL, bool has_defining_base=false);
 
-#if 1
-// ROSE_DLL_API SgTemplateInstantiationTypedefDeclaration*
-// buildTemplateInstantiationTypedefDeclaration_nfi(SgName name, SgType* base_type, SgScopeStatement* scope, bool has_defining_base, SgTemplateTypedefDeclaration* templateTypedefDeclaration, SgTemplateArgumentPtrList templateArgumentList);
-// ROSE_DLL_API SgTemplateInstantiationTypedefDeclaration*
-// buildTemplateInstantiationTypedefDeclaration_nfi(SgName name, SgType* base_type, SgScopeStatement* scope, bool has_defining_base, SgTemplateTypedefDeclaration* templateTypedefDeclaration);
-// ROSE_DLL_API SgTemplateInstantiationTypedefDeclaration*
-// buildTemplateInstantiationTypedefDeclaration_nfi();
-ROSE_DLL_API SgTemplateInstantiationTypedefDeclaration*
-buildTemplateInstantiationTypedefDeclaration_nfi(SgName & name, SgType* base_type, SgScopeStatement* scope, bool has_defining_base, SgTemplateTypedefDeclaration* templateTypedefDeclaration, SgTemplateArgumentPtrList & templateArgumentsList);
-#endif
+ROSE_DLL_API SgTemplateInstantiationTypedefDeclaration *
+buildTemplateInstantiationTypedefDeclaration_nfi(
+    SgName &name, SgType *base_type, SgScopeStatement *scope,
+    bool has_defining_base,
+    SgTemplateTypedefDeclaration *templateTypedefDeclaration,
+    SgTemplateArgumentPtrList &templateArgumentsList);
 
 //! Build an empty SgFunctionParameterList, possibly with some initialized names filled in
 ROSE_DLL_API SgFunctionParameterList * buildFunctionParameterList(SgInitializedName* in1 = NULL, SgInitializedName* in2 = NULL, SgInitializedName* in3 = NULL, SgInitializedName* in4 = NULL, SgInitializedName* in5 = NULL, SgInitializedName* in6 = NULL, SgInitializedName* in7 = NULL, SgInitializedName* in8 = NULL, SgInitializedName* in9 = NULL, SgInitializedName* in10 = NULL);
@@ -1212,9 +1169,10 @@ inline SgIfStmt * buildIfStmt(SgExpression* conditional, SgStatement * true_body
 
 ROSE_DLL_API SgIfStmt* buildIfStmt_nfi(SgStatement* conditional, SgStatement * true_body, SgStatement * false_body);
 
-// CR (9/3/2018)
+// Rasmussen (9/3/2018)
 //! Build a Fortran do construct
-ROSE_DLL_API SgFortranDo * buildFortranDo(SgExpression* initialization, SgExpression* bound, SgExpression* increment, SgBasicBlock* loop_body);
+ROSE_DLL_API SgFortranDo* buildFortranDo(SgExpression* initialization, SgExpression* bound, SgExpression* increment, SgBasicBlock* loop_body);
+ROSE_DLL_API SgFortranDo* buildFortranDo_nfi(SgExpression* initialization, SgExpression* bound, SgExpression* increment, SgBasicBlock* loop_body);
 
 //! Build a for init statement
 ROSE_DLL_API SgForInitStatement* buildForInitStatement();
@@ -1306,6 +1264,10 @@ SgBreakStmt* buildBreakStmt_nfi();
 ROSE_DLL_API SgContinueStmt* buildContinueStmt();
 SgContinueStmt* buildContinueStmt_nfi();
 
+//! Build a Fortran continue statement
+ROSE_DLL_API SgFortranContinueStmt* buildFortranContinueStmt();
+SgFortranContinueStmt* buildFortranContinueStmt_nfi();
+
 //! Build an Actual Argument Expression
 ROSE_DLL_API SgActualArgumentExpression* buildActualArgumentExpression(SgName arg_name, SgExpression* arg);
 SgActualArgumentExpression* buildActualArgumentExpression_nfi(SgName arg_name, SgExpression* arg);
@@ -1365,6 +1327,9 @@ ROSE_DLL_API SgStmtDeclarationStatement* buildStmtDeclarationStatement_nfi(SgSta
 ROSE_DLL_API SgNamespaceDeclarationStatement *  buildNamespaceDeclaration(const SgName& name, SgScopeStatement* scope=NULL);
 ROSE_DLL_API SgNamespaceDeclarationStatement *  buildNamespaceDeclaration_nfi(const SgName& name, bool unnamednamespace, SgScopeStatement* scope );
 ROSE_DLL_API SgNamespaceDefinitionStatement * buildNamespaceDefinition(SgNamespaceDeclarationStatement* d=NULL);
+
+// Pei-Hung (09/14/2023) :added support for building namespace alias
+ROSE_DLL_API SgNamespaceAliasDeclarationStatement *  buildNamespaceAliasDeclarationStatement(const SgName& name, SgNamespaceDeclarationStatement* namespaceDeclaration);
 
 // DQ (6/6/2012): Addeding support to include template arguments in the generated type (template argument must be provided as early as possible).
 // DQ (1/24/2009): Added this "_nfi" function but refactored buildStructDeclaration to also use it (this needs to be done uniformally).
@@ -1546,9 +1511,7 @@ address the interface from an external language parser and the construction of t
 Later iterations on the ROSE Untyped AST can be used to translate (or construct) a proper ROSE AST in
 terms of non-untyped IR nodes.
 
-All untyped IR nodes have been removed and this interface removed. Ultimately it proved easier to
-construct regular IR nodes from the Jovial parser. Using the untyped system just led to an
-unnecessary step and wasted effort.
+All untyped IR nodes have been removed and this interface removed.
 
 */
 //@}
@@ -1643,5 +1606,80 @@ T* buildUnaryExpression_nfi(SgExpression* operand) {
  }
 
 } // end of namespace
+
+namespace Rose {
+namespace Builder {
+namespace Templates {
+
+SgTemplateArgument *buildTemplateArgument(SgType *t);
+SgTemplateArgument *buildTemplateArgument(SgExpression *e);
+SgTemplateArgument *buildTemplateArgument(int v);
+SgTemplateArgument *buildTemplateArgument(bool v);
+
+std::string strTemplateArgument(int v);
+std::string strTemplateArgument(bool v);
+std::string strTemplateArgument(SgType *t);
+std::string strTemplateArgument(SgNamedType *nt);
+std::string strTemplateArgument(SgExpression *e);
+
+template <typename... Args>
+struct TemplateArgumentList {
+  static std::string str() { return ""; }
+  static void fill(std::vector<SgTemplateArgument *> &tpl_args) {}
+};
+
+template <typename T>
+struct TemplateArgumentList<T> {
+  static std::string str(T v) { return strTemplateArgument(v); }
+  static void fill(std::vector<SgTemplateArgument *> &tpl_args, T v) {
+    tpl_args.push_back(buildTemplateArgument(v));
+  }
+};
+
+template <typename T, typename... Args>
+struct TemplateArgumentList<T, Args...> {
+  static std::string str(T v, Args... args) {
+    return strTemplateArgument(v) + ", " +
+           TemplateArgumentList<Args...>::str(args...);
+  }
+  static void fill(std::vector<SgTemplateArgument *> &tpl_args, T v,
+                   Args... args) {
+    tpl_args.push_back(buildTemplateArgument(v));
+    TemplateArgumentList<Args...>::fill(tpl_args, args...);
+  }
+};
+
+template <typename... Args>
+std::string strTemplateArgumentList(Args... args) {
+  return TemplateArgumentList<Args...>::str(args...);
+}
+
+template <typename... Args>
+void fillTemplateArgumentList(std::vector<SgTemplateArgument *> &tpl_args,
+                              Args... args) {
+  TemplateArgumentList<Args...>::fill(tpl_args, args...);
+}
+
+template <typename... Args>
+std::vector<SgTemplateArgument *> buildTemplateArgumentList(Args... args) {
+  std::vector<SgTemplateArgument *> tpl_args;
+  TemplateArgumentList<Args...>::fill(tpl_args, args...);
+  return tpl_args;
+}
+
+SgExpression *instantiateNonrealRefExps(
+    SgExpression *expr, std::vector<SgTemplateParameter *> &tpl_params,
+    std::vector<SgTemplateArgument *> &tpl_args);
+SgType *instantiateNonrealTypes(
+    SgType *type, std::vector<SgTemplateParameter *> &tpl_params,
+    std::vector<SgTemplateArgument *> &tpl_args);
+
+} // namespace Templates
+} // namespace Builder
+} // namespace Rose
+
+namespace SageBuilder {
+using namespace Rose::Builder::Templates;
+}
 
 #endif //ROSE_SAGE_BUILDER_INTERFACE

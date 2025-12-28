@@ -1792,7 +1792,7 @@ Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier ( SgDeclarationStatement
                  // DQ (8/8/2012): This is a valid branch, commented out assert(false).
                  // DQ (8/2/2012): This branch should not be possible so assert false as a test (note that test2005_139.C will demonstrate this branch).
                     printf ("Warning: Rare case: It should be impossible to reach this code since SgTemplateInstantiationDefn is not a class, function or member function type \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 #endif
                   }
                  else
@@ -2974,14 +2974,14 @@ Unparse_MOD_SAGE::printAttributes(SgDeclarationStatement* decl_stmt, SgUnparse_I
 #if 0
                          printf ("In printAttributes(SgDeclarationStatement*): gnu visibility attribute was specified: unknown visibility setting (supressed) \n");
 #endif
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                          break;
                        }
 
                     case SgDeclarationModifier::e_error_visibility:   s = "(\"error\")";
                        {
                          printf ("In printAttributes(SgDeclarationStatement*): gnu visibility attribute was specified: error visibility setting (supressed) \n");
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                          break;
                        }
 
@@ -3501,7 +3501,7 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier2 ( SgDeclarationSta
                                 else
                                  { 
                                    cerr<<"WARNING: Unknown template construct: "<<decl_stmt->class_name()<<endl;
-                                // ROSE_ASSERT(0);
+                                // ROSE_ABORT();
                                  }
                             } 
         }

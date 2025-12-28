@@ -184,7 +184,7 @@ void AstPostProcessing (SgNode* node)
 #endif
 
             // printf ("SgProject support not implemented in AstPostProcessing \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
                break;
              }
 
@@ -273,9 +273,7 @@ void postProcessingSupport (SgNode* node)
 #endif
 #endif
 
-  // Only do AST post-processing for C/C++
-  // Rasmussen (4/8/2018): Added Ada, Cobol, and Jovial. The logic should probably
-  // be inverted to only process C and C++ but I don't understand interactions like OpenMP langauges.
+  // Only do AST post-processing for C/C++.
      bool noPostprocessing =
                              (SageInterface::is_Fortran_language() == true);
 
@@ -600,7 +598,7 @@ void postProcessingSupport (SgNode* node)
 
        // DQ (2/12/2012): This is a problem for test2004_35.C (debugging this issue).
        // printf ("Exiting after calling resetTemplateNames() \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 
           if (SgProject::get_verbose() > 1)
              {
@@ -848,7 +846,7 @@ void postProcessingSupport (SgNode* node)
 
        // DQ (2/12/2012): This is a problem for test2004_35.C (debugging this issue).
        // printf ("Exiting after calling resetTemplateNames() \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 
        // DQ (3/17/2007): This should be empty
           ROSE_ASSERT(SgNode::get_globalMangledNameMap().size() == 0);

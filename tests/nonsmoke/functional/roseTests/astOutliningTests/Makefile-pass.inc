@@ -189,7 +189,6 @@
 # DQ (1/8/2008): This does not pass the tests in: tests/nonsmoke/functional/roseTests/astOutliningTests
 # test2007_169.C 
 
-# JJW 5-22-2008 This is not portable to Mac OS X
 # test2006_44.C
 
 # Filter test list

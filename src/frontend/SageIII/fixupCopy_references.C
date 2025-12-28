@@ -148,7 +148,7 @@ SgLocatedNode::fixupCopy_references(SgNode* copy, SgCopyHelp & help) const
                                         if (SgProject::get_verbose() > 0)
                                              printf ("Error: could not find symbol associated with functionDeclaration_copy = %p = %s = %s \n",
                                                   functionDeclaration_copy,functionDeclaration_copy->class_name().c_str(),SageInterface::get_name(functionDeclaration_copy).c_str());
-                                     // ROSE_ASSERT(false);
+                                     // ROSE_ABORT();
                                       }
                                  }
                               break;
@@ -187,7 +187,7 @@ SgLocatedNode::fixupCopy_references(SgNode* copy, SgCopyHelp & help) const
                                         if (SgProject::get_verbose() > 0)
                                              printf ("Error: could not find symbol associated with (member) functionDeclaration_copy = %p = %s = %s \n",
                                                   functionDeclaration_copy,functionDeclaration_copy->class_name().c_str(),SageInterface::get_name(functionDeclaration_copy).c_str());
-                                     // ROSE_ASSERT(false);
+                                     // ROSE_ABORT();
                                       }
                                  }
                               break;

@@ -359,7 +359,7 @@ IRStmtIterator* SageIRInterface::GetMultiCatchall(StmtHandle h)
   // Structured two-way conditionals
   //
   // Note: An important pre-condition for structured conditionals is that chains
-  // of else-ifs must be represented as nested elses.  For example, this Matlab
+  // of else-ifs must be represented as nested elses.  For example, this
   // statement:
   //   if (c1)
   //     s1;

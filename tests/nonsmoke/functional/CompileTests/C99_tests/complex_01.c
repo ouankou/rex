@@ -8,9 +8,6 @@
    "_Bool", "_Complex", "_Imaginary", "__I__", "__NAN__", "__INFINITY__",
 */
 
-// DQ (3/21/2009): The header file "complex.h" is not available in Cygwin.
-#if !defined(__CYGWIN__)
-
 #include <complex.h>
 
 int main (void)
@@ -56,7 +53,6 @@ int main (void)
      __imag__ double y_imag = 0.0;
      __real__ float  x_real = 0.0;
      __real__ double y_real = 0.0;
-#endif
 
   // Extract the real and imaginary parts of complex type values into float and double types.
   // This is not currently passed through the code generation within ROSE.  This is now
@@ -117,6 +113,5 @@ int main (void)
    }
 
 #endif
-
 
 

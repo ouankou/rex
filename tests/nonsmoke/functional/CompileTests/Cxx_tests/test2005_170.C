@@ -44,11 +44,8 @@ MenuItemBase* MenuLists:: addItem
   {
     s_o << "\nbool MenuLists:: addItem - MenuField";
     item->print4awk(s_o);
-#ifdef WIN32
     s_o << endl;   // make debug output easier to read
-#else
     s_o->flush();
-#endif
 
   }
 #endif
@@ -599,5 +596,4 @@ void MenuLists:: log (const String& filename)
 }
 
 */
-
 

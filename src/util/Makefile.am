@@ -54,7 +54,7 @@ pkginclude_HEADERS =				\
 	rose_isnan.h				\
 	rose_paths.h				\
 	rose_strtoull.h				\
-	mlog.h FileSystem.h Unique.h
+	mlog.h ROSE_ASSERT.h ROSE_ABORT.h FileSystem.h Unique.h
 
 EXTRA_DIST = CMakeLists.txt utilDocumentation.docs
 

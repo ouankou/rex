@@ -160,14 +160,14 @@ INTERNAL_DOCS          = @DOXYGEN_INTERNAL_DOCS@
 # If the CASE_SENSE_NAMES tag is set to NO then Doxygen will only generate 
 # file names in lower case letters. If set to YES upper case letters are also 
 # allowed. This is useful if you have classes or files whose names only differ 
-# in case and if your file system supports case sensitive file names. Windows 
-# users are adviced to set this option to NO.
+# in case and if your file system supports case sensitive file names. For 
+# case-insensitive file systems, set this option to NO.
 
 CASE_SENSE_NAMES       = YES
 
 # If the SHORT_NAMES tag is set to YES, doxygen will generate much shorter 
-# (but less readable) file names. This can be useful is your file systems 
-# doesn't support long names like on DOS, Mac, or CD-ROM.
+# (but less readable) file names. This can be useful if your file system 
+# doesn't support long names.
 
 SHORT_NAMES            = NO
 
@@ -615,7 +615,7 @@ ENUM_VALUES_PER_LINE   = 1
 # is generated for HTML Help). For this to work a browser that supports 
 # or Internet explorer 4.0+). Note that for large projects the tree generation 
 # can take a very long time. In such cases it is better to disable this feature. 
-# Windows users are probably better off using the HTML help feature.
+# For large projects, HTML help can be easier to navigate.
 
 GENERATE_TREEVIEW      = YES
 

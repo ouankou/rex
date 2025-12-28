@@ -1071,7 +1071,7 @@ createBinaryOperator ( SgExpression* lhs, SgExpression* rhs, string name, bool i
                             }
                        }
                  // printf ("n != 2,4 character operators not implemented relOp = %s \n",name.c_str());
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                   }
              }
         }
@@ -1424,10 +1424,8 @@ SgExpression* getTopOfExpressionStack()
   // since that is linked to librose while the astScopeStack variable is declared in this 
   // file (so they at least have to stay together).
 
-     ROSE_ASSERT(astExpressionStack.empty() == false);
-  // SgExpression* topOfStack = *(astExpressionStack.begin());
+     ASSERT_require(astExpressionStack.empty() == false);
      SgExpression* topOfStack = astExpressionStack.front();
-  // printf ("In getTopOfExpressionStack() topOfStack = %p = %s \n",topOfStack,topOfStack->class_name().c_str());
 
      return topOfStack;
    }
@@ -1497,33 +1495,31 @@ getFunctionDefinitionFromScopeStack()
    }
 
 
-
-// SgLabelRefExp* buildNumericLabelSymbol(Token_t* label)
 SgLabelSymbol*
 buildNumericLabelSymbol(Token_t* label)
    {
   // This is the function we use to create the label that might refer to a 
   // previously seen statement or a statement we will see in the future.
 
-     ROSE_ASSERT(label != NULL);
-     ROSE_ASSERT(label->text != NULL);
+     ASSERT_not_null(label);
+     ASSERT_not_null(label->text);
 
   // DQ (11/22/2010): This is a bug in OFP, but I have to work around it for now.
      if (label->line == 0)
         {
           printf ("Error (OFP bug): label->line == 0 for label->text = %s \n",label->text);
         }
-  // ROSE_ASSERT(label->line > 0);
 
-     SgLabelSymbol* returnSymbol = NULL;
+     SgLabelSymbol* returnSymbol = nullptr;
 
 #if 0
   // Output debugging information about saved state (stack) information.
      outputState("At TOP of buildNumericLabelSymbol()");
 #endif
 
-     if ( SgProject::get_verbose() > DEBUG_COMMENT_LEVEL )
+     if ( SgProject::get_verbose() > DEBUG_COMMENT_LEVEL ) {
           printf ("This code can be replaced with a call to getFunctionDefinitionFromScopeStack() \n");
+     }
 
      std::list<SgScopeStatement*>::iterator i = astScopeStack.begin();
   // printf ("Defining iterator i scope = %p = %s \n",*i,(*i)->class_name().c_str());
@@ -1540,24 +1536,22 @@ buildNumericLabelSymbol(Token_t* label)
      if (i != astScopeStack.end())
         {
        // printf ("Looking for SgLabelSymbol i scope = %p = %s \n",*i,(*i)->class_name().c_str());
-          ROSE_ASSERT(isSgFunctionDefinition(*i) != NULL);
+          ASSERT_not_null(isSgFunctionDefinition(*i));
 
-       // ROSE_ASSERT( i != astScopeStack.end() );
           SgName name = label->text;
-       // SgLabelSymbol* returnSymbol = (*i)->lookup_label_symbol(name);
           returnSymbol = (*i)->lookup_label_symbol(name);
 
        // printf ("In buildNumericLabelSymbol(): returnSymbol = %p \n",returnSymbol);
-          if (returnSymbol == NULL)
+          if (returnSymbol == nullptr)
              {
             // The symbol was not found, create a symbol so that statements can reference
             // it then we can fixup the statement in the symbol later (when we see it).
                int label_value = atoi(label->text);
             // printf ("Building a SgLabelSymbol for a numeric label that we have not see yet: label_value = %d = %s \n",label_value,label->text);
 
-               returnSymbol = new SgLabelSymbol((SgLabelStatement*) NULL);
-               ROSE_ASSERT(returnSymbol != NULL);
-               returnSymbol->set_fortran_statement(NULL);
+               returnSymbol = new SgLabelSymbol((SgLabelStatement*) nullptr);
+               ASSERT_not_null(returnSymbol);
+               returnSymbol->set_fortran_statement(nullptr);
                returnSymbol->set_numeric_label_value(label_value);
 
                SgStatement* label_statement = new SgNullStatement();
@@ -1568,14 +1562,14 @@ buildNumericLabelSymbol(Token_t* label)
             // DQ (1/20/2008): The parent of a statement can't be set to a SgSymbol, so make it point to the current scope for now!
             // label_statement->set_parent(returnSymbol);
                label_statement->set_parent(astScopeStack.front());
-               ROSE_ASSERT(label_statement->get_parent() != NULL);
+               ASSERT_not_null(label_statement->get_parent());
 
             // DQ (1/20/2008): If the label is not present, but is referenced then this has to be set.
             // Note that test2007_175.f demonstrates that if the lable is not present 
             // then this label_statement fails because the source position is not set.
                setSourcePosition(label_statement);
 
-               ROSE_ASSERT(isSgFunctionDefinition(*i) != NULL);
+               ASSERT_not_null(isSgFunctionDefinition(*i));
             // Insert the symbol into the function definition's symbol table so it will be found next time.
                (*i)->insert_symbol(name,returnSymbol);
              }
@@ -1781,7 +1775,7 @@ setStatementNumericLabelUsingStack(SgStatement* statement)
             // printf ("################## In setStatementNumericLabelUsingStack(): statement = %p labelRefExp = %p value = %d \n",statement,labelRefExp,labelRefExp->get_symbol()->get_numeric_label_value());
 
             // printf ("Exiting as a test! \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
                statement->set_numeric_label(labelRefExp);
                labelRefExp->set_parent(statement);
@@ -2499,7 +2493,7 @@ trace_back_through_parent_scopes_lookup_member_variable_symbol(const std::vector
                                  {
                                 // DQ (1/18/2011): This detects where we have used the semantics of implicitly building symbols for implicit variables.
                                 // printf ("WARNING: This use of trace_back_through_parent_scopes_lookup_variable_symbol() used the side effect of building a symbol if the reference is not found! \n");
-                                // ROSE_ASSERT(false);
+                                // ROSE_ABORT();
 
                                 // This will build the variable symbol if the variable is not found.
                                 // variableSymbol = trace_back_through_parent_scopes_lookup_variable_symbol(qualifiedNameList[0],currentScope);
@@ -2707,7 +2701,7 @@ trace_back_through_parent_scopes_lookup_derived_type_symbol(const SgName & deriv
         {
           if ( SgProject::get_verbose() > DEBUG_COMMENT_LEVEL )
                printf ("Warning: trace_back_through_parent_scopes_lookup_derived_type_symbol(): could not locate the specified derived type %s in any outer symbol table \n",derivedTypeName.str());
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
      return derivedTypeSymbol;
@@ -4040,7 +4034,7 @@ buildAttributeSpecificationStatement ( SgAttributeSpecificationStatement::attrib
           initializedName->set_protected_declaration(true);
 
        // printf ("SgAttributeSpecificationStatement::e_protectedStatement is not yet supported \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
      if (kind == SgAttributeSpecificationStatement::e_bindStatement)
@@ -4631,7 +4625,7 @@ convertTypeOnStackToArrayType( int count )
 #endif
 
   // printf ("Exiting at base of convertTypeOnStackToArrayType \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
   // Put the array type onto the type stack
   // astTypeStack.push_front(arrayType);
@@ -4871,7 +4865,7 @@ generateFunctionCall( Token_t* nameToken )
         {
           if ( SgProject::get_verbose() > DEBUG_COMMENT_LEVEL )
                printf ("Found variableSymbol = %p nameToken = %s (erasing all traces of this variable so it can be supported as a function) \n",variableSymbol,nameToken->text);
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 
           SgSymbolTable* symbolTable = isSgSymbolTable(variableSymbol->get_parent());
           ROSE_ASSERT(symbolTable != NULL);
@@ -5089,7 +5083,7 @@ buildProcedureSupport(SgProcedureHeaderStatement* procedureDeclaration, bool has
           procedureDefinition->insert_symbol(returnVar->get_name(),returnVariableSymbol);
 
        // printf ("Processing the return var in a function \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
      if (hasDummyArgList == true)
@@ -6216,7 +6210,7 @@ fixup_possible_incomplete_function_return_type()
         }
 
   // printf ("Exiting at bottom of use_statement_fixup() \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
   // printf ("Leaving fixup_possible_incomplete_function_return_type() \n");
    }
@@ -6426,7 +6420,7 @@ processAttributeSpecStack(bool hasArraySpec, bool hasInitialization)
                                  }
 
                            // printf ("Error, we want to build or modify only the the type in the astTypeStack and not touch the type in the astBaseTypeStack \n");
-                           // ROSE_ASSERT(false);
+                           // ROSE_ABORT();
                             }
                            else
                             {

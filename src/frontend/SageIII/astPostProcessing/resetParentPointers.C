@@ -116,7 +116,7 @@ ResetParentPointers::traceBackToRoot ( SgNode* node )
        //      node->sage_class_name(),parentNode->sage_class_name());
 #endif
        // DQ (10/21/2004): This is relaxed to allow setting of parent pointers from manually constructed code!
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 #endif
    }
@@ -670,7 +670,7 @@ ResetParentPointers::resetParentPointersInTemplateArgumentList ( const SgTemplat
                        }
 
                  // printf ("Error: SgTemplateArgument::nontype_argument not implemented \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 
                     break;
                   }
@@ -681,7 +681,7 @@ ResetParentPointers::resetParentPointersInTemplateArgumentList ( const SgTemplat
                  // to a shared SgTemplateDeclaration. So there is nothing to do here.
 
                  // printf ("Error: resetParentPointersInTemplateArgumentList() SgTemplateArgument::template_template_argument case not implemented \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                     break;
                   }
 
@@ -689,7 +689,7 @@ ResetParentPointers::resetParentPointersInTemplateArgumentList ( const SgTemplat
                case SgTemplateArgument::start_of_pack_expansion_argument:
                   {
                  // printf ("Error: resetParentPointersInTemplateArgumentList() SgTemplateArgument::start_of_pack_expansion_argument case not implemented \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                     break;
                   }
              }
@@ -2053,7 +2053,7 @@ resetParentPointersInMemoryPool(SgNode* node)
             // This may be the source of the problem in using the SageBuilder::buildFile() API in testing test2019_501.C).
             // If so then this function should be fixed to allow a SgFile to be used alternatively.
             // printf ("In resetParentPointersInMemoryPool(): This function can't be called using anything but the SgProject: node = %p = %s \n",node,node->class_name().c_str());
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
             // DQ (8/6/2019): Alternatively, let's use the existing parent pointers to serach for the associated global scope.
                bool includingSelf = true;
@@ -2094,7 +2094,7 @@ resetParentPointersInMemoryPool(SgNode* node)
           // SgProject node, and will do nothing otherwise. printf ("In
           // resetParentPointersInMemoryPool(): This function is not doing
           // anything when called using: node = %p = %s
-          // \n",node,node->class_name().c_str()); ROSE_ASSERT(false);
+          // \n",node,node->class_name().c_str()); ROSE_ABORT();
         }
    }
 
@@ -2543,7 +2543,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                   }
 
             // printf ("Make this an error now to have a Sg_File_Info object with a NULL parent \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
 #else
        // DQ (6/26/2006): If we don't reset the parent pointer then this code is redundant with the AST Consistancy testing

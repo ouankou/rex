@@ -863,28 +863,28 @@ bool ClangToSageTranslator::VisitAttributedType(
 
           case clang::AttributedType::attr_address_space:
               std::cerr << "Unsupported attribute attr_address_space" <<
-     std::endl; ROSE_ASSERT(false); case clang::AttributedType::attr_regparm:
+     std::endl; ROSE_ABORT(); case clang::AttributedType::attr_regparm:
               std::cerr << "Unsupported attribute attr_regparm" << std::endl;
-     ROSE_ASSERT(false); case clang::AttributedType::attr_vector_size: std::cerr
+     ROSE_ABORT(); case clang::AttributedType::attr_vector_size: std::cerr
      << "Unsupported attribute attr_vector_size" << std::endl;
-     ROSE_ASSERT(false); case clang::AttributedType::attr_neon_vector_type:
+     ROSE_ABORT(); case clang::AttributedType::attr_neon_vector_type:
               std::cerr << "Unsupported attribute attr_neon_vector_type" <<
-     std::endl; ROSE_ASSERT(false); case
+     std::endl; ROSE_ABORT(); case
      clang::AttributedType::attr_neon_polyvector_type: std::cerr << "Unsupported
-     attribute attr_neon_polyvector_type" << std::endl; ROSE_ASSERT(false); case
+     attribute attr_neon_polyvector_type" << std::endl; ROSE_ABORT(); case
      clang::AttributedType::attr_objc_gc: std::cerr << "Unsupported attribute
-     attr_objc_gc" << std::endl; ROSE_ASSERT(false); case
+     attr_objc_gc" << std::endl; ROSE_ABORT(); case
      clang::AttributedType::attr_objc_ownership: std::cerr << "Unsupported
-     attribute attr_objc_ownership" << std::endl; ROSE_ASSERT(false); case
+     attribute attr_objc_ownership" << std::endl; ROSE_ABORT(); case
      clang::AttributedType::attr_pcs: std::cerr << "Unsupported attribute
-     attr_pcs" << std::endl; ROSE_ASSERT(false); case
+     attr_pcs" << std::endl; ROSE_ABORT(); case
      clang::AttributedType::attr_fastcall: std::cerr << "Unsupported attribute
-     attr_fastcall" << std::endl; ROSE_ASSERT(false); case
+     attr_fastcall" << std::endl; ROSE_ABORT(); case
      clang::AttributedType::attr_thiscall: std::cerr << "Unsupported attribute
-     attr_thiscall" << std::endl; ROSE_ASSERT(false); case
+     attr_thiscall" << std::endl; ROSE_ABORT(); case
      clang::AttributedType::attr_pascal: std::cerr << "Unsupported attribute
-     attr_pascal" << std::endl; ROSE_ASSERT(false); default: std::cerr <<
-     "Unknown attribute" << std::endl; ROSE_ASSERT(false);
+     attr_pascal" << std::endl; ROSE_ABORT(); default: std::cerr <<
+     "Unknown attribute" << std::endl; ROSE_ABORT();
       }
   */
   *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);
@@ -1258,13 +1258,52 @@ bool ClangToSageTranslator::VisitMemberPointerType(
     clang::MemberPointerType *member_pointer_type, SgNode **node) {
 #if DEBUG_VISIT_TYPE
   std::cerr << "ClangToSageTranslator::MemberPointerType" << std::endl;
+  std::cerr << "isMemberFunctionPointer  "
+            << member_pointer_type->isMemberFunctionPointer() << std::endl;
+  std::cerr << "isMemberDataPointer  "
+            << member_pointer_type->isMemberDataPointer() << std::endl;
+  std::cerr << "isSugared  " << member_pointer_type->isSugared() << std::endl;
 #endif
   bool res = true;
 
-  // TODO: Full support for member pointers not yet implemented
-  // Member pointers (e.g., int Class::*) point to class members
-  // For now, use a generic unknown type scoped to global scope
-  *node = SageBuilder::buildOpaqueType("member_pointer", getGlobalScope());
+  clang::QualType classQualType(member_pointer_type->getClass(), 0);
+  SgType *classType = buildTypeFromQualifiedType(classQualType);
+  if (classType == NULL)
+    {
+      classType = SageBuilder::buildUnknownType();
+    }
+  SgType *classTypeStripped =
+      classType != NULL ? classType->stripTypedefsAndModifiers() : NULL;
+  if (classTypeStripped == NULL ||
+      (isSgClassType(classTypeStripped) == NULL &&
+       isSgNonrealType(classTypeStripped) == NULL)) {
+    std::string class_name = classQualType.getAsString();
+    if (class_name.empty()) {
+      class_name = "unknown_member_class";
+    }
+    classType = SageBuilder::buildNonrealType(SgName(class_name),
+                                              getGlobalScope(), nullptr);
+  }
+
+  SgType *baseType =
+      buildTypeFromQualifiedType(member_pointer_type->getPointeeType());
+  ROSE_ASSERT(baseType);
+  if (member_pointer_type->isMemberFunctionPointer()) {
+    SgFunctionType *functionType = isSgFunctionType(baseType);
+    if (functionType != NULL)
+      {
+        SgMemberFunctionType *memFuncType = SageBuilder::buildMemberFunctionType(
+            functionType->get_return_type(), functionType->get_argument_list(),
+            classType, 0);
+        baseType = memFuncType;
+        ROSE_ASSERT(baseType);
+      }
+  }
+
+  SgPointerMemberType *pointerToMemberType =
+      SageBuilder::buildPointerMemberType(baseType, classType);
+
+  *node = pointerToMemberType;
 
   return VisitType(member_pointer_type, node) && res;
 }
@@ -1301,9 +1340,13 @@ bool ClangToSageTranslator::VisitParenType(clang::ParenType *paren_type,
                                            SgNode **node) {
 #if DEBUG_VISIT_TYPE
   std::cerr << "ClangToSageTranslator::VisitParenType" << std::endl;
+  std::cerr << "isSugared " << paren_type->isSugared() << std::endl;
 #endif
 
-  *node = buildTypeFromQualifiedType(paren_type->getInnerType());
+  if (paren_type->isSugared())
+    *node = buildTypeFromQualifiedType(paren_type->desugar());
+  else
+    *node = buildTypeFromQualifiedType(paren_type->getInnerType());
 
   return VisitType(paren_type, node);
 }
@@ -1427,6 +1470,7 @@ bool ClangToSageTranslator::VisitEnumType(clang::EnumType *enum_type,
     SgEnumDeclaration *sg_decl = isSgEnumDeclaration(tmp_decl);
 
     ROSE_ASSERT(sg_decl != NULL);
+
     *node = sg_decl->get_type();
   } else {
     *node = enum_sym->get_type();
@@ -2664,6 +2708,15 @@ bool ClangToSageTranslator::VisitElaboratedType(
 #endif
 
   SgType *type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
+
+  clang::TagDecl *ownedTagDecl = elaborated_type->getOwnedTagDecl();
+#if DEBUG_VISIT_TYPE
+  if (ownedTagDecl != nullptr) {
+    std::cerr << "ClangToSageTranslator::VisitElaboratedType has ownedTagDecl "
+              << "and isThisDeclarationADefinition = "
+              << ownedTagDecl->isThisDeclarationADefinition() << "\n";
+  }
+#endif
 
   // CLANG FRONTEND NOTE: ElaboratedType contains namespace qualifiers (e.g.,
   // "std::" in "std::string") and struct/class/enum keywords that provide

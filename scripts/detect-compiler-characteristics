@@ -35,7 +35,7 @@ dir0="${0%/*}"
 
 conftest=$(tempfile)
 
-format=
+format=quad
 compiler_baselang=
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -43,7 +43,6 @@ while [ "$#" -gt 0 ]; do
 	--baselang=*) compiler_baselang="${1#--baselang=}"; shift ;;
 	--baselang)   compiler_baselang="$2"; shift 2 ;;
 	--quad)    format=quad; shift ;;
-	--yaml)    format=yaml;    shift ;;
 	--version) format=version; shift ;;
 	-*)        die "unknown switch: $1" ;;
 	*)         break ;;
@@ -51,7 +50,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: $arg0 [--triplet|--yaml] COMPILER" >&2
+    echo "usage: $arg0 [SWITCHES] COMPILER" >&2
     exit 1
 fi
 
@@ -374,27 +373,6 @@ version_output=$(tempfile)
 #------------------------------------------------------------------------------------------------------------------------
 
 case "$format" in
-    ""|yaml)
-	echo -e "executable:\t\"$compiler_exe\""
-	if [ "$#" -eq 0 ]; then
-	    echo -e "flags:\t\t[]"
-	else
-	    echo "flags:";
-	    for flag in "$@"; do
-		echo "  - \"$flag\""
-	    done
-	fi
-	echo -e "language:\t\"$compiler_lang\""
-
-	echo -e "vendor:\t\t\"$compiler_vendor\""
-
-	echo -e "version:\t\"$compiler_version\""
-
-
-	echo "version-output: |"
-	sed 's/^/    /' <"$version_output"
-	;;
-
     version)
 	cat "$version_output"
 	;;

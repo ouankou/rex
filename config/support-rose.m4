@@ -28,8 +28,7 @@ if test "$am__untar" = "false"; then
    AC_MSG_FAILURE([am__untar set to false])
 fi
 
-# DQ (3/20/2009): Trying to get information about what system we are on so that I
-# can detect Cygwin and OSX (and other operating systems in the future).
+# DQ (3/20/2009): Trying to get information about what system we are on.
 AC_CANONICAL_BUILD
 # AC_CANONICAL_HOST
 # AC_CANONICAL_TARGET
@@ -47,8 +46,6 @@ DETERMINE_OS
 
 # DQ (3/20/2009): The default is to assume Linux, so skip supporting this test.
 # AM_CONDITIONAL(ROSE_BUILD_OS_IS_LINUX,  [test "x$build_os" = xlinux-gnu])
-AM_CONDITIONAL(ROSE_BUILD_OS_IS_OSX,    [test "x$build_vendor" = xapple])
-AM_CONDITIONAL(ROSE_BUILD_OS_IS_CYGWIN, [test "x$build_os" = xcygwin])
 
 # DQ (9/10/2009): A more agressive attempt to identify the OS vendor
 # This sets up automake conditional variables for each OS vendor name.
@@ -187,18 +184,6 @@ else
   ROSE_SUPPORT_GNU_EXTENSIONS="FALSE"
 fi
 AC_SUBST(ROSE_SUPPORT_GNU_EXTENSIONS)
-
-# DQ (1/4/2009) Added support for optional Microsoft language extensions in new legacy frontend/ROSE interface.
-# This value will be substituted into legacy frontend/4.0/src/rose_lang_feat.h in the future (not used at present!)
-AC_ARG_ENABLE(microsoft-extensions, AS_HELP_STRING([--enable-microsoft-extensions], [Enable internal support in ROSE for Microsoft language extensions]))
-if test "x$enable_microsoft_extensions" = "xyes"; then
-  ROSE_SUPPORT_MICROSOFT_EXTENSIONS="TRUE"
-  AC_DEFINE([ROSE_USE_MICROSOFT_EXTENSIONS], [], [Controls use of Microsoft MSVC features])
-else
-  ROSE_SUPPORT_MICROSOFT_EXTENSIONS="FALSE"
-fi
-AC_SUBST(ROSE_SUPPORT_MICROSOFT_EXTENSIONS)
-AM_CONDITIONAL(ROSE_USE_MICROSOFT_EXTENSIONS, [test "x$enable_microsoft_extensions" = xyes])
 
 # DQ (6/7/2013): Added support for new Fortran front-end development.
 AC_ARG_ENABLE(experimental_fortran_frontend,
@@ -348,7 +333,6 @@ AC_SUBST(ROSE_HOME)
 
 AC_LANG(C++)
 
-# Rasmussen (12/16/2017): Added test for Bison version (Mac OSX Bison version may be too old)
 ROSE_SUPPORT_BISON
 
 # DQ (11/5/2009): Added test for GraphViz's ``dot'' program
@@ -733,8 +717,6 @@ fi
 
 AC_PROG_CXXCPP
 dnl AC_PROG_RANLIB
-# echo "In configure.in (before libtool win32 setup): libtool test for 64 bit libs = `/usr/bin/file conftest.o`"
-dnl AC_LIBTOOL_WIN32_DLL -- ROSE is probably not set up for this
 
 # echo "In configure.in (before libtool setup): disabling static libraries by default (use --enable-static or --enable-static= to override)"
 AC_DISABLE_STATIC
@@ -1004,7 +986,7 @@ res_top_pwd=$(cd "$top_pwd" && pwd -P)
 # which syntax is best for the specification of these paths.
 AC_DEFINE_UNQUOTED([ROSE_COMPILE_TREE_PATH],"$res_top_pwd",[Location of ROSE Compile Tree.])
 
-# This block turns off features of libharu that don't work with Java
+# Disable libharu optional PNG/Zlib features in autotools inventory.
 with_png=no
 export with_png
 with_zlib=no
@@ -1113,6 +1095,8 @@ scripts/Makefile
 src/3rdPartyLibraries/Makefile
 src/3rdPartyLibraries/antlr-jars/Makefile
 src/3rdPartyLibraries/fortran-parser/Makefile
+src/AstNodes/Makefile
+src/AstNodes/Expression/Makefile
 src/Makefile
 src/ROSETTA/Makefile
 src/ROSETTA/src/Makefile

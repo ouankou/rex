@@ -1089,9 +1089,6 @@ HEADER_FUNCTION_MODIFIER_START
                e_marked_default            = 38, /*!< marked using "= default" syntax (different from default enum value) */
                e_marked_delete             = 39, /*!< marked using "= delete" syntax */
 
-            // Rasmussen (10/26/2019): Jovial function modifier
-               e_reentrant                 = 40, /*!< re-entrant function */
-
                e_last_modifier     /*!< last value (upper bound on range of values, used in error checking) */
              };
 
@@ -1152,11 +1149,6 @@ HEADER_FUNCTION_MODIFIER_START
           bool isRecursive() const;
           void setRecursive();
           void unsetRecursive();
-
-       // Rasmussen (10/26/2019): support for Jovial reentrant attribute on functions
-          bool isReentrant() const;
-          void setReentrant();
-          void unsetReentrant();
 
        // DQ (1/3/2009): Added GNU specific attributes
           bool isGnuAttributeConstructor() const;
@@ -1281,57 +1273,6 @@ HEADER_FUNCTION_MODIFIER_START
           void reset();
 
 HEADER_FUNCTION_MODIFIER_END
-
-
-// Rasmussen (4/4/2020): Added SgStructureModifier for Jovial tables
-HEADER_STRUCTURE_MODIFIER_START
-
-       // Jovial structure specifiers (unspecified, parallel, tight)
-
-      /*! \brief Jovial Structure Modifier/Specifier (tight implies serial)
-
-          Jovial Structure Specifier (parallel, tight).
-
-          \internal Only one value can be specified
-       */
-          enum jovial_structure_modifier_enum
-             {
-               e_unknown,                    /*!< error value */
-               e_default,                    /*!< jovial table structure is unspecified, indicates serial structure */
-               e_table_structure_parallel,   /*!< jovial table has parallel structure */
-               e_table_structure_tight,      /*!< jovial table has serial structure that is tightly packed */
-               e_last_modifier               /*!< last value (upper bound on range of values, used in error checking) */
-             };
-
-       // Copy constructor
-          $CLASSNAME ( const $CLASSNAME & X );
-
-       // Assignment Operator
-          $CLASSNAME & operator= ( const $CLASSNAME & X );
-
-          void post_construction_initialization() override;
-
-          bool isUnknown() const;
-          void setUnknown();
-
-          bool isDefault() const;
-          void setDefault();
-
-          bool isParallel() const;
-          void setParallel();
-
-          bool isTight() const;
-          void setTight();
-
-          std::string displayString() const;
-          void display ( std::string label ) const;
-          friend std::ostream & operator<< ( std::ostream & os, const SgStructureModifier & m );
-          friend bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs);
-
-       // Clear all bits
-          void reset();
-
-HEADER_STRUCTURE_MODIFIER_END
 
 
 HEADER_SPECIAL_FUNCTION_MODIFIER_START
@@ -1734,14 +1675,6 @@ HEADER_TYPE_MODIFIER_START
             // keyword, so I am trying to capture it as an attribute.
                e_gnu_attribute__device__             = 34,/*!< Using GNU support for general attributes in the contect of parameter type (ROSE extension using GNU attribute extension) */
 
-            // Rasmussen (3/1/2020): numeric type specifiers for Jovial
-               e_round                               = 35,/*!< Jovial rounding specifier */
-               e_truncate                            = 36,/*!< Jovial truncation specifier */
-               e_truncate_towards_zero               = 37,/*!< Jovial truncation towards zero specifier */
-
-            // PP (7/7/21): add support for Ada aliased declarations
-               e_aliased                             = 38,/*!< Ada aliased variable/parameter/field declaration */
-
             // Last attribute enum (used for internal bounds checking)
                e_last_modifier /*!< last value (upper bound on range of values, used in error checking) */
              };
@@ -1830,9 +1763,6 @@ HEADER_TYPE_MODIFIER_START
        // RV (2/2/2006): Added 'const' versions of above member functions.
           const SgConstVolatileModifier  & get_constVolatileModifier(void) const;
           const SgElaboratedTypeModifier & get_elaboratedTypeModifier(void) const;
-
-          SgStructureModifier            & get_structureModifier();
-          const SgStructureModifier      & get_structureModifier() const;
 
           bool isUnknown() const;
           void setUnknown();
@@ -1989,26 +1919,6 @@ HEADER_TYPE_MODIFIER_START
           bool isGnuAttributeDevice() const;
           void setGnuAttributeDevice();
           void unsetGnuAttributeDevice();
-
-       // Jovial specific attribute
-          bool isRound() const;
-          void setRound();
-          void unsetRound();
-
-       // Jovial specific attribute
-          bool isTruncate() const;
-          void setTruncate();
-          void unsetTruncate();
-
-       // Jovial specific attribute
-          bool isTruncateTowardsZero() const;
-          void setTruncateTowardsZero();
-          void unsetTruncateTowardsZero();
-
-       // Ada attribute for aliased variables, parameters, and components
-          bool isAliased() const;
-          void setAliased();
-          void unsetAliased();
 
           std::string displayString() const;
           void display ( std::string label ) const;
@@ -2935,11 +2845,6 @@ bool SgFunctionModifier::isRecursive() const { return checkBit(e_recursive,p_mod
 void SgFunctionModifier::setRecursive()      { setBit(e_recursive,p_modifierVector); }
 void SgFunctionModifier::unsetRecursive()    { unsetBit(e_recursive,p_modifierVector); }
 
-// Rasmussen (10/26/2019): Added Jovial specific attribute
-bool SgFunctionModifier::isReentrant() const { return checkBit(e_reentrant,p_modifierVector); }
-void SgFunctionModifier::setReentrant()      { setBit(e_reentrant,p_modifierVector); }
-void SgFunctionModifier::unsetReentrant()    { unsetBit(e_reentrant,p_modifierVector); }
-
 // DQ (1/3/2009): Added GNU specific attributes
 bool SgFunctionModifier::isGnuAttributeConstructor() const { return checkBit(e_gnu_attribute__constructor__,p_modifierVector); }
 void SgFunctionModifier::setGnuAttributeConstructor()      { setBit(e_gnu_attribute__constructor__,p_modifierVector); }
@@ -3083,7 +2988,6 @@ SgFunctionModifier::displayString() const
   // DQ (2/26/2013): Bug report noticed that a set of these attributes were not properly support.
      s += std::string("isElemental() = ")                        + std::string(isElemental() ? "true " : "false ");
      s += std::string("isRecursive() = ")                        + std::string(isRecursive() ? "true " : "false ");
-     s += std::string("isReentrant() = ")                        + std::string(isReentrant() ? "true " : "false ");
      s += std::string("isGnuAttributeConstructor() = ")          + std::string(isGnuAttributeConstructor() ? "true " : "false ");
      s += std::string("isGnuAttributeDestructor() = ")           + std::string(isGnuAttributeDestructor() ? "true " : "false ");
      s += std::string("isGnuAttributePure() = ")                 + std::string(isGnuAttributePure() ? "true " : "false ");
@@ -3142,7 +3046,6 @@ bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs)
 	       (lhs.isPure()      == rhs.isPure()     ) &&
 	       (lhs.isElemental() == rhs.isElemental()) &&
 	       (lhs.isRecursive() == rhs.isRecursive()) &&
-	       (lhs.isReentrant() == rhs.isReentrant()) &&
 	       // GNU specific
 	       (lhs.isGnuAttributeConstructor() == rhs.isGnuAttributeConstructor()) &&
 	       (lhs.isGnuAttributeDestructor()  == rhs.isGnuAttributeDestructor() ) &&
@@ -3190,84 +3093,6 @@ void SgFunctionModifier::reset()
    }
 
 SOURCE_FUNCTION_MODIFIER_END
-
-// Rasmussen (4/4/2020): Added SgStructureModifier for Jovial tables
-SOURCE_STRUCTURE_MODIFIER_START
-
-// Copy constructor
-$CLASSNAME::$CLASSNAME ( const $CLASSNAME & X )
-   {
-     p_modifier = X.p_modifier;
-   }
-
-$CLASSNAME &
-$CLASSNAME::operator= ( const $CLASSNAME & X )
-   {
-     p_modifier = X.p_modifier;
-     return *this;
-   }
-
-void
-$CLASSNAME::post_construction_initialization()
-   {
-     p_modifier = e_default;
-   }
-
-bool $CLASSNAME::isUnknown() const { return p_modifier == e_unknown; }
-void $CLASSNAME::setUnknown()      { p_modifier = e_unknown; }
-
-bool $CLASSNAME::isDefault() const { return p_modifier == e_default; }
-void $CLASSNAME::setDefault()      { p_modifier = e_default; }
-
-bool $CLASSNAME::isParallel() const { return p_modifier == e_table_structure_parallel; }
-void $CLASSNAME::setParallel()      { p_modifier = e_table_structure_parallel; }
-
-bool $CLASSNAME::isTight()    const { return p_modifier == e_table_structure_tight; }
-void $CLASSNAME::setTight()         { p_modifier = e_table_structure_tight; }
-
-string
-$CLASSNAME::displayString() const
-   {
-     std::string s = "$CLASSNAME(";
-     s += std::string("isUnknown() = ")     + std::string(isUnknown()     ? "true " : "false ");
-     s += std::string("isDefault() = ")     + std::string(isDefault()     ? "true " : "false ");
-     s += std::string("isParallel() = ")    + std::string(isParallel()    ? "true " : "false ");
-     s += std::string("isTight() = ")       + std::string(isTight()       ? "true " : "false ");
-
-     s += ")";
-     return s;
-   }
-
-void
-$CLASSNAME::display ( std::string label ) const
-   {
-     MLOG_INFO_C("ROSETTA", "In $CLASSNAME::display(%s) \n",label.c_str());
-     MLOG_INFO_C("ROSETTA", "%s \n",displayString().c_str());
-   }
-
-std::ostream & operator<< ( std::ostream & os, const SgStructureModifier & m)
-   {
-     os << m.get_modifier();
-     return os;
-   }
-
-bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs)
-{
-        return
-         (lhs.isUnknown()  == rhs.isUnknown()  ) &&
-         (lhs.isDefault()  == rhs.isDefault()  ) &&
-         (lhs.isParallel() == rhs.isParallel() ) &&
-         (lhs.isTight()    == rhs.isTight()    ) &&
-       true;
-}
-
-void $CLASSNAME::reset()
-   {
-     setDefault();
-   }
-
-SOURCE_STRUCTURE_MODIFIER_END
-
 
 SOURCE_SPECIAL_FUNCTION_MODIFIER_START
 
@@ -3891,23 +3716,6 @@ bool SgTypeModifier::isGnuAttributeDevice() const  { return checkBit(e_gnu_attri
 void SgTypeModifier::setGnuAttributeDevice()       { setBit(e_gnu_attribute__device__,p_modifierVector); }
 void SgTypeModifier::unsetGnuAttributeDevice()     { unsetBit(e_gnu_attribute__device__,p_modifierVector); }
 
-// Rasmussen (3/1/2020): numeric type specifiers for Jovial
-bool SgTypeModifier::isRound() const  { return checkBit(e_round,p_modifierVector); }
-void SgTypeModifier::setRound()       { setBit(e_round,p_modifierVector); }
-void SgTypeModifier::unsetRound()     { unsetBit(e_round,p_modifierVector); }
-
-bool SgTypeModifier::isTruncate() const  { return checkBit(e_truncate,p_modifierVector); }
-void SgTypeModifier::setTruncate()       { setBit(e_truncate,p_modifierVector); }
-void SgTypeModifier::unsetTruncate()     { unsetBit(e_truncate,p_modifierVector); }
-
-bool SgTypeModifier::isTruncateTowardsZero() const  { return checkBit(e_truncate_towards_zero,p_modifierVector); }
-void SgTypeModifier::setTruncateTowardsZero()       { setBit(e_truncate_towards_zero,p_modifierVector); }
-void SgTypeModifier::unsetTruncateTowardsZero()     { unsetBit(e_truncate_towards_zero,p_modifierVector); }
-
-bool SgTypeModifier::isAliased() const  { return checkBit(e_aliased,p_modifierVector); }
-void SgTypeModifier::setAliased()       { setBit(e_aliased,p_modifierVector); }
-void SgTypeModifier::unsetAliased()     { unsetBit(e_aliased,p_modifierVector); }
-
 string
 $CLASSNAME::displayString() const
    {
@@ -3915,14 +3723,12 @@ $CLASSNAME::displayString() const
      s += std::string("isUnknown() = ")                + std::string(isUnknown()  ? "true " : "false ");
      s += std::string("isDefault() = ")                + std::string(isDefault()  ? "true " : "false ");
      s += std::string("isRestrict() = ")               + std::string(isRestrict() ? "true " : "false ");
-     s += std::string("isAliased() = ")                + std::string(isAliased()  ? "true " : "false ");
      s += std::string("gnu_extension_machine_mode = ") + Rose::StringUtility::numberToString((int)p_gnu_extension_machine_mode) + " ";
      s += std::string("gnu_attribute_alignment = ")    + Rose::StringUtility::numberToString((int)p_gnu_attribute_alignment)    + " ";
      s += std::string("gnu_attribute_sentinel = ")     + Rose::StringUtility::numberToString((int)p_gnu_attribute_sentinel)     + " ";
      s += std::string("address_space_value = ")        + Rose::StringUtility::numberToString((int)p_address_space_value)        + " ";
      s += std::string("vector_size = ")                + Rose::StringUtility::numberToString((int)p_vector_size)                + " ";
      s += std::string("   ")                           + get_constVolatileModifier().displayString()                            + " ";
-     s += std::string("   ")                           + get_structureModifier().displayString()                                + " ";
      s += std::string("   ")                           + get_elaboratedTypeModifier().displayString();
      s += ")";
      return s;
@@ -3966,7 +3772,6 @@ bool SgTypeModifier::isIdentity() const
 bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs)
    {
      return
-          (lhs.get_structureModifier()      == rhs.get_structureModifier()     ) &&
           (lhs.get_constVolatileModifier()  == rhs.get_constVolatileModifier() ) &&
           (lhs.get_elaboratedTypeModifier() == rhs.get_elaboratedTypeModifier()) &&
           (lhs.isUnknown() == rhs.isUnknown()) &&
@@ -4019,13 +3824,6 @@ $CLASSNAME::get_constVolatileModifier ()
      return p_constVolatileModifier;
    }
 
-SgStructureModifier &
-$CLASSNAME::get_structureModifier ()
-   {
-     ROSE_ASSERT (this != NULL);
-     return p_structureModifier;
-   }
-
 SgElaboratedTypeModifier &
 $CLASSNAME::get_elaboratedTypeModifier ()
    {
@@ -4043,7 +3841,6 @@ void $CLASSNAME::reset()
      setDefault();
 
      get_constVolatileModifier().reset();
-     get_structureModifier().reset();
      get_elaboratedTypeModifier().reset();
    }
 
@@ -4053,13 +3850,6 @@ $CLASSNAME::get_constVolatileModifier (void) const
    {
      ROSE_ASSERT (this != NULL);
      return p_constVolatileModifier;
-   }
-
-const SgStructureModifier &
-$CLASSNAME::get_structureModifier (void) const
-   {
-     ROSE_ASSERT (this != NULL);
-     return p_structureModifier;
    }
 
 // RV (2/2/2006): Created this 'const' version of the member function.
@@ -5642,6 +5432,11 @@ HEADER_FILE_INFORMATION_START
           int  get_physical_line() const;
           void set_physical_source_position_to_match_logical_source_position();
 
+#if 1
+       // DQ (5/20/2021): Added to support debugging.
+          int*  get_physical_file_id_reference ();
+#endif
+
        // DQ (2/28/2019): Support for multi-file handling.
       //! Where this is a shared IR node across multiple files, return the line number location of the IR node for a specific file.
           int  get_physical_line(int file_id) const;
@@ -6325,6 +6120,9 @@ HEADER_APPLICATION_SOURCE_FILE_START
        // void buildStatementNumbering( NumberToStatementType & numberToStatementContainer );
           void buildStatementNumbering();
 #endif
+
+       // DQ (3/2/2022): Added a function to support initialization of all data members.
+          void initialization();
 
 HEADER_APPLICATION_SOURCE_FILE_END
 
@@ -7267,6 +7065,14 @@ HEADER_UNPARSE_INFO_START
           static bool get_extern_C_with_braces();
           static void set_extern_C_with_braces( bool extern_C_with_braces );
 
+       // DQ (6/5/2021): Support for debugging, we want to debug the transitions between token-based unparsing and unparsing from the AST.
+          static SgStatement* get_previouslyUnparsedStatement();
+          static void set_previouslyUnparsedStatement( SgStatement* previouslyUnparsedStatement );
+
+       // DQ (6/5/2021): Support for debugging, we want to debug the transitions between token-based unparsing and unparsing from the AST.
+          static bool get_previousStatementUnparsedFromTokenStream();
+          static void set_previousStatementUnparsedFromTokenStream( bool previousStatementUnparsedFromTokenStream );
+
 HEADER_UNPARSE_INFO_END
 
 
@@ -7279,6 +7085,7 @@ HEADER_UNPARSE_POSTDECLARATION_START
 extern std::string getSgVariant ( int x);
 
 HEADER_UNPARSE_POSTDECLARATION_END
+
 
 HEADER_TEMPLATE_PARAMETER_START
      public:
@@ -10839,9 +10646,14 @@ SgSymbolTable::find_function()
           p_no_name  = true;
           while(p_iterator != p_table->end())
              {
-            // if(isSgFunctionSymbol((*p_iterator).second))
-            //      return ((SgFunctionSymbol *)(*p_iterator).second);
-               if (p_iterator->second->variantT() == V_SgFunctionSymbol)
+            // DQ (8/3/2022): I think this needs to support the variant being either a V_SgFunctionSymbol or a V_SgMemberFunctionSymbol.
+            // Else we would need another function to support member functions (which might be the better solution).
+            // Better yet, this code should be using a consistant way to check for SgFunctionSymbol IR nodes as is done in
+            // the next_function_symbol() function.
+            // if (p_iterator->second->variantT() == V_SgFunctionSymbol)
+            //      return (SgFunctionSymbol *) p_iterator->second;
+            // if (p_iterator->second->variantT() == V_SgFunctionSymbol || p_iterator->second->variantT() == V_SgMemberFunctionSymbol)
+               if (isSgFunctionSymbol((*p_iterator).second))
                     return (SgFunctionSymbol *) p_iterator->second;
                p_iterator++;
              }
@@ -14106,6 +13918,15 @@ Sg_File_Info::get_physical_file_id() const
      int file_id = get_file_id();
 #endif
 
+#if 0
+     printf ("In Sg_File_Info::get_physical_file_id(): \n");
+     printf (" --- (before being set) return_physical_file_id = %d \n",return_physical_file_id);
+     printf (" --- p_physical_file_id                         = %d \n",p_physical_file_id);
+     printf (" --- physicalFileOK                             = %s \n",physicalFileOK ? "true" : "false");
+     printf (" --- file_id                                    = %d \n",file_id);
+     printf (" --- isCompilerGenerated()                      = %s \n",isCompilerGenerated() ? "true" : "false");
+#endif
+
   // DQ (8/20/2018): Not clear why this language specific rule is a good idea.
   // PHL (01/06/2014) use get_line for Fortran frontend
      if (SageInterface::is_Fortran_language() )
@@ -14134,7 +13955,22 @@ Sg_File_Info::get_physical_file_id() const
 #endif
           if (isCompilerGenerated() == true)
              {
+#if 1
                return_physical_file_id = file_id;
+#else
+            // DQ (5/20/2021): If the physical_file_id has been set (as we now do to support the header file unparsing) 
+            // then where it is a physical file (id >= 0) then we want to return this value, even of this is marked as 
+            // compiler generated.
+            // if (physicalFileOK == false && file_id < 0)
+               if (physicalFileOK == true)
+                  {
+                    return_physical_file_id = p_physical_file_id;
+                  }
+                 else
+                  {
+                    return_physical_file_id = file_id;
+                  }
+#endif
              }
             else
              {
@@ -14143,8 +13979,24 @@ Sg_File_Info::get_physical_file_id() const
 #endif
         }
 
+#if 0
+     printf ("Leaving Sg_File_Info::get_physical_file_id(): return_physical_file_id = %d \n",return_physical_file_id);
+#endif
+
      return return_physical_file_id;
    }
+
+
+#if 1
+// DQ (5/20/2021): Added to support debugging.
+int*
+Sg_File_Info::get_physical_file_id_reference()
+   {
+     assert (this != NULL);
+
+     return &p_physical_file_id;
+   }
+#endif
 
 
 int
@@ -15069,6 +14921,64 @@ Sg_File_Info::setTransformation()
      assert(this != NULL);
      p_classificationBitField |= e_transformation;
 
+#if 0
+  // DQ (7/13/2021): Added debugging code.
+     static int counter = 0;
+
+     SgNode* parent = this->get_parent();
+     if (parent != NULL)
+        {
+          SgCastExp* castExpression = isSgCastExp(parent);
+          if (castExpression != NULL)
+             {
+               printf ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX \n");
+               printf ("In Sg_File_Info::setTransformation(): Found SgCastExp %p counter = %d \n",castExpression,counter);
+               printf ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX \n");
+
+#if 0
+               if (counter > 20)
+                  {
+#if 1
+                    printf ("Exiting as a test: counter = %d \n",counter);
+                    ROSE_ASSERT(false);
+#endif
+                  }
+
+            // counter++;
+#endif
+
+#if 0
+               printf ("Exiting as a test! \n");
+               ROSE_ASSERT(false);
+#endif
+             }
+            else
+             {
+               printf ("In Sg_File_Info::setTransformation(): !SgCastExp: parent = %p = %s counter = %d \n",parent,parent->class_name().c_str(),counter);
+#if 0
+               printf ("Exiting as a test! \n");
+               ROSE_ASSERT(false);
+#endif
+             }
+        }
+       else
+        {
+          printf ("In Sg_File_Info::setTransformation(): parent == NULL: counter = %d \n",counter);
+        }
+
+#if 0
+     if (counter > 250)
+        {
+#if 0
+          printf ("Exiting as a test: counter = %d \n",counter);
+          ROSE_ASSERT(false);
+#endif
+        }
+#endif
+
+     counter++;
+#endif
+
      // Preserve backwards compatibility for code that historically set
      // transformation state via locatedNode->get_file_info()->setTransformation()
      // while enforcing SgLocatedNode invariants.
@@ -15914,14 +15824,7 @@ SgFile::initialization()
   // DQ (9/17/2020): Adding missing data member initialization.
      p_experimental_flang_frontend = false;
 
-  // DQ (6/7/2013): Added support for using experimental fortran frontend.
-  // Rasmussen (3/12/2018): Added support for CUDA Fortran within the experimental fortran frontend.
-     p_experimental_fortran_frontend = false;
-     p_experimental_cuda_fortran_frontend = false;
-
-  // DQ (1/23/2016): Added support for OFP parsing and pretty printing of generated Aterm
-  // (this is part of the internal testing of the new (experimental) Fortran support).
-     p_experimental_fortran_frontend_OFP_test = false;
+  // Rasmussen (9/10/2022): Replaced experimental_fortran_frontend with experimental_flang_frontend.
 
   // This will cause only the binary file format to be read and skipps instruction disassembly
 
@@ -15982,7 +15885,12 @@ SgFile::initialization()
   // DQ (9/17/2020): Added these missing variable initializations.
      p_standard     = e_default_standard;
      p_gnu_standard = false;
+
+  // DQ (5/20/2021): Support for token-based unparsing (computation of first and last statement in source file.
+  // p_firstStatement = NULL;
+  // p_lastStatement  = NULL;
    }
+
 
 #if 0
 // DQ (9/4/2008): This is now in SgSourceFile (and built using ROSETTA with a different name)
@@ -16397,6 +16305,52 @@ SgFile::generateOutputFileName() const
           objectFileName = baseFileNameWithoutSuffix + ".o";
         }
 
+  // DQ (1/26/2022): Need to enforce consistancy of the output object file path and the output object file.
+     if (get_objectFileNameWithoutPath() != "")
+        {
+          if (get_objectFileNameWithPath() == "")
+             {
+               printf ("NOTE: both objectFileNameWithPath and objectFileNameWithoutPath must be set consistantly \n");
+               printf (" --- get_objectFileNameWithoutPath() = %s \n",get_objectFileNameWithoutPath().c_str());
+               printf (" --- get_objectFileNameWithPath()    = %s \n",get_objectFileNameWithPath().c_str());
+#if 0
+               set_objectFileNameWithPath(get_objectFileNameWithoutPath());
+               printf (" --- after reset: get_objectFileNameWithPath() = %s \n",get_objectFileNameWithPath().c_str());
+#endif
+            // ROSE_ASSERT(false);
+             }
+        }
+       else
+        {
+          if (get_objectFileNameWithPath() != "")
+             {
+               printf ("NOTE: both objectFileNameWithPath and objectFileNameWithoutPath must be set consistantly \n");
+               printf (" --- get_objectFileNameWithoutPath() = %s \n",get_objectFileNameWithoutPath().c_str());
+               printf (" --- get_objectFileNameWithPath()    = %s \n",get_objectFileNameWithPath().c_str());
+#if 0
+               set_objectFileNameWithoutPath(get_objectFileNameWithPath());
+               printf (" --- after reset: get_objectFileNameWithoutPath() = %s \n",get_objectFileNameWithoutPath().c_str());
+#endif
+            // ROSE_ASSERT(false);
+             }
+        }
+
+
+     std::string specified_objectFileName = get_objectFileNameWithoutPath();
+     if (specified_objectFileName.length() == 0)
+        {
+#if 0
+          printf (" --- get_objectFileNameWithoutPath() returned empty string, using generateOutputFileName(): objectFileName = %s \n",objectFileName.c_str());
+#endif
+        }
+       else
+        {
+#if 0
+          printf (" --- using value from get_objectFileNameWithoutPath(): objectFileName = %s \n",objectFileName.c_str());
+#endif
+          objectFileName = specified_objectFileName;
+        }
+
   // MLOG_INFO_C("ROSETTA", "At base of SgFile::generateOutputFileName(): objectFileName = %s \n",objectFileName.c_str());
   // display("In SgFile::generateOutputFileName()");
 
@@ -16608,12 +16562,8 @@ SgFile::display ( const std::string & label ) const
 
      printf ("     p_skipAstConsistancyTests                   = %s \n",(p_skipAstConsistancyTests == true) ? "true" : "false");
 
-  // DQ (6/8/2013): Added support for experimental fortran frontend.
-     printf ("     p_experimental_fortran_frontend             = %s \n",(p_experimental_fortran_frontend == true) ? "true" : "false");
-     printf ("     p_experimental_fortran_frontend_OFP_test    = %s \n",(p_experimental_fortran_frontend_OFP_test == true) ? "true" : "false");
-
-  // Rasmussen (3/12/2018): Added support for CUDA Fortran within the experimental fortran frontend.
-     printf ("     p_experimental_cuda_fortran_frontend        = %s \n",(p_experimental_cuda_fortran_frontend == true) ? "true" : "false");
+  // Rasmussen (9/10/2022): Replaced experimental_fortran_frontend with experimental_flang_frontend (removing ATerm usage).
+     printf ("     p_experimental_flang_frontend               = %s \n",(p_experimental_flang_frontend == true) ? "true" : "false");
 
   // DQ (4/17/2015): Adding multifile handling support for commandline generation.
      printf ("     p_multifile_support                         = %s \n",(p_multifile_support == true) ? "true" : "false");
@@ -16624,6 +16574,10 @@ SgFile::display ( const std::string & label ) const
 
   // DQ (12/23/2015): Suppress variable declaration normalizations
      printf ("     p_suppress_variable_declaration_normalization = %s \n",(p_suppress_variable_declaration_normalization == true) ? "true" : "false");
+
+  // DQ (5/20/2021): Support for token-based unparsing (computation of first and last statement in source file.
+  // printf ("     p_firstStatement                            = %p \n",p_firstStatement);
+  // printf ("     p_lastStatement                             = %p \n",p_lastStatement);
 
 #if 0
 // Order of data member entries in support.C, matched against the
@@ -16750,11 +16704,22 @@ SOURCE_APPLICATION_FILE_END
 SOURCE_APPLICATION_SOURCE_FILE_START
 
 #if 0
+// DQ (3/2/2022): This default constructor is automatically generated by ROSETTA, so we don't need 
+// it to be explicit. Note that all of the data members are automatically initialized, as can be 
+// seen by looking at the Cxx_Grammar.C (generated code).
 SgSourceFile::SgSourceFile ()
    {
   // Default constructor
 
+#if 1
+     printf ("Inside of Default constructor SgSourceFile::SgSourceFile() \n");
+#endif
+
+     SgGlobal* p_root = NULL;
+
      assert (p_root == NULL);
+
+     initialization();
 
   // DQ (9/4/2008): Setup of global scope moved from SgFile to SgSourceFile
   // DQ (8/31/2006): Generate a NULL_FILE (instead of SgFile::SgFile) so that we can
@@ -16774,6 +16739,63 @@ SgSourceFile::SgSourceFile ()
      assert(p_root->get_endOfConstruct() == NULL);
      p_root->set_endOfConstruct(new Sg_File_Info("",0,0));
      assert(p_root->get_endOfConstruct() != NULL);
+   }
+#endif
+
+
+
+
+#if 1
+void
+SgSourceFile::initialization()
+   {
+  // DQ (3/2/2022): The SgSourceFile node has a number of new data members that were not previously initialized.
+
+  // Initialization
+
+#if 0
+     SourceFile.setDataPrototype   ( "SgGlobal*", "globalScope", "= NULL",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "SgModuleStatementPtrList", "module_list", "",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "SgTokenPtrList", "token_list", "",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "SgGlobal*", "temp_holding_scope", "= NULL",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "bool", "isHeaderFile", "= false",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "bool", "isHeaderFileIncludedMoreThanOnce", "= false",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "SgHeaderFileReport*", "headerFileReport", "= NULL",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
+     SourceFile.setDataPrototype("SgStringList","extraIncludeDirectorySpecifierBeforeList", "",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype("SgStringList","extraIncludeDirectorySpecifierAfterList", "",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "SgIncludeFile*", "associated_include_file", "= NULL",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
+     SourceFile.setDataPrototype   ( "bool", "processedToIncludeCppDirectivesAndComments", "= false",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype ( "SgNodePtrList" , "extra_nodes_for_namequal_init", "" ,
+                                   NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype   ( "bool", "isDynamicLibrary", "= false",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     SourceFile.setDataPrototype ( "SgStatement*", "firstStatement", " = NULL",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+     SourceFile.setDataPrototype ( "SgStatement*", "lastStatement", " = NULL",
+                                     NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+#endif
+
+     p_globalScope                                = NULL;
+     p_temp_holding_scope                         = NULL;
+     p_isHeaderFile                               = false;
+     p_isHeaderFileIncludedMoreThanOnce           = false;
+     p_headerFileReport                           = NULL;
+     p_associated_include_file                    = NULL;
+     p_processedToIncludeCppDirectivesAndComments = false;
+     p_isDynamicLibrary                           = false;
+     p_firstStatement                             = NULL;
+     p_lastStatement                              = NULL;
    }
 #endif
 
@@ -16903,10 +16925,12 @@ SgSourceFile::get_tokenSubsequenceMap()
 #if 0
           printf ("In SgSourceFile::get_tokenSubsequenceMap(): NOTE: SgSourceFile = %p not found in Rose::tokenSubsequenceMapOfMapsBySourceFile (might be because it is not saved in the AST write) \n",this);
 #endif
-       // DQ (2/19/2021): Disable this as an error since the AST read (after the AST write) will not have this data structure.
-       // We are not trying to currently support the token-based unparsing after an AST write and AST read.
-       // DQ (1/30/2021): Added an assertion.
-       // ROSE_ASSERT(false);
+       // Create an empty entry so callers can safely treat this as "no tokens".
+          std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenStreamSequenceMap =
+               new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+          Rose::tokenSubsequenceMapOfMapsBySourceFile.insert(
+               std::pair<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >(this,tokenStreamSequenceMap));
+          result = tokenStreamSequenceMap;
         }
 
      return *result;
@@ -17141,22 +17165,6 @@ SgSourceFile::get_token_unparse_frontier()
    }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void
 SgSourceFile::set_token_unparse_frontier_adjacency(std::map<SgNode*,PreviousAndNextNodeData*> & tokenStreamSequenceMap)
    {
@@ -17239,21 +17247,6 @@ SgSourceFile::get_token_unparse_frontier_adjacency()
 
      return *result;
    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // DQ (11/29/2013): Added to support access to multi-map of redundant mapping of frontier IR nodes to token subsequences.
@@ -17350,20 +17343,6 @@ SgSourceFile::get_redundantlyMappedTokensToStatementMultimap()
    }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // DQ (11/29/2013): Added to support access to multi-map of redundant mapping of frontier IR nodes to token subsequences.
 void
 SgSourceFile::set_redundantTokenEndingsSet(std::set<int> & X)
@@ -17449,18 +17428,6 @@ SgSourceFile::get_redundantTokenEndingsSet()
    }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 void
 SgSourceFile::set_representativeWhitespaceStatementMap(std::map<SgScopeStatement*,SgStatement*> & representativeWhitespaceStatementMap)
    {
@@ -17520,6 +17487,7 @@ SgSourceFile::set_representativeWhitespaceStatementMap(std::map<SgScopeStatement
 #endif
    }
 
+
 std::map<SgScopeStatement*,SgStatement*> &
 SgSourceFile::get_representativeWhitespaceStatementMap()
    {
@@ -17565,21 +17533,6 @@ SgSourceFile::get_representativeWhitespaceStatementMap()
      return *result;
    }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void
 SgSourceFile::set_macroExpansionMap(std::map<SgStatement*,MacroExpansion*> & macroExpansionMap)
    {
@@ -17618,6 +17571,7 @@ SgSourceFile::set_macroExpansionMap(std::map<SgStatement*,MacroExpansion*> & mac
      MLOG_INFO_C("ROSETTA", "In SgSourceFile::set_macroExpansionMap(): (after): frontierMap.size() = %zu \n",frontierMap.size());
 #endif
    }
+
 
 std::map<SgStatement*,MacroExpansion*> &
 SgSourceFile::get_macroExpansionMap()
@@ -17663,30 +17617,6 @@ SgSourceFile::get_macroExpansionMap()
 
      return *result;
    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 SOURCE_APPLICATION_SOURCE_FILE_END
 
@@ -17860,7 +17790,6 @@ SOURCE_APPLICATION_DIRECTORY_END
 
 SOURCE_APPLICATION_DIRECTORY_LIST_START
 SOURCE_APPLICATION_DIRECTORY_LIST_END
-
 
 SOURCE_APPLICATION_PROJECT_START
 
@@ -20546,6 +20475,34 @@ SgUnparse_Info::getStructureTagList ()
    {
   // Access function for internal STL list
      return p_structureTagProcessingList;
+   }
+
+// DQ (6/5/2021): Support for debugging, we want to debug the transitions between token-based unparsing and unparsing from the AST.
+SgStatement* SgUnparse_Info::p_previouslyUnparsedStatement              = NULL;
+bool         SgUnparse_Info::p_previousStatementUnparsedFromTokenStream = false;
+
+// DQ (6/5/2021): Support for debugging, we want to debug the transitions between token-based unparsing and unparsing from the AST.
+SgStatement* SgUnparse_Info::get_previouslyUnparsedStatement()
+   {
+     return p_previouslyUnparsedStatement;
+   }
+
+// DQ (6/5/2021): Support for debugging, we want to debug the transitions between token-based unparsing and unparsing from the AST.
+void SgUnparse_Info::set_previouslyUnparsedStatement( SgStatement* previouslyUnparsedStatement )
+   {
+     p_previouslyUnparsedStatement = previouslyUnparsedStatement;
+   }
+
+// DQ (6/5/2021): Support for debugging, we want to debug the transitions between token-based unparsing and unparsing from the AST.
+bool SgUnparse_Info::get_previousStatementUnparsedFromTokenStream()
+   {
+     return p_previousStatementUnparsedFromTokenStream;
+   }
+
+// DQ (6/5/2021): Support for debugging, we want to debug the transitions between token-based unparsing and unparsing from the AST.
+void SgUnparse_Info::set_previousStatementUnparsedFromTokenStream( bool previousStatementUnparsedFromTokenStream )
+   {
+     p_previousStatementUnparsedFromTokenStream = previousStatementUnparsedFromTokenStream;
    }
 
 SOURCE_UNPARSE_INFO_END

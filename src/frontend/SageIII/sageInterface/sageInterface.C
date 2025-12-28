@@ -53,6 +53,7 @@
 #include <algorithm> // for set operations
 #include <numeric>   // for std::accumulate
 #include <map>
+#include <unordered_set>
 #include <cstring>
 
 namespace sg
@@ -96,6 +97,53 @@ namespace sg
     report_error(msg + typeid(n).name(), file, ln);
   }
 }
+
+#if 0
+// DQ (3/5/2022): Adding support to check AST for invalide poionters.
+void
+SageInterface::checkSgNodePointers()
+   {
+  // This function uses a memory pool traversal to look for any pointers to invalid IR nodes.
+
+  // Step 1: is to build a map of the boundaries of the memory pools for each IR node kind.
+  // Step 2: traverse all of the IR nodes across all of the memory pools and check
+  //   a) if the pointer to each node in the list of child IR nodes is in the map from step 1.
+  //   b) if it is then we can expect to dereference the pointer and check the value of 
+  //      get_freepointer(), the value should be 0xffffffffffffffff, else it is an error
+  // (when it is an error it usually should be a value that is in the map from step 1, but it
+  // is a node that was previously deleted, so it is a stale pointer).
+
+     class BuildMapTraversal : public ROSE_VisitTraversal
+        {
+          public:
+            // std::vector<SgNode*> resultlist;
+            // std::map<enum VariantT,std::vector<std::pair<SgNode*,SgNode*>> mapOfMemoryPoolsBounds;
+
+            // We need to get the pools variable for each IR node.
+
+               void visit ( SgNode* node)
+                  {
+                 // Get list of all pointers to all IR nodes in the current node.
+
+                 // $CLASSNAME::pools
+                    node->checkDataMemberPointersIfInMemoryPool();
+
+                    resultlist.push_back(result);
+                  };
+
+           virtual ~MyTraversal() {}
+        };
+
+  // For debugging, recode the number of IR nodes before we delete the AST.
+     size_t numberOfNodes_before = numberOfNodes();
+
+     MyTraversal my_traversal;
+
+  // We need to visit all of the IR nodes, not just those of a specific class in ROSE.
+  // NodeType::traverseMemoryPoolNodes(my_traversal);
+     my_traversal.traverseMemoryPool();
+   }
+#endif
 
 // DQ (12/1/2015): Added to support macro handling.
 #include "detectMacroOrIncludeFileExpansions.h"
@@ -1184,7 +1232,7 @@ SageInterface::set_name ( SgInitializedName *initializedNameNode, SgName new_nam
           printf ("scope_stmt = %p = %s \n",scope_stmt,scope_stmt->class_name().c_str());
 #if 0
           printf ("Detected isSgEnumDeclaration as parent: exiting as a test in SageInterface::set_name() \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
 #endif
         }
 
@@ -1331,12 +1379,20 @@ SageInterface::set_name ( SgInitializedName *initializedNameNode, SgName new_nam
 #endif
                          varRefExp->set_isModified(true);
                          varRefExp->setTransformation();
-
-                      // DQ (4/23/2021): I think it is a problem that the statement is not marked as a transformation so that we know how to handle it with the token-based unparsing.
+#if 1
+                      // DQ (5/2/2021): The traversal over the file will identify the nesting of and transformations in outer (enclosing) IR nodes.
+                      // DQ (5/1/2021): I think that we may have to set the physical node id and maybe make it to be output.  This is 
+                      // special to the case of using the header file unparsing (any maybe the token-based unparsing with the header 
+                      // file unparsing, but I think just the header file unparsing).
+#if 0
+                         printf ("In SageInterface::set_name(): When unparsing header files, we need to set the physical file id to the correct file \n");
+#endif
+                      // DQ (4/23/2021): I think it is a problem that the statement is not marked as a transformation so that we 
+                      // know how to handle it with the token-based unparsing.  
                          SgStatement* associatedStatement = getEnclosingStatement(varRefExp);
                          ROSE_ASSERT(associatedStatement != NULL);
                          associatedStatement->setTransformation();
-
+#endif
 #if 0
                       // DQ (11/13/2018): Mark the statement associated with this SgVarRefExp (see test9 in UnparseHeaders_tests).
                          SgStatement* associatedStatement = getEnclosingStatement(varRefExp);
@@ -1397,6 +1453,79 @@ SageInterface::listHeaderFiles ( SgIncludeFile* includeFile )
      PrefixTraversal traversal;
      traversal.traverse(includeFile, preorder);
 
+   }
+
+
+bool 
+SageInterface::scopeHasStatementsFromSameFile(SgScopeStatement* scope)
+   {
+  // DQ (5/9/2021): Adding support for detection of statements in a scope that must be unparsed.
+  // This function supports the token-based unparsing when used with unparsing of header files 
+  // to know when the scope can be unparsed via it's token stream, even though a statement from 
+  // a header file may contain a transformation.
+  //    returns true if there is a statement in the scope that has to be unparsed (is from the same file as the scope).
+  //    returns false if the scope is empty or contains only statements associated with one or more header files.
+  // When the scope has statements from the same file, then if there is a transformation contained in any of 
+  // those statements then we have to unparse the scope one statement at a time when using the token-based 
+  // unparsing.  If the scope has no statements from the same file, then the existance of any statement that 
+  // contains a transformation does not case the statements to be unparsed individually.
+
+     ROSE_ASSERT(scope != NULL);
+     int scope_file_id = scope->get_file_info()->get_physical_file_id();
+
+     bool return_value = false;
+
+     if (scope->containsOnlyDeclarations() == true)
+        {
+          SgDeclarationStatementPtrList & declarationStatementList = scope->getDeclarationList();
+#if 1
+          printf ("In scopeHasStatementsFromSameFile(): DeclarationStatementList not implemented \n");
+#endif
+#if 1
+          printf ("declarationStatementList.size() = %zu \n",declarationStatementList.size());
+#endif
+          SgDeclarationStatementPtrList::iterator i = declarationStatementList.begin();
+
+          while (i != declarationStatementList.end() && return_value == false)
+             {
+               SgDeclarationStatement* statement = *i;
+               int statement_file_id = statement->get_file_info()->get_physical_file_id();
+
+               if (statement_file_id == scope_file_id)
+                 {
+                   return_value = true;
+                 }
+
+               i++;
+             }
+#if 0
+          printf ("Exiting as a test! \n");
+          ROSE_ABORT();
+#endif
+        }
+       else
+        {
+          SgStatementPtrList & statementList = scope->getStatementList();
+#if 1
+          printf ("In scopeHasStatementsFromSameFile(): StatementList not implemented \n");
+#endif
+          SgStatementPtrList::iterator i = statementList.begin();
+
+          while (i != statementList.end() && return_value == false)
+             {
+               SgStatement* statement = *i;
+               int statement_file_id = statement->get_file_info()->get_physical_file_id();
+
+               if (statement_file_id == scope_file_id)
+                 {
+                   return_value = true;
+                 }
+
+               i++;
+             }
+        }
+
+     return return_value;
    }
 
 
@@ -1911,6 +2040,7 @@ SageInterface::get_name ( const SgScopeStatement* scope )
 
        // DQ (11/30/2007): Added more fortran support.
           case V_SgAssociateStatement:
+          case V_SgFunctionParameterScope:
           case V_SgBasicBlock:
           case V_SgCatchOptionStmt:
           case V_SgDoWhileStmt:
@@ -2300,7 +2430,7 @@ SageInterface::get_name ( const SgSupport* node )
              {
                printf ("Default reached in switch for SgSupport IR node = %s \n",node->class_name().c_str());
                name = "default name";
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
                break;
              }
         }
@@ -3023,7 +3153,7 @@ SageInterface::generateUniqueNameForUseAsIdentifier_support ( SgDeclarationState
           default:
              {
                printf ("In SageInterface::generateUniqueNameForUseAsIdentifier(): Unsupported declaration = %p = %s \n",declaration,declaration->class_name().c_str());
-//               ROSE_ASSERT(false);
+//               ROSE_ABORT();
              }
         }
 
@@ -3083,7 +3213,7 @@ SageInterface::generateUniqueNameForUseAsIdentifier ( SgDeclarationStatement* de
             // Note that builtin functions will not have a defining declaration.
                printf ("Warning: defining declaration not in SageInterface::local_node_to_name_map: declaration = %p = %s using name = %s \n",
                     declaration,declaration->class_name().c_str(),SageInterface::get_name(declaration).c_str());
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
             // If there is no defining declaration then go ahead and use the non-defining one.
             // s = SageInterface::get_name(declaration);
@@ -3250,6 +3380,8 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
   // if it does not have a default constructor, but has any other constructor that would prevent
   // a compiler generated default constructor from being generated by the compiler.
 
+#define DEBUG_ADD_DEFAULT_CONSTRUCTOR 0
+
   // Note the physical_file_id is so that it can be marked to be unparsed when header file unparsing is active.
 
      ROSE_ASSERT(classType != NULL);
@@ -3269,6 +3401,10 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
      bool foundConstructor        = false;
      bool foundDefaultConstructor = false;
 
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
+     printf ("In addDefaultConstructorIfRequired(): class name = %s \n",classDeclaration->get_name().str());
+#endif
+
      SgDeclarationStatementPtrList::iterator i = declarationList.begin();
      while (i != declarationList.end())
         {
@@ -3279,17 +3415,32 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
                if (isConstructor == true)
                   {
                     foundConstructor = true;
-#if 0
+
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
                     printf ("Found a constructor! \n");
 #endif
                     SgFunctionParameterList* functionParameterList = memberFunctionDeclaration->get_parameterList();
                     ROSE_ASSERT(functionParameterList != NULL);
-                    foundDefaultConstructor = (functionParameterList->get_args().size() == 0);
-#if 0
+
+                 // DQ (7/19/2021): Fixed to allow for previously found default constructor to be registered as found.
+                 // foundDefaultConstructor = (functionParameterList->get_args().size() == 0);
+                    foundDefaultConstructor = ((foundDefaultConstructor == true) || (functionParameterList->get_args().size() == 0));
+
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
                     if (foundDefaultConstructor == true)
                        {
                          printf ("Found a default constructor! \n");
                        }
+                      else
+                       {
+                         printf ("This is not a default constructor: functionParameterList->get_args().size() = %zu \n",functionParameterList->get_args().size());
+                       }
+#endif
+                  }
+                 else
+                  {
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
+                    printf ("This is not a constructor \n");
 #endif
                   }
              }
@@ -3297,7 +3448,7 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
           i++;
         }
 
-#if 0
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
      printf ("foundConstructor        = %s \n",foundConstructor ? "true" : "false");
      printf ("foundDefaultConstructor = %s \n",foundDefaultConstructor ? "true" : "false");
 #endif
@@ -3305,26 +3456,28 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
      if (foundConstructor == true)
         {
        // Since there is at least one constructor, we can't rely on compiler generated constructors.
-#if 0
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
           printf ("Since there is at least one constructor, we can't rely on compiler generated constructors \n");
 #endif
           if (foundDefaultConstructor == true)
              {
             // We can use the existing default constructor.
-#if 0
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
                printf ("We can use the existing default constructor (no need to build one) \n");
 #endif
              }
             else
              {
             // We don't have a default constructor, so we need to build one explicitly, and insert it into the class definition.
-#if 0
+
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
                printf ("########################################################### \n");
                printf ("Need to build a default constructor in the associated class \n");
 #endif
                SgMemberFunctionDeclaration* constructorDeclaration = SageBuilder::buildDefaultConstructor(classType);
                ROSE_ASSERT(constructorDeclaration != NULL);
-#if 0
+
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
                printf (" --- constructorDeclaration = %p = %s name = %s \n",constructorDeclaration,constructorDeclaration->class_name().c_str(),constructorDeclaration->get_name().str());
 #endif
                ROSE_ASSERT (constructorDeclaration->get_declarationModifier().get_accessModifier().isPublic() == true);
@@ -3350,7 +3503,8 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
                constructorDeclaration->get_definition()->get_startOfConstruct()->set_physical_file_id(physical_file_id);
                constructorDeclaration->get_definition()->get_endOfConstruct  ()->set_physical_file_id(physical_file_id);
 #endif
-#if 0
+
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
                printf ("DONE: Need to build a default constructor in the associated class \n");
                printf ("################################################################# \n");
 #endif
@@ -3363,10 +3517,15 @@ SageInterface::addDefaultConstructorIfRequired ( SgClassType* classType, int phy
        else
         {
        // No constructors found, so we don't need to add an explicit default constructor.
-#if 0
+
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
           printf ("No constructors found, so we don't need to add an explicit default constructor \n");
 #endif
         }
+
+#if DEBUG_ADD_DEFAULT_CONSTRUCTOR
+     printf ("Leaving addDefaultConstructorIfRequired(): returnValue = %s \n",returnValue ? "true" : "false");
+#endif
 
      return returnValue;
    }
@@ -3798,7 +3957,7 @@ SageInterface::buildForwardFunctionDeclaration ( SgTemplateInstantiationMemberFu
      SgTemplateInstantiationMemberFunctionDecl* copyOfMemberFunction = static_cast<SgTemplateInstantiationMemberFunctionDecl*>(copyOfMemberFunctionNode);
 
   // printf ("\n\nHOW DO WE KNOW WHEN TO NOT COPY THE DEFINING DECLARATION SO THAT WE CAN JUST BUILD A FUNCTION PROTOTYPE! \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
 #if 0
      printf ("copyOfMemberFunction->get_firstNondefiningDeclaration() = %p \n",copyOfMemberFunction->get_firstNondefiningDeclaration());
@@ -4106,7 +4265,7 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
                        {
                       // There is a variable declaration in the conditional, it needs to be added to the symbol table.
                       // printf ("There is a variable declaration in the for statement initializer, it needs to be added to the symbol table scope = %p = %s \n",scope,scope->class_name().c_str());
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                          supportForVariableDeclarations ( scope, symbolTable, variableDeclarationInitializer );
                        }
 
@@ -4118,7 +4277,7 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
                   {
                  // There is a variable declaration in the conditional, it needs to be added to the symbol table.
                  // printf ("There is a variable declaration in the for statement test, it needs to be added to the symbol table scope = %p = %s \n",scope,scope->class_name().c_str());
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                     supportForVariableDeclarations ( scope, symbolTable, variableDeclarationCondition );
                   }
 
@@ -4191,7 +4350,7 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
                   {
                  // There is a variable declaration in the conditional, it needs to be added to the symbol table.
                  // printf ("There is a variable declaration in the conditional, it needs to be added to the symbol table \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                     supportForVariableDeclarations ( scope, symbolTable, variableDeclarationCondition );
                   }
                return;
@@ -4228,7 +4387,7 @@ SageInterface::rebuildSymbolTable ( SgScopeStatement* scope )
                   {
                  // There is a variable declaration in the conditional, it needs to be added to the symbol table.
                  // printf ("There is a variable declaration in the while statement condition, it needs to be added to the symbol table \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 
                     supportForVariableDeclarations ( scope, symbolTable, variableDeclarationCondition );
                   }
@@ -5428,7 +5587,7 @@ bool SageInterface::is_mixed_Fortran_and_C_and_Cxx_language()
 bool SageInterface::is_language_case_insensitive()
    {
    // This won't work for mixed languages so try returning to original
-   // return is_Fortran_language() || is_Jovial_language();
+   // return is_Fortran_language();
       return symbol_table_case_insensitive_semantics == true;
    }
 
@@ -6424,7 +6583,7 @@ SageInterface::lookupSymbolInParentScopes (const SgName &  name, SgScopeStatemen
 #if DEBUG_SYMBOL_LOOKUP_IN_PARENT_SCOPES
           printf ("Warning: In SageInterface:: lookupSymbolInParentScopes(): could not locate the specified name %s in any outer symbol table (templateParameterList = %p templateArgumentList = %p) \n",name.str(),templateParameterList,templateArgumentList);
 #endif
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
      return symbol;
@@ -6495,7 +6654,7 @@ SageInterface::lookupSymbolInParentScopesIgnoringAliasSymbols (const SgName & na
           printf ("Warning: In SageInterface:: lookupSymbolInParentScopesIgnoringAliasSymbols(): could not locate the specified name %s in any outer symbol table (templateParameterList = %p templateArgumentList = %p) \n",
                name.str(),templateParameterList,templateArgumentList);
 #endif
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
 #if 0
@@ -6538,7 +6697,7 @@ SgSymbol *SageInterface:: lookupSymbolInParentScopes (const SgName &  name, SgSc
     {
         //    printf ("Warning: could not locate the specified name %s in any outer symbol table \n"e,
         //  name.str());
-        //  ROSE_ASSERT(false);
+        //  ROSE_ABORT();
     }
     return symbol;
 }
@@ -6977,7 +7136,7 @@ SageInterface::setSourcePositionAsTransformation(SgNode *node)
 
   // DQ (10/12/2012): Commented out since we are past AST regression tests passing and now trying to get this work checked in.
 //     printf ("In SageInterface::setSourcePositionAsTransformation() for node = %p = %s (make this an error while debugging AST construction) \n",node,node->class_name().c_str());
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
      SgLocatedNode*     locatedNode = isSgLocatedNode(node);
      SgExpression*      expression  = isSgExpression(node);
@@ -7286,7 +7445,7 @@ SageInterface::setSourcePosition(SgNode* node)
                       else
                        {
                       // printf ("Error: can't call setSourcePosition() in mode e_sourcePositionFrontendConstruction with non SgLocatedNode (node = %p = %s) \n",node,node->class_name().c_str());
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                          SgType* type = isSgType(node);
                          if (type != NULL)
                             {
@@ -8460,10 +8619,10 @@ SageInterface::getTemplateDeclaration( const SgNode* astNode)
             else
              {
                printf ("Warning: In SageInterface::getTemplateDeclaration(): could not trace back to template declaration node from %s \n",astNode->class_name().c_str());
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
        // DQ (6/6/2013): commented this out since it is OK to return NULL (I think).
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 #endif
 
        // DQ (12/27/2010): This should not be an error (OK to return NULL).
@@ -9418,48 +9577,6 @@ SgFile * SageInterface::getEnclosingFileNode(SgNode* astNode)
           SgClassDeclaration* classDeclaration = isSgClassDeclaration(previous_previous_parent);
           if (classDeclaration != NULL)
              {
-#if 0
-               printf ("Class name = %p = %s = %s \n",classDeclaration,classDeclaration->class_name().c_str(),classDeclaration->get_name().str());
-#endif
-#if 0
-            // DQ (3/4/2014): This is the code we want to use until we get Philippe's branch in place with the attribute.
-               SgProject* project = SageInterface::getProject(parent);
-               ROSE_ASSERT(project != NULL);
-               SgFileList* fileList = project->get_fileList_ptr();
-               ROSE_ASSERT(fileList != NULL);
-               SgFilePtrList & vectorFile = fileList->get_listOfFiles();
-#if 0
-               printf ("Output list of files: \n");
-#endif
-               SgFilePtrList::iterator i = vectorFile.begin();
-               while (i != vectorFile.end())
-                  {
-                    SgFile* file = *i;
-                    ROSE_ASSERT(file != NULL);
-#if 0
-                    printf ("   --- filename = %s \n",file->getFileName().c_str());
-#endif
-                    string filename            = file->getFileName();
-                    string filenameWithoutPath = file->get_sourceFileNameWithoutPath();
-                    string classname           = classDeclaration->get_name();
-                    string matchingfilename    = classname + ".java";
-#if 0
-                    printf ("   ---   --- filename            = %s \n",filename.c_str());
-                    printf ("   ---   --- filenameWithoutPath = %s \n",filenameWithoutPath.c_str());
-                    printf ("   ---   --- classname           = %s \n",classname.c_str());
-                    printf ("   ---   --- matchingfilename    = %s \n",matchingfilename.c_str());
-#endif
-                    if (filenameWithoutPath == matchingfilename)
-                       {
-#if 0
-                         printf ("   return file = %p \n",file);
-#endif
-                         return file;
-                       }
-
-                    i++;
-                  }
-#else
             // DQ (3/4/2014): This is the code we want to use when the attribute is in place (philippe's branch).
                AstSgNodeAttribute *attribute = (AstSgNodeAttribute *) classDeclaration->getAttribute("sourcefile");
 
@@ -9470,7 +9587,6 @@ SgFile * SageInterface::getEnclosingFileNode(SgNode* astNode)
                     ROSE_ASSERT(sourcefile != NULL);
                     return sourcefile;
                   }
-#endif
              }
         } else {
         }
@@ -10146,7 +10262,7 @@ SageInterface::moveCommentsToNewStatement(SgStatement* sourceStatement, const ve
                   }
 
             // printf (" This case (surroundingStatementPreceedsTargetStatement == false) is not handled yet. \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
 
           targetStatement->addToAttachedPreprocessingInfo((*comments)[*j]);
@@ -10421,6 +10537,23 @@ void SageInterface::replaceStatement(SgStatement* oldStmt, SgStatement* newStmt,
 #endif
     p->replace_statement(oldStmt,newStmt);
 
+#if 1
+  // DQ (7/20/2021): Need to make the physical_file_ids match and the parents.
+  // Acutally this may be too late in the case of a deferred transformation since 
+  // we run the AST consistancy tests as an intermediate step.
+     int physical_file_id = oldStmt->get_startOfConstruct()->get_physical_file_id();
+
+#if 0
+     printf ("In SageInterface::replaceStatement(): physical_file_id = %d \n",physical_file_id);
+#endif
+
+     newStmt->get_startOfConstruct()->set_physical_file_id(physical_file_id);
+     newStmt->get_endOfConstruct  ()->set_physical_file_id(physical_file_id);
+
+  // DQ (7/20/2021): Do we need this when we set the physical_file_id?
+     newStmt->set_parent(oldStmt->get_parent());
+#endif
+
 // Some translators have their own handling for this (e.g. the outliner)
   if (movePreprocessingInfoValue)
      {
@@ -10620,6 +10753,8 @@ SageInterface::isTemplateInstantiationNode(SgNode* node)
    }
 
 #if 0
+// DQ (5/23/2021): Added (uncommented, and added to the header file) function to support test for template declaration.
+// Commented back out, since this is not required for what I am debugging currently.
 // DQ (6/27/2018): This will be the template declaration test version of the template instantiation test function above.
 bool
 SageInterface::isTemplateDeclarationNode(SgNode* node)
@@ -10634,7 +10769,7 @@ SageInterface::isTemplateDeclarationNode(SgNode* node)
 
      return isSgTemplateInstantiationDecl(node)
       // DQ (1/3/2016): Allow SgTemplateInstantiationDefn IR nodes.
-//       || isSgTemplateInstantiationDefn(node)
+      // || isSgTemplateInstantiationDefn(node)
          || isSgTemplateInstantiationDefn(node)
          || isSgTemplateInstantiationFunctionDecl(node)
          || isSgTemplateInstantiationMemberFunctionDecl(node)
@@ -10718,7 +10853,7 @@ SageInterface::wrapAllTemplateInstantiationsInAssociatedNamespaces(SgProject* ro
 
 #if 0
      printf ("Leaving SageInterface::wrapAllTemplateInstantiationsInAssociatedNamespaces(): Exiting as a test! \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 #endif
    }
 
@@ -11193,11 +11328,10 @@ SgOmpClauseBodyStatement* SageInterface::findEnclosingOmpClauseBodyStatement(SgS
 
 
 SgScopeStatement* SageInterface::findEnclosingLoop(SgStatement* s, const std::string& label, bool stopOnSwitches) {
-  /* label can represent a fortran label or a java label provided as a label in a continue/break statement */
+  /* label can represent a Fortran label; other languages should pass an empty label. */
   for (; s; s = isSgStatement(s->get_parent())) {
     SgScopeStatement* sc = isSgScopeStatement(s);
-    // Need to check for empty label as for java we must detect the
-        // innermost labeled statement and skip everything in between
+    // Need to check for empty label to detect the innermost labeled statement.
     switch (s->variantT()) {
       case V_SgDoWhileStmt: {
           if (label.empty()) {
@@ -12342,7 +12476,7 @@ SgInitializedName* SageInterface::getLoopIndexVariable(SgNode* loop)
   if (init.size() !=1)
   {
     cerr<<"SageInterface::getLoopIndexVariable(), no or more than one initialization statements are encountered. Not supported yet "<<endl;
-    //ROSE_ASSERT(false);
+    //ROSE_ABORT();
     return NULL;
   }
   SgStatement* init1 = init.front();
@@ -12396,7 +12530,7 @@ SgInitializedName* SageInterface::getLoopIndexVariable(SgNode* loop)
     init1->get_file_info()->display("Debug");
 
     return NULL;
-    //ROSE_ASSERT (false);
+    //ROSE_ABORT();
   }
   // Cannot be both true
  // ROSE_ASSERT(!(isCase1&&isCase2));
@@ -12544,7 +12678,7 @@ bool SageInterface::isCanonicalDoLoop(SgFortranDo* loop,SgInitializedName** ivar
   if (isSgNullExpression(incr))
   {
     cerr<<"Error:isCanonicalDoLoop() found NULL increment expression. Please call doLoopNormalization() first!"<<endl;
-    ROSE_ASSERT (false);
+    ROSE_ABORT();
   }
   if (hasIncrementalIterationSpace != NULL)
   {
@@ -12872,7 +13006,7 @@ void SageInterface::setLoopLowerBound(SgNode* loop, SgExpression* lb)
   else
   {
     cerr<<"Error. SageInterface::setLoopLowerBound(), illegal loop type:"<< loop->class_name()<<endl;
-    ROSE_ASSERT (false);
+    ROSE_ABORT();
   }
 }
 
@@ -12901,7 +13035,7 @@ void SageInterface::setLoopUpperBound(SgNode* loop, SgExpression* ub)
   else
   {
     cerr<<"Error. SageInterface::setLoopUpperBound(), illegal loop type:"<< loop->class_name()<<endl;
-    ROSE_ASSERT (false);
+    ROSE_ABORT();
   }
 
 }
@@ -13014,7 +13148,7 @@ void SageInterface::setLoopStride(SgNode* loop, SgExpression* stride)
   else
   {
     cerr<<"Error. SageInterface::setLoopStride(), illegal loop type:"<< loop->class_name()<<endl;
-    ROSE_ASSERT (false);
+    ROSE_ABORT();
 
   }
 }
@@ -13257,7 +13391,7 @@ ROSE_DLL_API int SageInterface::splitVariableDeclaration (SgScopeStatement* scop
   if (!topLevelOnly)
   {
     cerr<<"SageInterface::splitVariableDeclaration() topLevelOnly == false is not yet implemented."<<endl;
-    ROSE_ASSERT (false);
+    ROSE_ABORT();
   }
 
   Rose_STL_Container<SgNode*> nodeList = NodeQuery::querySubTree(scope, V_SgVariableDeclaration);
@@ -13339,6 +13473,8 @@ class AndOpGenerator: public StatementGenerator
 
           virtual SgStatement* generate(SgExpression* lhs)
              {
+               if (lhs == NULL)
+                 return NULL;
                SgTreeCopy treeCopy;
                SgExpression* lhsCopy = isSgExpression(lhs->copy(treeCopy));
                ROSE_ASSERT (lhsCopy);
@@ -13362,6 +13498,8 @@ class OrOpGenerator: public StatementGenerator
 
           virtual SgStatement* generate(SgExpression* lhs)
              {
+               if (lhs == NULL)
+                 return NULL;
                SgTreeCopy treeCopy;
                SgExpression* lhsCopy = isSgExpression(lhs->copy(treeCopy));
                ROSE_ASSERT (lhsCopy);
@@ -13385,6 +13523,8 @@ class ConditionalExpGenerator: public StatementGenerator
 
           virtual SgStatement* generate(SgExpression* lhs)
              {
+               if (lhs == NULL)
+                 return NULL;
                SgTreeCopy treeCopy;
                SgExpression* lhsCopy = isSgExpression(lhs->copy(treeCopy));
                ROSE_ASSERT (lhsCopy);
@@ -13410,7 +13550,7 @@ SgAssignInitializer* SageInterface::splitExpression(SgExpression* from, string n
 #if 0  // This is not accurate for template class specializations. We disable this assertion for now. The worst case is compilation error later.
   if (!SageInterface::isCopyConstructible(from->get_type())) {
     std::cerr << "Type " << from->get_type()->unparseToString() << " of expression " << from->unparseToString() << " is not copy constructible" << std::endl;
-    ROSE_ASSERT (false);
+    ROSE_ABORT();
   }
 
   assert (SageInterface::isCopyConstructible(from->get_type())); // How do we report errors?
@@ -13634,7 +13774,7 @@ SageInterface::setParameterList(actualFunction * func,SgFunctionParameterList * 
                << (func->get_name()).getString()<<endl
                << " Sharing parameter lists can corrupt symbol tables!"<<endl
                << " Please use deepCopy() to get an exclusive parameter list for each function declaration!"<<endl;
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
   // Liao,2/5/2008  constructor of SgFunctionDeclaration will automatically generate SgFunctionParameterList, so be cautious when set new paralist!!
@@ -14024,6 +14164,8 @@ void SageInterface::prependStatement(SgStatement *stmt, SgScopeStatement* scope)
      printf ("In SageInterface::prependStatement(): stmt = %p = %s scope = %p \n",stmt,stmt->class_name().c_str(),scope);
 #endif
 
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(stmt,"testing prependStatement(): 2.2.6.1.2.1") == false);
+
      if (scope == NULL)
         {
           scope = SageBuilder::topScopeStack();
@@ -14031,6 +14173,8 @@ void SageInterface::prependStatement(SgStatement *stmt, SgScopeStatement* scope)
 
      ROSE_ASSERT(scope != NULL);
   // TODO handle side effect like SageBuilder::appendStatement() does
+
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(scope,"testing prependStatement(): 2.2.6.1.2.1a") == false);
 
   // Must fix it before insert it into the scope,
   // otherwise assertions in insertStatementInScope() would fail
@@ -14040,6 +14184,8 @@ void SageInterface::prependStatement(SgStatement *stmt, SgScopeStatement* scope)
      printf ("In SageInterface::prependStatement(): stmt = %p = %s scope = %p = %s (resetInternalMapsForTargetStatement: stmt) \n",
           stmt,stmt->class_name().c_str(),scope,scope->class_name().c_str());
 #endif
+
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(stmt,"testing prependStatement(): 2.2.6.1.2.2") == false);
 
   // DQ (12/1/2015): If this is a moved statement then cause it to update internal data structures
   // to record it being moved (and thus the macroExpansions that it might be associated with having
@@ -14051,6 +14197,8 @@ void SageInterface::prependStatement(SgStatement *stmt, SgScopeStatement* scope)
           stmt,stmt->class_name().c_str(),scope,scope->class_name().c_str());
 #endif
 
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(stmt,"testing prependStatement(): 2.2.6.1.2.3") == false);
+
   // DQ (12/1/2015): Also look at the statements on either side of the location where this statement
   // is being inserted to make sure that they are not a part of a macro expansion. In the case of
   // prepend, we only need to look at the scope.
@@ -14060,8 +14208,13 @@ void SageInterface::prependStatement(SgStatement *stmt, SgScopeStatement* scope)
      printf ("Calling insertStatementInScope() \n");
 #endif
 
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(stmt,"testing prependStatement(): 2.2.6.1.2.4") == false);
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(scope,"testing prependStatement(): 2.2.6.1.2.4a") == false);
+
      scope->insertStatementInScope(stmt,true);
      stmt->set_parent(scope); // needed?
+
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(scope,"testing prependStatement(): 2.2.6.1.2.5") == false);
 
   // DQ (11/19/2012): If we are building the AST within the front-end then don't do this expensive
   // fixup (we already set it properly in the AST construction within the frontend so we don't need
@@ -14075,6 +14228,8 @@ void SageInterface::prependStatement(SgStatement *stmt, SgScopeStatement* scope)
         {
           updateDefiningNondefiningLinks(isSgFunctionDeclaration(stmt),scope);
         }
+
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(scope,"testing prependStatement(): 2.2.6.1.2.6") == false);
 
 #if 0
      printf ("Leaving SageInterface::prependStatement() \n");
@@ -15163,10 +15318,27 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
   for (Rose_STL_Container<SgNode*>::iterator i=reflist.begin();i!=reflist.end();i++)
   {
     varRef= isSgVarRefExp(*i);
-    ROSE_ASSERT(varRef->get_symbol());
-    SgInitializedName* initname= varRef->get_symbol()->get_declaration();
-
-    ROSE_ASSERT (initname != NULL);
+    SgSymbol* rawSymbol = varRef->get_symbol();
+    SgVariableSymbol* varSymbol = isSgVariableSymbol(rawSymbol);
+    SgInitializedName* initname = varSymbol != NULL ? varSymbol->get_declaration() : NULL;
+    if (initname == NULL)
+      {
+     // Provide a safe placeholder so downstream type queries won't crash.
+        SgName placeholderName("undefined");
+        SgScopeStatement* scope = getScope(varRef);
+        SgVarRefExp* placeholderRef =
+            SageBuilder::buildDanglingVarRefExp(placeholderName, scope);
+        if (placeholderRef != NULL)
+           {
+             varRef->set_symbol(placeholderRef->get_symbol());
+             varSymbol = isSgVariableSymbol(varRef->get_symbol());
+             initname = varSymbol != NULL ? varSymbol->get_declaration() : NULL;
+           }
+        if (initname == NULL)
+           {
+             continue;
+           }
+      }
     if (initname->get_type()==SgTypeUnknown::createType())
       //    if ((initname->get_scope()==NULL) && (initname->get_type()==SgTypeUnknown::createType()))
     {
@@ -15184,20 +15356,27 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
         if (varRef == arrowExp->get_rhs_operand_i())
         {
             // make sure the lhs operand has been fixed
-            counter += fixVariableReferences(arrowExp->get_lhs_operand_i());
+            counter += fixVariableReferences(arrowExp->get_lhs_operand_i(), false);
             SgType* lhs_type = arrowExp->get_lhs_operand_i()->get_type() ;
             lhs_type = lhs_type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
             SgPointerType* ptrType = isSgPointerType(lhs_type);
-            ROSE_ASSERT(ptrType);
-            SgClassType* clsType = isSgClassType(ptrType->get_base_type()-> stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE));
-            ROSE_ASSERT(clsType);
-            SgClassDeclaration* decl = isSgClassDeclaration(clsType->get_declaration());
-            decl = isSgClassDeclaration(decl->get_definingDeclaration());
-            ROSE_ASSERT(decl);
-
-         // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
-         // realSymbol = lookupSymbolInParentScopes(varName, decl->get_definition());
-            realSymbol = lookupVariableSymbolInParentScopes(varName, decl->get_definition());
+            if (ptrType != NULL) {
+              SgClassType* clsType = isSgClassType(ptrType->get_base_type()-> stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE));
+              if (clsType != NULL) {
+                SgClassDeclaration* decl = isSgClassDeclaration(clsType->get_declaration());
+                decl = decl != NULL ? isSgClassDeclaration(decl->get_definingDeclaration()) : NULL;
+                if (decl != NULL)
+                   {
+                  // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
+                  // realSymbol = lookupSymbolInParentScopes(varName, decl->get_definition());
+                     realSymbol = lookupVariableSymbolInParentScopes(varName, decl->get_definition());
+                   }
+              }
+            }
+            if (realSymbol == NULL)
+               {
+                 realSymbol = lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+               }
         }
         else
         {
@@ -15211,19 +15390,26 @@ int SageInterface::fixVariableReferences(SgNode* root, bool cleanUnusedSymbols/*
         if (varRef == dotExp->get_rhs_operand_i())
         {
             // make sure the lhs operand has been fixed
-            counter += fixVariableReferences(dotExp->get_lhs_operand_i());
+            counter += fixVariableReferences(dotExp->get_lhs_operand_i(), false);
 
             SgType* lhs_type = dotExp->get_lhs_operand_i()->get_type() ;
             lhs_type = lhs_type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
             SgClassType* clsType = isSgClassType(lhs_type);
-            ROSE_ASSERT(clsType);
-            SgClassDeclaration* decl = isSgClassDeclaration(clsType->get_declaration());
-            decl = isSgClassDeclaration(decl->get_definingDeclaration());
-            ROSE_ASSERT(decl);
-
-         // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
-         // realSymbol = lookupSymbolInParentScopes(varName, decl->get_definition());
-            realSymbol = lookupVariableSymbolInParentScopes(varName, decl->get_definition());
+            if (clsType != NULL)
+               {
+                 SgClassDeclaration* decl = isSgClassDeclaration(clsType->get_declaration());
+                 decl = decl != NULL ? isSgClassDeclaration(decl->get_definingDeclaration()) : NULL;
+                 if (decl != NULL)
+                    {
+                   // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
+                   // realSymbol = lookupSymbolInParentScopes(varName, decl->get_definition());
+                      realSymbol = lookupVariableSymbolInParentScopes(varName, decl->get_definition());
+                    }
+               }
+            if (realSymbol == NULL)
+               {
+                 realSymbol = lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+               }
         }
         else
          // DQ (8/16/2013): We want to lookup variable symbols not just any symbol.
@@ -15470,7 +15656,7 @@ void SageInterface::setFortranNumericLabel(SgStatement* stmt, int label_value,
        else
         {
           cerr<<"Error. SageInterface::setFortranNumericLabel() tries to set a duplicated label value!"<<endl;
-          ROSE_ASSERT (false);
+          ROSE_ABORT();
         }
 
   // SgLabelRefExp
@@ -15672,7 +15858,7 @@ void SageInterface::fixTemplateDeclaration(SgTemplateDeclaration* stmt, SgScopeS
    {
   // DQ (12/4/2011): This function has not been implemented yet.  It will assert fail if it is required.
      printf ("Need to handle SgTemplateDeclaration IR nodes as well...(implement later) \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
    }
 
 
@@ -16019,7 +16205,6 @@ PreprocessingInfo* SageInterface::attachComment(
      PreprocessingInfo::DirectiveType mytype=dtype;
      string comment;
 
-  // Rasmussen (11/3/2020): Added Ada and Jovial style comments
   // DQ (5/5/2010): infer comment type from target's language
      if (mytype == PreprocessingInfo::CpreprocessorUnknownDeclaration)
         {
@@ -16200,7 +16385,8 @@ SageInterface::insertHeader(SgSourceFile * source_file, const string & header_fi
   // DQ (3/12/2019): We need to mark the added comments and CPP directives as a transformation so that then can be output.
   // This is a result of a fix to support the correct handling of comments and CPP directives for shared IR nodes as happen
   // when multiple files are used on the command line.
-     result->get_file_info()->setTransformation();
+     if (result)
+       result->get_file_info()->setTransformation();
 
   // DQ (11/21/2019): Need to set supportTokenUnparsing.
      supportTokenUnparsing = source_file->get_unparse_tokens();
@@ -16249,7 +16435,7 @@ SageInterface::insertHeader(SgSourceFile * source_file, const string & header_fi
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
      return result;
@@ -16417,7 +16603,7 @@ PreprocessingInfo* SageInterface::insertHeader(const string& filename, Preproces
                               emptyDeclaration->get_endOfConstruct()->set_physical_file_id(physical_file_id);
 #if 0
                               printf ("Exiting as a test! \n");
-                              ROSE_ASSERT(false);
+                              ROSE_ABORT();
 #endif
                             }
 
@@ -16433,7 +16619,7 @@ PreprocessingInfo* SageInterface::insertHeader(const string& filename, Preproces
           cerr<<"SageInterface::insertHeader() Empty file is found!"<<endl;
           cerr<<"#include xxx is  preprocessing information which has to be attached  to some other  located node (a statement for example)"<<endl;
           cerr<<"You may have to insert some statement first before inserting a header"<<endl;
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
           result = new PreprocessingInfo(PreprocessingInfo::CpreprocessorIncludeDeclaration, content, "Transformation generated",0, 0, 0, PreprocessingInfo::after);
           ROSE_ASSERT(result);
           globalScope->addToAttachedPreprocessingInfo(result,position);
@@ -16458,7 +16644,7 @@ PreprocessingInfo* SageInterface::insertHeader(const string& filename, Preproces
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
 #if 0
@@ -16467,7 +16653,7 @@ PreprocessingInfo* SageInterface::insertHeader(const string& filename, Preproces
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
      return result;
@@ -16585,7 +16771,7 @@ void SageInterface::insertHeader (SgStatement* stmt, PreprocessingInfo* newheade
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
 }
@@ -16667,7 +16853,7 @@ PreprocessingInfo* SageInterface::insertHeader(SgSourceFile * source_file, const
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
   // must be inserted once somehow
@@ -16770,6 +16956,13 @@ SageInterface::movePreprocessingInfo (SgStatement* stmt_src,  SgStatement* stmt_
      ROSE_ASSERT(stmt_src != NULL);
      ROSE_ASSERT(stmt_dst != NULL);
      AttachedPreprocessingInfoType* infoList = stmt_src->getAttachedPreprocessingInfo();
+     if (infoList == NULL)
+        {
+#if 0
+          printf ("In SageInterface::movePreprocessingInfo(): infoList == NULL: exiting movePreprocessingInfo() \n");
+#endif
+          return;
+        }
      AttachedPreprocessingInfoType* infoToRemoveList = new AttachedPreprocessingInfoType();
 
 #if 0
@@ -16811,14 +17004,6 @@ SageInterface::movePreprocessingInfo (SgStatement* stmt_src,  SgStatement* stmt_
   // This is a bug in the support for building a new prototype from a defining function declaration
   // and caused this problem. This assertion will prevent this sort of error from happening again.
      ROSE_ASSERT(infoList == NULL || stmt_src->getAttachedPreprocessingInfo() != stmt_dst->getAttachedPreprocessingInfo());
-
-     if (infoList == NULL)
-        {
-#if 0
-          printf ("In SageInterface::movePreprocessingInfo(): infoList == NULL: exiting movePreprocessingInfo() \n");
-#endif
-          return;
-        }
 
 #if 0
      printf ("   --- infoList->size()                = %zu \n",infoList->size());
@@ -17111,18 +17296,23 @@ void SageInterface::cutPreprocessingInfo (SgLocatedNode* src_node, Preprocessing
 {
   ROSE_ASSERT(src_node != NULL);
 
+  // [Rasmussen,Sottile 2023.01.10]: Replaced deleted bind2nd (as of 2017)
   AttachedPreprocessingInfoType* info = src_node->get_attachedPreprocessingInfoPtr();
   if (info)
   {
-    remove_copy_if (info->begin (), info->end (),
-        back_inserter (save_buf),
-        [pos](const PreprocessingInfo* info) { return isNotRelPos(info, pos); });
+    // copy elements to save_buf where isRelPos() is false
+    remove_copy_if(info->begin(),
+                   info->end(),
+                   back_inserter(save_buf),
+                   [pos](auto x) { return !isRelPos(x, pos); }
+                  );
 
-    // DQ (9/26/2007): Commented out as part of move from std::list to std::vector
-    // info->remove_if (bind2nd (ptr_fun (isRelPos), pos));
-    // Liao (10/3/2007), implement list::remove_if for vector, which lacks sth. like erase_if
-    AttachedPreprocessingInfoType::iterator new_end =
-      remove_if(info->begin(),info->end(),[pos](const PreprocessingInfo* info) { return isRelPos(info, pos); });
+    // delete copied elements from save_buf
+    AttachedPreprocessingInfoType::iterator
+    new_end = remove_if(info->begin(),
+                        info->end(),
+                        [pos](auto x) { return isRelPos(x, pos); }
+                       );
     info->erase(new_end, info->end());
   }
 }
@@ -17975,7 +18165,7 @@ SageInterface::replaceExpressionWithStatement(SgExpression* from, StatementGener
                   if (enclosingForStatement && enclosingForStatement->get_test() == exprStatement)
                      {
                     // printf ("Found the test in the for loop \n");
-                    // ROSE_ASSERT(false);
+                    // ROSE_ABORT();
 
                     // Convert test of for statement:
                     // for (init; e; step) body; (where e contains from) becomes
@@ -18291,7 +18481,7 @@ void SageInterface::replaceSubexpressionWithStatement(SgExpression* from, Statem
     return name->get_storageModifier().isMutable();
   }
 
-  // Get a vector of Jovial input parameters from the function parameter list
+  // Get a vector of input parameters from the function parameter list
   // TODO: Look into making this work for Fortran
   std::vector<SgInitializedName*> SageInterface::getInParameters(const SgInitializedNamePtrList &params)
   {
@@ -18303,7 +18493,7 @@ void SageInterface::replaceSubexpressionWithStatement(SgExpression* from, Statem
     return in_params;
   }
 
-  // Get a list of Jovial output parameters from the function parameter list
+  // Get a list of output parameters from the function parameter list
   // TODO: Look into making this work for Fortran
   std::vector<SgInitializedName*> SageInterface::getOutParameters(const SgInitializedNamePtrList &params)
   {
@@ -18334,7 +18524,7 @@ void SageInterface::replaceSubexpressionWithStatement(SgExpression* from, Statem
       default:
          {
            printf ("ERROR: In SageInterface::getIntegerConstantValue(): default reached: expr = %p = %s \n",expr,expr->class_name().c_str());
-           ROSE_ASSERT (false);
+           ROSE_ABORT();
          }
 
     }
@@ -18795,7 +18985,6 @@ CollectDependentDeclarationsTraversal::visit(SgNode *astNode)
        }
 
       // handle base type:
-       SgType* strippedType = type;
        // We now can to strip typedefs since they are already handled by collectTypedefDeclarations()
        // this also reach to the defining body of a defining typedef declaration
        // and treat it as an independent declarations,
@@ -18813,7 +19002,7 @@ CollectDependentDeclarationsTraversal::visit(SgNode *astNode)
        // struct hypre_BoxArray_struct will be treated as a strippedType and its declaration
        // will be inserted.
        //
-       strippedType = type->stripType();
+       SgType* strippedType = type->stripType();
        SgNamedType* namedType = isSgNamedType(strippedType);
        if (namedType != NULL)
        {
@@ -19467,11 +19656,10 @@ SageInterface::checkSymbolTables ( SgNode* astNode )
      traversal.traverse(astNode, preorder);
    }
 
-
-
-
+//Jim Leek TODO (07/25/2023):  After Dan merges his branch, please clean up all the #1f 0 stuff 
 void SageInterface::markNodeToBeUnparsed(SgNode* node, int physical_file_id)
    {
+#if 0
      Sg_File_Info* fileInfo=node->get_file_info();
      if (fileInfo != NULL)
         {
@@ -19485,11 +19673,18 @@ void SageInterface::markNodeToBeUnparsed(SgNode* node, int physical_file_id)
                locatedNode->setTransformation();
                locatedNode->setOutputInCodeGeneration();
 
+            // DQ (7/8/2021): Added assertion.
+               ROSE_ASSERT(locatedNode->get_file_info() != NULL);
+#if 0
+               printf ("In markNodeToBeUnparsed(): physical_file_id = %d \n",physical_file_id);
+#endif
             // DQ (10/26/2020): Set the physical_file_id, required for ueader file unparsing (is it?).
                locatedNode->get_file_info()->set_physical_file_id(physical_file_id);
-#if 0
+#if 1
                printf ("Note: calling node markTransformationsForOutput(): node = %p = %s \n",node,node->class_name().c_str());
 #endif
+            // DQ (7/14/2021): This is just a redundant traversal over the subtree that only appears
+            // to call setTransformation() and setOutputInCodeGeneration().
                markTransformationsForOutput(node);
              }
             else
@@ -19505,11 +19700,42 @@ void SageInterface::markNodeToBeUnparsed(SgNode* node, int physical_file_id)
           printf ("Note: no Sg_File_Info was found: node = %p = %s \n",node,node->class_name().c_str());
 #endif
         }
+#else
+     SgLocatedNode* locatedNode = isSgLocatedNode(node);
+     if (locatedNode != NULL)
+        {
+          locatedNode->setTransformation();
+          locatedNode->setOutputInCodeGeneration();
+
+       // DQ (10/26/2020): Set the physical_file_id, required for header file unparsing (is it?).
+          if (locatedNode->get_file_info() != NULL)
+             {
+#if 0
+               printf ("In SageInterface::markNodeToBeUnparsed(): locatedNode = %p = %s calling set_physical_file_id(%d) \n",locatedNode,locatedNode->class_name().c_str(),physical_file_id);
+#endif
+               locatedNode->get_file_info()->set_physical_file_id(physical_file_id);
+             }
+            else
+             {
+#if 1
+               printf ("Note: no Sg_File_Info was found: node = %p = %s \n",node,node->class_name().c_str());
+#endif
+             }
+
+       // DQ (7/14/2021): This is just a redundant traversal over the subtree that only appears
+       // to call setTransformation() and setOutputInCodeGeneration().
+       // Jim Leek (07/25/2023) This doesn't seem to be redundant, it definately marks a bunch of the subtree as transformed
+       // That otherwise isn't, but Reverse Type Dependence often  fails to compile because too much gets unparsed.
+       // markTransformationsForOutput(node);
+        }
+#endif
    }
 
 
 void SageInterface::markSubtreeToBeUnparsed(SgNode* root, int physical_file_id)
    {
+     static int counter = 0;
+
      RoseAst ast(root);
      for (RoseAst::iterator i=ast.begin();i!=ast.end();++i)
         {
@@ -19525,6 +19751,119 @@ void SageInterface::markSubtreeToBeUnparsed(SgNode* root, int physical_file_id)
 #endif
           markNodeToBeUnparsed(*i,physical_file_id);
        }
+
+#if 0
+     if (counter > 0)
+        {
+          printf ("Exiting as a test! \n");
+          ROSE_ABORT();
+        }
+#endif
+
+     counter++;
+   }
+
+void SageInterface::markSubtreeToBeUnparsedTreeTraversal(SgNode* root, int physical_file_id)
+   {
+  // DQ (7/13/2021): This function marks nodes in a subtree to be a transformation, but avoids marking subtrees of the SgCastExp.
+  // This is important because currently the marking of an implicit cast will cause it to be unparsed, even though it is marked 
+  // as implicit.  This detail of precedence of implicit flags over transformation flags needs to be fixed seperated.
+  // This function has been implemented as part of debugging this issue.
+
+     static int counter = 0;
+
+     class InheritedAttribute
+        {
+          public:
+               int physical_file_id;
+               bool isCastSubtree;
+               InheritedAttribute(int file_id): physical_file_id(file_id), isCastSubtree(false) {} 
+               InheritedAttribute(const InheritedAttribute & X)
+                  {
+                    isCastSubtree    = X.isCastSubtree; 
+                    physical_file_id = X.physical_file_id;
+                  }
+        };
+
+// DQ (7/21/21): This code construction does not work with the GNU 4.9.x compilers.
+// #if !( ( (__GNUC__ == 4) && (__GNUC_MINOR__ <= 9) ) || (__GNUC__ < 4))
+#if (__GNUC__ > 4)
+
+     class SubtreeTraversal : public SgTopDownProcessing<InheritedAttribute>
+        {
+          public:
+               InheritedAttribute evaluateInheritedAttribute ( SgNode* node, InheritedAttribute inheritedAttribute)
+                  {
+                    InheritedAttribute returnAttribute(inheritedAttribute);
+
+                    SgCastExp* castExpression = isSgCastExp(node);
+                    if (castExpression != NULL)
+                       {
+                         returnAttribute.isCastSubtree = true;
+                       }
+
+                    if (returnAttribute.isCastSubtree == true)
+                       {
+                      // Nothing to do, unless we want to fixup the physical node id.
+#if 0
+                         printf ("In markSubtreeToBeUnparsedTreeTraversal(): subtree of a SgCastExp: node = %p = %s physical_file_id = %d \n",
+                              node,node->class_name().c_str(),inheritedAttribute.physical_file_id);
+#endif
+                       }
+                      else
+                       {
+#if 0
+                         printf ("In markSubtreeToBeUnparsedTreeTraversal(): Calling markNodeToBeUnparsed(): node = %p = %s physical_file_id = %d \n",
+                              node,node->class_name().c_str(),inheritedAttribute.physical_file_id);
+#endif
+                      // This logic will cause the SgCastExp node to NOT be marked as a transformation (not just its children).
+                         markNodeToBeUnparsed(node,inheritedAttribute.physical_file_id);
+                       }
+
+                    return returnAttribute;
+                  }
+        };
+
+     InheritedAttribute inheritedAttribute(physical_file_id);
+
+  // Now buid the traveral object and call the traversal (preorder) on the AST subtree.
+     SubtreeTraversal traversal;
+
+#if 0
+     printf ("\nIn markSubtreeToBeUnparsedTreeTraversal(): calling traverse \n");
+#endif
+
+  // This should pass.
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(root,"In markSubtreeToBeUnparsedTreeTraversal(): before traversal") == false);
+
+     traversal.traverse(root, inheritedAttribute);
+#else
+     printf ("This function does not compile with GNU 4.9 or older compilers (part of ROSE used only with more modern compilers) \n");
+#endif
+
+#if 0
+     printf ("Generate the dot output of the SAGE III AST: markSubtreeToBeUnparsedTreeTraversal \n");
+     SgProject* project = SageInterface::getProject();
+     generateDOTforMultipleFile ( *project, "markSubtreeToBeUnparsedTreeTraversal");
+     printf ("DONE: Generate the dot output of the SAGE III AST: markSubtreeToBeUnparsedTreeTraversal \n");
+#endif
+
+  // This should pass.
+  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(root,"In markSubtreeToBeUnparsedTreeTraversal() after traversal") == false);
+
+#if 0
+     printf ("DONE: In markSubtreeToBeUnparsedTreeTraversal(): calling traverse \n\n");
+#endif
+
+#if 0
+     if (counter > 1)
+        {
+          printf ("Exiting as a test! \n");
+          ROSE_ABORT();
+        }
+#endif
+
+     counter++;
    }
 
 
@@ -21365,7 +21704,7 @@ static void moveOneStatement(SgScopeStatement* sourceBlock, SgScopeStatement* ta
   targetBlock->append_statement(stmt);
 
   // Make sure that the parents are set.
-  ROSE_ASSERT(stmt->get_parent() == targetBlock);
+  ASSERT_require(stmt->get_parent() == targetBlock);
   if (stmt->hasExplicitScope())
   {
     // DQ (3/4/2009): This fails the test in ROSE/tutorial/outliner/inputCode_OutlineNonLocalJumps.cc
@@ -21376,7 +21715,7 @@ static void moveOneStatement(SgScopeStatement* sourceBlock, SgScopeStatement* ta
       {
 
         // why only move if it is a first nondefining declaration?
-        // We have a case to move both defining and nondefining function declarations of Ada package body to namespace definition.
+        // We have a case to move both defining and nondefining function declarations to the namespace definition.
          // comment out the if condition for now. 1/20/2021
         //
         // A call to a undeclared function will introduce a hidden func prototype declaration in the enclosing scope .
@@ -21385,7 +21724,7 @@ static void moveOneStatement(SgScopeStatement* sourceBlock, SgScopeStatement* ta
         // Liao 1/14/2011
         // if (func->get_firstNondefiningDeclaration() == func)
           func->set_scope(targetBlock);
-          // This is needed to move functions in Ada package body into C++ namespace
+          // This is needed to move functions into C++ namespace
           // We may have compiler generated first nondefining declaration. We need to move its scope also
           SgFunctionDeclaration* nondef_decl= isSgFunctionDeclaration(func->get_firstNondefiningDeclaration());
           if (func != nondef_decl)
@@ -21440,8 +21779,7 @@ static void moveOneStatement(SgScopeStatement* sourceBlock, SgScopeStatement* ta
             }
 
             // Rasmussen (6/29/2020) and (10/19/2020): Variable declarations related to anonymous types are not
-            // moved. This is fixed below. Note that SgJovialTableType derives from SgClassType, it may
-            // be that class types are not moved correctly either.
+            // moved. This is fixed below but class types may still not be moved correctly.
             //
             if (isSgEnumType(var_type))
             {
@@ -21502,7 +21840,7 @@ static void moveOneStatement(SgScopeStatement* sourceBlock, SgScopeStatement* ta
 
           break;
         }
-      // needed to move Ada record into definition of C++ namespace
+      // needed to move record into definition of C++ namespace
       case V_SgClassDeclaration:
       case V_SgEnumDeclaration:
         {
@@ -21530,7 +21868,7 @@ static void moveOneStatement(SgScopeStatement* sourceBlock, SgScopeStatement* ta
         {
           // Rasmussen 10/19/2020: Needed for issue RC-227
           SgTypedefDeclaration* typedef_decl = isSgTypedefDeclaration(declaration);
-          ROSE_ASSERT (typedef_decl);
+          ASSERT_not_null(typedef_decl);
           typedef_decl->set_parent(targetBlock);
           typedef_decl->set_scope(targetBlock);
           break;
@@ -21538,6 +21876,7 @@ static void moveOneStatement(SgScopeStatement* sourceBlock, SgScopeStatement* ta
       case V_SgAttributeSpecificationStatement:
       case V_SgEmptyDeclaration:
       case V_SgFortranIncludeLine:
+      case V_SgImplicitStatement: // TODO: implicit statement with letter-list
       case V_SgPragmaDeclaration:
         break;
       default:
@@ -21778,7 +22117,6 @@ SgInitializedName* SageInterface::convertRefToInitializedName(SgNode* current, b
     SgExpression* child = NULL;
     if (coarseGrain)
     {
-      child = isSgArrowExp(current)->get_lhs_operand();
       SgExpression* lhs = isSgArrowExp(current)->get_lhs_operand();
       ROSE_ASSERT(lhs);
       // Liao 9/12/2016, special handling for variables inside of C++11 lambda functions
@@ -21966,7 +22304,8 @@ SageInterface::collectReadWriteRefs(SgStatement* stmt, std::vector<SgNode*>& rea
     {
       cerr<<"In collectReadWriteRefs(): cannot proceed without a function body!"<<endl;
     }
-    stmt = funcDecl->get_definition()->get_body();
+    else
+      stmt = funcDecl->get_definition()->get_body();
   }
 
   // get function level information
@@ -22004,8 +22343,13 @@ SageInterface::collectReadWriteRefs(SgStatement* stmt, std::vector<SgNode*>& rea
   // Actual side effect analysis
   if (!AnalyzeStmtRefs(fa, s1, cwRef1, crRef1))
   {
-	MLOG_WARN_CXX("sageInterface") << "Side Effect Analysis incomplete on " << funcDef->get_declaration()->get_qualified_name() << endl;
-    //It's incomplete, but it's not useless, we still want the reflist returned. -Jim
+    // False returned here just means that the function called a
+    // function that was not annotated with Qing's RWset annotation
+    // method. This doesn't matter for my tool. -Jim Leek 03/21/2023
+    MLOG_DEBUG_CXX("sageInterface") << "Function: "
+                                   << funcDef->get_declaration()->get_qualified_name()
+                                   << " calls at least one function that has not been annotated."
+                                   << endl;
     retVal = false;
   }
 
@@ -23291,6 +23635,17 @@ SgExprListExp * SageInterface::loopCollapsing(SgForStatement* loop, size_t colla
         {
             cerr<<"Error in SageInterface::loopCollapsing(): target loop is not canonical."<<endl;
             dumpInfo(target_loop);
+
+            // release memory
+            delete[] ivar;
+            delete[] lb;
+            delete[] ub;
+            delete[] step;
+            delete[] orig_body;
+            delete[] total_iters;
+            delete[] interval;
+            delete[] isPlus;
+
             return NULL;
         }
 
@@ -23888,7 +24243,7 @@ void SageInterface::moveVariableDeclaration(SgVariableDeclaration* decl, SgScope
     default:
       {
         cerr<<"Error. Unhandled target scope type:"<<target_scope->class_name()<<endl;
-        ROSE_ASSERT  (false);
+        ROSE_ABORT();
       }
   }
 
@@ -24879,6 +25234,39 @@ static void serialize(SgNode* node, string& prefix, bool hasRemaining, ostringst
   if (SgLocatedNode* lnode= isSgLocatedNode(node))
   {
     out<< Rose::StringUtility::stripPathFromFileName ( lnode->get_file_info()->get_filename() )<<" "<<lnode->get_file_info()->get_line()<<":"<<lnode->get_file_info()->get_col();
+    // also preprocessing info. attached.
+    AttachedPreprocessingInfoType *comments =
+      lnode->getAttachedPreprocessingInfo ();
+
+    if (comments != NULL)
+    {
+//      printf ("Found an IR node with preprocessing Info attached:\n");
+      out<<" AttachedPreprocessingInfoType@"<<comments;
+      int counter = 0;
+      AttachedPreprocessingInfoType::iterator i;
+      out <<"{";
+      for (i = comments->begin (); i != comments->end (); i++)
+      {
+        out<<"<id=";
+        out<<counter++<<" ";
+  //        printf("-------------PreprocessingInfo #%d ----------- : \n",counter++);
+  //        printf("classification = %s:\n String format = %s\n",
+  //              PreprocessingInfo::directiveTypeName((*i)->getTypeOfDirective ()). c_str (),
+  //              (*i)->getString ().c_str ());
+        out<<" classification="<<PreprocessingInfo::directiveTypeName((*i)->getTypeOfDirective ()). c_str ();
+        out<<" string="<<(*i)->getString ().c_str ();
+        out<<" relative pos=";
+        if ((*i)->getRelativePosition () == PreprocessingInfo::inside)
+          out<<"inside";
+        else if ((*i)->getRelativePosition () == PreprocessingInfo::before)
+          out<<"inside";
+        else
+          out<<"after";
+
+        out<<">";
+      }
+      out <<"}";
+    }
   }
 
   if (SgDeclarationStatement* v= isSgDeclarationStatement(node))
@@ -24905,6 +25293,7 @@ static void serialize(SgNode* node, string& prefix, bool hasRemaining, ostringst
     out<<" "<< v->get_qualified_name();
     out<<" type@"<< v->get_type();
     out<<" initializer@"<< v->get_initializer();
+    out<<" scope@"<< v->get_scope();
 //    type_set.insert (v->get_type());
   }
 
@@ -27231,4 +27620,146 @@ void SageInterface::clearSharedGlobalScopes(SgProject * project) {
   hmm = st->get_table();
   ROSE_ASSERT(hmm != nullptr);
   hmm->clear();
+}
+
+bool
+SageInterface::findFirstSgCastExpMarkedAsTransformation(SgNode* n, const std::string & s)
+   {
+     class Traversal : public AstSimpleProcessing
+        {
+          public:
+               bool found;
+               Traversal() : found(false) {}
+               void visit (SgNode* node)
+                  {
+                    SgCastExp* castExpression = isSgCastExp(node);
+                    if (castExpression != NULL)
+                       {
+                      // SgNode* parent = castExpression->get_parent();
+                         SgInitializer* initializer = isSgInitializer(castExpression->get_parent());
+                         if (initializer == NULL)
+                            {
+                              ROSE_ASSERT(castExpression->get_file_info() != NULL);
+                              if (castExpression->get_file_info()->isTransformation() == true)
+                                 {
+                                   printf (" --- Found a SgCastExp marked as a transformation: castExpression = %p \n",castExpression);
+                                   found = true;
+#if 0
+                                   printf ("Exiting as a test! \n");
+                                   ROSE_ABORT();
+#endif
+                                 }
+                                else
+                                 {
+#if 0
+                                   printf (" --- SgCastExp (but not marked as a transformation) node = %p = %s \n",node,node->class_name().c_str());
+#endif
+                                 }
+                            }
+                           else
+                            {
+                           // DQ (7/14/2021): This case is less interesting (not the SgCastExp that I was looking for in testing).
+#if 1
+                              printf (" --- SgCastExp (but from an initializer) node = %p = %s \n",node,node->class_name().c_str());
+#endif
+                            }
+                       }
+                      else
+                       {
+#if 0
+                         printf (" --- node = %p = %s \n",node,node->class_name().c_str());
+#endif
+                       }
+                  }
+        };
+
+#if 1
+     printf ("In findFirstSgCastExpMarkedAsTransformation(): s = %s \n",s.c_str());
+#endif
+
+  // Now buid the traveral object and call the traversal (preorder) on the AST subtree.
+     Traversal traversal;
+     traversal.traverse(n, preorder);
+
+#if 1
+     printf ("In findFirstSgCastExpMarkedAsTransformation(): s = %s traversal.found = %s \n",s.c_str(),traversal.found ? "true" : "false");
+#endif
+#if 0
+  // DQ (7/13/2021): return false so that we can test the execution of the code to generate that backend code.
+     if (traversal.found == true)
+        {
+          printf ("In findFirstSgCastExpMarkedAsTransformation(): returning false \n");
+        }
+
+     return false;
+#else
+     return traversal.found;
+#endif
+   }
+
+//!  Convert all code within root matching the patern of (&left)->right, and translate them into left.right.  Return the number of matches of the pattern.
+/*
+
+By default, only transformation generated AST nodes will be normalized since this is designed to normalize translator-generated code.
+
+--- p_lhs_operand_i ->@0x7ff2fc3f1010 SgArrowExp c_rc-575-out.cpp 16:13
+   |--- p_lhs_operand_i ->@0x7ff2fc428010 SgAddressOfOp c_rc-575-out.cpp 16:4
+   |   |___ p_operand_i ->@0x7ff2fc582078 SgVarRefExp c_rc-575-out.cpp 16:5 init name@0x7ff2fcf03890 symbol name="table1"
+   |___ p_rhs_operand_i ->@0x7ff2fc5820e0 SgVarRefExp c_rc-575-out.cpp 16:16 init name@0x7ff2fcf03480 symbol name="item1"
+
+
+TODO: we only handle simplest pattern for now:  both leaf operands involved are SgVarRefExp.
+
+ * */
+int SageInterface::normalizeArrowExpWithAddressOfLeftOperand(SgNode* root, bool transformationGeneratedOnly)
+{
+  int match_count = 0;
+  ROSE_ASSERT(root);
+
+  // find all SgArrowExp, then try to match the expected pattern
+  // SgArrowExp(SgAddressOfOp(SgVarRefExp:table1),SgVarRefExp:item1)
+  Rose_STL_Container<SgNode*> nodeList = NodeQuery::querySubTree(root, V_SgArrowExp);
+
+  // Some translators generate multiple source file ASTs that share subtrees.
+  // Make sure the same subtree is only processed once.
+  std::unordered_set<SgNode*> visited;
+
+  // reverse iterator is safer to use than forward iterator to support translation
+  for (Rose_STL_Container<SgNode *>::reverse_iterator i = nodeList.rbegin(); i != nodeList.rend(); i++)
+  {
+    // skip a node if it is previously processed.
+    if (visited.count(*i) == 1)
+      continue;
+
+    visited.insert(*i);
+
+    SgArrowExp* a_exp = isSgArrowExp(*i);
+    if (!a_exp)
+    {
+      cerr<<"SageInterface::normalizeArrowExpWithAddressOfLeftOperand() expects SgArrowExp while encountering "<<(*i)->class_name()<<"@"<<(*i) <<endl;
+      ROSE_ASSERT(a_exp);
+    }
+
+    if (transformationGeneratedOnly)
+    {
+      if (!(a_exp->get_file_info()->isTransformation()))
+        continue;
+    }
+
+    if (SgAddressOfOp* address_op = isSgAddressOfOp(a_exp->get_lhs_operand()) )
+    {
+      if (SgVarRefExp* left = isSgVarRefExp(address_op->get_operand())) // match left side pattern
+      {
+        if (SgVarRefExp* right = isSgVarRefExp (a_exp->get_rhs_operand())) // match right side pattern
+        {
+          // do the transformation: copy two operands, making a dot exp instead
+          SgDotExp* dot_exp = buildDotExp (deepCopy(left), deepCopy(right));
+          replaceExpression (a_exp, dot_exp);
+          match_count++;
+        }
+      }
+    }
+  } // end for
+
+  return match_count;
 }

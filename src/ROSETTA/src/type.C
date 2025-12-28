@@ -39,15 +39,6 @@ Grammar::setUpTypes ()
      NEW_TERMINAL_MACRO ( TypeString          , "TypeString",           "T_STRING" );
      NEW_TERMINAL_MACRO ( TypeBool            , "TypeBool",             "T_BOOL" );
 
-  // Rasmussen (2/18/2020): Added TypeFixed for Jovial
-     NEW_TERMINAL_MACRO ( TypeFixed           , "TypeFixed",            "T_FIXED" );
-
-     //SK(08/20/2015): TypeMatrix to represent a Matlab matrix type
-     NEW_TERMINAL_MACRO ( TypeMatrix          , "TypeMatrix",           "T_MATRIX" );
-
-     //SK(08/20/2015): TypeTuple to represent the return type of a Matlab function that can return multiple types
-     NEW_TERMINAL_MACRO ( TypeTuple           , "TypeTuple",            "T_TUPLE");
-
   // DQ (7/29/2014): Added nullptr type (I think we require this for C++11 support).
      NEW_TERMINAL_MACRO ( TypeNullptr         , "TypeNullptr",          "T_NULLPTR" );
 
@@ -183,12 +174,9 @@ Grammar::setUpTypes ()
           ArrayType            | TypeEllipse             | TemplateType              | QualifiedNameType    |
           TypeComplex          | TypeImaginary           | TypeDefault               | TypeCAFTeam          |
           TypeCrayPointer      | TypeLabel               | RvalueReferenceType       |
-          TypeNullptr          | DeclType                | TypeOfType                | TypeMatrix           |
-          TypeTuple            | TypeChar16              | TypeChar32                | TypeFloat128         |
-          TypeFixed            | AutoType,
+          TypeNullptr          | DeclType                | TypeOfType                | TypeChar16           |
+          TypeChar32           | TypeFloat128            | AutoType,
         "Type","TypeTag", false);
-
-     //SK(08/20/2015): TypeMatrix and TypeTuple for Matlab
 
 #if 1
   // ***********************************************************************
@@ -324,7 +312,6 @@ Grammar::setUpTypes ()
   // TypeUnknown.setFunctionPrototype ( "HEADER_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
   // TypeUnknown.setFunctionSource    ( "SOURCE_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
 
-  // CR (8/9/2020): Jovial allows implicit forward declarations of typed pointers
      TypeUnknown.setDataPrototype("std::string", "type_name", "= \"\"",
                                   NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      TypeUnknown.setDataPrototype("bool", "has_type_name", "= false",
@@ -361,12 +348,6 @@ Grammar::setUpTypes ()
      PointerType.excludeFunctionSource      ( "SOURCE_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
      ArrayType.excludeFunctionPrototype     ( "HEADER_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
      ArrayType.excludeFunctionSource        ( "SOURCE_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
-
-  // Rasmussen (2/18/2020): Added TypeFixed for Jovial
-     TypeFixed.excludeFunctionPrototype     ( "HEADER_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
-     TypeFixed.excludeFunctionSource        ( "SOURCE_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
-     TypeFixed.excludeFunctionSource        ( "SOURCE_GET_MANGLED", "../Grammar/Type.code");
-     TypeFixed.setFunctionSource            ( "SOURCE_GET_MANGLED_TYPE_FIXED", "../Grammar/Type.code");
 
   // DQ (8/2/2014): Adding support for C++11 decltype().
      DeclType.excludeFunctionPrototype ( "HEADER_BUILTIN_TYPE_SUPPORT", "../Grammar/Type.code" );
@@ -485,17 +466,6 @@ Grammar::setUpTypes ()
      TypeNullptr.setDataPrototype          ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
 
-     TypeMatrix.setDataPrototype          ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
-     TypeTuple.setDataPrototype          ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
-     TypeTuple.setDataPrototype("SgTypePtrList", "types", "",
-                                  NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     TypeTuple.setFunctionPrototype     ("HEADER_TYPE_TUPLE", "../Grammar/Type.code" );
-     TypeTuple.setFunctionSource     ("SOURCE_TYPE_TUPLE", "../Grammar/Type.code" );
-
-
      TypeDefault.setDataPrototype          ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   // PointerType.setDataPrototype          ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   // ReferenceType.setDataPrototype        ("static $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
@@ -602,11 +572,6 @@ Grammar::setUpTypes ()
             "SOURCE_CREATE_TYPE_FOR_ARRAY_TYPE",
             "SgType* type = NULL, SgExpression* expr = NULL");
 
-  // Rasmussen (2/18/2020): Added support for the create function for Jovial TypeFixed
-     CUSTOM_CREATE_TYPE_MACRO(TypeFixed,
-            "SOURCE_CREATE_TYPE_FOR_TYPE_FIXED",
-            "SgExpression* scale = NULL, SgExpression* fraction = NULL");
-
   // DQ (8/17/2010): Added support for create function for StringType (Fortran specific)
      CUSTOM_CREATE_TYPE_MACRO(TypeString,
             "SOURCE_CREATE_TYPE_FOR_STRING_TYPE",
@@ -635,9 +600,6 @@ Grammar::setUpTypes ()
   // These classes have data fields
      TypeInt.setDataPrototype           ("int","field_size","= 0",
                                          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-     TypeMatrix.setDataPrototype           ("SgType*","base_type","= NULL",
-                                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (4/23/2014): I think this has to be defined as DEF_TRAVERSAL so that we can traverse the nested type.
   // This is required to support type transformations fo the shared memory DSL work. Likely also required for ReferenceType
@@ -898,8 +860,9 @@ Grammar::setUpTypes ()
                                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      MemberFunctionType.setDataPrototype     ("unsigned int", "mfunc_specifier","= 0",
                                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-     MemberFunctionType.setDataPrototype     ("unsigned int", "ref_qualifiers","= 0",
-                                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     // PP (10/4/22): experimentally commented out.
+     //~ MemberFunctionType.setDataPrototype     ("unsigned int", "ref_qualifiers","= 0",
+                                              //~ CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
      PartialFunctionType.setFunctionPrototype ("HEADER_PARTIAL_FUNCTION_TYPE", "../Grammar/Type.code" );
 
@@ -933,13 +896,6 @@ Grammar::setUpTypes ()
   // DQ (2/12/2016): Adding support for Variable Length Arrays.
      ArrayType.setDataPrototype ("bool", "is_variable_length_array" , "= false",
                                  NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // Rasmussen (2/18/2020): Added TypeFixed for Jovial
-     TypeFixed.setFunctionPrototype ("HEADER_TYPE_FIXED_TYPE", "../Grammar/Type.code" );
-     TypeFixed.setDataPrototype ("SgExpression*", "scale", "= NULL",
-                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE);
-     TypeFixed.setDataPrototype ("SgExpression*", "fraction", "= NULL",
-                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE);
 
      TypeComplex.setFunctionPrototype ("HEADER_TYPE_COMPLEX_TYPE", "../Grammar/Type.code" );
      TypeComplex.setDataPrototype ("SgType*", "base_type", "= NULL",
@@ -1075,7 +1031,6 @@ Grammar::setUpTypes ()
      TypeVoid.editSubstitute( "MANGLED_ID_STRING", "v" );
      TypeGlobalVoid.editSubstitute( "MANGLED_ID_STRING", "gv" );
      TypeWchar.editSubstitute( "MANGLED_ID_STRING", "wc" );
-     TypeFixed.editSubstitute( "MANGLED_ID_STRING", "fx" );
      TypeFloat.editSubstitute( "MANGLED_ID_STRING", "f" );
      TypeDouble.editSubstitute( "MANGLED_ID_STRING", "d" );
      TypeLongLong.editSubstitute( "MANGLED_ID_STRING", "L" );
@@ -1102,9 +1057,6 @@ Grammar::setUpTypes ()
 
   // DQ (7/29/2014): Added nullptr type (I think we require this for C++11 support).
      TypeNullptr.editSubstitute( "MANGLED_ID_STRING", "nullptr_t" );
-
-     TypeMatrix.editSubstitute( "MANGLED_ID_STRING", "matrix_t" );
-     TypeTuple.editSubstitute( "MANGLED_ID_STRING", "tuple_t" );
 
      TypeComplex.editSubstitute( "MANGLED_ID_STRING", "Complex" );
      TypeImaginary.editSubstitute( "MANGLED_ID_STRING", "Imaginary" );

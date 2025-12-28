@@ -55,7 +55,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "Constants.h"                             // defines things like Rose::UNLIMITED, Rose::INVALID_INDEX, etc.
+#include <Rose/Constants.h>                         // defines things like Rose::UNLIMITED, Rose::INVALID_INDEX, etc.
 
 // DQ (11/12/2011): This is support to reduce the size of ROSE so that I can
 // manage development on my laptop. This option defines a subset of ROSE as
@@ -252,7 +252,7 @@
 #include "rose_attributes_list.h"
 
 // Include ROSE common utility function library
-#include <StringUtility.h>
+#include <Rose/StringUtility.h>
 #include "FileUtility.h"
 #include "Escape.h"
 

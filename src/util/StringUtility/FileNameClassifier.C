@@ -19,7 +19,7 @@
 
 #include "FileUtility.h"
 #include "mlog.h"
-#include <StringUtility.h>
+#include <Rose/StringUtility.h>
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>

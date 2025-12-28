@@ -26,9 +26,6 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
   // strings. This ensures template declarations like "template <class T>" are
   // output correctly.
   sageFile.set_unparse_template_ast(true);
-  // Use token-based unparsing for Clang to preserve exact source text.
-  sageFile.set_unparse_tokens(true);
-
   // printf ("sageFile.get_clang_il_to_graphviz() = %s
   // \n",sageFile.get_clang_il_to_graphviz() ? "true" : "false");
 
@@ -252,6 +249,27 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     ROSE_ASSERT(language != ClangToSageTranslator::unknown);
 
+    std::string language_arg;
+    switch (language) {
+        case ClangToSageTranslator::C:
+            language_arg = "-xc";
+            break;
+        case ClangToSageTranslator::CPLUSPLUS:
+            language_arg = "-xc++";
+            break;
+        case ClangToSageTranslator::CUDA:
+            language_arg = "-xcuda";
+            break;
+        case ClangToSageTranslator::OPENCL:
+            language_arg = "-xcl";
+            break;
+        case ClangToSageTranslator::OBJC:
+            language_arg = "-xobjective-c";
+            break;
+        default:
+            ROSE_ABORT();
+    }
+
     const char * cxx_config_include_dirs_array [] = CXX_INCLUDE_STRING;
     const char * c_config_include_dirs_array   [] = C_INCLUDE_STRING;
 
@@ -291,6 +309,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     switch (language) {
         case ClangToSageTranslator::C:
             sys_dirs_list.insert(sys_dirs_list.begin(), c_config_include_dirs.begin(), c_config_include_dirs.end());
+            inc_list.push_back("clang-builtin-c.h");
             break;
         case ClangToSageTranslator::CPLUSPLUS:
             // Use configuration-driven cxx_config_include_dirs for portability
@@ -331,10 +350,19 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                            openmp_define_list.end());
     }
 
-    unsigned cnt = define_list.size() + inc_dirs_list.size() + sys_dirs_list.size() + inc_list.size() + passthrough_args.size();
+    unsigned cnt = 1 + define_list.size() + inc_dirs_list.size() +
+                   sys_dirs_list.size() + inc_list.size() +
+                   passthrough_args.size();
     char ** args = new char*[cnt];
     std::vector<std::string>::iterator it_str;
     unsigned i = 0;
+
+    args[i] = new char[language_arg.size() + 1];
+    strcpy(args[i], language_arg.c_str());
+#if DEBUG_ARGS
+    std::cerr << "args[" << i << "] = " << args[i] << std::endl;
+#endif
+    i++;
     for (it_str = define_list.begin(); it_str != define_list.end(); it_str++) {
         args[i] = new char[it_str->size() + 3];
         args[i][0] = '-';
@@ -485,6 +513,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
 
     if (language == ClangToSageTranslator::CPLUSPLUS) {
         ROSE_ASSERT(lang_opts.CPlusPlus && "Expected C++ mode after setting language defaults");
+        lang_opts.Bool = 1;
     }
 
     if (enable_cuda) {
@@ -1020,19 +1049,22 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
         if (located_node != NULL) {
           setFileInfosWithParent(located_node, start_fi, end_fi);
 
-          // CFE FIX: If operatorPosition was already created by
-          // setSourcePositionToDefault, we need to update it to match the real
-          // source location (like the legacy frontend does)
-          SgExpression* expr = isSgExpression(located_node);
-          if (expr != NULL && expr->get_operatorPosition() != NULL)
-             {
-               // Delete the old default file info and replace with real source location
-               delete expr->get_operatorPosition();
-               // Use the same location as startOfConstruct (operator is at the expression location)
-               Sg_File_Info* op_fi = new Sg_File_Info(*start_fi);
-               expr->set_operatorPosition(op_fi);
-               op_fi->set_parent(expr);
-             }
+          // Pei-Hung (09/29/2022) SgExpression::get_file_info() checks and
+          // returns get_operatorPosition(), so ensure operatorPosition is set.
+          SgExpression *expr = isSgExpression(located_node);
+          if (expr != NULL) {
+            if (expr->get_operatorPosition() == NULL) {
+              expr->set_operatorPosition(start_fi);
+            } else {
+              // CFE FIX: If operatorPosition was already created by
+              // setSourcePositionToDefault, update it to match the real source
+              // location.
+              delete expr->get_operatorPosition();
+              Sg_File_Info *op_fi = new Sg_File_Info(*start_fi);
+              expr->set_operatorPosition(op_fi);
+              op_fi->set_parent(expr);
+            }
+          }
         } else {
           if (init_name != NULL) {
             setFileInfosWithParent(init_name, start_fi, end_fi);
@@ -1072,6 +1104,16 @@ void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode * node, bool to_
         if (fi != NULL) delete fi;
 
         setFileInfosWithParent(located_node, start_fi, end_fi);
+
+        // Pei-Hung (07/12/2023) Ensure SgExpression file info is set so
+        // get_file_info() doesn't return null for compiler-generated nodes.
+        if (SgExpression *expr = isSgExpression(located_node)) {
+          Sg_File_Info *expr_fi = expr->get_file_info();
+          if (expr_fi != NULL && expr_fi != start_fi && expr_fi != end_fi) {
+            delete expr_fi;
+          }
+          expr->set_file_info(start_fi);
+        }
 
         // CFE FIX: If operatorPosition exists, update it to match compiler-generated flags
         SgExpression* expr = isSgExpression(located_node);

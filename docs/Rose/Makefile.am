@@ -339,7 +339,6 @@ EXTRA_DIST = CMakeLists.txt \
 # requirements.tex
 
 clean-web-pages:
-#	DQ (9/15/2009): wrong syntax for chmod, at least on OSX.
 #	test ! -d ROSE_WebPages || (test -d ROSE_WebPages && ( chmod +w -R ROSE_WebPages ))
 	test ! -d ROSE_WebPages || (test -d ROSE_WebPages && ( chmod -R +w ROSE_WebPages ))
 	rm -rf ROSE_WebPages

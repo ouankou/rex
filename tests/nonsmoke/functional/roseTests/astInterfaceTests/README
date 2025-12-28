@@ -39,9 +39,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildConjugateOp()
    buildVarArgStartOperandOp()
 
-// This is MATLAB
-   buildMatrixTransposeOp()
-
    buildDeleteExp()
    buildMinusOp_nfi()
 
@@ -54,17 +51,6 @@ Additional functions to test (specific to sageBuilder.C):
    buildIntegerDivideAssignOp()
    
    buildScopeOp()
-
-  // Matlab operators
-   BUILD_BINARY_DEF(PowerOp);
-   BUILD_BINARY_DEF(ElementwisePowerOp);
-   BUILD_BINARY_DEF(ElementwiseMultiplyOp);
-   BUILD_BINARY_DEF(ElementwiseDivideOp);
-   BUILD_BINARY_DEF(LeftDivideOp);
-   BUILD_BINARY_DEF(ElementwiseLeftDivideOp);
-   BUILD_BINARY_DEF(ElementwiseAddOp);
-   BUILD_BINARY_DEF(ElementwiseSubtractOp);
-   
 
    buildCompoundInitializer()
    buildCompoundInitializer_nfi()
@@ -100,7 +86,6 @@ Additional functions to test (specific to sageBuilder.C):
 
    buildDoWhileStmt_nfi()
 
-   buildMatlabForStatement()
    buildPassStatement()
    buildPassStatement_nfi()
 
@@ -143,11 +128,7 @@ Additional functions to test (specific to sageBuilder.C):
    generate_type_list()
 
    buildImaginaryType()
-   buildTupleType()
    buildRangeExp()
-
-   buildMatrixExp()
-   buildMagicColonExp()
 
    buildTypeExpression()
    buildFunctionParameterRefExp_nfi()
@@ -205,4 +186,3 @@ Additional functions to test (specific to sageBuilder.C):
 
 
    
-

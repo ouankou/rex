@@ -13,7 +13,6 @@
  *       XXX
  *       What about other language-specific types? They should be covered too.
  *       Fortran types..?
- *       Python types...?
  */
 #include <cassert>
 #include "testSupport.h"

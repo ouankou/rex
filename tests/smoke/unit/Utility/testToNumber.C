@@ -163,6 +163,7 @@ test() {
     assert_fail("7f", "syntax error: invalid digit");
 
     // Negatives and positives
+#if __cplusplus >= 201703L
     if constexpr (std::numeric_limits<T>::is_signed) {
         assert_eq("-000123", T{-123});
         assert_eq("-1_23", T{-123});
@@ -174,10 +175,12 @@ test() {
         assert_fail("+_123", "syntax error: separator not allowed before first digit");
         assert_eq("+0b_0111_1111", T{127});
     }
+#endif
 
     // Check overflows
     assert_fail(max_value_10 + "0", "overflow");
     assert_fail(max_value_10 + "1", "overflow");
+#if __cplusplus >= 201703L
     if constexpr (sizeof(T) < 8) {
         if constexpr (std::numeric_limits<T>::is_signed) {
             const std::string big_min_10 = toString((int64_t)std::numeric_limits<T>::min() - 1);
@@ -189,6 +192,7 @@ test() {
             assert_fail(big_max_10, "overflow error: greater than maximum value for type");
         }
     }
+#endif
 
     // Test certain syntax errors
     assert_fail("", "syntax error: digits expected");
@@ -196,6 +200,7 @@ test() {
     assert_fail("0z", "syntax error: invalid digit after parsing 1 digit");
     assert_fail("0x", "syntax error: digits expected");
     assert_fail("0b", "syntax error: digits expected");
+#if __cplusplus >= 201703L
     if constexpr (std::numeric_limits<T>::is_signed) {
         assert_fail("-", "syntax error: digits expected");
         assert_fail("+", "syntax error: digits expected");
@@ -207,6 +212,7 @@ test() {
         assert_fail("- 0", "syntax error: sign not allowed for unsigned types");
         assert_fail("+ 0", "syntax error: sign not allowed for unsigned types");
     }
+#endif
 }
 
 int main() {

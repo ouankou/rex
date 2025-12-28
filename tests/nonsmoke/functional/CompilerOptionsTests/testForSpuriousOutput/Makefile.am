@@ -88,7 +88,6 @@ check-local:
 	@echo "#################################################"
 	@echo "Test compilation for any output (should be zero!)"
 	@echo "#################################################"
-if !OS_MACOSX 	# Liao 2/9/2011. There are warnings for Mac OS X right now
 if ROSE_BUILD_CXX_LANGUAGE_SUPPORT
 	@$(MAKE) $(CXX_TEST_Objects)
 	@$(MAKE) test_multiple_files_1
@@ -101,11 +100,6 @@ endif
 	@echo "******************************************************************************************************************"
 	@echo "****** ROSE/tests/CompilerOptionTests/testForSpuriousOutput: make check rule complete (terminated normally) ******"
 	@echo "******************************************************************************************************************"
-else	
-	@echo "******************************************************************************************************************"
-	@echo "****** ROSE/tests/CompilerOptionTests/testForSpuriousOutput: make check rule skipped for Mac OSX (terminated normally) ******"
-	@echo "******************************************************************************************************************"
-endif
 # Test the -E option with all of these example files
 $(CXX_TEST_Objects): $(CXX_TESTCODES)
 	@rm -f outputFile; \
@@ -151,7 +145,6 @@ clean-local:
 	rm -f *.o rose_*.C rose_*.f rose_*.f?? *.sage.C test2001_??.C.show outputFile \
               *.C.pdf *.pdf *.int.C rose_directives_list.txt core
 	rm -rf ti_files
-
 
 
 

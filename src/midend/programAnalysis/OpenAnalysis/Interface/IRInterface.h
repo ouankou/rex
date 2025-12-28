@@ -294,7 +294,7 @@ class IRInterface {
   //
   // Note: An important pre-condition for structured conditionals is
   // that chains of else-ifs must be represented as nested elses.  For
-  // example, this Matlab statement:
+  // example, this statement:
   //   if (c1)
   //     s1;
   //   elseif (c2)
@@ -343,8 +343,8 @@ class IRInterface {
   // Given a structured multi-way branch, return true if the cases have
   // implied break semantics.  For example, this method would return false
   // for C since one case will fall-through to the next if there is no
-  // explicit break statement.  Matlab, on the other hand, implicitly exits
-  // the switch statement once a particular case has executed, so this
+  // explicit break statement.  Some languages implicitly exit the switch
+  // statement once a particular case has executed, so this
   // method would return true.
   virtual bool IsBreakImplied(StmtHandle multicond) = 0;
 

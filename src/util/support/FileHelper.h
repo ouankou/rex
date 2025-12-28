@@ -1,7 +1,7 @@
-// Consider using $ROSE/src/util/FileSystem.h since that one is documented and uses a proper path type and supports both
+// Consider using $ROSE/src/Rose/FileSystem.h since that one is documented and uses a proper path type and supports both
 // version 2 and version 3 of std::filesystem.
 
-#include <FileSystem.h>
+#include <Rose/FileSystem.h>
 
 #include <string>
 #include <filesystem>
@@ -9,7 +9,7 @@
 class FileHelper {
 public:
 
-    // This is initialized in src/frontend/SageIII/sage_support/sage_support.cpp, not FileHelper.C
+    // This is initialized in src/frontend/SageIII/sage_support/sage_support.C, not FileHelper.C
     static const std::string pathDelimiter;
 
     static void ensureParentFolderExists(const std::string& path) {

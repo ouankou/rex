@@ -53,7 +53,7 @@ if(enable-c)
   if(HAVE_SYSTEM_TIME_H)
     add_test(
       NAME testqualifiedName
-      COMMAND qualifiedName -c ${ROSE_TOP_SRC_DIR}/projects/autoTuning/tests/jacobi.c)
+      COMMAND qualifiedName -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests/jacobi.c)
   endif()
 
   add_test(

@@ -144,7 +144,7 @@ MarkOverloadedTemplateInstantiations::visit ( SgNode *node )
                       else
                        {
                          printf ("Non GNU compilers not handled for case of generating code for gnu compilers ... \n");
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
 
 #error "DEAD CODE!"
 

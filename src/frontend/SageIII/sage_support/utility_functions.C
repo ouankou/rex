@@ -35,30 +35,8 @@ using namespace Rose;
 // global variable for turning on and off internal debugging.
 int ROSE_DEBUG = 0;
 
-#if 1
-// ArrayAssignmentUsingTransformationGrammar* globalArrayAssignmentUsingTransformationGrammar = NULL;
-
-// CW: here we should definitly find a better way
-// to specify the cache parameters
-// Removed unused variables (next two declarations) [Rasmussen 2019.01.29]
-// const int roseTargetCacheSize     = 8192;
-// const int roseTargetCacheLineSize = 32;
-// cacheInfo roseTargetCacheInfo(roseTargetCacheSize,roseTargetCacheLineSize);
-
-// What is this and who put it here?
-// unsigned int *uint_global_dbug_ptr;
-
-#endif
-
-// DQ (8/10/2004): This was moved to the SgFile a long time ago and should not be used any more)
-// bool Rose::verbose                 = false;
-// DQ (8/11/2004): build a global state here
-// int Rose::roseVerbose = 0;
-
 // DQ (3/6/2017): Adding ROSE options data structure to support frontend and backend options (see header file for details).
 Rose::Options Rose::global_options;
-
-// DQ (3/6/2017): Adding ROSE options data structure to support frontend and backend options (see header file for details).
 Rose::Options::Options()
    {
   // DQ (3/6/2017): Default option value to minimize the chattyness of ROSE based tools.
@@ -170,6 +148,9 @@ std::map<int,std::map<SgStatement*,MacroExpansion*>*> Rose::macroExpansionMapOfM
 
 // DQ (10/29/2018): Build a map for the unparser to use to locate SgIncludeFile IR nodes.
 std::map<std::string, SgIncludeFile*> Rose::includeFileMapForUnparsing;
+
+// DQ (5/27/2021): Track first/last statements per scope per source file.
+std::map<SgSourceFile*,std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> > > Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile;
 
 
 // DQ (11/25/2020): These are the boolean variables that are computed in the function compute_language_kind()
@@ -393,8 +374,6 @@ outputPredefinedMacros()
 SgProject*
 frontend (int argc, char** argv, bool frontendConstantFolding )
    {
-  // printf ("In frontend(int argc,char** argv): frontendConstantFolding = %s \n",frontendConstantFolding == true ? "true" : "false");
-
      return frontend(std::vector<std::string>(argv, argv + argc),frontendConstantFolding);
    }
 
@@ -407,16 +386,13 @@ frontend (const std::vector<std::string>& argv, bool frontendConstantFolding )
   // Syncs C++ and C I/O subsystems!
      ios::sync_with_stdio();
 
-  // printf ("In frontend(const std::vector<std::string>& argv): frontendConstantFolding = %s \n",frontendConstantFolding == true ? "true" : "false");
-
   // We parse plugin related command line options before calling project();
      std::vector<std::string> argv2 = argv; // workaround const argv
      Rose::processPluginCommandLine(argv2);
 
      // Error code checks and reporting are done in SgProject constructor
-     // return new SgProject (argc,argv);
      SgProject* project = new SgProject (argv2,frontendConstantFolding);
-     ROSE_ASSERT (project != NULL);
+     ASSERT_not_null(project);
 
   // DQ (1/27/2017): Comment this out so that we can generate the dot graph to debug symbol with null basis.
      unsetNodesMarkedAsModified(project);
@@ -581,13 +557,13 @@ frontendShell (const std::vector<std::string>& argv)
                printf ("Calling project->unparse() \n");
 
 #if 0
-          printf ("Calling project->unparse() \n");
+          printf ("In backend(): Calling project->unparse() \n");
 #endif
 
           project->unparse(unparseFormatHelp,unparseDelegate);
 
 #if 0
-          printf ("DONE: Calling project->unparse() \n");
+          printf ("DONE: In backend(): Calling project->unparse() \n");
 #endif
 
           if ( SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL )
@@ -595,9 +571,9 @@ frontendShell (const std::vector<std::string>& argv)
         }
 
 #if 0
-     printf ("Inside of backend(SgProject*): SgProject::get_verbose()       = %d \n",SgProject::get_verbose());
-     printf ("Inside of backend(SgProject*): project->numberOfFiles()       = %d \n",project->numberOfFiles());
-     printf ("Inside of backend(SgProject*): project->numberOfDirectories() = %d \n",project->numberOfDirectories());
+     printf ("In backend(SgProject*): SgProject::get_verbose()       = %d \n",SgProject::get_verbose());
+     printf ("In backend(SgProject*): project->numberOfFiles()       = %d \n",project->numberOfFiles());
+     printf ("In backend(SgProject*): project->numberOfDirectories() = %d \n",project->numberOfDirectories());
 #endif
 
   // DQ (1/25/2010): We have to now test for both numberOfFiles() and numberOfDirectories(),
@@ -610,11 +586,15 @@ frontendShell (const std::vector<std::string>& argv)
        // if templates exist).
           if ( SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL )
                printf ("Calling project->compileOutput() \n");
-
+#if 0
+          printf ("In backend(SgProject*): calling project->compileOutput() \n");
+#endif
           finalCombinedExitStatus = project->compileOutput();
+#if 0
+          printf ("DONE: In backend(SgProject*): calling project->compileOutput() \n");
+#endif
         }
        else
-  // if (project->get_compileOnly() == false)
         {
           if ( SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL )
                printf ("   project->get_compileOnly() = %s \n",project->get_compileOnly() ? "true" : "false");

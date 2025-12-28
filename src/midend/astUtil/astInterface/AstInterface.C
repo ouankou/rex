@@ -614,7 +614,7 @@ GetFileInfo()); SgFunctionDeclaration* d1 = isSgFunctionDeclaration(cur); if (d1
                if (d3 != 0)
                    result = scope->AddClass(d3);
                else
-                   assert(false);
+                   ROSE_ABORT();
             }
          }
     }
@@ -3719,7 +3719,7 @@ bool AstInterfaceImpl::ReplaceAst(SgNode *orig, SgNode *n) {
   /*
       if (!HasNullParent(n)) {
            std::cerr << "SgNode does not have null parent: " <<
-     n->unparseToString() << "\n"; assert(0);
+     n->unparseToString() << "\n"; ROSE_ABORT();
       }
   */
   SgNode *p = orig->get_parent();
@@ -4012,7 +4012,7 @@ private:
       if (r == 0) {
         cerr << "failed to find symbol for variable: " << name << " in scope "
              << scope << endl;
-        // assert(false);
+        // ROSE_ABORT();
       } else
         var->set_symbol(r);
     } break;

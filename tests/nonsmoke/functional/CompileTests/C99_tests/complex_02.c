@@ -1,7 +1,4 @@
 
-// DQ (3/21/2009): The header file "complex.h" is not available in Cygwin.
-#if !defined(__CYGWIN__)
-
 // #include "defines.h"
 // #include "args.h"
 #include <sse_debug.h>
@@ -108,7 +105,6 @@ main (void)
   assert (x87_regs[1]._ldouble == __imag__ ldd);
 
   assert (__real__ ldd == 64.0L && __imag__ ldd == 66.0L);
-#endif
 
   return 0;
 }

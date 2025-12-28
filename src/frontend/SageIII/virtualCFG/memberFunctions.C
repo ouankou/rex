@@ -208,7 +208,7 @@ static CFGNode getNodeJustAfterInContainer(SgNode* n) {
     ROSE_ASSERT(switchStatement != NULL);
 
     printf ("In getNodeJustAfterInContainer(): found SgCaseOptionStmt: not clear how to proceed \n");
- // ROSE_ASSERT(false);
+ // ROSE_ABORT();
 #endif
 
  // return CFGNode(scopeStatement, 1);

@@ -46,7 +46,7 @@ class SgFile;
 // #if !CAN_NOT_COMPILE_WITH_ROSE
 // #ifndef USE_ROSE
 
-//! For preprocessing information including source comments, #include , #if, #define, etc
+//! For preprocessing information including source comments, include , if, define, etc
 class PreprocessingInfo
    {
      public:
@@ -167,7 +167,7 @@ class PreprocessingInfo
             // is impractical to build up an AST.
             RawText,
 
-            CpreprocessorEnd_ifDeclaration, // PP (10/1/21): Ada "end if"
+            CpreprocessorEnd_ifDeclaration,
 
             LastDirectiveType
           };

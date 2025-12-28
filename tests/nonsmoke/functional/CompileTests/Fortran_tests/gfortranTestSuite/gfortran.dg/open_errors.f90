@@ -1,7 +1,7 @@
-! { dg-do run { target { ! { *-*-mingw* *-*-cygwin* spu-*-* } } } }
+! { dg-do run { target { ! { spu-*-* } } } }
 ! PR30005 Enhanced error messages for OPEN
 ! Submitted by Jerry DeLisle  <jvdelisle@gcc.gnu.org>
-! See PR38956.  Test fails on cygwin when user has Administrator rights
+! See PR38956.  Test can fail when user has elevated rights.
 character(60) :: msg
 character(25) :: n = "temptestfile"
 logical :: there

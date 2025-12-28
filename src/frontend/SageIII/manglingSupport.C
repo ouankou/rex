@@ -122,8 +122,6 @@ findRootFunc (const SgScopeStatement* scope)
 
               case V_SgGlobal:
                 // Rasmussen (3/17/2021): Reached end of the line (of scopes), return nullptr
-                // Note: get_mangled_name() causes havoc for Jovial. See issues RC-227 and RC-765.
-                // Returning nullptr at global scope helps solve Jovial problems.
                 return nullptr;
 
               default:

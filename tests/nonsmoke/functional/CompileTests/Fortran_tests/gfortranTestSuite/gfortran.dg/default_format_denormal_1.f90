@@ -1,5 +1,5 @@
-! { dg-do run { xfail *-*-darwin[89]* *-*-cygwin* spu-*-* } }
-! Test XFAILed on these platforms because the system's printf() lacks
+! { dg-do run { xfail spu-*-* } }
+! Test XFAILed on some targets because the system's printf() lacks
 ! proper support for denormals.
 !
 ! This tests that the default formats for formatted I/O of reals are

@@ -170,7 +170,6 @@ test_simple_int.C \
 test_wchars.C \
 X.C
 
-# JJW 5-22-2008 This test is not portable to Mac OS X
 # test2006_44.C
 
 ###########################################################################

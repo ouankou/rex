@@ -4,7 +4,7 @@ bin_SCRIPTS =
 pkgdata_DATA =
 MOSTLYCLEANFILES =
 
-SUBDIRS = util ROSETTA frontend midend backend \
+SUBDIRS = util ROSETTA frontend midend backend AstNodes \
           3rdPartyLibraries
 
 # This lists a large number of directories.  If "make install"
@@ -30,6 +30,7 @@ libroseLibraries = \
    $(top_builddir)/src/frontend/SageIII/libsage3.la \
    $(libroseCxxlibraries) \
    $(libroseOpenFortranParserlibraries) \
+   $(top_builddir)/src/AstNodes/Expression/libroseAstNodesExpression.la \
    $(top_builddir)/src/midend/programAnalysis/libprogramAnalysis.la \
    $(top_builddir)/src/midend/programTransformation/loopProcessing/libLoopProcessing.la \
    $(top_builddir)/src/midend/programTransformation/extractFunctionArgumentsNormalization/libExtractFunctionArgumentsNormalization.la \
@@ -49,8 +50,6 @@ pkginclude_HEADERS = \
      featureTests.h \
      rose.h \
      roseInternal.h \
-     rose_msvc.h \
-     msvc_stdint.h \
      frontend/SageIII/sage3basic.h \
      frontend/SageIII/sage3basic.hhh \
      midend/astDiagnostics/AstConsistencyTests.h
@@ -94,9 +93,6 @@ endif
 librose_la_LDFLAGS += -fno-rtti
 librose_la_DEPENDENCIES = $(libroseLibraries)
 
-if OS_MACOSX
-  librose_la_LDFLAGS += $(ROSE_LINK_RPATHS)
-endif
 
 # Build list of all required libraries so that they can be built in parallel
 REQUIRED_LIBS = librose.la
@@ -114,9 +110,6 @@ rose_config_DEPENDENCIES = $(REQUIRED_LIBS)
 rose_config_CPPFLAGS = -DLIBDIR='"$(libdir)"'
 rose_config_LDADD = $(ROSE_LIBS)
 
-if OS_MACOSX
-  rose_config_LDFLAGS += $(ROSE_LINK_RPATHS)
-endif
 
 # DQ (4/12/2016): This is required for use with clang (not clear how to compile ROSE with out it).
 if USING_CLANG_COMPILER
@@ -138,7 +131,7 @@ rose_config_cfgdir = $(libdir)
 rose_config_cfg_DATA = rose-config.cfg
 
 # Rasmussen (3/23/2018): Added ROSE_RPATHS and ROSE_LINK_RPATHS to enable
-# linking on Mac OSX from a ROSE installations.
+# linking from a ROSE installation.
 rose-config.cfg:
 	$(AM_V_GEN) (								\
 		echo "# Things that the 'rose-config' tool can report";		\
@@ -172,11 +165,6 @@ if USING_CLANG_COMPILER
 endif
 LDFLAGS_ROSEBIN += -fno-rtti
 
-if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-if OS_MACOSX
-  LDFLAGS_ROSEBIN += $(ROSE_LINK_RPATHS)
-endif
-endif
 
 rose_compiler_SOURCES      = rose-compiler.C
 rose_compiler_LDFLAGS      = $(LDFLAGS_ROSEBIN)
@@ -209,7 +197,7 @@ check-dynload:
 	@echo "  TEST     whether a trivial ROSE program runs [rose-compiler]"
 	${AM_V_at}if ! ./rose-compiler --version; then                                           \
 	  echo "error: You cannot run a program linked with ROSE. Please be sure that your" >&2; \
-	  echo "error: LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (Mac OSX) contains the" >&2; \
+	  echo "error: LD_LIBRARY_PATH contains the" >&2; \
 	  echo "error: correct libraries (JVM, librose.so, etc.)" >&2;                           \
 	  exit 1;                                                                                \
 	fi
@@ -218,17 +206,6 @@ check-config:
 	@echo "  TEST     ROSE configuration tool [rose-config]"
 	./rose-config --version
 
-if OS_MACOSX
-check-hello-c: $(eval SHELL:=/bin/bash)
-	@echo "  TEST     ROSE C compiler [rose-cc]"
-	${AM_V_at}echo "#include <stdio.h>"                     >  hello-world.c
-	${AM_V_at}echo "int main() {"                           >> hello-world.c
-	${AM_V_at}echo "   printf(\"Hello World from C\\n\");"  >> hello-world.c
-	${AM_V_at}echo "   return 0;"                           >> hello-world.c
-	${AM_V_at}echo "}"                                      >> hello-world.c
-	${AM_V_at}./rose-cc hello-world.c -o hello-world-c
-	${AM_V_at}./hello-world-c
-else
 check-hello-c:
 	@echo "  TEST     ROSE C compiler [rose-cc]"
 	${AM_V_at}echo "#include <stdio.h>"                     >  hello-world.c
@@ -238,7 +215,6 @@ check-hello-c:
 	${AM_V_at}echo "}"                                      >> hello-world.c
 	${AM_V_at}./rose-cc hello-world.c -o hello-world-c
 	${AM_V_at}./hello-world-c
-endif
 check-hello-cxx:
 	@echo "  TEST     ROSE C++ compiler [rose-c++]"
 	${AM_V_at}echo "#include <iostream>"                                      >  hello-world.cpp
@@ -274,7 +250,7 @@ endif
 ########################################################################################################################
 
 # Rasmussen (3/23/2018): Added installing libtool to the bin directory to support
-# linking an application using ROSE from a ROSE installations.
+# linking an application using ROSE from a ROSE installation.
 bin_SCRIPTS += ../libtool
 
 

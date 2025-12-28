@@ -164,6 +164,7 @@ HEADER_START
        */
           void setOutputInCodeGeneration();
           void unsetOutputInCodeGeneration();
+          bool isOutputInCodeGeneration() const;
 
       /*! \brief Allow IR nodes (mostly SgLocatedNode) to be queried for there physical file ID.
 
@@ -1107,6 +1108,27 @@ SgLocatedNode::unsetOutputInCodeGeneration()
           ROSE_ASSERT(expression->get_operatorPosition() != NULL);
           expression->get_operatorPosition()->unsetOutputInCodeGeneration();
         }
+   }
+
+// DQ (9/3/2021): Adding for the interface defined at the SgLocatedNode level.
+bool
+SgLocatedNode::isOutputInCodeGeneration () const
+   {
+     bool return_value = false;
+
+     ROSE_ASSERT(get_startOfConstruct() != NULL);
+     ROSE_ASSERT(get_endOfConstruct() != NULL);
+
+     return_value = return_value || get_startOfConstruct()->isOutputInCodeGeneration();
+     ROSE_ASSERT(return_value == get_endOfConstruct()->isOutputInCodeGeneration());
+
+     const SgExpression* expression = isSgExpression(this);
+     if (expression != NULL && expression->get_operatorPosition() != NULL)
+        {
+          ROSE_ASSERT(return_value == expression->get_operatorPosition()->isOutputInCodeGeneration());
+        }
+
+     return return_value;
    }
 
 // DQ (10/25/20018): These function are part of a move to lift the interface for

@@ -18,7 +18,6 @@ using namespace Rose;
 // ################################################################
 
 SubclassListBuilder& SubclassListBuilder::operator|(const AstNodeClass& t) {
-  ROSE_ASSERT (&t);
   children.push_back(const_cast<AstNodeClass*>(&t));
   return *this;
 }
@@ -41,7 +40,8 @@ AstNodeClass::~AstNodeClass()
    {
    }
 
-AstNodeClass::AstNodeClass ( const string& lexemeString , Grammar & X , const string& stringVar, const string& tagString, bool canHaveInstances, const SubclassListBuilder & builder )
+AstNodeClass::AstNodeClass(const string& lexemeString , Grammar & X , const string& stringVar, const string& tagString,
+                           bool canHaveInstances, const SubclassListBuilder & builder)
    : name((stringVar.empty() ? lexemeString : stringVar)),
      baseName((stringVar.empty() ? lexemeString : stringVar)),
      baseClass(NULL),
@@ -59,17 +59,30 @@ AstNodeClass::AstNodeClass ( const string& lexemeString , Grammar & X , const st
      associatedGrammar(&X),
      generateEssentialDataMembersConstructorImplementation(false),
      generateEnforcedDefaultConstructorImplementation(false)
-   {
-     for (size_t i = 0; i < subclasses.size(); ++i) {
-       // If the next assertion fails, it's probably because you have an IR type that appears in more than one
-       // NEW_NONTERMINAL_MACRO() [Robb P. Matzke 2014-05-07]
-       ROSE_ASSERT (subclasses[i]->getBaseClass() == NULL);
-       ROSE_ASSERT (subclasses[i]);
-       subclasses[i]->setBaseClass(this);
-     }
-     X.addGrammarElement(*this);
-     ROSE_ASSERT(associatedGrammar != NULL);
-   }
+{
+    for (AstNodeClass *subclass: this->subclasses) {
+        ROSE_ASSERT(subclass != nullptr);
+        ROSE_ASSERT(subclass->getBaseClass() == nullptr);
+        subclass->setBaseClass(this);
+    }
+    X.addGrammarElement(*this);
+    ROSE_ASSERT(associatedGrammar != NULL);
+}
+
+void
+AstNodeClass::insertDerivedClass(AstNodeClass *derivedClass) {
+    ROSE_ASSERT(derivedClass != nullptr);
+    ROSE_ASSERT(derivedClass->getBaseClass() == nullptr);
+    subclasses.push_back(derivedClass);
+    derivedClass->setBaseClass(this);
+}
+
+void
+AstNodeClass::insertDerivedClass(std::vector<AstNodeClass*> &terminalList, const std::string &name) {
+    AstNodeClass *derived = lookupTerminal(terminalList, name);
+    ROSE_ASSERT(derived != nullptr);
+    insertDerivedClass(derived);
+}
 
 const std::string&
 AstNodeClass::getCppCondition() const {
@@ -172,7 +185,7 @@ AstNodeClass::buildDestructorBody ()
           if ( typeName.find("Sg") == 0 ) {
             tempString  = "    if (p_$DATA && p_$DATA->get_freepointer() == AST_FileIO::IS_VALID_POINTER()) { delete " + tempString + "p_$DATA; }\n";
 #if DEBUG_double_delete
-            tempString += "    else if (p_$DATA) { ROSE_ASSERT(false); }";
+            tempString += "    else if (p_$DATA) { ROSE_ABORT(); }";
 #endif
           }
           if ( typeName == " rose_hash_multimap*" || typeName == "OSEAttributesListContainerPtr" ) {
@@ -212,7 +225,7 @@ AstNodeClass::buildDestructorBody ()
 
    returnString = "  if (p_freepointer == AST_FileIO::IS_VALID_POINTER()) {\n" + returnString + "\n  }";
 #if DEBUG_double_delete
-   returnString = "ROSE_ASSERT(this);\n" + returnString + " else {\n    ROSE_ASSERT(false);\n  }";
+   returnString = "ROSE_ASSERT(this);\n" + returnString + " else {\n    ROSE_ABORT();\n  }";
 #endif
    returnString += "\n";
 
@@ -220,8 +233,10 @@ AstNodeClass::buildDestructorBody ()
      return returnString;
    }
 
+// DQ (9/28/2022): Fixing compiler warning for argument not used.
+// string AstNodeClass::buildConstructorBody ( bool withInitializers, ConstructParamEnum config )
 string
-AstNodeClass::buildConstructorBody ( bool withInitializers, ConstructParamEnum config )
+AstNodeClass::buildConstructorBody ( bool withInitializers )
    {
   // This function builds a string that represents the initialization of member data
   // if the default initializers are used (for default constructors) then all member 
@@ -308,7 +323,7 @@ StringUtility::FileWithLineNumbers AstNodeClass::buildCopyMemberFunctionHeader (
   // and not required which is required to match the other aspects of the copy mechanism code generation.
   // DQ (3/24/2006): This function declaration is now generated similar to the rest in Common.code
   // printf ("This function should no longer be called \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
      StringUtility::FileWithLineNumbers returnString;
      if (automaticGenerationOfCopyFunction)
@@ -400,7 +415,9 @@ StringUtility::FileWithLineNumbers AstNodeClass::buildCopyMemberFunctionSource (
 
                          constructArgList1 += ", " + varNameString;
 
-                         string setParentString = data->buildCopyMemberFunctionSetParentSource(varNameString);
+                      // DQ (9/28/2022): Fixing compiler warning for argument not used.
+                      // string setParentString = data->buildCopyMemberFunctionSetParentSource(varNameString);
+                         string setParentString = data->buildCopyMemberFunctionSetParentSource();
                          postConstructCopy += setParentString;
                        }
                       else
@@ -425,7 +442,9 @@ StringUtility::FileWithLineNumbers AstNodeClass::buildCopyMemberFunctionSource (
                                    postConstructCopy1 += data->buildCopyMemberFunctionSource(buildConstructorArgument);
 #if 1
                                 // string setParentString = "     " + string(data->getVariableNameString()) + "_copy->set_parent(result);\n";
-                                   string setParentString = data->buildCopyMemberFunctionSetParentSource(localVarNameString);
+                                // DQ (9/28/2022): Fixing compiler warning for argument not used.
+                                // string setParentString = data->buildCopyMemberFunctionSetParentSource(localVarNameString);
+                                   string setParentString = data->buildCopyMemberFunctionSetParentSource();
                                    postConstructCopy1 += setParentString;
 #endif
                                    break;
@@ -443,7 +462,9 @@ StringUtility::FileWithLineNumbers AstNodeClass::buildCopyMemberFunctionSource (
                                    postConstructCopy1 += data->buildCopyMemberFunctionSource(buildConstructorArgument);
 #if 1
                                 // string setParentString = "     " + string(data->getVariableNameString()) + "_copy.set_parent(result);\n";
-                                   string setParentString = data->buildCopyMemberFunctionSetParentSource(localVarNameString);
+                                // DQ (9/28/2022): Fixing compiler warning for argument not used.
+                                // string setParentString = data->buildCopyMemberFunctionSetParentSource(localVarNameString);
+                                   string setParentString = data->buildCopyMemberFunctionSetParentSource();
                                    postConstructCopy1 += setParentString;
 #endif
                                    break;
@@ -461,7 +482,9 @@ StringUtility::FileWithLineNumbers AstNodeClass::buildCopyMemberFunctionSource (
                                 // DQ (10/22/2005): Simpler code
                                    postConstructCopy1 += data->buildCopyMemberFunctionSource(buildConstructorArgument);
                                 // string setParentString = "     " + string(data->getVariableNameString()) + "_copy.set_parent(result);\n";
-                                   string setParentString = data->buildCopyMemberFunctionSetParentSource(varNameString);
+                                // DQ (9/28/2022): Fixing compiler warning for argument not used.
+                                // string setParentString = data->buildCopyMemberFunctionSetParentSource(varNameString);
+                                   string setParentString = data->buildCopyMemberFunctionSetParentSource();
                                 // postConstructCopy = setParentString + postConstructCopy;
                                    postConstructCopy1 += setParentString;
                                    break;
@@ -530,7 +553,9 @@ AstNodeClass::show(size_t indent) const
            terminalIterator != subclasses.end(); 
            terminalIterator++) {
          ROSE_ASSERT((*terminalIterator)!=NULL);
-         displayName(indent); cout << " -> "; (*terminalIterator)->AstNodeClass::show(); cout << ";" << endl; //MS edge
+      // DQ (9/28/2022): Fixing compiler warning for argument not used.
+      // displayName(indent); cout << " -> "; (*terminalIterator)->AstNodeClass::show(); cout << ";" << endl; //MS edge
+         displayName(); cout << " -> "; (*terminalIterator)->AstNodeClass::show(); cout << ";" << endl; //MS edge
          if ((*terminalIterator)->getCanHaveInstances()) {
            (*terminalIterator)->show();
            cout << "[style=bold];" << endl; // Terminals are bold! MS node
@@ -539,8 +564,10 @@ AstNodeClass::show(size_t indent) const
      }
    }
 
+// DQ (9/28/2022): Fixing compiler warning for argument not used.
+// void AstNodeClass::displayName ( int indent ) const
 void
-AstNodeClass::displayName ( int indent ) const
+AstNodeClass::displayName () const
    {
      ROSE_ASSERT (this != NULL);
      printf ("%s ",name.c_str());
@@ -718,7 +745,7 @@ AstNodeClass::setFunctionPrototype ( const GrammarString & inputMemberFunction )
        string directory;                                                       \
        functionString =                                                        \
            StringUtility::toString(Grammar::extractStringFromFile(             \
-               startMarkerString, endMarkerString, filename, directory));      \
+               startMarkerString, endMarkerString, filename));                 \
      } catch (const std::runtime_error &e) {                                   \
        if (strstr(e.what(), "could not locate startMarker") == NULL) {         \
          errorMessage = e.what();                                              \
@@ -731,11 +758,10 @@ AstNodeClass::setFunctionPrototype ( const GrammarString & inputMemberFunction )
        string endSuffix = "_END";                                              \
        string startMarkerString = markerString + startSuffix;                  \
        string endMarkerString = markerString + endSuffix;                      \
-       string directory;                                                       \
        try {                                                                   \
          functionString =                                                      \
              StringUtility::toString(Grammar::extractStringFromFile(           \
-                 startMarkerString, endMarkerString, filename, directory));    \
+                 startMarkerString, endMarkerString, filename));               \
        } catch (const std::runtime_error &e) {                                 \
          errorMessage = e.what();                                              \
        }                                                                       \
@@ -744,7 +770,7 @@ AstNodeClass::setFunctionPrototype ( const GrammarString & inputMemberFunction )
       * extractStringFromFile just before it aborted. */                       \
      if (!errorMessage.empty()) {                                              \
        fprintf(stderr, "%s\n", errorMessage.c_str());                          \
-       ROSE_ASSERT(false);                                                     \
+       ROSE_ABORT();                                                     \
      }                                                                         \
      GrammarString *codeString = new GrammarString(functionString);            \
      codeString->setVirtual(pureVirtual);
@@ -959,7 +985,7 @@ AstNodeClass::buildDataAccessFunctions ( const GrammarString & inputMemberData)
             // Use the older way of handling this (sometimes causes parents to be types (but for a class referenced in a typedef as in 
             //      typedef int (doubleArray::*doubleArrayMemberVoidFunctionPointerType) (void) const;
             // This seems to be OK, as long as the class declaration was a copy and not the original defining declaration
-               string tempString = "\n#if DEBUG_SAGE_ACCESS_FUNCTIONS\n     if (p_$DATA != NULL && $DATA != NULL && p_$DATA != $DATA)\n        {\n          printf (\"Warning: $DATA = %p overwriting valid pointer p_$DATA = %p \\n\",$DATA,p_$DATA);\n#if DEBUG_SAGE_ACCESS_FUNCTIONS_ASSERTION\n          printf (\"Error fails assertion (p_$DATA != NULL && $DATA != NULL && p_$DATA != $DATA) is false\\n\");\n          ROSE_ASSERT(false);\n#endif\n        }\n#endif";
+               string tempString = "\n#if DEBUG_SAGE_ACCESS_FUNCTIONS\n     if (p_$DATA != NULL && $DATA != NULL && p_$DATA != $DATA)\n        {\n          printf (\"Warning: $DATA = %p overwriting valid pointer p_$DATA = %p \\n\",$DATA,p_$DATA);\n#if DEBUG_SAGE_ACCESS_FUNCTIONS_ASSERTION\n          printf (\"Error fails assertion (p_$DATA != NULL && $DATA != NULL && p_$DATA != $DATA) is false\\n\");\n          ROSE_ABORT();\n#endif\n        }\n#endif";
                tempString = GrammarString::copyEdit (tempString,"$DATA",variableName);
                setParentFunctionCallString = tempString;
              }
@@ -1462,7 +1488,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                       // s += "                       std::cout << \"" + varTypeString + " p_" + varNameString + " --> \" << std::flush;\n" ;
                          s += "                       std::cout << \"" + varTypeString + " p_" + varNameString + " = \" << p_" + varNameString + " << \" --> \" << std::flush;\n" ;
                          s += "                       std::cout << \" not valid \" << std::endl;\n" ;
-                      // s += "                       ROSE_ASSERT(false); \n" ;
+                      // s += "                       ROSE_ABORT(); \n" ;
                          s += "                    } \n" ;
                          s += "             } \n" ;
                          s += "\n" ;
@@ -1490,7 +1516,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "                       std::cout << \"" + classNameString + " :: \" << std::flush;\n" ;
                          s += "                       std::cout << \"" + varTypeString + " p_" + varNameString + " --> \" << std::flush;\n" ;
                          s += "                       std::cout << \" entry not valid \" << std::endl;\n" ;
-                      // s += "                       ROSE_ASSERT(false); \n" ;
+                      // s += "                       ROSE_ABORT(); \n" ;
                          s += "                    } \n" ;
                          s += "             } \n" ;
 #if 1
@@ -1526,7 +1552,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "                       std::cout << \"" + classNameString + " :: \" << std::flush;\n" ;
                          s += "                       std::cout << \"" + varTypeString + " p_" + varNameString + " --> \" << std::flush;\n" ;
                          s += "                       std::cout << \" entry not valid \" << std::endl;\n" ;
-                      // s += "                       ROSE_ASSERT(false); \n" ;
+                      // s += "                       ROSE_ABORT(); \n" ;
                          s += "                    } \n" ;
                          s += "             } \n" ;
 #if 1
@@ -1565,7 +1591,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "                            std::cout << \"" + classNameString + " :: \" << std::flush;\n" ;
                          s += "                            std::cout << \"" + varTypeString + " p_" + varNameString + " --> \" << std::flush;\n" ;
                          s += "                            std::cout << \" entry not valid \" << std::endl;\n" ;
-                      // s += "                            ROSE_ASSERT(false); \n" ;
+                      // s += "                            ROSE_ABORT(); \n" ;
                          s += "                         } \n" ;
                          s += "                  } \n" ;
 #if 1
@@ -1609,7 +1635,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "                            std::cout << \"" + classNameString + " :: \" << std::flush;\n" ;
                          s += "                            std::cout << \"" + varTypeString + " p_" + varNameString + " --> \" << std::flush;\n" ;
                          s += "                            std::cout << \" entry not valid \" << std::endl;\n" ;
-                      // s += "                            ROSE_ASSERT(false); \n" ;
+                      // s += "                            ROSE_ABORT(); \n" ;
                          s += "                         } \n" ;
                          s += "                  } \n" ;
 #if 1
@@ -1871,7 +1897,9 @@ AstNodeClass::buildReturnDataMemberPointers ()
 *  The traverse parameter indicates whether the property is normally traversed.  This parameter is
 *  propagated through to the ReferenceToPointerHandler.
 *************************************************************************************************/
-string AstNodeClass::buildListIteratorStringForReferenceToPointers(string typeName, string variableName, string classNameString, bool traverse)
+// DQ (9/28/2022): Fixing compiler warning for argument not used.
+// string AstNodeClass::buildListIteratorStringForReferenceToPointers(string typeName, string variableName, string classNameString, bool traverse)
+string AstNodeClass::buildListIteratorStringForReferenceToPointers(string typeName, string variableName, bool traverse)
    {
   // AS(2/14/2006) Builds the strings for the list of data member pointers.
      string returnString;
@@ -2046,7 +2074,9 @@ AstNodeClass::buildProcessDataMemberReferenceToPointers ()
                  // is a ir-node pointer which is *not* yet replaced. $CLASSNAME is inside the string and will later be replaced with 
                  // e.g SgTypeInt etc. 'varTypeString.substr(0,15) == "$GRAMMAR_PREFIX"' checks to see if it is part of the grammar.
                  // 'varTypeString.substr(0,2) == "Sg" ' and to see if it is a Sg node of some type.
-                    s += buildListIteratorStringForReferenceToPointers(varTypeString, varNameString,classNameString, traverse);
+                 // DQ (9/28/2022): Fixing compiler warning for argument not used.
+                 // s += buildListIteratorStringForReferenceToPointers(varTypeString, varNameString,classNameString, traverse);
+                    s += buildListIteratorStringForReferenceToPointers(varTypeString, varNameString, traverse);
 
                     if ( (varTypeString == "$CLASSNAME *" ) || ( ( ( varTypeString.substr(0,15) == "$GRAMMAR_PREFIX" ) || ( varTypeString.substr(0,2) == "Sg" ) ) && typeIsStarPointer ) )
                        {
@@ -2095,7 +2125,9 @@ AstNodeClass::buildProcessDataMemberReferenceToPointers ()
 *  necessary to count the index of all data member pointers to IR nodes 
 *  contained in STL lists.
 *************************************************************************************************/
-std::string AstNodeClass::buildListIteratorStringForChildIndex(string typeName, string variableName, string classNameString)
+// DQ (9/28/2022): Fixing compiler warning for argument not used.
+// std::string AstNodeClass::buildListIteratorStringForChildIndex(string typeName, string variableName, string classNameString)
+std::string AstNodeClass::buildListIteratorStringForChildIndex(string typeName, string variableName)
    {
   // AS(2/14/2006) Builds the strings for the list of data member pointers.
      string returnString;
@@ -2269,7 +2301,9 @@ AstNodeClass::buildChildIndex()
                  // is a ir-node pointer which is *not* yet replaced. $CLASSNAME is inside the string and will later be replaced with 
                  // e.g SgTypeInt etc. 'varTypeString.substr(0,15) == "$GRAMMAR_PREFIX"' checks to see if it is part of the grammar.
                  // 'varTypeString.substr(0,2) == "Sg" ' and to see if it is a Sg node of some type.
-                    s += buildListIteratorStringForChildIndex(varTypeString, varNameString,classNameString);
+                 // DQ (9/28/2022): Fixing compiler warning for argument not used.
+                 // s += buildListIteratorStringForChildIndex(varTypeString, varNameString,classNameString);
+                    s += buildListIteratorStringForChildIndex(varTypeString, varNameString);
 
                     if ( (varTypeString == "$CLASSNAME *" ) || ( ( ( varTypeString.substr(0,15) == "$GRAMMAR_PREFIX" ) || ( varTypeString.substr(0,2) == "Sg" ) ) && typeIsStarPointer ) )
                        {

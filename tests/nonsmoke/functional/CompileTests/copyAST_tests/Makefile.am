@@ -784,7 +784,6 @@ FAILING_TESTS =
 # test2007_56.C
 # test2007_95.C -- broken test case
 
-# JJW 5-22-2008 This test is not portable to Mac OS X
 # test2006_44.C
 
 # Configure-time automake conditional

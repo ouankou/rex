@@ -858,7 +858,7 @@ class CheckTransformedFlagsVisitor: public AstSimpleProcessing
                        {
 #if 0
                          printf ("Found locatedNode = %p = %s as transformation \n",locatedNode,locatedNode->class_name().c_str());
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
 #endif
                        }
                   }

@@ -5,7 +5,7 @@
 
 ! Submitted by Walt Brainerd, The Fortran Company
 ! GNU Fortran 95 (GCC 4.1.0 20050322 (experimental))
-! Windows XP
+! Some targets
 
 ! Return value should be 3
 

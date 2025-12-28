@@ -177,7 +177,6 @@ X.C
 # EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS += \
 # endif
 
-# JJW 5-22-2008 This test is not portable to Mac OS X
 # test2006_44.C
 
 ###########################################################################
@@ -635,8 +634,8 @@ endif
 	@echo "******************************************************************************************************"
 
 clean-local:
-#	DQ (8/25/2011): This gnerates a command line that is too long for OSX and ends in an error.
-#	The problem appears to be that there are too many *.dot files...(with long names).
+#	DQ (8/25/2011): This generates a command line that is too long on some systems and ends in an error.
+#	The problem appears to be that there are too many *.dot files (with long names).
 #	rm -f *.o *.temp.c *-o *.mod *.dot
 	rm -f *.o 
 	rm -f *.temp.c 
@@ -649,4 +648,3 @@ clean-local:
 	rm -f *.passed *.failed *.err *.out
 	rm -f *.temp.int.c
 	rm -f *.log
-

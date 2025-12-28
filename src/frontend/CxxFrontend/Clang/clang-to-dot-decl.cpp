@@ -156,6 +156,9 @@ ClangToDotTranslator::Traverse(clang::Decl * decl)
         case clang::Decl::CXXDeductionGuide:
             ret_status = VisitCXXDeductionGuideDecl((clang::CXXDeductionGuideDecl *)decl, node_desc);
             break;
+        case clang::Decl::CXXMethod:
+            ret_status = VisitCXXMethodDecl((clang::CXXMethodDecl *)decl, node_desc);
+            break;
         case clang::Decl::CXXConstructor:
             ret_status = VisitCXXConstructorDecl((clang::CXXConstructorDecl *)decl, node_desc);
             break;
@@ -359,7 +362,29 @@ bool ClangToDotTranslator::VisitDecl(clang::Decl * decl, NodeDescriptor & node_d
 #endif
         }
 
-     node_desc.successors.push_back(std::pair<std::string, std::string>("canonical_decl", Traverse(decl->getCanonicalDecl())));
+     node_desc.successors.push_back(std::pair<std::string, std::string>("most_recent_decl", Traverse(decl->getMostRecentDecl())));
+     node_desc.successors.push_back(std::pair<std::string, std::string>("previous_decl", Traverse(decl->getPreviousDecl())));
+     clang::DeclContext* declContext = decl->getDeclContext();
+     if(declContext)
+       node_desc.successors.push_back(std::pair<std::string, std::string>("DeclContext", Traverse(clang::Decl::castFromDeclContext(declContext))));
+
+     if(decl->isCanonicalDecl())
+        {
+           node_desc.successors.push_back(std::pair<std::string, std::string>("canonical_decl", Traverse(decl->getCanonicalDecl())));
+        }
+
+     if(decl->hasBody())
+        {
+           node_desc.successors.push_back(std::pair<std::string, std::string>("body", Traverse(decl->getBody())));
+        }
+     if(decl->isImplicit())
+        {
+           node_desc.attributes.push_back(std::pair<std::string, std::string>("isImplicit", "Yes"));
+        }
+     if(decl->isFirstDecl())
+        {
+           node_desc.attributes.push_back(std::pair<std::string, std::string>("isFirstDecl", "Yes"));
+        }
 
      return true;
    }
@@ -387,7 +412,7 @@ bool ClangToDotTranslator::VisitAccessSpecDecl(clang::AccessSpecDecl * access_sp
 
      node_desc.kind_hierarchy.push_back("AccessSpecDecl");
 
-     ROSE_ASSERT(FAIL_TODO == 0); // TODO
+     //ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
      return VisitDecl(access_spec_decl, node_desc) && res;
 }
@@ -589,7 +614,7 @@ bool ClangToDotTranslator::VisitFriendDecl(clang::FriendDecl * friend_decl, Node
       node_desc.successors.push_back(std::pair<std::string, std::string>("friend_type", Traverse(type_source_info->getType().getTypePtr())));
     }
 
-     ROSE_ASSERT(FAIL_TODO == 0); // TODO
+     //ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
      return VisitDecl(friend_decl, node_desc) && res;
    }
@@ -713,7 +738,7 @@ bool ClangToDotTranslator::VisitNamedDecl(clang::NamedDecl * named_decl, NodeDes
                break;
         }
 
-     node_desc.successors.push_back(std::pair<std::string, std::string>("underlying_decl", Traverse(named_decl->getUnderlyingDecl())));
+     node_desc.successors.push_back(std::pair<std::string, std::string>("(underlying_decl", Traverse(named_decl->getUnderlyingDecl())));
 
      ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
@@ -807,7 +832,7 @@ bool ClangToDotTranslator::VisitNamespaceDecl(clang::NamespaceDecl * namespace_d
     unsigned cnt = 0;
     for (it = namespace_decl->decls_begin(); it != namespace_decl->decls_end(); it++) {
         std::ostringstream oss;
-        oss << "child[" << cnt++ << "]";
+        oss << "DeclContext::decls[" << cnt++ << "]";
         node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(*it)));
     }
 
@@ -1130,7 +1155,7 @@ bool ClangToDotTranslator::VisitTagDecl(clang::TagDecl * tag_decl, NodeDescripto
 
      node_desc.successors.push_back(std::pair<std::string, std::string>("canonical_decl", Traverse(tag_decl->getCanonicalDecl())));
 
-     node_desc.successors.push_back(std::pair<std::string, std::string>("definition", Traverse(tag_decl->getDefinition())));
+     node_desc.successors.push_back(std::pair<std::string, std::string>("(TagDecl) definition", Traverse(tag_decl->getDefinition())));
 
      node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", tag_decl->getKindName()));
 
@@ -1140,6 +1165,23 @@ bool ClangToDotTranslator::VisitTagDecl(clang::TagDecl * tag_decl, NodeDescripto
 
      ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
+#if DEBUG_VISIT_DECL
+    std::cerr << "ClangToSageTranslator::VisitTagDecl: casting to DeclContext" << std::endl;
+#endif
+    clang::DeclContext::decl_iterator it;
+    unsigned cnt = 0;
+    for (it = tag_decl->decls_begin(); it != tag_decl->decls_end(); it++) {
+#if DEBUG_VISIT_DECL
+          std::cerr << "ClangToSageTranslator::VisitTagDecl: visit decl #" << cnt << " " << *it<< std::endl;
+#endif
+          std::ostringstream oss;
+          oss << "DeclContext::decls["<< cnt++ << "]";
+          node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(*it)));
+     }
+
+#if DEBUG_VISIT_DECL
+    std::cerr << "ClangToSageTranslator::VisitTagDecl:" << cnt << " decls visited" << std::endl;
+#endif
      return VisitTypeDecl(tag_decl, node_desc) && res;
    }
 #endif
@@ -1148,6 +1190,8 @@ bool ClangToDotTranslator::VisitTagDecl(clang::TagDecl * tag_decl, NodeDescripto
 bool ClangToDotTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, SgNode ** node) {
 #if DEBUG_VISIT_DECL
     std::cerr << "ClangToDotTranslator::VisitRecordDecl" << std::endl;
+    std::cerr << "ClangToSageTranslator::VisitRecordDecl name:"
+              << record_decl->getNameAsString() << "\n";
 #endif
 
     // FIXME May have to check the symbol table first, because of out-of-order traversal of C++ classes (Could be done in CxxRecord class...)
@@ -1434,10 +1478,6 @@ bool ClangToDotTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, Node
 
      node_desc.kind_hierarchy.push_back("RecordDecl");
 
-  // DQ (11/28/2020): Name change in Clang 10.
-  // node_desc.successors.push_back(std::pair<std::string, std::string>("previous_declaration", Traverse(record_decl->getPreviousDeclaration())));
-     node_desc.successors.push_back(std::pair<std::string, std::string>("previous_declaration", Traverse(record_decl->getPreviousDecl())));
-
      clang::RecordDecl::field_iterator it;
      unsigned cnt = 0;
      for (it = record_decl->field_begin(); it != record_decl->field_end(); it++)
@@ -1446,6 +1486,8 @@ bool ClangToDotTranslator::VisitRecordDecl(clang::RecordDecl * record_decl, Node
           oss << "field[" << cnt++ << "]";
           node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(*it)));
         }
+     node_desc.attributes.push_back(std::pair<std::string, std::string>("field_empty",
+                                                                        record_decl->field_empty() ? "True" : "False"));
 
      return VisitTagDecl(record_decl, node_desc) && res;
 }
@@ -1492,6 +1534,12 @@ bool ClangToDotTranslator::VisitCXXRecordDecl(clang::CXXRecordDecl * cxx_record_
      bool res = VisitRecordDecl(cxx_record_decl, node_desc);
 
      node_desc.kind_hierarchy.push_back("CXXRecordDecl");
+
+    node_desc.successors.push_back(std::pair<std::string, std::string>("(CXXRecordecl) definition", Traverse(cxx_record_decl->getDefinition())));
+
+    // Pei-Hung: skipping the remaining processes when there is no definition found.  This should avoid issues when retriving bases, vbases, decls, ctors and friends.
+    if(!cxx_record_decl->hasDefinition())
+        return res;
 
 #if 0
   // DQ (11/28/2020): I think this skeleton is implemented as working code below.
@@ -1740,7 +1788,7 @@ bool ClangToDotTranslator::VisitEnumDecl(clang::EnumDecl * enum_decl, NodeDescri
 
      node_desc.successors.push_back(std::pair<std::string, std::string>("promotion_type", Traverse(enum_decl->getPromotionType().getTypePtr())));
 
-     return VisitDecl(enum_decl, node_desc) && res;
+     return VisitTagDecl(enum_decl, node_desc) && res;
 }
 #endif
 
@@ -2725,7 +2773,7 @@ bool ClangToDotTranslator::VisitCXXMethodDecl(clang::CXXMethodDecl * cxx_method_
 
      node_desc.kind_hierarchy.push_back("CXXMethodDecl");
 
-     ROSE_ASSERT(FAIL_TODO == 0); // TODO
+//     ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
      return VisitFunctionDecl(cxx_method_decl, node_desc) && res;
    }
@@ -2760,12 +2808,21 @@ bool ClangToDotTranslator::VisitCXXConstructorDecl(clang::CXXConstructorDecl * c
         std::ostringstream oss;
         oss << "init[" << cnt++ << "]";
 //      node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(*it)));
-        node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), ""));
+        if((*it)->isMemberInitializer())
+        {
+          clang::FieldDecl * field_decl = (*it)->getMember();
+          node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse((*it)->getInit())));
+          node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), field_decl->getNameAsString()));
+        }
     }
+    if(cxx_constructor_decl->isDefaultConstructor())
+        node_desc.attributes.push_back(std::pair<std::string, std::string>("is_default_constructor", "true"));
 
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
+//    ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
-    return VisitCXXMethodDecl(cxx_constructor_decl, node_desc) && res;
+    res = VisitCXXMethodDecl(cxx_constructor_decl, node_desc);
+
+    return res;
 }
 #endif
 
@@ -3024,7 +3081,7 @@ bool ClangToDotTranslator::VisitVarDecl(clang::VarDecl * var_decl, NodeDescripto
 
      node_desc.successors.push_back(std::pair<std::string, std::string>("acting_definition", Traverse(var_decl->getActingDefinition())));
 
-     node_desc.successors.push_back(std::pair<std::string, std::string>("definition", Traverse(var_decl->getDefinition())));
+     node_desc.successors.push_back(std::pair<std::string, std::string>("(VarDecl) definition", Traverse(var_decl->getDefinition())));
 
   // DQ (11/28/2020): I think this is no longer available in Clang 10.
   // node_desc.successors.push_back(std::pair<std::string, std::string>("out_of_line_definition", Traverse(var_decl->getOutOfLineDefinition())));
@@ -3744,7 +3801,7 @@ bool ClangToDotTranslator::VisitTranslationUnitDecl(clang::TranslationUnitDecl *
      for (it = translation_unit_decl->decls_begin(); it != translation_unit_decl->decls_end(); it++)
         {
           std::ostringstream oss;
-          oss << "child[" << cnt++ << "]";
+          oss << "DeclContext::decls[" << cnt++ << "]";
 #ifdef SHORT_CUT_BUILTIN
           if (cnt < 6) continue;
 #endif

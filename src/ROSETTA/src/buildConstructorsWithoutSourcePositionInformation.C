@@ -40,11 +40,13 @@ Grammar::markNodeForConstructorWithoutSourcePositionInformation ( AstNodeClass &
                i++;
              }
 #else
-          GrammarString* returnValue = getNamedDataMember ( node, "startOfConstruct" );
+       // DQ (9/28/2022): Fixing compiler warning for argument not used.
+       // GrammarString* returnValue = getNamedDataMember ( node, "startOfConstruct" );
+          GrammarString* returnValue = getNamedDataMember ( node );
           ROSE_ASSERT(returnValue != NULL);
           returnValue->setIsInConstructorParameterList(NO_CONSTRUCTOR_PARAMETER);
 #endif
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
    }
 
@@ -69,7 +71,9 @@ Grammar::markNodeForConstructorWithoutSourcePositionInformationSupport( AstNodeC
    }
 
 GrammarString* 
-Grammar::getNamedDataMember ( AstNodeClass & node, const string & name )
+// DQ (9/28/2022): Fixing compiler warning for argument not used.
+// Grammar::getNamedDataMember ( AstNodeClass & node, const string & name )
+Grammar::getNamedDataMember ( AstNodeClass & node )
    {
      GrammarString* returnValue = NULL;
      const vector<GrammarString*> & terminalList = node.getMemberDataPrototypeList(AstNodeClass::LOCAL_LIST,AstNodeClass::INCLUDE_LIST);
@@ -179,7 +183,9 @@ Grammar::buildConstructorWithoutSourcePositionInformation ( AstNodeClass & node 
                string baseClassParameterString = "";
                bool withInitializers = false;
                bool withTypes        = false;
-               baseClassParameterString = buildConstructorParameterListString (*node.getBaseClass(),withInitializers,withTypes, config);
+            // DQ (9/28/2022): Fixing compiler warning for argument not used.
+            // baseClassParameterString = buildConstructorParameterListString (*node.getBaseClass(),withInitializers,withTypes, config);
+               baseClassParameterString = buildConstructorParameterListString (*node.getBaseClass(),withInitializers,withTypes);
                string preInitializationString = ": " + parentClassName + "($BASECLASS_PARAMETERS)";
                preInitializationString = StringUtility::copyEdit (preInitializationString,"$BASECLASS_PARAMETERS",baseClassParameterString);
                constructorSource = StringUtility::copyEdit (constructorSource,"$PRE_INITIALIZATION_LIST",preInitializationString);
@@ -191,7 +197,9 @@ Grammar::buildConstructorWithoutSourcePositionInformation ( AstNodeClass & node 
 
           bool withInitializers         = false;
           bool withTypes                = true;
-          string constructorParameterString = buildConstructorParameterListString (node,withInitializers,withTypes,config,&complete);
+       // DQ (9/28/2022): Fixing compiler warning for argument not used.
+       // string constructorParameterString = buildConstructorParameterListString (node,withInitializers,withTypes,config,&complete);
+          string constructorParameterString = buildConstructorParameterListString (node,withInitializers,withTypes,&complete);
           constructorSource = StringUtility::copyEdit (constructorSource,"$CONSTRUCTOR_PARAMETER_LIST",constructorParameterString);
           constructorSource = StringUtility::copyEdit (constructorSource,"$CLASSNAME",className);
 
@@ -201,7 +209,7 @@ Grammar::buildConstructorWithoutSourcePositionInformation ( AstNodeClass & node 
              }
             else
              {
-               string constructorFunctionBody = node.buildConstructorBody(withInitializers, config);
+               string constructorFunctionBody = node.buildConstructorBody(withInitializers);
                constructorSource = StringUtility::copyEdit (constructorSource,"$CONSTRUCTOR_BODY",constructorFunctionBody);
              }
 
@@ -246,4 +254,3 @@ Grammar::buildConstructorWithoutSourcePositionInformationSupport( AstNodeClass &
         }
 #endif
    }
-

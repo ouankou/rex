@@ -1259,7 +1259,7 @@ class ApplyLoopSplittingImpl
   
    for (LoopTreeTraverse p(r); !p.ReachEnd(); p.Advance()) { 
     LoopTreeNode* n = p.Current();
-    if (n->GetClassName() == "LoopTreeRestrLoopRange") {
+    if (n->LoopTreeGetClassName() == "LoopTreeRestrLoopRange") {
         LoopTreeRestrLoopRange *cur = dynamic_cast<LoopTreeRestrLoopRange*>(n);
         LoopTreeNode* loop = cur->GetRestrLoop();
         SplitList& splitlist = splitmap[loop];
@@ -1284,4 +1284,3 @@ void ApplyLoopSplitting(LoopTreeNode *r)
 {
   ApplyLoopSplittingImpl()(r);
 }
-
