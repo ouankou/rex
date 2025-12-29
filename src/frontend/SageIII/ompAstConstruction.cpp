@@ -4276,8 +4276,7 @@ convertAffinityClause(SgStatement *clause_body,
   OpenMPAffinityClauseModifier modifier = affinity_clause->getModifier();
   std::list<std::list<SgExpression *>> affinity_iterators_definition_class;
   if (modifier == OMPC_AFFINITY_MODIFIER_iterator) {
-    const auto &omp_affinity_iterators =
-        affinity_clause->getIteratorsDefinitionClass();
+    const auto &omp_affinity_iterators = affinity_clause->getIterators();
     for (const auto &iterator_def : omp_affinity_iterators) {
       std::list<SgExpression *> iterator_expressions;
       if (!iterator_def.qualifier.empty()) {
