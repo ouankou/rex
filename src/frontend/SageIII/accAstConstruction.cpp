@@ -147,14 +147,12 @@ SgOmpExpressionClause *convertOpenACCExpressionClause(
   SgOmpExpressionClause *result = NULL;
   SgExpression *clause_expression = NULL;
   OpenACCClauseKind clause_kind = current_acc_clause->getKind();
-  std::vector<std::string> *current_expressions =
+  std::vector<OpenACCExpressionItem> *current_expressions =
       current_acc_clause->getExpressions();
-  if (current_expressions->size() != 0) {
-    std::vector<std::string>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
+  if (!current_expressions->empty()) {
+    for (const auto &expr_item : *current_expressions) {
       clause_expression = parseAccExpression(current_OpenACCIR_to_SageIII.first,
-                                             (*iter).c_str());
+                                             expr_item.text);
     }
   }
 
@@ -204,14 +202,12 @@ convertOpenACCClause(SgStatement *directive,
   ROSE_ASSERT(target != NULL);
 
   OpenACCClauseKind clause_kind = current_acc_clause->getKind();
-  std::vector<std::string> *current_expressions =
+  std::vector<OpenACCExpressionItem> *current_expressions =
       current_acc_clause->getExpressions();
-  if (current_expressions->size() != 0) {
-    std::vector<std::string>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
+  if (!current_expressions->empty()) {
+    for (const auto &expr_item : *current_expressions) {
       parseAccArraySection(current_OpenACCIR_to_SageIII,
-                           current_acc_clause->getKind(), *iter);
+                           current_acc_clause->getKind(), expr_item.text);
     }
   }
 
@@ -381,10 +377,10 @@ bool checkOpenACCIR(OpenACCDirective *directive) {
     return false;
   }
   };
-  std::map<OpenACCClauseKind, std::vector<OpenACCClause *> *> *clauses =
+  std::map<OpenACCClauseKind, std::vector<OpenACCClause *>> *clauses =
       directive->getAllClauses();
   if (clauses != NULL) {
-    std::map<OpenACCClauseKind, std::vector<OpenACCClause *> *>::iterator it;
+    std::map<OpenACCClauseKind, std::vector<OpenACCClause *>>::iterator it;
     for (it = clauses->begin(); it != clauses->end(); it++) {
       switch (it->first) {
       case ACCC_collapse:
