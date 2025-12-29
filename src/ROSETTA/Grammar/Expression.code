@@ -1364,7 +1364,7 @@ HEADER_ASM_OP_START
                e_imm_symbol,       /*!< s: any symbolic reference */
                e_imm_float,        /*!< E, F: any floating point constant */
 
-            // DQ (7/22/2006): Let's assume we want to include these (controled by EDG's setting of GNU_X86_ASM_EXTENSIONS_ALLOWED start)
+            // DQ (7/22/2006): Let's assume we want to include these (controlled by GNU_X86_ASM_EXTENSIONS_ALLOWED start)
             /* register constraints */
                e_reg_a,            /*!< a: ax */
                e_reg_b,            /*!< b: bx */
@@ -1393,7 +1393,7 @@ HEADER_ASM_OP_START
                e_imm_sse,          /*!< H: any SSE standard constant */
                e_imm_sext32,       /*!< e: any 32-bit quantity sign extended to 64 bits */
                e_imm_zext32,       /*!< Z: any 32-bit quantity zero extended to 64 bits */
-            // DQ (7/22/2006): Let's assume we want to include these (controled by EDG's setting of GNU_X86_ASM_EXTENSIONS_ALLOWED end)
+            // DQ (7/22/2006): Let's assume we want to include these (controlled by GNU_X86_ASM_EXTENSIONS_ALLOWED end)
                e_last
              };
 

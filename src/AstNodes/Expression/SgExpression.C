@@ -7,8 +7,8 @@
 Sg_File_Info*
 SgExpression::get_file_info() const
    {
-  // DQ (11/8/2006): Note that the EDG/SageIII translation only
-  // uses set_startOfConstruct() and set_endOfConstruct().
+  // DQ (11/8/2006): Note that the frontend translation only uses
+  // set_startOfConstruct() and set_endOfConstruct().
 
   // This redefines get_file_info() as it is implemented for a SgLocatedNode
   // to use the "get_operatorPosition()" instead of the get_startOfConstruct()"
@@ -23,8 +23,8 @@ SgExpression::get_file_info() const
 void
 SgExpression::set_file_info(Sg_File_Info* fileInfo)
    {
-  // DQ (11/8/2006): Note that the EDG/SageIII translation only
-  // uses set_startOfConstruct() and set_endOfConstruct().
+  // DQ (11/8/2006): Note that the frontend translation only uses
+  // set_startOfConstruct() and set_endOfConstruct().
 
   // This redefines get_file_info() as it is implemented for a SgLocatedNode
   // to use the "get_operatorPosition()" instead of the get_startOfConstruct()"

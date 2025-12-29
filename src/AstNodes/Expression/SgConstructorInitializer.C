@@ -2,16 +2,21 @@
 
 /** Obtain the class declaration for a constructor initializer if possible.
  *
- * If this is a constructor initializer for a class type then the first non-defining declaration of the constructor's class is
- * returned; the null pointer is returned for constructor initializers of primitive types.
+ * If this is a constructor initializer for a class type then the first
+ * non-defining declaration of the constructor's class is returned; the null
+ * pointer is returned for constructor initializers of primitive types.
  *
- * The SgConstructorInitializer::p_declaration points to a SgMemberFunctionDeclaration when the constructor is declared, but is
- * the null pointer when the constructor is not declared or when the constructor is for a non-class type.
+ * The SgConstructorInitializer::p_declaration points to a
+ * SgMemberFunctionDeclaration when the constructor is declared, but is the null
+ * pointer when the constructor is not declared or when the constructor is for a
+ * non-class type.
  *
- * When the p_declaration is the null pointer then the SgConstructorInitializer::p_expression_type can be used to determine
- * whether the constructor initializer is for a class type without a declared constructor, or for a non-class type.  In the
- * former case, the p_expression_type points to a SgClassType.  In the latter case it points to either a SgFunctionType (EDG4)
- * or null (EDG3). */
+ * When the p_declaration is the null pointer then the
+ * SgConstructorInitializer::p_expression_type can be used to determine whether
+ * the constructor initializer is for a class type without a declared
+ * constructor, or for a non-class type.  In the former case, the
+ * p_expression_type points to a SgClassType.  In the latter case it points to
+ * either a SgFunctionType or null depending on frontend behavior. */
 SgClassDeclaration*
 SgConstructorInitializer::get_class_decl () const
 {

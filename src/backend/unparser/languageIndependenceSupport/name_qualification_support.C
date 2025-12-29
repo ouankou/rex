@@ -84,11 +84,9 @@ Unparser_Nameq::lookup_generated_qualified_name ( SgNode* referencedNode )
              }
 
        // DQ (11/3/2014): Added support for templated typedef (part of C++11 support).
-          case V_SgTemplateTypedefDeclaration:
-       // Rose::CodeGen instantiates templated typedef. It never happens with EDG as those are "const-propagated".
-          case V_SgTemplateInstantiationTypedefDeclaration:
-          case V_SgTypedefDeclaration:
-             {
+             case V_SgTemplateTypedefDeclaration:
+             case V_SgTemplateInstantiationTypedefDeclaration:
+             case V_SgTypedefDeclaration: {
                SgTypedefDeclaration* node = isSgTypedefDeclaration(referencedNode);
 #if 0
                printf ("In Unparser_Nameq::lookup_generated_qualified_name(): case V_SgTypedefDeclaration: calling SgTypedefDeclaration::get_qualified_name_prefix_for_base_type() \n");

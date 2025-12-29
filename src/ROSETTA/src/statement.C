@@ -1950,7 +1950,7 @@ Grammar::setUpStatements ()
      // expression may or may not explicitly specify the template argument list,
      // but only where some do or all do not explicitly specify the template
      // argument list. See test2013_242.C for an example of where this is
-     // required (a boost graph example test code).
+     // required.
      TemplateInstantiationFunctionDecl.setDataPrototype(
          "bool", "template_argument_list_is_explicit", "= false",
          NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,

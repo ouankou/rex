@@ -5,21 +5,22 @@ SgTemplateParameterVal::get_template_parameter_name() const
    {
   // DQ (11/28/2011): Added to support template declarations in the AST.
 
-  // Note that we have to store the index position into the template parameter list
-  // so that this template parameter can be identified and its name used.  It
-  // can be different from the template parameter name of the template class declaration
-  // (which is the name referenced in EDG), so we have to find the enclosing template
-  // declaration and use the index position into its template parameter list (which
-  // can of course use different names).
+  // Note that we have to store the index position into the template parameter
+  // list so that this template parameter can be identified and its name used.
+  // It can be different from the template parameter name of the template class
+  // declaration (which is the name referenced in the frontend), so we have to
+  // find the enclosing template declaration and use the index position into its
+  // template parameter list (which can of course use different names).
 
   // DQ (7/24/2012): Added test.
      ROSE_ASSERT(this != NULL);
 
      ROSE_ASSERT(get_parent() != NULL);
 
-  // DQ (7/24/2012): For the new EDG support (4.x) and new template handling, we don't use
-  // a generic SgTemplateDeclaration; instead we have specific kinds of template declarations.
-  // So templateDeclaration will always be NULL now.
+     // DQ (7/24/2012): For the newer frontend support and template handling, we
+     // don't use a generic SgTemplateDeclaration; instead we have specific
+     // kinds of template declarations. So templateDeclaration will always be
+     // NULL now.
 
      int template_parameter_position = get_template_parameter_position();
 

@@ -1,6 +1,6 @@
 
-// This is a test from Tristan that is failing in ROSE when using EDG 6.2.
-// The problem is that the hexadecimal numbers will be output as char and
+// This is a test from Tristan that exercised a regression in ROSE.
+// The problem is that the hexadecimal numbers were output as char and
 // as a result some will be unprintable.  To make it worse the backend compiler
 // will output the unprintable char values and crash bash as well.
 // If there are fewer elements in the initializer, then it works fine.

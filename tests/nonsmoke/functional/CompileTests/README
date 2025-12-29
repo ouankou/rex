@@ -37,10 +37,6 @@ C99_std_c99_tests:
 
    So this directory does not have many tests at present.
 
-CAF2_tests:
-   This directorh is intended to have tests (Fortran) that are specific to the
-   requirements of the CAF2 project at Rice.
-
 C++Code:
    This has some example applications that we want to make sure to be tested as part of
    the regression tests that are distributed.  In general, most application testing

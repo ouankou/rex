@@ -57,13 +57,14 @@ SgArrowStarOp::get_type() const
              }
           default:
              {
-#if defined(ROSE_USE_EDG_VERSION_4) || defined(ROSE_USE_CLANG_FRONTEND)
+#if defined(ROSE_USE_CLANG_FRONTEND)
             // DQ (1/19/2017): I think we want to fix this similarly to the case of SgDotStarExp::get_type() (above)
-            // printf ("Using default case in SgArrowStarOp::get_type() differently with EDG version 4.x someType = %s \n",someType->class_name().c_str());
-               returnType = someType;
+            returnType = someType;
 #else
-               printf ("Error: default reached in In SgArrowStarOp::get_type() someType = %s \n",someType->class_name().c_str());
-               ROSE_ABORT();
+            printf("Error: default reached in In SgArrowStarOp::get_type() "
+                   "someType = %s \n",
+                   someType->class_name().c_str());
+            ROSE_ABORT();
 #endif
              }
         }

@@ -23,16 +23,7 @@ SgFunctionCallExp::get_type() const
         }
 
      SgFunctionType* functionType = isSgFunctionType(likelyFunctionType);
-     if (functionType == NULL)
-        {
-       // DQ (8/26/2012): Decrease the volume of warnings from this part of the code.
-#ifdef ROSE_DEBUG_NEW_EDG_ROSE_CONNECTION
-          static int count = 0;
-          if (count++ % 100 == 0)
-             {
-               printf ("Warning: unexpected type found for likelyFunctionType = %p = %s \n",likelyFunctionType,likelyFunctionType->class_name().c_str());
-             }
-#endif
+     if (functionType == NULL) {
        // DQ (7/15/2007): Handle case of typedef of function type
        // Milind Chabbi, after discussing with DQ (7/29/2013), we need to strip all. See test: CompileTests/Cxx_tests/test2013_milind_01.C
           likelyFunctionType = likelyFunctionType->stripType(SgType::STRIP_MODIFIER_TYPE |
@@ -46,7 +37,7 @@ SgFunctionCallExp::get_type() const
           if (functionType == NULL) {
               return SgTypeUnknown::createType();
           }
-        }
+     }
      ROSE_ASSERT(functionType);
      returnType = functionType->get_return_type();
      ROSE_ASSERT(returnType != NULL);

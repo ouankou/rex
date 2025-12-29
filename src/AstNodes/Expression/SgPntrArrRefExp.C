@@ -88,7 +88,8 @@ SgPntrArrRefExp::get_type() const
                break;
              }
 
-       // DQ (12/31/2008): This is a better fit for the new EDG/ROSE translation interface.
+               // DQ (12/31/2008): This is a better fit for the newer
+               // translation interface.
           default:
              {
 

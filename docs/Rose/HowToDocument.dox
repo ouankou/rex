@@ -47,9 +47,9 @@
  *    comment, and it provides a hint that lines matched by @p grep style searching are comments rather than code. Both become
  *    more important as the size of the block comment grows, especially if it contains lines that might look like code.
  *
- *  + <b>Use Javadoc style:</b> Javadoc style uses the at-sign ("@") rather than the backslash ("\") to introduce Doxygen
- *    key words. The backslash style comes from the much less common Qt documentation system. IDEs tend to have fewer problems
- *    recognizing the Javadoc style due to its popularity and the fact that "@" is relatively uncommon in C++ code.  Similarly,
+ *  + <b>Use at-sign style:</b> The at-sign ("@") style uses "@" rather than the backslash ("\") to introduce Doxygen
+ *    keywords. The backslash style comes from the much less common Qt documentation system. IDEs tend to have fewer problems
+ *    recognizing the at-sign style due to its popularity and the fact that "@" is relatively uncommon in C++ code.  Similarly,
  *    the presence of "!" to mark the start of a Doxygen comment is a Qt-ism, so avoid it for similar reasons.
  *
  *  + <b>Explicit references:</b> Although Doxygen will automatically create cross references to any word that has strange
@@ -228,7 +228,7 @@
  *       writing a comment inside a Doxygen comment using the HTML syntax. -->
  *
  *  Doxygen understands a subset of [HTML](http://www.stack.nl/~dimitri/doxygen/manual/htmlcmds.html), its own
- *  [Javadoc-like directives](http://www.stack.nl/~dimitri/doxygen/manual/commands.html), and
+ *  [command directives](http://www.stack.nl/~dimitri/doxygen/manual/commands.html), and
  *  [Markdown](http://www.stack.nl/~dimitri/doxygen/manual/markdown.html).  The most useful are:
  *
  *  + Sections and subsections are introduced by @c @@section or @c @@subsection followed by a unique identifier followed by

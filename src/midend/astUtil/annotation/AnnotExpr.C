@@ -34,8 +34,7 @@ template class CloseDescriptor<SymbolicValDescriptor, '{', '}'>;
 // compile using ROSE).
 #ifndef USE_ROSE
 
-// DQ (1/9/2010): This is a problem for the Intel icpc compiler (which uses EDG
-// same as ROSE).
+// DQ (1/9/2010): This is a problem for the Intel icpc compiler.
 #ifndef __INTEL_COMPILER
 template bool CloseDescriptor<SymbolicValDescriptor, '{', '}'>::read(istream &);
 #endif

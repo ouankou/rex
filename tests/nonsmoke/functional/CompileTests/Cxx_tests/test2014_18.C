@@ -1,7 +1,6 @@
-// This is reported as a problem by the ROSEclipse guys.
+// This was reported as a problem by external users.
 // It works fine on RedHat 6 and g++ version 4.4.7.
-// I gather that it fails for them on some other OS and 
-// g++ version.
+// It fails on some other OS and g++ versions.
 
 #include<iostream>
 

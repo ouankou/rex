@@ -4714,16 +4714,21 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
 #endif
              }
 
-#if DEBUG_PROJECT_COMPILE_COMMAND_LINE_WITH_ARGS
-       // DQ (2/6/2022): Set to "1" to output the backend compiler command line.
-          printf ("In SgFile::compileOutput(): Calling systemFromVector(): compilerCmdLine = \n%s\n",CommandlineProcessing::generateStringFromArgList(compilerCmdLine,false,false).c_str());
+#if DEBUG_PROJECT_COMPILE_COMMAND_LINE_WITH_ARGS || 1
+             // DQ (2/6/2022): Set to "1" to output the backend compiler command
+             // line.
+             printf("In SgFile::compileOutput(): Calling systemFromVector(): "
+                    "compilerCmdLine = \n%s\n",
+                    CommandlineProcessing::generateStringFromArgList(
+                        compilerCmdLine, false, false)
+                        .c_str());
 #endif
 
        // DQ (2/20/2013): The timer used in TimingPerformance is now fixed to properly record elapsed wall clock time.
        // CAVE3 double check that is correct and shouldn't be compilerCmdLine
           returnValueForCompiler = systemFromVector (compilerCmdLine);
 
-#if 0
+#if 1
           printf ("In SgFile::compileOutput(): Calling systemFromVector(): returnValueForCompiler = %d \n",returnValueForCompiler);
 #endif
 
@@ -4763,17 +4768,25 @@ SgFile::compileOutput ( vector<string>& argv, int fileNameIndex )
 
                          returnValueForCompiler = this->compileOutput(argv, fileNameIndex);
                       }
-                  }
-             }
-         } //if (get_skipfinalCompileStep() == false)
-       else
-        {
-          if ( get_verbose() > 1 )
-               printf ("COMPILER NOT CALLED: compilerNameString = %s \n", "<unknown>" /* compilerNameString.c_str() */);
-        }
+               } else {
+                 // DQ (2/7/2022): Allow the multi-file handling support to
+                 // optionally exit after the first error (important for work
+                 // with C/C++ tools).
+#if 1
+                 printf("Exiting with an error in the backend compilation! \n");
+                 ROSE_ASSERT(false);
+#endif
+               }
+          }
+     } // if (get_skipfinalCompileStep() == false)
+     else {
+       if (get_verbose() > 1)
+         printf("COMPILER NOT CALLED: compilerNameString = %s \n",
+                "<unknown>" /* compilerNameString.c_str() */);
+     }
 
-  // DQ (7/20/2006): Catch errors returned from unix "system" function
-  // (commonly "out of memory" errors, suggested by Peter and Jeremiah).
+     // DQ (7/20/2006): Catch errors returned from unix "system" function
+     // (commonly "out of memory" errors, suggested by Peter and Jeremiah).
      if (returnValueForCompiler < 0)
         {
           perror("Serious Error returned from internal systemFromVector command");

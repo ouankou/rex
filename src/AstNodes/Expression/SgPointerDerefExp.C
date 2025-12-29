@@ -91,8 +91,9 @@ SgPointerDerefExp::get_type() const
                break;
              }
 
-       // DQ (5/25/2013): Added this for the case of the new EDG interface.
-       // DQ (6/18/2007): The dereference of a function type is a function call so the type is it's return type (I think)
+               // DQ (5/25/2013): Added this for the updated frontend interface.
+               // DQ (6/18/2007): The dereference of a function type is a
+               // function call so the type is it's return type (I think)
           case V_SgFunctionType:
              {
                SgFunctionType* functionType = isSgFunctionType(someType);
@@ -101,7 +102,7 @@ SgPointerDerefExp::get_type() const
                break;
              }
 
-       // DQ (5/25/2013): Added this for the case of the new EDG interface.
+               // DQ (5/25/2013): Added this for the updated frontend interface.
           case V_SgClassType:
              {
                SgClassType* classType = isSgClassType(someType);
@@ -109,7 +110,7 @@ SgPointerDerefExp::get_type() const
                break;
              }
 
-       // DQ (7/13/2013): Added this for the case of the new EDG interface.
+               // DQ (7/13/2013): Added this for the updated frontend interface.
           case V_SgTypeVoid:
              {
                SgTypeVoid* voidType = isSgTypeVoid(someType);
@@ -117,7 +118,8 @@ SgPointerDerefExp::get_type() const
                break;
              }
 
-       // DQ (2/16/2014): Added this for the case of the new EDG interface (sometimes this case is required).
+               // DQ (2/16/2014): Added this for the updated frontend interface
+               // (sometimes this case is required).
           case V_SgTypeUnknown:
              {
                returnType = someType;
@@ -127,9 +129,10 @@ SgPointerDerefExp::get_type() const
           default:
              {
             // DQ (10/23/2016): Commented out message to avoid output spew.
-            // DQ (12/31/2008): This is the new behavior for EDG version 4.x.
-            // printf ("Warning: default reached in In SgPointerDerefExp::get_type() someType = %s \n",someType->class_name().c_str());
-               returnType = someType;
+            // printf ("Warning: default reached in In
+            // SgPointerDerefExp::get_type() someType = %s
+            // \n",someType->class_name().c_str());
+            returnType = someType;
              }
         }
 

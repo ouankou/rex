@@ -50,8 +50,6 @@ endif
 if !ROSE_USE_SANITIZER
 # DQ (7/25/2010): These should not be at the end, but it is easier to split out Fortran support this way.
 if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-# DQ (7/14/2013): Temporarily commented out this test to evaluate progress on tests/nonsmoke/functional/CompileTests directory.
-#  SUBDIRS += Fortran_tests CAF2_tests
    SUBDIRS += Fortran_tests
 #Pei-Hung (7/13/2015): Adding mixlanguage tests (patches from Stephen Guzik)
 if ROSE_BUILD_CXX_LANGUAGE_SUPPORT

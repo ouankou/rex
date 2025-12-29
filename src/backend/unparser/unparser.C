@@ -5284,10 +5284,6 @@ void unparseIncludedFiles ( SgProject* project, UnparseFormatHelp *unparseFormat
                copySetInterator++;
              }
 
-#if DEBUG_UNPARSE_INCLUDE_FILES
-          printf ("DONE: In unparseIncludedFiles(): before while loop over unparseMap (files to copy): EDG_ROSE_Translation::edg_include_file_map.size() = %zu \n",
-               EDG_ROSE_Translation::edg_include_file_map.size());
-#endif
 #if 0
           printf ("Exiting as a test! \n");
           ROSE_ABORT();

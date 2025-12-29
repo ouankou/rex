@@ -1,4 +1,4 @@
-// Bug specific to EDG 6.3
+// Regression test for member pointer template base-class handling.
 
 template<typename _MemFunPtr, bool __is_mem_fn = false>
 class _Mem_fn_base

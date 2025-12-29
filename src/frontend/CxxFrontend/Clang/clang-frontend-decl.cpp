@@ -4744,7 +4744,7 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
   bool hasElaboratedType = false;
   bool isOwnedTagDeclADefinition = false;
   bool isDefinitionRequired = false;
-  // See EDG semantics: definitions embedded in a declarator are not autonomous.
+  // Definitions embedded in a declarator are not autonomous.
   bool isAutonomousDeclaration = true;
 
   // Adding check for EaboratedType and PointerType to retrieve base EnumType
@@ -7747,7 +7747,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   bool hasElaboratedType = false;
   bool isOwnedTagDeclADefinition = false;
   bool isDefinitionRequired = false;
-  // See EDG semantics: definitions embedded in a declarator are not autonomous.
+  // Definitions embedded in a declarator are not autonomous.
   bool isAutonomousDeclaration = true;
 
   // Adding check for EaboratedType and PointerType to retrieve base EnumType

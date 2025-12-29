@@ -1320,7 +1320,7 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(SgNode* n, Fr
 #if DEBUG_INHERIT
                printf ("looking for header file: filename = %s \n",filename.c_str());
 #endif
-               // REX uses Clang only; EDG include maps are not available.
+               // REX uses Clang only; legacy include maps are not available.
 
                ROSE_ASSERT(returnAttribute.sourceFile != NULL);
 #if 0
