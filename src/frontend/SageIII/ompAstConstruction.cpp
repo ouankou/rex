@@ -2745,13 +2745,11 @@ convertOmpAllocateDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     }
     };
   };
-  std::vector<const char *> *current_expressions =
+  const std::vector<std::string> &current_expressions =
       current_ir->getAllocateList();
-  if (current_expressions->size() != 0) {
-    std::vector<const char *>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
-      std::string expr_string = std::string() + "varlist " + *iter + "\n";
+  if (!current_expressions.empty()) {
+    for (const auto &expr : current_expressions) {
+      std::string expr_string = std::string() + "varlist " + expr + "\n";
       omp_exprparser_parser_init(current_OpenMPIR_to_SageIII.first,
                                  expr_string.c_str());
       omp_exprparser_parse();
@@ -2773,7 +2771,6 @@ convertOmpAllocateDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
            << ((*iter).second)->class_name();
     }
   }
-  current_expressions->clear();
   omp_variable_list.clear();
   return statement;
 }
@@ -2789,13 +2786,11 @@ SgStatement *convertOmpThreadprivateStatement(
       static_cast<OpenMPThreadprivateDirective *>(
           current_OpenMPIR_to_SageIII.second);
 
-  std::vector<const char *> *current_expressions =
+  const std::vector<std::string> &current_expressions =
       current_ir->getThreadprivateList();
-  if (current_expressions->size() != 0) {
-    std::vector<const char *>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
-      std::string expr_string = std::string() + "varlist " + *iter + "\n";
+  if (!current_expressions.empty()) {
+    for (const auto &expr : current_expressions) {
+      std::string expr_string = std::string() + "varlist " + expr + "\n";
       omp_exprparser_parser_init(current_OpenMPIR_to_SageIII.first,
                                  expr_string.c_str());
       omp_exprparser_parse();
@@ -3598,8 +3593,8 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
                   OpenMPClause *current_omp_clause) {
   printf("when clause is coming.\n");
   SgStatement *variant_directive = NULL;
-  OpenMPDirective *variant_OpenMPIR =
-      ((OpenMPWhenClause *)current_omp_clause)->getVariantDirective();
+  auto *when_clause = static_cast<OpenMPWhenClause *>(current_omp_clause);
+  OpenMPDirective *variant_OpenMPIR = when_clause->getVariantDirective();
   if (variant_OpenMPIR) {
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         paired_variant_OpenMPIR =
@@ -3609,7 +3604,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
 
   SgExpression *user_condition = NULL;
   std::string user_condition_string =
-      ((OpenMPWhenClause *)current_omp_clause)->getUserCondition()->second;
+      when_clause->getUserCondition()->expression;
   if (user_condition_string.size()) {
     user_condition = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
                                         current_omp_clause->getKind(),
@@ -3617,7 +3612,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
   };
   SgExpression *user_condition_score = NULL;
   std::string user_condition_score_string =
-      ((OpenMPWhenClause *)current_omp_clause)->getUserCondition()->first;
+      when_clause->getUserCondition()->score;
   if (user_condition_score_string.size()) {
     user_condition_score = parseOmpExpression(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -3625,8 +3620,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
   };
 
   SgExpression *device_arch = NULL;
-  std::string device_arch_string =
-      ((OpenMPWhenClause *)current_omp_clause)->getArchExpression()->second;
+  std::string device_arch_string = when_clause->getArchExpression()->expression;
   if (device_arch_string.size()) {
     device_arch = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
                                      current_omp_clause->getKind(),
@@ -3634,8 +3628,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
   };
 
   SgExpression *device_isa = NULL;
-  std::string device_isa_string =
-      ((OpenMPWhenClause *)current_omp_clause)->getIsaExpression()->second;
+  std::string device_isa_string = when_clause->getIsaExpression()->expression;
   if (device_isa_string.size()) {
     device_isa = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
                                     current_omp_clause->getKind(),
@@ -3644,8 +3637,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
 
   SgOmpClause::omp_when_context_kind_enum sg_device_kind =
       SgOmpClause::e_omp_when_context_kind_unknown;
-  OpenMPClauseContextKind device_kind =
-      ((OpenMPWhenClause *)current_omp_clause)->getContextKind()->second;
+  OpenMPClauseContextKind device_kind = when_clause->getContextKind()->second;
   switch (device_kind) {
   case OMPC_CONTEXT_KIND_host: {
     sg_device_kind = SgOmpClause::e_omp_when_context_kind_host;
@@ -3678,7 +3670,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpClause::omp_when_context_vendor_enum sg_implementation_vendor =
       SgOmpClause::e_omp_when_context_vendor_unspecified;
   OpenMPClauseContextVendor implementation_vendor =
-      ((OpenMPWhenClause *)current_omp_clause)->getImplementationKind()->second;
+      when_clause->getImplementationKind()->second;
   switch (implementation_vendor) {
   case OMPC_CONTEXT_VENDOR_amd: {
     sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_amd;
@@ -3735,9 +3727,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
 
   SgExpression *implementation_user_defined = NULL;
   std::string implementation_user_defined_string =
-      ((OpenMPWhenClause *)current_omp_clause)
-          ->getImplementationExpression()
-          ->second;
+      when_clause->getImplementationExpression()->expression;
   if (implementation_user_defined_string.size()) {
     implementation_user_defined = parseOmpExpression(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -3746,9 +3736,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
 
   SgExpression *implementation_extension = NULL;
   std::string implementation_extension_string =
-      ((OpenMPWhenClause *)current_omp_clause)
-          ->getExtensionExpression()
-          ->second;
+      when_clause->getExtensionExpression()->expression;
   if (implementation_extension_string.size()) {
     implementation_extension = parseOmpExpression(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -3760,7 +3748,7 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
       sg_device_kind, sg_implementation_vendor, implementation_user_defined,
       implementation_extension, variant_directive);
   std::vector<std::pair<std::string, OpenMPDirective *>> *construct_directive =
-      ((OpenMPWhenClause *)current_omp_clause)->getConstructDirective();
+      when_clause->getConstructDirective();
   if (construct_directive->size()) {
     std::list<SgStatement *> sg_construct_directives;
     SgStatement *sg_construct_directive = NULL;
@@ -4163,44 +4151,38 @@ convertDependClause(SgStatement *clause_body,
   SgExpression *end = NULL;
   SgExpression *step = NULL;
 
-  OpenMPDependClauseModifier modifier =
-      ((OpenMPDependClause *)current_omp_clause)->getModifier();
-  std::vector<vector<const char *> *> *omp_depend_iterators_definition_class =
-      NULL;
+  auto *depend_clause = static_cast<OpenMPDependClause *>(current_omp_clause);
+  OpenMPDependClauseModifier modifier = depend_clause->getModifier();
   std::list<std::list<SgExpression *>> depend_iterators_definition_class;
   if (modifier == OMPC_DEPEND_MODIFIER_iterator) {
-    omp_depend_iterators_definition_class =
-        ((OpenMPDependClause *)current_omp_clause)
-            ->getDependIteratorsDefinitionClass();
-    for (unsigned int i = 0; i < omp_depend_iterators_definition_class->size();
-         i++) {
+    const auto &omp_depend_iterators = depend_clause->getIterators();
+    for (const auto &iterator_def : omp_depend_iterators) {
       std::list<SgExpression *> iterator_expressions;
-      if ((string)(omp_depend_iterators_definition_class->at(i)->at(0)) != "") {
-        iterator_type = parseOmpExpression(
-            current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-            std::string(omp_depend_iterators_definition_class->at(i)->at(0)));
+      if (!iterator_def.qualifier.empty()) {
+        iterator_type = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                           current_omp_clause->getKind(),
+                                           iterator_def.qualifier);
         iterator_expressions.push_back(iterator_type);
       } else {
         iterator_type = NULL;
         iterator_expressions.push_back(iterator_type);
       }
-      identifier = parseOmpExpression(
-          current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-          std::string(omp_depend_iterators_definition_class->at(i)->at(1)));
+      identifier =
+          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), iterator_def.var);
       iterator_expressions.push_back(identifier);
-      begin = parseOmpExpression(
-          current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-          std::string(omp_depend_iterators_definition_class->at(i)->at(2)));
+      begin =
+          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), iterator_def.begin);
       iterator_expressions.push_back(begin);
-      end = parseOmpExpression(
-          current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-          std::string(omp_depend_iterators_definition_class->at(i)->at(3)));
+      end = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                               current_omp_clause->getKind(), iterator_def.end);
       iterator_expressions.push_back(end);
 
-      if ((string)(omp_depend_iterators_definition_class->at(i)->at(4)) != "") {
-        step = parseOmpExpression(
-            current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-            std::string(omp_depend_iterators_definition_class->at(i)->at(4)));
+      if (!iterator_def.step.empty()) {
+        step = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                  current_omp_clause->getKind(),
+                                  iterator_def.step);
         iterator_expressions.push_back(step);
       } else {
         step = NULL;
@@ -4211,8 +4193,7 @@ convertDependClause(SgStatement *clause_body,
   }
   SgOmpClause::omp_depend_modifier_enum sg_modifier =
       toSgOmpClauseDependModifier(modifier);
-  OpenMPDependClauseType type =
-      ((OpenMPDependClause *)current_omp_clause)->getType();
+  OpenMPDependClauseType type = depend_clause->getType();
   SgOmpClause::omp_dependence_type_enum sg_type =
       toSgOmpClauseDependenceType(type);
   SgExprListExp *explist = NULL;
@@ -4290,46 +4271,39 @@ convertAffinityClause(SgStatement *clause_body,
   SgExpression *end = NULL;
   SgExpression *step = NULL;
 
-  OpenMPAffinityClauseModifier modifier =
-      ((OpenMPAffinityClause *)current_omp_clause)->getModifier();
-  std::vector<vector<const char *> *> *omp_affinity_iterators_definition_class =
-      NULL;
+  auto *affinity_clause =
+      static_cast<OpenMPAffinityClause *>(current_omp_clause);
+  OpenMPAffinityClauseModifier modifier = affinity_clause->getModifier();
   std::list<std::list<SgExpression *>> affinity_iterators_definition_class;
   if (modifier == OMPC_AFFINITY_MODIFIER_iterator) {
-    omp_affinity_iterators_definition_class =
-        ((OpenMPAffinityClause *)current_omp_clause)
-            ->getIteratorsDefinitionClass();
-    for (unsigned int i = 0;
-         i < omp_affinity_iterators_definition_class->size(); i++) {
+    const auto &omp_affinity_iterators = affinity_clause->getIterators();
+    for (const auto &iterator_def : omp_affinity_iterators) {
       std::list<SgExpression *> iterator_expressions;
-      if ((string)(omp_affinity_iterators_definition_class->at(i)->at(0)) !=
-          "") {
-        iterator_type = parseOmpExpression(
-            current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-            std::string(omp_affinity_iterators_definition_class->at(i)->at(0)));
+      if (!iterator_def.qualifier.empty()) {
+        iterator_type = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                           current_omp_clause->getKind(),
+                                           iterator_def.qualifier);
         iterator_expressions.push_back(iterator_type);
       } else {
         iterator_type = NULL;
         iterator_expressions.push_back(iterator_type);
       }
-      identifier = parseOmpExpression(
-          current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-          std::string(omp_affinity_iterators_definition_class->at(i)->at(1)));
+      identifier =
+          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), iterator_def.var);
       iterator_expressions.push_back(identifier);
-      begin = parseOmpExpression(
-          current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-          std::string(omp_affinity_iterators_definition_class->at(i)->at(2)));
+      begin =
+          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), iterator_def.begin);
       iterator_expressions.push_back(begin);
-      end = parseOmpExpression(
-          current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-          std::string(omp_affinity_iterators_definition_class->at(i)->at(3)));
+      end = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                               current_omp_clause->getKind(), iterator_def.end);
       iterator_expressions.push_back(end);
 
-      if ((string)(omp_affinity_iterators_definition_class->at(i)->at(4)) !=
-          "") {
-        step = parseOmpExpression(
-            current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-            std::string(omp_affinity_iterators_definition_class->at(i)->at(4)));
+      if (!iterator_def.step.empty()) {
+        step = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                  current_omp_clause->getKind(),
+                                  iterator_def.step);
         iterator_expressions.push_back(step);
       } else {
         step = NULL;
