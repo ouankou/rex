@@ -4,17 +4,9 @@
 
 #include <stddef.h>
 
-#ifdef COMPILED_FROM_DSP
-#include "winconfig.h"
-#elif defined(MACOS_CLASSIC)
-#include "macconfig.h"
-#elif defined(__amigaos4__)
-#include "amigaconfig.h"
-#else
 #ifdef HAVE_EXPAT_CONFIG_H
 #include <expat_config.h>
 #endif
-#endif /* ndef COMPILED_FROM_DSP */
 
 #include "expat_external.h"
 #include "internal.h"

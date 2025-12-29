@@ -367,10 +367,8 @@ void PrintTo(const T& value, ::std::ostream* os) {
   // elements; therefore we check for container types here to ensure
   // that our format is used.
   //
-  // The second argument of DefaultPrintTo() is needed to bypass a bug
-  // in Symbian's C++ compiler that prevents it from picking the right
+  // The second argument of DefaultPrintTo() helps select the right
   // overload between:
-  //
   //   PrintTo(const T& x, ...);
   //   PrintTo(T* x, ...);
   DefaultPrintTo(IsContainerTest<T>(0), is_pointer<T>(), value, os);
@@ -425,18 +423,11 @@ inline void PrintTo(unsigned char* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const void*>(s), os);
 }
 
-// MSVC can be configured to define wchar_t as a typedef of unsigned
-// short.  It defines _NATIVE_WCHAR_T_DEFINED when wchar_t is a native
-// type.  When wchar_t is a typedef, defining an overload for const
-// wchar_t* would cause unsigned short* be printed as a wide string,
-// possibly causing invalid memory accesses.
-#if !defined(_MSC_VER) || defined(_NATIVE_WCHAR_T_DEFINED)
 // Overloads for wide C strings
 GTEST_API_ void PrintTo(const wchar_t* s, ::std::ostream* os);
 inline void PrintTo(wchar_t* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const wchar_t*>(s), os);
 }
-#endif
 
 // Overload for C arrays.  Multi-dimensional arrays are printed
 // properly.
@@ -577,14 +568,7 @@ void PrintTo(const ::std::pair<T1, T2>& value, ::std::ostream* os) {
 // pick the right overload of PrintTo() for T.
 template <typename T>
 class UniversalPrinter {
- public:
-  // MSVC warns about adding const to a function type, so we want to
-  // disable the warning.
-#ifdef _MSC_VER
-# pragma warning(push)          // Saves the current warning state.
-# pragma warning(disable:4180)  // Temporarily disables warning 4180.
-#endif  // _MSC_VER
-
+public:
   // Note: we deliberately don't call this PrintTo(), as that name
   // conflicts with ::testing::internal::PrintTo in the body of the
   // function.
@@ -599,10 +583,6 @@ class UniversalPrinter {
     // following statement - exactly what we want.
     PrintTo(value, os);
   }
-
-#ifdef _MSC_VER
-# pragma warning(pop)           // Restores the warning state.
-#endif  // _MSC_VER
 };
 
 // UniversalPrintArray(begin, len, os) prints an array of 'len'
@@ -651,14 +631,7 @@ class UniversalPrinter<T[N]> {
 // Implements printing a reference type T&.
 template <typename T>
 class UniversalPrinter<T&> {
- public:
-  // MSVC warns about adding const to a function type, so we want to
-  // disable the warning.
-#ifdef _MSC_VER
-# pragma warning(push)          // Saves the current warning state.
-# pragma warning(disable:4180)  // Temporarily disables warning 4180.
-#endif  // _MSC_VER
-
+public:
   static void Print(const T& value, ::std::ostream* os) {
     // Prints the address of the value.  We use reinterpret_cast here
     // as static_cast doesn't compile when T is a function type.
@@ -667,10 +640,6 @@ class UniversalPrinter<T&> {
     // Then prints the value itself.
     UniversalPrint(value, os);
   }
-
-#ifdef _MSC_VER
-# pragma warning(pop)           // Restores the warning state.
-#endif  // _MSC_VER
 };
 
 // Prints a value tersely: for a reference type, the referenced value
@@ -801,8 +770,8 @@ struct TuplePrefixPrinter<0> {
 // We have to specialize the entire TuplePrefixPrinter<> class
 // template here, even though the definition of
 // TersePrintPrefixToStrings() is the same as the generic version, as
-// Embarcadero (formerly CodeGear, formerly Borland) C++ doesn't
-// support specializing a method template of a class template.
+// some compilers don't support specializing a method template of a
+// class template.
 template <>
 struct TuplePrefixPrinter<1> {
   template <typename Tuple>

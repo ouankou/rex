@@ -6,10 +6,6 @@
 #ifdef __GNUC__
 #define USE_ELSEWHERE_MASK_MACRO
 #endif
-#ifdef CRAY
-#define USE_ELSEWHERE_MASK_MACRO
-#endif
-
 
 // A++/P++ translation of FORTRAN function for Dinshaw's code!
 
@@ -540,5 +536,3 @@ int main (int argc, char** argv)
      Optimization_Manager::Exit_Virtual_Machine ();
      printf ("Virtual Machine exited! \n");
    }
-
-

@@ -13,8 +13,8 @@
 !  to X).
 !
 !  The purpose of this dummy version is to allow the makefiles 
-!  to be portable to systems which may not have X windows.  If 
-!  you have X windows on your system and you want to try this, 
+!  to be portable to systems which may not have X11.  If 
+!  you have X11 on your system and you want to try this, 
 !  then overwrite this file, xdisplay.F, with 
 !
 !    cp ../input_templates/xdisplay.F90.unsupported ./xdisplay.F90

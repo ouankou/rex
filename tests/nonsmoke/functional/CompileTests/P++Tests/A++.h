@@ -302,19 +302,18 @@ class BaseSerialArray
           virtual void Allocate_Array_Data ( bool Force_Memory_Allocation = TRUE ) = 0;
 #endif
 
-#if 1   
-       // Bugs in the Sun C++ compiler have routinely caused the base class member functions
-       // to be called instead of the derived class.  One solution might be to have the
-       // Array_ID variable stored in the base class so that it can always be accessed from 
-       // the base class.  Since the other function is only defined for APP and PPP
-       // I think the definition of some virtual function here is required.
-       // virtual int Array_ID () const = 0;
-          virtual int Dummy_Function_Array_ID () const
-             { 
-               printf ("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
-               APP_ABORT();
-               return -1000;
-             }
+#if 1
+  // Bugs in the legacy C++ compiler have routinely caused the base class member
+  // functions to be called instead of the derived class.  One solution might be
+  // to have the Array_ID variable stored in the base class so that it can
+  // always be accessed from the base class.  Since the other function is only
+  // defined for APP and PPP I think the definition of some virtual function
+  // here is required. virtual int Array_ID () const = 0;
+  virtual int Dummy_Function_Array_ID() const {
+    printf("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
+    APP_ABORT();
+    return -1000;
+  }
 #endif
 
 #if defined(APP) || defined(PPP)
@@ -1968,9 +1967,10 @@ friend class intSerialArray_Aggregate_Operator;
         doubleSerialArray & redim ( const Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List );
         doubleSerialArray & redim ( const Index_Pointer_Array_MAX_ARRAY_DIMENSION_Type Internal_Index_List );
 
-     // The Sun C++ compiler can't handle template declarations in non templated classes
-     // template<class T, int Template_Dimension>
-     // doubleSerialArray & redim ( const SerialArray_Descriptor_Type<T,Template_Dimension> & X );
+        // The legacy C++ compiler can't handle template declarations in non
+        // templated classes template<class T, int Template_Dimension>
+        // doubleSerialArray & redim ( const
+        // SerialArray_Descriptor_Type<T,Template_Dimension> & X );
         doubleSerialArray & redim ( const SerialArray_Domain_Type & X );
 
      // Changes dimensions of array object with no change in number of elements
@@ -2926,19 +2926,18 @@ class BaseSerialArray
           virtual void Allocate_Array_Data ( bool Force_Memory_Allocation = TRUE ) = 0;
 #endif
 
-#if 1   
-       // Bugs in the Sun C++ compiler have routinely caused the base class member functions
-       // to be called instead of the derived class.  One solution might be to have the
-       // Array_ID variable stored in the base class so that it can always be accessed from 
-       // the base class.  Since the other function is only defined for APP and PPP
-       // I think the definition of some virtual function here is required.
-       // virtual int Array_ID () const = 0;
-          virtual int Dummy_Function_Array_ID () const
-             { 
-               printf ("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
-               APP_ABORT();
-               return -1000;
-             }
+#if 1
+  // Bugs in the legacy C++ compiler have routinely caused the base class member
+  // functions to be called instead of the derived class.  One solution might be
+  // to have the Array_ID variable stored in the base class so that it can
+  // always be accessed from the base class.  Since the other function is only
+  // defined for APP and PPP I think the definition of some virtual function
+  // here is required. virtual int Array_ID () const = 0;
+  virtual int Dummy_Function_Array_ID() const {
+    printf("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
+    APP_ABORT();
+    return -1000;
+  }
 #endif
 
 #if defined(APP) || defined(PPP)
@@ -4592,9 +4591,10 @@ friend class intSerialArray_Aggregate_Operator;
         floatSerialArray & redim ( const Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List );
         floatSerialArray & redim ( const Index_Pointer_Array_MAX_ARRAY_DIMENSION_Type Internal_Index_List );
 
-     // The Sun C++ compiler can't handle template declarations in non templated classes
-     // template<class T, int Template_Dimension>
-     // floatSerialArray & redim ( const SerialArray_Descriptor_Type<T,Template_Dimension> & X );
+        // The legacy C++ compiler can't handle template declarations in non
+        // templated classes template<class T, int Template_Dimension>
+        // floatSerialArray & redim ( const
+        // SerialArray_Descriptor_Type<T,Template_Dimension> & X );
         floatSerialArray & redim ( const SerialArray_Domain_Type & X );
 
      // Changes dimensions of array object with no change in number of elements
@@ -5550,19 +5550,18 @@ class BaseSerialArray
           virtual void Allocate_Array_Data ( bool Force_Memory_Allocation = TRUE ) = 0;
 #endif
 
-#if 1   
-       // Bugs in the Sun C++ compiler have routinely caused the base class member functions
-       // to be called instead of the derived class.  One solution might be to have the
-       // Array_ID variable stored in the base class so that it can always be accessed from 
-       // the base class.  Since the other function is only defined for APP and PPP
-       // I think the definition of some virtual function here is required.
-       // virtual int Array_ID () const = 0;
-          virtual int Dummy_Function_Array_ID () const
-             { 
-               printf ("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
-               APP_ABORT();
-               return -1000;
-             }
+#if 1
+  // Bugs in the legacy C++ compiler have routinely caused the base class member
+  // functions to be called instead of the derived class.  One solution might be
+  // to have the Array_ID variable stored in the base class so that it can
+  // always be accessed from the base class.  Since the other function is only
+  // defined for APP and PPP I think the definition of some virtual function
+  // here is required. virtual int Array_ID () const = 0;
+  virtual int Dummy_Function_Array_ID() const {
+    printf("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
+    APP_ABORT();
+    return -1000;
+  }
 #endif
 
 #if defined(APP) || defined(PPP)
@@ -7216,9 +7215,10 @@ friend class intSerialArray_Aggregate_Operator;
         intSerialArray & redim ( const Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List );
         intSerialArray & redim ( const Index_Pointer_Array_MAX_ARRAY_DIMENSION_Type Internal_Index_List );
 
-     // The Sun C++ compiler can't handle template declarations in non templated classes
-     // template<class T, int Template_Dimension>
-     // intSerialArray & redim ( const SerialArray_Descriptor_Type<T,Template_Dimension> & X );
+        // The legacy C++ compiler can't handle template declarations in non
+        // templated classes template<class T, int Template_Dimension>
+        // intSerialArray & redim ( const
+        // SerialArray_Descriptor_Type<T,Template_Dimension> & X );
         intSerialArray & redim ( const SerialArray_Domain_Type & X );
 
      // Changes dimensions of array object with no change in number of elements

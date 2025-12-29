@@ -339,13 +339,12 @@ are thankful to there liberal research license.
     we will support this, we have no experience with this yet.
 
 \item Dialects: how would you handle different language dialects, e.g. c89,c99,the
-    different flavors of C++, Visual C++, etc? Do you build a 'super' grammar that unifies
+    different flavors of C++? Do you build a 'super' grammar that unifies
     all these somehow? Or you have alternative grammars / type checkers?
 
     We support C89, C99, C++ (98 standard), Fortran 4, Fortran 66, Fortran 77, Fortran 90,
     Fortran 95, and Fortran 2003.  We will start work on C++0x when we upgrade to the newest
-    version of legacy frontend.  We support C++ compiled using Microsoft Visual Studio, but not all
-    the MS extensions.  We support a number of GNU specific C and C++ extensions, but not
+    version of legacy frontend.  We support a number of GNU specific C and C++ extensions, but not
     all. Since we use legacy frontend for the frontend, we don't have any {\bf super} grammar
     representation (evn legacy frontend does not have such a construction in the design of there
     frontend).  Such concepts don't work well for real languges when you need to handle

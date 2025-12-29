@@ -415,9 +415,10 @@ class intSerialArray_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static intSerialArray_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on vector systems. The use of the hash table for cacheing raw memory
+       // avoids calles to malloc!
+       static intSerialArray_Data_Hash_Table Hash_Table;
 #endif
 
      private:
@@ -581,13 +582,14 @@ class intSerialArray_Descriptor_Type
      // intSerialArray_Descriptor_Type ( const intSerialArray_Descriptor_Type & X );
 #if 0
      // The KCC compiler can accept this as correct code
-     // but the Sun C++ compiler must have templates defined at global scope
+     // but some legacy C++ compilers must have templates defined at global scope
      // so we have had to dumb this use of templates down somewhat
         template<class S, int SecondDimension>
         intSerialArray_Descriptor_Type ( const intSerialArray_Descriptor_Type<S,SecondDimension> & X );
 #else
-     // Sun C++ version
-     // intSerialArray_Descriptor_Type ( const intSerialArray_Descriptor_Type & X );
+        // legacy compiler version
+        // intSerialArray_Descriptor_Type ( const intSerialArray_Descriptor_Type
+        // & X );
         intSerialArray_Descriptor_Type ( const intSerialArray_Descriptor_Type & X, int Type_Of_Copy = DEEPCOPY );
      // intSerialArray_Descriptor_Type ( const intSerialArray_Descriptor_Type<double,MAX_ARRAY_DIMENSION> & X );
      // intSerialArray_Descriptor_Type ( const SerialArray_Descriptor_Type<float ,MAX_ARRAY_DIMENSION> & X );
@@ -1503,9 +1505,10 @@ class doubleSerialArray_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static doubleSerialArray_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on vector systems. The use of the hash table for cacheing raw memory
+       // avoids calles to malloc!
+       static doubleSerialArray_Data_Hash_Table Hash_Table;
 #endif
 
      private:
@@ -1669,13 +1672,14 @@ class doubleSerialArray_Descriptor_Type
      // doubleSerialArray_Descriptor_Type ( const doubleSerialArray_Descriptor_Type & X );
 #if 0
      // The KCC compiler can accept this as correct code
-     // but the Sun C++ compiler must have templates defined at global scope
+     // but some legacy C++ compilers must have templates defined at global scope
      // so we have had to dumb this use of templates down somewhat
         template<class S, int SecondDimension>
         doubleSerialArray_Descriptor_Type ( const doubleSerialArray_Descriptor_Type<S,SecondDimension> & X );
 #else
-     // Sun C++ version
-     // doubleSerialArray_Descriptor_Type ( const doubleSerialArray_Descriptor_Type & X );
+        // legacy compiler version
+        // doubleSerialArray_Descriptor_Type ( const
+        // doubleSerialArray_Descriptor_Type & X );
         doubleSerialArray_Descriptor_Type ( const doubleSerialArray_Descriptor_Type & X, int Type_Of_Copy = DEEPCOPY );
      // doubleSerialArray_Descriptor_Type ( const doubleSerialArray_Descriptor_Type<double,MAX_ARRAY_DIMENSION> & X );
      // doubleSerialArray_Descriptor_Type ( const SerialArray_Descriptor_Type<float ,MAX_ARRAY_DIMENSION> & X );
@@ -2591,9 +2595,10 @@ class floatSerialArray_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static floatSerialArray_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on vector systems. The use of the hash table for cacheing raw memory
+       // avoids calles to malloc!
+       static floatSerialArray_Data_Hash_Table Hash_Table;
 #endif
 
      private:
@@ -2757,13 +2762,14 @@ class floatSerialArray_Descriptor_Type
      // floatSerialArray_Descriptor_Type ( const floatSerialArray_Descriptor_Type & X );
 #if 0
      // The KCC compiler can accept this as correct code
-     // but the Sun C++ compiler must have templates defined at global scope
+     // but some legacy C++ compilers must have templates defined at global scope
      // so we have had to dumb this use of templates down somewhat
         template<class S, int SecondDimension>
         floatSerialArray_Descriptor_Type ( const floatSerialArray_Descriptor_Type<S,SecondDimension> & X );
 #else
-     // Sun C++ version
-     // floatSerialArray_Descriptor_Type ( const floatSerialArray_Descriptor_Type & X );
+        // legacy compiler version
+        // floatSerialArray_Descriptor_Type ( const
+        // floatSerialArray_Descriptor_Type & X );
         floatSerialArray_Descriptor_Type ( const floatSerialArray_Descriptor_Type & X, int Type_Of_Copy = DEEPCOPY );
      // floatSerialArray_Descriptor_Type ( const floatSerialArray_Descriptor_Type<double,MAX_ARRAY_DIMENSION> & X );
      // floatSerialArray_Descriptor_Type ( const SerialArray_Descriptor_Type<float ,MAX_ARRAY_DIMENSION> & X );
@@ -3304,8 +3310,3 @@ class floatSerialArray_Descriptor_Type
 
 
 #endif  /* !defined(_APP_DESCRIPTOR_H) */
-
-
-
-
-

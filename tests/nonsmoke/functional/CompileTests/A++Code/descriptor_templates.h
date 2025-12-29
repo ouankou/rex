@@ -411,9 +411,10 @@ class Array_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static Array_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on vector systems. The use of the hash table for cacheing raw memory
+       // avoids calles to malloc!
+       static Array_Data_Hash_Table Hash_Table;
 #endif
 
      private:
@@ -577,13 +578,13 @@ class Array_Descriptor_Type
      // Array_Descriptor_Type ( const Array_Descriptor_Type & X );
 #if 0
      // The KCC compiler can accept this as correct code
-     // but the Sun C++ compiler must have templates defined at global scope
+     // but some legacy C++ compilers must have templates defined at global scope
      // so we have had to dumb this use of templates down somewhat
         template<class S, int SecondDimension>
         Array_Descriptor_Type ( const Array_Descriptor_Type<S,SecondDimension> & X );
 #else
-     // Sun C++ version
-     // Array_Descriptor_Type ( const Array_Descriptor_Type & X );
+        // legacy compiler version
+        // Array_Descriptor_Type ( const Array_Descriptor_Type & X );
         Array_Descriptor_Type ( const Array_Descriptor_Type & X, int Type_Of_Copy = DEEPCOPY );
      // Array_Descriptor_Type ( const Array_Descriptor_Type<double,MAX_ARRAY_DIMENSION> & X );
      // Array_Descriptor_Type ( const Array_Descriptor_Type<float ,MAX_ARRAY_DIMENSION> & X );
@@ -1122,8 +1123,3 @@ class Array_Descriptor_Type
 
 
 #endif  /* !defined(_APP_DESCRIPTOR_H) */
-
-
-
-
-

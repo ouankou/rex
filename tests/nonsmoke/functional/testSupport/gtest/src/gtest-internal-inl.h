@@ -45,9 +45,7 @@
 # error "It must not be included except by Google Test itself."
 #endif  // GTEST_IMPLEMENTATION_
 
-#ifndef _WIN32_WCE
-# include <errno.h>
-#endif  // !_WIN32_WCE
+#include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>  // For strtoll/_strtoul64/malloc/free.
 #include <string.h>  // For memmove.
@@ -62,10 +60,6 @@
 # include <arpa/inet.h>  // NOLINT
 # include <netdb.h>  // NOLINT
 #endif
-
-#if GTEST_OS_WINDOWS
-# include <windows.h>  // NOLINT
-#endif  // GTEST_OS_WINDOWS
 
 #include "gtest/gtest.h"  // NOLINT
 #include "gtest/gtest-spi.h"
@@ -233,8 +227,8 @@ GTEST_API_ std::string CodePointToUtf8(UInt32 code_point);
 
 // Converts a wide string to a narrow string in UTF-8 encoding.
 // The wide string is assumed to have the following encoding:
-//   UTF-16 if sizeof(wchar_t) == 2 (on Windows, Cygwin, Symbian OS)
-//   UTF-32 if sizeof(wchar_t) == 4 (on Linux)
+//   UTF-16 if sizeof(wchar_t) == 2
+//   UTF-32 if sizeof(wchar_t) == 4
 // Parameter str points to a null-terminated wide string.
 // Parameter num_chars may additionally limit the number
 // of wchar_t characters processed. -1 is used when the entire string
@@ -280,8 +274,8 @@ GTEST_API_ bool ShouldRunTestOnShard(
 // the given predicate.
 template <class Container, typename Predicate>
 inline int CountIf(const Container& c, Predicate predicate) {
-  // Implemented as an explicit loop since std::count_if() in libCstd on
-  // Solaris has a non-standard signature.
+  // Implemented as an explicit loop since some standard libraries have
+  // non-standard signatures for std::count_if().
   int count = 0;
   for (typename Container::const_iterator it = c.begin(); it != c.end(); ++it) {
     if (predicate(*it))
@@ -394,15 +388,6 @@ class GTEST_API_ UnitTestOptions {
   // name and the test name.
   static bool FilterMatchesTest(const std::string &test_case_name,
                                 const std::string &test_name);
-
-#if GTEST_OS_WINDOWS
-  // Function for supporting the gtest_catch_exception flag.
-
-  // Returns EXCEPTION_EXECUTE_HANDLER if Google Test should handle the
-  // given SEH exception, or EXCEPTION_CONTINUE_SEARCH otherwise.
-  // This function is useful as an __except condition.
-  static int GTestShouldProcessSEH(DWORD exception_code);
-#endif  // GTEST_OS_WINDOWS
 
   // Returns true if "name" matches the ':' separated list of glob-style
   // filters in "filter".
@@ -968,32 +953,6 @@ GTEST_API_ void ParseGoogleTestFlagsOnly(int* argc, wchar_t** argv);
 // platform.
 GTEST_API_ std::string GetLastErrnoDescription();
 
-# if GTEST_OS_WINDOWS
-// Provides leak-safe Windows kernel handle ownership.
-class AutoHandle {
- public:
-  AutoHandle() : handle_(INVALID_HANDLE_VALUE) {}
-  explicit AutoHandle(HANDLE handle) : handle_(handle) {}
-
-  ~AutoHandle() { Reset(); }
-
-  HANDLE Get() const { return handle_; }
-  void Reset() { Reset(INVALID_HANDLE_VALUE); }
-  void Reset(HANDLE handle) {
-    if (handle != handle_) {
-      if (handle_ != INVALID_HANDLE_VALUE)
-        ::CloseHandle(handle_);
-      handle_ = handle;
-    }
-  }
-
- private:
-  HANDLE handle_;
-
-  GTEST_DISALLOW_COPY_AND_ASSIGN_(AutoHandle);
-};
-# endif  // GTEST_OS_WINDOWS
-
 // Attempts to parse a string into a positive integer pointed to by the
 // number parameter.  Returns true if that is possible.
 // GTEST_HAS_DEATH_TEST implies that we have ::std::string, so we can use
@@ -1012,18 +971,8 @@ bool ParseNaturalNumber(const ::std::string& str, Integer* number) {
   // BiggestConvertible is the largest integer type that system-provided
   // string-to-number conversion routines can return.
 
-# if GTEST_OS_WINDOWS && !defined(__GNUC__)
-
-  // MSVC and C++ Builder define __int64 instead of the standard long long.
-  typedef unsigned __int64 BiggestConvertible;
-  const BiggestConvertible parsed = _strtoui64(str.c_str(), &end, 10);
-
-# else
-
   typedef unsigned long long BiggestConvertible;  // NOLINT
   const BiggestConvertible parsed = strtoull(str.c_str(), &end, 10);
-
-# endif  // GTEST_OS_WINDOWS && !defined(__GNUC__)
 
   const bool parse_success = *end == '\0' && errno == 0;
 

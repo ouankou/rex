@@ -70,7 +70,7 @@ struct eqstr3 {
 #endif
 
 
-// taken form sgi stl page
+// taken from a legacy STL reference
 //The hash<T> template is only defined for template arguments of type char*, const char*, crope, wrope, and the built-in integral types.
 #if 0
 struct HashFunction_String

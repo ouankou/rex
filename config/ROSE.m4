@@ -208,12 +208,6 @@ if test "x$with_CXX_DEBUG" = "xyes"; then
     KCC | mpKCC)
       CXX_DEBUG="-g"
       ;;
-    CC)
-      case $host_os in
-        solaris*| sun4*)
-          CXX_DEBUG="-g"
-    esac
-    ;;
   esac
 elif test "x$with_CXX_DEBUG" = "xno"; then
   CXX_DEBUG=''
@@ -232,12 +226,6 @@ elif test "x$with_CXX_DEBUG" = "xno"; then
     "KCC --c" | mpKCC)
       CXX_DEBUG=""
       ;;
-    CC)
-      case $host_os in
-        solaris*| sun4*)
-          CXX_DEBUG=""
-    esac
-    ;;
   esac
 else
 # Settings specified explicitly by the user.
@@ -319,12 +307,6 @@ if test "x$with_CXX_WARNINGS" = "xyes"; then
     kai)
       CXX_WARNINGS="--for_init_diff_warning --new_for_init -w"
       ;;
-    sun)
-      case $host_os in
-        solaris*| sun4*)
-          CXX_WARNINGS=""
-    esac
-    ;;
   esac
 elif test "x$with_CXX_WARNINGS" = "xno"; then
   AC_MSG_NOTICE([using at least some default (minimal) options for warnings (false case)])
@@ -341,12 +323,6 @@ elif test "x$with_CXX_WARNINGS" = "xno"; then
     kai)
       CXX_WARNINGS=""
       ;;
-    sun)
-      case $host_os in
-        solaris*| sun4*)
-          CXX_WARNINGS=""
-    esac
-    ;;
   esac
 else
 # Settings specified explicitly by the user.
@@ -452,12 +428,6 @@ if test "x$with_C_DEBUG" = "xyes"; then
     KCC | mpKCC)
       C_DEBUG="-g"
       ;;
-    cc)
-      case $host_os in
-        solaris*| sun4*)
-          C_DEBUG="-g"
-    esac
-    ;;
   esac
 elif test "x$with_C_DEBUG" = "xno"; then
   C_DEBUG=''
@@ -476,12 +446,6 @@ elif test "x$with_C_DEBUG" = "xno"; then
     "KCC --c" | mpKCC)
       C_DEBUG=""
       ;;
-    cc)
-      case $host_os in
-        solaris*| sun4*)
-          C_DEBUG=""
-    esac
-    ;;
   esac
 else
 # Settings specified explicitly by the user.
@@ -564,12 +528,6 @@ if test "x$with_C_WARNINGS" = "xyes"; then
     kai)
       C_WARNINGS="--for_init_diff_warning --new_for_init -w"
       ;;
-    sun)
-      case $host_os in
-        solaris*| sun4*)
-          C_WARNINGS=""
-    esac
-    ;;
   esac
 elif test "x$with_C_WARNINGS" = "xno"; then
   case $FRONTEND_CXX_COMPILER_VENDOR in
@@ -585,12 +543,6 @@ elif test "x$with_C_WARNINGS" = "xno"; then
     kai)
       C_WARNINGS=""
       ;;
-    sun)
-      case $host_os in
-        solaris*| sun4*)
-          C_WARNINGS=""
-    esac
-    ;;
   esac
 else
   AC_MSG_NOTICE([adding explicitly specified warnings to be used.])

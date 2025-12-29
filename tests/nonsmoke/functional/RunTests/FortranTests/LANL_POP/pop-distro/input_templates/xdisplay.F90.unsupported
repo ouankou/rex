@@ -234,8 +234,8 @@
 
 !-----------------------------------------------------------------------
 !
-!    The following stuff was put in for those using Exodus for the
-!    Macintosh.  If we stop here, most windows are turned black
+!    The following stuff was put in for some legacy X11 setups.
+!    If we stop here, most windows are turned black
 !    until the first call to fixputimage.  By doing this call here
 !    (at essentially no cost), this problem exists only for a
 !    short time.

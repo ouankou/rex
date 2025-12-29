@@ -10,9 +10,6 @@ use netcdf
 .SS Most Systems:
 f90 ... -lnetcdf
 .sp
-.SS CRAY PVP Systems:
-f90 -dp -i64 ... -lnetcdf
-
 .ad
 .hy
 .SH "LIBRARY VERSION"
@@ -909,15 +906,14 @@ releases. Programmers are cautioned against heavy reliance upon this
 feature.
 .SH "MPP FUNCTION DESCRIPTIONS"
 .LP
-Additional functions for use on SGI/Cray MPP machines (_CRAYMPP).
+Additional functions for use on legacy MPP systems.
 These are used to set and inquire which PE is the base for MPP
 for a particular netCDF. These are only relevant when
-using the SGI/Cray ``global''
-Flexible File I/O layer and desire to have
+using a legacy global Flexible File I/O layer and desire to have
 only a subset of PEs to open the specific netCDF file.
 For technical reasons, these functions are available on all platforms.
-On a platform other than SGI/Cray MPP, it is as if
-only processor available were processor 0.
+On platforms without MPP, it is as if the only processor available were
+processor 0.
 .LP
 To use this feature, you need to specify a communicator group and call
 \fBglio_group_mpi(\|)\fR or \fBglio_group_shmem(\|)\fR prior to the netCDF

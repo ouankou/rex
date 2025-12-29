@@ -3455,9 +3455,8 @@ FortranCodeGeneration_locatedNode::unparseVarDecl(SgStatement* stmt, SgInitializ
                curprint(", VALUE");
              }
 
-       //FMZ (4/14/2009): Cray Pointer
-          if (isSgTypeCrayPointer(type) == nullptr)
-             {
+             // FMZ (4/14/2009): Pointer extension
+             if (isSgTypeCrayPointer(type) == nullptr) {
                curprint(" :: ");
              }
             else

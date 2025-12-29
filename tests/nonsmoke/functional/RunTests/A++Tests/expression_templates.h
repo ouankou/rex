@@ -26,27 +26,16 @@
 // compile times.
 // define DEFAULT_MEMBER_FUNCTIONS_IMPLEMENTED
 
-#if defined(__KCC) || defined(SGI)
-#define HAS_MEMBER_TEMPLATES
-#define HAS_FORTRAN
-#define HANDLES_TEMPLATES_IN_CCFILES
-#else
-// The Sun C++ compiler does not know about the static_cast keyword
-// define static_cast
+// Use the minimal expression-template configuration for compiler compatibility.
 #define BARE_BONES_EXPRESSION_TEMPLATES
-#endif
 
-// Test implementation of expression templates without the static_cast keyword (with KCC compiler)
-// The results of the test are that the static_cast is required to work with the KCC compiler
-// at least this is my experience so far.  A better implementation might be able to work around the
-// problem.  So far the Sun C++ compiler will compile A++ and some examples using expressions
-// if this is turned ON  (i.e. defined).
-// define BARE_BONES_EXPRESSION_TEMPLATES
+// Test implementation of expression templates without static_cast.
+// Some compilers require static_cast, but this option keeps a minimal variant
+// available. define BARE_BONES_EXPRESSION_TEMPLATES
 
-// I can't get the non member template option to work -- I think this just requires more work
-// I susspect there is a problem in my implementation since it does not work with the KCC compiler 
-// (the sun C++ compiler is the real target of this part of the work and that is VERY close to working)
-// undef HAS_MEMBER_TEMPLATES
+// I can't get the non member template option to work -- I think this just
+// requires more work. I suspect there is a problem in my implementation. undef
+// HAS_MEMBER_TEMPLATES
 
 #if !defined(__GNUC__) && !defined(typename)
 #define typename
@@ -64,13 +53,6 @@ typedef double Double;
 typedef int Int;
 
 /* bools */
-#if 0
-#if defined(SGI)
-typedef int bool;
-#define true 1
-#define false 0
-#endif
-#endif
 
 ///////////////////////////////////////////////////////////////////////////
 //

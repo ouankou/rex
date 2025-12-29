@@ -28,11 +28,7 @@ dnl BTNG_INFO_CXX_ID and BTNG_INFO_C_ID determine which C or C++ compiler
 dnl is being used.
 # Set the variables CXX_ID or C_ID as follows:
 # Gnu		-> gnu
-# SUNWspro	-> sunpro
-# Dec		-> dec
-# KCC		-> kai
-# SGI		-> sgi
-# IBM xlc	-> xlc
+# Additional compiler IDs may be added as needed.
 
 
 AC_DEFUN([BTNG_INFO_CXX_ID_NAMES],
@@ -55,21 +51,6 @@ dnl We may eventually have a compiler that must be tested in a different
 dnl method
 
 
-  # Check if it is a Sun compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CXX is sunpro)
-changequote(BEG,END)
-    AC_EGREP_CPP(^0x[0-9]+,__SUNPRO_CC,
-changequote([,])
-      $1=sunpro
-      # SUN compiler defines __SUNPRO_CC to the version number.
-      echo __SUNPRO_CC > conftest.C
-      $2=`${CXXCPP} conftest.C | sed -n 2p`
-      rm -f conftest.C
-    )
-  fi
-
-
   # Check if it is a GNU compiler.
   if test $$1 = unknown; then
     BTNG_AC_LOG(checking if $CXX is gnu)
@@ -83,62 +64,6 @@ yes;
     # Alternatively, it also defines __GNUC__, GNUC_MINOR__ and
     # __GNUC_PATCHLEVEL__
     [[$2=`$CXX --version | sed -e 's/[^0-9]\{0,\}\([^ ]\{1,\}\).\{0,\}/\1/' -e 1q`]]
-    )
-  fi
-
-
-  # Check if it is a DEC compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CXX is dec)
-    AC_EGREP_CPP(^1,__DECCXX,
-      $1=dec
-      # DEC compiler defines __DECCXX_VER to the version number.
-      echo __DECCXX_VER > conftest.C
-      $2=`${CXXCPP} conftest.C | sed -n 2p`
-      rm -f conftest.C
-    )
-  fi
-
-
-  # Check if it is a KAI compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CXX is kai)
-    AC_EGREP_CPP(^1,__KCC,
-      $1=kai
-      # KCC compiler defines __KCC_VERSION to the version number.
-      echo __KCC_VERSION > conftest.C
-      $2=`${CXXCPP} conftest.C | sed -n 2p`
-      rm -f conftest.C
-    )
-  fi
-
-
-  # Check if it is a SGI compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CXX is sgi)
-    AC_EGREP_CPP(^1,__sgi,
-      $1=sgi
-      # SGI compiler defines _COMPILER_VERSION to the version number.
-      echo _COMPILER_VERSION > conftest.C
-      $2=`${CXXCPP} conftest.C | sed /^\\#/d`
-      rm -f conftest.C
-    )
-  fi
-
-
-  # Check if it is a IBM compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CXX is xlc)
-    AC_EGREP_CPP(^yes,
-#ifdef __xlC__
-yes;
-#endif
-,
-    $1=xlc
-    # IBM compiler defines __xlC__ to the version number.
-    echo __xlC__ > conftest.C
-    $2=`${CXXCPP} conftest.C | sed /^\\#/d`
-    rm -f conftest.C
     )
   fi
 
@@ -172,21 +97,6 @@ dnl We may eventually have a compiler that must be tested in a different
 dnl method
 
 
-  # Check if it is a Sun compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CC is sunpro)
-changequote(BEG,END)
-    AC_EGREP_CPP(^ 0x[0-9]+,__SUNPRO_C,
-changequote([,])
-      $1=sunpro
-      # SUN compiler defines __SUNPRO_C to the version number.
-      echo __SUNPRO_C > conftest.c
-      $2=`${CPP} ${CPPFLAGS} conftest.c | sed -n -e 's/^ //' -e 2p`
-      rm -f conftest.c
-    )
-  fi
-
-
   # Check if it is a GNU compiler.
   if test $$1 = unknown; then
     BTNG_AC_LOG(checking if $CC is gnu)
@@ -198,74 +108,6 @@ yes;
     $1=gnu
     [[$2=`$CC --version | sed -e 's/[^0-9]\{0,\}\([^ ]\{1,\}\).\{0,\}/\1/' -e 1q`]]
     )
-  fi
-
-
-  # Check if it is a DEC compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CC is dec)
-    AC_EGREP_CPP(^ 1,__DECC,
-      $1=dec
-      # DEC compiler defines __DECC_VER to the version number.
-      echo __DECC_VER > conftest.c
-      $2=`${CPP} ${CPPFLAGS} conftest.c | sed -n -e 's/^ //' -e 2p`
-      rm -f conftest.c
-    )
-  fi
-
-
-  # Check if it is a KAI compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CC is kai)
-    AC_EGREP_CPP(^1,__KCC,
-      $1=kai
-      # KCC compiler defines __KCC_VERSION to the version number.
-      echo __KCC_VERSION > conftest.c
-      $2=`${CPP} ${CPPFLAGS} conftest.c | sed -n 2p`
-      rm -f conftest.c
-    )
-  fi
-
-
-  # Check if it is a SGI compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CC is sgi)
-    AC_EGREP_CPP(^1,__sgi,
-      $1=sgi
-      # SGI compiler defines _COMPILER_VERSION to the version number.
-      echo _COMPILER_VERSION > conftest.c
-      $2=`${CPP} ${CPPFLAGS} conftest.c | sed /^\\#/d`
-      rm -f conftest.c
-    )
-  fi
-
-
-  # Check if it is a IBM compiler.
-  if test $$1 = unknown; then
-    BTNG_AC_LOG(checking if $CC is xlc)
-    if echo "$host_os" | grep "aix" >/dev/null ; then
-      # The wretched IBM shell does not eval correctly,
-      # so we have to help it with a pre-eval eval statement.
-      ac_cpp=`eval "echo $ac_cpp"`
-      save_ac_cpp=$ac_cpp
-      BTNG_AC_LOG(ac_cpp is temporarily set to $ac_cpp)
-    else
-      save_ac_cpp=
-    fi
-    BTNG_AC_LOG(ac_cpp is $ac_cpp)
-    AC_EGREP_CPP(^yes,
-#ifdef __xlC__
-yes;
-#endif
-,
-    $1=xlc
-    # IBM compiler defines __xlC__ to the version number.
-    echo __xlC__ > conftest.C
-    $2=`${CPP} conftest.C | sed /^\\#/d`
-    rm -f conftest.C
-    )
-    test "$save_ac_cpp" && ac_cpp=$save_ac_cpp
-    BTNG_AC_LOG(ac_cpp is restored to $ac_cpp)
   fi
 
 

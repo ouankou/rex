@@ -200,7 +200,7 @@ class GTEST_API_ SingleFailureChecker {
 //   if (::testing::internal::AlwaysTrue()) { statement; }
 // instead of
 //   GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement)
-// to avoid an MSVC warning on unreachable code.
+// to avoid compiler warnings about unreachable code.
 #define EXPECT_NONFATAL_FAILURE(statement, substr) \
   do {\
     ::testing::TestPartResultArray gtest_failures;\

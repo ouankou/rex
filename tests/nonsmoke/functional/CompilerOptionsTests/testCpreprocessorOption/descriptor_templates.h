@@ -411,9 +411,10 @@ class Array_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static Array_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on legacy vector systems. The use of the hash table for cacheing raw
+       // memory avoids calles to malloc!
+       static Array_Data_Hash_Table Hash_Table;
 #endif
 
      private:

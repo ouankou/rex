@@ -36,25 +36,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#if GTEST_OS_WINDOWS_MOBILE
-# include <windows.h>  // For TerminateProcess()
-#elif GTEST_OS_WINDOWS
-# include <io.h>
-# include <sys/stat.h>
-#else
-# include <unistd.h>
-#endif  // GTEST_OS_WINDOWS_MOBILE
-
-#if GTEST_OS_MAC
-# include <mach/mach_init.h>
-# include <mach/task.h>
-# include <mach/vm_map.h>
-#endif  // GTEST_OS_MAC
-
-#if GTEST_OS_QNX
-# include <devctl.h>
-# include <sys/procfs.h>
-#endif  // GTEST_OS_QNX
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest-message.h"
@@ -73,65 +56,14 @@
 namespace testing {
 namespace internal {
 
-#if defined(_MSC_VER) || defined(__BORLANDC__)
-// MSVC and C++Builder do not provide a definition of STDERR_FILENO.
-const int kStdOutFileno = 1;
-const int kStdErrFileno = 2;
-#else
 const int kStdOutFileno = STDOUT_FILENO;
 const int kStdErrFileno = STDERR_FILENO;
-#endif  // _MSC_VER
-
-#if GTEST_OS_MAC
-
-// Returns the number of threads running in the process, or 0 to indicate that
-// we cannot detect it.
-size_t GetThreadCount() {
-  const task_t task = mach_task_self();
-  mach_msg_type_number_t thread_count;
-  thread_act_array_t thread_list;
-  const kern_return_t status = task_threads(task, &thread_list, &thread_count);
-  if (status == KERN_SUCCESS) {
-    // task_threads allocates resources in thread_list and we need to free them
-    // to avoid leaks.
-    vm_deallocate(task,
-                  reinterpret_cast<vm_address_t>(thread_list),
-                  sizeof(thread_t) * thread_count);
-    return static_cast<size_t>(thread_count);
-  } else {
-    return 0;
-  }
-}
-
-#elif GTEST_OS_QNX
-
-// Returns the number of threads running in the process, or 0 to indicate that
-// we cannot detect it.
-size_t GetThreadCount() {
-  const int fd = open("/proc/self/as", O_RDONLY);
-  if (fd < 0) {
-    return 0;
-  }
-  procfs_info process_info;
-  const int status =
-      devctl(fd, DCMD_PROC_INFO, &process_info, sizeof(process_info), NULL);
-  close(fd);
-  if (status == EOK) {
-    return static_cast<size_t>(process_info.num_threads);
-  } else {
-    return 0;
-  }
-}
-
-#else
 
 size_t GetThreadCount() {
   // There's no portable way to detect the number of threads, so we just
   // return 0 to indicate that we cannot detect it.
   return 0;
 }
-
-#endif  // GTEST_OS_MAC
 
 #if GTEST_USES_POSIX_RE
 
@@ -182,9 +114,8 @@ void RE::Init(const char* regex) {
   // not be properly initialized can may cause trouble when it's
   // freed.
   //
-  // Some implementation of POSIX regex (e.g. on at least some
-  // versions of Cygwin) doesn't accept the empty string as a valid
-  // regex.  We change it to an equivalent form "()" to be safe.
+  // Some implementations of POSIX regex don't accept the empty string as a
+  // valid regex.  We change it to an equivalent form "()" to be safe.
   if (is_valid_) {
     const char* const partial_regex = (*regex == '\0') ? "()" : regex;
     is_valid_ = regcomp(&partial_regex_, partial_regex, REG_EXTENDED) == 0;
@@ -323,8 +254,8 @@ bool MatchRepetitionAndRegexAtHead(
   const size_t min_count = (repeat == '+') ? 1 : 0;
   const size_t max_count = (repeat == '?') ? 1 :
       static_cast<size_t>(-1) - 1;
-  // We cannot call numeric_limits::max() as it conflicts with the
-  // max() macro on Windows.
+  // We cannot call numeric_limits::max() as it can conflict with
+  // a max() macro from platform headers.
 
   for (size_t i = 0; i <= max_count; ++i) {
     // We know that the atom matches each of the first i characters in str.
@@ -500,66 +431,23 @@ GTestLog::~GTestLog() {
     posix::Abort();
   }
 }
-// Disable Microsoft deprecation warnings for POSIX functions called from
-// this class (creat, dup, dup2, and close)
-#ifdef _MSC_VER
-# pragma warning(push)
-# pragma warning(disable: 4996)
-#endif  // _MSC_VER
-
 #if GTEST_HAS_STREAM_REDIRECTION
 
 // Object that captures an output stream (stdout/stderr).
 class CapturedStream {
  public:
   // The ctor redirects the stream to a temporary file.
-  explicit CapturedStream(int fd) : fd_(fd), uncaptured_fd_(dup(fd)) {
-# if GTEST_OS_WINDOWS
-    char temp_dir_path[MAX_PATH + 1] = { '\0' };  // NOLINT
-    char temp_file_path[MAX_PATH + 1] = { '\0' };  // NOLINT
-
-    ::GetTempPathA(sizeof(temp_dir_path), temp_dir_path);
-    const UINT success = ::GetTempFileNameA(temp_dir_path,
-                                            "gtest_redir",
-                                            0,  // Generate unique file name.
-                                            temp_file_path);
-    GTEST_CHECK_(success != 0)
-        << "Unable to create a temporary file in " << temp_dir_path;
-    const int captured_fd = creat(temp_file_path, _S_IREAD | _S_IWRITE);
-    GTEST_CHECK_(captured_fd != -1) << "Unable to open temporary file "
-                                    << temp_file_path;
-    filename_ = temp_file_path;
-# else
-    // There's no guarantee that a test has write access to the current
-    // directory, so we create the temporary file in the /tmp directory
-    // instead. We use /tmp on most systems, and /sdcard on Android.
-    // That's because Android doesn't have /tmp.
-#  if GTEST_OS_LINUX_ANDROID
-    // Note: Android applications are expected to call the framework's
-    // Context.getExternalStorageDirectory() method through JNI to get
-    // the location of the world-writable SD Card directory. However,
-    // this requires a Context handle, which cannot be retrieved
-    // globally from native code. Doing so also precludes running the
-    // code as part of a regular standalone executable, which doesn't
-    // run in a Dalvik process (e.g. when running it through 'adb shell').
-    //
-    // The location /sdcard is directly accessible from native code
-    // and is the only location (unofficially) supported by the Android
-    // team. It's generally a symlink to the real SD Card mount point
-    // which can be /mnt/sdcard, /mnt/sdcard0, /system/media/sdcard, or
-    // other OEM-customized locations. Never rely on these, and always
-    // use /sdcard.
-    char name_template[] = "/sdcard/gtest_captured_stream.XXXXXX";
-#  else
-    char name_template[] = "/tmp/captured_stream.XXXXXX";
-#  endif  // GTEST_OS_LINUX_ANDROID
-    const int captured_fd = mkstemp(name_template);
-    filename_ = name_template;
-# endif  // GTEST_OS_WINDOWS
-    fflush(NULL);
-    dup2(captured_fd, fd_);
-    close(captured_fd);
-  }
+   explicit CapturedStream(int fd) : fd_(fd), uncaptured_fd_(dup(fd)) {
+     // There's no guarantee that a test has write access to the current
+     // directory, so we create the temporary file in the /tmp directory
+     // instead.
+     char name_template[] = "/tmp/captured_stream.XXXXXX";
+     const int captured_fd = mkstemp(name_template);
+     filename_ = name_template;
+     fflush(NULL);
+     dup2(captured_fd, fd_);
+     close(captured_fd);
+   }
 
   ~CapturedStream() {
     remove(filename_.c_str());
@@ -693,15 +581,6 @@ const ::std::vector<testing::internal::string>& GetInjectableArgvs() {
   return g_argvs;
 }
 #endif  // GTEST_HAS_DEATH_TEST
-
-#if GTEST_OS_WINDOWS_MOBILE
-namespace posix {
-void Abort() {
-  DebugBreak();
-  TerminateProcess(GetCurrentProcess(), 1);
-}
-}  // namespace posix
-#endif  // GTEST_OS_WINDOWS_MOBILE
 
 // Returns the name of the environment variable corresponding to the
 // given flag.  For example, FlagToEnvVar("foo") will return

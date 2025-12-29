@@ -159,7 +159,6 @@ class TestResultAccessor;
 class TestEventListenersAccessor;
 class TestEventRepeater;
 class UnitTestRecordPropertyTestHelper;
-class WindowsDeathTest;
 class UnitTestImpl* GetUnitTestImpl();
 void ReportFailureInUnknownLocation(TestPartResult::Type result_type,
                                     const std::string& message);
@@ -545,7 +544,6 @@ class GTEST_API_ TestResult {
   friend class internal::ExecDeathTest;
   friend class internal::TestResultAccessor;
   friend class internal::UnitTestImpl;
-  friend class internal::WindowsDeathTest;
 
   // Gets the vector of TestPartResults.
   const std::vector<TestPartResult>& test_part_results() const {
@@ -1330,8 +1328,7 @@ inline Environment* AddGlobalTestEnvironment(Environment* env) {
 // Calling the function for the second time has no user-visible effect.
 GTEST_API_ void InitGoogleTest(int* argc, char** argv);
 
-// This overloaded version can be used in Windows programs compiled in
-// UNICODE mode.
+// This overloaded version accepts wide arguments when available.
 GTEST_API_ void InitGoogleTest(int* argc, wchar_t** argv);
 
 namespace internal {
@@ -2115,32 +2112,6 @@ GTEST_API_ AssertionResult FloatLE(const char* expr1, const char* expr2,
 GTEST_API_ AssertionResult DoubleLE(const char* expr1, const char* expr2,
                                     double val1, double val2);
 
-
-#if GTEST_OS_WINDOWS
-
-// Macros that test for HRESULT failure and success, these are only useful
-// on Windows, and rely on Windows SDK macros and APIs to compile.
-//
-//    * {ASSERT|EXPECT}_HRESULT_{SUCCEEDED|FAILED}(expr)
-//
-// When expr unexpectedly fails or succeeds, Google Test prints the
-// expected result and the actual result with both a human-readable
-// string representation of the error, if available, as well as the
-// hex result code.
-# define EXPECT_HRESULT_SUCCEEDED(expr) \
-    EXPECT_PRED_FORMAT1(::testing::internal::IsHRESULTSuccess, (expr))
-
-# define ASSERT_HRESULT_SUCCEEDED(expr) \
-    ASSERT_PRED_FORMAT1(::testing::internal::IsHRESULTSuccess, (expr))
-
-# define EXPECT_HRESULT_FAILED(expr) \
-    EXPECT_PRED_FORMAT1(::testing::internal::IsHRESULTFailure, (expr))
-
-# define ASSERT_HRESULT_FAILED(expr) \
-    ASSERT_PRED_FORMAT1(::testing::internal::IsHRESULTFailure, (expr))
-
-#endif  // GTEST_OS_WINDOWS
-
 // Macros that execute statement and check that it doesn't generate new fatal
 // failures in the current thread.
 //
@@ -2225,8 +2196,8 @@ bool StaticAssertTypeEq() {
 
 // Note that we call GetTestTypeId() instead of GetTypeId<
 // ::testing::Test>() here to get the type ID of testing::Test.  This
-// is to work around a suspected linker bug when using Google Test as
-// a framework on Mac OS X.  The bug causes GetTypeId<
+// is to work around a suspected linker issue in some environments.  The bug
+// causes GetTypeId<
 // ::testing::Test>() to return different values depending on whether
 // the call is from the Google Test framework itself or from user test
 // code.  GetTestTypeId() is guaranteed to always return the same

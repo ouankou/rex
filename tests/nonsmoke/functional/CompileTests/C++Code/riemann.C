@@ -3,16 +3,6 @@
 #include <A++.h>
 #include <time.h>
 
-#if 0
-#ifdef __GNUC__
-#define USE_ELSEWHERE_MASK_MACRO
-#endif
-#ifdef CRAY
-#define USE_ELSEWHERE_MASK_MACRO
-#endif
-#endif
-
-
 // A++/P++ translation of FORTRAN function for Dinshaw's code!
 
 void One_Dimensional_Goduov_Solver ( int nriemann,
@@ -535,5 +525,3 @@ int main (int argc, char** argv)
      Optimization_Manager::Exit_Virtual_Machine ();
      printf ("Virtual Machine exited! \n");
    }
-
-

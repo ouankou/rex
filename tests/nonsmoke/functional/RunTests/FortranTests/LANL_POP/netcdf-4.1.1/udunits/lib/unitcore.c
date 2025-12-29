@@ -313,8 +313,8 @@ gregorianDateToJulianDay(year, month, day)
     }
 
     /*
-     *  Note: SLIGHTLY STRANGE CONSTRUCTIONS REQUIRED TO AVOID PROBLEMS WITH
-     *        OPTIMISATION OR GENERAL ERRORS UNDER VMS!
+     *  Note: Slightly odd constructions required to avoid problems with
+     *        some legacy toolchains.
      */
     julday = day + (int)(30.6001 * jm);
     if (jy >= 0)

@@ -2,7 +2,7 @@ c { dg-do compile }
       SUBROUTINE SGBTRF( M, KL, KU, AB, LDAB )
 
 *  Slightly modified version of 20000601-1.f that still ICES with
-*  CVS 20010118 g77 on mips-sgi-irix6.5/-mabi=64.
+*  CVS 20010118 g77 on a legacy target.
 *
 *  Originally derived from LAPACK 3.0 test suite failure.
 *

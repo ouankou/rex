@@ -2223,10 +2223,7 @@ struct options
   char *post_data;
   char *post_file_name;
 
-  enum {
-    restrict_unix,
-    restrict_windows
-  } restrict_files_os;
+  enum { restrict_unix } restrict_files_os;
   _Bool restrict_files_ctrl;
 
 
@@ -9430,8 +9427,6 @@ cmd_spec_restrict_file_names (const char *com, const char *val, void *place_igno
 
       if (((end) - (val) == sizeof ("unix") - 1 && !memcmp (val, "unix", sizeof ("unix") - 1)))
         restrict_os = restrict_unix;
-      else if (((end) - (val) == sizeof ("windows") - 1 && !memcmp (val, "windows", sizeof ("windows") - 1)))
-        restrict_os = restrict_windows;
       else if (((end) - (val) == sizeof ("lowercase") - 1 && !memcmp (val, "lowercase", sizeof ("lowercase") - 1)))
         restrict_case = restrict_lowercase;
       else if (((end) - (val) == sizeof ("uppercase") - 1 && !memcmp (val, "uppercase", sizeof ("uppercase") - 1)))
@@ -9442,11 +9437,12 @@ cmd_spec_restrict_file_names (const char *com, const char *val, void *place_igno
         restrict_nonascii = 1;
       else
         {
-          fprintf (stderr, gettext ("%s: %s: Invalid restriction %s,\n    use [unix|windows],[lowercase|uppercase],[nocontrol],[ascii].\n"),
+        fprintf(stderr,
+                gettext("%s: %s: Invalid restriction %s,\n    use "
+                        "[unix],[lowercase|uppercase],[nocontrol],[ascii].\n"),
 
-
-                   exec_name, com, quote (val));
-          return 0;
+                exec_name, com, quote(val));
+        return 0;
         }
 
       if (*end)

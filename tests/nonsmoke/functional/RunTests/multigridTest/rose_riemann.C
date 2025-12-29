@@ -18,18 +18,6 @@ template < class T, int Template_Dimension > class Array_Descriptor_Type;
 
 #endif
 
-
-#ifdef CRAY
-
-
-#define USE_ELSEWHERE_MASK_MACRO
-
-
-#endif
-
-
-
-
 // A++/P++ translation of FORTRAN function for Dinshaw's code!
 
 

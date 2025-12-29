@@ -15,8 +15,7 @@
 // (the max number of dimensions you have provided in the macros below).  This 
 // example is for 8D arrays.
 
-// An alternate version of the macros are provided for the SUN4 machines since their 
-// compilers // are superior
+// Alternate versions of the macros were used for legacy compiler limitations.
 
 // GNU will build intances of all objects in the header file if this
 // is not specified.  The result is very large object files (too many symbols)
@@ -27,13 +26,6 @@
 #endif
 
 #include <max_array_dim.h>
-
-#if defined(CRAY) || defined(SGI)
-// These machines' compilers do not understand the initialization list used in the 
-// macros below so we have provide alternative difinitions of these macros for these 
-// machines.
-#define USE_SLOWER_DIMENSION_MACRO
-#endif
 
 #define IO_CONTROL_STRING_MACRO_INTEGER "%d, %d, %d, %d, %d, %d"
 #define ARRAY_TO_LIST_MACRO(A) A[0],A[1],A[2],A[3],A[4],A[5]
@@ -68,40 +60,15 @@
      int k , const Range & Range_K , int l, const Range & Range_L, \
      int m , const Range & Range_M , int n, const Range & Range_N
 
-#if defined(USE_SLOWER_DIMENSION_MACRO)
-// Some computers use the Cfront C++ compiler which has many unimplemented C++ features
-#define INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO \
-     Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List; \
-     Integer_List [0] = i; \
-     Integer_List [1] = j; \
-     Integer_List [2] = k; \
-     Integer_List [3] = l; \
-     Integer_List [4] = m; \
-     Integer_List [5] = n; 
-#else
-// We previously used "const" for this array but several compilers (SOLARIS) complained
-#define INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO \
-     Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List = \
-     { i, j, k, l, m, n};
-#endif
+// We previously used "const" for this array but several compilers complained.
+#define INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO                                \
+  Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List = {i, j, k, l, m, n};
 
 // Use the previous macro to define this macro  ---  This can't be done
-#if defined(USE_SLOWER_DIMENSION_MACRO)
-// Some computers use the Cfront C++ compiler which has many unimplemented C++ features
-#define USER_DEFINED_INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO(i,j,k,l,m,n,o,p) \
-     Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List; \
-     Integer_List [0] = i; \
-     Integer_List [1] = j; \
-     Integer_List [2] = k; \
-     Integer_List [3] = l; \
-     Integer_List [4] = m; \
-     Integer_List [5] = n; 
-#else
-// We previously used "const" for this array but several compilers (SOLARIS) complained
-#define USER_DEFINED_INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO(i,j,k,l,m,n,o,p) \
-     Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List = \
-     { i, j, k, l, m, n};
-#endif
+// We previously used "const" for this array but several compilers complained.
+#define USER_DEFINED_INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO(i, j, k, l, m, n, \
+                                                             o, p)             \
+  Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List = {i, j, k, l, m, n};
 
 #define VARIABLE_LIST_MACRO_CONST_REF_RANGE Range_I,Range_J,Range_K,Range_L,Range_M,Range_N
 #define ARGUMENT_LIST_MACRO_CONST_REF_RANGE \
@@ -278,6 +245,3 @@
      SerialArray->Array_Descriptor.Array_View_Pointer5 = \
         SerialArray->Array_Descriptor.Array_Data+ \
         SerialArray->Array_Descriptor.Array_Domain.Scalar_Offset[5];
-
-
-

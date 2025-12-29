@@ -35,29 +35,3 @@ violated can help pinpoint the source of the problem.
 
 The units for salinity in the model are g/g.  Care must be
 taken to renormalize salinity data, which is often in g/kg.
-
-\section{Running POP on PCs}
-\label{sec:PCPOP}
-
-POP has been successfully run on a single-processor Intel PC
-with Windows NT. POP was built with Digital Visual
-Fortran 5.0 as a Win32 console application (meaning you run
-it with a command line in a DOS window).  The make system
-used for other platforms was not used on the PC. Instead, a
-standard Visual Studio project was created.
-
-Source files added to the project were
-\begin{itemize}
-\item All .F90 and .C files in source subdirectory
-\item All .F90 files in serial subdirectory
-\end{itemize}
-
-In addition to the defaults, these Fortran preprocessor
-options `/fpp' was needed.
-To enable POP to run the test problem without stack overflow,
-reserve stack memory was set to 64 MB. A lower
-value may be possible, but 48 MB was not enough.
-The debug version required the link option: /nodefaultlib:libc.
-The release version (optimized) ran the test problem in about
-four minutes (262 seconds) on a 450 MHz, 256 MB
-Pentium II PC.

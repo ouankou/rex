@@ -67,19 +67,19 @@ namespace std _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
-  /**
-   *  @brief This function controls the size of memory nodes.
-   *  @param  __size  The size of an element.
-   *  @return   The number (not byte size) of elements per node.
-   *
-   *  This function started off as a compiler kludge from SGI, but
-   *  seems to be a useful wrapper around a repeated constant
-   *  expression.  The @b 512 is tunable (and no other code needs to
-   *  change), but no investigation has been done since inheriting the
-   *  SGI code.  Touch _GLIBCXX_DEQUE_BUF_SIZE only if you know what
-   *  you are doing, however: changing it breaks the binary
-   *  compatibility!!
-  */
+/**
+ *  @brief This function controls the size of memory nodes.
+ *  @param  __size  The size of an element.
+ *  @return   The number (not byte size) of elements per node.
+ *
+ *  This function started off as a compiler kludge from legacy toolchains, but
+ *  seems to be a useful wrapper around a repeated constant
+ *  expression.  The @b 512 is tunable (and no other code needs to
+ *  change), but no investigation has been done since inheriting the
+ *  legacy code.  Touch _GLIBCXX_DEQUE_BUF_SIZE only if you know what
+ *  you are doing, however: changing it breaks the binary
+ *  compatibility!!
+ */
 
 #ifndef _GLIBCXX_DEQUE_BUF_SIZE
 #define _GLIBCXX_DEQUE_BUF_SIZE 512
@@ -741,93 +741,93 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	_M_deallocate_node(*__n);
     }
 
-  /**
-   *  @brief  A standard container using fixed-size memory allocation and
-   *  constant-time manipulation of elements at either end.
-   *
-   *  @ingroup sequences
-   *
-   *  @tparam _Tp  Type of element.
-   *  @tparam _Alloc  Allocator type, defaults to allocator<_Tp>.
-   *
-   *  Meets the requirements of a <a href="tables.html#65">container</a>, a
-   *  <a href="tables.html#66">reversible container</a>, and a
-   *  <a href="tables.html#67">sequence</a>, including the
-   *  <a href="tables.html#68">optional sequence requirements</a>.
-   *
-   *  In previous HP/SGI versions of deque, there was an extra template
-   *  parameter so users could control the node size.  This extension turned
-   *  out to violate the C++ standard (it can be detected using template
-   *  template parameters), and it was removed.
-   *
-   *  Here's how a deque<Tp> manages memory.  Each deque has 4 members:
-   *
-   *  - Tp**        _M_map
-   *  - size_t      _M_map_size
-   *  - iterator    _M_start, _M_finish
-   *
-   *  map_size is at least 8.  %map is an array of map_size
-   *  pointers-to-@a nodes.  (The name %map has nothing to do with the
-   *  std::map class, and @b nodes should not be confused with
-   *  std::list's usage of @a node.)
-   *
-   *  A @a node has no specific type name as such, but it is referred
-   *  to as @a node in this file.  It is a simple array-of-Tp.  If Tp
-   *  is very large, there will be one Tp element per node (i.e., an
-   *  @a array of one).  For non-huge Tp's, node size is inversely
-   *  related to Tp size: the larger the Tp, the fewer Tp's will fit
-   *  in a node.  The goal here is to keep the total size of a node
-   *  relatively small and constant over different Tp's, to improve
-   *  allocator efficiency.
-   *
-   *  Not every pointer in the %map array will point to a node.  If
-   *  the initial number of elements in the deque is small, the
-   *  /middle/ %map pointers will be valid, and the ones at the edges
-   *  will be unused.  This same situation will arise as the %map
-   *  grows: available %map pointers, if any, will be on the ends.  As
-   *  new nodes are created, only a subset of the %map's pointers need
-   *  to be copied @a outward.
-   *
-   *  Class invariants:
-   * - For any nonsingular iterator i:
-   *    - i.node points to a member of the %map array.  (Yes, you read that
-   *      correctly:  i.node does not actually point to a node.)  The member of
-   *      the %map array is what actually points to the node.
-   *    - i.first == *(i.node)    (This points to the node (first Tp element).)
-   *    - i.last  == i.first + node_size
-   *    - i.cur is a pointer in the range [i.first, i.last).  NOTE:
-   *      the implication of this is that i.cur is always a dereferenceable
-   *      pointer, even if i is a past-the-end iterator.
-   * - Start and Finish are always nonsingular iterators.  NOTE: this
-   * means that an empty deque must have one node, a deque with <N
-   * elements (where N is the node buffer size) must have one node, a
-   * deque with N through (2N-1) elements must have two nodes, etc.
-   * - For every node other than start.node and finish.node, every
-   * element in the node is an initialized object.  If start.node ==
-   * finish.node, then [start.cur, finish.cur) are initialized
-   * objects, and the elements outside that range are uninitialized
-   * storage.  Otherwise, [start.cur, start.last) and [finish.first,
-   * finish.cur) are initialized objects, and [start.first, start.cur)
-   * and [finish.cur, finish.last) are uninitialized storage.
-   * - [%map, %map + map_size) is a valid, non-empty range.
-   * - [start.node, finish.node] is a valid range contained within
-   *   [%map, %map + map_size).
-   * - A pointer in the range [%map, %map + map_size) points to an allocated
-   *   node if and only if the pointer is in the range
-   *   [start.node, finish.node].
-   *
-   *  Here's the magic:  nothing in deque is @b aware of the discontiguous
-   *  storage!
-   *
-   *  The memory setup and layout occurs in the parent, _Base, and the iterator
-   *  class is entirely responsible for @a leaping from one node to the next.
-   *  All the implementation routines for deque itself work only through the
-   *  start and finish iterators.  This keeps the routines simple and sane,
-   *  and we can use other standard algorithms as well.
-  */
-  template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
-    class deque : protected _Deque_base<_Tp, _Alloc>
-    {
+    /**
+     *  @brief  A standard container using fixed-size memory allocation and
+     *  constant-time manipulation of elements at either end.
+     *
+     *  @ingroup sequences
+     *
+     *  @tparam _Tp  Type of element.
+     *  @tparam _Alloc  Allocator type, defaults to allocator<_Tp>.
+     *
+     *  Meets the requirements of a <a href="tables.html#65">container</a>, a
+     *  <a href="tables.html#66">reversible container</a>, and a
+     *  <a href="tables.html#67">sequence</a>, including the
+     *  <a href="tables.html#68">optional sequence requirements</a>.
+     *
+     *  In previous legacy versions of deque, there was an extra template
+     *  parameter so users could control the node size.  This extension turned
+     *  out to violate the C++ standard (it can be detected using template
+     *  template parameters), and it was removed.
+     *
+     *  Here's how a deque<Tp> manages memory.  Each deque has 4 members:
+     *
+     *  - Tp**        _M_map
+     *  - size_t      _M_map_size
+     *  - iterator    _M_start, _M_finish
+     *
+     *  map_size is at least 8.  %map is an array of map_size
+     *  pointers-to-@a nodes.  (The name %map has nothing to do with the
+     *  std::map class, and @b nodes should not be confused with
+     *  std::list's usage of @a node.)
+     *
+     *  A @a node has no specific type name as such, but it is referred
+     *  to as @a node in this file.  It is a simple array-of-Tp.  If Tp
+     *  is very large, there will be one Tp element per node (i.e., an
+     *  @a array of one).  For non-huge Tp's, node size is inversely
+     *  related to Tp size: the larger the Tp, the fewer Tp's will fit
+     *  in a node.  The goal here is to keep the total size of a node
+     *  relatively small and constant over different Tp's, to improve
+     *  allocator efficiency.
+     *
+     *  Not every pointer in the %map array will point to a node.  If
+     *  the initial number of elements in the deque is small, the
+     *  /middle/ %map pointers will be valid, and the ones at the edges
+     *  will be unused.  This same situation will arise as the %map
+     *  grows: available %map pointers, if any, will be on the ends.  As
+     *  new nodes are created, only a subset of the %map's pointers need
+     *  to be copied @a outward.
+     *
+     *  Class invariants:
+     * - For any nonsingular iterator i:
+     *    - i.node points to a member of the %map array.  (Yes, you read that
+     *      correctly:  i.node does not actually point to a node.)  The member
+     * of the %map array is what actually points to the node.
+     *    - i.first == *(i.node)    (This points to the node (first Tp
+     * element).)
+     *    - i.last  == i.first + node_size
+     *    - i.cur is a pointer in the range [i.first, i.last).  NOTE:
+     *      the implication of this is that i.cur is always a dereferenceable
+     *      pointer, even if i is a past-the-end iterator.
+     * - Start and Finish are always nonsingular iterators.  NOTE: this
+     * means that an empty deque must have one node, a deque with <N
+     * elements (where N is the node buffer size) must have one node, a
+     * deque with N through (2N-1) elements must have two nodes, etc.
+     * - For every node other than start.node and finish.node, every
+     * element in the node is an initialized object.  If start.node ==
+     * finish.node, then [start.cur, finish.cur) are initialized
+     * objects, and the elements outside that range are uninitialized
+     * storage.  Otherwise, [start.cur, start.last) and [finish.first,
+     * finish.cur) are initialized objects, and [start.first, start.cur)
+     * and [finish.cur, finish.last) are uninitialized storage.
+     * - [%map, %map + map_size) is a valid, non-empty range.
+     * - [start.node, finish.node] is a valid range contained within
+     *   [%map, %map + map_size).
+     * - A pointer in the range [%map, %map + map_size) points to an allocated
+     *   node if and only if the pointer is in the range
+     *   [start.node, finish.node].
+     *
+     *  Here's the magic:  nothing in deque is @b aware of the discontiguous
+     *  storage!
+     *
+     *  The memory setup and layout occurs in the parent, _Base, and the
+     * iterator class is entirely responsible for @a leaping from one node to
+     * the next. All the implementation routines for deque itself work only
+     * through the start and finish iterators.  This keeps the routines simple
+     * and sane, and we can use other standard algorithms as well.
+     */
+    template <typename _Tp, typename _Alloc = std::allocator<_Tp>>
+    class deque : protected _Deque_base<_Tp, _Alloc> {
       // concept requirements
       typedef typename _Alloc::value_type        _Alloc_value_type;
 #if __cplusplus < 201103L

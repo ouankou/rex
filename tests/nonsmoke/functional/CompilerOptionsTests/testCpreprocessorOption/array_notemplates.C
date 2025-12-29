@@ -391,9 +391,9 @@ bool doubleArray::USE_DESCRIPTOR_CACHING              = FALSE;
 const int doubleArray::DECIMAL_DISPLAY_FORMAT     = 0;
 const int doubleArray::EXPONENTIAL_DISPLAY_FORMAT = 1;
 const int doubleArray::SMART_DISPLAY_FORMAT       = 2;
-// On the HP machines their C++ compiler initializes const static
+// On some legacy compilers the C++ compiler initializes const static
 // variable AFTER non-const static variables thus the DISPLAY_FORMAT
-// gets garbage.  To fix this we initialize DISPLAY_FORMAT with the 
+// gets garbage.  To fix this we initialize DISPLAY_FORMAT with the
 // value 2 directly!
 // int doubleArray::DISPLAY_FORMAT = doubleArray::SMART_DISPLAY_FORMAT;
 int doubleArray::DISPLAY_FORMAT = 2;
@@ -2345,7 +2345,6 @@ doubleArray::seqAdd ( double Base , double Stride )
      Test_Consistency ("Called from doubleArray::seqAdd(Base,Stride)");
 #endif
 
-#if !defined(CRAY)
      double Counter = Base;
 
   // The use of multiple function call here is not very important 
@@ -2691,14 +2690,8 @@ doubleArray::seqAdd ( double Base , double Stride )
                    APP_ABORT();
         }
 #endif
-#else
-     printf ("ERROR: FUNCTION DISABLED ON CRAY Y-MP -- doubleArray::seqAdd function generates internal compiler error \n");
-     printf ("       NO WORK AROUND HAS BEEN FOUND! \n");
-     APP_ABORT();
-#endif
-
-     return *this;
-   }
+        return *this;
+}
 
 #if defined(INTARRAY)
 #if 0
@@ -3200,9 +3193,10 @@ doubleArray::Build_Pointer_To_View_Of_Array (
      for (temp=0; temp < MAX_ARRAY_DIMENSION; temp++)
         {
           APP_ASSERT (Internal_Index_List[temp] != NULL);
-       // Bugfix (11/9/95) New Cray C++ compiler on T3D does not like the following statement
-       // It is good to have such picky compilers since no other compiler has caught the problem.
-       // ... (8/26/96) use Internal_Index_List_For_View instead ...
+          // Bugfix (11/9/95) legacy compiler does not like the following
+          // statement It is good to have such picky compilers since no other
+          // compiler has caught the problem.
+          // ... (8/26/96) use Internal_Index_List_For_View instead ...
           Local_Index_Array [temp] = Internal_Index_List_For_View[temp]->getPointerToLocalPart
                                           (X.Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,temp);
 
@@ -5091,21 +5085,21 @@ doubleArray::Test_Consistency( const char *Label ) const
 
   // int temp;
 
-  // Check that these are the correct values since on some machines
-  // (like the HP) they can be initialized in a strange order (see 
-  // note at top of file)
-     APP_ASSERT (DECIMAL_DISPLAY_FORMAT     == 0);
-     APP_ASSERT (EXPONENTIAL_DISPLAY_FORMAT == 1);
-     APP_ASSERT (SMART_DISPLAY_FORMAT       == 2);
-     APP_ASSERT (DISPLAY_FORMAT             == 2);
+   // Check that these are the correct values since on some machines
+   // (on some legacy compilers) they can be initialized in a strange order (see
+   // note at top of file)
+   APP_ASSERT(DECIMAL_DISPLAY_FORMAT == 0);
+   APP_ASSERT(EXPONENTIAL_DISPLAY_FORMAT == 1);
+   APP_ASSERT(SMART_DISPLAY_FORMAT == 2);
+   APP_ASSERT(DISPLAY_FORMAT == 2);
 
-  // error checking!
-  // APP_ASSERT(Array_Descriptor != NULL);
-  // if (Array_Descriptor == NULL)
-  //    {
-  //      printf ("ERROR: Array_Descriptor == NULL in doubleArray::Test_Consistency \n");
-  //      APP_ABORT();
-  //    }
+   // error checking!
+   // APP_ASSERT(Array_Descriptor != NULL);
+   // if (Array_Descriptor == NULL)
+   //    {
+   //      printf ("ERROR: Array_Descriptor == NULL in
+   //      doubleArray::Test_Consistency \n"); APP_ABORT();
+   //    }
 
 #if defined(APP) || defined(SERIAL_APP)
   // This fails on 3 processors but passes on 1 and two processors
@@ -6865,9 +6859,10 @@ doubleArray & doubleArray::view ( const char *Label ) const
      if (Expression_Tree_Node_Type::DEFER_EXPRESSION_EVALUATION)
         {
 #if COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS
-       // This function has problems with the new Solaris C++ compiler!
-          doubleArray_Function_16 *Execution_Object = new doubleArray_Function_16 ( view_Function , doubleArray::view , *this , Label );
-          APP_ASSERT( Execution_Object != NULL );
+       // This function has problems with the legacy C++ compiler!
+       doubleArray_Function_16 *Execution_Object = new doubleArray_Function_16(
+           view_Function, doubleArray::view, *this, Label);
+       APP_ASSERT(Execution_Object != NULL);
 #endif
         }
        else
@@ -7094,8 +7089,10 @@ doubleArray::display ( const char *Label ) const
 
 #if defined(PPP)
      printf ("doubleArray::display() (CONST) (Array_ID = %d) -- %s \n",Array_ID(),Label);
-  // Bugfix (12/19/96) the conversion of a pointer to an int is not allowed on the 64-bit SGI compiler.
-  // printf ("SerialArray is a %s pointer = %p (%d)! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" : "VALID",SerialArray,(int)SerialArray);
+     // Bugfix (12/19/96) the conversion of a pointer to an int is not allowed
+     // on the legacy 64-bit compiler. printf ("SerialArray is a %s pointer = %p
+     // (%d)! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" :
+     // "VALID",SerialArray,(int)SerialArray);
      printf ("SerialArray is a %s pointer = %p! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" : "VALID",Array_Descriptor.SerialArray);
 
 // if !defined(NDEBUG)
@@ -7114,9 +7111,10 @@ doubleArray::display ( const char *Label ) const
      if (Expression_Tree_Node_Type::DEFER_EXPRESSION_EVALUATION)
         {
 #if COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS
-       // This function has problems with the new Solaris C++ compiler!
-          doubleArray_Function_16 *Execution_Object = new doubleArray_Function_16 ( display_Function , doubleArray::display , *this , Label );
-          APP_ASSERT( Execution_Object != NULL );
+       // This function has problems with the legacy C++ compiler!
+       doubleArray_Function_16 *Execution_Object = new doubleArray_Function_16(
+           display_Function, doubleArray::display, *this, Label);
+       APP_ASSERT(Execution_Object != NULL);
 #endif
         }
        else
@@ -10321,9 +10319,10 @@ Delete_If_Temporary ( const doubleArray & X )
 void
 Delete_Lhs_If_Temporary ( const doubleArray & Lhs )
    {
-  // The Solaris C++ compiler v3.0 can't inline a function with a static variable we get a
-  // "sorry not implemented: cannot expand inline function with static Last_Lhs_doubleArray_Operand" message.
-  // So it is a variable with file scope (later we should make it a static data member).
+  // The legacy C++ compiler can't inline a function with a static variable we
+  // get a "sorry not implemented: cannot expand inline function with static
+  // Last_Lhs_doubleArray_Operand" message. So it is a variable with file scope
+  // (later we should make it a static data member).
 
 #if COMPILE_DEBUG_STATEMENTS
      if (APP_DEBUG > 1)
@@ -10610,9 +10609,9 @@ bool floatArray::USE_DESCRIPTOR_CACHING              = FALSE;
 const int floatArray::DECIMAL_DISPLAY_FORMAT     = 0;
 const int floatArray::EXPONENTIAL_DISPLAY_FORMAT = 1;
 const int floatArray::SMART_DISPLAY_FORMAT       = 2;
-// On the HP machines their C++ compiler initializes const static
+// On some legacy compilers the C++ compiler initializes const static
 // variable AFTER non-const static variables thus the DISPLAY_FORMAT
-// gets garbage.  To fix this we initialize DISPLAY_FORMAT with the 
+// gets garbage.  To fix this we initialize DISPLAY_FORMAT with the
 // value 2 directly!
 // int floatArray::DISPLAY_FORMAT = floatArray::SMART_DISPLAY_FORMAT;
 int floatArray::DISPLAY_FORMAT = 2;
@@ -12564,7 +12563,6 @@ floatArray::seqAdd ( float Base , float Stride )
      Test_Consistency ("Called from floatArray::seqAdd(Base,Stride)");
 #endif
 
-#if !defined(CRAY)
      float Counter = Base;
 
   // The use of multiple function call here is not very important 
@@ -12910,14 +12908,8 @@ floatArray::seqAdd ( float Base , float Stride )
                    APP_ABORT();
         }
 #endif
-#else
-     printf ("ERROR: FUNCTION DISABLED ON CRAY Y-MP -- floatArray::seqAdd function generates internal compiler error \n");
-     printf ("       NO WORK AROUND HAS BEEN FOUND! \n");
-     APP_ABORT();
-#endif
-
-     return *this;
-   }
+        return *this;
+}
 
 #if defined(INTARRAY)
 #if 0
@@ -13419,9 +13411,10 @@ floatArray::Build_Pointer_To_View_Of_Array (
      for (temp=0; temp < MAX_ARRAY_DIMENSION; temp++)
         {
           APP_ASSERT (Internal_Index_List[temp] != NULL);
-       // Bugfix (11/9/95) New Cray C++ compiler on T3D does not like the following statement
-       // It is good to have such picky compilers since no other compiler has caught the problem.
-       // ... (8/26/96) use Internal_Index_List_For_View instead ...
+          // Bugfix (11/9/95) legacy compiler does not like the following
+          // statement It is good to have such picky compilers since no other
+          // compiler has caught the problem.
+          // ... (8/26/96) use Internal_Index_List_For_View instead ...
           Local_Index_Array [temp] = Internal_Index_List_For_View[temp]->getPointerToLocalPart
                                           (X.Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,temp);
 
@@ -15310,21 +15303,21 @@ floatArray::Test_Consistency( const char *Label ) const
 
   // int temp;
 
-  // Check that these are the correct values since on some machines
-  // (like the HP) they can be initialized in a strange order (see 
-  // note at top of file)
-     APP_ASSERT (DECIMAL_DISPLAY_FORMAT     == 0);
-     APP_ASSERT (EXPONENTIAL_DISPLAY_FORMAT == 1);
-     APP_ASSERT (SMART_DISPLAY_FORMAT       == 2);
-     APP_ASSERT (DISPLAY_FORMAT             == 2);
+   // Check that these are the correct values since on some machines
+   // (on some legacy compilers) they can be initialized in a strange order (see
+   // note at top of file)
+   APP_ASSERT(DECIMAL_DISPLAY_FORMAT == 0);
+   APP_ASSERT(EXPONENTIAL_DISPLAY_FORMAT == 1);
+   APP_ASSERT(SMART_DISPLAY_FORMAT == 2);
+   APP_ASSERT(DISPLAY_FORMAT == 2);
 
-  // error checking!
-  // APP_ASSERT(Array_Descriptor != NULL);
-  // if (Array_Descriptor == NULL)
-  //    {
-  //      printf ("ERROR: Array_Descriptor == NULL in floatArray::Test_Consistency \n");
-  //      APP_ABORT();
-  //    }
+   // error checking!
+   // APP_ASSERT(Array_Descriptor != NULL);
+   // if (Array_Descriptor == NULL)
+   //    {
+   //      printf ("ERROR: Array_Descriptor == NULL in
+   //      floatArray::Test_Consistency \n"); APP_ABORT();
+   //    }
 
 #if defined(APP) || defined(SERIAL_APP)
   // This fails on 3 processors but passes on 1 and two processors
@@ -17084,9 +17077,10 @@ floatArray & floatArray::view ( const char *Label ) const
      if (Expression_Tree_Node_Type::DEFER_EXPRESSION_EVALUATION)
         {
 #if COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS
-       // This function has problems with the new Solaris C++ compiler!
-          floatArray_Function_16 *Execution_Object = new floatArray_Function_16 ( view_Function , floatArray::view , *this , Label );
-          APP_ASSERT( Execution_Object != NULL );
+       // This function has problems with the legacy C++ compiler!
+       floatArray_Function_16 *Execution_Object = new floatArray_Function_16(
+           view_Function, floatArray::view, *this, Label);
+       APP_ASSERT(Execution_Object != NULL);
 #endif
         }
        else
@@ -17313,8 +17307,10 @@ floatArray::display ( const char *Label ) const
 
 #if defined(PPP)
      printf ("floatArray::display() (CONST) (Array_ID = %d) -- %s \n",Array_ID(),Label);
-  // Bugfix (12/19/96) the conversion of a pointer to an int is not allowed on the 64-bit SGI compiler.
-  // printf ("SerialArray is a %s pointer = %p (%d)! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" : "VALID",SerialArray,(int)SerialArray);
+     // Bugfix (12/19/96) the conversion of a pointer to an int is not allowed
+     // on the legacy 64-bit compiler. printf ("SerialArray is a %s pointer = %p
+     // (%d)! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" :
+     // "VALID",SerialArray,(int)SerialArray);
      printf ("SerialArray is a %s pointer = %p! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" : "VALID",Array_Descriptor.SerialArray);
 
 // if !defined(NDEBUG)
@@ -17333,9 +17329,10 @@ floatArray::display ( const char *Label ) const
      if (Expression_Tree_Node_Type::DEFER_EXPRESSION_EVALUATION)
         {
 #if COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS
-       // This function has problems with the new Solaris C++ compiler!
-          floatArray_Function_16 *Execution_Object = new floatArray_Function_16 ( display_Function , floatArray::display , *this , Label );
-          APP_ASSERT( Execution_Object != NULL );
+       // This function has problems with the legacy C++ compiler!
+       floatArray_Function_16 *Execution_Object = new floatArray_Function_16(
+           display_Function, floatArray::display, *this, Label);
+       APP_ASSERT(Execution_Object != NULL);
 #endif
         }
        else
@@ -20540,9 +20537,10 @@ Delete_If_Temporary ( const floatArray & X )
 void
 Delete_Lhs_If_Temporary ( const floatArray & Lhs )
    {
-  // The Solaris C++ compiler v3.0 can't inline a function with a static variable we get a
-  // "sorry not implemented: cannot expand inline function with static Last_Lhs_floatArray_Operand" message.
-  // So it is a variable with file scope (later we should make it a static data member).
+  // The legacy C++ compiler can't inline a function with a static variable we
+  // get a "sorry not implemented: cannot expand inline function with static
+  // Last_Lhs_floatArray_Operand" message. So it is a variable with file scope
+  // (later we should make it a static data member).
 
 #if COMPILE_DEBUG_STATEMENTS
      if (APP_DEBUG > 1)
@@ -20829,9 +20827,9 @@ bool intArray::USE_DESCRIPTOR_CACHING              = FALSE;
 const int intArray::DECIMAL_DISPLAY_FORMAT     = 0;
 const int intArray::EXPONENTIAL_DISPLAY_FORMAT = 1;
 const int intArray::SMART_DISPLAY_FORMAT       = 2;
-// On the HP machines their C++ compiler initializes const static
+// On some legacy compilers the C++ compiler initializes const static
 // variable AFTER non-const static variables thus the DISPLAY_FORMAT
-// gets garbage.  To fix this we initialize DISPLAY_FORMAT with the 
+// gets garbage.  To fix this we initialize DISPLAY_FORMAT with the
 // value 2 directly!
 // int intArray::DISPLAY_FORMAT = intArray::SMART_DISPLAY_FORMAT;
 int intArray::DISPLAY_FORMAT = 2;
@@ -22783,7 +22781,6 @@ intArray::seqAdd ( int Base , int Stride )
      Test_Consistency ("Called from intArray::seqAdd(Base,Stride)");
 #endif
 
-#if !defined(CRAY)
      int Counter = Base;
 
   // The use of multiple function call here is not very important 
@@ -23129,14 +23126,8 @@ intArray::seqAdd ( int Base , int Stride )
                    APP_ABORT();
         }
 #endif
-#else
-     printf ("ERROR: FUNCTION DISABLED ON CRAY Y-MP -- intArray::seqAdd function generates internal compiler error \n");
-     printf ("       NO WORK AROUND HAS BEEN FOUND! \n");
-     APP_ABORT();
-#endif
-
-     return *this;
-   }
+        return *this;
+}
 
 #if defined(INTARRAY)
 #if 0
@@ -23638,9 +23629,10 @@ intArray::Build_Pointer_To_View_Of_Array (
      for (temp=0; temp < MAX_ARRAY_DIMENSION; temp++)
         {
           APP_ASSERT (Internal_Index_List[temp] != NULL);
-       // Bugfix (11/9/95) New Cray C++ compiler on T3D does not like the following statement
-       // It is good to have such picky compilers since no other compiler has caught the problem.
-       // ... (8/26/96) use Internal_Index_List_For_View instead ...
+          // Bugfix (11/9/95) legacy compiler does not like the following
+          // statement It is good to have such picky compilers since no other
+          // compiler has caught the problem.
+          // ... (8/26/96) use Internal_Index_List_For_View instead ...
           Local_Index_Array [temp] = Internal_Index_List_For_View[temp]->getPointerToLocalPart
                                           (X.Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,temp);
 
@@ -25529,21 +25521,21 @@ intArray::Test_Consistency( const char *Label ) const
 
   // int temp;
 
-  // Check that these are the correct values since on some machines
-  // (like the HP) they can be initialized in a strange order (see 
-  // note at top of file)
-     APP_ASSERT (DECIMAL_DISPLAY_FORMAT     == 0);
-     APP_ASSERT (EXPONENTIAL_DISPLAY_FORMAT == 1);
-     APP_ASSERT (SMART_DISPLAY_FORMAT       == 2);
-     APP_ASSERT (DISPLAY_FORMAT             == 2);
+   // Check that these are the correct values since on some machines
+   // (on some legacy compilers) they can be initialized in a strange order (see
+   // note at top of file)
+   APP_ASSERT(DECIMAL_DISPLAY_FORMAT == 0);
+   APP_ASSERT(EXPONENTIAL_DISPLAY_FORMAT == 1);
+   APP_ASSERT(SMART_DISPLAY_FORMAT == 2);
+   APP_ASSERT(DISPLAY_FORMAT == 2);
 
-  // error checking!
-  // APP_ASSERT(Array_Descriptor != NULL);
-  // if (Array_Descriptor == NULL)
-  //    {
-  //      printf ("ERROR: Array_Descriptor == NULL in intArray::Test_Consistency \n");
-  //      APP_ABORT();
-  //    }
+   // error checking!
+   // APP_ASSERT(Array_Descriptor != NULL);
+   // if (Array_Descriptor == NULL)
+   //    {
+   //      printf ("ERROR: Array_Descriptor == NULL in
+   //      intArray::Test_Consistency \n"); APP_ABORT();
+   //    }
 
 #if defined(APP) || defined(SERIAL_APP)
   // This fails on 3 processors but passes on 1 and two processors
@@ -27303,9 +27295,10 @@ intArray & intArray::view ( const char *Label ) const
      if (Expression_Tree_Node_Type::DEFER_EXPRESSION_EVALUATION)
         {
 #if COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS
-       // This function has problems with the new Solaris C++ compiler!
-          intArray_Function_16 *Execution_Object = new intArray_Function_16 ( view_Function , intArray::view , *this , Label );
-          APP_ASSERT( Execution_Object != NULL );
+       // This function has problems with the legacy C++ compiler!
+       intArray_Function_16 *Execution_Object = new intArray_Function_16(
+           view_Function, intArray::view, *this, Label);
+       APP_ASSERT(Execution_Object != NULL);
 #endif
         }
        else
@@ -27532,8 +27525,10 @@ intArray::display ( const char *Label ) const
 
 #if defined(PPP)
      printf ("intArray::display() (CONST) (Array_ID = %d) -- %s \n",Array_ID(),Label);
-  // Bugfix (12/19/96) the conversion of a pointer to an int is not allowed on the 64-bit SGI compiler.
-  // printf ("SerialArray is a %s pointer = %p (%d)! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" : "VALID",SerialArray,(int)SerialArray);
+     // Bugfix (12/19/96) the conversion of a pointer to an int is not allowed
+     // on the legacy 64-bit compiler. printf ("SerialArray is a %s pointer = %p
+     // (%d)! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" :
+     // "VALID",SerialArray,(int)SerialArray);
      printf ("SerialArray is a %s pointer = %p! \n",(Array_Descriptor.SerialArray == NULL) ? "NULL" : "VALID",Array_Descriptor.SerialArray);
 
 // if !defined(NDEBUG)
@@ -27552,9 +27547,10 @@ intArray::display ( const char *Label ) const
      if (Expression_Tree_Node_Type::DEFER_EXPRESSION_EVALUATION)
         {
 #if COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS
-       // This function has problems with the new Solaris C++ compiler!
-          intArray_Function_16 *Execution_Object = new intArray_Function_16 ( display_Function , intArray::display , *this , Label );
-          APP_ASSERT( Execution_Object != NULL );
+       // This function has problems with the legacy C++ compiler!
+       intArray_Function_16 *Execution_Object = new intArray_Function_16(
+           display_Function, intArray::display, *this, Label);
+       APP_ASSERT(Execution_Object != NULL);
 #endif
         }
        else
@@ -30759,9 +30755,10 @@ Delete_If_Temporary ( const intArray & X )
 void
 Delete_Lhs_If_Temporary ( const intArray & Lhs )
    {
-  // The Solaris C++ compiler v3.0 can't inline a function with a static variable we get a
-  // "sorry not implemented: cannot expand inline function with static Last_Lhs_intArray_Operand" message.
-  // So it is a variable with file scope (later we should make it a static data member).
+  // The legacy C++ compiler can't inline a function with a static variable we
+  // get a "sorry not implemented: cannot expand inline function with static
+  // Last_Lhs_intArray_Operand" message. So it is a variable with file scope
+  // (later we should make it a static data member).
 
 #if COMPILE_DEBUG_STATEMENTS
      if (APP_DEBUG > 1)
@@ -31006,11 +31003,4 @@ intArray::testArray()
 
 #undef INTARRAY
 
-
-
-
-
-
-/*include(../src/descriptor_macro.m4)*/
-
-
+   /*include(../src/descriptor_macro.m4)*/

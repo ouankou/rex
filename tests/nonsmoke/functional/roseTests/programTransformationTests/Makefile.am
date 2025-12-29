@@ -135,11 +135,6 @@ cf_2.passed: $(srcdir)/inputCode_constantFoldingTransformation.C $(TEST_EXIT_STA
 cf_3.passed: $(srcdir)/inputCode_constantFoldingTransformation2.C $(TEST_EXIT_STATUS) constantFoldingTest2
 	@$(RTH_RUN) CMD="./constantFoldingTest2 -c $<" $(TEST_EXIT_STATUS) $@
 
-ada_diff:rose-ada-output/rangev2.adb
-	diff $< $(srcdir)/referenceOutput/rangev2.adb > $@
-rose-ada-output/rangev2.adb: $(srcdir)/rangev2.adb constantFoldingTest2
-	./constantFoldingTest2 -c $< 
-
 .PHONY: check-constantFoldingTests
 check-constantFoldingTests: $(cf_TEST_TARGETS)
 

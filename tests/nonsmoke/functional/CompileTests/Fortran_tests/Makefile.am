@@ -875,7 +875,7 @@ F03_TESTCODES_REQUIRED_TO_PASS += \
 #      FAILING TESTS
 # #######################
 
-## Cray pointer Tests
+## Pointer tests
 F90_TESTCODES_CURRENTLY_FAILING = \
      test2007_108.f90 \
      test2007_46.f90 \
@@ -1422,7 +1422,7 @@ bug3:
 bug4:
 	../../testTranslator $(ROSE_FLAGS) -rose:output_parser_actions -I$(srcdir) -c $(srcdir)/verify.f
 
-# DQ (9/19/2011): Added Cray pointer test using test code from Imperial College London.
+# DQ (9/19/2011): Added pointer test using test code from Imperial College London.
 crayPointerTest: testTranslator test2011_imperial_crayPointers.f90
 	$(VALGRIND) ../../testTranslator $(ROSE_FLAGS) -rose:f90 -rose:cray_pointer_support -rose:skip_syntax_check -rose:skipfinalCompileStep -c $(srcdir)/test2011_imperial_crayPointers.f90
 	$(VALGRIND) ../../testTranslator $(ROSE_FLAGS) -rose:f90 -rose:skip_syntax_check -rose:skipfinalCompileStep -c $(srcdir)/test2011_imperial_crayPointers.f90

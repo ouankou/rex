@@ -128,8 +128,8 @@ enum CharFormat {
 };
 
 // Returns true if c is a printable ASCII character.  We test the
-// value of c directly instead of calling isprint(), which is buggy on
-// Windows Mobile.
+// value of c directly instead of calling isprint() to avoid
+// locale-dependent behavior.
 inline bool IsPrintableAscii(wchar_t c) {
   return 0x20 <= c && c <= 0x7E;
 }
@@ -316,13 +316,6 @@ void PrintTo(const char* s, ostream* os) {
   }
 }
 
-// MSVC compiler can be configured to define whar_t as a typedef
-// of unsigned short. Defining an overload for const wchar_t* in that case
-// would cause pointers to unsigned shorts be printed as wide strings,
-// possibly accessing more memory than intended and causing invalid
-// memory accesses. MSVC defines _NATIVE_WCHAR_T_DEFINED symbol when
-// wchar_t is implemented as a native type.
-#if !defined(_MSC_VER) || defined(_NATIVE_WCHAR_T_DEFINED)
 // Prints the given wide C string to the ostream.
 void PrintTo(const wchar_t* s, ostream* os) {
   if (s == NULL) {
@@ -332,7 +325,6 @@ void PrintTo(const wchar_t* s, ostream* os) {
     PrintCharsAsStringTo(s, wcslen(s), os);
   }
 }
-#endif  // wchar_t is native
 
 // Prints a ::string object.
 #if GTEST_HAS_GLOBAL_STRING

@@ -1,4 +1,4 @@
-! This is a VMS Fortran Extension, not supported in OFP
+! This is a vendor-specific Fortran extension, not supported in OFP
 ! It is similar to a struct in C.
       STRUCTURE /S/
           INTEGER I

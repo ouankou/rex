@@ -1470,13 +1470,9 @@ RENAME(sync)(int ncid)
 		return status;
 
 #ifdef USE_FSYNC
-	/* may improve concurrent access, but slows performance if
-	 * called frequently */
-#ifndef WIN32
-	status = fsync(ncp->nciop->fd);
-#else
-	status = _commit(ncp->nciop->fd);
-#endif	/* WIN32 */
+        /* may improve concurrent access, but slows performance if
+         * called frequently */
+        status = fsync(ncp->nciop->fd);
 #endif	/* USE_FSYNC */
 
 	return status;

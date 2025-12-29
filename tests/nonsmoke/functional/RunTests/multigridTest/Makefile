@@ -1,4 +1,4 @@
-APLUSPLUS=/usr/casc/overture/A++P++/A++P++-0.7.2c/A++/lib/solaris_cc_CC
+APLUSPLUS=/usr/casc/overture/A++P++/A++P++-0.7.2c/A++/lib/linux_gcc_gpp
 CXX = CC
 CXXFLAGS = 
 INCLUDEPATH = -I$(APLUSPLUS)/include

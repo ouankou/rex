@@ -59,18 +59,6 @@ an fseek
 #include <rpc/types.h>
 #endif
 
-#ifdef WIN32
-#include <winsock2.h>
-
-#define strcasecmp stricmp
-
-#ifndef TRUE
-#define TRUE 1
-#define FALSE 0
-#endif
-
-#endif
-
 #include <stdio.h>
 
 #ifdef HAVE_RPC_XDR_H
@@ -79,9 +67,7 @@ an fseek
 #include <xdr.h>
 #endif
 
-#ifdef _AIX
 #include <netinet/in.h>
-#endif
 
 static bool_t	ocxdrstdio_getlong();
 static bool_t	ocxdrstdio_putlong();
@@ -92,27 +78,18 @@ static bool_t	ocxdrstdio_setpos();
 static int *	ocxdrstdio_inline();
 static void	ocxdrstdio_destroy();
 
-/* Need this to keep AIX quiet */
-#ifdef _AIX
-typedef long* (*LOCALINLINE)();
-#endif
-
 /*
  * Ops vector for stdio type XDR
  */
-static struct xdr_ops	ocxdrstdio_ops = {
-	ocxdrstdio_getlong,	/* deseraialize a 32 bit int */
-	ocxdrstdio_putlong,	/* seraialize a 32 bit  int */
-	ocxdrstdio_getbytes,	/* deserialize counted bytes */
-	ocxdrstdio_putbytes,	/* serialize counted bytes */
-	ocxdrstdio_getpos,	/* get offset in the stream */
-	ocxdrstdio_setpos,	/* set offset in the stream */
-#ifdef _AIX
-	(LOCALINLINE)ocxdrstdio_inline,	/* prime stream for inline macros */
-#else
-	ocxdrstdio_inline,	/* prime stream for inline macros */
-#endif
-	ocxdrstdio_destroy	/* destroy stream */
+static struct xdr_ops ocxdrstdio_ops = {
+    ocxdrstdio_getlong,  /* deseraialize a 32 bit int */
+    ocxdrstdio_putlong,  /* seraialize a 32 bit  int */
+    ocxdrstdio_getbytes, /* deserialize counted bytes */
+    ocxdrstdio_putbytes, /* serialize counted bytes */
+    ocxdrstdio_getpos,   /* get offset in the stream */
+    ocxdrstdio_setpos,   /* set offset in the stream */
+    ocxdrstdio_inline,   /* prime stream for inline macros */
+    ocxdrstdio_destroy   /* destroy stream */
 };
 
 /*

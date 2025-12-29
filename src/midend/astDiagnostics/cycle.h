@@ -53,26 +53,18 @@
    defined according to whether the corresponding function/type/header
    is available on your system.  The necessary macros are most
    conveniently defined if you are using GNU autoconf, via the tests:
-   
+
    dnl ---------------------------------------------------------------------
 
    AC_C_INLINE
    AC_HEADER_TIME
-   AC_CHECK_HEADERS([sys/time.h c_asm.h intrinsics.h mach/mach_time.h])
+   AC_CHECK_HEADERS([sys/time.h])
 
-   AC_CHECK_TYPE([hrtime_t],[AC_DEFINE(HAVE_HRTIME_T, 1, [Define to 1 if hrtime_t is defined in <sys/time.h>])],,[#if HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif])
+   AC_CHECK_TYPE([hrtime_t],[AC_DEFINE(HAVE_HRTIME_T, 1, [Define to 1 if
+hrtime_t is defined in <sys/time.h>])],,[#if HAVE_SYS_TIME_H #include
+<sys/time.h> #endif])
 
-   AC_CHECK_FUNCS([gethrtime read_real_time time_base_to_time clock_gettime mach_absolute_time])
-
-   dnl Cray UNICOS _rtc() (real-time clock) intrinsic
-   AC_MSG_CHECKING([for _rtc intrinsic])
-   rtc_ok=yes
-   AC_TRY_LINK([#ifdef HAVE_INTRINSICS_H
-#include <intrinsics.h>
-#endif], [_rtc()], [AC_DEFINE(HAVE__RTC,1,[Define if you have the UNICOS _rtc() intrinsic.])], [rtc_ok=no])
-   AC_MSG_RESULT($rtc_ok)
+   AC_CHECK_FUNCS([clock_gettime])
 
    dnl ---------------------------------------------------------------------
 */
@@ -115,32 +107,11 @@ INLINE_ELAPSED(inline)
 #endif
 
 /*----------------------------------------------------------------*/
-/* AIX v. 4+ routines to read the real-time clock or time-base register */
-#if defined(HAVE_READ_REAL_TIME) && defined(HAVE_TIME_BASE_TO_TIME) && !defined(HAVE_TICK_COUNTER)
-typedef timebasestruct_t ticks;
-
-static inline ticks getticks(void)
-{
-     ticks t;
-     read_real_time(&t, TIMEBASE_SZ);
-     return t;
-}
-
-static inline double elapsed(ticks t1, ticks t0) /* time in nanoseconds */
-{
-     time_base_to_time(&t1, TIMEBASE_SZ);
-     time_base_to_time(&t0, TIMEBASE_SZ);
-     return ((t1.tb_high - t0.tb_high) * 1e9 + (t1.tb_low - t0.tb_low));
-}
-
-#define HAVE_TICK_COUNTER
-#endif
-
-/*----------------------------------------------------------------*/
 /*
  * PowerPC ``cycle'' counter using the time base register.
  */
-#if ((defined(__GNUC__) && (defined(__powerpc__) || defined(__ppc__))) || (defined(__MWERKS__) && defined(macintosh)))  && !defined(HAVE_TICK_COUNTER)
+#if defined(__GNUC__) && (defined(__powerpc__) || defined(__ppc__)) &&         \
+    !defined(HAVE_TICK_COUNTER)
 typedef unsigned long long ticks;
 
 static __inline__ ticks getticks(void)
@@ -252,55 +223,6 @@ INLINE_ELAPSED(__inline__)
 #define HAVE_TICK_COUNTER
 #endif
 
-/* HP/UX IA64 compiler, courtesy Teresa L. Johnson: */
-#if defined(__hpux) && defined(__ia64) && !defined(HAVE_TICK_COUNTER)
-#include <machine/sys/inline.h>
-typedef unsigned long ticks;
-
-static inline ticks getticks(void)
-{
-     ticks ret;
-
-     ret = _Asm_mov_from_ar (_AREG_ITC);
-     return ret;
-}
-
-INLINE_ELAPSED(inline)
-
-#define HAVE_TICK_COUNTER
-#endif
-
-/*----------------------------------------------------------------*/
-/*
- * PA-RISC cycle counter 
- */
-#if defined(__hppa__) || defined(__hppa) && !defined(HAVE_TICK_COUNTER)
-typedef unsigned long ticks;
-
-#  ifdef __GNUC__
-static __inline__ ticks getticks(void)
-{
-     ticks ret;
-
-     __asm__ __volatile__("mfctl 16, %0": "=r" (ret));
-     /* no input, nothing else clobbered */
-     return ret;
-}
-#  else
-#  include <machine/inline.h>
-static inline unsigned long getticks(void)
-{
-     register ticks ret;
-     _MFCTL(16, ret);
-     return ret;
-}
-#  endif
-
-INLINE_ELAPSED(inline)
-
-#define HAVE_TICK_COUNTER
-#endif
-
 /*----------------------------------------------------------------*/
 /* S390, courtesy of James Treacy */
 #if defined(__GNUC__) && defined(__s390__) && !defined(HAVE_TICK_COUNTER)
@@ -370,37 +292,3 @@ INLINE_ELAPSED(__inline)
 #define HAVE_TICK_COUNTER
 #endif
 /*----------------------------------------------------------------*/
-/* SGI/Irix */
-#if defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_SGI_CYCLE) && !defined(HAVE_TICK_COUNTER)
-typedef struct timespec ticks;
-
-static inline ticks getticks(void)
-{
-     struct timespec t;
-     clock_gettime(CLOCK_SGI_CYCLE, &t);
-     return t;
-}
-
-static inline double elapsed(ticks t1, ticks t0)
-{
-     return (double)(t1.tv_sec - t0.tv_sec) * 1.0E9 +
-          (double)(t1.tv_nsec - t0.tv_nsec);
-}
-#define HAVE_TICK_COUNTER
-#endif
-
-/*----------------------------------------------------------------*/
-/* Cray UNICOS _rtc() intrinsic function */
-#if defined(HAVE__RTC) && !defined(HAVE_TICK_COUNTER)
-#ifdef HAVE_INTRINSICS_H
-#  include <intrinsics.h>
-#endif
-
-typedef long long ticks;
-
-#define getticks _rtc
-
-INLINE_ELAPSED(inline)
-
-#define HAVE_TICK_COUNTER
-#endif

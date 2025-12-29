@@ -31,9 +31,7 @@
 # endif
 #else
 # if HAVE_ALLOCA_H
-#  include <alloca.h>
-# elif defined(_AIX)
-#  pragma alloca
+#include <alloca.h>
 # endif /* HAVE_ALLOCA_H */
 #endif /* __GNUC__ */
 
@@ -43,16 +41,6 @@
 
 # define ALLOC_ONSTACK(name, type, nelems) \
 	type *const name = (type *) alloca((ALLOCA_ARG_T)((nelems) * sizeof(type)))
-
-# define FREE_ONSTACK(name)
-
-#elif defined(_CRAYC) && !defined(__crayx1) && !__cplusplus && __STDC__ > 1
-/*
- * Cray C allows sizing of arrays with non-constant values.
- */
-
-# define ALLOC_ONSTACK(name, type, nelems) \
-	type name[nelems]
 
 # define FREE_ONSTACK(name)
 

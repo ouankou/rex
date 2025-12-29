@@ -6,8 +6,8 @@ C To: egcs-bugs@cygnus.com
 C Date: Mon, 17 Nov 1997 12:46:27 -0600 (CST)
 
 C I sent the following to fortran@gnu.ai.mit.edu, and Dave Love
-C replied that he was able to reproduce it on rs6000-aix; not on
-C others. He suggested that I send it to egcs-bugs. 
+C replied that he was able to reproduce it on a legacy system; not on
+C others. He suggested that I send it to egcs-bugs.
 
 C Hi - I've observed the following behavior regarding 
 C automatic arrays and gotos.  Seems similar to what I found
@@ -15,7 +15,7 @@ C in the docs about computed gotos (but not exactly the same).
 C 
 C I suspect from the nature of the error msg that it's in the GBE.
 C 
-C I'm using egcs-971105, under linux-ppc.
+C I'm using egcs-971105.
 C 
 C I also observed the same in g77-0.5.19 (and gcc 2.7.2?).
 C 

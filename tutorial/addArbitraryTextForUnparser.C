@@ -24,8 +24,10 @@ void visitorTraversal::visit(SgNode* n)
      if (valueExp != NULL)
         {
        // Add a backend specific compiler directive
-          string compilerSpecificDirective = "\n#if CRAY \n   cray_specific_attribute \n#endif\n";
-          SageInterface::addTextForUnparser(valueExp,compilerSpecificDirective,AstUnparseAttribute::e_before);
+       string compilerSpecificDirective =
+           "\n#if LEGACY_COMPILER \n   legacy_specific_attribute \n#endif\n";
+       SageInterface::addTextForUnparser(valueExp, compilerSpecificDirective,
+                                         AstUnparseAttribute::e_before);
         }
 
    }
@@ -43,5 +45,4 @@ int main( int argc, char * argv[] )
      exampleTraversal.traverseInputFiles(project,preorder);
 
      return backend(project);
-   }
-
+}

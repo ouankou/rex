@@ -32,7 +32,7 @@ ROSE_FLAGS = -rose:skip_transformation
 ## and not the execution!)
 ## Include the path to A++ and the transformation specification
 ## AM_CPPFLAGS = @Axx_INCLUDES@
-MPI_INCLUDE = -I/usr/local/mpi/mpich-1.1.1/include -I/usr/local/mpi/mpich-1.1.1/lib/solaris/ch_p4
+MPI_INCLUDE = -I/usr/local/mpi/mpich-1.1.1/include
 
 AM_CPPFLAGS = -I. -I../../.. -I$(top_srcdir)/tests/nonsmoke/functional/CompileTests/P++Tests -I$(top_srcdir)/include $(MPI_INCLUDE)
 

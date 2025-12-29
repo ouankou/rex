@@ -19,33 +19,10 @@
 #define elsewhere(MASK) for(Where_Statement_Support::APP_Global_Where_Var=elsewhere_function(MASK); \
                             Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO; \
                             Where_Statement_Support::APP_Global_Where_Var=endwhere_function())
-#define otherwise() for(Where_Statement_Support::APP_Global_Where_Var=elsewhere_function(); \
-                            Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO; \
-                            Where_Statement_Support::APP_Global_Where_Var=endwhere_function())
-#if 0
-#ifdef CRAY
-#define elsewhere_mask(MASK) for(Where_Statement_Support::APP_Global_Where_Var=elsewhere_function(MASK); \
-                            Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO; \
-                            Where_Statement_Support::APP_Global_Where_Var=endwhere_function())
-#define elsewhere() for(Where_Statement_Support::APP_Global_Where_Var=elsewhere_function(); \
-                            Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO; \
-                            Where_Statement_Support::APP_Global_Where_Var=endwhere_function())
-#else
-#ifdef GNU
-#define elsewhere_mask(MASK) for(Where_Statement_Support::APP_Global_Where_Var=elsewhere_function(MASK); \
-                            Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO; \
-                            Where_Statement_Support::APP_Global_Where_Var=endwhere_function())
-#define elsewhere() for(Where_Statement_Support::APP_Global_Where_Var=elsewhere_function(); \
-                            Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO; \
-                            Where_Statement_Support::APP_Global_Where_Var=endwhere_function())
-#else
-#define elsewhere(MASK) for(Where_Statement_Support::APP_Global_Where_Var=elsewhere_function(MASK); \
-                            Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO; \
-                            Where_Statement_Support::APP_Global_Where_Var=endwhere_function())
-#endif
-#endif
-#endif
-
+#define otherwise()                                                            \
+  for (Where_Statement_Support::APP_Global_Where_Var = elsewhere_function();   \
+       Where_Statement_Support::APP_Global_Where_Var != STOP_WHERE_MACRO;      \
+       Where_Statement_Support::APP_Global_Where_Var = endwhere_function())
 class Where_Statement_Support
    {
   // We could implement a scope mechanism to permit
@@ -221,6 +198,3 @@ class Where_Statement_Support
    };
 
 #endif  /* !defined(_APP_WHERE_H) */
-
-
-

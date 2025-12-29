@@ -760,7 +760,7 @@ get_type_info2(NC_HDF5_FILE_INFO_T *h5, hid_t datasetid,
 
    /* Because these N5T_NATIVE_* constants are actually function calls
     * (!) in H5Tpublic.h, I can't initialize this array in the usual
-    * way, because at least some C compilers (like Irix) complain
+    * way, because at least some C compilers complain
     * about calling functions when defining constants. So I have to do
     * it like this. Note that there's no native types for char or
     * string. Those are handled later. */
@@ -2913,5 +2913,3 @@ nc_exit()
    return NC_NOERR;
 }
 #endif /* EXTRA_TESTS */
-
-

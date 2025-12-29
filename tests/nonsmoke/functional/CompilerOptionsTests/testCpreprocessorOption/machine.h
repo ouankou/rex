@@ -27,21 +27,9 @@ extern "C" {
 #include <stdlib.h>
 // #include <malloc.h>
 
-
-#ifdef sun
-#define MDI_MALLOC(size) valloc(size)
-#else
 #define MDI_MALLOC(size) malloc(size)
-#endif
 
 /* funtions defined in common_func.c */
-#ifdef CRAY
-double asinh(double x);
-double acosh(double x);
-double atanh(double x);
-double APP_cray_pow (double x, double y);
-#endif
-
 /*
 #include "constants.h"
 */
@@ -3942,8 +3930,4 @@ void MDI_Build_Index_Map_Array ( int *Result , int *Lhs , int *Mask_Array_Pointe
 /* 
 // 
 // Macro expansions!
-*/ 
-
-
-
-
+*/

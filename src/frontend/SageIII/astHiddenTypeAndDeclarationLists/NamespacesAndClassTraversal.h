@@ -60,7 +60,7 @@ struct eqstr3 {
 };
 
 
-// taken form sgi stl page
+// taken from a legacy STL reference
 //The hash<T> template is only defined for template arguments of type char*, const char*, crope, wrope, and the built-in integral types.
 struct HashFunction_String
 {
@@ -228,4 +228,3 @@ void StringVectorHashMapOutput(StringVectorHashMap &SVHM);
 // DQ (5/21/2013): I think that we can and should remove this file.
 // for the moment I will comment out the whole file.
 #endif
-

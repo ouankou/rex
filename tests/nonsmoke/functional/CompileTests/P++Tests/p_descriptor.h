@@ -415,9 +415,10 @@ class intArray_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static intArray_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on vector systems. The use of the hash table for cacheing raw memory
+       // avoids calles to malloc!
+       static intArray_Data_Hash_Table Hash_Table;
 #endif
 
      private:
@@ -581,13 +582,13 @@ class intArray_Descriptor_Type
      // intArray_Descriptor_Type ( const intArray_Descriptor_Type & X );
 #if 0
      // The KCC compiler can accept this as correct code
-     // but the Sun C++ compiler must have templates defined at global scope
+     // but some legacy C++ compilers must have templates defined at global scope
      // so we have had to dumb this use of templates down somewhat
         template<class S, int SecondDimension>
         intArray_Descriptor_Type ( const intArray_Descriptor_Type<S,SecondDimension> & X );
 #else
-     // Sun C++ version
-     // intArray_Descriptor_Type ( const intArray_Descriptor_Type & X );
+        // legacy compiler version
+        // intArray_Descriptor_Type ( const intArray_Descriptor_Type & X );
         intArray_Descriptor_Type ( const intArray_Descriptor_Type & X, int Type_Of_Copy = DEEPCOPY );
      // intArray_Descriptor_Type ( const intArray_Descriptor_Type<double,MAX_ARRAY_DIMENSION> & X );
      // intArray_Descriptor_Type ( const Array_Descriptor_Type<float ,MAX_ARRAY_DIMENSION> & X );
@@ -1503,9 +1504,10 @@ class doubleArray_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static doubleArray_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on vector systems. The use of the hash table for cacheing raw memory
+       // avoids calles to malloc!
+       static doubleArray_Data_Hash_Table Hash_Table;
 #endif
 
      private:
@@ -1669,13 +1671,14 @@ class doubleArray_Descriptor_Type
      // doubleArray_Descriptor_Type ( const doubleArray_Descriptor_Type & X );
 #if 0
      // The KCC compiler can accept this as correct code
-     // but the Sun C++ compiler must have templates defined at global scope
+     // but some legacy C++ compilers must have templates defined at global scope
      // so we have had to dumb this use of templates down somewhat
         template<class S, int SecondDimension>
         doubleArray_Descriptor_Type ( const doubleArray_Descriptor_Type<S,SecondDimension> & X );
 #else
-     // Sun C++ version
-     // doubleArray_Descriptor_Type ( const doubleArray_Descriptor_Type & X );
+        // legacy compiler version
+        // doubleArray_Descriptor_Type ( const doubleArray_Descriptor_Type & X
+        // );
         doubleArray_Descriptor_Type ( const doubleArray_Descriptor_Type & X, int Type_Of_Copy = DEEPCOPY );
      // doubleArray_Descriptor_Type ( const doubleArray_Descriptor_Type<double,MAX_ARRAY_DIMENSION> & X );
      // doubleArray_Descriptor_Type ( const Array_Descriptor_Type<float ,MAX_ARRAY_DIMENSION> & X );
@@ -2591,9 +2594,10 @@ class floatArray_Descriptor_Type
 
      private:
 #if (!defined(PPP))
-     // Hash Table for array data (raw memory)! Intended to be more efficient on the Cray!
-     // The use of the hash table for cacheing raw memory avoids calles to malloc!
-        static floatArray_Data_Hash_Table Hash_Table;
+       // Hash Table for array data (raw memory)! Intended to be more efficient
+       // on vector systems. The use of the hash table for cacheing raw memory
+       // avoids calles to malloc!
+       static floatArray_Data_Hash_Table Hash_Table;
 #endif
 
      private:
@@ -2757,13 +2761,13 @@ class floatArray_Descriptor_Type
      // floatArray_Descriptor_Type ( const floatArray_Descriptor_Type & X );
 #if 0
      // The KCC compiler can accept this as correct code
-     // but the Sun C++ compiler must have templates defined at global scope
+     // but some legacy C++ compilers must have templates defined at global scope
      // so we have had to dumb this use of templates down somewhat
         template<class S, int SecondDimension>
         floatArray_Descriptor_Type ( const floatArray_Descriptor_Type<S,SecondDimension> & X );
 #else
-     // Sun C++ version
-     // floatArray_Descriptor_Type ( const floatArray_Descriptor_Type & X );
+        // legacy compiler version
+        // floatArray_Descriptor_Type ( const floatArray_Descriptor_Type & X );
         floatArray_Descriptor_Type ( const floatArray_Descriptor_Type & X, int Type_Of_Copy = DEEPCOPY );
      // floatArray_Descriptor_Type ( const floatArray_Descriptor_Type<double,MAX_ARRAY_DIMENSION> & X );
      // floatArray_Descriptor_Type ( const Array_Descriptor_Type<float ,MAX_ARRAY_DIMENSION> & X );
@@ -3303,8 +3307,3 @@ class floatArray_Descriptor_Type
 #undef FLOATARRAY
 
 #endif  /* !defined(_PPP_DESCRIPTOR_H) */
-
-
-
-
-

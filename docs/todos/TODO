@@ -70,9 +70,6 @@ DONE * Need to build Sage II in such a way that we can better maintain it
 DONE (see below) * Need a way to display the AST (currently we can print out the AST associated with the sage representation)
   but we have no mechanism to print out what is in the legacy frontend representation.  This would be helpful.
 
-* Need to consider the requirements of the SGI FORTRAN 95 open source front-end.
-  I have read the WHIRL Intermediate Language Specification and this appears to be possible.
-
 * Require an inliner mechanism for the transformation support. Great student project!
 
 * Reference counting of the SAGE classes has not been implemented
@@ -1109,7 +1106,6 @@ DONE: Specify where to get DOT (GraphViz) and Doxygen software used in ROSE
 developers (added where to find MySQL as well).
 
  
-
 
 
 

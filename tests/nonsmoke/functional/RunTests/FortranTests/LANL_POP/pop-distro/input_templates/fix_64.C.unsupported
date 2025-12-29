@@ -2,11 +2,11 @@
 
 /* ***********************************************************************
 
-   Fix (Fortran Interface to X windows) is a set of routines that allow
-   Fortran programs to open and draw to X windows.
+   Fix (Fortran Interface to X11) is a set of routines that allow
+   Fortran programs to open and draw to X11 windows.
 
    10/4/97 RCMalone: changed all 'long' declarations to 'int' for use
-   with SGI -64 compiler option.
+   with 64-bit compiler options.
 
    *********************************************************************** */
 
@@ -3474,8 +3474,8 @@ int *prxoff,*pryoff,*prwidth,*prheight;
       *prheight=wheight+sumyoff;
      }
 
-   return 0;			/* "0" added to remove some SGI
-                                   compiler complaints (non void function 
+   return 0;			/* "0" added to remove legacy compiler
+                                   complaints (non void function
                                    must return a value) --JSP */
 
 }

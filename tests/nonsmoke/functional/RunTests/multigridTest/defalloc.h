@@ -23,30 +23,6 @@
 #include <iostream.h>
 #include <algobase.h>
 
-/*
- * had to comment the following line out in order to make STL compile
- * with KCc
- * 
-inline void* operator new(size_t, void* p) {return p;}
- */
- 
-/*
- * the following template function is replaced by the following two functions
- * due to the fact that the Borland compiler doesn't change prediff_t type
- * to type long when compile with -ml or -mh.
-
-template <class T>
-inline T* allocate(ptrdiff_t size, T*) {
-    set_new_handler(0);
-    T* tmp = (T*)(::operator new((size_t)(size * sizeof(T))));
-    if (tmp == 0) {
-	cerr << "out of memory" << endl; 
-	exit(1);
-    }
-    return tmp;
-}
-*/
-
 template <class T>
 inline T* allocate(int size, T*) {
     set_new_handler(0);

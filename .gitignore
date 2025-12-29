@@ -14,12 +14,15 @@
 # Executables
 *.out
 a.out
+*.exe
 # Libraries
 *.so
 *.so.*
 *.a
 *.la
 *.lo
+*.dylib
+*.dll
 # Fortran module files
 *.mod
 *.smod
@@ -78,14 +81,30 @@ GTAGS
 /config/missing
 /config/depcomp
 /config/ltargz.m4
+
 # Eclipse project files
 .cproject
 .project
 .settings
 
+# Eclipse project files
+.cproject
+.project
+.settings
+
+# OS X Finder files
+.DS_Store
+
 # Docs build artifacts
 docs/_build/
 docs/doxygen-xml/
+
+# compiled python files
+*.pyc
+*.pyo
+
+# Jupyter temporary files
+.ipynb_checkpoints
 
 # CMake build directory
 /build/

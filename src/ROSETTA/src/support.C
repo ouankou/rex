@@ -1091,7 +1091,7 @@ Grammar::setUpSupport ()
      File.setDataPrototype("bool","compileOnly", "= false",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/13/2004): Added to support to save Edg command line
+     // DQ (2/13/2004): Added to support saving the frontend command line
      File.setDataPrototype("std::string","savedFrontendCommandLine", "= \"\"",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 

@@ -23,10 +23,10 @@ doubleArray_Aggregate_Operator::~doubleArray_Aggregate_Operator ()
      printf ("Inside of doubleArray_Aggregate_Operator destructor! \n");
    }
 
-doubleArray_Aggregate_Operator::doubleArray_Aggregate_Operator ()
-  // Bugfix (5/12/95) reported by Ted Stern (required for new SGI C++ compiler)
-     : Operand_Result()
-   {
+   doubleArray_Aggregate_Operator::doubleArray_Aggregate_Operator()
+       // Bugfix (5/12/95) reported by Ted Stern (required for a legacy
+       // compiler)
+       : Operand_Result() {
      printf ("Inside of doubleArray_Aggregate_Operator default constructor! \n");
    }
 
@@ -212,10 +212,10 @@ floatArray_Aggregate_Operator::~floatArray_Aggregate_Operator ()
      printf ("Inside of floatArray_Aggregate_Operator destructor! \n");
    }
 
-floatArray_Aggregate_Operator::floatArray_Aggregate_Operator ()
-  // Bugfix (5/12/95) reported by Ted Stern (required for new SGI C++ compiler)
-     : Operand_Result()
-   {
+   floatArray_Aggregate_Operator::floatArray_Aggregate_Operator()
+       // Bugfix (5/12/95) reported by Ted Stern (required for a legacy
+       // compiler)
+       : Operand_Result() {
      printf ("Inside of floatArray_Aggregate_Operator default constructor! \n");
    }
 
@@ -403,10 +403,10 @@ intArray_Aggregate_Operator::~intArray_Aggregate_Operator ()
      printf ("Inside of intArray_Aggregate_Operator destructor! \n");
    }
 
-intArray_Aggregate_Operator::intArray_Aggregate_Operator ()
-  // Bugfix (5/12/95) reported by Ted Stern (required for new SGI C++ compiler)
-     : Operand_Result()
-   {
+   intArray_Aggregate_Operator::intArray_Aggregate_Operator()
+       // Bugfix (5/12/95) reported by Ted Stern (required for a legacy
+       // compiler)
+       : Operand_Result() {
      printf ("Inside of intArray_Aggregate_Operator default constructor! \n");
    }
 
@@ -587,16 +587,4 @@ void intArray_Aggregate_Operator::New_Function_Loop ()
    }
 
 
-#undef INTARRAY 
- 
-
-
-
-
-
-
-
-
-
-
-
+#undef INTARRAY

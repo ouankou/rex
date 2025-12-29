@@ -96,9 +96,6 @@ Return: The number of value found.  If pname is not a list, the number of
   #include <strings.h>
   #include <unistd.h>
 
-  #if defined(J90)/*Cray*/ || defined(C90)/*Cray*/ || defined(IP)/*SGI*/
-  #include <sys/types.h>
-  #endif
 #endif
 
 #include <regex.h>

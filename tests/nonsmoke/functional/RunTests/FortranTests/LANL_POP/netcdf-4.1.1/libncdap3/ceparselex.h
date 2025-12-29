@@ -10,11 +10,6 @@
 #include "dapdebug.h"
 #include "dapdump.h"
 
-#ifdef WIN32
-#define strcasecmp stricmp
-#define snprintf _snprintf
-#endif
-
 /* For consistency with Java parser */
 #define null NULL
 
@@ -90,4 +85,3 @@ extern void celexcleanup(CElexstate** lexstatep);
 extern int cedebug;
 
 #endif /*CEPARSELEX_H*/
-

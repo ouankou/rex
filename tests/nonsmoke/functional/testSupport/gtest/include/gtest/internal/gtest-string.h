@@ -41,11 +41,6 @@
 #ifndef GTEST_INCLUDE_GTEST_INTERNAL_GTEST_STRING_H_
 #define GTEST_INCLUDE_GTEST_INTERNAL_GTEST_STRING_H_
 
-#ifdef __BORLANDC__
-// string.h is not guaranteed to provide strcpy on C++ Builder.
-# include <mem.h>
-#endif
-
 #include <string.h>
 #include <string>
 
@@ -67,32 +62,6 @@ class GTEST_API_ String {
   // This is different from strdup() in string.h, which allocates
   // memory using malloc().
   static const char* CloneCString(const char* c_str);
-
-#if GTEST_OS_WINDOWS_MOBILE
-  // Windows CE does not have the 'ANSI' versions of Win32 APIs. To be
-  // able to pass strings to Win32 APIs on CE we need to convert them
-  // to 'Unicode', UTF-16.
-
-  // Creates a UTF-16 wide string from the given ANSI string, allocating
-  // memory using new. The caller is responsible for deleting the return
-  // value using delete[]. Returns the wide string, or NULL if the
-  // input is NULL.
-  //
-  // The wide string is created using the ANSI codepage (CP_ACP) to
-  // match the behaviour of the ANSI versions of Win32 calls and the
-  // C runtime.
-  static LPCWSTR AnsiToUtf16(const char* c_str);
-
-  // Creates an ANSI string from the given wide string, allocating
-  // memory using new. The caller is responsible for deleting the return
-  // value using delete[]. Returns the ANSI string, or NULL if the
-  // input is NULL.
-  //
-  // The returned string is created using the ANSI codepage (CP_ACP) to
-  // match the behaviour of the ANSI versions of Win32 calls and the
-  // C runtime.
-  static const char* Utf16ToAnsi(LPCWSTR utf16_str);
-#endif
 
   // Compares two C strings.  Returns true iff they have the same content.
   //
@@ -131,11 +100,6 @@ class GTEST_API_ String {
   // A NULL C string is considered different to any non-NULL wide C string,
   // including the empty string.
   // NB: The implementations on different platforms slightly differ.
-  // On windows, this method uses _wcsicmp which compares according to LC_CTYPE
-  // environment variable. On GNU platform this method uses wcscasecmp
-  // which compares according to LC_CTYPE category of the current locale.
-  // On MacOS X, it uses towlower, which also uses LC_CTYPE category of the
-  // current locale.
   static bool CaseInsensitiveWideCStringEquals(const wchar_t* lhs,
                                                const wchar_t* rhs);
 

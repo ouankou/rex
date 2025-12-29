@@ -135,8 +135,7 @@ StructLayoutInfo NonpackedTypeLayoutGenerator::layoutType(SgType* t) const {
   }
 }
 
-//! There is a nice summary for ABI from
-// http://developers.sun.com/solaris/articles/about_amd64_abi.html
+//! There is a nice summary for ABI in the AMD64 System V ABI docs.
 // Liao, 7/22/2008
 StructLayoutInfo I386PrimitiveTypeLayoutGenerator::layoutType(SgType* t) const {
   StructLayoutInfo layout;

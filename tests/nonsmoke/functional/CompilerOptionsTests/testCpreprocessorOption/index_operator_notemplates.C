@@ -106,12 +106,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -157,10 +159,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -254,12 +256,14 @@ doubleArray doubleArray::operator() ( const Internal_Index & I ) const
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -305,10 +309,10 @@ doubleArray doubleArray::operator() ( const Internal_Index & I ) const
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -397,12 +401,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -448,10 +454,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -544,12 +550,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -595,10 +603,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -690,12 +698,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -741,10 +751,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -830,12 +840,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -881,10 +893,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -970,12 +982,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -1021,10 +1035,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -1112,12 +1126,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -1163,10 +1179,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -1256,12 +1272,14 @@ doubleArray doubleArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -1307,10 +1325,10 @@ doubleArray doubleArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -1363,18 +1381,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
    Indirect_Index_Pointer_List[0] = &((Internal_Indirect_Addressing_Index &) I);
 
    int num_dims = 1;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -1486,18 +1505,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
    Indirect_Index_Pointer_List[1] = &((Internal_Indirect_Addressing_Index &) J);
 
    int num_dims = 2;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -1613,18 +1633,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
    Indirect_Index_Pointer_List[2] = &((Internal_Indirect_Addressing_Index &) K);
 
    int num_dims = 3;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -1741,18 +1762,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
    Indirect_Index_Pointer_List[3] = &((Internal_Indirect_Addressing_Index &) L);
 
    int num_dims = 4;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -1871,18 +1893,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
    Indirect_Index_Pointer_List[4] = &((Internal_Indirect_Addressing_Index &) M);
 
    int num_dims = 5;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -2003,18 +2026,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
    Indirect_Index_Pointer_List[5] = &((Internal_Indirect_Addressing_Index &) N);
 
    int num_dims = 6;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -2138,18 +2162,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
 
 
    int num_dims = 7;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -2275,18 +2300,19 @@ doubleArray doubleArray::operator() ( const Internal_Indirect_Addressing_Index &
    Indirect_Index_Pointer_List[6] = &((Internal_Indirect_Addressing_Index &) P);
 
    int num_dims = 8;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -2462,12 +2488,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -2513,10 +2541,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -2610,12 +2638,14 @@ floatArray floatArray::operator() ( const Internal_Index & I ) const
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -2661,10 +2691,10 @@ floatArray floatArray::operator() ( const Internal_Index & I ) const
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -2753,12 +2783,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -2804,10 +2836,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -2900,12 +2932,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -2951,10 +2985,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -3046,12 +3080,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -3097,10 +3133,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -3186,12 +3222,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -3237,10 +3275,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -3326,12 +3364,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -3377,10 +3417,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -3468,12 +3508,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -3519,10 +3561,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -3612,12 +3654,14 @@ floatArray floatArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -3663,10 +3707,10 @@ floatArray floatArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -3719,18 +3763,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
    Indirect_Index_Pointer_List[0] = &((Internal_Indirect_Addressing_Index &) I);
 
    int num_dims = 1;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -3842,18 +3887,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
    Indirect_Index_Pointer_List[1] = &((Internal_Indirect_Addressing_Index &) J);
 
    int num_dims = 2;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -3969,18 +4015,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
    Indirect_Index_Pointer_List[2] = &((Internal_Indirect_Addressing_Index &) K);
 
    int num_dims = 3;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -4097,18 +4144,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
    Indirect_Index_Pointer_List[3] = &((Internal_Indirect_Addressing_Index &) L);
 
    int num_dims = 4;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -4227,18 +4275,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
    Indirect_Index_Pointer_List[4] = &((Internal_Indirect_Addressing_Index &) M);
 
    int num_dims = 5;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -4359,18 +4408,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
    Indirect_Index_Pointer_List[5] = &((Internal_Indirect_Addressing_Index &) N);
 
    int num_dims = 6;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -4494,18 +4544,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
 
 
    int num_dims = 7;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -4631,18 +4682,19 @@ floatArray floatArray::operator() ( const Internal_Indirect_Addressing_Index & I
    Indirect_Index_Pointer_List[6] = &((Internal_Indirect_Addressing_Index &) P);
 
    int num_dims = 8;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -4818,12 +4870,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -4869,10 +4923,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -4966,12 +5020,14 @@ intArray intArray::operator() ( const Internal_Index & I ) const
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -5017,10 +5073,10 @@ intArray intArray::operator() ( const Internal_Index & I ) const
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -5109,12 +5165,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -5160,10 +5218,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -5256,12 +5314,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -5307,10 +5367,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -5402,12 +5462,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -5453,10 +5515,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -5542,12 +5604,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -5593,10 +5657,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -5682,12 +5746,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -5733,10 +5799,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -5824,12 +5890,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -5875,10 +5943,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -5968,12 +6036,14 @@ intArray intArray::operator()
         {
           if (Index_Pointer_List[i] != NULL)
              {
-            // Cray T3D compiler will not allow us to take the address of 
-            // the result of getLocalPart so this fix allows for a more 
-            // clean implementation (though we have to free up the memory 
+            // legacy compiler will not allow us to take the address of
+            // the result of getLocalPart so this fix allows for a more
+            // clean implementation (though we have to free up the memory
             // afterward).
-               Local_Index_Pointer_List[i] = 
-                    Index_Pointer_List[i]->getPointerToLocalPart(Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,i);
+            Local_Index_Pointer_List[i] =
+                Index_Pointer_List[i]->getPointerToLocalPart(
+                    Array_Descriptor.SerialArray->Array_Descriptor.Array_Domain,
+                    i);
              }
             else
              {
@@ -6019,10 +6089,10 @@ intArray intArray::operator()
   // subscript(might want to make this a SerialArray function) ...
      View->Fixup_User_Base (Index_Pointer_List,Local_Index_Pointer_List);
 
-  // Free up the data allocated via the heap! This is part of the fix 
-  // for the P++ code so that it can work properly with the Cray T3D 
-  // compiler. We could make this more efficient if we avoided allocation
-  // and deallocation from the heap.
+     // Free up the data allocated via the heap! This is part of the fix
+     // for the P++ code so that it can work properly with the legacy platform
+     // compiler. We could make this more efficient if we avoided allocation
+     // and deallocation from the heap.
      for (i=0; i < MAX_ARRAY_DIMENSION; i++)
         {
           if (Local_Index_Pointer_List[i] != NULL)
@@ -6075,18 +6145,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ) c
    Indirect_Index_Pointer_List[0] = &((Internal_Indirect_Addressing_Index &) I);
 
    int num_dims = 1;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -6198,18 +6269,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ,
    Indirect_Index_Pointer_List[1] = &((Internal_Indirect_Addressing_Index &) J);
 
    int num_dims = 2;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -6325,18 +6397,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ,
    Indirect_Index_Pointer_List[2] = &((Internal_Indirect_Addressing_Index &) K);
 
    int num_dims = 3;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -6453,18 +6526,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ,
    Indirect_Index_Pointer_List[3] = &((Internal_Indirect_Addressing_Index &) L);
 
    int num_dims = 4;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -6583,18 +6657,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ,
    Indirect_Index_Pointer_List[4] = &((Internal_Indirect_Addressing_Index &) M);
 
    int num_dims = 5;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -6715,18 +6790,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ,
    Indirect_Index_Pointer_List[5] = &((Internal_Indirect_Addressing_Index &) N);
 
    int num_dims = 6;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -6850,18 +6926,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ,
 
 
    int num_dims = 7;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {
@@ -6987,18 +7064,19 @@ intArray intArray::operator() ( const Internal_Indirect_Addressing_Index & I ,
    Indirect_Index_Pointer_List[6] = &((Internal_Indirect_Addressing_Index &) P);
 
    int num_dims = 8;
-   // ... (7/18/96, kdb) This same code was repeated reguardless of the number of 
+   // ... (7/18/96, kdb) This same code was repeated reguardless of the number
+   // of
    //  arguments so it is pulled out into a macro.  This makes it easier to
    //  make changes and to increase the number of dimensions.  It has been
    //  changed slightly so that some lists have been turned into loops.
-   //  This may be less inefficient on the cray and so we may have to modify this
-   //  later. ...
+   //  This may be less inefficient on the legacy vector system and so we may
+   //  have to modify this later. ...
 
-     int i = 0;
-     for (i=num_dims; i < MAX_ARRAY_DIMENSION; i++)
-          Indirect_Index_Pointer_List[i] = NULL;
+   int i = 0;
+   for (i = num_dims; i < MAX_ARRAY_DIMENSION; i++)
+     Indirect_Index_Pointer_List[i] = NULL;
 
-  // printf ("Inside of Macro \n");
+   // printf ("Inside of Macro \n");
 #if BOUNDS_ERROR_CHECKING
      if (Index::Index_Bounds_Checking)
         {

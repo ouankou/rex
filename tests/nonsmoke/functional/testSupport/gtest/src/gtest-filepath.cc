@@ -35,81 +35,33 @@
 
 #include <stdlib.h>
 
-#if GTEST_OS_WINDOWS_MOBILE
-# include <windows.h>
-#elif GTEST_OS_WINDOWS
-# include <direct.h>
-# include <io.h>
-#elif GTEST_OS_SYMBIAN
-// Symbian OpenC has PATH_MAX in sys/syslimits.h
-# include <sys/syslimits.h>
-#else
-# include <limits.h>
-# include <climits>  // Some Linux distributions define PATH_MAX here.
-#endif  // GTEST_OS_WINDOWS_MOBILE
+#include <climits> // Some Linux distributions define PATH_MAX here.
+#include <limits.h>
 
-#if GTEST_OS_WINDOWS
-# define GTEST_PATH_MAX_ _MAX_PATH
-#elif defined(PATH_MAX)
+#if defined(PATH_MAX)
 # define GTEST_PATH_MAX_ PATH_MAX
 #elif defined(_XOPEN_PATH_MAX)
 # define GTEST_PATH_MAX_ _XOPEN_PATH_MAX
 #else
 # define GTEST_PATH_MAX_ _POSIX_PATH_MAX
-#endif  // GTEST_OS_WINDOWS
+#endif
 
 #include "gtest/internal/gtest-string.h"
 
 namespace testing {
 namespace internal {
 
-#if GTEST_OS_WINDOWS
-// On Windows, '\\' is the standard path separator, but many tools and the
-// Windows API also accept '/' as an alternate path separator. Unless otherwise
-// noted, a file path can contain either kind of path separators, or a mixture
-// of them.
-const char kPathSeparator = '\\';
-const char kAlternatePathSeparator = '/';
-const char kPathSeparatorString[] = "\\";
-const char kAlternatePathSeparatorString[] = "/";
-# if GTEST_OS_WINDOWS_MOBILE
-// Windows CE doesn't have a current directory. You should not use
-// the current directory in tests on Windows CE, but this at least
-// provides a reasonable fallback.
-const char kCurrentDirectoryString[] = "\\";
-// Windows CE doesn't define INVALID_FILE_ATTRIBUTES
-const DWORD kInvalidFileAttributes = 0xffffffff;
-# else
-const char kCurrentDirectoryString[] = ".\\";
-# endif  // GTEST_OS_WINDOWS_MOBILE
-#else
 const char kPathSeparator = '/';
 const char kPathSeparatorString[] = "/";
 const char kCurrentDirectoryString[] = "./";
-#endif  // GTEST_OS_WINDOWS
 
 // Returns whether the given character is a valid path separator.
-static bool IsPathSeparator(char c) {
-#if GTEST_HAS_ALT_PATH_SEP_
-  return (c == kPathSeparator) || (c == kAlternatePathSeparator);
-#else
-  return c == kPathSeparator;
-#endif
-}
+static bool IsPathSeparator(char c) { return c == kPathSeparator; }
 
 // Returns the current working directory, or "" if unsuccessful.
 FilePath FilePath::GetCurrentDir() {
-#if GTEST_OS_WINDOWS_MOBILE
-  // Windows CE doesn't have a current directory, so we just return
-  // something reasonable.
-  return FilePath(kCurrentDirectoryString);
-#elif GTEST_OS_WINDOWS
-  char cwd[GTEST_PATH_MAX_ + 1] = { '\0' };
-  return FilePath(_getcwd(cwd, sizeof(cwd)) == NULL ? "" : cwd);
-#else
   char cwd[GTEST_PATH_MAX_ + 1] = { '\0' };
   return FilePath(getcwd(cwd, sizeof(cwd)) == NULL ? "" : cwd);
-#endif  // GTEST_OS_WINDOWS_MOBILE
 }
 
 // Returns a copy of the FilePath with the case-insensitive extension removed.
@@ -125,19 +77,10 @@ FilePath FilePath::RemoveExtension(const char* extension) const {
   return *this;
 }
 
-// Returns a pointer to the last occurence of a valid path separator in
-// the FilePath. On Windows, for example, both '/' and '\' are valid path
-// separators. Returns NULL if no path separator was found.
+// Returns a pointer to the last occurrence of a valid path separator in
+// the FilePath. Returns NULL if no path separator was found.
 const char* FilePath::FindLastPathSeparator() const {
-  const char* const last_sep = strrchr(c_str(), kPathSeparator);
-#if GTEST_HAS_ALT_PATH_SEP_
-  const char* const last_alt_sep = strrchr(c_str(), kAlternatePathSeparator);
-  // Comparing two pointers of which only one is NULL is undefined.
-  if (last_alt_sep != NULL &&
-      (last_sep == NULL || last_alt_sep > last_sep)) {
-    return last_alt_sep;
-  }
-#endif
+  const char *const last_sep = strrchr(c_str(), kPathSeparator);
   return last_sep;
 }
 
@@ -146,7 +89,6 @@ const char* FilePath::FindLastPathSeparator() const {
 // FilePath("file"). If there is no directory part ("just_a_file"), it returns
 // the FilePath unmodified. If there is no file part ("just_a_dir/") it
 // returns an empty FilePath ("").
-// On Windows platform, '\' is the path separator, otherwise it is '/'.
 FilePath FilePath::RemoveDirectoryName() const {
   const char* const last_sep = FindLastPathSeparator();
   return last_sep ? FilePath(last_sep + 1) : *this;
@@ -155,9 +97,8 @@ FilePath FilePath::RemoveDirectoryName() const {
 // RemoveFileName returns the directory path with the filename removed.
 // Example: FilePath("path/to/file").RemoveFileName() returns "path/to/".
 // If the FilePath is "a_file" or "/a_file", RemoveFileName returns
-// FilePath("./") or, on Windows, FilePath(".\\"). If the filepath does
-// not have a file, like "just/a/dir/", it returns the FilePath unmodified.
-// On Windows platform, '\' is the path separator, otherwise it is '/'.
+// FilePath("./"). If the filepath does not have a file, like "just/a/dir/",
+// it returns the FilePath unmodified.
 FilePath FilePath::RemoveFileName() const {
   const char* const last_sep = FindLastPathSeparator();
   std::string dir;
@@ -174,7 +115,6 @@ FilePath FilePath::RemoveFileName() const {
 // Given directory = "dir", base_name = "test", number = 0,
 // extension = "xml", returns "dir/test.xml". If number is greater
 // than zero (e.g., 12), returns "dir/test_12.xml".
-// On Windows platform, uses \ as the separator rather than /.
 FilePath FilePath::MakeFileName(const FilePath& directory,
                                 const FilePath& base_name,
                                 int number,
@@ -190,7 +130,6 @@ FilePath FilePath::MakeFileName(const FilePath& directory,
 }
 
 // Given directory = "dir", relative_path = "test.xml", returns "dir/test.xml".
-// On Windows, uses \ as the separator rather than /.
 FilePath FilePath::ConcatPaths(const FilePath& directory,
                                const FilePath& relative_path) {
   if (directory.IsEmpty())
@@ -202,72 +141,32 @@ FilePath FilePath::ConcatPaths(const FilePath& directory,
 // Returns true if pathname describes something findable in the file-system,
 // either a file, directory, or whatever.
 bool FilePath::FileOrDirectoryExists() const {
-#if GTEST_OS_WINDOWS_MOBILE
-  LPCWSTR unicode = String::AnsiToUtf16(pathname_.c_str());
-  const DWORD attributes = GetFileAttributes(unicode);
-  delete [] unicode;
-  return attributes != kInvalidFileAttributes;
-#else
   posix::StatStruct file_stat;
   return posix::Stat(pathname_.c_str(), &file_stat) == 0;
-#endif  // GTEST_OS_WINDOWS_MOBILE
 }
 
 // Returns true if pathname describes a directory in the file-system
 // that exists.
 bool FilePath::DirectoryExists() const {
   bool result = false;
-#if GTEST_OS_WINDOWS
-  // Don't strip off trailing separator if path is a root directory on
-  // Windows (like "C:\\").
-  const FilePath& path(IsRootDirectory() ? *this :
-                                           RemoveTrailingPathSeparator());
-#else
-  const FilePath& path(*this);
-#endif
+  const FilePath &path(*this);
 
-#if GTEST_OS_WINDOWS_MOBILE
-  LPCWSTR unicode = String::AnsiToUtf16(path.c_str());
-  const DWORD attributes = GetFileAttributes(unicode);
-  delete [] unicode;
-  if ((attributes != kInvalidFileAttributes) &&
-      (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-    result = true;
-  }
-#else
   posix::StatStruct file_stat;
-  result = posix::Stat(path.c_str(), &file_stat) == 0 &&
-      posix::IsDir(file_stat);
-#endif  // GTEST_OS_WINDOWS_MOBILE
+  result =
+      posix::Stat(path.c_str(), &file_stat) == 0 && posix::IsDir(file_stat);
 
   return result;
 }
 
-// Returns true if pathname describes a root directory. (Windows has one
-// root directory per disk drive.)
+// Returns true if pathname describes a root directory.
 bool FilePath::IsRootDirectory() const {
-#if GTEST_OS_WINDOWS
-  // TODO(wan@google.com): on Windows a network share like
-  // \\server\share can be a root directory, although it cannot be the
-  // current directory.  Handle this properly.
-  return pathname_.length() == 3 && IsAbsolutePath();
-#else
   return pathname_.length() == 1 && IsPathSeparator(pathname_.c_str()[0]);
-#endif
 }
 
 // Returns true if pathname describes an absolute path.
 bool FilePath::IsAbsolutePath() const {
-  const char* const name = pathname_.c_str();
-#if GTEST_OS_WINDOWS
-  return pathname_.length() >= 3 &&
-     ((name[0] >= 'a' && name[0] <= 'z') ||
-      (name[0] >= 'A' && name[0] <= 'Z')) &&
-     name[1] == ':' &&
-     IsPathSeparator(name[2]);
-#else
+  const char *const name = pathname_.c_str();
   return IsPathSeparator(name[0]);
-#endif
 }
 
 // Returns a pathname for a file that does not currently exist. The pathname
@@ -316,18 +215,9 @@ bool FilePath::CreateDirectoriesRecursively() const {
 // Create the directory so that path exists. Returns true if successful or
 // if the directory already exists; returns false if unable to create the
 // directory for any reason, including if the parent directory does not
-// exist. Not named "CreateDirectory" because that's a macro on Windows.
+// exist.
 bool FilePath::CreateFolder() const {
-#if GTEST_OS_WINDOWS_MOBILE
-  FilePath removed_sep(this->RemoveTrailingPathSeparator());
-  LPCWSTR unicode = String::AnsiToUtf16(removed_sep.c_str());
-  int result = CreateDirectory(unicode, NULL) ? 0 : -1;
-  delete [] unicode;
-#elif GTEST_OS_WINDOWS
-  int result = _mkdir(pathname_.c_str());
-#else
   int result = mkdir(pathname_.c_str(), 0777);
-#endif  // GTEST_OS_WINDOWS_MOBILE
 
   if (result == -1) {
     return this->DirectoryExists();  // An error is OK if the directory exists.
@@ -337,7 +227,6 @@ bool FilePath::CreateFolder() const {
 
 // If input name has a trailing separator character, remove it and return the
 // name, otherwise return the name string unmodified.
-// On Windows platform, uses \ as the separator, other platforms use /.
 FilePath FilePath::RemoveTrailingPathSeparator() const {
   return IsDirectory()
       ? FilePath(pathname_.substr(0, pathname_.length() - 1))
@@ -347,7 +236,6 @@ FilePath FilePath::RemoveTrailingPathSeparator() const {
 // Removes any redundant separators that might be in the pathname.
 // For example, "bar///foo" becomes "bar/foo". Does not eliminate other
 // redundancies that might be in a pathname involving "." or "..".
-// TODO(wan@google.com): handle Windows network shares (e.g. \\server\share).
 void FilePath::Normalize() {
   if (pathname_.c_str() == NULL) {
     pathname_ = "";
@@ -363,11 +251,6 @@ void FilePath::Normalize() {
     if (!IsPathSeparator(*src)) {
       src++;
     } else {
-#if GTEST_HAS_ALT_PATH_SEP_
-      if (*dest_ptr == kAlternatePathSeparator) {
-        *dest_ptr = kPathSeparator;
-      }
-#endif
       while (IsPathSeparator(*src))
         src++;
     }

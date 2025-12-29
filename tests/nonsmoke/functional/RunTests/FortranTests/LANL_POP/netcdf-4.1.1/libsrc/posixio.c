@@ -11,15 +11,11 @@
 #ifndef ENOERR
 #define ENOERR 0
 #endif
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
-#ifdef _MSC_VER /* Microsoft Compilers */
-#include <io.h>
-#else
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
-#endif
 #ifndef HAVE_SSIZE_T
 #define ssize_t int
 #endif
@@ -54,9 +50,7 @@
 #undef X_ALIGN
 #endif
 
-/* These are needed on mingw to get a dll to compile. They really
- * should be provided in sys/stats.h, but what the heck. Let's not be
- * too picky! */
+/* These may be missing on some platforms; define them if needed. */
 #ifndef S_IRGRP
 #define S_IRGRP   0000040
 #endif
@@ -1477,12 +1471,8 @@ ncio_create(const char *path, int ioflags,
 #ifdef O_BINARY
 	fSet(oflags, O_BINARY);
 #endif
-#ifdef vms
-	fd = open(path, oflags, NC_DEFAULT_CREAT_MODE, "ctx=stm");
-#else
-	/* Should we mess with the mode based on NC_SHARE ?? */
-	fd = open(path, oflags, NC_DEFAULT_CREAT_MODE);
-#endif
+        /* Should we mess with the mode based on NC_SHARE ?? */
+        fd = open(path, oflags, NC_DEFAULT_CREAT_MODE);
 #if 0
 	(void) fprintf(stderr, "ncio_create(): path=\"%s\"\n", path);
 	(void) fprintf(stderr, "ncio_create(): oflags=0x%x\n", oflags);
@@ -1606,12 +1596,8 @@ ncio_open(const char *path,
 #ifdef O_BINARY
 	fSet(oflags, O_BINARY);
 #endif
-#ifdef vms
-	fd = open(path, oflags, 0, "ctx=stm");
-#else
-	fd = open(path, oflags, 0);
-#endif
-	if(fd < 0)
+        fd = open(path, oflags, 0);
+        if(fd < 0)
 	{
 		status = errno;
 		goto unwind_new;
