@@ -149,7 +149,7 @@ SgOmpExpressionClause *convertOpenACCExpressionClause(
   OpenACCClauseKind clause_kind = current_acc_clause->getKind();
   std::vector<OpenACCExpressionItem> *current_expressions =
       current_acc_clause->getExpressions();
-  if (!current_expressions->empty()) {
+  if (current_expressions != NULL && !current_expressions->empty()) {
     if (clause_kind == ACCC_wait && current_expressions->size() > 1) {
       SgExprListExp *expr_list = SageBuilder::buildExprListExp();
       for (const auto &expr_item : *current_expressions) {
@@ -215,7 +215,7 @@ convertOpenACCClause(SgStatement *directive,
   OpenACCClauseKind clause_kind = current_acc_clause->getKind();
   std::vector<OpenACCExpressionItem> *current_expressions =
       current_acc_clause->getExpressions();
-  if (!current_expressions->empty()) {
+  if (current_expressions != NULL && !current_expressions->empty()) {
     for (const auto &expr_item : *current_expressions) {
       parseAccArraySection(current_OpenACCIR_to_SageIII,
                            current_acc_clause->getKind(), expr_item.text);
