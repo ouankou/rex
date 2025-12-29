@@ -69,7 +69,7 @@ markAsCompilerGenerated( SgNode* node )
                   {
                  // printf ("Warning: detected attempt to mark a template declaration in scope = %s as compiler generated! (will not be marked)\n",parentScope->class_name().c_str());
                  // templateDeclaration->get_file_info()->display("template declaration being marked as compiler generated");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 
                     markAsCompilerGenerated = false;
                   }

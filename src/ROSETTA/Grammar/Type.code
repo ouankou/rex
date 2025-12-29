@@ -872,17 +872,6 @@ HEADER_TYPE_COMPLEX_TYPE_START
           virtual void set_type_kind ( SgExpression* type_kind ) override;
 HEADER_TYPE_COMPLEX_TYPE_END
 
-// SK(08/20/2015): SgTypeTuple implementation
-HEADER_TYPE_TUPLE_START
-    SgTypePtrList& get_types();
-    const SgTypePtrList& get_types() const;
-
-    void prepend_type(SgType *what);
-    void append_type(SgType *what);
-
-HEADER_TYPE_TUPLE_END
-
-
 HEADER_POINTER_MEMBER_TYPE_START
        //! The API to this function has been changed to support returning a SgDeclarationStatement.
        // DQ (4/11/2019): This alllows it to support both the cases where a definition might not
@@ -956,11 +945,6 @@ HEADER_ARRAY_TYPE_START
 
 HEADER_ARRAY_TYPE_END
 
-// CR (2/19/2020): Added SgTypedFixed for Jovial. Don't really know what to do here.
-HEADER_TYPE_FIXED_TYPE_START
-      // SgName get_name() const;
-HEADER_TYPE_FIXED_TYPE_END
-
 // #########################################################
 // #########################################################
 //                      SOURCE CODE
@@ -990,7 +974,6 @@ $CLASSNAME::get_mangled (void) const
      ROSE_ASSERT(this != NULL);
 
   // DQ (10/4/2010): Modified to provide Fortran support (type_kind is a data member used for Fortran only, it is always NULL for other languages)
-  // CR (3/6/2020): Now type_kind is also used for Jovial.
      SgName name = "MANGLED_ID_STRING";
      if (get_type_kind() != NULL)
         {
@@ -1015,29 +998,6 @@ $CLASSNAME::get_mangled (void) const
                printf ("In get_mangled(void): (get_type_kind() != NULL): this = %p = %s MANGLED ID STRING = %s \n",this,this->class_name().c_str(),"MANGLED_ID_STRING");
 #endif
                name += SageInterface::generateUniqueName(get_type_kind(),false);
-             }
-        }
-
-  // CR (3/6/2020): This is a hack but I can't get SgTypeFixed::get_mangled() to work
-  // REMOVE_ME please!
-     if (isSgTypeFixed(this))
-        {
-          const SgTypeFixed* fixed_type = isSgTypeFixed(this);
-          if (fixed_type->get_scale() != NULL)
-             {
-               SgValueExp* value = isSgValueExp(fixed_type->get_scale());
-               if (value != NULL)
-                  {
-                    name += string("_") + value->get_constant_folded_value_as_string();
-                  }
-             }
-          if (fixed_type->get_fraction() != NULL)
-             {
-               SgValueExp* value = isSgValueExp(fixed_type->get_fraction());
-               if (value != NULL)
-                  {
-                    name += string("_") + value->get_constant_folded_value_as_string();
-                  }
              }
         }
 
@@ -1262,47 +1222,6 @@ SgTypeString::get_mangled (void) const
    }
 
 SOURCE_GET_MANGLED_STRING_TYPE_END
-
-// CR (3/6/2020): Added get_mangled for SgTypedFixed (primitive type in Jovial)
-SOURCE_GET_MANGLED_TYPE_FIXED_START
-
-SgName
-SgTypeFixed::get_mangled (void) const
-   {
-     ROSE_ASSERT(this != NULL);
-
-     SgName mangled_name = "MANGLED_ID_STRING";
-
-  // Note additional name mangling is being done here because I couldn't figure out how to add
-  // it to get_mangled directly because the class is a ROSETTA macro and doesn't have access to
-  // the scale or fraction information.
-     if (get_scale() != NULL)
-        {
-           SgValueExp* value = isSgValueExp(get_scale());
-           if (value != NULL)
-              {
-                 mangled_name += string("_") + value->get_constant_folded_value_as_string();
-                 std::cout << "--> added scale " << mangled_name << std::endl;
-              }
-        }
-     if (get_fraction() != NULL)
-        {
-           SgValueExp* value = isSgValueExp(get_fraction());
-           if (value != NULL)
-              {
-                 mangled_name += string("_") + value->get_constant_folded_value_as_string();
-                 std::cout << "--> added fraction " << mangled_name << std::endl;
-              }
-        }
-
-#if 1
-     printf ("LEAVING: In SgTypeFixed::get_mangled(): mangled_name = %s \n",mangled_name.str());
-#endif
-
-     return mangled_name;
-   }
-
-SOURCE_GET_MANGLED_TYPE_FIXED_END
 
 SOURCE_CONSTRUCTOR_START
 #if 0
@@ -2496,8 +2415,6 @@ SgType::containsInternalTypes()
   // communicates the type IR nodes that can hide internal types and thus may require a
   // nested traversal or a specialized recursive traversal.
 
-  // PP (2/17/22) added Ada types
-
      bool returnValue = false;
 
      if ( isSgPointerType(this) != NULL || isSgArrayType(this)    != NULL || isSgReferenceType(this) != NULL ||
@@ -3101,26 +3018,6 @@ SOURCE_TYPE_SIGNED_128BIT_TYPE_END
 
 SOURCE_TYPE_UNSIGNED_128BIT_TYPE_START
 SOURCE_TYPE_UNSIGNED_128BIT_TYPE_END
-
-SOURCE_TYPE_TUPLE_START
-
-SgTypePtrList&
-SgTypeTuple::get_types()
-   { return p_types; }
-
-const SgTypePtrList&
-SgTypeTuple::get_types() const
-   { return p_types; }
-
-void
-SgTypeTuple::append_type(SgType *what)
-   { what->set_parent(this); p_types.push_back(what); }
-
-void
-SgTypeTuple::prepend_type(SgType *what)
-   { what->set_parent(this); p_types.insert(p_types.begin(), what); }
-
-SOURCE_TYPE_TUPLE_END
 
 SOURCE_TYPE_LONG_DOUBLE_TYPE_START
 SOURCE_TYPE_LONG_DOUBLE_TYPE_END
@@ -4540,9 +4437,6 @@ SgModifierType::get_mangled (void) const
 
      const SgTypeModifier &          type_mod = get_typeModifier();
      const SgConstVolatileModifier & cv_mod   = type_mod.get_constVolatileModifier();
-
-     // PP (02/17/22) Add aliased information to mangled name
-     if (type_mod.isAliased())   mangled_name << "A";
 
      if (cv_mod.isConst())       mangled_name << "C";
      if (cv_mod.isVolatile())    mangled_name << "V";
@@ -8017,106 +7911,6 @@ SgArrayType::createType ( SgType* base_type, SgExpression* idx, SgExpression* op
    }
 
 SOURCE_CREATE_TYPE_FOR_ARRAY_TYPE_END
-
-// CR (2/19/2020): Added SgTypedFixed (primitive type in Jovial)
-SOURCE_CREATE_TYPE_FOR_TYPE_FIXED_START
-
-SgTypeFixed*
-SgTypeFixed::createType ( SgExpression* scale, SgExpression* fraction, SgExpression* optional_fortran_type_kind )
-   {
-  // There is no size (equivalent to Fortran kind) parameter for Jovial fixed type
-     ROSE_ASSERT(optional_fortran_type_kind == NULL);
-
-     SgTypeFixed* return_type = new SgTypeFixed(scale, fraction);
-     ROSE_ASSERT(return_type != NULL);
-
-     SgName name = return_type->get_mangled();
-
-  // Only look for pointers to type in the global type table.
-     SgType* t = get_globalTypeTable()->lookup_type(name);
-     if (t == NULL)
-        {
-           get_globalTypeTable()->insert_type(name,return_type);
-        }
-       else
-        {
-       // If it is already present in the type table then delete the type (so that it will remain unique).
-#if ALLOW_DELETE_OF_EXPLORATORY_NODE
-       // DQ (10/26/2016): Suppress the delete to test mergeTest_04 behavior.
-       // It might be that in the memory pool traversal we can't be allocating and deallocating IR nodes that we might be traversing.
-       // This is now fixed by making a copy of the nodes to be traversed with the visit function before calling the visit function on those IR nodes.
-          ROSE_ASSERT(t != return_type);
-          delete return_type;
-#endif
-          return_type = isSgTypeFixed(t);
-        }
-
-     return return_type;
-   }
-
-SOURCE_CREATE_TYPE_FOR_TYPE_FIXED_END
-
-
-// Rasmussen (2/19/2020): Added SgTypedFixed (primitive type in Jovial)
-SOURCE_CREATE_TYPE_FOR_TYPE_FIXED_START
-
-SgTypeFixed*
-SgTypeFixed::createType ( SgExpression* scale, SgExpression* fraction, SgExpression* optional_fortran_type_kind )
-   {
-#if 0
-     printf ("In SgTypeFixed::createType() \n");
-#endif
-
-  // There is size (equivalent to Fortran kind) parameter for Jovial fixed type
-     ROSE_ASSERT(optional_fortran_type_kind == NULL);
-
-     SgTypeFixed* returnType = new SgTypeFixed(scale, fraction);
-     ROSE_ASSERT(returnType != NULL);
-
-     SgName name = returnType->get_mangled();
-
-  // Only look for pointers to type in the global type table.
-     SgType* t = get_globalTypeTable()->lookup_type(name);
-
-#if 0
-     printf ("In SgTypeFixed::createType(): After get_globalTypeTable()->lookup_type(%s) t = %p \n",name.str(),t);
-#endif
-
-     if (t == NULL)
-        {
-#if 0
-           printf ("Mangled type name for $CLASSNAME = %s (does NOT exist in type table) interting it... \n",name.str());
-#endif
-           get_globalTypeTable()->insert_type(name,returnType);
-        }
-       else
-        {
-       // If it is already present in the type table then delete the type (so that it will remain unique).
-#if 0
-          printf ("Mangled type name for SgTypeFixed = %s (already exists in type table) t = %p returnType = %p \n",name.str(),t,returnType);
-#endif
-          ROSE_ASSERT(t != returnType);
-
-#if ALLOW_DELETE_OF_EXPLORATORY_NODE
-       // DQ (10/26/2016): Suppress the delete to test mergeTest_04 behavior.
-       // It might be that in the memory pool traversal we can't be allocating and deallocating IR nodes that we might be traversing.
-       // This is now fixed by making a copy of the nodes to be traversed with the visit function before calling the visit function on those IR nodes.
-          delete returnType;
-#endif
-          returnType = NULL;
-
-          returnType = isSgTypeFixed(t);
-        }
-
-#if 0
-     printf ("In SgTypeFixed::createType(): idx = %p \n",idx);
-#endif
-
-     return returnType;
-   }
-
-SOURCE_CREATE_TYPE_FOR_TYPE_FIXED_END
-
 
 SOURCE_CREATE_TYPE_FOR_STRING_TYPE_START
 

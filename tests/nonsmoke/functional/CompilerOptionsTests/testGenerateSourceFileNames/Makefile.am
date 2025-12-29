@@ -1,7 +1,5 @@
 include $(top_srcdir)/config/Makefile.for.ROSE.includes.and.libs
 
-if !OS_MACOSX
-
 TEST_TRANSLATOR = $(top_builddir)/tests/nonsmoke/functional/testTranslator $(ROSE_FLAGS)
 
 # DQ (11/5/2016): Adding support for address sanitizer (borrowing the VALGRIND variable to support 
@@ -44,15 +42,10 @@ conditional-check-local:
 	@echo "*  ROSE/tests/CompilerOptionTests/testGenerateSourceFileNames: ############# TESTS COMMENTED OUT ############   *"
 	@echo "*****************************************************************************************************************"
 
-else
-conditional-check-local:
-endif
-
 EXTRA_DIST = doesFilesExist.sh  filesNotExist.sh test1.C
 
 check-local: conditional-check-local
 
 clean-local:
 	rm -f *.o test1 *.s rm *.out rose_*.C *.C.pdf *.dot core local_test-isystemOption.C *.dump *.new
-
 

@@ -875,7 +875,7 @@ nc_set_log_level(int new_level);
 /* #ifdef _CRAYMPP */
 /*
  * Public interfaces to better support
- * CRAY multi-processor systems like T3E.
+ * legacy MPP systems.
  * A tip of the hat to NERSC.
  */
 /*

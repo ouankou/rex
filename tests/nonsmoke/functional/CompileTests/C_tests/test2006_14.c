@@ -21,11 +21,8 @@ It compiles fine with GCC.
 #endif
 
 #include <strings.h>
-#include <unistd.h>
-
-#if defined(J90)/*Cray*/ || defined(C90)/*Cray*/ || defined(IP)/*SGI*/
 #include <sys/types.h>
-#endif
+#include <unistd.h>
 
 // We don't include string.h directly but it
 // is included from the header files above.

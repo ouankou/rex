@@ -15,9 +15,6 @@
    "_Bool", "_Complex", "_Imaginary", "__I__", "__NAN__", "__INFINITY__",
 */
 
-// DQ (3/21/2009): The header file "complex.h" is not available in Cygwin.
-#if !defined(__CYGWIN__)
-
 #include <complex.h>
 
 int main (void)
@@ -43,7 +40,6 @@ int main (void)
   // (not clear if this is might just be the use of the commar operator).
   // note that the parenthesis are required.
      _Complex float x_with_real_and_imaginary_parts = (1.0,-1.0);
-#endif
 
 #if 1
      _Complex float an_i_new_syntax2 = __I__;
@@ -69,6 +65,5 @@ int main (void)
    }
 
 #endif
-
 
 

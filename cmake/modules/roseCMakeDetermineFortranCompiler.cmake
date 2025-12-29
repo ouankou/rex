@@ -34,15 +34,13 @@ IF(NOT CMAKE_Fortran_COMPILER)
     #  f77/f90/f95: generic compiler names
     #  g77: GNU Fortran 77 compiler
     #  gfortran: putative GNU Fortran 95+ compiler (in progress)
-    #  fort77: native F77 compiler under HP-UX (and some older Crays)
+    #  fort77: legacy F77 compiler name
     #  frt: Fujitsu F77 compiler
     #  pgf77/pgf90/pgf95: Portland Group F77/F90/F95 compilers
-    #  xlf/xlf90/xlf95: IBM (AIX) F77/F90/F95 compilers
+    #  xlf/xlf90/xlf95: IBM XL Fortran compilers
     #  lf95: Lahey-Fujitsu F95 compiler
-    #  fl32: Microsoft Fortran 77 "PowerStation" compiler
-    #  af77: Apogee F77 compiler for Intergraph hardware running CLIX
     #  epcf90: "Edinburgh Portable Compiler" F90
-    #  fort: Compaq (now HP) Fortran 90/95 compiler for Tru64 and Linux/Alpha
+    #  fort: legacy vendor Fortran compiler name
     #  ifc: Intel Fortran 95 compiler for Linux/x86
     #  efc: Intel Fortran 95 compiler for IA64
     #
@@ -57,7 +55,7 @@ IF(NOT CMAKE_Fortran_COMPILER)
       flang flang-new flang-20
 # Legacy ordering retained below (see note about duplication in CMake/Source/CMakeLists.txt).
       gfortran ifort ifc efc f95 pgf95 lf95 xlf95 fort gfortran-4 g95 f90
-      pgf90 xlf90 epcf90 fort77 frt pgf77 xlf fl32 af77 g77 f77
+      pgf90 xlf90 epcf90 fort77 frt pgf77 xlf g77 f77
       )
   ENDIF(CMAKE_Fortran_COMPILER_INIT)
 

@@ -512,13 +512,9 @@ SgGraph::display_node_index_pair_to_edge_multimap() const
 // #ifdef ROSE_USE_NEW_GRAPH_NODES
      rose_graph_integerpair_edge_hash_multimap::const_iterator i = p_node_index_pair_to_edge_multimap.begin();
      while (i != p_node_index_pair_to_edge_multimap.end()) {
-//#ifndef _MSCx_VER
-#if 1
-// tps (12/08/09) : Does not work under windows:  error C2039: 'first' : is not a member of 'System::UInt32'
-                        printf ("   node pair: (i->first.first = %d,i->first.second = %d) SgGraphEdge: i->second = %p = %d \n",i->first.first,i->first.second,i->second,i->second->get_index());
-#endif
-                  i++;
-  }
+          printf ("   node pair: (i->first.first = %d,i->first.second = %d) SgGraphEdge: i->second = %p = %d \n",i->first.first,i->first.second,i->second,i->second->get_index());
+          i++;
+     }
 // #endif
    }
 

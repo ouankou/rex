@@ -307,7 +307,7 @@ string affineInequalityFact::str(string indent)
         stringstream outs;
         
         outs << "affineInequalityFact:";
-        if(ineqs.size()>0); outs << "\n";
+        if(ineqs.size()>0) outs << "\n";
                 
         for(set<varAffineInequality>::const_iterator it = ineqs.begin(); it!=ineqs.end(); )
         {
@@ -324,7 +324,7 @@ string affineInequalityFact::str(string indent) const
         stringstream outs;
         
         outs << "affineInequalityFact:";
-        if(ineqs.size()>0); outs << "\n";
+        if(ineqs.size()>0) outs << "\n";
                 
         for(set<varAffineInequality>::const_iterator it = ineqs.begin(); it!=ineqs.end(); )
         {
@@ -776,7 +776,7 @@ string varAffineInequality::str(string indent) const
         //        <= -a'*a*y + c'*a
         else if(x==that.y && y==that.x)
         {
-                ROSE_ASSERT(0);
+                ROSE_ABORT();
                 // This is too complex for now
                 ineq.setToTop();
         }

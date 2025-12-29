@@ -29,7 +29,6 @@
  * Removed text after #endif, etc.
  *
  * Revision 2.1  1993/07/13  01:12:47  drach
- * Merged Sun, Unicos, SGI, and HP versions.
  *
 # Revision 2.3  1992/10/14  23:14:54  drach
 # Added putdic options
@@ -47,7 +46,7 @@
 
 **********************************************************************
 
-			DISCLAIMER
+                        DISCLAIMER
 
    This software was prepared as an account of work sponsored by an
    agency of the United States Government. Neither the United
@@ -65,7 +64,7 @@
    necessarily state or reflect those of the United States
    Government or the University of California, and shall not be
    used for advertising or product endorsement purposes.
-   
+
 **********************************************************************
 
 
@@ -94,20 +93,10 @@
 #define IDRS_EXTEND 3
 
 /*     MachineName */
-#define IDRS_SUN 1
-#define IDRS_CRAY 2
+#define IDRS_GENERIC 1
 
-#ifdef cray
-
-#define IDRS_MACHINE IDRS_CRAY
-#define IDRS_BYTES_PER_WORD 8
-#define IDRS_NSL 8			     /* Aslun flag: file is on NSL UniTree */
-#define IDRS_NOCOPY 16			     /* Aslun flag: do not copy dictionary from NSL on open */
-#else
-#define IDRS_MACHINE IDRS_SUN
+#define IDRS_MACHINE IDRS_GENERIC
 #define IDRS_BYTES_PER_WORD 4
-
-#endif
 
 /*     DRSVersion */
 /*     DRS_VERSION is current version */
@@ -129,14 +118,7 @@
 #define IDRS_TIMELEN 9
 #define IDRS_TYPELEN 9
 
-#ifdef cray
-
-#define IDRS_FILENAMELEN 248
-#else
 #define IDRS_FILENAMELEN 1024
-
-#endif
-
 
 typedef char DRS_SOURCE[IDRS_SOURCELEN];
 typedef char DRS_NAME[IDRS_NAMELEN];
@@ -146,8 +128,8 @@ typedef char DRS_DATE[IDRS_DATELEN];
 typedef char DRS_TIME[IDRS_TIMELEN];
 typedef char DRS_TYPE[IDRS_TYPELEN];
 typedef char DRS_FILENAME[IDRS_FILENAMELEN];
-            
-/*     Cray-to-IEEE translation parameters */
+
+/*     Legacy translation parameters */
 #define IDRS_LEFTHALFWORD 0
 #define IDRS_RIGHTHALFWORD 4
 
@@ -155,7 +137,6 @@ typedef char DRS_FILENAME[IDRS_FILENAMELEN];
 #define IDRS_I4 1
 #define IDRS_I8 2
 #define IDRS_IEEE_R4 3
-#define IDRS_CRAY_R8 4
 #define IDRS_ASCII 5
 #define IDRS_USER 6
 #ifndef __EXTENDED_DRS_DATATYPES
@@ -163,7 +144,6 @@ typedef char DRS_FILENAME[IDRS_FILENAMELEN];
 #define IDRS_I1 7
 #define IDRS_I2 8
 #define IDRS_IEEE_R8 9
-#define IDRS_CRAY_R16 10
 #define IDRS_IEEE_R16 11
 #endif
 
@@ -275,4 +255,3 @@ extern int drsl2ncp PROTO((char* infile, char* outfile));
 #endif
 
 #endif
-

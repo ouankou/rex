@@ -562,10 +562,10 @@ c---------------------------------------------------------------------
 C
 C  NOTE: this version of the multiply is actually (slightly: maybe %5) 
 C        faster on the sp2 on 16 nodes than is the unrolled-by-2 version 
-C        below.   On the Cray t3d, the reverse is true, i.e., the 
+C        below.   On some legacy systems, the reverse is true, i.e., the
 C        unrolled-by-two version is some 10% faster.  
 C        The unrolled-by-8 version below is significantly faster
-C        on the Cray t3d - overall speed of code is 1.5 times faster.
+C        on those systems - overall speed of code is 1.5 times faster.
 C
          do j=1,lastrow-firstrow+1
             sum = 0.d0
@@ -1102,6 +1102,5 @@ c---------------------------------------------------------------------
       return
       end
 c-------end   of vecset-----------------------------
-
 
 

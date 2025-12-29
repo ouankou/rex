@@ -464,7 +464,7 @@ isOverridingType( SgMemberFunctionType* derived,
   if (derived == base) return true;
 
   if (  derived->get_mfunc_specifier() != base->get_mfunc_specifier()
-     || derived->get_ref_qualifiers()  != base->get_ref_qualifiers()
+     //~ || derived->get_ref_qualifiers()  != base->get_ref_qualifiers()
      || derived->get_has_ellipses()    != base->get_has_ellipses()
      )
   {

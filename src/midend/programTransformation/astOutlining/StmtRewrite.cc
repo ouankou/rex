@@ -138,7 +138,7 @@ ASTtools::replaceStatement (SgStatement* s_cur, SgStatement* s_new)
   }
 #else
   cout<<"please use SageInterface::replaceStatement() instead"<<endl;
-  ROSE_ASSERT(false);
+  ROSE_ABORT();
 #endif  
 }
 
@@ -146,7 +146,7 @@ void  // move statements from src block to dest block // same semantics to SageI
 ASTtools::moveStatements (SgBasicBlock* src, SgBasicBlock* dest)
 {
   cerr<<"ASTtools::moveStatements(SgBasicBlock*src, SgBasicBlock* dest) is used. Please use SageInterface::moveStatementsBetweenBlocks(SgBasicBlock* src, SgBasicBlock* dest) instead."<<endl;
-  ROSE_ASSERT (false);
+  ROSE_ABORT();
   if (!src) return; // no work to do
   ROSE_ASSERT (src && dest);
 

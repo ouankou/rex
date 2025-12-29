@@ -175,9 +175,9 @@ size_t xomp_get_maxThreadBlocksPerMultiprocessor(int devID)
   else
   {
    printf("Error: xomp_get_maxThreadBlocksPerMultiprocessor(): unhandled Compute Capability numbers%d.%d \n", major, minor);
-   assert (false);
+   ROSE_ABORT();
   }
-  assert (false);
+  ROSE_ABORT();
   return 0;
 }
 
@@ -273,7 +273,7 @@ void* xomp_deviceMalloc(size_t size)
   else
   {
     fprintf(stderr, "Error: cudaMalloc() failed to allocate the requested %zu bytes!\n", size);
-    assert (false);
+    ROSE_ABORT();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -305,7 +305,7 @@ void * xomp_memcpyHostToDevice (void *dest, const void * src, size_t n)
   else
   {
     fprintf(stderr, "Error: cudaMemcpy() failed to copy memory from Host %p to Device %p, for %zu bytes!\n", src, dest, n);
-    assert (false);
+    ROSE_ABORT();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -323,7 +323,7 @@ void * xomp_memcpyDeviceToHost (void *dest, const void * src, size_t n)
   {
     fprintf(stderr, "Error: cudaMemcpy() failed to copy memory from Device %p to Host %p, for %zu bytes!\n", src, dest, n);
     fprintf(stderr, "Error message is =%s\n",cudaGetErrorString(rt));
-    assert (false);
+    ROSE_ABORT();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -425,7 +425,7 @@ void * xomp_memcpyDeviceToDevice (void *dest, const void * src, size_t n)
   else
   {
     fprintf(stderr, "Error: cudaMemcpy() failed to copy from Device %p to Device %p for requested %zu bytes!\n", src, dest, n);
-    assert (false);
+    ROSE_ABORT();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -438,7 +438,7 @@ void * xomp_memcpyHostToHost (void *dest, const void * src, size_t n) // same as
   else
   {
     fprintf(stderr, "Error: cudaMemcpy() failed to copy from Host %p to Host %p for requested %zu bytes!\n", src, dest, n);
-    assert (false);
+    ROSE_ABORT();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 
@@ -607,7 +607,7 @@ __device__ void xomp_inner_block_reduction_##dtype(dtype local_value, dtype * gr
               /* TODO: add assertion or set cudaError with an error code */ \
               /* cannot call a host function */ \
               /* fprintf (stderr, "Error. xomp_inner_block_reduction() unhandled reduction operation:%d\n",reduction_op); */ \
-              /* assert (false); */ \
+              /* ROSE_ABORT(); */ \
              } \
       } /* end switch */ \
     } \
@@ -625,7 +625,7 @@ __device__ void xomp_inner_block_reduction_##dtype(dtype local_value, dtype * gr
             /* TODO: add assertion or set cudaError with an error code */  \
             /* cannot call a host function */ \
             /* fprintf (stderr, "Error. xomp_inner_block_reduction() unhandled reduction operation:%d\n",reduction_op); */ \
-            /* assert (false); */ \
+            /* ROSE_ABORT(); */ \
           } \
       } /* end switch */ \
     } \

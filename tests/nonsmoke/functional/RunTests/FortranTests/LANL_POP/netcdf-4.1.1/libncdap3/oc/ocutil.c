@@ -6,10 +6,6 @@
 #include "ocinternal.h"
 #include "ocdebug.h"
 
-#ifdef WIN32
-#define snprintf _snprintf
-#endif
-
 /* Null terminate; element 0 is preferred form.*/
 static char* DDSdatamarks[] = {"Data:\n", "Data:\r\n",(char*)0};
 

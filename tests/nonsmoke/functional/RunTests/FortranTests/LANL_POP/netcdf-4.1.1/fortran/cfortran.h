@@ -25,62 +25,40 @@
       Oct 1997: Changed symbol name extname to appendus (PDW/HSTX)
                 (Conflicted with a common variable name in FTOOLS)
       Nov 1997: If g77Fortran defined, also define f2cFortran (PDW/HSTX)
-      Feb 1998: Let VMS see the NUM_ELEMS code. Lets programs treat
-                single strings as vectors with single elements
-      Nov 1999: If macintoxh defined, also define f2cfortran (for Mac OS-X)
-      Apr 2000: If WIN32 defined, also define PowerStationFortran and
-                VISUAL_CPLUSPLUS (Visual C++)
       Jun 2000: If __GNUC__ and linux defined, also define f2cFortran
                 (linux/gcc environment detection)
-      Apr 2002: If __CYGWIN__ is defined, also define f2cFortran
-      Nov 2002: If __APPLE__ defined, also define f2cfortran (for Mac OS-X)
 
       Nov 2003: If __INTEL_COMPILER or INTEL_COMPILER defined, also define
                 f2cFortran (KMCCARTY)
       Dec 2005: If f2cFortran is defined, enforce REAL functions in FORTRAN
                 returning "double" in C.  This was one of the items on
-		Burkhard's TODO list. (KMCCARTY)
+                Burkhard's TODO list. (KMCCARTY)
       Dec 2005: Modifications to support 8-byte integers. (MR)
-		USE AT YOUR OWN RISK!
+                USE AT YOUR OWN RISK!
       Feb 2006  Added logic to typedef the symbol 'LONGLONG' to an appropriate
                 intrinsic 8-byte integer datatype  (WDP)
       Apr 2006: Modifications to support gfortran (and g77 with -fno-f2c flag)
                 since by default it returns "float" for FORTRAN REAL function.
                 (KMCCARTY)
       May 2008: Revert commenting out of "extern" in COMMON_BLOCK_DEF macro.
-		Add braces around do-nothing ";" in 3 empty while blocks to
-		get rid of compiler warnings.  Thanks to ROOT developers
-		Jacek Holeczek and Rene Brun for these suggestions. (KMCCARTY)
+                Add braces around do-nothing ";" in 3 empty while blocks to
+                get rid of compiler warnings.  Thanks to ROOT developers
+                Jacek Holeczek and Rene Brun for these suggestions. (KMCCARTY)
       Aug 2008: If __GNUC__ is defined and no FORTRAN compiler is specified
-		via a #define or -D, default to gfortran behavior rather than
-		g77 behavior. (KMCCARTY)
+                via a #define or -D, default to gfortran behavior rather than
+                g77 behavior. (KMCCARTY)
  *******/
 
-/* 
-  Avoid symbols already used by compilers and system *.h:
-  __ - OSF1 zukal06 V3.0 347 alpha, cc -c -std1 cfortest.c
-
+/*
+  Avoid symbols already used by compilers and system headers.
 */
 
-/* 
+/*
    Determine what 8-byte integer data type is available.
-  'long long' is now supported by most compilers, but older
-  MS Visual C++ compilers before V7.0 use '__int64' instead. (WDP)
 */
 
-#ifndef LONGLONG_TYPE   /* this may have been previously defined */
-#if defined(_MSC_VER)   /* Microsoft Visual C++ */
-
-#if (_MSC_VER < 1300)   /* versions earlier than V7.0 do not have 'long long' */
-    typedef __int64 LONGLONG;
-#else                   /* newer versions do support 'long long' */
-    typedef long long LONGLONG; 
-#endif
-
-#else
-    typedef long long LONGLONG; 
-#endif
-
+#ifndef LONGLONG_TYPE /* this may have been previously defined */
+typedef long long LONGLONG;
 #define LONGLONG_TYPE
 #endif  
 
@@ -113,25 +91,9 @@
 #define _3(A,B,C) A/**/B/**/C
 #endif
 
-#if (defined(vax)&&defined(unix)) || (defined(__vax__)&&defined(__unix__))
-#define VAXUltrix
-#endif
-
-#include <stdio.h>     /* NULL [in all machines stdio.h]                      */
-#include <string.h>    /* strlen, memset, memcpy, memchr.                     */
-#if !( defined(VAXUltrix) || defined(sun) || (defined(apollo)&&!defined(__STDCPP__)) )
-#include <stdlib.h>    /* malloc,free                                         */
-#else
-#include <malloc.h>    /* Had to be removed for DomainOS h105 10.4 sys5.3 425t*/
-#ifdef apollo
-#define __CF__APOLLO67 /* __STDCPP__ is in Apollo 6.8 (i.e. ANSI) and onwards */
-#endif
-#endif
-
-#if !defined(__GNUC__) && !defined(__sun) && (defined(sun)||defined(VAXUltrix)||defined(lynx))
-#define __CF__KnR     /* Sun, LynxOS and VAX Ultrix cc only supports K&R.     */
-                      /* Manually define __CF__KnR for HP if desired/required.*/
-#endif                /*       i.e. We will generate Kernighan and Ritchie C. */
+#include <stdio.h>  /* NULL [in all machines stdio.h]                      */
+#include <stdlib.h> /* malloc,free                                         */
+#include <string.h> /* strlen, memset, memcpy, memchr.                     */
 /* Note that you may define __CF__KnR before #include cfortran.h, in order to
 generate K&R C instead of the default ANSI C. The differences are mainly in the
 function prototypes and declarations. All machines, except the Apollo, work
@@ -148,110 +110,10 @@ only C calling FORTRAN subroutines will work using K&R style.*/
 #define f2cFortran
 #endif
 
-/* VAX/VMS does not let us \-split long #if lines. */ 
-/* Split #if into 2 because some HP-UX can't handle long #if */
-#if !(defined(NAGf90Fortran)||defined(f2cFortran)||defined(hpuxFortran)||defined(apolloFortran)||defined(sunFortran)||defined(IBMR2Fortran)||defined(CRAYFortran))
-#if !(defined(mipsFortran)||defined(DECFortran)||defined(vmsFortran)||defined(CONVEXFortran)||defined(PowerStationFortran)||defined(AbsoftUNIXFortran)||defined(AbsoftProFortran)||defined(SXFortran))
-/* If no Fortran compiler is given, we choose one for the machines we know.   */
-#if defined(lynx) || defined(VAXUltrix)
-#define f2cFortran    /* Lynx:      Only support f2c at the moment.
-                         VAXUltrix: f77 behaves like f2c.
-                           Support f2c or f77 with gcc, vcc with f2c. 
-                           f77 with vcc works, missing link magic for f77 I/O.*/
-#endif
-/* 04/13/00 DM (CFITSIO): Add these lines for NT */
-/*   with PowerStationFortran and and Visual C++ */
-#if defined(WIN32) && !defined(__CYGWIN__)
-#define PowerStationFortran   
-#define VISUAL_CPLUSPLUS
-#endif
-#if defined(g77Fortran)                        /* 11/03/97 PDW (CFITSIO) */
+/* Default to gfortran conventions when no compiler is specified. */
+#if !defined(NAGf90Fortran) && !defined(f2cFortran) && !defined(gFortran)
 #define f2cFortran
-#endif
-#if        defined(__CYGWIN__)                 /* 04/11/02 LEB (CFITSIO) */
-#define       f2cFortran 
-#define	      gFortran /* 8/26/08 (KMCCARTY) */
-#endif
-#if        defined(__GNUC__) && defined(linux) /* 06/21/00 PDW (CFITSIO) */
-#define       f2cFortran 
-#define	      gFortran /* 8/26/08 (KMCCARTY) */
-#endif
-#if defined(macintosh)                         /* 11/1999 (CFITSIO) */
-#define f2cFortran
-#define	      gFortran /* 8/26/08 (KMCCARTY) */
-#endif
-#if defined(__APPLE__)                         /* 11/2002 (CFITSIO) */
-#define f2cFortran
-#define	      gFortran /* 8/26/08 (KMCCARTY) */
-#endif
-#if defined(__hpux)             /* 921107: Use __hpux instead of __hp9000s300 */
-#define       hpuxFortran       /*         Should also allow hp9000s7/800 use.*/
-#endif
-#if       defined(apollo)
-#define           apolloFortran /* __CF__APOLLO67 also defines some behavior. */
-#endif
-#if          defined(sun) || defined(__sun) 
-#define              sunFortran
-#endif
-#if       defined(_IBMR2)
-#define            IBMR2Fortran
-#endif
-#if        defined(_CRAY)
-#define             CRAYFortran /*       _CRAYT3E also defines some behavior. */
-#endif
-#if        defined(_SX)
-#define               SXFortran
-#endif
-#if         defined(mips) || defined(__mips)
-#define             mipsFortran
-#endif
-#if          defined(vms) || defined(__vms)
-#define              vmsFortran
-#endif
-#if      defined(__alpha) && defined(__unix__)
-#define              DECFortran
-#endif
-#if   defined(__convex__)
-#define           CONVEXFortran
-#endif
-#if   defined(VISUAL_CPLUSPLUS)
-#define     PowerStationFortran
-#endif
-#endif /* ...Fortran */
-#endif /* ...Fortran */
-
-/* Split #if into 2 because some HP-UX can't handle long #if */
-#if !(defined(NAGf90Fortran)||defined(f2cFortran)||defined(hpuxFortran)||defined(apolloFortran)||defined(sunFortran)||defined(IBMR2Fortran)||defined(CRAYFortran))
-#if !(defined(mipsFortran)||defined(DECFortran)||defined(vmsFortran)||defined(CONVEXFortran)||defined(PowerStationFortran)||defined(AbsoftUNIXFortran)||defined(AbsoftProFortran)||defined(SXFortran))
-/* If your compiler barfs on ' #error', replace # with the trigraph for #     */
- #error "cfortran.h:  Can't find your environment among:\
-    - GNU gcc (gfortran) on Linux.                                       \
-    - MIPS cc and f77 2.0. (e.g. Silicon Graphics, DECstations, ...)     \
-    - IBM AIX XL C and FORTRAN Compiler/6000 Version 01.01.0000.0000     \
-    - VAX   VMS CC 3.1 and FORTRAN 5.4.                                  \
-    - Alpha VMS DEC C 1.3 and DEC FORTRAN 6.0.                           \
-    - Alpha OSF DEC C and DEC Fortran for OSF/1 AXP Version 1.2          \
-    - Apollo DomainOS 10.2 (sys5.3) with f77 10.7 and cc 6.7.            \
-    - CRAY                                                               \
-    - NEC SX-4 SUPER-UX                                                  \
-    - CONVEX                                                             \
-    - Sun                                                                \
-    - PowerStation Fortran with Visual C++                               \
-    - HP9000s300/s700/s800 Latest test with: HP-UX A.08.07 A 9000/730    \
-    - LynxOS: cc or gcc with f2c.                                        \
-    - VAXUltrix: vcc,cc or gcc with f2c. gcc or cc with f77.             \
-    -            f77 with vcc works; but missing link magic for f77 I/O. \
-    -            NO fort. None of gcc, cc or vcc generate required names.\
-    - f2c/g77:   Use #define    f2cFortran, or cc -Df2cFortran           \
-    - gfortran:  Use #define    gFortran,   or cc -DgFortran             \
-                 (also necessary for g77 with -fno-f2c option)           \
-    - NAG f90: Use #define NAGf90Fortran, or cc -DNAGf90Fortran          \
-    - Absoft UNIX F77: Use #define AbsoftUNIXFortran or cc -DAbsoftUNIXFortran \
-    - Absoft Pro Fortran: Use #define AbsoftProFortran \
-    - Portland Group Fortran: Use #define pgiFortran \
-    - Intel Fortran: Use #define INTEL_COMPILER"
-/* Compiler must throw us out at this point! */
-#endif
+#define gFortran
 #endif
 
 
@@ -262,31 +124,8 @@ only C calling FORTRAN subroutines will work using K&R style.*/
 
 /* Throughout cfortran.h we use: UN = Uppercase Name.  LN = Lowercase Name.   */
 
-/* "extname" changed to "appendus" below (CFITSIO) */
-#if defined(f2cFortran) || defined(NAGf90Fortran) || defined(DECFortran) || defined(mipsFortran) || defined(apolloFortran) || defined(sunFortran) || defined(CONVEXFortran) || defined(SXFortran) || defined(appendus)
 #define CFC_(UN,LN)            _(LN,_)      /* Lowercase FORTRAN symbols.     */
-#define orig_fcallsc(UN,LN)    CFC_(UN,LN)
-#else 
-#if defined(CRAYFortran) || defined(PowerStationFortran) || defined(AbsoftProFortran)
-#ifdef _CRAY          /* (UN), not UN, circumvents CRAY preprocessor bug.     */
-#define CFC_(UN,LN)            (UN)         /* Uppercase FORTRAN symbols.     */
-#else                 /* At least VISUAL_CPLUSPLUS barfs on (UN), so need UN. */
-#define CFC_(UN,LN)            UN           /* Uppercase FORTRAN symbols.     */
-#endif
-#define orig_fcallsc(UN,LN)    CFC_(UN,LN)  /* CRAY insists on arg.'s here.   */
-#else  /* For following machines one may wish to change the fcallsc default.  */
-#define CF_SAME_NAMESPACE
-#ifdef vmsFortran
-#define CFC_(UN,LN)            LN           /* Either case FORTRAN symbols.   */
-     /* BUT we usually use UN for C macro to FORTRAN routines, so use LN here,*/
-     /* because VAX/VMS doesn't do recursive macros.                          */
-#define orig_fcallsc(UN,LN)    UN
-#else      /* HP-UX without +ppu or IBMR2 without -qextname. NOT reccomended. */
-#define CFC_(UN,LN)            LN           /* Lowercase FORTRAN symbols.     */
-#define orig_fcallsc(UN,LN)    CFC_(UN,LN)
-#endif /*  vmsFortran */
-#endif /* CRAYFortran PowerStationFortran */
-#endif /* ....Fortran */
+#define orig_fcallsc(UN, LN) CFC_(UN, LN)
 
 #define fcallsc(UN,LN)               orig_fcallsc(UN,LN)
 #define preface_fcallsc(P,p,UN,LN)   CFC_(_(P,UN),_(p,LN))
@@ -312,75 +151,18 @@ only C calling FORTRAN subroutines will work using K&R style.*/
 #endif  /* COMMON_BLOCK */
 
 #ifndef DOUBLE_PRECISION
-#if defined(CRAYFortran) && !defined(_CRAYT3E)
-#define DOUBLE_PRECISION long double
-#else
 #define DOUBLE_PRECISION double
-#endif
 #endif
 
 #ifndef FORTRAN_REAL
-#if defined(CRAYFortran) &&  defined(_CRAYT3E)
-#define FORTRAN_REAL double
-#else
 #define FORTRAN_REAL float
 #endif
-#endif
 
-#ifdef CRAYFortran
-#ifdef _CRAY
-#include <fortran.h>
-#else
-#include "fortran.h"  /* i.e. if crosscompiling assume user has file. */
-#endif
-#define FLOATVVVVVVV_cfPP (FORTRAN_REAL *)   /* Used for C calls FORTRAN.     */
-/* CRAY's double==float but CRAY says pointers to doubles and floats are diff.*/
-#define VOIDP  (void *)  /* When FORTRAN calls C, we don't know if C routine 
-                            arg.'s have been declared float *, or double *.   */
-#else
 #define FLOATVVVVVVV_cfPP
 #define VOIDP
-#endif
 
-#ifdef vmsFortran
-#if    defined(vms) || defined(__vms)
-#include <descrip.h>
-#else
-#include "descrip.h"  /* i.e. if crosscompiling assume user has file. */
-#endif
-#endif
-
-#ifdef sunFortran
-#if defined(sun) || defined(__sun)
-#include <math.h>     /* Sun's FLOATFUNCTIONTYPE, ASSIGNFLOAT, RETURNFLOAT.  */
-#else
-#include "math.h"     /* i.e. if crosscompiling assume user has file. */
-#endif
-/* At least starting with the default C compiler SC3.0.1 of SunOS 5.3,
- * FLOATFUNCTIONTYPE, ASSIGNFLOAT, RETURNFLOAT are not required and not in
- * <math.h>, since sun C no longer promotes C float return values to doubles.
- * Therefore, only use them if defined.
- * Even if gcc is being used, assume that it exhibits the Sun C compiler
- * behavior in order to be able to use *.o from the Sun C compiler.
- * i.e. If FLOATFUNCTIONTYPE, etc. are in math.h, they required by gcc.
- */
-#endif
-
-#ifndef apolloFortran
 #define COMMON_BLOCK_DEF(DEFINITION, NAME) extern DEFINITION NAME
 #define CF_NULL_PROTO
-#else                                         /* HP doesn't understand #elif. */
-/* Without ANSI prototyping, Apollo promotes float functions to double.    */
-/* Note that VAX/VMS, IBM, Mips choke on 'type function(...);' prototypes. */
-#define CF_NULL_PROTO ...
-#ifndef __CF__APOLLO67
-#define COMMON_BLOCK_DEF(DEFINITION, NAME) \
- DEFINITION NAME __attribute((__section(NAME)))
-#else
-#define COMMON_BLOCK_DEF(DEFINITION, NAME) \
- DEFINITION NAME #attribute[section(NAME)]
-#endif
-#endif
 
 #ifdef __cplusplus
 #undef  CF_NULL_PROTO
@@ -431,83 +213,14 @@ only C calling FORTRAN subroutines will work using K&R style.*/
 #define  firstindexlength(A) (sizeof(A[0])==1 ? 1 : (sizeof(A) / sizeof(A[0])) )
 #define secondindexlength(A) (sizeof(A[0])==1 ?      sizeof(A) : sizeof(A[0])  )
 
-/* Behavior of FORTRAN LOGICAL. All machines' LOGICAL is same size as C's int.
-Conversion is automatic except for arrays which require F2CLOGICALV/C2FLOGICALV.
-f2c, MIPS f77 [DECstation, SGI], VAX Ultrix f77,
-HP-UX f77                                        : as in C.
-VAX/VMS FORTRAN, VAX Ultrix fort,
-Absoft Unix Fortran, IBM RS/6000 xlf             : LS Bit = 0/1 = TRUE/FALSE.
-Apollo                                           : neg.   = TRUE, else FALSE. 
-[Apollo accepts -1 as TRUE for function values, but NOT all other neg. values.]
-[DECFortran for Ultrix RISC is also called f77 but is the same as VAX/VMS.]   
-[MIPS f77 treats .eqv./.neqv. as .eq./.ne. and hence requires LOGICAL_STRICT.]*/
-
-#if defined(NAGf90Fortran) || defined(f2cFortran) || defined(mipsFortran) || defined(PowerStationFortran) || defined(hpuxFortran800) || defined(AbsoftUNIXFortran) || defined(AbsoftProFortran) || defined(SXFortran)
-/* SX/PowerStationFortran have 0 and 1 defined, others are neither T nor F.   */
-/* hpuxFortran800 has 0 and 0x01000000 defined. Others are unknown.           */
-#define LOGICAL_STRICT      /* Other Fortran have .eqv./.neqv. == .eq./.ne.   */
-#endif
-
+/* Behavior of FORTRAN LOGICAL follows C conventions on Linux. */
 #define C2FLOGICALV(A,I) \
  do {int __i; for(__i=0;__i<I;__i++) A[__i]=C2FLOGICAL(A[__i]); } while (0)
 #define F2CLOGICALV(A,I) \
  do {int __i; for(__i=0;__i<I;__i++) A[__i]=F2CLOGICAL(A[__i]); } while (0)
 
-#if defined(apolloFortran)
-#define C2FLOGICAL(L) ((L)?-1:(L)&~((unsigned)1<<sizeof(int)*8-1))
-#define F2CLOGICAL(L) ((L)<0?(L):0) 
-#else
-#if defined(CRAYFortran)
-#define C2FLOGICAL(L) _btol(L)
-#define F2CLOGICAL(L) _ltob(&(L))     /* Strangely _ltob() expects a pointer. */
-#else
-#if defined(IBMR2Fortran) || defined(vmsFortran) || defined(DECFortran) || defined(AbsoftUNIXFortran)
-/* How come no AbsoftProFortran ? */
-#define C2FLOGICAL(L) ((L)?(L)|1:(L)&~(int)1)
-#define F2CLOGICAL(L) ((L)&1?(L):0)
-#else
-#if defined(CONVEXFortran)
-#define C2FLOGICAL(L) ((L) ? ~0 : 0 )
-#define F2CLOGICAL(L) (L)
-#else   /* others evaluate LOGICALs as for C. */
-#define C2FLOGICAL(L) (L)
-#define F2CLOGICAL(L) (L)
-#ifndef LOGICAL_STRICT
-#undef  C2FLOGICALV
-#undef  F2CLOGICALV
-#define C2FLOGICALV(A,I)
-#define F2CLOGICALV(A,I)
-#endif  /* LOGICAL_STRICT                     */
-#endif  /* CONVEXFortran || All Others        */
-#endif  /* IBMR2Fortran vmsFortran DECFortran AbsoftUNIXFortran */
-#endif  /* CRAYFortran                        */
-#endif  /* apolloFortran                      */
-
-/* 970514 - In addition to CRAY, there may be other machines
-            for which LOGICAL_STRICT makes no sense. */
-#if defined(LOGICAL_STRICT) && !defined(CRAYFortran)
-/* Force C2FLOGICAL to generate only the values for either .TRUE. or .FALSE.
-   SX/PowerStationFortran only have 0 and 1 defined.
-   Elsewhere, only needed if you want to do:
-     logical lvariable
-     if (lvariable .eq.  .true.) then       ! (1)
-   instead of
-     if (lvariable .eqv. .true.) then       ! (2)
-   - (1) may not even be FORTRAN/77 and that Apollo's f77 and IBM's xlf
-     refuse to compile (1), so you are probably well advised to stay away from 
-     (1) and from LOGICAL_STRICT.
-   - You pay a (slight) performance penalty for using LOGICAL_STRICT. */
-#undef  C2FLOGICAL
-#ifdef hpuxFortran800
-#define C2FLOGICAL(L) ((L)?0x01000000:0)
-#else
-#if defined(apolloFortran) || defined(vmsFortran) || defined(DECFortran)
-#define C2FLOGICAL(L) ((L)?-1:0) /* These machines use -1/0 for .true./.false.*/
-#else
-#define C2FLOGICAL(L) ((L)? 1:0) /* All others     use +1/0 for .true./.false.*/
-#endif
-#endif
-#endif /* LOGICAL_STRICT */
+#define C2FLOGICAL(L) ((L) ? 1 : 0)
+#define F2CLOGICAL(L) ((L) ? 1 : 0)
 
 /* Convert a vector of C strings into FORTRAN strings. */
 #ifndef __CF__KnR
@@ -611,7 +324,7 @@ typedef DSC$DESCRIPTOR_A(1) fstringvector;
                     *( (F).dsc$l_m[0]=(F).dsc$bounds[0].dsc$l_u=(ELEMNO)  ),   \
   (F).dsc$a_a0    =  ( (F).dsc$a_pointer=(C) ) - (F).dsc$w_length          ,(F))
 
-#endif      /* PDW: 2/10/98 (CFITSIO) -- Let VMS see NUM_ELEMS definitions */
+#endif /* NUM_ELEMS helper definitions */
 #define _NUM_ELEMS      -1
 #define _NUM_ELEM_ARG   -2
 #define NUM_ELEMS(A)    A,_NUM_ELEMS
@@ -722,8 +435,7 @@ return (int)num;
 #define    SHORT_cfVCF(A,B)
 
 /* 980416
-   Cast (void (*)(CF_NULL_PROTO)) causes SunOS CC 4.2 occasionally to barf,
-   while the following equivalent typedef is fine.
+   Some older compilers were sensitive to direct casts, so use a typedef.
    For consistency use the typedef on all machines.
  */
 typedef void (*cfCAST_FUNCTION)(CF_NULL_PROTO);
@@ -739,51 +451,33 @@ typedef void (*cfCAST_FUNCTION)(CF_NULL_PROTO);
 #define  INTVVVVVV_cfV(T,A,B,F)
 #define INTVVVVVVV_cfV(T,A,B,F)
 #define PINT_cfV(      T,A,B,F) _(T,_cfVP)(A,B)
-#define PVOID_cfV(     T,A,B,F)
-#if defined(apolloFortran) || defined(hpuxFortran800) || defined(AbsoftUNIXFortran) || defined(AbsoftProFortran)
-#define    ROUTINE_cfV(T,A,B,F) void (*B)(CF_NULL_PROTO) = (cfCAST_FUNCTION)A;
-#else
-#define    ROUTINE_cfV(T,A,B,F)
-#endif
-#define     SIMPLE_cfV(T,A,B,F)
-#ifdef vmsFortran
-#define     STRING_cfV(T,A,B,F) static struct {fstring f; unsigned clen;} B =  \
-                                       {{0,DSC$K_DTYPE_T,DSC$K_CLASS_S,NULL},0};
-#define    PSTRING_cfV(T,A,B,F) static fstring B={0,DSC$K_DTYPE_T,DSC$K_CLASS_S,NULL};
-#define    STRINGV_cfV(T,A,B,F) static fstringvector B =                       \
-  {sizeof(A),DSC$K_DTYPE_T,DSC$K_CLASS_A,NULL,0,0,{0,0,1,1,1},1,0,NULL,0,{1,0}};
-#define   PSTRINGV_cfV(T,A,B,F) static fstringvector B =                       \
-          {0,DSC$K_DTYPE_T,DSC$K_CLASS_A,NULL,0,0,{0,0,1,1,1},1,0,NULL,0,{1,0}};
-#else
+#define PVOID_cfV(T, A, B, F)
+#define ROUTINE_cfV(T, A, B, F)
+#define SIMPLE_cfV(T, A, B, F)
 #define     STRING_cfV(T,A,B,F) struct {unsigned int clen, flen; char *nombre;} B;
 #define    STRINGV_cfV(T,A,B,F) struct {char *s, *fs; unsigned flen; char *nombre;} B;
 #define    PSTRING_cfV(T,A,B,F) int     B;
-#define   PSTRINGV_cfV(T,A,B,F) struct{char *fs; unsigned int sizeofA,flen;}B;
-#endif
+#define PSTRINGV_cfV(T, A, B, F)                                               \
+  struct {                                                                     \
+    char *fs;                                                                  \
+    unsigned int sizeofA, flen;                                                \
+  } B;
 #define    ZTRINGV_cfV(T,A,B,F)  STRINGV_cfV(T,A,B,F)
 #define   PZTRINGV_cfV(T,A,B,F) PSTRINGV_cfV(T,A,B,F)
 
 /* Note that the actions of the A table were performed inside the AA table.
-   VAX Ultrix vcc, and HP-UX cc, didn't evaluate arguments to functions left to
-   right, so we had to split the original table into the current robust two. */
+   Some older compilers didn't evaluate arguments left-to-right, so we split
+   the original table into the current robust two. */
 #define ACF(NAME,TN,AI,I)      _(TN,_cfSTR)(4,A,NAME,I,AI,_(B,I),0)
 #define   DEFAULT_cfA(M,I,A,B)
 #define   LOGICAL_cfA(M,I,A,B) B=C2FLOGICAL(B);
 #define  PLOGICAL_cfA(M,I,A,B) A=C2FLOGICAL(A);
 #define    STRING_cfA(M,I,A,B)  STRING_cfC(M,I,A,B,sizeof(A))
-#define   PSTRING_cfA(M,I,A,B) PSTRING_cfC(M,I,A,B,sizeof(A))
-#ifdef vmsFortran
-#define  AATRINGV_cfA(    A,B, sA,filA,silA)                                   \
- initfstr(B,_cf_malloc((sA)-(filA)),(filA),(silA)-1),                          \
-          c2fstrv(A,B.dsc$a_pointer,(silA),(sA));
-#define APATRINGV_cfA(    A,B, sA,filA,silA)                                   \
- initfstr(B,A,(filA),(silA)-1),c2fstrv(A,A,(silA),(sA));
-#else
+#define PSTRING_cfA(M, I, A, B) PSTRING_cfC(M, I, A, B, sizeof(A))
 #define  AATRINGV_cfA(    A,B, sA,filA,silA)                                   \
      (B.s=_cf_malloc((sA)-(filA)),B.fs=c2fstrv(A,B.s,(B.flen=(silA)-1)+1,(sA)));
-#define APATRINGV_cfA(    A,B, sA,filA,silA)                                   \
- B.fs=c2fstrv(A,A,(B.flen=(silA)-1)+1,B.sizeofA=(sA));
-#endif
+#define APATRINGV_cfA(A, B, sA, filA, silA)                                    \
+  B.fs = c2fstrv(A, A, (B.flen = (silA) - 1) + 1, B.sizeofA = (sA));
 #define   STRINGV_cfA(M,I,A,B)                                                 \
     AATRINGV_cfA((char *)A,B,sizeof(A),firstindexlength(A),secondindexlength(A))
 #define  PSTRINGV_cfA(M,I,A,B)                                                 \
@@ -912,37 +606,19 @@ typedef void (*cfCAST_FUNCTION)(CF_NULL_PROTO);
 #define     STRING_cfN(T,A) fstring *             A
 #define    STRINGV_cfN(T,A) fstringvector *       A
 #else
-#ifdef CRAYFortran
-#define     STRING_cfN(T,A) _fcd                  A
-#define    STRINGV_cfN(T,A) _fcd                  A
-#else
 #define     STRING_cfN(T,A) char *                A
 #define    STRINGV_cfN(T,A) char *                A
 #endif
-#endif
-#define    PSTRING_cfN(T,A)   STRING_cfN(T,A) /* CRAY insists on arg.'s here. */
-#define   PNSTRING_cfN(T,A)   STRING_cfN(T,A) /* CRAY insists on arg.'s here. */
-#define   PPSTRING_cfN(T,A)   STRING_cfN(T,A) /* CRAY insists on arg.'s here. */
+#define PSTRING_cfN(T, A) STRING_cfN(T, A)
+#define PNSTRING_cfN(T, A) STRING_cfN(T, A)
+#define PPSTRING_cfN(T, A) STRING_cfN(T, A)
 #define   PSTRINGV_cfN(T,A)  STRINGV_cfN(T,A)
 #define    ZTRINGV_cfN(T,A)  STRINGV_cfN(T,A)
 #define   PZTRINGV_cfN(T,A) PSTRINGV_cfN(T,A)
 
-
-/* Apollo 6.7, CRAY, old Sun, VAX/Ultrix vcc/cc and new ultrix
-   can't hack more than 31 arg's.
-   e.g. ultrix >= 4.3 gives message:
-       zow35> cc -c -DDECFortran cfortest.c
-       cfe: Fatal: Out of memory: cfortest.c
-       zow35>
-   Old __hpux had the problem, but new 'HP-UX A.09.03 A 9000/735' is fine
-   if using -Aa, otherwise we have a problem.
- */
+/* Conservative limit for macro argument expansion. */
 #ifndef MAX_PREPRO_ARGS
-#if !defined(__GNUC__) && (defined(VAXUltrix) || defined(__CF__APOLLO67) || (defined(sun)&&!defined(__sun)) || defined(_CRAY) || defined(__ultrix__) || (defined(__hpux)&&defined(__CF__KnR)))
-#define MAX_PREPRO_ARGS 31
-#else
 #define MAX_PREPRO_ARGS 99
-#endif
 #endif
 
 #if defined(AbsoftUNIXFortran) || defined(AbsoftProFortran)
@@ -994,12 +670,12 @@ typedef void (*cfCAST_FUNCTION)(CF_NULL_PROTO);
  F(TM,22,1) F(TN,23,1) F(TO,24,1) F(TP,25,1) F(TQ,26,1) F(TR,27,1)             \
  M       CFARGT27S(S,T1,T2,T3,T4,T5,T6,T7,T8,T9,TA,TB,TC,TD,TE,TF,TG,TH,TI,TJ,TK,TL,TM,TN,TO,TP,TQ,TR)
 
-#if !(defined(PowerStationFortran)||defined(hpuxFortran800))
+#if 1
 /*  Old CFARGT14 -> CFARGT14FS as seen below, for Absoft cross-compile yields:
-      SunOS> cc -c -Xa -DAbsoftUNIXFortran c.c
+      cc -c -DAbsoftUNIXFortran c.c
       "c.c", line 406: warning: argument mismatch
-    Haven't checked if this is ANSI C or a SunOS bug. SunOS -Xs works ok.
-    Behavior is most clearly seen in example:
+    Haven't checked if this is ANSI C or a preprocessor bug. Behavior is
+    most clearly seen in example:
       #define A 1 , 2
       #define  C(X,Y,Z) x=X. y=Y. z=Z.
       #define  D(X,Y,Z) C(X,Y,Z)
@@ -1516,11 +1192,8 @@ do{VVCF(T1,A1,B1)  VVCF(T2,A2,B2)  VVCF(T3,A3,B3)  VVCF(T4,A4,B4)  VVCF(T5,A5,B5
 #define   SHORTVVVVVVV_cfINT(N,A,B,X,Y,Z) DOUBLEVVVVVVV_cfINT(N,A,B,X,Y,Z)
 #define          PVOID_cfINT(N,A,B,X,Y,Z) _(CFARGS,N)(A,B,B,X,Y,Z,0)
 #define        ROUTINE_cfINT(N,A,B,X,Y,Z)         PVOID_cfINT(N,A,B,X,Y,Z)
-/*CRAY coughs on the first,
-  i.e. the usual trouble of not being able to
-  define macros to macros with arguments. 
-  New ultrix is worse, it coughs on all such uses.
- */
+/* Some preprocessors have trouble with macros that expand to macros with
+   arguments; keep the indirection explicit. */
 /*#define       SIMPLE_cfINT                    PVOID_cfINT*/
 #define         SIMPLE_cfINT(N,A,B,X,Y,Z)         PVOID_cfINT(N,A,B,X,Y,Z)
 #define           VOID_cfINT(N,A,B,X,Y,Z)         PVOID_cfINT(N,A,B,X,Y,Z)
@@ -1824,10 +1497,9 @@ do{VVCF(T1,A1,B1)  VVCF(T2,A2,B2)  VVCF(T3,A3,B3)  VVCF(T4,A4,B4)  VVCF(T5,A5,B5
 #define   DOUBLE_cfCCC(A,B) &A
 #if !defined(__CF__KnR)
 #define    FLOAT_cfCCC(A,B) &A
-                               /* Although the VAX doesn't, at least the      */
-#else                          /* HP and K&R mips promote float arg.'s of     */
-#define    FLOAT_cfCCC(A,B) &B /* unprototyped functions to double. Cannot    */
-#endif                         /* use A here to pass the argument to FORTRAN. */
+#else                        /* Some K&R compilers promote float arguments  */
+#define FLOAT_cfCCC(A, B) &B /* of unprototyped functions to double.        */
+#endif                       /* Use B to pass the argument to FORTRAN.      */
 #define      INT_cfCCC(A,B) &A
 #define  LOGICAL_cfCCC(A,B) &A
 #define     LONG_cfCCC(A,B) &A
@@ -2045,11 +1717,7 @@ static _Icf(2,U,F,CFFUN(UN),0)() {_(F,_cfE) _Icf(3,GZ,F,UN,LN) ABSOFT_cf1(F));_(
 #define PNSTRING_cfQ(B) char *B=NULL;
 #define PPSTRING_cfQ(B)
 
-#ifdef     __sgi   /* Else SGI gives warning 182 contrary to its C LRM A.17.7 */
-#define ROUTINE_orig    *(void**)& 
-#else
-#define ROUTINE_orig     (void *)  
-#endif
+#define ROUTINE_orig (void *)
 
 #define ROUTINE_1     ROUTINE_orig   
 #define ROUTINE_2     ROUTINE_orig   

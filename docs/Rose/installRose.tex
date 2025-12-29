@@ -18,28 +18,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 
 See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_hardware.html
 
-%% ROSE has been mainly developed on Linux/Intel platforms. 
-%% The best supported platforms (including both 32-bit and 64-bit versions) include:
-%% \begin{itemize}
-%% \item Red Hat Enterprise Linux Client release 5.5 (Tikanga) or the
-%% open source equivalent, CentOS 5.5;  
-%% \item Mac OS X 10.6.
-%% \end{itemize}
-
-
-%% %We have addressed significant portability issues for ROSE, and routinely work on both 64
-%% %and 32 bit Linux and Mac OS X platforms. 
-%% Other Linux distributions should also work with ROSE.
-%% ROSE is being tested on about 20 different versions of Linux and Max OS X.
-%% %and works with most modern versions of the GNU compilers (4.0.x to 4.4.x
-%% %and Intel compilers. 
-%% See section ref{NMI\_testing} for current status. 
-%% %Recent work has ported ROSE to Cygwin (under Microsoft Windows; not
-%% %released generally at the moment) and.
-%% A port to Visual Studio is ongoing work.
-%% We will in time expand the portability of ROSE to other platforms as
-%% required.
-
 %% % Irrelevant details.
 %% %The ROSE C/C++ frontend, legacy frontend (software from the Edison Design Group),
 %% %is released as source code or binary; all other language support in
@@ -51,7 +29,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_hardware.html
 %% If you have a specific requirement for ROSE to be ported to a target platform
 %% please let us know.
 %% % At a later point we will address portability of ROSE onto other platforms:
-%% % mostly likely IBM AIX will be next (at some point).
 
 \subsubsection{Software Requirements}
 
@@ -64,15 +41,13 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %% % We use the GNU g++ compiler most often, but the Intel compiler (version 9.1) will also work.
 %% %Present development work is done on Intel/Linux platforms
 %% %using the GNU g++ 3.3.x, 3.4.x, and 4.x; and the Intel compilers.
-%% %using the GNU g++ 4.0.x to 4.4.x; and the Intel compilers.  Other people using ROSE
-%% %regularly use Mac OS X (but version 10.5, Leopard, or later).
+%% %using the GNU g++ 4.0.x to 4.4.x; and the Intel compilers.
 %% %GNU compilers older
 %% %than 3.3.x are not supported within the ROSE project, but in some cases they might work 
 %% %(g++ 3.2.x is likely to work, but g++ 2.96 will not work).
 %% 
 %% %{\bf Required Software:} \\
 %% %  The following software is required in order to build and use ROSE 
-%% %(see note about Mac OS X as well):
 %% \begin{itemize}
 %%    \item {\bf ROSE}: \\
 %%      There are three distributions of ROSE: the {\it Distribution Version} for users
@@ -136,15 +111,10 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%   your platform, if the configure script detects that your platform is supported. 
 %% 
 %%    \item {\bf g++} : version 4.0.x to 4.4.x (Support for GCC 4.5 and higher
-%%    versions is still ongoing work). For Mac OSX, please install XCode to
-%%    have g++. .
+%%    versions is still ongoing work).
 %% 
 %%    \item {\bf gfortran}: version 4.2.x to 4.4.x. Required if you want to
-%%    handle Fortran input. For Mac OS X 10.6, gfortran is not included in
-%%    XCode. We use Apple Xcode gcc-42 (gfortran) add-on provided at
-%%    \htmladdnormallink{http://r.research.att.com/tools/}{http://r.research.att.com/tools/}
-%%    to get gfortran installed. Be sure to use a package matching your gcc
-%%    build number there. 
+%%    handle Fortran input.
 %% 
 %%      versions) right now due to resource limits. 
 %% 
@@ -156,8 +126,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%      the GNU Coding Standards.
 %% 
 %%    \item {\bf GNU Libtool}: version $>=$1.5.6.  Needed \emph{ONLY} for development versions. 
-%%    For MAC OS X, the default libtool used is not a GNU libtool. Please
-%%    install GNU libtool and use it instead.
 %% 
 %%    \item {\bf GNU Flex}: Needed \emph{ONLY} for development versions. \\
 %%    Flex is used to generate annotation\/OpenMP directive scanners in ROSE. 
@@ -231,55 +199,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %% %\begin{itemize}
 %% %\end{itemize}
 %% 
-%% 
-%% \commentout{ % Liao 2/16/2011. I merged necessary Mac information into the
-%% %list above
-%% \paragraph{Mac OS X Support:}
-%%    It has been reported that our binary version of legacy frontend requires Mac OS X v10.5
-%% (which might make sense because we build it using Mac OS X v10.5.6).  More
-%% specifically there are unresolved references during linking ROSE applications with
-%% Mac OS X v10.4.11; the solution is to upgrade your Mac OS.  Note that Mac OS X 
-%% v10.4 is fairly old and so this should not be a problem on more modern Apple
-%% systems.  Our report about this fix also says that upgrading Xcode from version 2.4 
-%% to version 3.3, might be related.
-%% 
-%% Note that on our Mac OS X v10.5.6, all of our testing of ROSE uses the following packages:
-%% \begin{itemize}
-%% 
-%%    \item {\bf doxygen-1.5.6.src.tar.gz}:
-%%      Doxegen is required to build the documentation which is both distributed with ROSE
-%%      and make available via the ROSE web site.
-%% 
-%% 
-%%    \item {\bf latex2html-2002-2-1.tar.gz}:
-%%      Likely required by LaTeX (not required by ROSE as far as I know).
-%% 
-%%    \item {\bf texlive2007-live-20070212.iso.zip (LaTeX)}:
-%%      Reqired to build the latex documentation (ROSE Manual and ROSE Tutorial).
-%% 
-%%    \item {\bf fontconfig-2.6.0.tar.gz}:
-%%      Not clear that this is really required by ROSE.
-%% 
-%%    \item {\bf libtool-2.2.4.tar.bz2}:
-%%      Required to build ROSE (used in ROSE configuration management).
-%% \end{itemize}
-%% 
-%% As an extra detail, our .bashrc file for Mac OS X is:
-%% \begin{verbatim}
-%% export PATH="/Users/dquinlan/local/doxygen-install/bin:$PATH"
-%% export PATH="/Users/dquinlan/local/graphviz-install/bin:$PATH"
-%% export PATH="/Users/dquinlan/local/texlive-install/2007/bin/i386-darwin/:$PATH"
-%% export PATH="/Users/dquinlan/local/latex2html-install/bin/:$PATH"
-%% export PATH="/Users/dquinlan/local/ghostscript-install/bin/:$PATH"
-%% export PATH="/Users/dquinlan/local/fontconfig-install/bin/:$PATH"
-%% \end{verbatim}
-%% 
-%%    We are not significant Mac users, ROSE is primarily developed under Linux, 
-%% however we are particularly interested in supporting collaborators who are, 
-%% so Mac OS X support is important to us.  We would appreciate any help in making 
-%% sure that ROSE installs smoothly on both Mac OS X and Linux.
-%% 
-%% }
 %% 
 %% 
 %% % \subsection{Installation and Testing }
@@ -425,8 +344,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %%      the path in front of any other paths to avoid some old versions of
 %%            For example: For Linux, 
 %% 
-%%            For MAC OS X: 
-%%            {\tt export
 %% 
 %%      \item Run the {\tt configure} script. \\
 %%            Type {\tt \{AbsoluteOrRelativePath\}/configure
@@ -487,14 +404,11 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
    ROSE) indicates that your {\tt LD\_LIBRARY\_PATH} (environment variable) is not set to 
    {\tt LD\_LIBRARY\_PATH} is finally required and is not properly set.
 
- % Note from Matt (11/23/2008): Fixed it -- I just gave up one the libtool that came with
- % the apple dev tools and just built my own libtool in my home directory.  All is
- % compiling fine now.
    \item Message: {\tt Making all in libltdl \\
       make[2]: *** No rule to make target `all'.  Stop.} \\
    Run {\tt glibtoolize --force} to rebuild the libtool support in ROSE for your machine 
    at the top level of the source tree. If that does not work then give up on the libtool 
-   that came with the apple dev tools and just build your own libtool in your home directory.
+   that came with your system toolchain and just build your own libtool in your home directory.
 
    \item {\bf Don't build ROSE in the source tree, it is not tested often, but it should work.} \\
     Save yourself some trouble and build a separate compile tree.  This will also allow
@@ -911,20 +825,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 
 %%    These are comments collected from users about what 
 %% platform specific details they have discovered and shared.
-%% 
-%% \subsubsection{Mac OS X}
-%%    Mac OS X does not appear to come with wget and it should be installed
-%% separately so that ROSE can find and download it's required legacy frontend 
-%% binaries from the web (ROSE web site).
-%% 
-%% \paragraph{Mac OS X v10.5, Leopard}
-%%    We only build legacy frontend binaries for the default GNU 4.0 compiler.
-
-\paragraph{Mac OS X v10.6, Snow Leopard}
-   The non-standard STL hashmap implementation in Mac OS X v10.6 is broken and so ROSE
-can fail when using this OS.  We are working on a fix to use more standard
-features of STL.
-
 \subsubsection{Fedora 11}
    Some trivia with regard to libtool and building the SVN version of Rose:
 Fedora (11), at least, has a package, libtool-ltdl-devel that is needed (and separate from
@@ -943,105 +843,6 @@ The problem that this appears to fix is that on some machines the ROSE
 file AST\_FILE\_IO.C will fail with the error {\em memory limit error},
 this flag to the Intel compiler will fix this (the mcpcom process goes above 
 2.5g memory for this file).
-
-
-\subsection{Installing ROSE under Windows}
-% Notes by tps 11/9/2010
-Under Windows ROSE uses CMake. This is a project that is currently under development. As
-of November 2010 we are able to compile and link the src directory. We are also able to 
-run example programs that link against librose and execute the frontend and backend.
-{\em However, this is an internal capability and not available externally yet since we don't
-distribute the Windows generated legacy frontend binaries that would be required.  Also the
-current support for Windows is still incomplete, ROSE does not yet pass its internal
-tests under Windows.}
-
-\subsubsection{Setup}
-   Under Windows we use the following tools for compilation and development:
-
-\begin{itemize}
-\item Microsoft Visual Studio (9.0) : We currently use the Debug mode
-\item CMake 2.8.0 : One only needs to specify the source and build directory. All configuration options should be chosen correctly during makefile generation.
-\item Bison 2.4.1 : Used by ROSE
-\item Flex 2.5.4 : Used by ROSE
-\item Git 1.6.5 : We utilize the git shell for debugging and command line operations
-\end{itemize}
-
-In order to have Hudson test ROSE under Windows, we have additional tools set up:
-
-\begin{itemize}
-\item pegeant.exe : Allows to avoid entering ssh keys when connecting to git repository
-\item Hudson client : The client can be started through the web page. All that is required is a JVM runtime.
-\end{itemize}
-
-Currently under tux270-0 Flex, CMake, and Bison are installed under c:/ROSE. In
-addition, a ROSE test branch for ROSE-tps is installed in order to test ROSE under
-Windows locally without Hudson. The directory c:/tools contains pegeant.exe and other
-useful tools like plink.exe and puttygen.exe. See further notes below. Finally
-required ssh keys are located in c:/putty\_keys.
-
-\subsubsection{Debugging in VS 8}
-
-ROSE compiles now in release mode and debug mode. Debug mode was a challenge before because adding type-information (RTTI) caused the ROSE dll to be too large. 
-
-To use VS with debugging information right click on the ROSE.dll project and chose PROPERTIES/C-C++ INFO:
-
-\begin{itemize}
-    \item GENERAL: turn on Debugging Information Format (/Z7) - do not use DB
-    \item Language: Enable Runtime type information
-    \item Linker: Turn off incremental linking (slightly slower but takes too much memory) 
-\end{itemize}
-
-
-To test whether ROSE (src) compiles, links and a test program can run, modify the qualifiedName project in VS:
-\begin{itemize}
-    \item General and Language options as above
-    \item Debugging: enter the following under arguments ``--help'' 
-\end{itemize}
-
-This should allow you to run ``qualifiedName --help'' in debug mode and all options of rose are print out. 
-
-
-
-
-\subsubsection{Hudson specific}
-
-Setting up SSH keys on Windows Server (logged in as hudson-rose):
-
-\begin{itemize}
-\item Generate the keys:
-\begin{itemize}
-   \item Generate the keys, run ``plink -agent tux269'' and enter your
-      own login and then password. to login to tux269 and then exit.
-\end{itemize}
-
-\item Copy the keys onto tux270-0:
-\begin{itemize}
-   \item Double Click on ``My\_Computer'' icon
-   \item Goto C:, tools, pageant.exe
-   \item Double click on pageant.exe
-   \item Should display a computer with a hat on it in the bottom right 
-corner of the screen.
-   \item Right click on icon (of computer with a hat on it)
-   \item click on ``Add Key'' (this will cause a window to put up called ``Select Private Key File''
-   \item Goto ``My Computer TUX270-0'', ``Local Disk(C:)'', ``putty\_keys''
-   \item Click on file ``id\_rsa.ppk''  (this will load the private  key for 
-use by ssh).
-   \item Now try to run the git command: git clone ssh://hudson-rose@tux269/usr/casc/overture/ROSE/git/ROSE.git c:/ROSE/hudson/workspace/test-windows/label/windows-server
-\end{itemize}
-\end{itemize}
-
-Now in order to run a job from Hudson under Windows we need to start the client on the Windows side.
-Go to the hudson webpage and chose ``Manage Hudson''/''Manage Nodes''/''tux270'' and the start the JNLP agent.
-On the Windows side a client job is active now and whenever the Windows job on Hudson runs the client is activated.
-
-Currently Hudson is configured in a way that when a00-ROSE-from-scratch passes, a downstream is started and a01-ROSE-WINDOWS is started. The a01-ROSE-WINDOWS job will activate the client on tux270-0 and run the Windows test. In addition rose-hdsn-win-1 has been configured as a second Windows test node for Hudson.
-
-\subsubsection{Extending ROSE with the Windows SDK}
-
-Some functions used in Linux are not available under Windows - but they are available through the Windows SDK. For instance, realpath() in linux is available as PathCanonicalize() under Windows using the Windows SDK. You need to include : \#include ``Shlwapi.h'' and the following library into the project : shlwapi.lib (part of SDK). More information can be found at: http://msdn.microsoft.com/en-us/windows/bb980924.aspx http://en.wikipedia.org/wiki/Microsoft\_Windows\_SDK
-
-
-
 
 
 \subsection{Options for Static vs. Dynamic Linking of Executables}

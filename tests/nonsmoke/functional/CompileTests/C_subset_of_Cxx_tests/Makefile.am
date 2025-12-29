@@ -207,11 +207,6 @@ if USING_CLANG_COMPILER
 
 #      EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
 else
-if OS_MACOSX
-#      EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
-else
-#  EXAMPLE_TESTCODES_REQUIRED_TO_PASS += 
-
 # GNU compiler
 if ROSE_USING_GCC_VERSION_LATER_10_1
       # skip these codes when using GNU 10.1 (testing)
@@ -222,7 +217,6 @@ endif
     # The test codes fail CLANG 10.0
       EXAMPLE_TESTCODES_REQUIRED_TO_PASS += \
       test2005_111.C 
-endif
 endif
 endif
 
@@ -312,4 +306,3 @@ clean-local:
 
 status:
 	@$(MAKE) $(TEST_Source_passed)
-

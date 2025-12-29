@@ -83,7 +83,7 @@ char* PreprocessingInfo::packed()  const
      char* storePointer = returnData;
 
   // printf ("Error, need to get the info out of the SgFileInfo object! \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
   // DQ (2/28/2010): We do want to write out the data value for this since it has been
   // converted to a global index value in the AST file I/O.
@@ -133,7 +133,7 @@ void PreprocessingInfo::unpacked( char* storePointer )
 
   // std::cout << " in PreprocessingInfo::unpacked ... " << std::endl;
   // printf ("Error, need to build a new SgFileInfo object! \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 #if 0
   // DQ (2/28/2010): This is a pointer to an IR node and they are handled using global index values
   // that are mapped back to pointer values after reading. This will trash a properly set value!
@@ -1154,7 +1154,7 @@ ROSEAttributesList::setFileName(const string & fName)
   // triggering more comments and CPP directives to be saved as part of the file I/O
   // (serialization of the AST).
      printf ("In ROSEAttributesList::setFileName(): Verify that the filenames are correct for all comments in this list! \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
   // Error checking!
      vector<PreprocessingInfo*>::iterator i = attributeList.begin();
@@ -1898,24 +1898,6 @@ ROSEAttributesList::isCppDirective( const string & line, PreprocessingInfo::Dire
    }
 
 
-namespace
-{
-  /// returns a tuple<isComment, commentString, columnNumber>
-  ///   commentString and columnNumber are only valid iff isComment is true
-  std::tuple<bool, std::string, size_t>
-  extractAdaComment(const std::string& line)
-  {
-    size_t     pos = line.find("--");
-    const bool comment = pos != std::string::npos;
-
-    // prevents substr to throw an exception when pos == npos
-    if (!comment)
-      pos = line.size();
-
-    return std::make_tuple(comment, line.substr(pos), pos);
-  }
-}
-
 void
 ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST( const string & filename, ROSEAttributesList::languageTypeEnum languageType )
    {
@@ -1935,7 +1917,7 @@ ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST( const string
   // CPP directives should also be easier than a lot of other token recognition.
 
   // printf ("This function ROSEAttributesList::collectFreeFormatPreprocessorDirectivesAndCommentsForAS(): is not implemented yet! \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
      ROSE_ASSERT (this != NULL);
 
@@ -1944,7 +1926,7 @@ ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST( const string
   // Open file for reading line by line!
      const PreprocessingInfo::DirectiveType commentKind = PreprocessingInfo::FortranStyleComment;
      string line;
-     size_t colNumber = 0; // PP (04/13/21) column information, currently only used by Ada
+     size_t colNumber = 0;
 
 #if DEBUG_CPP_DIRECTIVE_COLLECTION
      printf ("In ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST: Opening file %s for reading comments and CPP directives \n",filename.c_str());
@@ -2049,7 +2031,7 @@ ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST( const string
                     if (isComment == true)
                        {
 #if 0
-                         printf ("This is a comment, set to PreprocessingInfo::FortranStyleComment (  PreprocessingInfo::AdaStyleComment)\n");
+                         printf ("This is a comment, set to PreprocessingInfo::FortranStyleComment\n");
 #endif
                          // PP was: cppDeclarationKind = PreprocessingInfo::FortranStyleComment;
                          cppDeclarationKind = commentKind;
@@ -2213,7 +2195,7 @@ ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST( const string
        else
         {
           cerr << "Warning: unable to open target source file: " << filename << "\n";
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
 #if 0
@@ -2642,7 +2624,7 @@ ROSEAttributesListContainer::display ( const string & label )
         }
 
   // printf ("ROSEAttributesListContainer::display() not implemented for new map datastructure \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 #endif
    }
 

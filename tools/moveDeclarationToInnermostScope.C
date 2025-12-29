@@ -609,6 +609,8 @@ GetSourceFilenamesFromCommandline(const std::vector<std::string>& argv)
 
 int main(int argc, char * argv[])
 {
+  ROSE_INITIALIZE;
+
   //! Command line process begin --------------------------
 
   vector <string> argvList (argv, argv + argc);
@@ -2607,4 +2609,3 @@ bool moveDeclarationToInnermostScope_v1(SgVariableDeclaration* declaration, std:
     return false;  
   }
 }
-

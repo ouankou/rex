@@ -1,7 +1,7 @@
 #ifndef ROSE_StringUtility_NumberToString_H
 #define ROSE_StringUtility_NumberToString_H
 
-#include <BitOps.h>
+#include <Rose/BitOps.h>
 #include <rosedll.h>
 
 #include <string>

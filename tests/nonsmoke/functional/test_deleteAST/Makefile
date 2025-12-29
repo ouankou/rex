@@ -34,7 +34,7 @@ ROSE_LIBS += $(ROSE_DWARF_LIBS_WITH_PATH)
 
 CC                    = gcc
 CXX                   = g++
-CPPFLAGS              =  -I/usr/apps/java/jdk1.5.0_11/include -I/usr/apps/java/jdk1.5.0_11/include/linux
+CPPFLAGS              =
 #CXXCPPFLAGS           = @CXXCPPFLAGS@
 CXXFLAGS              =
 LDFLAGS               = 

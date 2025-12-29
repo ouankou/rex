@@ -148,7 +148,7 @@ void* querySolverGrammarElementFromVariantVector ( SgNode * astNode, VariantVect
                             {
 #if 0
                               printf ("If we have not already seen this entry then we have to chase down possible nested types. \n");
-                           // ROSE_ASSERT(false);
+                           // ROSE_ABORT();
 #endif
 
                               Rose_STL_Container<SgType*> typeVector = type->getInternalTypes();

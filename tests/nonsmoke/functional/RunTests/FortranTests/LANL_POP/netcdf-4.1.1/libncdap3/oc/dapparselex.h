@@ -13,11 +13,6 @@
 #include "dap.tab.h"
 #endif
 
-#ifdef WIN32
-#define strcasecmp stricmp
-#define snprintf _snprintf
-#endif
-
 /* For consistency with Java parser */
 #define null NULL
 

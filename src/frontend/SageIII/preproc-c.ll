@@ -535,7 +535,7 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
              }
 #if 0
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
 #endif
         }
 #endif
@@ -758,12 +758,12 @@ BEGIN NORMAL;
 
 <NORMAL>\r\n { 
 #if DEBUG_LEX_PASS
-     printf("%s is a windows line ending token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
+     printf("%s is a CRLF line ending token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
 #endif
-  // DQ (11/29/2018): Adding windows line ending support to ROSE.
+  // DQ (11/29/2018): Adding CRLF line ending support to ROSE.
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
 
-  // DQ (12/26/2018): Adding windows line ending support to ROSE (increment the line count).
+  // DQ (12/26/2018): Adding CRLF line ending support to ROSE (increment the line count).
      preproc_line_num  += 1;
 
   // DQ (12/26/2018): This is reset in the add_token() function.
@@ -1334,9 +1334,9 @@ BEGIN NORMAL;
                 }
 
         /*Actions while in a MACRO.*/
-<MACRO>\\\r\n   {   // Escaped DOS line termination
+<MACRO>\\\r\n   {   // Escaped CRLF line termination
 #if DEBUG_LEX_PASS
-                    printf("%s is an escaped  windows line ending token in a CPP directive (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
+                    printf("%s is an escaped CRLF line ending token in a CPP directive (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
 #endif
                     macroString += yytext;
                     ++preproc_line_num;
@@ -1351,7 +1351,7 @@ BEGIN NORMAL;
 
 <MACRO>\n       {   // End of macro
 
-                 // DQ (12/30/2018): This is where windows line endings are normalized, and we need to supress this.
+                 // DQ (12/30/2018): This is where CRLF line endings are normalized, and we need to supress this.
                  // macroString = Rose::StringUtility::fixLineTermination(macroString + yytext);
                     macroString = macroString + yytext;
 
@@ -1368,7 +1368,7 @@ BEGIN NORMAL;
 
 <MACRO><<EOF>>  {   // End of macro
 
-                 // DQ (12/30/2018): This is where windows line endings are normalized, and we need to supress this.
+                 // DQ (12/30/2018): This is where CRLF line endings are normalized, and we need to supress this.
                  // macroString = Rose::StringUtility::fixLineTermination(macroString + yytext);
                     macroString = macroString + yytext;
 
@@ -1495,7 +1495,7 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
         {
        // DQ (5/22/2020): We need to allow this in the narrow case of a source file that is being copied.
           printf ("WARNING: fileName has been processed previously (allowed for source files being copied): %s \n",fileName.c_str());
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 #endif
 
@@ -1505,13 +1505,13 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
      if (counter > 10)
         {
           printf ("Exiting as a test while processing the 10th file \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
      counter++;
 #endif
 
   // printf ("Inside of lex file: getPreprocessorDirectives() \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
   // assert(input_token_stream_pointer == NULL);
      ROSE_token_stream_pointer = new LexTokenStreamType;
@@ -1594,8 +1594,8 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
                     printf ("Error: can't find the requested file (%s) \n",fileName.c_str());
 
                  // DQ (11/8/2019): Uncomment so that we can identify calling location where this is called with a filename that does not exist (see buildFile()).
-                 // ROSE_ASSERT(false);
-                    ROSE_ASSERT(false);
+                 // ROSE_ABORT();
+                    ROSE_ABORT();
                   }
              }
         }
@@ -1625,13 +1625,13 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
      if (preprocessorInfoList->getFileName() == "/home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test0/Simple.h")
         {
           printf ("Found specific file: tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test0/Simple.h \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
 #endif
 
 #if 0
      printf ("Exiting in getPreprocessorDirectives() \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
      return preprocessorInfoList;

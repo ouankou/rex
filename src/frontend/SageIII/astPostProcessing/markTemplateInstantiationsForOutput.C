@@ -618,7 +618,7 @@ ProcessMemberFunctionTemplateDeclarations ( set<SgDeclarationStatement*> setOfRe
                                                   printf ("nondefiningMemberFunctionInstantiation = %p \n",nondefiningMemberFunctionInstantiation);
 
                                                   printf ("If it was a defining declaration but the non-defining declaration doesn't exist then we have to build one \n");
-                                               // ROSE_ASSERT(false);
+                                               // ROSE_ABORT();
 #endif
                                                 }
                                            }
@@ -760,7 +760,7 @@ ProcessMemberFunctionTemplateDeclarations ( set<SgDeclarationStatement*> setOfRe
 #if 0
                                                // DQ (11/3/2007): Make this an error!
                                                   printf ("Warning: parent class of template instantiation member function not found in global scope! (Can't insert forward declaration of template member function specialization, but not required here, I think) \n");
-                                               // ROSE_ASSERT(false);
+                                               // ROSE_ABORT();
 #endif
                                                 }
                                            }
@@ -1524,7 +1524,7 @@ MarkTemplateInstantiationsForOutputSupport::evaluateSynthesizedAttribute (
                                                // These are the SgAggregateInitializer and SgAssignInitializer cases
 
                                                // printf ("Error: default in switch! \n");
-                                               // ROSE_ASSERT(false);
+                                               // ROSE_ABORT();
                                                 }
                                            }
 

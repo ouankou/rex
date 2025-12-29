@@ -1521,7 +1521,6 @@ SgName get_mangled_name() const override;
 
 HEADER_LIST_DECLARATIONS
 
-// Rasmussen (09/24/2020): Finishing implementation of SgFunctionParameterScope for Jovial
   protected:
     virtual bool replace_child(SgStatement *,SgStatement *, bool extractListFromBasicBlock = false) override;
     virtual bool insert_child(SgStatement*, SgStatement*, bool inFront = true, bool extractListFromBasicBlock = false) override;
@@ -2578,6 +2577,10 @@ HEADER_CONTINUE_STATEMENT_START
 HEADER_CONTINUE_STATEMENT_END
 
 
+HEADER_FORTRAN_CONTINUE_STATEMENT_START
+HEADER_FORTRAN_CONTINUE_STATEMENT_END
+
+
 HEADER_RETURN_STATEMENT_START
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
@@ -3013,7 +3016,7 @@ HEADER_TEMPLATE_VARIABLE_DECLARATION_STATEMENT_START
 
 // DQ (10/5/2014): This is now wrong because we now include rose_config.h before processing the
 // files generated from this file.  This change was required to support the ATerm libraries.
-// BH (11/13/2015) on windows this caused incosistent defines of this
+// BH (11/13/2015) this caused incosistent defines of this
 // so that it was not defined in the .h but used in the cxx file
      private:
        // DQ (12/29/2011): This is added to support backward compatability.
@@ -3028,7 +3031,7 @@ HEADER_TEMPLATE_TYPEDEF_DECLARATION_STATEMENT_START
 
        // DQ (12/28/2011): We need a constructor similar to the base class.
        // $CLASSNAME ( const SgName& var_name, SgType *type, SgInitializer *initializer );
-// BH (11/13/2015) on windows this caused incosistent defines of this
+// BH (11/13/2015) this caused incosistent defines of this
 // so that it was not defined in the .h but used in the cxx file
      private:
        // DQ (12/29/2011): This is added to support backward compatability.
@@ -3435,10 +3438,7 @@ HEADER_USE_STATEMENT_END
 
 HEADER_PROCESS_CONTROL_STATEMENT_START
      public:
-       // Rasmussen (4/26/2018): Added e_exit for Jovial (exit similar to Fortran stop)
-       // Rasmussen (5/21/2018): Added e_abort for Jovial
        // Rasmussen (7/11/2020): Renamed SgStopOrPauseStatement to SgProcessControlStatement
-       // PP (2/11/22): added requeue and requeue_with_abort to support Ada
           enum control_enum
              {
                e_unknown,
@@ -3446,6 +3446,7 @@ HEADER_PROCESS_CONTROL_STATEMENT_START
                e_stop,
                e_error_stop,
                e_exit,
+               e_fail_image,
                e_pause,
              };
 
@@ -4337,7 +4338,7 @@ SgStatement::get_scope(void) const
 
                     if (stmt->get_parent() == NULL)
                        {
-                         if (isSgEmptyDeclaration(stmt)) return NULL; // TODO dangling SgJovialCompoolStatement without parent AND SgEmptyDeclaration generate in "collect" phase of the translator but files are created later leading to pool traversal in post-processing.
+                         if (isSgEmptyDeclaration(stmt)) return NULL;
 
                          printf ("Error: NULL parent pointer not allowed for statement = %p = %s = %s \n",stmt,stmt->class_name().c_str(),SageInterface::get_name(stmt).c_str());
                          ROSE_ASSERT(stmt->get_file_info() != NULL);
@@ -5940,7 +5941,7 @@ SgScopeStatement::containsOnlyDeclarations() const
           case V_SgTemplateInstantiationDefn:
           case V_SgNamespaceDefinitionStatement:
           case V_SgGlobal:
-          case V_SgFunctionParameterScope: // Rasmussen (09/24/2020): finishing implementation for Jovial
+          case V_SgFunctionParameterScope:
           case V_SgModuleStatement:
           case V_SgDeclarationScope:
                returnValue = true;
@@ -6068,7 +6069,6 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
             // DQ (6/26/2013): Added test for if this statement already exists in the current scope (declaration list).
                ROSE_ASSERT(find(statementList.begin(),statementList.end(),newTransformationStatement) == statementList.end());
 
-            // if (statementList.size() == 0)
                if (statementList.empty() == true)
                   {
 #ifndef REMOVE_SET_PARENT_FUNCTION
@@ -6083,7 +6083,7 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
                   }
                  else
                   {
-                    ROSE_ASSERT ( *statement != NULL );
+                    ASSERT_not_null(*statement);
                     insert_statement (*statement,newTransformationStatement,inFront);
 
                  // DQ (6/24/2006): This should be set by the lower level insert_statement member function, verify this!
@@ -6109,7 +6109,6 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
                ROSE_ASSERT(find(declarationList.begin(),declarationList.end(),newDeclarationStatement) == declarationList.end());
 
                unsigned oldSize = declarationList.size();
-            // if (declarationList.size() == 0)
                if (declarationList.empty() == true)
                   {
                  // append_declaration(newTransformationStatement);
@@ -6154,7 +6153,6 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
             // DQ (6/26/2013): Added test for if this statement already exists in the current scope (declaration list).
                ROSE_ASSERT(find(statementList.begin(),statementList.end(),newTransformationStatement) == statementList.end());
 
-            // if (statementList.size() == 0)
                if (statementList.empty() == true)
                   {
 #ifndef REMOVE_SET_PARENT_FUNCTION
@@ -6169,7 +6167,7 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
                   }
                  else
                   {
-                    ROSE_ASSERT ( *statement != NULL );
+                    ASSERT_not_null(*statement);
 #if 0
                     printf ("In SgScopeStatement::insertStatementInScope(): calling insert_statement(): this = %p = %s \n",this,this->class_name().c_str());
                     SgFunctionDefinition* functionDefinition = isSgFunctionDefinition(this);
@@ -6186,7 +6184,6 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
                  // DQ (3/27/2021): The base class implementation of insert_statement is being called by mistake, use the this poitner explicitly.
                     insert_statement (*statement,newTransformationStatement,inFront);
 #else
-                 // this->insert_statement (*statement,newTransformationStatement,inFront);
                     if (functionDefinition != NULL)
                        {
 #if 1
@@ -6197,7 +6194,6 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
 #if 1
                          printf ("Skipping call to body->insert_statement \n");
 #endif
-                      // body->insert_statement (*statement,newTransformationStatement,inFront);
 
                       // DQ (3/28/2021): Set the parent to pass the assertion below.
                          newTransformationStatement->set_parent(body);
@@ -8624,9 +8620,6 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
                                      // default being reached (missed including this type previously).
                                         case V_SgArrayType:
 
-                                     // Rasmussen (2/18/2020): Added SgTypeFixed (primitive type in Jovial)
-                                        case V_SgTypeFixed:
-
                                      // DQ (2/28/2005): List of types used in compiling Kull
                                         case V_SgTypeChar:
                                         case V_SgTypeWchar:
@@ -10393,7 +10386,6 @@ SgFunctionParameterScope::post_construction_initialization()
   // Nothing to do here, but we need this function to be defined.
    }
 
-// Rasmussen (09/24/2020): Finishing implementation of SgParameterScope for Jovial
 SgName
 SgFunctionParameterScope::get_mangled_name(void) const
    {
@@ -10746,7 +10738,9 @@ SgFunctionDeclaration::get_mangled_name() const
 
      ROSE_ASSERT(this != NULL);
 
-#if 0
+#define DEBUG_FUNCDECL_MANGLED_NAMES 0
+
+#if DEBUG_FUNCDECL_MANGLED_NAMES
      printf ("In SgFunctionDeclaration::get_mangled_name() for this = %p = %s \n",this,this->class_name().c_str());
 #endif
 
@@ -10756,14 +10750,14 @@ SgFunctionDeclaration::get_mangled_name() const
   // if (i != p_globalMangledNameMap.end())
      std::string mangledNameString = SageInterface::getMangledNameFromCache(const_cast<SgFunctionDeclaration*>(this));
 
-#if 0
+#if DEBUG_FUNCDECL_MANGLED_NAMES
      printf ("Inside of SgFunctionDeclaration::get_mangled_name(): mangledNameString.empty() = %s \n",mangledNameString.empty() ? "true" : "false");
 #endif
 
      if (mangledNameString.empty() == false)
         {
        // return i->second.c_str();
-#if 0
+#if DEBUG_FUNCDECL_MANGLED_NAMES
           printf ("RETURN FROM CACHE: Inside of SgFunctionDeclaration::get_mangled_name(): mangledNameString = %s \n",mangledNameString.c_str());
 #endif
           return mangledNameString;
@@ -10798,16 +10792,29 @@ SgFunctionDeclaration::get_mangled_name() const
                type_name = "defaultFunctionTypeName";
              }
 
+#if DEBUG_FUNCDECL_MANGLED_NAMES
+          printf ("Inside of SgFunctionDeclaration::get_mangled_name(): type_name     = %s \n",type_name.str());
+          printf ("Inside of SgFunctionDeclaration::get_mangled_name(): ret_type_name = %s \n",ret_type_name.str());
+#endif
        // This function's name, transformed.
           SgName func_name = mangleFunctionName (get_name(), ret_type_name);
 
+#if DEBUG_FUNCDECL_MANGLED_NAMES
+          printf ("Inside of SgFunctionDeclaration::get_mangled_name(): func_name = %s \n",func_name.str());
+#endif
        // Compute the name qualification, if any.
           const SgScopeStatement* par_scope = get_scope();
           SgName scope_name = mangleQualifiers(par_scope);
 
+#if DEBUG_FUNCDECL_MANGLED_NAMES
+          printf ("Inside of SgFunctionDeclaration::get_mangled_name(): scope_name = %s \n",scope_name.str());
+#endif
        // Compute the translation unit qualification, if any.
           string xlation_unit_qual = mangleTranslationUnitQualifiers(this);
 
+#if DEBUG_FUNCDECL_MANGLED_NAMES
+          printf ("Inside of SgFunctionDeclaration::get_mangled_name(): xlation_unit_qual = %s \n",xlation_unit_qual.c_str());
+#endif
        // Compute the final mangled name.
           mangledName = joinMangledQualifiers (scope_name, xlation_unit_qual + func_name + "__" + type_name);
 
@@ -10816,13 +10823,20 @@ SgFunctionDeclaration::get_mangled_name() const
        //    typedef struct Domain_s { } Domain_t;
        //    int foo ( Domain_s *domain);
        //    int foo ( Domain_t *domain);
-#if 0
+#if DEBUG_FUNCDECL_MANGLED_NAMES
           printf ("Inside of SgFunctionDeclaration::get_mangled_name(): mangledName = %s \n",mangledName.str());
 #endif
-#if 1
+// DQ (6/22/2022): Leave this call to SageInterface::addMangledNameToCache(), but remove 
+// the addition of the parameter list's mangled name as a suffix since it is redundant,
+// and the resetting of the updated mangled name in the globalMangledNameMap.
+// #if 1
        // printf ("TEMP: Inside of SgFunctionDeclaration::get_mangled_name(): mangledName = %s \n",mangledName.str());
           mangledName = SageInterface::addMangledNameToCache(const_cast<SgFunctionDeclaration*>(this),mangledName);
        // printf ("TEMP RETURN: Inside of SgFunctionDeclaration::get_mangled_name(): mangledName = %s \n",mangledName.str());
+
+#if 0
+       // DQ (6/21/2022): This redundantly appends the mangled name for the parameter to the end and
+       // results in a compressed version of the string that is not translation unit independent.
 
        // This results in infinite recursion in the evaluation.
           SgFunctionParameterList* parameterList = this->get_parameterList();
@@ -10830,12 +10844,19 @@ SgFunctionDeclaration::get_mangled_name() const
           SgName mangledParameterList = parameterList->get_mangled_name();
           mangledName += "__" + mangledParameterList;
        // printf ("Inside of SgFunctionDeclaration::get_mangled_name(): after adding parameter list mangledName = %s \n",mangledName.str());
-#endif
+// #endif
 
+#if 0
+          printf ("Inside of SgFunctionDeclaration::get_mangled_name(): mangledParameterList = %s \n",mangledParameterList.str());
+#endif
        // Reset the mangled name in the map.
        // p_globalMangledNameMap[function] = mangledName;
           SgNode::get_globalMangledNameMap()[const_cast<SgFunctionDeclaration*>(this)] = mangledName;
+#endif
 
+#if DEBUG_FUNCDECL_MANGLED_NAMES
+          printf ("Inside of SgFunctionDeclaration::get_mangled_name(): after resetting mangledName = %s \n",mangledName.str());
+#endif
        // DQ (7/24/2012): Added test for template brackets that are caught later in AstConsistencyTests.
        // Make sure that there is no template specific syntax included in the mangled name
           string mangled_name = mangledName;
@@ -10845,7 +10866,7 @@ SgFunctionDeclaration::get_mangled_name() const
              }
           ROSE_ASSERT(mangled_name.find('<') == string::npos);
 
-#if 0
+#if DEBUG_FUNCDECL_MANGLED_NAMES
        // DQ (7/24/2012): Output the mangled name being generated for debugging.
           printf (">>>>>>>>>> SgFunctionDeclaration::get_mangled_name(): returning mangledName = %s \n",mangledName.str());
 #endif
@@ -12722,7 +12743,6 @@ SgVariableDeclaration::insert_variable( const SgInitializedNamePtrList::iterator
   // DQ (6/1/2004): Can we assert this
      ROSE_ASSERT (*new_item == what);
 
-  // this->setNameOnly();
      return new_item;
    }
 #endif
@@ -15044,34 +15064,23 @@ SgLabelStatement::get_name() const
      return get_label();
    }
 
-// DQ (2/6/2007): Get the associated symbol from the symbol table in the stored scope
 SgSymbol*
 SgLabelStatement::get_symbol_from_symbol_table() const
    {
-#if 0
-     ROSE_ASSERT(get_scope() != NULL);
-     ROSE_ASSERT(get_scope()->get_symbol_table() != NULL);
-     return get_scope()->get_symbol_table()->find(this);
-#else
-  // DQ (12/9/2007): The label's symbol is stored in the function definition, so we need to look for it there.
-  // printf ("What is the scope of a label:%s scope = %s \n",get_name().str(),get_scope()->class_name().c_str());
-  // SgFunctionDeclaration* functionDeclaration = TransformationSupport::getFunctionDeclaration(this);
      SgScopeStatement* tempScope = get_scope();
-     ROSE_ASSERT(tempScope != NULL);
-     while (tempScope != NULL && isSgFunctionDefinition(tempScope) == NULL)
+     ASSERT_not_null(tempScope);
+     while (tempScope != nullptr && isSgFunctionDefinition(tempScope) == nullptr)
         {
           tempScope = tempScope->get_scope();
         }
 
      SgFunctionDefinition* functionDefinition = isSgFunctionDefinition(tempScope);
-     if (functionDefinition == NULL)
+     if (functionDefinition == nullptr)
         {
-          printf ("Labels are stored in the SgFunctionDefinition (function scope), could not locate associated function scope \n");
+          std::cerr << "[WARN]: Labels are stored in the SgFunctionDefinition (function scope), could not locate associated function scope\n";
         }
-     ROSE_ASSERT(functionDefinition != NULL);
-  // return functionDefinition->get_symbol_table()->find(this);
+     ASSERT_not_null(functionDefinition);
      return functionDefinition->find_symbol_from_declaration(this);
-#endif
    }
 
 SgType*
@@ -15664,6 +15673,15 @@ SgContinueStmt::post_construction_initialization()
 
 SOURCE_CONTINUE_STATEMENT_END
 
+
+SOURCE_FORTRAN_CONTINUE_STATEMENT_START
+
+void
+SgFortranContinueStmt::post_construction_initialization()
+   {
+   }
+
+SOURCE_FORTRAN_CONTINUE_STATEMENT_END
 
 SOURCE_RETURN_STATEMENT_START
 

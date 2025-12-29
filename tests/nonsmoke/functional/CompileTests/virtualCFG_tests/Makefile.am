@@ -178,7 +178,6 @@ X.C
 FAILING_CXX_TESTS = \
    test2013_60.C
 
-# JJW 5-22-2008 This test is not portable to Mac OS X
 # test2006_44.C
 
 ###########################################################################
@@ -583,8 +582,8 @@ endif # USING_GNU_COMPILER
 	@echo "******************************************************************************************************"
 
 clean-local:
-#	DQ (8/25/2011): This gnerates a command line that is too long for OSX and ends in an error.
-#	The problem appears to be ther there are too many *.dot files...(with long names).
+#	DQ (8/25/2011): This generates a command line that is too long on some systems and ends in an error.
+#	The problem appears to be that there are too many *.dot files (with long names).
 #	rm -f *.o *.temp.c *-o *.mod *.dot
 	rm -f *.o 
 	rm -f *.temp.c 
@@ -596,4 +595,3 @@ clean-local:
 	rm -rf QMTest
 	rm -fr rose-output*
 	rm -f *.passed *.failed *.err *.out
-

@@ -101,7 +101,6 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
   if test x$ac_success = xno; then
     dnl HP's aCC needs +std=c++11 according to:
     dnl http://h21007.www2.hp.com/portal/download/files/unprot/aCxx/PDF_Release_Notes/769149-001.pdf
-    dnl Cray's crayCC needs "-h std=c++11"
     for alternative in ${ax_cxx_compile_alternatives}; do
       for switch in -std=c++${alternative} +std=c++${alternative} "-h std=c++${alternative}"; do
         cachevar=AS_TR_SH([ax_cv_cxx_compile_cxx$1_$switch])

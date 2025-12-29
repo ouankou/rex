@@ -281,10 +281,10 @@ struct NC {
 #  define LOCKNUMREC_LOCK	1
 #  define LOCKNUMREC_SERVING	2
 #  define LOCKNUMREC_BASEPE	3
-	/* Used on Cray T3E MPP to maintain the
-	 * integrity of numrecs for an unlimited dimension
-	 */
-	ushmem_t lock[LOCKNUMREC_DIM];
+  /* Used on legacy MPP systems to maintain the
+   * integrity of numrecs for an unlimited dimension
+   */
+  ushmem_t lock[LOCKNUMREC_DIM];
 #endif
 };
 

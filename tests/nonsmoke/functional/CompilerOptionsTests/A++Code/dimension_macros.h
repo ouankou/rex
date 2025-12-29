@@ -15,8 +15,8 @@
 // (the max number of dimensions you have provided in the macros below).  This 
 // example is for 8D arrays.
 
-// An alternate version of the macros are provided for the SUN4 machines since their 
-// compilers // are superior
+// An alternate version of the macros is provided for legacy compilers that do
+// not accept initializer-list syntax used below.
 
 // GNU will build intances of all objects in the header file if this
 // is not specified.  The result is very large object files (too many symbols)
@@ -27,13 +27,6 @@
 #endif
 
 #include <max_array_dim.h>
-
-#if defined(CRAY) || defined(SGI)
-// These machines' compilers do not understand the initialization list used in the 
-// macros below so we have provide alternative difinitions of these macros for these 
-// machines.
-#define USE_SLOWER_DIMENSION_MACRO
-#endif
 
 #define IO_CONTROL_STRING_MACRO_INTEGER "%d, %d, %d, %d, %d, %d"
 #define ARRAY_TO_LIST_MACRO(A) A[0],A[1],A[2],A[3],A[4],A[5]
@@ -79,7 +72,8 @@
      Integer_List [4] = m; \
      Integer_List [5] = n; 
 #else
-// We previously used "const" for this array but several compilers (SOLARIS) complained
+// We previously used "const" for this array but several legacy compilers
+// complained
 #define INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO \
      Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List = \
      { i, j, k, l, m, n};
@@ -97,7 +91,8 @@
      Integer_List [4] = m; \
      Integer_List [5] = n; 
 #else
-// We previously used "const" for this array but several compilers (SOLARIS) complained
+// We previously used "const" for this array but several legacy compilers
+// complained
 #define USER_DEFINED_INTEGER_ARGUMENTS_TO_INTEGER_LIST_MACRO(i,j,k,l,m,n,o,p) \
      Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List = \
      { i, j, k, l, m, n};
@@ -278,6 +273,3 @@
      SerialArray->Array_Descriptor.Array_View_Pointer5 = \
         SerialArray->Array_Descriptor.Array_Data+ \
 	SerialArray->Array_Descriptor.Array_Domain.Scalar_Offset[5];
-
-
-

@@ -40,18 +40,10 @@
 
 #include <utility>  // For ::std::pair.
 
-// The compiler used in Symbian has a bug that prevents us from declaring the
-// tuple template as a friend (it complains that tuple is redefined).  This
-// hack bypasses the bug by declaring the members that should otherwise be
-// private as public.
-// Sun Studio versions < 12 also have the above bug.
-#if defined(__SYMBIAN32__) || (defined(__SUNPRO_CC) && __SUNPRO_CC < 0x590)
-# define GTEST_DECLARE_TUPLE_AS_FRIEND_ public:
-#else
-# define GTEST_DECLARE_TUPLE_AS_FRIEND_ \
-    template <GTEST_10_TYPENAMES_(U)> friend class tuple; \
-   private:
-#endif
+#define GTEST_DECLARE_TUPLE_AS_FRIEND_                                         \
+  template <GTEST_10_TYPENAMES_(U)> friend class tuple;                        \
+                                                                               \
+private:
 
 // GTEST_n_TUPLE_(T) is the type of an n-tuple.
 #define GTEST_0_TUPLE_(T) tuple<>

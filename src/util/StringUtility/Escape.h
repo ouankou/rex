@@ -51,11 +51,6 @@ ROSE_UTIL_API std::string cUnescape(const std::string&);
  *  Assumes that the context is outside of any quoting and possibly adds quotes. */
 ROSE_UTIL_API std::string bourneEscape(const std::string&);
 
-/** Escapes characters that are special to YAML strings.
- *
- *  Assumes that the context is outside of any quoting and possibly adds quotes. */
-ROSE_UTIL_API std::string yamlEscape(const std::string&);
-
 /** Escapes characters that are special in CSV tables.
  *
  *  Assumes that the context is outside of any quoting and possib9 adds quotes. See RFC 4180 for details. */

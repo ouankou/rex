@@ -264,13 +264,13 @@ AttachPreprocessingInfoTreeTrav::handleBracedScopes(SgLocatedNode* previousLocat
 #endif
 #if 0
                printf ("Exiting as a test! \n");
-               ROSE_ASSERT(false);
+               ROSE_ABORT();
 #endif
              }
 
 #if 0
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
 #endif
         }
 #else
@@ -949,7 +949,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
   //    {
   // if (filePreprocInfo != NULL)
 
-     // PP (04/13/21) adding ada support
+     // PP (04/13/21) limit preprocessing for non-Fortran sources
      const bool isFortran = sourceFile->get_Fortran_only();
 
      if ((isFortran == false) && (filePreprocInfo != NULL) )
@@ -984,7 +984,9 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
             // LexTokenStreamTypePointer token_list_pointer = returnListOfAttributes->get_rawTokenStream();
             // ROSE_ASSERT(token_list_pointer != NULL);
                ROSE_ASSERT(returnListOfAttributes->get_rawTokenStream() != NULL);
-
+#if 0
+               printf ("In buildCommentAndCppDirectiveList(): returnListOfAttributes->get_rawTokenStream()->size() = %zu \n",returnListOfAttributes->get_rawTokenStream()->size());
+#endif
 #if 0
             // This is a list<stream_element*> type.
                LexTokenStreamType & tokenList = *(returnListOfAttributes->get_rawTokenStream());
@@ -1031,7 +1033,10 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
             // LexTokenStreamType* tokenStream = getTokenStream(sourceFile);
                LexTokenStreamType* tokenStream = returnListOfAttributes->get_rawTokenStream();
                ROSE_ASSERT(tokenStream != NULL);
-
+#if 0
+               printf ("In buildCommentAndCppDirectiveList(): returnListOfAttributes->get_rawTokenStream()->size() = %zu \n",returnListOfAttributes->get_rawTokenStream()->size());
+               printf ("In buildCommentAndCppDirectiveList(): tokenStream->size() = %zu \n",tokenStream->size());
+#endif
             // Set this value so that we can generate unique keys for any interval.
             // I think that a better mehcanism for generating unique keys would be possible (but this is simple).
                TokenStreamSequenceToNodeMapping::tokenStreamSize = tokenStream->size();
@@ -1052,6 +1057,10 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
                   }
 
             // return tokenVector;
+#endif
+
+#if 0
+               printf ("tokenVector.size() = %zu \n",tokenVector.size());
 #endif
 
 #if 0
@@ -1167,7 +1176,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
                     if (sourceFile->getFileName() == "/home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test17/Simple.h")
                        {
                          printf ("Exiting as a test! \n");
-                         ROSE_ASSERT(false);
+                         ROSE_ABORT();
                        }
 #endif
                   }
@@ -1178,7 +1187,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
 #endif
 #if 0
                     printf ("Exiting as a test! \n");
-                    ROSE_ASSERT(false);
+                    ROSE_ABORT();
 #endif
                   }
 #if 0
@@ -1189,14 +1198,14 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
                if (sourceFile->getFileName() == "/home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test0/Simple.h")
                   {
                     printf ("Found specific file: tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test0/Simple.h \n");
-                    ROSE_ASSERT(false);
+                    ROSE_ABORT();
                   }
 #endif
 
 #if 0
             // DQ (1/17/2021): Debugging how the token stream is supported.
                printf ("Exiting as a test! \n");
-               ROSE_ASSERT(false);
+               ROSE_ABORT();
 #endif
 
 #if 0
@@ -1254,7 +1263,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
 
 #if 0
                printf ("Exiting as a test! \n");
-               ROSE_ASSERT(false);
+               ROSE_ABORT();
 #endif
              }
             else
@@ -1272,7 +1281,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
 #if 1
             // DQ (1/9/2021): Debugging.
                printf ("Exiting as a test! \n");
-               ROSE_ASSERT(false);
+               ROSE_ABORT();
 #endif
              }
         }
@@ -1603,7 +1612,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
      if (sourceFile->getFileName() == "/home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test17/Simple.h")
         {
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
         }
 #endif
 
@@ -3315,7 +3324,7 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
                                            ( previousStatement, lineOfClosingBrace, PreprocessingInfo::after, reset_start_index, currentListOfAttributes );
 #if 0
                                         printf ("Exiting as a test! \n");
-                                        ROSE_ASSERT(false);
+                                        ROSE_ABORT();
 #endif
                                       }
 
@@ -3330,7 +3339,7 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
                                  }
 #if 0
                               printf ("Exiting as a test! \n");
-                              ROSE_ASSERT(false);
+                              ROSE_ABORT();
 #endif
                             }
 #else

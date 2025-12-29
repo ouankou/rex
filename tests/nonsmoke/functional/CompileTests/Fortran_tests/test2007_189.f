@@ -9167,7 +9167,7 @@ C
 C
 C     97/10/23  Joseph Grcar
 C
-C        Works on SGI.
+C        Works on legacy toolchains.
 C
 C///////////////////////////////////////////////////////////////////////
 
@@ -9394,4 +9394,3 @@ C***FIRST EXECUTABLE STATEMENT  SDAWTS
       RETURN
 C------END OF SUBROUTINE SDAWTS------------------------------------
       END
-

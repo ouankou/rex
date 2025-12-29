@@ -18,11 +18,7 @@ typedef double real8 ;
 #  ifdef USE_FOR_64BIT
 #     define    ALE_INT64 USE_FOR_64BIT
 #  else
-#     ifdef _WIN32
-#        define ALE_INT64 __int64
-#     else
-#        define ALE_INT64 int64
-#     endif
+#     define ALE_INT64 long long
 #  endif
 #endif
 
@@ -103,4 +99,3 @@ void bug3(globalID len) {
    for (globalID i=globalID(0); i<len; ++i) {
    }
 }
-

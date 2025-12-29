@@ -24,11 +24,11 @@
 
 # define A_INIT(lhs, type, ndims, rhs)
 	
-#else 
+#else
 /*
  * We do have to copy the arguments to switch from 'long'
- * to 'size_t' or 'ptrdiff_t'. In my tests on an SGI,
- * any additional cost was lost in measurement variation.
+ * to 'size_t' or 'ptrdiff_t'. In testing, any additional
+ * cost was lost in measurement variation.
  */
 
 # include "onstack.h"

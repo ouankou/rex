@@ -3,11 +3,6 @@
 load_lib gfortran-dg.exp
 load_lib gcc-gdb-test.exp
 
-# Disable on darwin until radr://7264615 is resolved.
-if { [istarget *-*-darwin*] } {
-  return
-}
-
 dg-init
 
 global GDB

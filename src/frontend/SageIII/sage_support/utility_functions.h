@@ -256,6 +256,8 @@ public:
 
   // DQ (10/29/2018): Build a map for the unparser to use to locate SgIncludeFile IR nodes.
      extern std::map<std::string, SgIncludeFile*> includeFileMapForUnparsing;
+  // DQ (5/27/2021): Track first/last statements per scope per source file.
+     extern std::map<SgSourceFile*,std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> > > firstAndLastStatementsToUnparseInScopeMapBySourceFile;
 
      // DQ (11/25/2020): These are the boolean variables that are computed in
      // the function compute_language_kind() and inlined via the

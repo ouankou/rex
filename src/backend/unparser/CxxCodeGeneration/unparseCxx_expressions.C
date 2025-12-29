@@ -419,7 +419,7 @@ Unparse_ExprStmt::unparseLambdaExpression(SgExpression* expr, SgUnparse_Info& in
         {
        // DQ (4/7/2018): cleanup output spew (review with Liao).
        // cout<<"Warning in Unparse_ExprStmt::unparseLambdaExpression().  Unparse_Info has skipBaseType() set. Unset it now."<<endl;
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 
           info.unset_SkipBaseType ();
         }
@@ -700,7 +700,7 @@ Unparse_ExprStmt::unparseTemplateParameterValue(SgExpression* expr, SgUnparse_In
 
   // printf ("Skip unparsing this IR node until we understand it's connection to C++11 better. \n");
   // DQ (8/23/2012): Uncommented to support debugging.
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
    }
 
 
@@ -1979,7 +1979,7 @@ Unparse_ExprStmt::unparseTemplateArgument(SgTemplateArgument* templateArgument, 
 #if 0
                     printf ("In unparseTemplateArgument(): case SgTemplateArgument::type_argument: This is now filtered and out to simplify template list processing \n");
 #endif
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 #if 0
                     printf ("In unparseTemplateArgument(): case SgTemplateArgument::type_argument: found anonymous class (returning) \n");
 #endif
@@ -2994,7 +2994,7 @@ Unparse_ExprStmt::unparseFuncRefSupport(SgExpression* expr, SgUnparse_Info& info
 
        // printf ("ERROR: In unparseType(): nodeReferenceToFunction = NULL \n");
        // printf ("WARNING: In unparseType(): nodeReferenceToFunction = NULL \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
 #if DEBUG_FUNCTION_REFERENCE_SUPPORT || 0
@@ -3617,7 +3617,7 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
 
        // printf ("ERROR: In unparseType(): nodeReferenceToFunction = NULL \n");
        // printf ("WARNING: In unparseType(): nodeReferenceToFunction = NULL \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
 #if 0
@@ -5000,7 +5000,7 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
      if (uses_operator_syntax == true)
         {
           printf ("In Unparse_ExprStmt::unparseFuncCall(): Detected uses_operator_syntax == true \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 #endif
 
@@ -5237,12 +5237,12 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
              {
 #if DEBUG_FUNCTION_CALL
                printf ("rhs was not a SgMemberFunctionRefExp \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 #endif
              }
 
        // printf ("Exiting as part of testing \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
 #if DEBUG_FUNCTION_CALL
@@ -5924,7 +5924,7 @@ Unparse_ExprStmt::unparseFoldExpression(SgExpression* expr, SgUnparse_Info& info
      curprint(operator_token.c_str());
      curprint(" ... ");
 
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
   // unparseAddOp(expr,info);
    }
 
@@ -8044,7 +8044,7 @@ Unparse_ExprStmt::trimOutputOfFunctionNameForGNU_4_5_VersionAndLater(SgName name
         {
        // Now check the version of the identified GNU g++ compiler.
           if ((usingGxx && ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 && BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER >= 5) || (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4)))
-          // DQ (3/31/2020): bug fix for use of ROSE on older clang version 6 (on my Mac)
+          // DQ (3/31/2020): bug fix for use of ROSE on older clang version 6.
           // || (usingClang && (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 7)))
              || (usingClang && (BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER >= 6)))
              {
@@ -8960,7 +8960,7 @@ Unparse_ExprStmt::unparseAssnInit(SgExpression* expr, SgUnparse_Info& info)
              {
             // temp backup in case operand is not a cast!
                printf ("Warning: unparseAssnInit operand was marked as implicit cast but didn't contain a SgCastExp object \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
                unparseExpression(assn_init->get_operand(), info);
              }

@@ -70,6 +70,7 @@ class UnparseFormat
      int chars_on_line; //! the number of characters printed on the line
      int stmtIndent;    //! the current indent for statement
      int linewrap;      //! the characters allowed perline before wraping the line
+     int userDefinedLinewrap; //! user defined line wrap; used to restore linewrap when needed.
      int indentstop;    //! the number of spaces allowed for indenting
      SgLocatedNode* prevnode; //! The previous SgLocatedNode unparsed
      std::ostream* os;  //! the directed output for the current file
@@ -147,7 +148,6 @@ class UnparseFormat
    };
 
 #endif
-
 
 
 

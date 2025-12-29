@@ -61,7 +61,7 @@ AstSharedMemoryParallelProcessingSynchronizationInfo::AstSharedMemoryParallelPro
   // suggested it would avoid a possible double free error.  I agree.
 
   // printf ("Error: it is an error to call this copy constructor. \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
   // Note that this is the behavior of the implicit copy constructor, but likely not what we want.
   // These are pointers (copy only the pointer value to perserve the implicit copy constructor semantics)

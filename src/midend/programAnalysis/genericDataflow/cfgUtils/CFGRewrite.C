@@ -1008,7 +1008,7 @@ void cfgRWTransaction::do_insertAfter(SgNode* n, SgExpression* newNode)
                 // insert after SgVariableDeclaration
                 /*** THIS DOESN'T WORK RIGHT NOW BECAUSE EACH isSgInitializedName THAT HAS A isSgAssignInitializer
                  *** ACTUALLY GETS TWO DataflowNodes *** /
-                ROSE_ASSERT(false);*/
+                ROSE_ABORT();*/
                 myStatementInsert(isSgVariableDeclaration(parent), convertToStatement(newNode), false, true);
         }
         else if(isSgStatement(n))
@@ -1093,7 +1093,7 @@ void replaceStatementByBlockAfter(SgStatement* stmt, SgStatement* newNode) {
                 } else ROSE_ASSERT (!"Bad n.getNode() case");
         } else {
                 cerr << "insertAfter: bad position " << n.toString() << " to insert " << newNode->unparseToString() << endl;
-                ROSE_ASSERT (false);
+                ROSE_ABORT();
         }
 }*/
 

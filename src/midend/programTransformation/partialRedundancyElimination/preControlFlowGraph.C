@@ -207,7 +207,7 @@ PRE::addEdgeInsertionPoints(PRE::ControlFlowGraph& controlflow)
 
                                    case V_SgForStatement:
                                      // printf ("Found a SgForStatement, but this should not be used now the the conditional test is a SgExprStatement \n");
-                                     // ROSE_ASSERT(false);
+                                     // ROSE_ABORT();
                                         if (kind == CFGConfig::COND_TRUE)
                                            {
                                              insert_point = make_pair(isSgForStatement(expr_parent)->get_loop_body(), true);

@@ -275,7 +275,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
 
                  // printf ("case V_SgClassDefinition: scopeStatement = %p = %s classDeclaration = %p = %s \n",scopeStatement,scopeStatement->class_name().c_str(),classDeclaration,classDeclaration->class_name().c_str());
                  // printf ("case V_SgClassDefinition: key = %s additionalSuffix = %s \n",key.c_str(),additionalSuffix.c_str());
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 
                     break;
                   }
@@ -409,7 +409,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
 
                     additionalSuffix = "__function_parameter_list";
 
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                     ROSE_ASSERT(key.empty() == false);
 #if 0
                     if (key.empty() == true)
@@ -533,7 +533,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                           key += "__uniqueValue_" + declarationPositionString(enumDeclaration) + "_";
 
                       // printf ("Found an un-named class = %p = %s key = %s \n",enumDeclaration,enumDeclaration->get_name().str(),key.c_str());
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                        }
 
                  // printf ("case V_SgEnumDeclaration: key = %s \n",key.c_str());
@@ -904,7 +904,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                          key += "__uniqueValue_" + declarationPositionString(classDeclaration) + "_";
 
                       // printf ("Found an un-named class = %p = %s key = %s \n",classDeclaration,classDeclaration->get_name().str(),key.c_str());
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                        }
                       else
                        {
@@ -918,7 +918,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                     if (key.find_first_of("__generatedName_") != string::npos)
                        {
                          printf ("In generateUniqueName(): Found a generated name as a key = %s (reset to empty string) \n",key.c_str());
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                          key = "";
                        }
 #endif
@@ -1696,7 +1696,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                                  }
 #else
                            // printf ("     templateArgument->get_expression() = %s \n",templateArgument->get_expression()->unparseToString().c_str());
-                           // ROSE_ASSERT(false);
+                           // ROSE_ABORT();
                               key += StringUtility::numberToString(node);
 #endif
                               break;

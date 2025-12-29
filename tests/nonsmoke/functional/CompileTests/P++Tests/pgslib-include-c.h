@@ -35,7 +35,8 @@ struct {
   int   io_pe;
 } pgslib_state;
 #else
-/* Quinlan (9/24/2000) Added here to avoid redeclaration of pgslib_state (prevents warning on SGI at link time) */
+/* Quinlan (9/24/2000) Added here to avoid redeclaration of pgslib_state
+ * (prevents warning on legacy toolchains) */
 struct pgslib_state_struct {
   int   initialized;
   int   nPE;

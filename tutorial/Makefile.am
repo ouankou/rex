@@ -111,13 +111,8 @@ NOINST_TUTORIAL_EXAMPLES = \
    wholeGraphAST \
    wholeGraphFilterOnPersistantAttributes
 
-# DQ (3/21/2009): Separate those that compile under Cygwin from those that don't.
-if ROSE_BUILD_OS_IS_CYGWIN
-  noinst_PROGRAMS += $(NOINST_TUTORIAL_EXAMPLES)
-else
-  noinst_PROGRAMS += $(NOINST_TUTORIAL_EXAMPLES) sharedMemoryTraversals
-  sharedMemoryTraversals_SOURCES = sharedMemoryTraversals.C
-endif
+noinst_PROGRAMS += $(NOINST_TUTORIAL_EXAMPLES) sharedMemoryTraversals
+sharedMemoryTraversals_SOURCES = sharedMemoryTraversals.C
 
 #traverseSourceCFG_SOURCES = traverseSourceCFG.C
 
@@ -882,16 +877,9 @@ combinedTraversals.out: combinedTraversals
 	@echo "Generate executable from compilation of input code (combinedTraversals) ..."
 	./combinedTraversals $(ROSE_FLAGS) -c $(srcdir)/inputCode_ExampleTraversals_17.C > combinedTraversals.out
 
-# DQ (3/21/2009): sharedMemoryTraversals fails to compile under Cygwin.
-if ROSE_BUILD_OS_IS_CYGWIN
-sharedMemoryTraversals.out:
-	@echo "Commented out shared memory tests for Cygwin (sharedMemoryTraversals fails to compile) ..."
-	touch sharedMemoryTraversals.out
-else
 sharedMemoryTraversals.out: sharedMemoryTraversals
 	@echo "Generate executable from compilation of input code (sharedMemoryTraversals) ..."
 	./sharedMemoryTraversals $(ROSE_FLAGS) -c $(srcdir)/inputCode_ExampleTraversals_18.C > sharedMemoryTraversals.out
-endif
 
 classicObjectOrientedVisitorPatternTraversal.out: classicObjectOrientedVisitorPatternTraversal
 	@echo "Generate executable from compilation of input code (classicObjectOrientedVisitorPatternTraversal) ..."
@@ -1203,13 +1191,7 @@ rose_inputCode_addComments.C: addComments
 	./addComments $(ROSE_FLAGS) -c $(srcdir)/inputCode_addComments.C
 
 rose_inputCode_addArbitraryTextForUnparser.C: addArbitraryTextForUnparser
-if ROSE_BUILD_OS_IS_CYGWIN
-#	DQ (3/21/2009): These tests don't appear to run under Cygwin.
-	@echo "Cygwin test of addArbitraryTextForUnparser fails ..."
-	touch rose_inputCode_addArbitraryTextForUnparser.C
-else
 	./addArbitraryTextForUnparser $(ROSE_FLAGS) -c $(srcdir)/inputCode_addArbitraryTextForUnparser.C
-endif
 
 collectCommentsSkipHeaderFiles.out: collectComments
 	./collectComments $(ROSE_FLAGS) -I$(srcdir) -c $(srcdir)/inputCode_collectComments.C > collectCommentsSkipHeaderFiles.out
@@ -1391,7 +1373,6 @@ cleanDocs:
 
 clean-local: cleanDocs
 	rm -rf Templates.DB ii_files ti_files *.ti *.svg  *.new *.dump
-	find . -depth -name \*.dSYM -exec rm -rf {} \; # OS X object file debug info
 	rm -rf $(generatedCodeExamples) *.out *.pdf *.dot
 
 # Compile everything with -g (compiler's debug flag)

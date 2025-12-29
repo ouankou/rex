@@ -65,7 +65,7 @@ FixupFortranReferences::visit ( SgNode* node )
              }
 
        // printf ("Exiting as a test: Found the SgUnknownArrayOrFunctionReference \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
   // DQ (12/9/2007): Fixup the labels in the SgArithmeticIfStatement IR node
@@ -158,7 +158,7 @@ FixupFortranReferences::visit ( SgNode* node )
              }
 
        // printf ("Exiting in   SgArithmeticIfStatement fixup! \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
    }
 

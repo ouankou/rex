@@ -569,10 +569,10 @@ ROSE_DLL_API void setExtern(SgDeclarationStatement* stmt);
 //! True if an SgInitializedName is "mutable' (has storage modifier set)
 bool ROSE_DLL_API isMutable(SgInitializedName* name);
 
-//! Get a vector of Jovial input parameters from the function parameter list (may work for Fortran in the future)
+//! Get a vector of input parameters from the function parameter list
 std::vector<SgInitializedName*> getInParameters(const SgInitializedNamePtrList &params);
 
-//! Get a vector of Jovial output parameters from the function parameter list (may work for Fortran in the future)
+//! Get a vector of output parameters from the function parameter list
 std::vector<SgInitializedName*> getOutParameters(const SgInitializedNamePtrList &params);
 
 //! Interface for creating a statement whose computation writes its answer into
@@ -632,6 +632,14 @@ void checkSymbolTables ( SgNode* );
 // is required when unparsing header files is true or support multiple files and shared IR nodes).
 void markSubtreeToBeUnparsed(SgNode* root, int physical_file_id);
 void markNodeToBeUnparsed(SgNode* node, int physical_file_id);
+
+// DQ (7/8/2021): This is a tree traversal based version of this marking of a subtree which allows special handling of cast expressions.
+// Basically, cast expression should not be marked as transformations. 
+void markSubtreeToBeUnparsedTreeTraversal(SgNode* root, int physical_file_id);
+
+// DQ (7/12/2021): Debugging code to locate specific node marked as a transforamtion in the AST.
+// Debugging the outliner.
+bool findFirstSgCastExpMarkedAsTransformation(SgNode* n, const std::string & s);
 
 
 //@}
@@ -1760,8 +1768,14 @@ NodeType* getEnclosingNode(const SgNode* astNode, const bool includingSelf = fal
 
   // DQ (11/15/2018): Adding support for traversals over the include file tree.
   //! return path prefix for subtree of include files.
-  void listHeaderFiles ( SgIncludeFile* includeFile );
+  ROSE_DLL_API void listHeaderFiles ( SgIncludeFile* includeFile );
 
+  // DQ (5/9/2021): Adding support for detection of statements in a scope that must be unparsed.
+  /*! \brief This function supports the token-based unparsing when used with unparsing of header files to know when the scope can be unparsed via it's token stream, even though a statement from a header file may contain a transformation.
+     returns true if there is a statement in the scope that has to be unparsed (is from the same file as the scope).
+     returns false if the scope is empty or contains only statements associated with one or more header files.
+  */
+  ROSE_DLL_API bool scopeHasStatementsFromSameFile(SgScopeStatement* scope);
 
 //@}
 
@@ -1873,6 +1887,9 @@ struct DeferredTransformation
 // DQ (2/24/2009): Simple function to delete an AST subtree (used in outlining).
 //! Function to delete AST subtree's nodes only, users must take care of any dangling pointers, symbols or types that result.
 ROSE_DLL_API void deleteAST(SgNode* node);
+
+// DQ (3/5/2022): Adding support to check AST for invalid poionters.
+ROSE_DLL_API void checkSgNodePointers();
 
 //! Special purpose function for deleting AST expression tress containing valid original expression trees in constant folded expressions (for internal use only).
 ROSE_DLL_API void deleteExpressionTreeWithOriginalExpressionSubtrees(SgNode* root);
@@ -2046,7 +2063,7 @@ void setParameterList(actualFunction *func,SgFunctionParameterList *paralist) {
                << (func->get_name()).getString()<<endl
                << " Sharing parameter lists can corrupt symbol tables!"<<endl
                << " Please use deepCopy() to get an exclusive parameter list for each function declaration!"<<endl;
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 #endif
 
@@ -2119,6 +2136,9 @@ ROSE_DLL_API void moveCommentsToNewStatement(SgStatement* sourceStatement, const
 ROSE_DLL_API void moveDeclarationToAssociatedNamespace ( SgDeclarationStatement* declarationStatement );
 
 ROSE_DLL_API bool isTemplateInstantiationNode(SgNode* node);
+
+// DQ (5/23/2021): Added function to support test for template declaration (commented out, not required).
+// ROSE_DLL_API bool isTemplateDeclarationNode(SgNode* node);
 
 ROSE_DLL_API void wrapAllTemplateInstantiationsInAssociatedNamespaces(SgProject* root);
 
@@ -2389,6 +2409,9 @@ ROSE_DLL_API void cleanupNontransformedBasicBlockNode();
 // DQ (1/18/2015): This is added to support better quality token-based unparsing.
 //! Record where normalization have been done so that we can preform denormalizations as required for the token-based unparsing to generate minimal diffs.
 ROSE_DLL_API void recordNormalizations(SgStatement* s);
+
+//! Convert all code within root matching the patern of (&left)->right, and translate them into left.right.  Return the number of matches of the pattern. Be default, only transformation generated nodes will be normalized.
+ROSE_DLL_API int normalizeArrowExpWithAddressOfLeftOperand(SgNode* root, bool transformationGeneratedOnly=true);
 
 //! Check if a statement is a (true or false) body of a container-like parent,
 //! such as For, Do-while, switch, If, Catch, OmpBodyStmt, etc

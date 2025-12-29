@@ -1,5 +1,5 @@
 # 1 "../../../trunk/libgfortran/generated/_abs_c4.F90"
-# 1 "C:\\msys\\1.0.10\\home\\FX\\ibin\\i586-pc-mingw32\\libgfortran//"
+# 1 "/usr/lib/gfortran/"
 # 1 "<built-in>"
 # 1 "<command-line>"
 # 1 "../../../trunk/libgfortran/generated/_abs_c4.F90"

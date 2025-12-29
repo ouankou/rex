@@ -451,11 +451,11 @@ ASTtools::getClassName (const SgMemberFunctionDeclaration* mem_func)
     } else if (nrdecl != NULL) {
       return nrdecl->get_name ();
     } else {
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
       abort();
     }
   } else {
-    ROSE_ASSERT(false);
+    ROSE_ABORT();
     abort();
   }
 }
@@ -542,6 +542,12 @@ void ASTtools::setSourcePositionAsTransformation(SgNode* node)
   SgInitializedName* initName    = isSgInitializedName(node);
   SgPragma*          pragma      = isSgPragma(node); // missed this one!! Liao, 1/30/2008
   SgGlobal*          global      = isSgGlobal(node); // SgGlobal should have NULL endOfConstruct()
+
+#if 1
+  // DQ (7/13/2021): Debugging information.  The relocated statements are assigned new SgFileInfo objects 
+  // instead of changing the existing ones.
+  printf ("In ASTtools::setSourcePositionAsTransformation(): node = %p = %s \n",node,node->class_name().c_str());
+#endif
 
   if  (locatedNode != NULL)
   {

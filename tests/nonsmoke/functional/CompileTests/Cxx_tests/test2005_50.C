@@ -10,28 +10,28 @@ int main()
    {
      printf ("__cplusplus is %s \n",(__cplusplus != 0) ? "defined" : "NOT defined (defined to be 0)");
 
-// DQ (9/16/2006): Modified to permit running on systems (e.g. Cygwin) where these macros are not defined.
+// DQ (9/16/2006): Modified to permit running on systems where these macros are not defined.
 #ifdef __USE_BSD
      printf ("__USE_BSD is %s \n",(__USE_BSD != 0) ? "defined" : "NOT defined (defined to be 0)");
 #else
      printf ("__USE_BSD is not defined \n");
 #endif
 
-// DQ (9/16/2006): Modified to permit running on systems (e.g. Cygwin) where these macros are not defined.
+// DQ (9/16/2006): Modified to permit running on systems where these macros are not defined.
 #ifdef __USE_ISOC99
      printf ("__USE_ISOC99 is %s \n",(__USE_ISOC99 != 0) ? "defined" : "NOT defined (defined to be 0)");
 #else
      printf ("__USE_ISOC99 is not defined \n");
 #endif
 
-// DQ (9/16/2006): Modified to permit running on systems (e.g. Cygwin) where these macros are not defined.
+// DQ (9/16/2006): Modified to permit running on systems where these macros are not defined.
 #ifdef __USE_UNIX98
      printf ("__USE_UNIX98 is %s \n",(__USE_UNIX98 != 0) ? "defined" : "NOT defined (defined to be 0)");
 #else
      printf ("__USE_UNIX98 is not defined \n");
 #endif
 
-// DQ (9/16/2006): Modified to permit running on systems (e.g. Cygwin) where these macros are not defined.
+// DQ (9/16/2006): Modified to permit running on systems where these macros are not defined.
 // this is defined for g++ 3.4.x but not for g++ 3.3.x  so we have to test it only where it is defined
 #ifdef _GLIBCXX_HAVE_INT64
      printf ("_GLIBCXX_HAVE_INT64 is %s \n",(_GLIBCXX_HAVE_INT64 != 0) ? "defined" : "NOT defined (defined to be 0)");
@@ -81,4 +81,3 @@ int main()
 
      return 0;
    }
-

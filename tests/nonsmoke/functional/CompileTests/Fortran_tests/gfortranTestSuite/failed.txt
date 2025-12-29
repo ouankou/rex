@@ -481,7 +481,6 @@ gfortran.dg/widechar_intrinsics_7.f90
 gfortran.dg/widechar_intrinsics_8.f90
 gfortran.dg/widechar_intrinsics_9.f90
 gfortran.dg/widechar_select_1.f90
-gfortran.dg/winapi.f90
 gfortran.dg/write_check.f90
 gfortran.dg/write_zero_array.f90
 gfortran.dg/wtruncate_fix.f

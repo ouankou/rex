@@ -233,7 +233,7 @@ AstAttribute::packed_data() {
 }
 
 void
-AstAttribute::unpacked_data(int size, char* data) {}
+AstAttribute::unpacked_data(int /*size*/, char* /*data*/) {}
 
 std::string
 AstAttribute::additionalNodeOptions() {

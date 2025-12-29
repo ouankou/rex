@@ -1242,32 +1242,17 @@ sub _command_common_pipe {
 	_check_valid_cmd($cmd);
 
 	my $fh;
-	if ($^O eq 'MSWin32') {
-		# ActiveState Perl
-		#defined $opts{STDERR} and
-		#	warn 'ignoring STDERR option - running w/ ActiveState';
-		$direction eq '-|' or
-			die 'input pipe for ActiveState not implemented';
-		# the strange construction with *ACPIPE is just to
-		# explain the tie below that we want to bind to
-		# a handle class, not scalar. It is not known if
-		# it is something specific to ActiveState Perl or
-		# just a Perl quirk.
-		tie (*ACPIPE, 'Git::activestate_pipe', $cmd, @args);
-		$fh = *ACPIPE;
-
-	} else {
-		my $pid = open($fh, $direction);
-		if (not defined $pid) {
-			throw Error::Simple("open failed: $!");
-		} elsif ($pid == 0) {
-			if (defined $opts{STDERR}) {
-				close STDERR;
-			}
-			if ($opts{STDERR}) {
-				open (STDERR, '>&', $opts{STDERR})
-					or die "dup failed: $!";
-			}
+	my $pid = open($fh, $direction);
+	if (not defined $pid) {
+		throw Error::Simple("open failed: $!");
+	} elsif ($pid == 0) {
+		if (defined $opts{STDERR}) {
+			close STDERR;
+		}
+		if ($opts{STDERR}) {
+			open (STDERR, '>&', $opts{STDERR})
+				or die "dup failed: $!";
+		}
 			_cmd_exec($self, $cmd, @args);
 		}
 	}

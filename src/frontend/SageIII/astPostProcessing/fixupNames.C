@@ -202,7 +202,7 @@ ResetEmptyNames::visit(SgNode* node)
 
                  // printf ("declaration = %p new_name = %s \n",declaration,new_name.str());
 
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
 
                     if (definingDeclaration != NULL)
                        {
@@ -304,7 +304,7 @@ ResetEmptyNames::visit(SgNode* node)
                        }
 
                  // printf ("After resetting name for class declaration = %p = %s new_name = %s \n",declaration,declaration->class_name().c_str(),new_name.str());
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                   }
                  else
                   {

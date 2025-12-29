@@ -76,7 +76,6 @@
 #define IDRS_I1 7
 #define IDRS_I2 8
 #define IDRS_IEEE_R8 9
-#define IDRS_CRAY_R16 10
 #define IDRS_IEEE_R16 11
 #endif
 
@@ -86,7 +85,7 @@ typedef enum {CW_STANDARD = 1, CW_EXTENDED} CwExtensionOption;
 typedef enum {CW_LOCAL = 1, CW_SHARED, CW_IMPLICIT_SHARED} CwDimensionType;
 
 #undef PROTO
-#if defined(__STDC__) || (OS_NAME == AIX)
+#if defined(__STDC__)
 #define PROTO(x) x
 #else
 #define PROTO(x) ()

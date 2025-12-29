@@ -11,7 +11,6 @@ endif()
 
 
 add_library(midend OBJECT
-  midend_roseh_pch.cpp
   astQuery/nodeQueryInheritedAttribute.C
   astQuery/nameQuery.C
   astQuery/astQueryInheritedAttribute.C

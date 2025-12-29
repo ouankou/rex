@@ -275,9 +275,9 @@ inline void *SerialArray_Statement_Type::operator new ( size_t Size )
 /* MACRO EXPANSION BEGINS HERE */
 
 /* We have to put the INTARRAY expansion first since these
-   have inlined descriptor functions that are used later in the 
-   DOUBLEARRAY and FLOATARRAY and some compilers (SGI) will
-   complain if the descriptor member function is used before 
+   have inlined descriptor functions that are used later in the
+   DOUBLEARRAY and FLOATARRAY and some legacy compilers will
+   complain if the descriptor member function is used before
    being declared as inline as any good C++ compiler should.
  */
 
@@ -1965,28 +1965,30 @@ intSerialArray::Binary_Conformable ( const intSerialArray & X ) const
 // *****************************************************************
 // *****************************************************************
 
-// ***********************************************************************************
-// This function handles the case of deleting a temporary that appears on
-// the Lhs (which is rare and for the most part does not happen in sane user
-// code).  Example: (A+B) = 1;
-// But the case is handled anyway.  It used to be a that views are managed similar
-// to temporaries - but this was an error (view have to have the scope of the
-// scope that builds them).  This is easy to demonstrate in the case where a
-// view is passed into a function (the function can't delete the view).
-// ***** Come to think of it: this function may be not be useful!  *****
-// ***** WRONG! *****
-// Even taking the view of a temporary requires the deletion of the temporary -
-// so for example: A = (B+C)(I,J) requires that we delete the temporary (B+C)
-// this is done within the operator() for each of the different versions of operator().
-// It is an obscure point - but it happens in the testcode.C and forced a failure on the SGI
-// ***********************************************************************************
-extern intSerialArray *Last_Lhs_intSerialArray_Operand;
+   // ***********************************************************************************
+   // This function handles the case of deleting a temporary that appears on
+   // the Lhs (which is rare and for the most part does not happen in sane user
+   // code).  Example: (A+B) = 1;
+   // But the case is handled anyway.  It used to be a that views are managed
+   // similar to temporaries - but this was an error (view have to have the
+   // scope of the scope that builds them).  This is easy to demonstrate in the
+   // case where a view is passed into a function (the function can't delete the
+   // view).
+   // ***** Come to think of it: this function may be not be useful!  *****
+   // ***** WRONG! *****
+   // Even taking the view of a temporary requires the deletion of the temporary
+   // - so for example: A = (B+C)(I,J) requires that we delete the temporary
+   // (B+C) this is done within the operator() for each of the different
+   // versions of operator(). It is an obscure point - but it happens in the
+   // testcode.C and forced a failure on legacy toolchains.
+   // ***********************************************************************************
+   extern intSerialArray *Last_Lhs_intSerialArray_Operand;
 
 #if 0
 inline void
 Delete_Lhs_If_Temporary ( const intSerialArray & Lhs )
    {
-  // The Solaris C++ compiler v3.0 can't inline a function with a static variable we get a
+  // Some older compilers can't inline a function with a static variable; we get a
   // "sorry not implemented: cannot expand inline function with static Last_Lhs_intSerialArray_Operand" message.
   // So it is a variable with file scope (later we should make it a static data member).
 
@@ -2041,7 +2043,7 @@ Delete_Lhs_If_Temporary ( const intSerialArray & Lhs )
 #endif
    }
 #endif
- 
+
 #if 0
 inline void
 Delete_If_Temporary ( const intSerialArray & X )
@@ -2108,58 +2110,58 @@ Delete_If_Temporary ( const intSerialArray & X )
    }
 #endif
 
-// End of inlineable functions!
+   // End of inlineable functions!
 #endif
-
 
 #undef INTARRAY
 
 #define DOUBLEARRAY
-// **********************************************************************
-//  Inlined scalar i n d e x operators (this is the only way to make such 
-//  things fast).  Though there use is officially discouraged since the  
-//  performance is poor!
-// **********************************************************************
+   // **********************************************************************
+   //  Inlined scalar i n d e x operators (this is the only way to make such
+   //  things fast).  Though there use is officially discouraged since the
+   //  performance is poor!
+   // **********************************************************************
 
-/* inlining the i n d e x operators */
+   /* inlining the i n d e x operators */
 
 #if 1
 #if !defined(USE_EXPRESSION_TEMPLATES)
-// *************************************************************************
-// *************************************************************************
-//                      INLINED SCALAR OPERATOR()'S
-// *************************************************************************
-// *************************************************************************
+   // *************************************************************************
+   // *************************************************************************
+   //                      INLINED SCALAR OPERATOR()'S
+   // *************************************************************************
+   // *************************************************************************
 
 #if HPF_INDEXING
 #error Scalar Indexing operators written for non HPF_INDEXING
 #endif
 
-inline double & doubleSerialArray::operator() ( int i ) const
-{
-   // Note that the use of an scalar  i n d e x i n g  is not efficient in an array 
-   // class. The prefered way of indexing array objects is to use the Index class!
+   inline double &doubleSerialArray::operator()(int i) const {
+     // Note that the use of an scalar  i n d e x i n g  is not efficient in an
+     // array class. The prefered way of indexing array objects is to use the
+     // Index class!
 
-//==============================================================================
+   //==============================================================================
 #if COMPILE_DEBUG_STATEMENTS
-   if (APP_DEBUG > 0)
-        printf ("Inside of doubleSerialArray::operator() ( int i=%d ) \n",i);
-   Test_Consistency();
+     if (APP_DEBUG > 0)
+       printf("Inside of doubleSerialArray::operator() ( int i=%d ) \n", i);
+     Test_Consistency();
 #endif
-//==============================================================================
+     //==============================================================================
 
 #if defined(BOUNDS_CHECK)
-   // This could be simplified if we just assumed that the first
-   // number of entries were valid up to the problem dimension.
-   Integer_Pointer_Array_MAX_ARRAY_DIMENSION_Type Scalar_Index_List;
-   Scalar_Index_List [0] = &i;
-   for (int temp_index=1; temp_index < MAX_ARRAY_DIMENSION; temp_index++)
-        Scalar_Index_List[temp_index] = NULL;
-   Array_Descriptor.Error_Checking_For_Scalar_Index_Operators ( Scalar_Index_List );
+     // This could be simplified if we just assumed that the first
+     // number of entries were valid up to the problem dimension.
+     Integer_Pointer_Array_MAX_ARRAY_DIMENSION_Type Scalar_Index_List;
+     Scalar_Index_List[0] = &i;
+     for (int temp_index = 1; temp_index < MAX_ARRAY_DIMENSION; temp_index++)
+       Scalar_Index_List[temp_index] = NULL;
+     Array_Descriptor.Error_Checking_For_Scalar_Index_Operators(
+         Scalar_Index_List);
 #endif
 
-   //APP_ASSERT(Array_Descriptor.Descriptor_Dimension == 1);
-   int Address_Subscript = 0;
+     // APP_ASSERT(Array_Descriptor.Descriptor_Dimension == 1);
+     int Address_Subscript = 0;
 
 #if 0
 #if defined(PPP)
@@ -2175,24 +2177,22 @@ inline double & doubleSerialArray::operator() ( int i ) const
 #endif
 #endif
 
-   int temp;
-   if (Array_Descriptor.Array_Domain.Uses_Indirect_Addressing)
-   {
-      // This handles the case of scalar indexing applied to a array object
-      // previously indexed using indirect addressing (a view).
-      // Since all such views are defined to be 1 dimensional arrays
-      // we need only worry about this detail in the scalar opeerator(int) 
-      // (taking a single scalar parameter).
+     int temp;
+     if (Array_Descriptor.Array_Domain.Uses_Indirect_Addressing) {
+       // This handles the case of scalar indexing applied to a array object
+       // previously indexed using indirect addressing (a view).
+       // Since all such views are defined to be 1 dimensional arrays
+       // we need only worry about this detail in the scalar opeerator(int)
+       // (taking a single scalar parameter).
 
-           
 #if defined(PPP)
-      Address_Subscript = 
-         ( (getSerialDomain().Index_Array [0] != NULL) ? 
-         ((*(getSerialDomain().Index_Array[0]))(i) - 
-         getSerialDomain().Data_Base[0]) : 
-         getSerialDomain().Base[0] ) * 
-         getSerialDomain().Stride [0];
-      for (temp=1; temp < MAX_ARRAY_DIMENSION; temp++)
+       Address_Subscript =
+           ((getSerialDomain().Index_Array[0] != NULL)
+                ? ((*(getSerialDomain().Index_Array[0]))(i)-getSerialDomain()
+                       .Data_Base[0])
+                : getSerialDomain().Base[0]) *
+           getSerialDomain().Stride[0];
+       for (temp = 1; temp < MAX_ARRAY_DIMENSION; temp++)
          Address_Subscript += 
             ( (getSerialDomain().Index_Array [temp] != NULL) ? 
             ((*(getSerialDomain().Index_Array[temp]))(i) - 
@@ -2201,13 +2201,13 @@ inline double & doubleSerialArray::operator() ( int i ) const
             getSerialDomain().Stride [temp] * 
             getSerialDomain().Size[temp-1];
 #else
-      Address_Subscript = 
-         ( (Array_Descriptor.Array_Domain.Index_Array [0] != NULL) ? 
-         ((*(Array_Descriptor.Array_Domain.Index_Array[0]))(i) - 
-         Array_Descriptor.Array_Domain.Data_Base[0]) : 
-         Array_Descriptor.Array_Domain.Base[0] ) * 
-         Array_Descriptor.Array_Domain.Stride [0];
-      for (temp=1; temp < MAX_ARRAY_DIMENSION; temp++)
+       Address_Subscript =
+           ((Array_Descriptor.Array_Domain.Index_Array[0] != NULL)
+                ? ((*(Array_Descriptor.Array_Domain.Index_Array[0]))(
+                       i)-Array_Descriptor.Array_Domain.Data_Base[0])
+                : Array_Descriptor.Array_Domain.Base[0]) *
+           Array_Descriptor.Array_Domain.Stride[0];
+       for (temp = 1; temp < MAX_ARRAY_DIMENSION; temp++)
          Address_Subscript += 
             ( (Array_Descriptor.Array_Domain.Index_Array [temp] != NULL) ? 
             ((*(Array_Descriptor.Array_Domain.Index_Array[temp]))(i) - 
@@ -2430,7 +2430,7 @@ inline double & doubleSerialArray::operator() ( int i , int j ) const
    return Array_Descriptor.Array_View_Pointer1 [Address_Subscript];
 #endif
 }
-#endif 
+#endif
 
 #if MAX_ARRAY_DIMENSION >= 3
 inline double & doubleSerialArray::operator() ( int i , int j , int k ) const
@@ -3402,7 +3402,7 @@ inline double & doubleSerialArray::operator() (int i, int j, int k, int l, int m
 // ********************************************************************************
 //        INLINING FUNCTIONS SPECIFIC TO A++/P++ (Not user application code)
 // ********************************************************************************
-// ******************************************************************************** 
+// ********************************************************************************
 
 #if defined(INTARRAY)
 // Use if d e f to force only ONE instance of the dimension function!
@@ -3798,28 +3798,30 @@ doubleSerialArray::Binary_Conformable ( const doubleSerialArray & X ) const
 // *****************************************************************
 // *****************************************************************
 
-// ***********************************************************************************
-// This function handles the case of deleting a temporary that appears on
-// the Lhs (which is rare and for the most part does not happen in sane user
-// code).  Example: (A+B) = 1;
-// But the case is handled anyway.  It used to be a that views are managed similar
-// to temporaries - but this was an error (view have to have the scope of the
-// scope that builds them).  This is easy to demonstrate in the case where a
-// view is passed into a function (the function can't delete the view).
-// ***** Come to think of it: this function may be not be useful!  *****
-// ***** WRONG! *****
-// Even taking the view of a temporary requires the deletion of the temporary -
-// so for example: A = (B+C)(I,J) requires that we delete the temporary (B+C)
-// this is done within the operator() for each of the different versions of operator().
-// It is an obscure point - but it happens in the testcode.C and forced a failure on the SGI
-// ***********************************************************************************
-extern doubleSerialArray *Last_Lhs_doubleSerialArray_Operand;
+   // ***********************************************************************************
+   // This function handles the case of deleting a temporary that appears on
+   // the Lhs (which is rare and for the most part does not happen in sane user
+   // code).  Example: (A+B) = 1;
+   // But the case is handled anyway.  It used to be a that views are managed
+   // similar to temporaries - but this was an error (view have to have the
+   // scope of the scope that builds them).  This is easy to demonstrate in the
+   // case where a view is passed into a function (the function can't delete the
+   // view).
+   // ***** Come to think of it: this function may be not be useful!  *****
+   // ***** WRONG! *****
+   // Even taking the view of a temporary requires the deletion of the temporary
+   // - so for example: A = (B+C)(I,J) requires that we delete the temporary
+   // (B+C) this is done within the operator() for each of the different
+   // versions of operator(). It is an obscure point - but it happens in the
+   // testcode.C and forced a failure on legacy toolchains.
+   // ***********************************************************************************
+   extern doubleSerialArray *Last_Lhs_doubleSerialArray_Operand;
 
 #if 0
 inline void
 Delete_Lhs_If_Temporary ( const doubleSerialArray & Lhs )
    {
-  // The Solaris C++ compiler v3.0 can't inline a function with a static variable we get a
+  // Some older compilers can't inline a function with a static variable; we get a
   // "sorry not implemented: cannot expand inline function with static Last_Lhs_doubleSerialArray_Operand" message.
   // So it is a variable with file scope (later we should make it a static data member).
 
@@ -3874,7 +3876,7 @@ Delete_Lhs_If_Temporary ( const doubleSerialArray & Lhs )
 #endif
    }
 #endif
- 
+
 #if 0
 inline void
 Delete_If_Temporary ( const doubleSerialArray & X )
@@ -3941,58 +3943,58 @@ Delete_If_Temporary ( const doubleSerialArray & X )
    }
 #endif
 
-// End of inlineable functions!
+   // End of inlineable functions!
 #endif
-
 
 #undef DOUBLEARRAY
 
 #define FLOATARRAY
-// **********************************************************************
-//  Inlined scalar i n d e x operators (this is the only way to make such 
-//  things fast).  Though there use is officially discouraged since the  
-//  performance is poor!
-// **********************************************************************
+   // **********************************************************************
+   //  Inlined scalar i n d e x operators (this is the only way to make such
+   //  things fast).  Though there use is officially discouraged since the
+   //  performance is poor!
+   // **********************************************************************
 
-/* inlining the i n d e x operators */
+   /* inlining the i n d e x operators */
 
 #if 1
 #if !defined(USE_EXPRESSION_TEMPLATES)
-// *************************************************************************
-// *************************************************************************
-//                      INLINED SCALAR OPERATOR()'S
-// *************************************************************************
-// *************************************************************************
+   // *************************************************************************
+   // *************************************************************************
+   //                      INLINED SCALAR OPERATOR()'S
+   // *************************************************************************
+   // *************************************************************************
 
 #if HPF_INDEXING
 #error Scalar Indexing operators written for non HPF_INDEXING
 #endif
 
-inline float & floatSerialArray::operator() ( int i ) const
-{
-   // Note that the use of an scalar  i n d e x i n g  is not efficient in an array 
-   // class. The prefered way of indexing array objects is to use the Index class!
+   inline float &floatSerialArray::operator()(int i) const {
+     // Note that the use of an scalar  i n d e x i n g  is not efficient in an
+     // array class. The prefered way of indexing array objects is to use the
+     // Index class!
 
-//==============================================================================
+   //==============================================================================
 #if COMPILE_DEBUG_STATEMENTS
-   if (APP_DEBUG > 0)
-        printf ("Inside of floatSerialArray::operator() ( int i=%d ) \n",i);
-   Test_Consistency();
+     if (APP_DEBUG > 0)
+       printf("Inside of floatSerialArray::operator() ( int i=%d ) \n", i);
+     Test_Consistency();
 #endif
-//==============================================================================
+     //==============================================================================
 
 #if defined(BOUNDS_CHECK)
-   // This could be simplified if we just assumed that the first
-   // number of entries were valid up to the problem dimension.
-   Integer_Pointer_Array_MAX_ARRAY_DIMENSION_Type Scalar_Index_List;
-   Scalar_Index_List [0] = &i;
-   for (int temp_index=1; temp_index < MAX_ARRAY_DIMENSION; temp_index++)
-        Scalar_Index_List[temp_index] = NULL;
-   Array_Descriptor.Error_Checking_For_Scalar_Index_Operators ( Scalar_Index_List );
+     // This could be simplified if we just assumed that the first
+     // number of entries were valid up to the problem dimension.
+     Integer_Pointer_Array_MAX_ARRAY_DIMENSION_Type Scalar_Index_List;
+     Scalar_Index_List[0] = &i;
+     for (int temp_index = 1; temp_index < MAX_ARRAY_DIMENSION; temp_index++)
+       Scalar_Index_List[temp_index] = NULL;
+     Array_Descriptor.Error_Checking_For_Scalar_Index_Operators(
+         Scalar_Index_List);
 #endif
 
-   //APP_ASSERT(Array_Descriptor.Descriptor_Dimension == 1);
-   int Address_Subscript = 0;
+     // APP_ASSERT(Array_Descriptor.Descriptor_Dimension == 1);
+     int Address_Subscript = 0;
 
 #if 0
 #if defined(PPP)
@@ -4008,24 +4010,22 @@ inline float & floatSerialArray::operator() ( int i ) const
 #endif
 #endif
 
-   int temp;
-   if (Array_Descriptor.Array_Domain.Uses_Indirect_Addressing)
-   {
-      // This handles the case of scalar indexing applied to a array object
-      // previously indexed using indirect addressing (a view).
-      // Since all such views are defined to be 1 dimensional arrays
-      // we need only worry about this detail in the scalar opeerator(int) 
-      // (taking a single scalar parameter).
+     int temp;
+     if (Array_Descriptor.Array_Domain.Uses_Indirect_Addressing) {
+       // This handles the case of scalar indexing applied to a array object
+       // previously indexed using indirect addressing (a view).
+       // Since all such views are defined to be 1 dimensional arrays
+       // we need only worry about this detail in the scalar opeerator(int)
+       // (taking a single scalar parameter).
 
-           
 #if defined(PPP)
-      Address_Subscript = 
-         ( (getSerialDomain().Index_Array [0] != NULL) ? 
-         ((*(getSerialDomain().Index_Array[0]))(i) - 
-         getSerialDomain().Data_Base[0]) : 
-         getSerialDomain().Base[0] ) * 
-         getSerialDomain().Stride [0];
-      for (temp=1; temp < MAX_ARRAY_DIMENSION; temp++)
+       Address_Subscript =
+           ((getSerialDomain().Index_Array[0] != NULL)
+                ? ((*(getSerialDomain().Index_Array[0]))(i)-getSerialDomain()
+                       .Data_Base[0])
+                : getSerialDomain().Base[0]) *
+           getSerialDomain().Stride[0];
+       for (temp = 1; temp < MAX_ARRAY_DIMENSION; temp++)
          Address_Subscript += 
             ( (getSerialDomain().Index_Array [temp] != NULL) ? 
             ((*(getSerialDomain().Index_Array[temp]))(i) - 
@@ -4034,13 +4034,13 @@ inline float & floatSerialArray::operator() ( int i ) const
             getSerialDomain().Stride [temp] * 
             getSerialDomain().Size[temp-1];
 #else
-      Address_Subscript = 
-         ( (Array_Descriptor.Array_Domain.Index_Array [0] != NULL) ? 
-         ((*(Array_Descriptor.Array_Domain.Index_Array[0]))(i) - 
-         Array_Descriptor.Array_Domain.Data_Base[0]) : 
-         Array_Descriptor.Array_Domain.Base[0] ) * 
-         Array_Descriptor.Array_Domain.Stride [0];
-      for (temp=1; temp < MAX_ARRAY_DIMENSION; temp++)
+       Address_Subscript =
+           ((Array_Descriptor.Array_Domain.Index_Array[0] != NULL)
+                ? ((*(Array_Descriptor.Array_Domain.Index_Array[0]))(
+                       i)-Array_Descriptor.Array_Domain.Data_Base[0])
+                : Array_Descriptor.Array_Domain.Base[0]) *
+           Array_Descriptor.Array_Domain.Stride[0];
+       for (temp = 1; temp < MAX_ARRAY_DIMENSION; temp++)
          Address_Subscript += 
             ( (Array_Descriptor.Array_Domain.Index_Array [temp] != NULL) ? 
             ((*(Array_Descriptor.Array_Domain.Index_Array[temp]))(i) - 
@@ -4263,7 +4263,7 @@ inline float & floatSerialArray::operator() ( int i , int j ) const
    return Array_Descriptor.Array_View_Pointer1 [Address_Subscript];
 #endif
 }
-#endif 
+#endif
 
 #if MAX_ARRAY_DIMENSION >= 3
 inline float & floatSerialArray::operator() ( int i , int j , int k ) const
@@ -5235,7 +5235,7 @@ inline float & floatSerialArray::operator() (int i, int j, int k, int l, int m,
 // ********************************************************************************
 //        INLINING FUNCTIONS SPECIFIC TO A++/P++ (Not user application code)
 // ********************************************************************************
-// ******************************************************************************** 
+// ********************************************************************************
 
 #if defined(INTARRAY)
 // Use if d e f to force only ONE instance of the dimension function!
@@ -5631,28 +5631,30 @@ floatSerialArray::Binary_Conformable ( const floatSerialArray & X ) const
 // *****************************************************************
 // *****************************************************************
 
-// ***********************************************************************************
-// This function handles the case of deleting a temporary that appears on
-// the Lhs (which is rare and for the most part does not happen in sane user
-// code).  Example: (A+B) = 1;
-// But the case is handled anyway.  It used to be a that views are managed similar
-// to temporaries - but this was an error (view have to have the scope of the
-// scope that builds them).  This is easy to demonstrate in the case where a
-// view is passed into a function (the function can't delete the view).
-// ***** Come to think of it: this function may be not be useful!  *****
-// ***** WRONG! *****
-// Even taking the view of a temporary requires the deletion of the temporary -
-// so for example: A = (B+C)(I,J) requires that we delete the temporary (B+C)
-// this is done within the operator() for each of the different versions of operator().
-// It is an obscure point - but it happens in the testcode.C and forced a failure on the SGI
-// ***********************************************************************************
-extern floatSerialArray *Last_Lhs_floatSerialArray_Operand;
+   // ***********************************************************************************
+   // This function handles the case of deleting a temporary that appears on
+   // the Lhs (which is rare and for the most part does not happen in sane user
+   // code).  Example: (A+B) = 1;
+   // But the case is handled anyway.  It used to be a that views are managed
+   // similar to temporaries - but this was an error (view have to have the
+   // scope of the scope that builds them).  This is easy to demonstrate in the
+   // case where a view is passed into a function (the function can't delete the
+   // view).
+   // ***** Come to think of it: this function may be not be useful!  *****
+   // ***** WRONG! *****
+   // Even taking the view of a temporary requires the deletion of the temporary
+   // - so for example: A = (B+C)(I,J) requires that we delete the temporary
+   // (B+C) this is done within the operator() for each of the different
+   // versions of operator(). It is an obscure point - but it happens in the
+   // testcode.C and forced a failure on legacy toolchains.
+   // ***********************************************************************************
+   extern floatSerialArray *Last_Lhs_floatSerialArray_Operand;
 
 #if 0
 inline void
 Delete_Lhs_If_Temporary ( const floatSerialArray & Lhs )
    {
-  // The Solaris C++ compiler v3.0 can't inline a function with a static variable we get a
+  // Some older compilers can't inline a function with a static variable; we get a
   // "sorry not implemented: cannot expand inline function with static Last_Lhs_floatSerialArray_Operand" message.
   // So it is a variable with file scope (later we should make it a static data member).
 
@@ -5707,7 +5709,7 @@ Delete_Lhs_If_Temporary ( const floatSerialArray & Lhs )
 #endif
    }
 #endif
- 
+
 #if 0
 inline void
 Delete_If_Temporary ( const floatSerialArray & X )
@@ -5774,22 +5776,9 @@ Delete_If_Temporary ( const floatSerialArray & X )
    }
 #endif
 
-// End of inlineable functions!
+   // End of inlineable functions!
 #endif
-
 
 #undef FLOATARRAY
 
-#endif  /* !defined(_APP_INLINE_FUNC_H) */
-
-
-
-
-
-
-
-
-
-
-
-
+#endif /* !defined(_APP_INLINE_FUNC_H) */

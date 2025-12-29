@@ -73,7 +73,7 @@ foreach file ( GNUmakefile *.awk sample_* utilities.gnu )
   echo $file
   cp $file ../$workdir/$file
 end
-foreach name ( domain_size.F90 pop_in pop_sgi.log )
+foreach name ( domain_size.F90 pop_in )
   if (-e $name.$model) then
     echo "Copying $name"
     cp $name.$model ../$workdir/$name
@@ -81,4 +81,3 @@ foreach name ( domain_size.F90 pop_in pop_sgi.log )
 end
 echo "Copying GNUmakefile"
 cp GNUmakefile.compile ../$subdir/GNUmakefile
-

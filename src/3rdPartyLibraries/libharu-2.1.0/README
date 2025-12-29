@@ -11,7 +11,7 @@ See INSTALL for instructions on how to install libpng.
 *
 * What is Haru Free PDF Library?
 *
-Haru is a free, cross platform, open-sourced software library for generating 
+Haru is a free, portable, open-sourced software library for generating 
 PDF. It supports the following features.
 
    1. Generating PDF files with lines, text, images.
@@ -49,21 +49,8 @@ previous version.
 *
 Haru is written in ANSI-C and should compile easily with any compliant C 
 compiler.
-I inspected Haru in the following environment and make files for these 
-environments are included in a package.
-
-   1. Cygwin + GCC (Microsoft Windows)
-   2. Cygwin + MinGW (Microsoft Windows)
-   3. MSYS + MinGW (Microsoft Windows)
-   3. Microsoft VC++ (Microsoft Windows)
-   4. Borland C++ (Microsoft Windows)
-   5. GCC (Linux, FreeBSD, NetBSD, Solaris...)
-
-Also on platforms except the above, it is easy to build HARU. If you success to build HARU on other platforms, please send makefile to me.
 In addition, ZLIB and PNGLIB are required when you want to use the features of 
-compression and embedding PNG images. (In the case of Windows, static library 
-files for several compilers are included in the package for WIndows.  In the 
-case of  most of UNIX, these libraries are usually installed.)
+compression and embedding PNG images.
 
 *
 * Available development environment
@@ -83,14 +70,13 @@ If you write bindings for other programing languages, please notice me!
    No runtime files are required.
 
 2. shared-library
-   In Windows, you have to distribute libhpdf.dll with a program. In UNIX you 
-   have to distribute libhpdf.so* with a program.
+   You have to distribute the shared library with a program.
 
 
 
 NOTE:
-In the UNIX environment, there are the cases that libz.so, libpng.so.x are 
-necessary. About this, please refer to the documentation of PNGLIB and ZLIB.
+There are cases that libz.so, libpng.so.x are necessary. About this, please 
+refer to the documentation of PNGLIB and ZLIB.
 
 *
 * License

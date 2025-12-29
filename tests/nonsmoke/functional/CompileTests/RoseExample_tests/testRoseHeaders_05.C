@@ -176,7 +176,7 @@
 
 // Include ROSE common utility function library
 #include "escape.h"
-#include <StringUtility.h>
+#include <Rose/StringUtility.h>
 
 // Include support for Brian Gunney's command line parser tool (nice work)
 #include "sla.h"
@@ -239,7 +239,7 @@ namespace Exec { namespace ELF { class ElfFileHeader; }; };
 
 // DQ (12/29/2009): This permits the optional use of smaller generated header files for the IR.
 // Without this option the generated header file for the ROSE IR is nearly 300K in size, and
-// this can be a problem for some compilers (MSVC).  This is part of work to optionally reduce
+// this can be a problem for some compilers.  This is part of work to optionally reduce
 // the sizes of some of the larger ROSETTA generated files in ROSE. Later this will be controled
 // using a configure command line option to ROSE (at configure time).
 // #define ROSE_USING_SMALL_GENERATED_HEADER_FILES 1

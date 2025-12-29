@@ -3,7 +3,7 @@ c { dg-do compile }
 
 *  PR fortran/275
 *  ICE in `change_address', at emit-rtl.c:1589 with -O1 and above
-*  g77 version 2.96 20000530 (experimental) on mips-sgi-irix6.5/-mabi=64
+*  g77 version 2.96 20000530 (experimental) on a legacy target
 *
 *  Originally derived from LAPACK 3.0 test suite failure.
 *

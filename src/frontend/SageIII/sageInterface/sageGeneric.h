@@ -75,8 +75,6 @@ namespace sg
     return res;
   }
 
-  // \note implemented originall in SageInterfaceAda.h. Now the implementations are moved to SageInterface.C since
-  // SageInterfaceAda.h is deleted when we remove Ada support for rexompiler
   // \{
   [[noreturn]]
   void report_error(std::string desc, const char* file = nullptr, size_t ln = 0);
@@ -100,8 +98,6 @@ namespace sg
     report_error_if(!ptr, "assertion failed: null dereference ", file, ln);
     return *ptr;
   }
-
-  // \note implemented in SageInterfaceAda.h
 
 /**
  * struct DispatchHandler
@@ -274,13 +270,6 @@ namespace sg
     GEN_VISIT(SgDotStarOp)
     GEN_VISIT(SgDoubleVal)
     GEN_VISIT(SgElaboratedTypeModifier)
-    GEN_VISIT(SgElementwiseOp)
-    GEN_VISIT(SgElementwiseAddOp)
-    GEN_VISIT(SgElementwiseDivideOp)
-    GEN_VISIT(SgElementwiseLeftDivideOp)
-    GEN_VISIT(SgElementwiseMultiplyOp)
-    GEN_VISIT(SgElementwisePowerOp)
-    GEN_VISIT(SgElementwiseSubtractOp)
     GEN_VISIT(SgElseDirectiveStatement)
     GEN_VISIT(SgElseWhereStatement)
     GEN_VISIT(SgElseifDirectiveStatement)
@@ -440,7 +429,6 @@ namespace sg
     GEN_VISIT(SgLambdaCapture)
     GEN_VISIT(SgLambdaCaptureList)
     GEN_VISIT(SgLambdaExp)
-    GEN_VISIT(SgLeftDivideOp)
     GEN_VISIT(SgLessOrEqualOp)
     GEN_VISIT(SgLessThanOp)
     GEN_VISIT(SgLineDirectiveStatement)
@@ -453,9 +441,6 @@ namespace sg
     GEN_VISIT(SgLongLongIntVal)
     GEN_VISIT(SgLshiftAssignOp)
     GEN_VISIT(SgLshiftOp)
-    GEN_VISIT(SgMagicColonExp)
-    GEN_VISIT(SgMatrixExp)
-    GEN_VISIT(SgMatrixTransposeOp)
     GEN_VISIT(SgMemberFunctionDeclaration)
     GEN_VISIT(SgMemberFunctionRefExp)
     GEN_VISIT(SgMemberFunctionSymbol)
@@ -576,7 +561,6 @@ namespace sg
     GEN_VISIT(SgPointerDerefExp)
     GEN_VISIT(SgPointerMemberType)
     GEN_VISIT(SgPointerType)
-    GEN_VISIT(SgPowerOp)
     GEN_VISIT(SgPragma)
     GEN_VISIT(SgPragmaDeclaration)
     GEN_VISIT(SgPrintStatement)
@@ -623,7 +607,6 @@ namespace sg
     GEN_VISIT(SgStorageModifier)
     GEN_VISIT(SgStringKeyedBidirectionalGraph)
     GEN_VISIT(SgStringVal)
-    GEN_VISIT(SgStructureModifier)
     GEN_VISIT(SgSubscriptExpression)
     GEN_VISIT(SgSubtractOp)
     GEN_VISIT(SgSupport)
@@ -675,7 +658,6 @@ namespace sg
     GEN_VISIT(SgTypeLabel)
     GEN_VISIT(SgTypeDouble)
     GEN_VISIT(SgTypeEllipse)
-    GEN_VISIT(SgTypeFixed)
     GEN_VISIT(SgTypeFloat)
     GEN_VISIT(SgTypeFloat128)
     GEN_VISIT(SgTypeFloat80)
@@ -687,8 +669,6 @@ namespace sg
     GEN_VISIT(SgTypeLongDouble)
     GEN_VISIT(SgTypeLongLong)
     GEN_VISIT(SgTypeModifier)
-    GEN_VISIT(SgTypeMatrix)
-    GEN_VISIT(SgTypeTuple)
     GEN_VISIT(SgTypeNullptr)
     GEN_VISIT(SgTypeOfType)
     GEN_VISIT(SgTypeShort)

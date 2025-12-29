@@ -1,6 +1,3 @@
-// DQ (3/21/2009): The header file "complex.h" is not available in Cygwin.
-#if !defined(__CYGWIN__)
-
 #include <complex.h>
 
 // Test use of C99 and common C constants
@@ -24,7 +21,6 @@ void foo()
 #ifndef __INTEL_COMPILER
      float  an_infinity_float  = __INFINITY__;
      double an_infinity_double = __INFINITY__;
-#endif
    }
 
 #endif

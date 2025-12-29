@@ -1,7 +1,7 @@
 c { dg-do run }
       PROGRAM LABUG1
 
-*  This program core dumps on mips-sgi-irix6.2 when compiled
+*  This program core dumps on a legacy target when compiled
 *  with egcs-19981101, egcs-19981109 and egcs-19981122 snapshots
 *  with -O2
 *
@@ -46,7 +46,6 @@ c { dg-do run }
       integer i
       complex a
       end
-
 
 
 

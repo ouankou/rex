@@ -496,7 +496,6 @@ clean-cxx-pointer-alias:
 # These two are defined based on what languages ROSE was compiled to support.
 .PHONY: check-c-languages check-fortran-languages
 
-if !ROSE_BUILD_OS_IS_OSX
 # Note: C++ language support implies C, C++, and C99 support.
 if ROSE_BUILD_CXX_LANGUAGE_SUPPORT
 check-c-languages: $(C_CHECK_TARGETS)
@@ -507,12 +506,6 @@ if ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 check-fortran-languages: $(FORTRAN_CHECK_TARGETS)
 else
 check-fortran-languages:
-endif
-else
-check-c-languages:
-	@echo "Disabled on OS X. DQ (9/30/2011): OSX testing is problematic, too many fail (so look into this later)." >&2
-check-fortran-languages:
-	@echo "Disabled on OS X. DQ (9/30/2011): OSX testing is problematic, too many fail (so look into this later)." >&2
 endif
 
 

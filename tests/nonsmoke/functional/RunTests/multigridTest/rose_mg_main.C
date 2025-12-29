@@ -206,12 +206,10 @@ int main(int argc,char * * argv)
      
 //  Number_Of_Processors,argc,argv);
 
-     Optimization_Manager::Initialize_Virtual_Machine("/n/c19s0/dquinlan/A++P++Source/A++P++/APPLICATIONS/SUNULTRA/p_mg",
-     Number_Of_Processors,argc,argv);      
-//   ("/n/c19s3/A++P++Source/A++P++Source/A++P++/APPLICATIONS/SUNULTRA/p_mg",
-
-
-
+     Optimization_Manager::Initialize_Virtual_Machine(
+         "/opt/apps/A++P++/APPLICATIONS/LINUX/p_mg", Number_Of_Processors, argc,
+         argv);
+     //   ("/opt/apps/A++P++/APPLICATIONS/LINUX/p_mg",
 
      printf("Run P++ code (Number_Of_Processors = %d) \n",Number_Of_Processors); 
 

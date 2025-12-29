@@ -2137,13 +2137,18 @@ Array_Domain_Type::Initialize_Domain (
         }
 #endif
 
-  /* It is faster to put the initialization of the data members into the body of the 
-  // constructor rather than into the preinitialization list (though I think this
-  // is compiler dependent)!  Also on the cray we could have an example static descriptor
-  // and then initialize the new one using the static one in a loop that would vectorize 
-  // and then to the few scalar operations to fixup the new descriptor data that was
-  // dependent on the input values (array sizes).
-  */
+        /* It is faster to put the initialization of the data members into the
+        body of the
+        // constructor rather than into the preinitialization list (though I
+        think this
+        // is compiler dependent)!  Also on some legacy systems we could have an
+        example static descriptor
+        // and then initialize the new one using the static one in a loop that
+        would vectorize
+        // and then to the few scalar operations to fixup the new descriptor
+        data that was
+        // dependent on the input values (array sizes).
+        */
 
 #if defined(APP) || defined(SERIAL_APP)
  // Double check that the MDI data structure is at least the same size
@@ -2675,14 +2680,14 @@ Array_Domain_Type::Initialize_Domain (
 
    // Bugfix (1/26/96) a view should not be a temporary since it could then be
    // deleted within the delete if temporary function if the destructors
-   // for the view were called too early as is the case on the SGI.
-   // The problem appeared in the P6 = -12 + (P5+P4)(all,all,3) test in
-   // the testcode.C program that Kristi wrote.
-   // What this means is that a view of a temporary is not a temporary in the A++
-   // sense because the view is on the local scope and its destructor is called
-   // by the compiler where as an A++ temporary is on the heap and its destructor is
-   // called by A++.  If we didn't have it this way then the compiler could delete
-   // something allocated within local scope as a local variable.
+   // for the view were called too early as is the case on some legacy
+   // toolchains. The problem appeared in the P6 = -12 + (P5+P4)(all,all,3) test
+   // in the testcode.C program that Kristi wrote. What this means is that a
+   // view of a temporary is not a temporary in the A++ sense because the view
+   // is on the local scope and its destructor is called by the compiler where
+   // as an A++ temporary is on the heap and its destructor is called by A++. If
+   // we didn't have it this way then the compiler could delete something
+   // allocated within local scope as a local variable.
 
    Is_A_Temporary = FALSE;
 
@@ -9998,25 +10003,3 @@ void Array_Domain_Type::operator delete ( void *Pointer, size_t sizeOfObject )
   // case of USE_CPP_NEW_DELETE_OPERATORS FALSE
 #endif
    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

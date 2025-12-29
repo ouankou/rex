@@ -645,10 +645,8 @@ TESTCODES_REQUIRED_TO_PASS += \
 endif
 
 
-if !OS_MACOSX
- # DQ (1/12/2010): This appears to fail under Mac OSX (at least version 10.5).
-   TESTCODES_REQUIRED_TO_PASS += test2006_44.C
-endif
+ # DQ (1/12/2010): This should pass on supported Linux platforms.
+ TESTCODES_REQUIRED_TO_PASS += test2006_44.C
 
 
 # DQ (8/28/2006): Verified non-working code (some are here because they represent source positions tests)

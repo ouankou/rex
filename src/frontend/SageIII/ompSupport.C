@@ -587,7 +587,7 @@ namespace OmpSupport
           ((SgOmpClauseBodyStatement*)node)->get_clauses().push_back(clause);
       }
       else {
-          ROSE_ASSERT(0);
+          ROSE_ABORT();
       };
   }
 

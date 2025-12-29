@@ -11,7 +11,7 @@ program main
 
  real*8 x
 
-	! cray pointer (used for aliasing x with single levels of multigrid)
+	! pointer (used for aliasing x with single levels of multigrid)
 	pointer ( px, x )
 
 	integer(4) :: i, j

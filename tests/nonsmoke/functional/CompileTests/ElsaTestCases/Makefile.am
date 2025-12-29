@@ -755,7 +755,6 @@ t0124.cc
 #gnu/t0130.cc\
 #gnu/bugs/d0106.cc\
 #gnu/bugs/gb0005.cc\
-#msvc/m0001.cc\
 #k0044.cc\
 #k0053.cc\
 #t0006.cc\
@@ -874,6 +873,5 @@ check-local: $(TRANSLATOR_EXECUTABLE)
 	@echo "***********************************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/CompileTests/C++Code/ElsaTestCases: make check rule complete (terminated normally) ******"
 	@echo "***********************************************************************************************************"
-
 
 

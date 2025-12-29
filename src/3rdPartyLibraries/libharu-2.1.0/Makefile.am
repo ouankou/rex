@@ -3,4 +3,4 @@
 
 SUBDIRS=src include
 
-EXTRA_DIST = CMakeLists.txt script
+EXTRA_DIST = CMakeLists.txt

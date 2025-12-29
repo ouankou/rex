@@ -594,15 +594,14 @@ class Array_Domain_Type
 
      public:
        // We are forced to make much more public that I would like becase the
-       // Sun C++ compiler can't represent templated classes as friends within
-       // not templated classes.
+       // Some legacy compilers can't represent templated classes as friends
+       // within not templated classes.
 #if 1
        // Use of reference count access is made available for debugging
-          int getReferenceCount() const 
-             { 
-               APP_ASSERT (referenceCount >= -2);
-               return referenceCount; 
-             }
+       int getReferenceCount() const {
+         APP_ASSERT(referenceCount >= -2);
+         return referenceCount;
+       }
 #endif
        // Support functions for reference counting (inlined for performance)
           inline void decrementReferenceCount() const { ((Array_Domain_Type*) this)->referenceCount--; }
@@ -1574,8 +1573,3 @@ class Array_Domain_Type
 
 
 #endif  /* !defined(_PPP_DOMAIN_H) */
-
-
-
-
-

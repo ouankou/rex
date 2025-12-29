@@ -18,7 +18,6 @@ option(with-ROSE_LONG_MAKE_CHECK_RULE "Specify longer internal testing" ON)
 add_subdirectory(CompileTests)
 add_subdirectory(UnitTests)
 add_subdirectory(roseTests)
-#add_subdirectory(RunTests)
 #add_subdirectory(PerformanceTests)
 #add_subdirectory(CompilerOptionsTests)
 add_subdirectory(translatorTests)
@@ -31,5 +30,3 @@ if(bash)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMAND ${bash} ${CMAKE_SOURCE_DIR}/scripts/policies-checker.sh)
 endif()
-
-install(TARGETS testTranslator DESTINATION bin)

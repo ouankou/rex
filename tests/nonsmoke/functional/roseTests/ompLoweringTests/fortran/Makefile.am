@@ -118,9 +118,6 @@ conditional-check-local: ../roseomp
 	@echo "Test for ROSE OpenMP lowering."
 	@echo "***************** Testing Fortran 77 input *******************"
 	$(MAKE) $(PASSING_F77_TEST_Objects)
-#if OS_MACOSX
-#        @echo "/* threadprivate.c not run on MAC OSX (no thread local storage on OSX). */" > rose_threadprivate.c
-#endif
 	@echo "***************** Testing Fortran 90 input ******************"
 	$(MAKE) $(PASSING_F90_TEST_Objects)
 	@echo "***********************************************************************************************************"
@@ -138,9 +135,6 @@ conditional-check-local: ../roseomp
 	@echo "Test for ROSE OpenMP lowering."
 	@echo "***************** Testing Fortran 77 input *******************"
 	$(MAKE) $(PASSING_F77_TEST_Objects)
-#if OS_MACOSX
-#        @echo "/* threadprivate.c not run on MAC OSX (no thread local storage on OSX). */" > rose_threadprivate.c
-#endif
 	$(MAKE) $(F77_TEST_OBJECT_REQUIRED_TO_RUN)
 	@echo "***************** Testing Fortran 90 input ******************"
 	$(MAKE) $(PASSING_F90_TEST_Objects)

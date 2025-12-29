@@ -125,12 +125,11 @@ ROSE_SUPPORT_ROSE_BUILD_INCLUDE_FILES
 # Rasmussen (11/19//2019): This is a strange bug. I can't figure out where
 # the bug actually occurs in the m4 macros. However the symptom is that
 # ECHO may not be set after this point but it is used. Thus setting ECHO
-# may be needed. This error was noticed after a new release of XCode (11.2.1)
-# was installed but probably is not related. It is more likely related to
-# libtools.m4. After talking with Robb we realized that the Mac version is
-# different from linux. I believe that somehow a portion of the libtool
-# code is copied when ./build is run (at least this is consistent with
-# the behavior.
+# may be needed. This error was noticed after a toolchain update but is likely
+# related to libtools.m4. After talking with Robb we realized that libtool
+# variants differ across distributions. I believe that somehow a portion of the
+# libtool code is copied when ./build is run (at least this is consistent with
+# the behavior).
 if test "x$ECHO" = x; then
     ECHO=echo
 fi

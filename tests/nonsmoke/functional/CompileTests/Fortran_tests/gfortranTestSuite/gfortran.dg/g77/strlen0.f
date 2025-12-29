@@ -26,9 +26,7 @@ C     to comply with the standard specification.  Under the stricter
 C     interpretation, functions strcat and strlat would be incorrect as
 C     written for null values of str1 and/or str2.
 C
-C     This code compiles and runs without error on
-C       SunOS 4.1.3 f77 (-C option)
-C       SUNWspro SPARCcompiler 4.2 f77 (-C option)
+C     This code compiles and runs without error on legacy toolchains
 C       (and with proposed patches, gcc-2.9.2 -fbounds-check except for test 6,
 C        which is a genuine, deliberate error - comment out to make further
 C        tests)

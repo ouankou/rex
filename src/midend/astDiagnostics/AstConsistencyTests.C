@@ -230,7 +230,7 @@ AstTests::runAllTests(SgProject* sageProject)
   // printf ("Inside of AstTests::runAllTests(sageProject = %p) \n",sageProject);
 
   // printf ("Exiting at top of AstTests::runAllTests() \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
 /*! \page AstProperties AST Properties (Consistency Tests)
 
@@ -535,7 +535,7 @@ AstTests::runAllTests(SgProject* sageProject)
           TestMappingOfDeclarationsInMemoryPoolToSymbols::test();
 
        // printf ("Exiting after call to TestMappingOfDeclarationsInMemoryPoolToSymbols::test() \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
         }
 
      if ( SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL )
@@ -954,7 +954,7 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                        {
                       // printf ("node->get_file_info()->get_line() == 0: node is %s \n",node->sage_class_name());
                          listOfNodesWithoutValidFileInfo.push_back(node);
-                      // ROSE_ASSERT (false);
+                      // ROSE_ABORT();
                        }
                   }
              }
@@ -1203,11 +1203,9 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                          break;
                        }
 
-                    // PP (01/22/21) used in Ada
                     case V_SgTypeBool:
                     case V_SgTypeLongLong:
                        {
-                         //ROSE_ASSERT(SageInterface::is_Ada_language());
                          break;
                        }
 
@@ -1354,7 +1352,6 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                        }
                        else
                        {
-                         //ROSE_ASSERT(isSgAdaAcceptStmt(parentParameterList->get_parent()));
                          ROSE_ASSERT(NULL);
                        }
                   }
@@ -2879,7 +2876,7 @@ TestAstForProperlySetDefiningAndNondefiningDeclarations::visit ( SgNode* node )
                          if(func != NULL)
                          {
                            printf ("Error: found a defining function declaration with its first nondefining declaration set to itself/(or a defining declaration).\n");
-                           //ROSE_ASSERT (false);
+                           //ROSE_ABORT();
                          }
 
                        }
@@ -2970,8 +2967,7 @@ TestAstSymbolTables::visit ( SgNode* node )
 
             // DQ (12/9/2007): Skip symbols that come from labels since they are often
             // numeric labels and need to be tested in a Fortran specific way.
-            // if (declarationStatement != NULL)
-               if (declarationStatement != NULL && isSgLabelSymbol(symbol) == NULL)
+               if (declarationStatement != nullptr && isSgLabelSymbol(symbol) == nullptr)
                   {
                  // DQ (8/21/2013): Test added by Tristan are a problem for Fortran code...
 #if 0
@@ -2982,19 +2978,6 @@ TestAstSymbolTables::visit ( SgNode* node )
                  // ROSE_ASSERT(declarationStatement->get_firstNondefiningDeclaration() == declarationStatement);
 
                     SgSymbol* local_symbol = declarationStatement->get_symbol_from_symbol_table();
-#if 0
-                    if (local_symbol == NULL)
-                       {
-                         printf ("The declarationStatement = %p = %s = %s in symbol = %p = %s = %s can't locate it's symbol in scope = %p = %s = %s \n",
-                              declarationStatement,declarationStatement->class_name().c_str(),SageInterface::get_name(declarationStatement).c_str(),
-                              symbol,symbol->class_name().c_str(),SageInterface::get_name(scope).c_str(),
-                              scope,scope->class_name().c_str(),SageInterface::get_name(scope).c_str());
-                         declarationStatement->get_startOfConstruct()->display("declarationStatement->get_symbol_from_symbol_table() == NULL");
-                       }
-#endif
-
-                 // DQ (7/26/2007): Not all declarations have an associated symbol, but those declaration found in symbols should have symbols.
-                 // ROSE_ASSERT(local_symbol != NULL);
                     SgMemberFunctionDeclaration* memberFunctionDeclaration = isSgMemberFunctionDeclaration(declarationStatement);
                     if (memberFunctionDeclaration != NULL && memberFunctionDeclaration->get_associatedClassDeclaration() != NULL)
                        {
@@ -3003,11 +2986,11 @@ TestAstSymbolTables::visit ( SgNode* node )
                          printf ("memberFunctionDeclaration scope has no associated symbol (case of pointer to member function): local_symbol = %p \n",local_symbol);
 #endif
                       // ROSE_ASSERT(local_symbol == NULL);
-                         ROSE_ASSERT(memberFunctionDeclaration->get_scope() != NULL);
+                         ROSE_ASSERT(memberFunctionDeclaration->get_scope() != nullptr);
                        }
                       else
                        {
-                         if (local_symbol == NULL)
+                         if (local_symbol == nullptr)
                             {
 
                            // It appears this is an issue because the name is slightly different between:
@@ -3043,7 +3026,7 @@ TestAstSymbolTables::visit ( SgNode* node )
 
                       // DQ (11/7/2007): Allow this, with a warning, I think!
                          SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(declarationStatement);
-                         if (local_symbol == NULL && functionDeclaration != NULL && functionDeclaration->get_name() == "__default_function_pointer_name")
+                         if (local_symbol == nullptr && functionDeclaration != nullptr && functionDeclaration->get_name() == "__default_function_pointer_name")
                             {
 // #if PRINT_DEVELOPER_WARNINGS
                               printf ("Warning: functionDeclaration = %s without symbol is OK in this case. \n",functionDeclaration->get_name().str());
@@ -3057,7 +3040,7 @@ TestAstSymbolTables::visit ( SgNode* node )
 #else
                            // DQ (2/28/2015): This fails for copyAST_tests/copytest2007_40.C and a few other files.
                            // I think this is related to the support for the EDN normalized template declarations.
-                              if (local_symbol == NULL)
+                              if (local_symbol == nullptr)
                                  {
                                    printf ("WARNING: local_symbol == NULL: this can happen in the copyAST_tests directory files. \n");
                                  }
@@ -3099,7 +3082,7 @@ TestAstSymbolTables::visit ( SgNode* node )
                          printf ("In TestAstSymbolTables::visit(): initializedName = %p = %s \n",initializedName,initializedName->get_name().str());
 #endif
                          SgSymbol* local_symbol = initializedName->get_symbol_from_symbol_table();
-                         if (local_symbol == NULL)
+                         if (local_symbol == nullptr)
                             {
                               printf ("Error: initializedName->get_symbol_from_symbol_table() == NULL initializedName = %p = %s \n",initializedName,initializedName->get_name().str());
                               initializedName->get_startOfConstruct()->display("Error: initializedName->get_symbol_from_symbol_table() == NULL");
@@ -3125,7 +3108,7 @@ TestAstSymbolTables::visit ( SgNode* node )
                             {
                               SgLabelStatement* labelStatement = (SgLabelStatement *) declarationNode;
                               SgSymbol* local_symbol = labelStatement->get_symbol_from_symbol_table();
-                              if (local_symbol == NULL)
+                              if (local_symbol == nullptr)
                                  {
                                    printf ("Error: labelStatement->get_symbol_from_symbol_table() == NULL labelStatement = %p = %s \n",labelStatement,labelStatement->get_label().str());
                                    ROSE_ASSERT(labelStatement->get_scope() != NULL);
@@ -3151,7 +3134,7 @@ TestAstSymbolTables::visit ( SgNode* node )
                   }
 
             // DQ (12/16/2007): Added test
-               ROSE_ASSERT(symbol != NULL);
+               ASSERT_not_null(symbol);
 
             // We have to look at each type of symbol separately!  This is because there is no virtual function,
             // the reason for this is that each get_declaration() function returns a different type!
@@ -3177,7 +3160,7 @@ TestAstSymbolTables::visit ( SgNode* node )
                          ROSE_ASSERT(templateClassSymbol->get_declaration() != NULL);
 
                       // DQ (12/27/2011): Make sure this is correctly associated with a SgTemplateClassDeclaration.
-                         ROSE_ASSERT(isSgTemplateClassDeclaration(templateClassSymbol->get_declaration()) != NULL);
+                         ASSERT_not_null(isSgTemplateClassDeclaration(templateClassSymbol->get_declaration()));
                          break;
                        }
 
@@ -3330,7 +3313,7 @@ TestAstSymbolTables::visit ( SgNode* node )
                   }
 
             // DQ (12/16/2007): Added test
-               ROSE_ASSERT(symbol != NULL);
+               ASSERT_not_null(symbol);
 
             // DQ (6/10/2007): Test if the scopes match!
             // This also test the SgSymbol::get_symbol_basis() member function
@@ -3341,7 +3324,7 @@ TestAstSymbolTables::visit ( SgNode* node )
                  // DQ (10/22/2007) Unclear if this is a serious problem.
                     printf ("Warning: scope of declaration = %p = %s in symbol does not match input scope = %p = %s \n",decl_scope,decl_scope->class_name().c_str(),scope,scope->class_name().c_str());
 #endif
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                   }
                  else
                   {
@@ -3797,7 +3780,7 @@ TestExpressionTypes::visit ( SgNode* node )
                                                    parentType, parentType->sage_class_name(),
                                                    type, type->sage_class_name());
                                  }
-                           // ROSE_ASSERT(false);
+                           // ROSE_ABORT();
                             }
                        }
                   }
@@ -4784,7 +4767,7 @@ TestParentPointersInMemoryPool::visit(SgNode* node)
                               printf ("Found a Sg_File_Info using filename == NULL_FILE: parent == NULL \n");
                             }
 
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                        }
 #endif
 #if 0
@@ -5211,7 +5194,7 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
                                           // This is the defining function declared inside the class, so there will be no non-defining member function
                                           // in the class (this declaration is all that will be in the parent list).
                                           // printf ("Error: this member fucntion is the defining declaration and defined in the class so it should have been in the parent list. \n");
-                                          // ROSE_ASSERT(false);
+                                          // ROSE_ABORT();
                                            }
                                           else
                                            {
@@ -5221,7 +5204,7 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
                                                // This is currently the case for all non-definng declarations since the parent is artificially set to the class
                                                // scope (is there a better idea of howto set it?).
                                                // printf ("Error: this member fucntion is the defining declaration and defined in the class so it should have been in the parent list. \n");
-                                               // ROSE_ASSERT(false);
+                                               // ROSE_ABORT();
                                                 }
                                                else
                                                 {
@@ -5546,7 +5529,7 @@ TestMappingOfDeclarationsInMemoryPoolToSymbols::visit( SgNode* node)
 #endif
 
        // printf ("Exiting to test this! \n");
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 
 
 // DQ (8/1/2007): Temp control of use of this test
@@ -6136,7 +6119,7 @@ TestForProperLanguageAndSymbolTableCaseSensitivity::test(SgNode* node)
      TestForProperLanguageAndSymbolTableCaseSensitivity traversal; // (node,IH);
 
   // printf ("Traversing AST to support TestForProperLanguageAndSymbolTableCaseSensitivity::test() \n");
-  // ROSE_ASSERT(false);
+  // ROSE_ABORT();
 
   // This should be a SgProject or SgFile so that we can evaluate the language type (obtained from the SgFile).
      ROSE_ASSERT(isSgProject(node) != NULL || isSgFile(node) != NULL);

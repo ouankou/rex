@@ -8,9 +8,7 @@
 #include "config.h"
 #endif
 
-#ifdef _AIX
 #include <netinet/in.h>
-#endif
 
 #include <stdlib.h>
 #include <assert.h>

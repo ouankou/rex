@@ -326,7 +326,7 @@ FixupAstSymbolTables::visit ( SgNode* node )
                       // It night be there are are no other types of symbols to consider...
 
                       // printf ("Ignoring non SgClassSymbols (fixupSymbolTables.C) symbol = %s \n",symbol->class_name().c_str());
-                      // ROSE_ASSERT(false);
+                      // ROSE_ABORT();
                        }
                   }
 
@@ -352,7 +352,7 @@ FixupAstSymbolTables::visit ( SgNode* node )
                associatedSymbolTable->remove(removeSymbol);
 
                printf ("Redundant symbol removed...from symbol table \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
 #if 0
        // debugging

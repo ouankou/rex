@@ -1,24 +1,8 @@
-#ifndef ROSE_StringUtility_H
-#define ROSE_StringUtility_H
+#ifndef ROSE_Deprecated_StringUtility_H
+#define ROSE_Deprecated_StringUtility_H
 
-#include <Convert.h>
-#include <Escape.h>
-#include <NumberToString.h>
-#include <Predicate.h>
-#include <Replace.h>
-#include <SplitJoin.h>
+#include <rose_pragma_message.h>
+ROSE_PRAGMA_MESSAGE("This header is deprecated; use Rose/StringUtility.h instead");
+#include <Rose/StringUtility.h>
 
-namespace Rose {
-
-/** Functions for operating on strings.
- *
- *  This name space provides functions for operating on strings.
- *
- */
-namespace StringUtility {}
-
-// DQ (1/21/2010): Use this to turn off the use of #line in ROSETTA generated code.
-#define SKIP_HASH_LINE_NUMBER_DECLARATIONS_IN_GENERATED_FILES
-
-} // namespace
 #endif

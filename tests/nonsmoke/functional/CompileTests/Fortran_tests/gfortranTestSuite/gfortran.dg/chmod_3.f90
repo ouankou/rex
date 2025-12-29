@@ -1,6 +1,6 @@
-! { dg-do run { target { ! { *-*-mingw* *-*-cygwin* spu-*-* } } } }
+! { dg-do run { target { ! { spu-*-* } } } }
 ! { dg-options "-std=gnu -fdefault-integer-8" }
-! See PR38956.  Test fails on cygwin when user has Administrator rights
+! See PR38956.  Test can fail when user has elevated rights.
   implicit none
   character(len=*), parameter :: n = "foobar_file"
   integer :: i

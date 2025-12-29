@@ -282,17 +282,15 @@ l3nc_get_var_double(int ncid, int varid, double *ip);
 
 /* End {get}_var */
 
-/* #ifdef _CRAYMPP */
 /*
- * Public interfaces to better support
- * CRAY multi-processor systems like T3E.
+ * Public interfaces to better support legacy MPP systems.
  * A tip of the hat to NERSC.
  */
 /*
  * It turns out we need to declare and define
  * these public interfaces on all platforms
  * or things get ugly working out the
- * FORTRAN interface. On !_CRAYMPP platforms,
+ * FORTRAN interface. On non-MPP platforms,
  * these functions work as advertised, but you
  * can only use "processor element" 0.
  */
@@ -310,10 +308,7 @@ EXTERNL int
 l3nc_delete_mp(const char * path, int basepe);
 */
 
-/* #endif _CRAYMPP */
-
 #if defined(__cplusplus)
 }
 #endif
 #endif
-

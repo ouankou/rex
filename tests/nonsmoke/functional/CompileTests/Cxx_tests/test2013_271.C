@@ -81,8 +81,8 @@
 #define HAVE_ERRNO_H 1
 #define HAVE_WCHAR_H 1
 /* end confdefs.h.  */
-/* Define wcstombs to an innocuous variant, in case <limits.h> declares wcstombs.
-   For example, HP-UX 11i <limits.h> declares gettimeofday.  */
+/* Define wcstombs to an innocuous variant, in case <limits.h> declares
+   wcstombs. For example, some legacy libcs declare gettimeofday.  */
 #define wcstombs innocuous_wcstombs
 
 /* System header to define __stub macros and hopefully few prototypes,
@@ -119,4 +119,3 @@ return wcstombs ();
   ;
   return 0;
 }
-

@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string>
 #include "grammar.h"
-#include <StringUtility.h>
+#include <Rose/StringUtility.h>
 #include "FileUtility.h"
 
 #include <iostream>
@@ -116,7 +116,9 @@ class GrammarString
   std::string buildCopyMemberFunctionSource ( bool buildConstructorArgument );
 
   // DQ (9/24/2005): Build the copy mechanism's source code to set the parents of child nodes
-  std::string buildCopyMemberFunctionSetParentSource ( std::string copyString );
+  // DQ (9/28/2022): Fixing compiler warning for argument not used.
+  // std::string buildCopyMemberFunctionSetParentSource ( std::string copyString );
+  std::string buildCopyMemberFunctionSetParentSource();
 
   // DQ (5/22/2006): Build the source code for each variable in the destructor.
   std::string buildDestructorSource();

@@ -8,9 +8,9 @@
 #
 # DESCRIPTION
 #
-#   Determine the vendor of the C/C++ compiler, e.g., gnu, intel, ibm, sun,
-#   hp, borland, comeau, dec, cray, kai, lcc, metrowerks, sgi, microsoft,
-#   watcom, etc. The vendor is returned in the cache variable
+#   Determine the vendor of the C/C++ compiler, e.g., gnu, clang, intel,
+#   fujitsu, portland, tcc, etc. The vendor is returned in the
+#   cache variable
 #   $ax_cv_c_compiler_vendor for C and $ax_cv_cxx_compiler_vendor for C++.
 #
 # LICENSE
@@ -54,24 +54,10 @@ AC_DEFUN([AX_COMPILER_VENDOR],
   dnl Please add if possible support to ax_compiler_version.m4
   [# note: don't check for gcc first since some other compilers define __GNUC__
   vendors="intel:     __ICC,__ECC,__INTEL_COMPILER
-           ibm:       __xlc__,__xlC__,__IBMC__,__IBMCPP__
-           pathscale: __PATHCC__,__PATHSCALE__
            clang:     __clang__
-           cray:      _CRAYC
            fujitsu:   __FUJITSU
            rose:      USE_ROSE
            gnu:       __GNUC__
-           sun:       __SUNPRO_C,__SUNPRO_CC
-           hp:        __HP_cc,__HP_aCC
-           dec:       __DECC,__DECCXX,__DECC_VER,__DECCXX_VER
-           borland:   __BORLANDC__,__CODEGEARC__,__TURBOC__
-           comeau:    __COMO__
-           kai:       __KCC
-           lcc:       __LCC__
-           sgi:       __sgi,sgi
-           microsoft: _MSC_VER
-           metrowerks: __MWERKS__
-           watcom:    __WATCOMC__
            portland:  __PGI
            tcc:       __TINYC__
            unknown:   UNKNOWN"

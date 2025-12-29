@@ -48,7 +48,6 @@ clean-local:
 PASSING_TEST_EXECUTABLES = \
 	CaseSensitivtyUnitTests \
 	SgExpressionBuildersUnitTests \
-	MatlabNodeBuildersUnitTests \
 	SgTypeBuildersUnitTests \
 	SgStatementBuildersUnitTests \
 	SupportNodesUnitTests \
@@ -56,7 +55,6 @@ PASSING_TEST_EXECUTABLES = \
 
 CaseSensitivtyUnitTests_SOURCES = CaseSensitivtyUnitTests.C
 SgExpressionBuildersUnitTests_SOURCES = SgExpressionBuildersUnitTests.C
-MatlabNodeBuildersUnitTests_SOURCES = MatlabNodeBuildersUnitTests.C
 SgTypeBuildersUnitTests_SOURCES = SgTypeBuildersUnitTests.C
 SgStatementBuildersUnitTests_SOURCES = SgStatementBuildersUnitTests.C
 SupportNodesUnitTests_SOURCES = SupportNodesUnitTests.C
@@ -68,4 +66,3 @@ TEST_TARGETS = ${PASSING_TEST_EXECUTABLES:=.test}
 check_PROGRAMS = \
 	$(PASSING_TEST_EXECUTABLES)
 #------------------------------------------------------------------------------
-

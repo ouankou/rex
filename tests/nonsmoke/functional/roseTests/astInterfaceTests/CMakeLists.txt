@@ -56,6 +56,7 @@ set(noinst_programs
   interfaceFunctionCoverage
   buildTemplateClass
   buildUsingDirectiveStatement
+  normalizeArrowExpWithAddressOfLeftOperand
   templateQualification
 )
 
@@ -128,6 +129,7 @@ set(group1_tests
   getDependentDecls
   replaceWithPattern
   buildUsingDirectiveStatement
+  normalizeArrowExpWithAddressOfLeftOperand
 )
 
 foreach(test ${group1_tests})

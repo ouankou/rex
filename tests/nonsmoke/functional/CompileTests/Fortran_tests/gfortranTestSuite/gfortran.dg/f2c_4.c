@@ -5,8 +5,8 @@
   
    Simplified from f2c output and tested with g77 */
 
-/* We used to #include <complex.h>, but this fails for some platforms
-   (like cygwin) who don't have it yet.  */
+/* We used to #include <complex.h>, but this fails for some targets
+   that don't have it yet.  */
 #define complex __complex__
 #define _Complex_I (1.0iF)
 

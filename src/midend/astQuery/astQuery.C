@@ -26,7 +26,7 @@ VariantVector::VariantVector ( const VariantT & X )
 
   // printVariantVector(*this);
   // printf ("End of VariantVector constructor \n");
-  // ROSE_ASSERT (false);
+  // ROSE_ABORT();
 }
 
 VariantVector::VariantVector ( const VariantVector & X )

@@ -26,58 +26,50 @@ class doubleArray_Data_Hash_Table
   /* We build a special sort of hash table that is two dimensional.
   // The first dimension acts the way a usual hash table works, but the
   // second dimension acts as a cache by letting the first several
-  // (determined by the Hash_Table_Depth) buckets to exist in an 
-  // array where the access is very fast.  Additional entries are 
+  // (determined by the Hash_Table_Depth) buckets to exist in an
+  // array where the access is very fast.  Additional entries are
   // available as in a standard hash table by having a linked list
   // at the end of the last bucket in the array of buckets of length
-  // Hash_Table_Depth.  The idea behind this sort of hash table is that 
+  // Hash_Table_Depth.  The idea behind this sort of hash table is that
   // there are very few entries to be stored in the hash table so
-  // it can almost always avoid the mallocing of the small bucket 
-  // objects, and thus the method should be fast on the CRAY!
+  // it can almost always avoid the mallocing of the small bucket
+  // objects, and thus the method should be fast on vector systems.
   */
 
-     class double_Hashed_Array_Type
-        {
-          public:
-             int Memory_Size;
-             double* Raw_Memory;
+  class double_Hashed_Array_Type {
+  public:
+    int Memory_Size;
+    double *Raw_Memory;
 
-            ~double_Hashed_Array_Type () 
-                {
-               // Memory_Size = 0;
-               // delete []Raw_Memory;
-                  delete Raw_Memory;
-                };
+    ~double_Hashed_Array_Type() {
+      // Memory_Size = 0;
+      // delete []Raw_Memory;
+      delete Raw_Memory;
+    };
 
-             double_Hashed_Array_Type () : Memory_Size (0), Raw_Memory (NULL) 
-                { };
+    double_Hashed_Array_Type() : Memory_Size(0), Raw_Memory(NULL) {};
 
-             double_Hashed_Array_Type ( int Size ) : Memory_Size (Size)
-                { 
-               // We need access to the descriptor to allocate memory using the MDI functions!
-               // Raw_Memory = MDI_double_Allocate ();
-                  Raw_Memory = (double*) malloc ( Size * sizeof(double) );
-                };
+    double_Hashed_Array_Type(int Size) : Memory_Size(Size) {
+      // We need access to the descriptor to allocate memory using the MDI
+      // functions! Raw_Memory = MDI_double_Allocate ();
+      Raw_Memory = (double *)malloc(Size * sizeof(double));
+    };
 
-             double_Hashed_Array_Type ( double* Memory_To_Store , int Size ) : Memory_Size (Size),
-                                                                    Raw_Memory (Memory_To_Store)
-                { };
+    double_Hashed_Array_Type(double *Memory_To_Store, int Size)
+        : Memory_Size(Size), Raw_Memory(Memory_To_Store) {};
 
-          /* Used to resize existing memory, if the correct size was not found! */
-             double_Hashed_Array_Type & redim( int New_Size )
-                {
-                  Memory_Size = New_Size;
-                  if (Raw_Memory == NULL)
-                     {
-                       Raw_Memory  = (double*) ( malloc ( New_Size * sizeof(double) ) );
-                     }
-                    else
-                     {
-                       Raw_Memory  = (double*) ( realloc ( (char *) Raw_Memory , New_Size * sizeof(double) ) );
-                     }
+    /* Used to resize existing memory, if the correct size was not found! */
+    double_Hashed_Array_Type &redim(int New_Size) {
+      Memory_Size = New_Size;
+      if (Raw_Memory == NULL) {
+        Raw_Memory = (double *)(malloc(New_Size * sizeof(double)));
+      } else {
+        Raw_Memory =
+            (double *)(realloc((char *)Raw_Memory, New_Size * sizeof(double)));
+      }
 
-                  return *this;
-                };
+      return *this;
+    };
         };
 
      public:
@@ -90,19 +82,19 @@ class doubleArray_Data_Hash_Table
 
           double_Hashed_Array_Type *Search_Table [NUMBER_OF_BUCKETS][HASH_TABLE_DEPTH];
 
-       /* This stores the largest values of the indexes used in the
-       // HASH_TABLE_DEPTH dimension of the search table.  Thus the
-       // searching of the search table is shortened from the maximum of
-       // the worst case and the search table can contain NULL entries
-       // which will then be skipped over instead of signaling the end
-       // of the list of entries in the search table bucket list.  
-       // This avoids the problem of having to  all the entries 
-       // in a bucket list so that the list is a contigous set of non-NULL
-       // pointers. It is a little bit complicated but allows for very 
-       // fast access to the hash table data with mimimal calls to the 
-       // heap to add new buckets to the list etc.  It is entended to be
-       // very fast on the CRAY!
-       */
+          /* This stores the largest values of the indexes used in the
+          // HASH_TABLE_DEPTH dimension of the search table.  Thus the
+          // searching of the search table is shortened from the maximum of
+          // the worst case and the search table can contain NULL entries
+          // which will then be skipped over instead of signaling the end
+          // of the list of entries in the search table bucket list.
+          // This avoids the problem of having to  all the entries
+          // in a bucket list so that the list is a contigous set of non-NULL
+          // pointers. It is a little bit complicated but allows for very
+          // fast access to the hash table data with mimimal calls to the
+          // heap to add new buckets to the list etc.  It is entended to be
+          // very fast on vector systems.
+          */
 
           int Max_Index_In_Table [NUMBER_OF_BUCKETS];
           
@@ -121,58 +113,50 @@ class floatArray_Data_Hash_Table
   /* We build a special sort of hash table that is two dimensional.
   // The first dimension acts the way a usual hash table works, but the
   // second dimension acts as a cache by letting the first several
-  // (determined by the Hash_Table_Depth) buckets to exist in an 
-  // array where the access is very fast.  Additional entries are 
+  // (determined by the Hash_Table_Depth) buckets to exist in an
+  // array where the access is very fast.  Additional entries are
   // available as in a standard hash table by having a linked list
   // at the end of the last bucket in the array of buckets of length
-  // Hash_Table_Depth.  The idea behind this sort of hash table is that 
+  // Hash_Table_Depth.  The idea behind this sort of hash table is that
   // there are very few entries to be stored in the hash table so
-  // it can almost always avoid the mallocing of the small bucket 
-  // objects, and thus the method should be fast on the CRAY!
+  // it can almost always avoid the mallocing of the small bucket
+  // objects, and thus the method should be fast on vector systems.
   */
 
-     class float_Hashed_Array_Type
-        {
-          public:
-             int Memory_Size;
-             float* Raw_Memory;
+  class float_Hashed_Array_Type {
+  public:
+    int Memory_Size;
+    float *Raw_Memory;
 
-            ~float_Hashed_Array_Type () 
-                {
-               // Memory_Size = 0;
-               // delete []Raw_Memory;
-                  delete Raw_Memory;
-                };
+    ~float_Hashed_Array_Type() {
+      // Memory_Size = 0;
+      // delete []Raw_Memory;
+      delete Raw_Memory;
+    };
 
-             float_Hashed_Array_Type () : Memory_Size (0), Raw_Memory (NULL) 
-                { };
+    float_Hashed_Array_Type() : Memory_Size(0), Raw_Memory(NULL) {};
 
-             float_Hashed_Array_Type ( int Size ) : Memory_Size (Size)
-                { 
-               // We need access to the descriptor to allocate memory using the MDI functions!
-               // Raw_Memory = MDI_float_Allocate ();
-                  Raw_Memory = (float*) malloc ( Size * sizeof(float) );
-                };
+    float_Hashed_Array_Type(int Size) : Memory_Size(Size) {
+      // We need access to the descriptor to allocate memory using the MDI
+      // functions! Raw_Memory = MDI_float_Allocate ();
+      Raw_Memory = (float *)malloc(Size * sizeof(float));
+    };
 
-             float_Hashed_Array_Type ( float* Memory_To_Store , int Size ) : Memory_Size (Size),
-                                                                    Raw_Memory (Memory_To_Store)
-                { };
+    float_Hashed_Array_Type(float *Memory_To_Store, int Size)
+        : Memory_Size(Size), Raw_Memory(Memory_To_Store) {};
 
-          /* Used to resize existing memory, if the correct size was not found! */
-             float_Hashed_Array_Type & redim( int New_Size )
-                {
-                  Memory_Size = New_Size;
-                  if (Raw_Memory == NULL)
-                     {
-                       Raw_Memory  = (float*) ( malloc ( New_Size * sizeof(float) ) );
-                     }
-                    else
-                     {
-                       Raw_Memory  = (float*) ( realloc ( (char *) Raw_Memory , New_Size * sizeof(float) ) );
-                     }
+    /* Used to resize existing memory, if the correct size was not found! */
+    float_Hashed_Array_Type &redim(int New_Size) {
+      Memory_Size = New_Size;
+      if (Raw_Memory == NULL) {
+        Raw_Memory = (float *)(malloc(New_Size * sizeof(float)));
+      } else {
+        Raw_Memory =
+            (float *)(realloc((char *)Raw_Memory, New_Size * sizeof(float)));
+      }
 
-                  return *this;
-                };
+      return *this;
+    };
         };
 
      public:
@@ -185,19 +169,19 @@ class floatArray_Data_Hash_Table
 
           float_Hashed_Array_Type *Search_Table [NUMBER_OF_BUCKETS][HASH_TABLE_DEPTH];
 
-       /* This stores the largest values of the indexes used in the
-       // HASH_TABLE_DEPTH dimension of the search table.  Thus the
-       // searching of the search table is shortened from the maximum of
-       // the worst case and the search table can contain NULL entries
-       // which will then be skipped over instead of signaling the end
-       // of the list of entries in the search table bucket list.  
-       // This avoids the problem of having to  all the entries 
-       // in a bucket list so that the list is a contigous set of non-NULL
-       // pointers. It is a little bit complicated but allows for very 
-       // fast access to the hash table data with mimimal calls to the 
-       // heap to add new buckets to the list etc.  It is entended to be
-       // very fast on the CRAY!
-       */
+          /* This stores the largest values of the indexes used in the
+          // HASH_TABLE_DEPTH dimension of the search table.  Thus the
+          // searching of the search table is shortened from the maximum of
+          // the worst case and the search table can contain NULL entries
+          // which will then be skipped over instead of signaling the end
+          // of the list of entries in the search table bucket list.
+          // This avoids the problem of having to  all the entries
+          // in a bucket list so that the list is a contigous set of non-NULL
+          // pointers. It is a little bit complicated but allows for very
+          // fast access to the hash table data with mimimal calls to the
+          // heap to add new buckets to the list etc.  It is entended to be
+          // very fast on vector systems.
+          */
 
           int Max_Index_In_Table [NUMBER_OF_BUCKETS];
           
@@ -216,58 +200,50 @@ class intArray_Data_Hash_Table
   /* We build a special sort of hash table that is two dimensional.
   // The first dimension acts the way a usual hash table works, but the
   // second dimension acts as a cache by letting the first several
-  // (determined by the Hash_Table_Depth) buckets to exist in an 
-  // array where the access is very fast.  Additional entries are 
+  // (determined by the Hash_Table_Depth) buckets to exist in an
+  // array where the access is very fast.  Additional entries are
   // available as in a standard hash table by having a linked list
   // at the end of the last bucket in the array of buckets of length
-  // Hash_Table_Depth.  The idea behind this sort of hash table is that 
+  // Hash_Table_Depth.  The idea behind this sort of hash table is that
   // there are very few entries to be stored in the hash table so
-  // it can almost always avoid the mallocing of the small bucket 
-  // objects, and thus the method should be fast on the CRAY!
+  // it can almost always avoid the mallocing of the small bucket
+  // objects, and thus the method should be fast on vector systems.
   */
 
-     class int_Hashed_Array_Type
-        {
-          public:
-             int Memory_Size;
-             int* Raw_Memory;
+  class int_Hashed_Array_Type {
+  public:
+    int Memory_Size;
+    int *Raw_Memory;
 
-            ~int_Hashed_Array_Type () 
-                {
-               // Memory_Size = 0;
-               // delete []Raw_Memory;
-                  delete Raw_Memory;
-                };
+    ~int_Hashed_Array_Type() {
+      // Memory_Size = 0;
+      // delete []Raw_Memory;
+      delete Raw_Memory;
+    };
 
-             int_Hashed_Array_Type () : Memory_Size (0), Raw_Memory (NULL) 
-                { };
+    int_Hashed_Array_Type() : Memory_Size(0), Raw_Memory(NULL) {};
 
-             int_Hashed_Array_Type ( int Size ) : Memory_Size (Size)
-                { 
-               // We need access to the descriptor to allocate memory using the MDI functions!
-               // Raw_Memory = MDI_int_Allocate ();
-                  Raw_Memory = (int*) malloc ( Size * sizeof(int) );
-                };
+    int_Hashed_Array_Type(int Size) : Memory_Size(Size) {
+      // We need access to the descriptor to allocate memory using the MDI
+      // functions! Raw_Memory = MDI_int_Allocate ();
+      Raw_Memory = (int *)malloc(Size * sizeof(int));
+    };
 
-             int_Hashed_Array_Type ( int* Memory_To_Store , int Size ) : Memory_Size (Size),
-                                                                    Raw_Memory (Memory_To_Store)
-                { };
+    int_Hashed_Array_Type(int *Memory_To_Store, int Size)
+        : Memory_Size(Size), Raw_Memory(Memory_To_Store) {};
 
-          /* Used to resize existing memory, if the correct size was not found! */
-             int_Hashed_Array_Type & redim( int New_Size )
-                {
-                  Memory_Size = New_Size;
-                  if (Raw_Memory == NULL)
-                     {
-                       Raw_Memory  = (int*) ( malloc ( New_Size * sizeof(int) ) );
-                     }
-                    else
-                     {
-                       Raw_Memory  = (int*) ( realloc ( (char *) Raw_Memory , New_Size * sizeof(int) ) );
-                     }
+    /* Used to resize existing memory, if the correct size was not found! */
+    int_Hashed_Array_Type &redim(int New_Size) {
+      Memory_Size = New_Size;
+      if (Raw_Memory == NULL) {
+        Raw_Memory = (int *)(malloc(New_Size * sizeof(int)));
+      } else {
+        Raw_Memory =
+            (int *)(realloc((char *)Raw_Memory, New_Size * sizeof(int)));
+      }
 
-                  return *this;
-                };
+      return *this;
+    };
         };
 
      public:
@@ -280,19 +256,19 @@ class intArray_Data_Hash_Table
 
           int_Hashed_Array_Type *Search_Table [NUMBER_OF_BUCKETS][HASH_TABLE_DEPTH];
 
-       /* This stores the largest values of the indexes used in the
-       // HASH_TABLE_DEPTH dimension of the search table.  Thus the
-       // searching of the search table is shortened from the maximum of
-       // the worst case and the search table can contain NULL entries
-       // which will then be skipped over instead of signaling the end
-       // of the list of entries in the search table bucket list.  
-       // This avoids the problem of having to  all the entries 
-       // in a bucket list so that the list is a contigous set of non-NULL
-       // pointers. It is a little bit complicated but allows for very 
-       // fast access to the hash table data with mimimal calls to the 
-       // heap to add new buckets to the list etc.  It is entended to be
-       // very fast on the CRAY!
-       */
+          /* This stores the largest values of the indexes used in the
+          // HASH_TABLE_DEPTH dimension of the search table.  Thus the
+          // searching of the search table is shortened from the maximum of
+          // the worst case and the search table can contain NULL entries
+          // which will then be skipped over instead of signaling the end
+          // of the list of entries in the search table bucket list.
+          // This avoids the problem of having to  all the entries
+          // in a bucket list so that the list is a contigous set of non-NULL
+          // pointers. It is a little bit complicated but allows for very
+          // fast access to the hash table data with mimimal calls to the
+          // heap to add new buckets to the list etc.  It is entended to be
+          // very fast on vector systems.
+          */
 
           int Max_Index_In_Table [NUMBER_OF_BUCKETS];
           
@@ -308,8 +284,3 @@ class intArray_Data_Hash_Table
 
 
 #endif  /* !defined(_PPP_HASH_H) */
-
-
-
-
-

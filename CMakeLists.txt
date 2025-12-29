@@ -255,10 +255,15 @@ endif()
 # Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
 option(enable-fortran "Enable Fortran analysis." OFF)
 
-# JVM-based Open Fortran Parser (OFP) dependency (required until Flang integration)
+# JVM-based Open Fortran Parser (OFP) dependency (legacy frontend)
 option(enable-fortran-ofp "Enable JVM-based Open Fortran Parser (OFP) support." ON)
-if(enable-fortran AND NOT enable-fortran-ofp)
-  message(FATAL_ERROR "Fortran analysis currently requires the JVM-based Open Fortran Parser (OFP). Set -Denable-fortran-ofp=ON or disable Fortran.")
+
+# Experimental Flang frontend (f18)
+option(enable-fortran-flang "Enable experimental Flang frontend (f18) support." OFF)
+set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
+
+if(enable-fortran AND NOT (enable-fortran-ofp OR enable-fortran-flang))
+  message(FATAL_ERROR "Fortran analysis requires at least one frontend: OFP or Flang. Set -Denable-fortran-ofp=ON or -Denable-fortran-flang=ON, or disable Fortran.")
 endif()
 
 if(enable-fortran AND enable-fortran-ofp)
@@ -301,6 +306,50 @@ if(enable-fortran AND enable-fortran-ofp)
       "endif()\n")
     set_property(DIRECTORY PROPERTY TEST_INCLUDE_FILE "${_rose_ctest_env}")
   endif()
+endif()
+
+if(enable-fortran AND enable-fortran-flang)
+  if(NOT LLVM_FOUND)
+    find_package(LLVM REQUIRED CONFIG)
+  endif()
+
+  set(_flang_search_dirs "")
+  if(FLANG_ROOT)
+    list(APPEND _flang_search_dirs "${FLANG_ROOT}/lib" "${FLANG_ROOT}/lib64")
+  endif()
+  if(LLVM_LIBRARY_DIRS)
+    list(APPEND _flang_search_dirs ${LLVM_LIBRARY_DIRS})
+  endif()
+  set(FLANG_INCLUDE_DIRS "")
+  if(FLANG_ROOT)
+    list(APPEND FLANG_INCLUDE_DIRS "${FLANG_ROOT}/include")
+  endif()
+  if(LLVM_INCLUDE_DIRS)
+    list(APPEND FLANG_INCLUDE_DIRS ${LLVM_INCLUDE_DIRS})
+  endif()
+  list(REMOVE_DUPLICATES FLANG_INCLUDE_DIRS)
+
+  set(_flang_lib_names FortranCommon FortranParser FortranSemantics
+    FortranEvaluate FortranLower FortranRuntime FortranDecimal)
+  set(FLANG_LIBS "")
+  set(_flang_missing "")
+  foreach(_flang_lib ${_flang_lib_names})
+    unset(_flang_lib_path CACHE)
+    find_library(_flang_lib_path NAMES ${_flang_lib} PATHS ${_flang_search_dirs} NO_DEFAULT_PATH)
+    if(NOT _flang_lib_path)
+      find_library(_flang_lib_path NAMES ${_flang_lib})
+    endif()
+    if(_flang_lib_path)
+      list(APPEND FLANG_LIBS ${_flang_lib_path})
+    else()
+      list(APPEND _flang_missing ${_flang_lib})
+    endif()
+  endforeach()
+  if(_flang_missing)
+    message(FATAL_ERROR "Flang libraries not found: ${_flang_missing}. Set -DFLANG_ROOT=... or disable enable-fortran-flang.")
+  endif()
+
+  add_compile_definitions(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
 endif()
 
 # OpenCL
@@ -472,7 +521,7 @@ if(enable-microsoft-extensions)
 endif()
 
 if(enable-fortran AND enable-fortran-ofp)
-  set(enable-ofp-version "20200704" CACHE STRING "version number for OFP")
+  set(enable-ofp-version "20200819-JDK8" CACHE STRING "version number for OFP")
   set(ENV{CLASSPATH} "${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar:${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/fortran-parser/OpenFortranParser-${enable-ofp-version}.jar")
 endif()
 
@@ -773,9 +822,7 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/constantFolding
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/runtimeTransformation
-  ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include
-  ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include
-  ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/win32/include)
+  ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include)
 
 ########################################################################################################################
 # Set output directories

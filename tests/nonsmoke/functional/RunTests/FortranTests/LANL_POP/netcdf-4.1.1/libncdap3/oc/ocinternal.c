@@ -38,21 +38,6 @@ static OCerror createtempfile(OCstate*,OCtree*);
 
 extern OCnode* makeunlimiteddimension(void);
 
-#ifdef WIN32
-#include <fcntl.h>
-#define _S_IREAD 256
-#define _S_IWRITE 128
-int mkstemp(char *tmpl)
-{
-   int ret=-1;
-
-mktemp(tmpl); ret=open(tmpl,O_RDWR|O_BINARY|O_CREAT|O_EXCL|_O_SHORT_LIVED, _S_IREAD|_S_IWRITE);
-
-   return ret;
-}
-
-#endif
-
 /* Global flags*/
 static int oc_big_endian;
 int oc_network_order; /* network order is big endian */

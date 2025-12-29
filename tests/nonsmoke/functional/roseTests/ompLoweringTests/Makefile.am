@@ -173,16 +173,13 @@ REX_C_TESTCODES_REQUIRED_TO_RUN = \
 	single3.c \
 	omp_version.c
 
-# DQ (9/27/2009): Conditionally compile these files (fail in OSX due to lack of OSX
-# support for thread local storage). Liao knows more about the details of these tests.
+# Threadprivate tests remain disabled in REX.
 # threadprivate.c
 # threadprivate2.c
 # threadprivate3.c
 
 # REX doesn't support these tests yet.
-#if !OS_MACOSX
-#   C_TESTCODES_REQUIRED_TO_RUN += threadprivate.c threadprivate2.c threadprivate3.c
-#endif
+# C_TESTCODES_REQUIRED_TO_RUN += threadprivate.c threadprivate2.c threadprivate3.c
 
 # C++ test codes which can only be compiled
 CXX_TESTCODES_REQUIRED_TO_COMPILE = \
@@ -396,14 +393,6 @@ conditional-check-local: roseomp
 	$(MAKE) $(PASSING_C_TEST_Objects)
 	$(MAKE)	$(PASSING_OMP_ACC_TEST_CUDA_Files)
 	$(MAKE)	$(PASSING_OMP_ACC_TEST_CXX_CUDA_Files)
-if OS_MACOSX
-#	DQ (9/27/2009): We need to generate this file temporaily because the documentation depends on it.
-#	However, documentation should only depend upon generated files in the tutorial directory.
-#	Please more the test to the tutorial directory if it is only for documentation purposes
-#	or recreate it there for purposes of documentation and leave it here for purposes of testing
-#	(I would like to not mix the two purposes together).
-	@echo "/* threadprivate.c not run on MAC OSX (no thread local storage on OSX). */" > rose_threadprivate.c
-endif
 	@echo "***************** Testing C++ input ******************"
 	$(MAKE) $(PASSING_CXX_TEST_Objects)
 	@echo "***********************************************************************************************************"
@@ -441,14 +430,6 @@ conditional-check-local: roseomp
 	$(MAKE) $(PASSING_C_TEST_Objects)
 	$(MAKE)	$(PASSING_OMP_ACC_TEST_CUDA_Files)
 	$(MAKE)	$(PASSING_OMP_ACC_TEST_CXX_CUDA_Files)
-if OS_MACOSX
-#	DQ (9/27/2009): We need to generate this file temporaily because the documentation depends on it.
-#	However, documentation should only depend upon generated files in the tutorial directory.
-#	Please more the test to the tutorial directory if it is only for documentation purposes
-#	or recreate it there for purposes of documentation and leave it here for purposes of testing
-#	(I would like to not mix the two purposes together).
-	@echo "/* threadprivate.c not run on MAC OSX (no thread local storage on OSX). */" > rose_threadprivate.c
-endif
 	@echo "***************** Testing C++ input ******************"
 	$(MAKE) $(PASSING_CXX_TEST_Objects)
 	@echo "***********************************************************************************************************"
@@ -473,14 +454,6 @@ conditional-check-local: roseomp
 	@$(MAKE) $(PASSING_C_TEST_Objects) $(C_TEST_OBJECT_REQUIRED_TO_RUN)
 #		$(PASSING_C_TEST_Objects) $(C_TEST_OBJECT_REQUIRED_TO_RUN) $(PASSING_OMP_ACC_TEST_CUDA_Files) \
 #		$(PASSING_CXX_TEST_Objects) $(CXX_TEST_OBJECT_REQUIRED_TO_RUN) $(PASSING_OMP_ACC_TEST_CXX_CUDA_Files)
-if OS_MACOSX
-#	DQ (9/27/2009): We need to generate this file temporaily because the documentation depends on it.
-#	However, documentation should only depend upon generated files in the tutorial directory.
-#	Please more the test to the tutorial directory if it is only for documentation purposes
-#	or recreate it there for purposes of documentation and leave it here for purposes of testing
-#	(I would like to not mix the two purposes together).
-	@echo "/* threadprivate.c not run on MAC OSX (no thread local storage on OSX). */" > rose_threadprivate.c
-endif
 #	$(MAKE) $(PASSING_Objects_With_main) # make objects with main entries here 
 	@echo "***********************************************************************************************************"
 	@echo "****** ROSE/tests/nonsmoke/functional/roseTests/ompLoweringTests:                                                        ******"
@@ -539,5 +512,4 @@ clean-local:
 EXTRA_DIST = ROSEXOMPReference
 
 CLEANFILES = 
-
 

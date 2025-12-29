@@ -71,11 +71,7 @@ process_headers()
   else
     [ -n "$VERBOSE" ] && echo "$src_dir needs to be copied and modified"
     find "$src_dir/." -type d -a -print | sed -n "s|^${src_dir}\\(.*\\)\$|mkdir -p '$target_dir/\\1'|p" | sh -s
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-    find "$src_dir/." -type f -a -print | sed -n "s|^${src_dir}\\(.*\\)\$|ln -s -F '&' '$target_dir/\\1'|p" | sh -s
-    else
     find "$src_dir/." -type f -a -print | sed -n "s|^${src_dir}\\(.*\\)\$|ln -s --force '&' '$target_dir/\\1'|p" | sh -s
-    fi
   # find "$src_dir/." -type f -a -print | sed -n "s|^${src_dir}\\(.*\\)\$|ln -s '&' '$target_dir/\\1'|p" | sh -s &
     [ -n "$VERBOSE" ] && echo "Done copying"
     # Find the special-case files to process
@@ -376,11 +372,8 @@ fi
 
 
 ###### Fixups for cdefs.h
-## PP (05/15/19) solaris does not seem to have a cdefs.h file
-if [[ "$OSTYPE" != solaris2* ]]; then
-
 # Replace "#include "/.../cdefs.h" with the path that's valid for this platform, copying the file from the ROSE source
-# tree to the build tree in the process (because the source tree should not be modified when building).  The old behavior
+# tree to the build tree in the process (because the source tree should not be modified when building). The old behavior
 # was for this script to call "exit 5" if a hard-coded system cdefs.h didn't exist. [Robb Matzke, 2015-11-04]
 rose_src_cdefs_h="$roseHome/config/rose_specific_cdefs.h"
 rose_bld_cdefs_h="$system_headers_directory/sys/cdefs.h"
@@ -390,19 +383,12 @@ if [ "$rose_system_cdefs_h" = "" ]; then
     exit 5
 elif [ ! -r "$rose_system_cdefs_h" ]; then
     # The "#include </.../cdefs.h> in the ROSE-specific cdefs.h is wrong, so try to fix it.
-    # CLANG FRONTEND FIX: Exclude newlib paths and prefer architecture-specific paths
-    # Look for arch-specific cdefs.h first (e.g., x86_64-linux-gnu, aarch64-linux-gnu, loongarch64-linux-gnu)
+    # CLANG FRONTEND FIX: Exclude newlib paths and prefer architecture-specific paths.
+    # Look for arch-specific cdefs.h first (e.g., x86_64-linux-gnu, aarch64-linux-gnu, loongarch64-linux-gnu).
     real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h -path '*-linux-gnu/sys/cdefs.h' | head -n1)
-    # Fallback to generic search if arch-specific not found, but exclude newlib
+    # Fallback to generic search if arch-specific not found, but exclude newlib.
     if [ -z "$real_system_cdefs_h" ] || [ ! -r "$real_system_cdefs_h" ]; then
         real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h -not -path '*/newlib/*' | head -n1)
-    fi
-
-    # Fix cdefs.h path for later versions of Mac OSX [Craig Rasmussen, 2019-01-23]
-    if [[ "$OSTYPE" == "darwin18" ]]; then
-        real_system_cdefs_h="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk/usr/include/sys/cdefs.h"
-    elif [[ "$OSTYPE" == "darwin19" || "$OSTYPE" == "darwin20" ]]; then
-        real_system_cdefs_h="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/cdefs.h"
     fi
 
     if [ ! -r "$real_system_cdefs_h" ]; then
@@ -426,18 +412,7 @@ else
     # an extension).  This is a problem for legacy frontend and we fix it this way.
     cp "$rose_src_cdefs_h" "$rose_bld_cdefs_h" || exit 1
 fi
-
-fi  # SOLARIS test  
 ###### End of fixups for cdefs.h
-
-
-###### FIXUP for missing err.h on Solaris
-## PP (05/15/19)
-if [[ "$OSTYPE" = solaris2* ]]; then
-  echo "Solaris Fix: install fake err.h in src/roseSupport"
-  cp "$roseHome/solaris-includes/err.h" "$roseHome/src/roseSupport/"
-fi
-###### End of fixup for missing err.h on Solaris
 
 # echo "Processing header files to language = $language"
 

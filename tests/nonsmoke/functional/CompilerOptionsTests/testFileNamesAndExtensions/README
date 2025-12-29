@@ -29,8 +29,7 @@ c:C:cpp:CPP:cxx:CXX:cc
 #######################################################
 EXAMPLES OF CASE (IN)SENSITIVE systems:
 ------------------------------------------------------
-Some systems are case sensitive (like UNIX/LINUX),
-some are not (like MAC/DOS/WINDOWZ)
+Some systems are case sensitive, some are not.
 
 #######################################################
 MY changes to DAN's cpp file name checker

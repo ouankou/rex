@@ -234,19 +234,18 @@ class BaseArray
           virtual void Allocate_Array_Data ( bool Force_Memory_Allocation = TRUE ) = 0;
 #endif
 
-#if 1   
-       // Bugs in the Sun C++ compiler have routinely caused the base class member functions
-       // to be called instead of the derived class.  One solution might be to have the
-       // Array_ID variable stored in the base class so that it can always be accessed from 
-       // the base class.  Since the other function is only defined for APP and PPP
-       // I think the definition of some virtual function here is required.
-       // virtual int Array_ID () const = 0;
-          virtual int Dummy_Function_Array_ID () const
-             { 
-               printf ("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
-               APP_ABORT();
-               return -1000;
-             }
+#if 1
+  // Bugs in the legacy C++ compiler have routinely caused the base class member
+  // functions to be called instead of the derived class.  One solution might be
+  // to have the Array_ID variable stored in the base class so that it can
+  // always be accessed from the base class.  Since the other function is only
+  // defined for APP and PPP I think the definition of some virtual function
+  // here is required. virtual int Array_ID () const = 0;
+  virtual int Dummy_Function_Array_ID() const {
+    printf("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
+    APP_ABORT();
+    return -1000;
+  }
 #endif
 
 #if defined(APP) || defined(PPP)
@@ -1900,9 +1899,10 @@ friend class intArray_Aggregate_Operator;
         doubleArray & redim ( const Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List );
         doubleArray & redim ( const Index_Pointer_Array_MAX_ARRAY_DIMENSION_Type Internal_Index_List );
 
-     // The Sun C++ compiler can't handle template declarations in non templated classes
-     // template<class T, int Template_Dimension>
-     // doubleArray & redim ( const Array_Descriptor_Type<T,Template_Dimension> & X );
+        // The legacy C++ compiler can't handle template declarations in non
+        // templated classes template<class T, int Template_Dimension>
+        // doubleArray & redim ( const
+        // Array_Descriptor_Type<T,Template_Dimension> & X );
         doubleArray & redim ( const Array_Domain_Type & X );
 
      // Changes dimensions of array object with no change in number of elements
@@ -2847,19 +2847,18 @@ class BaseArray
           virtual void Allocate_Array_Data ( bool Force_Memory_Allocation = TRUE ) = 0;
 #endif
 
-#if 1   
-       // Bugs in the Sun C++ compiler have routinely caused the base class member functions
-       // to be called instead of the derived class.  One solution might be to have the
-       // Array_ID variable stored in the base class so that it can always be accessed from 
-       // the base class.  Since the other function is only defined for APP and PPP
-       // I think the definition of some virtual function here is required.
-       // virtual int Array_ID () const = 0;
-          virtual int Dummy_Function_Array_ID () const
-             { 
-               printf ("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
-               APP_ABORT();
-               return -1000;
-             }
+#if 1
+  // Bugs in the legacy C++ compiler have routinely caused the base class member
+  // functions to be called instead of the derived class.  One solution might be
+  // to have the Array_ID variable stored in the base class so that it can
+  // always be accessed from the base class.  Since the other function is only
+  // defined for APP and PPP I think the definition of some virtual function
+  // here is required. virtual int Array_ID () const = 0;
+  virtual int Dummy_Function_Array_ID() const {
+    printf("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
+    APP_ABORT();
+    return -1000;
+  }
 #endif
 
 #if defined(APP) || defined(PPP)
@@ -4513,9 +4512,10 @@ friend class intArray_Aggregate_Operator;
         floatArray & redim ( const Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List );
         floatArray & redim ( const Index_Pointer_Array_MAX_ARRAY_DIMENSION_Type Internal_Index_List );
 
-     // The Sun C++ compiler can't handle template declarations in non templated classes
-     // template<class T, int Template_Dimension>
-     // floatArray & redim ( const Array_Descriptor_Type<T,Template_Dimension> & X );
+        // The legacy C++ compiler can't handle template declarations in non
+        // templated classes template<class T, int Template_Dimension>
+        // floatArray & redim ( const
+        // Array_Descriptor_Type<T,Template_Dimension> & X );
         floatArray & redim ( const Array_Domain_Type & X );
 
      // Changes dimensions of array object with no change in number of elements
@@ -5460,19 +5460,18 @@ class BaseArray
           virtual void Allocate_Array_Data ( bool Force_Memory_Allocation = TRUE ) = 0;
 #endif
 
-#if 1   
-       // Bugs in the Sun C++ compiler have routinely caused the base class member functions
-       // to be called instead of the derived class.  One solution might be to have the
-       // Array_ID variable stored in the base class so that it can always be accessed from 
-       // the base class.  Since the other function is only defined for APP and PPP
-       // I think the definition of some virtual function here is required.
-       // virtual int Array_ID () const = 0;
-          virtual int Dummy_Function_Array_ID () const
-             { 
-               printf ("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
-               APP_ABORT();
-               return -1000;
-             }
+#if 1
+  // Bugs in the legacy C++ compiler have routinely caused the base class member
+  // functions to be called instead of the derived class.  One solution might be
+  // to have the Array_ID variable stored in the base class so that it can
+  // always be accessed from the base class.  Since the other function is only
+  // defined for APP and PPP I think the definition of some virtual function
+  // here is required. virtual int Array_ID () const = 0;
+  virtual int Dummy_Function_Array_ID() const {
+    printf("ERROR: Virtual Base Class called: BaseArray::Array_ID() \n");
+    APP_ABORT();
+    return -1000;
+  }
 #endif
 
 #if defined(APP) || defined(PPP)
@@ -7126,9 +7125,9 @@ friend class intArray_Aggregate_Operator;
         intArray & redim ( const Integer_Array_MAX_ARRAY_DIMENSION_Type Integer_List );
         intArray & redim ( const Index_Pointer_Array_MAX_ARRAY_DIMENSION_Type Internal_Index_List );
 
-     // The Sun C++ compiler can't handle template declarations in non templated classes
-     // template<class T, int Template_Dimension>
-     // intArray & redim ( const Array_Descriptor_Type<T,Template_Dimension> & X );
+        // The legacy C++ compiler can't handle template declarations in non
+        // templated classes template<class T, int Template_Dimension> intArray
+        // & redim ( const Array_Descriptor_Type<T,Template_Dimension> & X );
         intArray & redim ( const Array_Domain_Type & X );
 
      // Changes dimensions of array object with no change in number of elements

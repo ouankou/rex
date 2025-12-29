@@ -602,7 +602,7 @@ namespace SgNodeHelper {
 
   /// matches C and C++ function calls (also ctor and dtor)
   ExtendedCallInfo
-  matchExtendedNormalizedCall(SgNode*);
+  matchExtendedNormalizedCall(SgNode*, bool matchExtended=false);
 } // end of namespace SgNodeHelper
 
 #endif

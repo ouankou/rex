@@ -50,16 +50,7 @@
  * You may need to tweak this.
  */
 
-
-#if defined(IBM)
-#define wtime wtime
-#elif defined(CRAY)
-#define wtime WTIME
-#else
 #define wtime wtime_
-#endif
-
-
 
 void wtime(double *t)
 {
@@ -3950,8 +3941,4 @@ void timer_stop( int n )
 /*****************************************************************/
 /******            T  I  M  E  R  _  R  E  A  D             ******/
 /*****************************************************************/
-double timer_read( int n )
-{
-    return( elapsed[n] );
-}
-
+double timer_read(int n) { return (elapsed[n]); }

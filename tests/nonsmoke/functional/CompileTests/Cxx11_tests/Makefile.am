@@ -1009,9 +1009,6 @@ if USING_CLANG_COMPILER
    test2020_56.C 
 
 else
-if OS_MACOSX
-#      TESTCODES_REQUIRED_TO_PASS += 
-else
   TESTCODES_REQUIRED_TO_PASS += \
      test2016_23.C \
      test2016_35.C \
@@ -1061,7 +1058,6 @@ endif
    test2020_21.C 
 endif
 endif
-endif
 
 # DQ (9/21/2020) Notes:
 # test2014_88.C  Passing for GNU 6.1 and Intel v17, but fails only in CLANG (v10) and appears to be missing a builtin function or the builtin function is not correctly declared.
@@ -1097,29 +1093,6 @@ endif
 #   test2018_100.C 
 # endif
 # endif
-
-if OS_MACOSX
-#  TESTCODE_CURRENTLY_FAILING += \
-     test2016_12.C \
-     test2016_20.C \
-     test2016_23.C \
-     test2016_24.C \
-     test2016_33.C \
-     test2016_34.C \
-     test2016_35.C \
-     test2016_36.C \
-     test2016_90.C 
-else
-#  TESTCODES_REQUIRED_TO_PASS += \
-#     test2016_23.C \
-#     test2016_24.C \
-#     test2016_33.C \
-#     test2016_34.C \
-#     test2016_35.C \
-#     test2016_36.C 
-endif
-
-
 
 # Automake's testing mechanism (which defines the "make check" rule) requires passing tests.
 TESTCODES = \
@@ -1288,7 +1261,6 @@ if USING_CLANG_COMPILER
 # Exclude this list of files in the case of CLANG compiler.
 	@echo "USING_CLANG_COMPILER == true"
 	@echo "C++11 tests not allowed with legacy frontend 4.9: Clang backend compiler using legacy frontend 4.12 or greater frontend."
-# DQ (3/22/2020): Builtins are now mostly supported, allowing tests so that we can debug Mac support during COVID-19 work at home.
 # DQ (2/21/2017): Too many failing files due to builtin functions that are missing.
 #	@$(MAKE) $(PASSING_TEST_Objects)
 	@$(MAKE) $(PASSING_TEST_Source_passed)

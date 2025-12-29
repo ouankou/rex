@@ -50,72 +50,18 @@
 #include <sstream>
 #include <vector>
 
-#if GTEST_OS_LINUX
-
 // TODO(kenton@google.com): Use autoconf to detect availability of
 // gettimeofday().
-# define GTEST_HAS_GETTIMEOFDAY_ 1
+#define GTEST_HAS_GETTIMEOFDAY_ 1
 
-# include <fcntl.h>  // NOLINT
-# include <limits.h>  // NOLINT
-# include <sched.h>  // NOLINT
-// Declares vsnprintf().  This header is not available on Windows.
-# include <strings.h>  // NOLINT
-# include <sys/mman.h>  // NOLINT
-# include <sys/time.h>  // NOLINT
-# include <unistd.h>  // NOLINT
-# include <string>
-
-#elif GTEST_OS_SYMBIAN
-# define GTEST_HAS_GETTIMEOFDAY_ 1
-# include <sys/time.h>  // NOLINT
-
-#elif GTEST_OS_ZOS
-# define GTEST_HAS_GETTIMEOFDAY_ 1
-# include <sys/time.h>  // NOLINT
-
-// On z/OS we additionally need strings.h for strcasecmp.
-# include <strings.h>  // NOLINT
-
-#elif GTEST_OS_WINDOWS_MOBILE  // We are on Windows CE.
-
-# include <windows.h>  // NOLINT
-
-#elif GTEST_OS_WINDOWS  // We are on Windows proper.
-
-# include <io.h>  // NOLINT
-# include <sys/timeb.h>  // NOLINT
-# include <sys/types.h>  // NOLINT
-# include <sys/stat.h>  // NOLINT
-
-# if GTEST_OS_WINDOWS_MINGW
-// MinGW has gettimeofday() but not _ftime64().
-// TODO(kenton@google.com): Use autoconf to detect availability of
-//   gettimeofday().
-// TODO(kenton@google.com): There are other ways to get the time on
-//   Windows, like GetTickCount() or GetSystemTimeAsFileTime().  MinGW
-//   supports these.  consider using them instead.
-#  define GTEST_HAS_GETTIMEOFDAY_ 1
-#  include <sys/time.h>  // NOLINT
-# endif  // GTEST_OS_WINDOWS_MINGW
-
-// cpplint thinks that the header is already included, so we want to
-// silence it.
-# include <windows.h>  // NOLINT
-
-#else
-
-// Assume other platforms have gettimeofday().
-// TODO(kenton@google.com): Use autoconf to detect availability of
-//   gettimeofday().
-# define GTEST_HAS_GETTIMEOFDAY_ 1
-
-// cpplint thinks that the header is already included, so we want to
-// silence it.
-# include <sys/time.h>  // NOLINT
-# include <unistd.h>  // NOLINT
-
-#endif  // GTEST_OS_LINUX
+#include <fcntl.h>  // NOLINT
+#include <limits.h> // NOLINT
+#include <sched.h>  // NOLINT
+#include <string>
+#include <strings.h>  // NOLINT
+#include <sys/mman.h> // NOLINT
+#include <sys/time.h> // NOLINT
+#include <unistd.h>   // NOLINT
 
 #if GTEST_HAS_EXCEPTIONS
 # include <stdexcept>
@@ -134,10 +80,6 @@
 #define GTEST_IMPLEMENTATION_ 1
 #include "src/gtest-internal-inl.h"
 #undef GTEST_IMPLEMENTATION_
-
-#if GTEST_OS_WINDOWS
-# define vsnprintf _vsnprintf
-#endif  // GTEST_OS_WINDOWS
 
 namespace testing {
 
@@ -377,11 +319,7 @@ std::string g_executable_path;
 FilePath GetCurrentExecutableName() {
   FilePath result;
 
-#if GTEST_OS_WINDOWS
-  result.Set(FilePath(g_executable_path).RemoveExtension("exe"));
-#else
   result.Set(FilePath(g_executable_path));
-#endif  // GTEST_OS_WINDOWS
 
   return result.RemoveDirectoryName();
 }
@@ -415,10 +353,6 @@ std::string UnitTestOptions::GetAbsolutePathToOutputFile() {
 
   internal::FilePath output_name(colon + 1);
   if (!output_name.IsAbsolutePath())
-    // TODO(wan@google.com): on Windows \some\path is not an absolute
-    // path (as its meaning depends on the current drive), yet the
-    // following logic for turning it into an absolute path is wrong.
-    // Fix it.
     output_name = internal::FilePath::ConcatPaths(
         internal::FilePath(UnitTest::GetInstance()->original_working_dir()),
         internal::FilePath(colon + 1));
@@ -588,8 +522,8 @@ namespace internal {
 
 // Returns the type ID of ::testing::Test.  We should always call this
 // instead of GetTypeId< ::testing::Test>() to get the type ID of
-// testing::Test.  This is to work around a suspected linker bug when
-// using Google Test as a framework on Mac OS X.  The bug causes
+// testing::Test.  This is to work around a suspected linker issue in
+// some environments.  The bug causes
 // GetTypeId< ::testing::Test>() to return different values depending
 // on whether the call is from the Google Test framework itself or
 // from user test code.  GetTestTypeId() is guaranteed to always
@@ -778,95 +712,14 @@ std::string UnitTestImpl::CurrentOsStackTraceExceptTop(int skip_count) {
 
 // Returns the current time in milliseconds.
 TimeInMillis GetTimeInMillis() {
-#if GTEST_OS_WINDOWS_MOBILE || defined(__BORLANDC__)
-  // Difference between 1970-01-01 and 1601-01-01 in milliseconds.
-  // http://analogous.blogspot.com/2005/04/epoch.html
-  const TimeInMillis kJavaEpochToWinFileTimeDelta =
-    static_cast<TimeInMillis>(116444736UL) * 100000UL;
-  const DWORD kTenthMicrosInMilliSecond = 10000;
-
-  SYSTEMTIME now_systime;
-  FILETIME now_filetime;
-  ULARGE_INTEGER now_int64;
-  // TODO(kenton@google.com): Shouldn't this just use
-  //   GetSystemTimeAsFileTime()?
-  GetSystemTime(&now_systime);
-  if (SystemTimeToFileTime(&now_systime, &now_filetime)) {
-    now_int64.LowPart = now_filetime.dwLowDateTime;
-    now_int64.HighPart = now_filetime.dwHighDateTime;
-    now_int64.QuadPart = (now_int64.QuadPart / kTenthMicrosInMilliSecond) -
-      kJavaEpochToWinFileTimeDelta;
-    return now_int64.QuadPart;
-  }
-  return 0;
-#elif GTEST_OS_WINDOWS && !GTEST_HAS_GETTIMEOFDAY_
-  __timeb64 now;
-
-# ifdef _MSC_VER
-
-  // MSVC 8 deprecates _ftime64(), so we want to suppress warning 4996
-  // (deprecated function) there.
-  // TODO(kenton@google.com): Use GetTickCount()?  Or use
-  //   SystemTimeToFileTime()
-#  pragma warning(push)          // Saves the current warning state.
-#  pragma warning(disable:4996)  // Temporarily disables warning 4996.
-  _ftime64(&now);
-#  pragma warning(pop)           // Restores the warning state.
-# else
-
-  _ftime64(&now);
-
-# endif  // _MSC_VER
-
-  return static_cast<TimeInMillis>(now.time) * 1000 + now.millitm;
-#elif GTEST_HAS_GETTIMEOFDAY_
   struct timeval now;
   gettimeofday(&now, NULL);
   return static_cast<TimeInMillis>(now.tv_sec) * 1000 + now.tv_usec / 1000;
-#else
-# error "Don't know how to get the current time on your system."
-#endif
 }
 
 // Utilities
 
 // class String.
-
-#if GTEST_OS_WINDOWS_MOBILE
-// Creates a UTF-16 wide string from the given ANSI string, allocating
-// memory using new. The caller is responsible for deleting the return
-// value using delete[]. Returns the wide string, or NULL if the
-// input is NULL.
-LPCWSTR String::AnsiToUtf16(const char* ansi) {
-  if (!ansi) return NULL;
-  const int length = strlen(ansi);
-  const int unicode_length =
-      MultiByteToWideChar(CP_ACP, 0, ansi, length,
-                          NULL, 0);
-  WCHAR* unicode = new WCHAR[unicode_length + 1];
-  MultiByteToWideChar(CP_ACP, 0, ansi, length,
-                      unicode, unicode_length);
-  unicode[unicode_length] = 0;
-  return unicode;
-}
-
-// Creates an ANSI string from the given wide string, allocating
-// memory using new. The caller is responsible for deleting the return
-// value using delete[]. Returns the ANSI string, or NULL if the
-// input is NULL.
-const char* String::Utf16ToAnsi(LPCWSTR utf16_str)  {
-  if (!utf16_str) return NULL;
-  const int ansi_length =
-      WideCharToMultiByte(CP_ACP, 0, utf16_str, -1,
-                          NULL, 0, NULL, NULL);
-  char* ansi = new char[ansi_length + 1];
-  WideCharToMultiByte(CP_ACP, 0, utf16_str, -1,
-                      ansi, ansi_length, NULL, NULL);
-  ansi[ansi_length] = 0;
-  return ansi;
-}
-
-#endif  // GTEST_OS_WINDOWS_MOBILE
 
 // Compares two C strings.  Returns true iff they have the same content.
 //
@@ -1332,68 +1185,6 @@ AssertionResult IsNotSubstring(
 
 namespace internal {
 
-#if GTEST_OS_WINDOWS
-
-namespace {
-
-// Helper function for IsHRESULT{SuccessFailure} predicates
-AssertionResult HRESULTFailureHelper(const char* expr,
-                                     const char* expected,
-                                     long hr) {  // NOLINT
-# if GTEST_OS_WINDOWS_MOBILE
-
-  // Windows CE doesn't support FormatMessage.
-  const char error_text[] = "";
-
-# else
-
-  // Looks up the human-readable system message for the HRESULT code
-  // and since we're not passing any params to FormatMessage, we don't
-  // want inserts expanded.
-  const DWORD kFlags = FORMAT_MESSAGE_FROM_SYSTEM |
-                       FORMAT_MESSAGE_IGNORE_INSERTS;
-  const DWORD kBufSize = 4096;
-  // Gets the system's human readable message string for this HRESULT.
-  char error_text[kBufSize] = { '\0' };
-  DWORD message_length = ::FormatMessageA(kFlags,
-                                          0,  // no source, we're asking system
-                                          hr,  // the error
-                                          0,  // no line width restrictions
-                                          error_text,  // output buffer
-                                          kBufSize,  // buf size
-                                          NULL);  // no arguments for inserts
-  // Trims tailing white space (FormatMessage leaves a trailing CR-LF)
-  for (; message_length && IsSpace(error_text[message_length - 1]);
-          --message_length) {
-    error_text[message_length - 1] = '\0';
-  }
-
-# endif  // GTEST_OS_WINDOWS_MOBILE
-
-  const std::string error_hex("0x" + String::FormatHexInt(hr));
-  return ::testing::AssertionFailure()
-      << "Expected: " << expr << " " << expected << ".\n"
-      << "  Actual: " << error_hex << " " << error_text << "\n";
-}
-
-}  // namespace
-
-AssertionResult IsHRESULTSuccess(const char* expr, long hr) {  // NOLINT
-  if (SUCCEEDED(hr)) {
-    return AssertionSuccess();
-  }
-  return HRESULTFailureHelper(expr, "succeeds", hr);
-}
-
-AssertionResult IsHRESULTFailure(const char* expr, long hr) {  // NOLINT
-  if (FAILED(hr)) {
-    return AssertionSuccess();
-  }
-  return HRESULTFailureHelper(expr, "fails", hr);
-}
-
-#endif  // GTEST_OS_WINDOWS
-
 // Utility functions for encoding Unicode text (wide strings) in
 // UTF-8.
 
@@ -1461,9 +1252,9 @@ std::string CodePointToUtf8(UInt32 code_point) {
   return str;
 }
 
-// The following two functions only make sense if the the system
-// uses UTF-16 for wide string encoding. All supported systems
-// with 16 bit wchar_t (Windows, Cygwin, Symbian OS) do use UTF-16.
+// The following two functions only make sense if the system uses UTF-16
+// for wide string encoding. All supported systems with 16-bit wchar_t do
+// use UTF-16.
 
 // Determines if the arguments constitute UTF-16 surrogate pair
 // and thus should be combined into a single Unicode code point
@@ -1486,8 +1277,8 @@ inline UInt32 CreateCodePointFromUtf16SurrogatePair(wchar_t first,
 
 // Converts a wide string to a narrow string in UTF-8 encoding.
 // The wide string is assumed to have the following encoding:
-//   UTF-16 if sizeof(wchar_t) == 2 (on Windows, Cygwin, Symbian OS)
-//   UTF-32 if sizeof(wchar_t) == 4 (on Linux)
+//   UTF-16 if sizeof(wchar_t) == 2
+//   UTF-32 if sizeof(wchar_t) == 4
 // Parameter str points to a null-terminated wide string.
 // Parameter num_chars may additionally limit the number
 // of wchar_t characters processed. -1 is used when the entire string
@@ -1587,38 +1378,19 @@ bool String::CaseInsensitiveCStringEquals(const char * lhs, const char * rhs) {
   return posix::StrCaseCmp(lhs, rhs) == 0;
 }
 
-  // Compares two wide C strings, ignoring case.  Returns true iff they
-  // have the same content.
-  //
-  // Unlike wcscasecmp(), this function can handle NULL argument(s).
-  // A NULL C string is considered different to any non-NULL wide C string,
-  // including the empty string.
-  // NB: The implementations on different platforms slightly differ.
-  // On windows, this method uses _wcsicmp which compares according to LC_CTYPE
-  // environment variable. On GNU platform this method uses wcscasecmp
-  // which compares according to LC_CTYPE category of the current locale.
-  // On MacOS X, it uses towlower, which also uses LC_CTYPE category of the
-  // current locale.
+// Compares two wide C strings, ignoring case.  Returns true iff they
+// have the same content.
+//
+// Unlike wcscasecmp(), this function can handle NULL argument(s).
+// A NULL C string is considered different to any non-NULL wide C string,
+// including the empty string.
 bool String::CaseInsensitiveWideCStringEquals(const wchar_t* lhs,
                                               const wchar_t* rhs) {
   if (lhs == NULL) return rhs == NULL;
 
   if (rhs == NULL) return false;
 
-#if GTEST_OS_WINDOWS
-  return _wcsicmp(lhs, rhs) == 0;
-#elif GTEST_OS_LINUX && !GTEST_OS_LINUX_ANDROID
   return wcscasecmp(lhs, rhs) == 0;
-#else
-  // Android, Mac OS X and Cygwin don't define wcscasecmp.
-  // Other unknown OSes may not define it either.
-  wint_t left, right;
-  do {
-    left = towlower(*lhs++);
-    right = towlower(*rhs++);
-  } while (left && left == right);
-  return left == right;
-#endif  // OS selector
 }
 
 // Returns true iff str ends with the given suffix, ignoring case.
@@ -2003,23 +1775,6 @@ bool Test::HasSameFixtureClass() {
   return true;
 }
 
-#if GTEST_HAS_SEH
-
-// Adds an "exception thrown" fatal failure to the current test.  This
-// function returns its result via an output parameter pointer because VC++
-// prohibits creation of objects with destructors on stack in functions
-// using __try (see error C2712).
-static std::string* FormatSehExceptionMessage(DWORD exception_code,
-                                              const char* location) {
-  Message message;
-  message << "SEH exception with code 0x" << std::setbase(16) <<
-    exception_code << std::setbase(10) << " thrown in " << location << ".";
-
-  return new std::string(message.GetString());
-}
-
-#endif  // GTEST_HAS_SEH
-
 namespace internal {
 
 #if GTEST_HAS_EXCEPTIONS
@@ -2047,41 +1802,21 @@ GoogleTestFailureException::GoogleTestFailureException(
 
 #endif  // GTEST_HAS_EXCEPTIONS
 
-// We put these helper functions in the internal namespace as IBM's xlC
-// compiler rejects the code if they were declared static.
+// We put these helper functions in the internal namespace as some compilers
+// reject the code if they were declared static.
 
-// Runs the given method and handles SEH exceptions it throws, when
-// SEH is supported; returns the 0-value for type Result in case of an
-// SEH exception.  (Microsoft compilers cannot handle SEH and C++
-// exceptions in the same function.  Therefore, we provide a separate
-// wrapper function for handling SEH exceptions.)
+// Runs the given method and returns its result. This stub exists for
+// compatibility with platforms that provide structured exception handling.
 template <class T, typename Result>
-Result HandleSehExceptionsInMethodIfSupported(
-    T* object, Result (T::*method)(), const char* location) {
-#if GTEST_HAS_SEH
-  __try {
-    return (object->*method)();
-  } __except (internal::UnitTestOptions::GTestShouldProcessSEH(  // NOLINT
-      GetExceptionCode())) {
-    // We create the exception message on the heap because VC++ prohibits
-    // creation of objects with destructors on stack in functions using __try
-    // (see error C2712).
-    std::string* exception_message = FormatSehExceptionMessage(
-        GetExceptionCode(), location);
-    internal::ReportFailureInUnknownLocation(TestPartResult::kFatalFailure,
-                                             *exception_message);
-    delete exception_message;
-    return static_cast<Result>(0);
-  }
-#else
+Result HandleSehExceptionsInMethodIfSupported(T *object, Result (T::*method)(),
+                                              const char *location) {
   (void)location;
   return (object->*method)();
-#endif  // GTEST_HAS_SEH
 }
 
-// Runs the given method and catches and reports C++ and/or SEH-style
-// exceptions, if they are supported; returns the 0-value for type
-// Result in case of an SEH exception.
+// Runs the given method and catches and reports exceptions, if they are
+// supported; returns the 0-value for type Result when an exception is
+// reported.
 template <class T, typename Result>
 Result HandleExceptionsInMethodIfSupported(
     T* object, Result (T::*method)(), const char* location) {
@@ -2532,17 +2267,6 @@ static void PrintTestPartResult(const TestPartResult& test_part_result) {
       PrintTestPartResultToString(test_part_result);
   printf("%s\n", result.c_str());
   fflush(stdout);
-  // If the test program runs in Visual Studio or a debugger, the
-  // following statements add the test part result message to the Output
-  // window such that the user can double-click on it to jump to the
-  // corresponding source code location; otherwise they do nothing.
-#if GTEST_OS_WINDOWS && !GTEST_OS_WINDOWS_MOBILE
-  // We don't call OutputDebugString*() on Windows Mobile, as printing
-  // to stdout is done by OutputDebugString() there already - we don't
-  // want the same message printed twice.
-  ::OutputDebugStringA(result.c_str());
-  ::OutputDebugStringA("\n");
-#endif
 }
 
 // class PrettyUnitTestResultPrinter
@@ -2553,20 +2277,6 @@ enum GTestColor {
   COLOR_GREEN,
   COLOR_YELLOW
 };
-
-#if GTEST_OS_WINDOWS && !GTEST_OS_WINDOWS_MOBILE
-
-// Returns the character attribute for the given color.
-WORD GetColorAttribute(GTestColor color) {
-  switch (color) {
-    case COLOR_RED:    return FOREGROUND_RED;
-    case COLOR_GREEN:  return FOREGROUND_GREEN;
-    case COLOR_YELLOW: return FOREGROUND_RED | FOREGROUND_GREEN;
-    default:           return 0;
-  }
-}
-
-#else
 
 // Returns the ANSI color code for the given color.  COLOR_DEFAULT is
 // an invalid input.
@@ -2579,19 +2289,12 @@ const char* GetAnsiColorCode(GTestColor color) {
   };
 }
 
-#endif  // GTEST_OS_WINDOWS && !GTEST_OS_WINDOWS_MOBILE
-
 // Returns true iff Google Test should use colors in the output.
 bool ShouldUseColor(bool stdout_is_tty) {
   const char* const gtest_color = GTEST_FLAG(color).c_str();
 
   if (String::CaseInsensitiveCStringEquals(gtest_color, "auto")) {
-#if GTEST_OS_WINDOWS
-    // On Windows the TERM variable is usually not set, but the
-    // console there does support colors.
-    return stdout_is_tty;
-#else
-    // On non-Windows platforms, we rely on the TERM variable.
+    // For POSIX terminals, rely on the TERM variable.
     const char* const term = posix::GetEnv("TERM");
     const bool term_supports_color =
         String::CStringEquals(term, "xterm") ||
@@ -2599,10 +2302,8 @@ bool ShouldUseColor(bool stdout_is_tty) {
         String::CStringEquals(term, "xterm-256color") ||
         String::CStringEquals(term, "screen") ||
         String::CStringEquals(term, "screen-256color") ||
-        String::CStringEquals(term, "linux") ||
-        String::CStringEquals(term, "cygwin");
+        String::CStringEquals(term, "linux");
     return stdout_is_tty && term_supports_color;
-#endif  // GTEST_OS_WINDOWS
   }
 
   return String::CaseInsensitiveCStringEquals(gtest_color, "yes") ||
@@ -2614,22 +2315,14 @@ bool ShouldUseColor(bool stdout_is_tty) {
   // be conservative.
 }
 
-// Helpers for printing colored strings to stdout. Note that on Windows, we
-// cannot simply emit special characters and have the terminal change colors.
-// This routine must actually emit the characters rather than return a string
-// that would be colored when printed, as can be done on Linux.
+// Helpers for printing colored strings to stdout.
 void ColoredPrintf(GTestColor color, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
 
-#if GTEST_OS_WINDOWS_MOBILE || GTEST_OS_SYMBIAN || GTEST_OS_ZOS || GTEST_OS_IOS
-  const bool use_color = false;
-#else
   static const bool in_color_mode =
       ShouldUseColor(posix::IsATTY(posix::FileNo(stdout)) != 0);
   const bool use_color = in_color_mode && (color != COLOR_DEFAULT);
-#endif  // GTEST_OS_WINDOWS_MOBILE || GTEST_OS_SYMBIAN || GTEST_OS_ZOS
-  // The '!= 0' comparison is necessary to satisfy MSVC 7.1.
 
   if (!use_color) {
     vprintf(fmt, args);
@@ -2637,30 +2330,9 @@ void ColoredPrintf(GTestColor color, const char* fmt, ...) {
     return;
   }
 
-#if GTEST_OS_WINDOWS && !GTEST_OS_WINDOWS_MOBILE
-  const HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-
-  // Gets the current text color.
-  CONSOLE_SCREEN_BUFFER_INFO buffer_info;
-  GetConsoleScreenBufferInfo(stdout_handle, &buffer_info);
-  const WORD old_color_attrs = buffer_info.wAttributes;
-
-  // We need to flush the stream buffers into the console before each
-  // SetConsoleTextAttribute call lest it affect the text that is already
-  // printed but has not yet reached the console.
-  fflush(stdout);
-  SetConsoleTextAttribute(stdout_handle,
-                          GetColorAttribute(color) | FOREGROUND_INTENSITY);
-  vprintf(fmt, args);
-
-  fflush(stdout);
-  // Restores the text color.
-  SetConsoleTextAttribute(stdout_handle, old_color_attrs);
-#else
   printf("\033[0;3%sm", GetAnsiColorCode(color));
   vprintf(fmt, args);
-  printf("\033[m");  // Resets the terminal to default.
-#endif  // GTEST_OS_WINDOWS && !GTEST_OS_WINDOWS_MOBILE
+  printf("\033[m"); // Resets the terminal to default.
   va_end(args);
 }
 
@@ -3108,10 +2780,10 @@ void XmlUnitTestResultPrinter::OnTestIterationEnd(const UnitTest& unit_test,
     //
     //   1. There is no urgent need for it.
     //   2. It's a bit involved to make the errno variable thread-safe on
-    //      all three operating systems (Linux, Windows, and Mac OS).
+    //      all supported platforms.
     //   3. To interpret the meaning of errno in a thread-safe way,
-    //      we need the strerror_r() function, which is not available on
-    //      Windows.
+    //      we need the strerror_r() function, which is not available
+    //      everywhere.
     fprintf(stderr,
             "Unable to open file \"%s\"\n",
             output_file_.c_str());
@@ -3638,25 +3310,9 @@ void TestEventListeners::SuppressEventForwarding() {
 // We don't protect this under mutex_ as a user is not supposed to
 // call this before main() starts, from which point on the return
 // value will never change.
-UnitTest* UnitTest::GetInstance() {
-  // When compiled with MSVC 7.1 in optimized mode, destroying the
-  // UnitTest object upon exiting the program messes up the exit code,
-  // causing successful tests to appear failed.  We have to use a
-  // different implementation in this case to bypass the compiler bug.
-  // This implementation makes the compiler happy, at the cost of
-  // leaking the UnitTest object.
-
-  // CodeGear C++Builder insists on a public destructor for the
-  // default implementation.  Use this implementation to keep good OO
-  // design with private destructor.
-
-#if (_MSC_VER == 1310 && !defined(_DEBUG)) || defined(__BORLANDC__)
-  static UnitTest* const instance = new UnitTest;
-  return instance;
-#else
+UnitTest *UnitTest::GetInstance() {
   static UnitTest instance;
   return &instance;
-#endif  // (_MSC_VER == 1310 && !defined(_DEBUG)) || defined(__BORLANDC__)
 }
 
 // Gets the number of successful test cases.
@@ -3812,18 +3468,10 @@ void UnitTest::AddTestPartResult(
     // with another testing framework) and specify the former on the
     // command line for debugging.
     if (GTEST_FLAG(break_on_failure)) {
-#if GTEST_OS_WINDOWS
-      // Using DebugBreak on Windows allows gtest to still break into a debugger
-      // when a failure happens and both the --gtest_break_on_failure and
-      // the --gtest_catch_exceptions flags are specified.
-      DebugBreak();
-#else
       // Dereference NULL through a volatile pointer to prevent the compiler
       // from removing. We use this rather than abort() or __builtin_trap() for
-      // portability: Symbian doesn't implement abort() well, and some debuggers
-      // don't correctly trap abort().
-      *static_cast<volatile int*>(NULL) = 1;
-#endif  // GTEST_OS_WINDOWS
+      // portability across debuggers.
+      *static_cast<volatile int *>(NULL) = 1;
     } else if (GTEST_FLAG(throw_on_failure)) {
 #if GTEST_HAS_EXCEPTIONS
       throw internal::GoogleTestFailureException(result);
@@ -3883,45 +3531,6 @@ int UnitTest::Run() {
   // Captures the value of GTEST_FLAG(catch_exceptions).  This value will be
   // used for the duration of the program.
   impl()->set_catch_exceptions(GTEST_FLAG(catch_exceptions));
-
-#if GTEST_HAS_SEH
-  // Either the user wants Google Test to catch exceptions thrown by the
-  // tests or this is executing in the context of death test child
-  // process. In either case the user does not want to see pop-up dialogs
-  // about crashes - they are expected.
-  if (impl()->catch_exceptions() || in_death_test_child_process) {
-# if !GTEST_OS_WINDOWS_MOBILE
-    // SetErrorMode doesn't exist on CE.
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOALIGNMENTFAULTEXCEPT |
-                 SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-# endif  // !GTEST_OS_WINDOWS_MOBILE
-
-# if (defined(_MSC_VER) || GTEST_OS_WINDOWS_MINGW) && !GTEST_OS_WINDOWS_MOBILE
-    // Death test children can be terminated with _abort().  On Windows,
-    // _abort() can show a dialog with a warning message.  This forces the
-    // abort message to go to stderr instead.
-    _set_error_mode(_OUT_TO_STDERR);
-# endif
-
-# if _MSC_VER >= 1400 && !GTEST_OS_WINDOWS_MOBILE
-    // In the debug version, Visual Studio pops up a separate dialog
-    // offering a choice to debug the aborted program. We need to suppress
-    // this dialog or it will pop up for every EXPECT/ASSERT_DEATH statement
-    // executed. Google Test will notify the user of any unexpected
-    // failure via stderr.
-    //
-    // VC++ doesn't define _set_abort_behavior() prior to the version 8.0.
-    // Users of prior VC versions shall suffer the agony and pain of
-    // clicking through the countless debug dialogs.
-    // TODO(vladl@google.com): find a way to suppress the abort dialog() in the
-    // debug mode when compiled with VC 7.1 or lower.
-    if (!GTEST_FLAG(break_on_failure))
-      _set_abort_behavior(
-          0x0,                                    // Clear the following flags:
-          _WRITE_ABORT_MSG | _CALL_REPORTFAULT);  // pop-up window, core dump.
-# endif
-  }
-#endif  // GTEST_HAS_SEH
 
   return internal::HandleExceptionsInMethodIfSupported(
       impl(),
@@ -4819,68 +4428,77 @@ static void PrintColorEncoded(const char* str) {
 }
 
 static const char kColorEncodedHelpMessage[] =
-"This program contains tests written using " GTEST_NAME_ ". You can use the\n"
-"following command line flags to control its behavior:\n"
-"\n"
-"Test Selection:\n"
-"  @G--" GTEST_FLAG_PREFIX_ "list_tests@D\n"
-"      List the names of all tests instead of running them. The name of\n"
-"      TEST(Foo, Bar) is \"Foo.Bar\".\n"
-"  @G--" GTEST_FLAG_PREFIX_ "filter=@YPOSTIVE_PATTERNS"
+    "This program contains tests written using " GTEST_NAME_
+    ". You can use the\n"
+    "following command line flags to control its behavior:\n"
+    "\n"
+    "Test Selection:\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "list_tests@D\n"
+    "      List the names of all tests instead of running them. The name of\n"
+    "      TEST(Foo, Bar) is \"Foo.Bar\".\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "filter=@YPOSTIVE_PATTERNS"
     "[@G-@YNEGATIVE_PATTERNS]@D\n"
-"      Run only the tests whose name matches one of the positive patterns but\n"
-"      none of the negative patterns. '?' matches any single character; '*'\n"
-"      matches any substring; ':' separates two patterns.\n"
-"  @G--" GTEST_FLAG_PREFIX_ "also_run_disabled_tests@D\n"
-"      Run all disabled tests too.\n"
-"\n"
-"Test Execution:\n"
-"  @G--" GTEST_FLAG_PREFIX_ "repeat=@Y[COUNT]@D\n"
-"      Run the tests repeatedly; use a negative count to repeat forever.\n"
-"  @G--" GTEST_FLAG_PREFIX_ "shuffle@D\n"
-"      Randomize tests' orders on every iteration.\n"
-"  @G--" GTEST_FLAG_PREFIX_ "random_seed=@Y[NUMBER]@D\n"
-"      Random number seed to use for shuffling test orders (between 1 and\n"
-"      99999, or 0 to use a seed based on the current time).\n"
-"\n"
-"Test Output:\n"
-"  @G--" GTEST_FLAG_PREFIX_ "color=@Y(@Gyes@Y|@Gno@Y|@Gauto@Y)@D\n"
-"      Enable/disable colored output. The default is @Gauto@D.\n"
-"  -@G-" GTEST_FLAG_PREFIX_ "print_time=0@D\n"
-"      Don't print the elapsed time of each test.\n"
-"  @G--" GTEST_FLAG_PREFIX_ "output=xml@Y[@G:@YDIRECTORY_PATH@G"
-    GTEST_PATH_SEP_ "@Y|@G:@YFILE_PATH]@D\n"
-"      Generate an XML report in the given directory or with the given file\n"
-"      name. @YFILE_PATH@D defaults to @Gtest_details.xml@D.\n"
+    "      Run only the tests whose name matches one of the positive patterns "
+    "but\n"
+    "      none of the negative patterns. '?' matches any single character; "
+    "'*'\n"
+    "      matches any substring; ':' separates two patterns.\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "also_run_disabled_tests@D\n"
+    "      Run all disabled tests too.\n"
+    "\n"
+    "Test Execution:\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "repeat=@Y[COUNT]@D\n"
+    "      Run the tests repeatedly; use a negative count to repeat forever.\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "shuffle@D\n"
+    "      Randomize tests' orders on every iteration.\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "random_seed=@Y[NUMBER]@D\n"
+    "      Random number seed to use for shuffling test orders (between 1 and\n"
+    "      99999, or 0 to use a seed based on the current time).\n"
+    "\n"
+    "Test Output:\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "color=@Y(@Gyes@Y|@Gno@Y|@Gauto@Y)@D\n"
+    "      Enable/disable colored output. The default is @Gauto@D.\n"
+    "  -@G-" GTEST_FLAG_PREFIX_ "print_time=0@D\n"
+    "      Don't print the elapsed time of each test.\n"
+    "  @G--" GTEST_FLAG_PREFIX_
+    "output=xml@Y[@G:@YDIRECTORY_PATH@G" GTEST_PATH_SEP_
+    "@Y|@G:@YFILE_PATH]@D\n"
+    "      Generate an XML report in the given directory or with the given "
+    "file\n"
+    "      name. @YFILE_PATH@D defaults to @Gtest_details.xml@D.\n"
 #if GTEST_CAN_STREAM_RESULTS_
-"  @G--" GTEST_FLAG_PREFIX_ "stream_result_to=@YHOST@G:@YPORT@D\n"
-"      Stream test results to the given server.\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "stream_result_to=@YHOST@G:@YPORT@D\n"
+    "      Stream test results to the given server.\n"
 #endif  // GTEST_CAN_STREAM_RESULTS_
-"\n"
-"Assertion Behavior:\n"
-#if GTEST_HAS_DEATH_TEST && !GTEST_OS_WINDOWS
-"  @G--" GTEST_FLAG_PREFIX_ "death_test_style=@Y(@Gfast@Y|@Gthreadsafe@Y)@D\n"
-"      Set the default death test style.\n"
-#endif  // GTEST_HAS_DEATH_TEST && !GTEST_OS_WINDOWS
-"  @G--" GTEST_FLAG_PREFIX_ "break_on_failure@D\n"
-"      Turn assertion failures into debugger break-points.\n"
-"  @G--" GTEST_FLAG_PREFIX_ "throw_on_failure@D\n"
-"      Turn assertion failures into C++ exceptions.\n"
-"  @G--" GTEST_FLAG_PREFIX_ "catch_exceptions=0@D\n"
-"      Do not report exceptions as test failures. Instead, allow them\n"
-"      to crash the program or throw a pop-up (on Windows).\n"
-"\n"
-"Except for @G--" GTEST_FLAG_PREFIX_ "list_tests@D, you can alternatively set "
+    "\n"
+    "Assertion Behavior:\n"
+#if GTEST_HAS_DEATH_TEST
+    "  @G--" GTEST_FLAG_PREFIX_
+    "death_test_style=@Y(@Gfast@Y|@Gthreadsafe@Y)@D\n"
+    "      Set the default death test style.\n"
+#endif // GTEST_HAS_DEATH_TEST
+    "  @G--" GTEST_FLAG_PREFIX_ "break_on_failure@D\n"
+    "      Turn assertion failures into debugger break-points.\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "throw_on_failure@D\n"
+    "      Turn assertion failures into C++ exceptions.\n"
+    "  @G--" GTEST_FLAG_PREFIX_ "catch_exceptions=0@D\n"
+    "      Do not report exceptions as test failures. Instead, allow them\n"
+    "      to crash the program.\n"
+    "\n"
+    "Except for @G--" GTEST_FLAG_PREFIX_
+    "list_tests@D, you can alternatively set "
     "the corresponding\n"
-"environment variable of a flag (all letters in upper-case). For example, to\n"
-"disable colored text output, you can either specify @G--" GTEST_FLAG_PREFIX_
-    "color=no@D or set\n"
-"the @G" GTEST_FLAG_PREFIX_UPPER_ "COLOR@D environment variable to @Gno@D.\n"
-"\n"
-"For more information, please read the " GTEST_NAME_ " documentation at\n"
-"@G" GTEST_PROJECT_URL_ "@D. If you find a bug in " GTEST_NAME_ "\n"
-"(not one in your own code or tests), please report it to\n"
-"@G<" GTEST_DEV_EMAIL_ ">@D.\n";
+    "environment variable of a flag (all letters in upper-case). For example, "
+    "to\n"
+    "disable colored text output, you can either specify "
+    "@G--" GTEST_FLAG_PREFIX_ "color=no@D or set\n"
+    "the @G" GTEST_FLAG_PREFIX_UPPER_
+    "COLOR@D environment variable to @Gno@D.\n"
+    "\n"
+    "For more information, please read the " GTEST_NAME_ " documentation at\n"
+    "@G" GTEST_PROJECT_URL_ "@D. If you find a bug in " GTEST_NAME_ "\n"
+    "(not one in your own code or tests), please report it to\n"
+    "@G<" GTEST_DEV_EMAIL_ ">@D.\n";
 
 // Parses the command line for Google Test flags, without initializing
 // other parts of Google Test.  The type parameter CharType can be
@@ -5006,8 +4624,7 @@ void InitGoogleTest(int* argc, char** argv) {
   internal::InitGoogleTestImpl(argc, argv);
 }
 
-// This overloaded version can be used in Windows programs compiled in
-// UNICODE mode.
+// This overloaded version accepts wide arguments when available.
 void InitGoogleTest(int* argc, wchar_t** argv) {
   internal::InitGoogleTestImpl(argc, argv);
 }

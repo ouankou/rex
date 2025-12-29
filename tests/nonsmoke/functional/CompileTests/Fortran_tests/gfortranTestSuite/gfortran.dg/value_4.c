@@ -3,8 +3,8 @@
 
     Contributed by Paul Thomas <pault@gcc.gnu.org>  */
 
-/* We used to #include <complex.h>, but this fails for some platforms
-   (like cygwin) who don't have it yet.  */
+/* We used to #include <complex.h>, but this fails for some targets
+   that don't have it yet.  */
 #define complex __complex__
 #define _Complex_I (1.0iF)
 
@@ -46,4 +46,3 @@ c_to_c__(complex float *retval, complex float c1, complex float *c2)
   *retval = *c2 * 4.0;
   return;
 }
-

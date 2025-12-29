@@ -237,7 +237,7 @@ FixupSourcePositionInformation::evaluateSynthesizedAttribute
 #if PRINT_DEVELOPER_WARNINGS
                printf ("Note: locatedNode->get_endOfConstruct() == NULL (locatedNode = %p = %s), generating new Sg_File_Info object ... \n",locatedNode,locatedNode->class_name().c_str());
 #endif
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
                ROSE_ASSERT(locatedNode->get_startOfConstruct() != NULL);
                Sg_File_Info* newFileInfo = new Sg_File_Info(*(locatedNode->get_startOfConstruct()));
@@ -672,8 +672,5 @@ fixupSourcePositionConstructs()
 void
 FixupSourcePositionConstructs::visit(SgNode* node)
    {
-// Rasmussen (08/25/2022): Removed all untyped Sage nodes. Ultimately it proved easier to
-// construct regular IR nodes from the Jovial parser. Using the untyped system just lead an
-// unnecessary step and wasted effort.
+// Rasmussen (08/25/2022): Removed all untyped Sage nodes.
    }
-

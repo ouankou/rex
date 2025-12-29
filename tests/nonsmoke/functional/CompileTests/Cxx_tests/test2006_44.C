@@ -8,9 +8,7 @@ Best regards,
 Lingxiao Jiang
 #endif
 
-// Cong (10/20/2010): OS X does not have this non-standard header file gconv.h
-#ifndef __APPLE__
-
+// Cong (10/20/2010): Use gconv.h to exercise iconv ABI types.
 #include <gconv.h>
 typedef union
 {
@@ -21,5 +19,3 @@ typedef union
     struct __gconv_step_data __data;
   } __combined;
 } _G_iconv_t;
-
-#endif

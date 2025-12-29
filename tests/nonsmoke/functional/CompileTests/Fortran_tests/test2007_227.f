@@ -439,7 +439,7 @@ C     1.  Restructured data in OMEG12
 C     2.  Changed REAL*8 to real
 C     3.  Changed POLFIT and PCOEF to call single and double precision
 C         SLATEC subroutines POLFIT,DPOLFT and PCOEF,DPCOEF
-C     4.  Change vms open statements
+C     4.  Change legacy open statements
 C     CHANGES FROM VERSION 1.3
 C     1.  Change THIGH to 3500
 C     2.  Change name to TRANFT to conform to ANSI standard

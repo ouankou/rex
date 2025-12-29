@@ -57,11 +57,6 @@
 	* with-prefix.m4: New file.  Define macro to specify
 	where a software package is installed (its prefix).
 
-2001-02-22  Brian T. N. Gunney  <gunney@cogneato.llnl.gov>
-
-	* compiler-id.m4: Pre-eval eval added for IBM because
-	it does not eval correctly in one step.
-
 2001-02-20  Brian T. N. Gunney  <gunney@cogneato.llnl.gov>
 
 	* support-lam.m4: Added file support-lam.m4.
@@ -70,6 +65,3 @@
 
 	* choose-STL.m4: Added prefix BTNG_ to names to avoid clash
 	with PADRE version.
-
-	* compiler-id.m4: Added entries for SGI and IBM.
-

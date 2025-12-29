@@ -62,10 +62,18 @@
 #define cdSetInt(vp,val) {int *ip; ip=(int*)(vp); *ip=(val);}
 #define cdSetLong(vp,val) {long *lp; lp=(long*)(vp); *lp=(val);}
 #define cdSetFloat(vp,val) {float *fp; fp = (float *)(vp); *fp=(val);}
-#define cdSetDouble(vp,val) {double *dp; dp=(double*)(vp); *dp=(val);}
-#if !defined(sgi) && !defined(__alpha)
-#define cdSetLongDouble(vp,val) {long double *ldp; ldp=(long double*)(vp); *ldp=(val);}
-#endif
+#define cdSetDouble(vp, val)                                                   \
+  {                                                                            \
+    double *dp;                                                                \
+    dp = (double *)(vp);                                                       \
+    *dp = (val);                                                               \
+  }
+#define cdSetLongDouble(vp, val)                                               \
+  {                                                                            \
+    long double *ldp;                                                          \
+    ldp = (long double *)(vp);                                                 \
+    *ldp = (val);                                                              \
+  }
 #define cdSetCharTime(vp,val) {char *cp; cp=(char*)(vp); strncpy(cp,(val),CD_MAX_CHARTIME); cp[CD_MAX_CHARTIME-1]='\0';}
 
 					     /* For Dean's DRS-like extensions */

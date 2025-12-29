@@ -195,24 +195,6 @@ bourneEscape(const std::string &s) {
 }
 
 std::string
-yamlEscape(const std::string &s) {
-    const std::string escaped = cEscape(s);
-    if (s.empty() || s != escaped) {
-        return "\"" + escaped + "\"";
-    } else if (s.find(':') != std::string::npos) {
-        return "\"" + s + "\"";
-    } else {
-        std::string lc = s;
-        for (char&c: lc) c = std::tolower(c); //convert to lower case
-        if ("yes" == lc || "true" == lc || "no" == lc || "false" == lc) {
-            return"\"" + s + "\"";
-        } else {
-            return s;
-        }
-    }
-}
-
-std::string
 csvEscape(const std::string &s) {
     const std::string quote = s.find_first_of(",\r\n\"") == std::string::npos ? "" : "\"";
     return quote + Rose::StringUtility::replaceAllCopy(s, "\"", "\"\"") + quote;
@@ -378,4 +360,3 @@ std::string unescapeString(const std::string& s) {
   }
   return result;
 }
-

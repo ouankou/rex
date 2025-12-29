@@ -407,14 +407,11 @@ endif
 #     test2011_Rice_B-cant-assert-keyword-nonnull.f90
 #     test2011_Rice_C-cant-assert-keyword-nonnull.f90
 
-#Liao 2/11/2010, 'include' issue on gfortran 4.2.0 of Mac OS X
-# 4.2.1 can handle them properly
-#if !OS_MACOSX
-#  F90_TESTCODES_REQUIRED_TO_PASS += \
-#       test2007_29.f90 \
-#       test2010_01.f90 \
-#       test2010_50.f90
-#endif
+# Liao 2/11/2010: 'include' issue on gfortran 4.2.0; 4.2.1 can handle them properly.
+# F90_TESTCODES_REQUIRED_TO_PASS += \
+#      test2007_29.f90 \
+#      test2010_01.f90 \
+#      test2010_50.f90
 
 # DQ (2/12/2011): This test codes appears to randomly fail (failed on GNU 4.1.2)
 # I will look into this separately. 
@@ -834,7 +831,7 @@ F90_TESTCODES_REQUIRED_TO_PASS += \
      test2012_SavedCommonBlock.f90 
 endif
 
-# DQ (9/30/2011): There is a long history of this being a statistical failure on at least OSX systems. 
+# DQ (9/30/2011): There is a long history of this being a statistical failure on some systems.
 # test2010_161.f90 
 # Liao 12/15/2011. This one also uses alternative return according to Dan
 #     test2011_66.f90  
@@ -878,7 +875,7 @@ F03_TESTCODES_REQUIRED_TO_PASS += \
 #      FAILING TESTS
 # #######################
 
-## Cray pointer Tests
+## Pointer tests
 F90_TESTCODES_CURRENTLY_FAILING = \
      test2007_108.f90 \
      test2007_46.f90 \
@@ -951,10 +948,8 @@ F90_TESTCODES_CURRENTLY_FAILING += \
 
 F90_TESTCODES_REQUIRING_PREPROCESSOR_CURRENTLY_FAILING =  \
     test2008_01.F90
-#if !OS_MACOSX
-#  # Liao 2/11/2011. gfortran 4.2.0 on Mac cannot handle include '/long/absolute/path/file.h'
-#  F90_TESTCODES_REQUIRING_PREPROCESSOR_CURRENTLY_FAILING += test2008_01.F90
-#endif
+# Liao 2/11/2011: gfortran 4.2.0 cannot handle include '/long/absolute/path/file.h'.
+# F90_TESTCODES_REQUIRING_PREPROCESSOR_CURRENTLY_FAILING += test2008_01.F90
 
 
 F77_FIXED_FORMAT_TESTCODES_CURRENTLY_FAILING = \
@@ -1427,7 +1422,7 @@ bug3:
 bug4:
 	../../testTranslator $(ROSE_FLAGS) -rose:output_parser_actions -I$(srcdir) -c $(srcdir)/verify.f
 
-# DQ (9/19/2011): Added Cray pointer test using test code from Imperial College London.
+# DQ (9/19/2011): Added pointer test using test code from Imperial College London.
 crayPointerTest: testTranslator test2011_imperial_crayPointers.f90
 	$(VALGRIND) ../../testTranslator $(ROSE_FLAGS) -rose:f90 -rose:cray_pointer_support -rose:skip_syntax_check -rose:skipfinalCompileStep -c $(srcdir)/test2011_imperial_crayPointers.f90
 	$(VALGRIND) ../../testTranslator $(ROSE_FLAGS) -rose:f90 -rose:skip_syntax_check -rose:skipfinalCompileStep -c $(srcdir)/test2011_imperial_crayPointers.f90

@@ -105,13 +105,6 @@ SgDotExp
 SgDotStarOp
 SgDoubleVal
 SgElaboratedTypeModifier
-SgElementwiseOp
-SgElementwiseAddOp
-SgElementwiseDivideOp
-SgElementwiseLeftDivideOp
-SgElementwiseMultiplyOp
-SgElementwisePowerOp
-SgElementwiseSubtractOp
 SgElseDirectiveStatement
 SgElseWhereStatement
 SgElseifDirectiveStatement
@@ -147,6 +140,7 @@ SgForStatement
 SgFormatItem
 SgFormatItemList
 SgFormatStatement
+SgFortranContinueStmt
 SgFortranDo
 SgFortranIncludeLine
 SgFortranNonblockedDo
@@ -213,7 +207,7 @@ SgLabelSymbol
 SgLambdaCapture
 SgLambdaCaptureList
 SgLambdaExp
-SgLeftDivideOp
+SgLambdaRefExp
 SgLessOrEqualOp
 SgLessThanOp
 SgLineDirectiveStatement
@@ -226,9 +220,6 @@ SgLongIntVal
 SgLongLongIntVal
 SgLshiftAssignOp
 SgLshiftOp
-SgMagicColonExp
-SgMatrixExp
-SgMatrixTransposeOp
 SgMemberFunctionDeclaration
 SgMemberFunctionRefExp
 SgMemberFunctionSymbol
@@ -443,7 +434,6 @@ SgPointerAssignOp
 SgPointerDerefExp
 SgPointerMemberType
 SgPointerType
-SgPowerOp
 SgPragma
 SgPragmaDeclaration
 SgPrintStatement
@@ -506,7 +496,6 @@ SgStopOrPauseStatement
 SgStorageModifier
 SgStringKeyedBidirectionalGraph
 SgStringVal
-SgStructureModifier
 SgSubscriptExpression
 SgSubtractOp
 SgSupport
@@ -558,7 +547,6 @@ SgTypeExpression
 SgTypeLabel
 SgTypeDouble
 SgTypeEllipse
-SgTypeFixed
 SgTypeFloat
 SgTypeFloat128
 SgTypeFloat80
@@ -570,8 +558,6 @@ SgTypeLong
 SgTypeLongDouble
 SgTypeLongLong
 SgTypeModifier
-SgTypeMatrix
-SgTypeTuple
 SgTypeNullptr
 SgTypeOfType
 SgTypeShort

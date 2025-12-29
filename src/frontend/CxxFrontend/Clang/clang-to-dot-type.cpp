@@ -503,29 +503,29 @@ bool ClangToDotTranslator::VisitAttributedType(clang::AttributedType * attribute
         case clang::AttributedType::attr_stdcall:              sg_modifer.setGnuAttributeStdcall();       break;
 
         case clang::AttributedType::attr_address_space:
-            std::cerr << "Unsupported attribute attr_address_space" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_address_space" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_regparm:
-            std::cerr << "Unsupported attribute attr_regparm" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_regparm" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_vector_size:
-            std::cerr << "Unsupported attribute attr_vector_size" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_vector_size" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_neon_vector_type:
-            std::cerr << "Unsupported attribute attr_neon_vector_type" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_neon_vector_type" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_neon_polyvector_type:
-            std::cerr << "Unsupported attribute attr_neon_polyvector_type" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_neon_polyvector_type" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_objc_gc:
-            std::cerr << "Unsupported attribute attr_objc_gc" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_objc_gc" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_objc_ownership:
-            std::cerr << "Unsupported attribute attr_objc_ownership" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_objc_ownership" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_pcs:
-            std::cerr << "Unsupported attribute attr_pcs" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_pcs" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_fastcall:
-            std::cerr << "Unsupported attribute attr_fastcall" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_fastcall" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_thiscall:
-            std::cerr << "Unsupported attribute attr_thiscall" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_thiscall" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_pascal:
-            std::cerr << "Unsupported attribute attr_pascal" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_pascal" << std::endl; ROSE_ABORT();
         default:
-            std::cerr << "Unknown attribute" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unknown attribute" << std::endl; ROSE_ABORT();
     } 
 */
     *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);;
@@ -552,29 +552,29 @@ bool ClangToDotTranslator::VisitAttributedType(clang::AttributedType * attribute
         case clang::AttributedType::attr_stdcall:              sg_modifer.setGnuAttributeStdcall();       break;
 
         case clang::AttributedType::attr_address_space:
-            std::cerr << "Unsupported attribute attr_address_space" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_address_space" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_regparm:
-            std::cerr << "Unsupported attribute attr_regparm" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_regparm" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_vector_size:
-            std::cerr << "Unsupported attribute attr_vector_size" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_vector_size" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_neon_vector_type:
-            std::cerr << "Unsupported attribute attr_neon_vector_type" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_neon_vector_type" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_neon_polyvector_type:
-            std::cerr << "Unsupported attribute attr_neon_polyvector_type" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_neon_polyvector_type" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_objc_gc:
-            std::cerr << "Unsupported attribute attr_objc_gc" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_objc_gc" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_objc_ownership:
-            std::cerr << "Unsupported attribute attr_objc_ownership" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_objc_ownership" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_pcs:
-            std::cerr << "Unsupported attribute attr_pcs" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_pcs" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_fastcall:
-            std::cerr << "Unsupported attribute attr_fastcall" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_fastcall" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_thiscall:
-            std::cerr << "Unsupported attribute attr_thiscall" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_thiscall" << std::endl; ROSE_ABORT();
         case clang::AttributedType::attr_pascal:
-            std::cerr << "Unsupported attribute attr_pascal" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unsupported attribute attr_pascal" << std::endl; ROSE_ABORT();
         default:
-            std::cerr << "Unknown attribute" << std::endl; ROSE_ASSERT(false);
+            std::cerr << "Unknown attribute" << std::endl; ROSE_ABORT();
     } 
 */
     *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);;
@@ -1745,6 +1745,7 @@ bool ClangToDotTranslator::VisitRecordType(clang::RecordType * record_type, Node
     }
 #endif
 
+     node_desc.successors.push_back(std::pair<std::string, std::string>("decl", Traverse(record_type->getDecl())));
      node_desc.kind_hierarchy.push_back("RecordType");
 
     return VisitType(record_type, node_desc);

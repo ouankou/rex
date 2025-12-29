@@ -1,6 +1,7 @@
 #include <DynamicCompSlice.h>
 #include <CompSliceImpl.h>
 #include <LoopTreeTransform.h>
+#include <assert.h>
 #include <stdio.h>
 
 class CondSliceStmt : public CompSliceStmt
@@ -22,7 +23,7 @@ class CondSliceStmt : public CompSliceStmt
       CompSliceStmt::Dump();
       std::cerr << "slicing group: " <<  groupIndex << "\n";
     }
-  virtual std::string GetClassName() const { return "CondSliceStmt"; }
+  virtual std::string CompSliceGetClassName() const { return "CondSliceStmt"; }
 };
 
 
@@ -32,7 +33,7 @@ class DynamicCompSliceImpl : public CompSliceImpl
  protected:
    virtual CompSliceStmt* CreateSliceStmtNode( LoopTreeNode *n, CompSliceStmt *_that = 0)
    {
-      CondSliceStmt *that = (_that == 0 || _that->GetClassName() != "CondSliceStmt")? 0
+      CondSliceStmt *that = (_that == 0 || _that->CompSliceGetClassName() != "CondSliceStmt")? 0
                             :  static_cast<CondSliceStmt*>(_that);
       size_t gi = (that == 0)? groupIndex : groupIndex + that->GetSliceGroupIndex();
       if (gi > groupNum)
@@ -121,5 +122,3 @@ Transform( LoopTreeDepComp& c, const CompSlice *_slice, LoopTreeNode *root)
 
   return nr;
 }
-
-

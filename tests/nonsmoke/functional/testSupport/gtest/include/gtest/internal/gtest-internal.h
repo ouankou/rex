@@ -378,8 +378,8 @@ class FloatingPoint {
   FloatingPointUnion u_;
 };
 
-// We cannot use std::numeric_limits<T>::max() as it clashes with the max()
-// macro defined by <windows.h>.
+// We cannot use std::numeric_limits<T>::max() as it can clash with a
+// max() macro defined by some platform headers.
 template <>
 inline float FloatingPoint<float>::Max() { return FLT_MAX; }
 template <>
@@ -401,10 +401,10 @@ typedef const void* TypeId;
 template <typename T>
 class TypeIdHelper {
  public:
-  // dummy_ must not have a const type.  Otherwise an overly eager
-  // compiler (e.g. MSVC 7.1 & 8.0) may try to merge
-  // TypeIdHelper<T>::dummy_ for different Ts as an "optimization".
-  static bool dummy_;
+   // dummy_ must not have a const type.  Otherwise an overly eager
+   // compiler may try to merge TypeIdHelper<T>::dummy_ for different
+   // Ts as an "optimization".
+   static bool dummy_;
 };
 
 template <typename T>
@@ -424,9 +424,8 @@ TypeId GetTypeId() {
 
 // Returns the type ID of ::testing::Test.  Always call this instead
 // of GetTypeId< ::testing::Test>() to get the type ID of
-// ::testing::Test, as the latter may give the wrong result due to a
-// suspected linker bug when compiling Google Test as a Mac OS X
-// framework.
+// ::testing::Test, as the latter may give the wrong result due to
+// link-time optimizations.
 GTEST_API_ TypeId GetTestTypeId();
 
 // Defines the abstract factory interface that creates instances
@@ -453,19 +452,6 @@ class TestFactoryImpl : public TestFactoryBase {
  public:
   virtual Test* CreateTest() { return new TestClass; }
 };
-
-#if GTEST_OS_WINDOWS
-
-// Predicate-formatters for implementing the HRESULT checking macros
-// {ASSERT|EXPECT}_HRESULT_{SUCCEEDED|FAILED}
-// We pass a long instead of HRESULT to avoid causing an
-// include dependency for the HRESULT type.
-GTEST_API_ AssertionResult IsHRESULTSuccess(const char* expr,
-                                            long hr);  // NOLINT
-GTEST_API_ AssertionResult IsHRESULTFailure(const char* expr,
-                                            long hr);  // NOLINT
-
-#endif  // GTEST_OS_WINDOWS
 
 // Types of SetUpTestCase() and TearDownTestCase() functions.
 typedef void (*SetUpTestCaseFunc)();
@@ -720,23 +706,11 @@ struct RemoveConst { typedef T type; };  // NOLINT
 template <typename T>
 struct RemoveConst<const T> { typedef T type; };  // NOLINT
 
-// MSVC 8.0, Sun C++, and IBM XL C++ have a bug which causes the above
-// definition to fail to remove the const in 'const int[3]' and 'const
-// char[3][4]'.  The following specialization works around the bug.
+// The following specialization ensures const is removed from array types.
 template <typename T, size_t N>
 struct RemoveConst<const T[N]> {
   typedef typename RemoveConst<T>::type type[N];
 };
-
-#if defined(_MSC_VER) && _MSC_VER < 1400
-// This is the only specialization that allows VC++ 7.1 to remove const in
-// 'const int[3] and 'const int[3][4]'.  However, it causes trouble with GCC
-// and thus needs to be conditionally compiled.
-template <typename T, size_t N>
-struct RemoveConst<T[N]> {
-  typedef typename RemoveConst<T>::type type[N];
-};
-#endif
 
 // A handy wrapper around RemoveConst that works when the argument
 // T depends on template parameters.
@@ -799,28 +773,9 @@ class ImplicitlyConvertible {
   static char Helper(To);
   static char (&Helper(...))[2];  // NOLINT
 
-  // We have to put the 'public' section after the 'private' section,
-  // or MSVC refuses to compile the code.
- public:
-  // MSVC warns about implicitly converting from double to int for
-  // possible loss of data, so we need to temporarily disable the
-  // warning.
-#ifdef _MSC_VER
-# pragma warning(push)          // Saves the current warning state.
-# pragma warning(disable:4244)  // Temporarily disables warning 4244.
-
+public:
   static const bool value =
       sizeof(Helper(ImplicitlyConvertible::MakeFrom())) == 1;
-# pragma warning(pop)           // Restores the warning state.
-#elif defined(__BORLANDC__)
-  // C++Builder cannot use member overload resolution during template
-  // instantiation.  The simplest workaround is to use its C++0x type traits
-  // functions (C++Builder 2009 and above only).
-  static const bool value = __is_convertible(From, To);
-#else
-  static const bool value =
-      sizeof(Helper(ImplicitlyConvertible::MakeFrom())) == 1;
-#endif  // _MSV_VER
 };
 template <typename From, typename To>
 const bool ImplicitlyConvertible<From, To>::value;
@@ -854,8 +809,8 @@ struct IsAProtocolMessage
 // iterator is an STL container.
 //
 // Also note that the simpler approach of overloading
-// IsContainerTest(typename C::const_iterator*) and
-// IsContainerTest(...) doesn't work with Visual Age C++ and Sun C++.
+// IsContainerTest(typename C::const_iterator*) and IsContainerTest(...)
+// can behave differently across compilers.
 typedef int IsContainer;
 template <class C>
 IsContainer IsContainerTest(int /* dummy */,
@@ -1037,9 +992,8 @@ class NativeArray {
 #define GTEST_SUCCESS_(message) \
   GTEST_MESSAGE_(message, ::testing::TestPartResult::kSuccess)
 
-// Suppresses MSVC warnings 4072 (unreachable code) for the code following
-// statement if it returns or throws (or doesn't return or throw in some
-// situations).
+// Suppresses unreachable-code warnings for the code following the statement
+// if it returns or throws (or doesn't return or throw in some situations).
 #define GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement) \
   if (::testing::internal::AlwaysTrue()) { statement; }
 

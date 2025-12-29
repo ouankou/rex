@@ -20,7 +20,7 @@
  *  <table>
  *    <tr><td><b>Subject name</b></td><td><b>What it means</b></td></tr>
  *    <tr><td>%Frontend, %Analysis</td><td>Some broad part of the ROSE library.</td></tr>
- *    <tr><td>codethorn, compass2</td><td>A particular project that uses ROSE.</td></td>
+ *    <tr><td>compass2</td><td>A particular project that uses ROSE.</td></td>
  *    <tr><td>%Attribute, %Stack %Delta</td><td>Some specific feature.</td></tr>
  *  </table>
  *

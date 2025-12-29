@@ -43,16 +43,6 @@ OUTPUT_DIRECTORY       = .
 
 OUTPUT_LANGUAGE        = English
 
-# This tag can be used to specify the encoding used in the generated output. 
-# The encoding is not always determined by the language that is chosen, 
-# but also whether or not the output is meant for Windows or non-Windows users. 
-# In case there is a difference, setting the USE_WINDOWS_ENCODING tag to YES 
-# forces the Windows encoding (this is the default for the Windows binary), 
-# whereas setting the tag to NO uses a Unix-style encoding (the default for 
-# all platforms other than Windows).
-
-USE_WINDOWS_ENCODING   = NO
-
 # If the BRIEF_MEMBER_DESC tag is set to YES (the default) Doxygen will 
 # include brief member descriptions after the members that are listed in 
 # Set to NO to disable this.
@@ -104,8 +94,8 @@ FULL_PATH_NAMES        = NO
 STRIP_FROM_PATH        = 
 
 # If the SHORT_NAMES tag is set to YES, doxygen will generate much shorter 
-# (but less readable) file names. This can be useful is your file systems 
-# doesn't support long names like on DOS, Mac, or CD-ROM.
+# (but less readable) file names. This can be useful if your file system 
+# doesn't support long names.
 
 SHORT_NAMES            = NO
 
@@ -240,8 +230,8 @@ INTERNAL_DOCS          = @DOXYGEN_INTERNAL_DOCS@
 # If the CASE_SENSE_NAMES tag is set to NO then Doxygen will only generate 
 # file names in lower-case letters. If set to YES upper-case letters are also 
 # allowed. This is useful if you have classes or files whose names only differ 
-# in case and if your file system supports case sensitive file names. Windows 
-# users are advised to set this option to NO.
+# in case and if your file system supports case sensitive file names. For 
+# case-insensitive file systems, set this option to NO.
 
 CASE_SENSE_NAMES       = YES
 
@@ -631,8 +621,8 @@ ENUM_VALUES_PER_LINE   = 1
 # If the GENERATE_TREEVIEW tag is set to YES, a side panel will be
 # generated containing a tree-like index structure (just like the one that 
 # is generated for HTML Help). For this to work a browser that supports 
-# Netscape 6.0+, Internet explorer 5.0+, or Konqueror). Windows users are 
-# probably better off using the HTML help feature.
+# Netscape 6.0+, Internet explorer 5.0+, or Konqueror). For large projects, 
+# HTML help can be easier to navigate.
 
 GENERATE_TREEVIEW      = YES
 

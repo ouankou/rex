@@ -30,8 +30,8 @@ public:
 
 // C++11 allows constructors to call other peer constructors (known as
 // delegation). This allows constructors to utilize another constructor's
-// behavior with a minimum of added code. Examples of other languages similar to
-// C++ that provide delegation are C# and D.
+// behavior with a minimum of added code. Other languages also provide
+// delegation.
 
 // This syntax is as follows:
 

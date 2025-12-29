@@ -33,9 +33,6 @@
  * - Cache netCDF unlimited dimensions
  * - Consistent with GrADS src170
  *
- * Revision 1.8  1996/04/04  21:48:02  drach
- * - Minor fix for SGI version
- *
  * Revision 1.7  1996/04/04  18:27:02  drach
  * - Added CDMS inquiry, lookup, open, and internal routines
  *
@@ -68,7 +65,6 @@
  *
  *
  */
-
 
 /*
  * =================================================================

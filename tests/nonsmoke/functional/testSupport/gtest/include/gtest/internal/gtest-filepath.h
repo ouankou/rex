@@ -83,7 +83,6 @@ class GTEST_API_ FilePath {
   // Given directory = "dir", base_name = "test", number = 0,
   // extension = "xml", returns "dir/test.xml". If number is greater
   // than zero (e.g., 12), returns "dir/test_12.xml".
-  // On Windows platform, uses \ as the separator rather than /.
   static FilePath MakeFileName(const FilePath& directory,
                                const FilePath& base_name,
                                int number,
@@ -91,7 +90,6 @@ class GTEST_API_ FilePath {
 
   // Given directory = "dir", relative_path = "test.xml",
   // returns "dir/test.xml".
-  // On Windows, uses \ as the separator rather than /.
   static FilePath ConcatPaths(const FilePath& directory,
                               const FilePath& relative_path);
 
@@ -112,7 +110,6 @@ class GTEST_API_ FilePath {
 
   // If input name has a trailing separator character, removes it and returns
   // the name, otherwise return the name string unmodified.
-  // On Windows platform, uses \ as the separator, other platforms use /.
   FilePath RemoveTrailingPathSeparator() const;
 
   // Returns a copy of the FilePath with the directory part removed.
@@ -120,15 +117,13 @@ class GTEST_API_ FilePath {
   // FilePath("file"). If there is no directory part ("just_a_file"), it returns
   // the FilePath unmodified. If there is no file part ("just_a_dir/") it
   // returns an empty FilePath ("").
-  // On Windows platform, '\' is the path separator, otherwise it is '/'.
   FilePath RemoveDirectoryName() const;
 
   // RemoveFileName returns the directory path with the filename removed.
   // Example: FilePath("path/to/file").RemoveFileName() returns "path/to/".
   // If the FilePath is "a_file" or "/a_file", RemoveFileName returns
-  // FilePath("./") or, on Windows, FilePath(".\\"). If the filepath does
-  // not have a file, like "just/a/dir/", it returns the FilePath unmodified.
-  // On Windows platform, '\' is the path separator, otherwise it is '/'.
+  // FilePath("./"). If the filepath does not have a file, like "just/a/dir/",
+  // it returns the FilePath unmodified.
   FilePath RemoveFileName() const;
 
   // Returns a copy of the FilePath with the case-insensitive extension removed.
@@ -146,7 +141,7 @@ class GTEST_API_ FilePath {
   // Create the directory so that path exists. Returns true if successful or
   // if the directory already exists; returns false if unable to create the
   // directory for any reason, including if the parent directory does not
-  // exist. Not named "CreateDirectory" because that's a macro on Windows.
+  // exist.
   bool CreateFolder() const;
 
   // Returns true if FilePath describes something in the file-system,
@@ -162,42 +157,40 @@ class GTEST_API_ FilePath {
   // This does NOT check that a directory (or file) actually exists.
   bool IsDirectory() const;
 
-  // Returns true if pathname describes a root directory. (Windows has one
-  // root directory per disk drive.)
+  // Returns true if pathname describes a root directory.
   bool IsRootDirectory() const;
 
   // Returns true if pathname describes an absolute path.
   bool IsAbsolutePath() const;
 
  private:
-  // Replaces multiple consecutive separators with a single separator.
-  // For example, "bar///foo" becomes "bar/foo". Does not eliminate other
-  // redundancies that might be in a pathname involving "." or "..".
-  //
-  // A pathname with multiple consecutive separators may occur either through
-  // user error or as a result of some scripts or APIs that generate a pathname
-  // with a trailing separator. On other platforms the same API or script
-  // may NOT generate a pathname with a trailing "/". Then elsewhere that
-  // pathname may have another "/" and pathname components added to it,
-  // without checking for the separator already being there.
-  // The script language and operating system may allow paths like "foo//bar"
-  // but some of the functions in FilePath will not handle that correctly. In
-  // particular, RemoveTrailingPathSeparator() only removes one separator, and
-  // it is called in CreateDirectoriesRecursively() assuming that it will change
-  // a pathname from directory syntax (trailing separator) to filename syntax.
-  //
-  // On Windows this method also replaces the alternate path separator '/' with
-  // the primary path separator '\\', so that for example "bar\\/\\foo" becomes
-  // "bar\\foo".
+   // Replaces multiple consecutive separators with a single separator.
+   // For example, "bar///foo" becomes "bar/foo". Does not eliminate other
+   // redundancies that might be in a pathname involving "." or "..".
+   //
+   // A pathname with multiple consecutive separators may occur either through
+   // user error or as a result of some scripts or APIs that generate a pathname
+   // with a trailing separator. On other platforms the same API or script
+   // may NOT generate a pathname with a trailing "/". Then elsewhere that
+   // pathname may have another "/" and pathname components added to it,
+   // without checking for the separator already being there.
+   // The script language and operating system may allow paths like "foo//bar"
+   // but some of the functions in FilePath will not handle that correctly. In
+   // particular, RemoveTrailingPathSeparator() only removes one separator, and
+   // it is called in CreateDirectoriesRecursively() assuming that it will
+   // change a pathname from directory syntax (trailing separator) to filename
+   // syntax.
+   //
+   // This method also replaces alternate path separators with the primary
+   // separator for the current platform.
 
-  void Normalize();
+   void Normalize();
 
-  // Returns a pointer to the last occurence of a valid path separator in
-  // the FilePath. On Windows, for example, both '/' and '\' are valid path
-  // separators. Returns NULL if no path separator was found.
-  const char* FindLastPathSeparator() const;
+   // Returns a pointer to the last occurrence of a valid path separator in
+   // the FilePath. Returns NULL if no path separator was found.
+   const char *FindLastPathSeparator() const;
 
-  std::string pathname_;
+   std::string pathname_;
 };  // class FilePath
 
 }  // namespace internal

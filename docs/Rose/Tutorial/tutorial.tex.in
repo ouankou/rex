@@ -309,7 +309,8 @@ transformations and optimizations.}
 %\input{globalVariableHandling}
 %-------end of chapter for AST construction
 
-\input{parserBuildingBlocks}
+%\input{parserBuildingBlocks}
+% This project has been removed.
 
 \input{addingComments}  % handling preprocessing information
 \input{partialRedundancyElimination}
@@ -387,7 +388,6 @@ debugging.}
 
 % Disabled as it breaks new assertion in Copy Mechanism, Liao, 2/7/2008
 %\input{copyHelp}
-
 
 
 

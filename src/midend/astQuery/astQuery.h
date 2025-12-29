@@ -7,6 +7,8 @@
 #include "AstProcessing.h"
 #include "rosedll.h"
 
+#include <ROSE_ABORT.h>
+
 #include <functional>
 #include <type_traits>
 // Support for operations like (SgTypeInt | SgTypeFloat)

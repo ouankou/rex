@@ -266,7 +266,7 @@ ResetTemplateNames::visit ( SgNode* node )
                   }
 
             // printf ("ResetTemplateNames::visit(): case V_SgTemplateInstantiationMemberFunctionDecl: not implemented! \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
             // Should we be calling resetTemplateName()
             // templateClassDeclaration->resetTemplateName();
@@ -652,7 +652,7 @@ ResetTemplateNamesOnMemoryPool::visit ( SgNode* node )
                                 // I think that this should be commented out since the name will be updated directly
                                 // templateMemberFunctionDeclaration->set_name(fixedUpName);
 
-                                // ROSE_ASSERT(false);
+                                // ROSE_ABORT();
                                  }
                                 else
                                  {
@@ -688,7 +688,7 @@ ResetTemplateNamesOnMemoryPool::visit ( SgNode* node )
                   }
 
             // printf ("ResetTemplateNames::visit(): case V_SgTemplateInstantiationMemberFunctionDecl: not implemented! \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
             // Should we be calling resetTemplateName()
             // templateClassDeclaration->resetTemplateName();

@@ -12,7 +12,7 @@ c
       program labug3
       implicit none
 
-*  This program gives the wrong answer on mips-sgi-irix6.5
+*  This program gives the wrong answer on a legacy target
 *  when compiled with g77 from egcs-19990629 (gcc 2.95 prerelease)
 *  Get a = 0.0 when it should be 1.0 
 *

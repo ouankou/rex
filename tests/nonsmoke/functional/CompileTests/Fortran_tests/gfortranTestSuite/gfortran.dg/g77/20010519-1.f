@@ -29,7 +29,7 @@ C     of the Hessian.
 C-----------------------------------------------------------------------
 C-----------------------------------------------------------------------
 C:::##INCLUDE '~/charmm_fcm/impnon.fcm'
-C..##IF VAX IRIS HPUX IRIS GNU CSPP OS2 GWS CRAY ALPHA
+C..##IF LEGACY
       IMPLICIT NONE
 C..##ENDIF
 C-----------------------------------------------------------------------
@@ -48,7 +48,7 @@ C-----------------------------------------------------------------------
 C:::##INCLUDE '~/charmm_fcm/dimens.fcm'
       INTEGER LARGE,MEDIUM,SMALL,REDUCE
 C..##IF QUANTA
-C..##ELIF T3D
+C..##ELIF LEGACY
 C..##ELSE
       PARAMETER (LARGE=60120, MEDIUM=25140, SMALL=6120)
 C..##ENDIF
@@ -92,7 +92,7 @@ C...##ELSE
 C...##ENDIF
 C..##ENDIF
       INTEGER MXCMSZ
-C..##IF IBM IBMRS CRAY INTEL IBMSP T3D REDUCE
+C..##IF LEGACY
 C..##ELSE
       PARAMETER (MXCMSZ = 5000)
 C..##ENDIF
@@ -204,7 +204,7 @@ C..##ELSE
       PARAMETER (MAXSHK = SIZE*3/4)
 C..##ENDIF
       INTEGER SCRMAX
-C..##IF IBM IBMRS CRAY INTEL IBMSP T3D REDUCE
+C..##IF LEGACY
 C..##ELSE
       PARAMETER (SCRMAX = 5000)
 C..##ENDIF
@@ -284,10 +284,10 @@ C..##ELSE
       PARAMETER (RSMALL=1.0D-10,RBIG=1.0D20)
 C..##ENDIF
       REAL(KIND=8) RPRECI,RBIGST
-C..##IF VAX DEC
+C..##IF LEGACY
 C..##ELIF IBM
-C..##ELIF CRAY
-C..##ELIF ALPHA T3D T3E
+C..##ELIF LEGACY
+C..##ELIF LEGACY
 C..##ELSE
 C...##IF SINGLE
 C...##ELSE
@@ -433,10 +433,10 @@ C..##IFN UNICOS (unicos)
 C...##IF XXLARGE (size)
 C...##ELIF LARGE XLARGE (size)
 C...##ELIF MEDIUM (size)
-C....##IF T3D (t3d2)
+C....##IF LEGACY
 C....##ELIF TERRA (t3d2)
-C....##ELIF ALPHA (t3d2)
-C....##ELIF T3E (t3d2)
+C....##ELIF LEGACY
+C....##ELIF LEGACY
 C....##ELSE (t3d2)
       PARAMETER (HEAPDM=2048000)
 C....##ENDIF (t3d2)

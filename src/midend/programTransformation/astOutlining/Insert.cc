@@ -480,7 +480,7 @@ findMatchingDefiningClassDeclaration(SgSourceFile* targetFile, SgClassDeclaratio
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
      return t.matchingClassDeclaration;
@@ -717,7 +717,7 @@ insertFriendDecl (const SgFunctionDeclaration* func,
 
 #if 0
                                printf ("Exiting as a test! \n");
-                               ROSE_ASSERT(false);
+                               ROSE_ABORT();
 #endif
                              }
                         }
@@ -726,7 +726,7 @@ insertFriendDecl (const SgFunctionDeclaration* func,
 
 #if 0
                 printf ("Exiting as a test! \n");
-                ROSE_ASSERT(false);
+                ROSE_ABORT();
 #endif
               }
              else
@@ -737,7 +737,7 @@ insertFriendDecl (const SgFunctionDeclaration* func,
 
 #if 0
            printf ("Exiting as a test! \n");
-           ROSE_ASSERT(false);
+           ROSE_ABORT();
 #endif
          }
         else
@@ -805,7 +805,7 @@ insertFriendDecl (const SgFunctionDeclaration* func,
 
 #if 0
       printf ("Exiting as a test! \n");
-      ROSE_ASSERT(false);
+      ROSE_ABORT();
 #endif
 
     }
@@ -954,7 +954,7 @@ isProtPrivType (SgType* t)
           if (decl)
             if (decl->get_definingDeclaration ())
               decl = decl->get_definingDeclaration ();
-          if (isProtPriv (decl))
+          if (decl && isProtPriv (decl))
             return isSgClassDefinition (decl->get_parent ());
         }
     }
@@ -1219,9 +1219,11 @@ insertFriendDecls (SgFunctionDeclaration* func,
          {
            printf ("NOTE: In insertFriendDecls(): deferedFriendTransformation.targetClasses.size() = %zu \n",deferedFriendTransformation.targetClasses.size());
          }
+   // DQ (4/19/2022): An essential application code demonstrates that this value can sometimes be as great as 4, so I have increased the limit.
    // DQ (12/11/2019): Modified to increase bound (required for tool_G using some of the later gregression tests (after test_33.cpp).
    // ROSE_ASSERT(deferedFriendTransformation.targetClasses.size() <= 2);
-      ROSE_ASSERT(deferedFriendTransformation.targetClasses.size() <= 3);
+   // ROSE_ASSERT(deferedFriendTransformation.targetClasses.size() <= 3);
+      ROSE_ASSERT(deferedFriendTransformation.targetClasses.size() <= 4);
    // ROSE_ASSERT(deferedFriendTransformation.targetFriends.size() < 2);
       ROSE_ASSERT(deferedFriendTransformation.targetFriends.size() == 0);
     }
@@ -1430,7 +1432,7 @@ Outliner::insert (SgFunctionDeclaration* func,
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
   // DQ (11/19/2020): DeferredTransformation support was moved to the SageInterface namespace to support more general usage.
@@ -1593,7 +1595,7 @@ Outliner::insert (SgFunctionDeclaration* func,
 
 #if 0
      printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
+     ROSE_ABORT();
 #endif
 
      SgFunctionSymbol* sourceFileFunctionPrototypeSymbol = isSgFunctionSymbol(src_global->lookup_symbol(func->get_name()));
@@ -1660,8 +1662,11 @@ Outliner::insert (SgFunctionDeclaration* func,
           ROSE_ASSERT(firstStatement != NULL);
           if (firstStatement != NULL)
              {
-               printf ("In outliner: before inserting outlined function prototype: firstStatement = %p = %s = %s \n",firstStatement,firstStatement->class_name().c_str(),SageInterface::get_name(firstStatement).c_str());
-
+#if 0
+            // DQ (6/5/2021): Supress this output spew for the quarterly review (not an error).
+               printf ("In outliner: before inserting outlined function prototype: firstStatement = %p = %s = %s \n",firstStatement,
+                    firstStatement->class_name().c_str(),SageInterface::get_name(firstStatement).c_str());
+#endif
             // DQ (3/17/2021): When using the token-based unparsing we need to set this so that the surrounding 
             // whitespace will be unparsed from the AST, instead of the token stream.
                firstStatement->set_containsTransformationToSurroundingWhitespace(true);
@@ -1681,7 +1686,7 @@ Outliner::insert (SgFunctionDeclaration* func,
           outlinedFileFunctionPrototype->set_containsTransformationToSurroundingWhitespace(true);
 #if 0
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
 #endif
        // DQ (9/26/2019): Trying to trace down where there is a SgFunctionParameterList with parent not being set!
           ROSE_ASSERT(outlinedFileFunctionPrototype->get_parameterList()->get_parent() != NULL);
@@ -1734,14 +1739,14 @@ Outliner::insert (SgFunctionDeclaration* func,
                         printf ("############# Error: this is the wrong function to defer, or it should not be defered for insertion into the class definition \n");
 #if 0
                         printf ("Exiting as a test! \n");
-                        ROSE_ASSERT(false);
+                        ROSE_ABORT();
 #endif
                       }
                   }
                  else
                   {
                     printf ("ERROR: This function is used in the global scope function prototype \n");
-                    ROSE_ASSERT(false);
+                    ROSE_ABORT();
                   }
 
                i++;
@@ -1750,7 +1755,7 @@ Outliner::insert (SgFunctionDeclaration* func,
 
 #if 0
           printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
+          ROSE_ABORT();
 #endif
 
        // The build function should have build symbol for the symbol table.

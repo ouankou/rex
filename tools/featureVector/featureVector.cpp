@@ -4,6 +4,20 @@ using namespace std;
 bool enable_debug = false;
 bool enable_verbose = false;
 
+static void printHelp(const char* program_name)
+{
+  std::cout << "Feature Vector: This program prints out the feature\n"
+            << "vector of a program to help verifying ROSE output correctness.\n"
+            << "\n"
+            << "Usage: " << program_name << " [options] <file>\n"
+            << "\n"
+            << "Options:\n"
+            << "  --help            Show this help.\n"
+            << "  --rose:help       Show ROSE frontend help.\n"
+            << "  --debug           Enable debug output.\n"
+            << "  --verbose         Enable verbose output.\n";
+}
+
 class nodeTraversal : public AstSimpleProcessing
 {
   private:
@@ -256,16 +270,32 @@ void nodeTraversal::visit(SgNode* n)
 }
 
 int main(int argc, char *argv[]) {
-  if (argc == 2) { //--help
-	  std::string helpflag ("--help");
-	  if (helpflag.compare(argv[1]) == 0) {
-		  std::cout << "Feature Vector: This program prints out the feature\n"
-				    << "vector of a program to help verifying ROSE output correctness.\n";
-		  exit(0);
-	  }
+  std::vector<std::string> frontend_args;
+  frontend_args.reserve(argc);
+  frontend_args.push_back(argv[0]);
+
+  for (int i = 1; i < argc; ++i) {
+    std::string arg(argv[i]);
+    if (arg == "--help") {
+      printHelp(argv[0]);
+      return 0;
+    }
+    if (arg == "--debug") {
+      enable_debug = true;
+      continue;
+    }
+    if (arg == "--verbose") {
+      enable_verbose = true;
+      continue;
+    }
+    if (arg == "--rose:help") {
+      frontend_args.push_back("-rose:help");
+      continue;
+    }
+    frontend_args.push_back(arg);
   }
-  std::vector<std::string> args(argv, argv+argc);
-  SgProject* project = frontend(args);
+
+  SgProject* project = frontend(frontend_args);
 
   Rose_STL_Container<std::string> filenames = project->getAbsolutePathFileNames();
   for(Rose_STL_Container<std::string>::iterator it = filenames.begin(); it != filenames.end(); it++)

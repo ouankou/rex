@@ -6,11 +6,9 @@
 
 #include "assert.h"
 
-#ifndef __APPLE__
 #include "roseInternal.h"
-#endif
 
-// void __assert_fail(const char*, const char*, unsigned int, const char*); // Not defined on OS X
+// void __assert_fail(const char*, const char*, unsigned int, const char*);
 // extern "C" void __assert_fail();
 
 // Note that the problem is that the use of ROSE_ASSERT() is in a function in a
@@ -26,10 +24,7 @@ struct Y
    {
      void foo1()
         {
-#ifndef __APPLE__
           ROSE_ASSERT (!"Inside of struct Y::foo1 (using ROSE_ASSERT)");
-#endif
           assert (!"Inside of struct Y::foo1 (using assert)");
         }
    };
-

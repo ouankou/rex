@@ -29,6 +29,7 @@ UnparseFormat::UnparseFormat( ostream* nos, UnparseFormatHelp *inputFormatHelp)
      currentIndent = 0;
      currentLine   = 1;
      linewrap      = MAXCHARSONLINE;
+     userDefinedLinewrap = linewrap;
 
   // indentstop    = MAXINDENT;
      indentstop    = (formatHelpInfo != NULL) ? formatHelpInfo->maxLineLength() : MAXINDENT;
@@ -88,7 +89,7 @@ UnparseFormat & UnparseFormat::operator=(const UnparseFormat & X)
   // DQ (9/11/2011): This function is provided to make this code better so that can be analyized using static analysis 
   // (static analysis tools don't understand access functions).
 
-  // DQ (9/12/2011): This avoids the memory leak that could happend with self assignment.
+  // DQ (9/12/2011): This avoids the memory leak that could happen with self assignment.
      if (&X == this)
         {
           return *this;
@@ -510,7 +511,7 @@ UnparseFormat& UnparseFormat:: operator << (void* pointer)
 #endif
 
 
-void UnparseFormat::set_linewrap( int w) { linewrap = w; } // no wrapping if linewrap <= 0
+void UnparseFormat::set_linewrap( int w) { userDefinedLinewrap = linewrap = w; } // no wrapping if linewrap <= 0
 int UnparseFormat::get_linewrap() const { return linewrap; }
 
 void
@@ -680,18 +681,25 @@ UnparseFormat::format(SgLocatedNode* node, SgUnparse_Info& info, FormatOpt opt)
                                       {
                                         insert_newline(1,stmtIndent);
                                       }
+
+                                   linewrap = userDefinedLinewrap;
                                  }
                             }
                        }
                     break;
                   }
                case FORMAT_BEFORE_DIRECTIVE:
-                    linewrap = -1;
-                    insert_newline(1,0); 
+                    {
+                      linewrap = -1;
+                      insert_newline(1,0);
+                    }
                     break;
                case FORMAT_AFTER_DIRECTIVE:
-                    linewrap = MAXCHARSONLINE;
-                    insert_newline();
+                    {
+                      linewrap = MAXCHARSONLINE;
+                      insert_newline();
+                      linewrap = userDefinedLinewrap;
+                    }
                     break;
                case FORMAT_BEFORE_BASIC_BLOCK1:
                     if ( v1 != V_SgCatchOptionStmt && v1 != V_SgDoWhileStmt  && 
@@ -1137,5 +1145,3 @@ int UnparseOrigFormat::getLine(SgLocatedNode *node, SgUnparse_Info& info, Format
   return r;
 }
 #endif
-
-

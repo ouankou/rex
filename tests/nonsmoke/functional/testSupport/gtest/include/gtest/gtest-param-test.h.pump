@@ -180,9 +180,7 @@ TEST_P(DerivedTest, DoesBlah) {
 
 #include "gtest/internal/gtest-port.h"
 
-#if !GTEST_OS_SYMBIAN
-# include <utility>
-#endif
+#include <utility>
 
 // scripts/fuse_gtest.py depends on gtest's own header being #included
 // *unconditionally*.  Therefore these #includes cannot be moved

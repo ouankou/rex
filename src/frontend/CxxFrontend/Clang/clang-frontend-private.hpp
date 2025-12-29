@@ -88,6 +88,8 @@
 #define DEBUG_ARGS                0
 #define DEBUG_TRAVERSE_DECL       0
 #define DEBUG_VISIT_STMT          0
+#define DEBUG_IMPLICIT_NODE       0
+#define DEBUG_IMPLICIT_NODE       0
 
 // Print visitor name when visiting a node inheritance hierarchy
 #ifdef DEBUG_VISITOR
@@ -352,6 +354,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         std::map<clang::Decl *, SgNode *> p_decl_translation_map;
         std::map<clang::Stmt *, SgNode *> p_stmt_translation_map;
         std::map<const clang::Type *, SgNode *> p_type_translation_map;
+        std::map<clang::DeclContext *, SgScopeStatement *> p_decl_context_map;
         SgGlobal * p_global_scope;
 
         std::map<SgClassType *, bool> p_class_type_decl_first_see_in_type;
@@ -532,7 +535,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         virtual SgNode * Traverse(clang::Decl * decl);
         virtual SgNode * Traverse(clang::Stmt * stmt);
         virtual SgNode * Traverse(const clang::Type * type);
-        virtual SgNode * TraverseForDeclContext(clang::DeclContext * decl_context);
+        virtual bool TraverseForDeclContext(clang::DeclContext * decl_context);
         virtual SgNode *TraverseOnDemand(clang::Decl *decl);
 
         /* Visit methods */

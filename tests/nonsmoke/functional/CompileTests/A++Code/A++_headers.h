@@ -54,18 +54,6 @@ using namespace std;
 // define USE_TEMPLATES
 // define APP_RESTRICT_MACRO
 
-#if defined(SGI)
-// This prevents the expansion of the templates which take precedence over
-// the A++/P++ member functions for relational operators.  In KCC (the correct way)
-// the templated relational operator will not be called if the arguments match properly
-// but with the SGI C++ compiler the templated relational operator will be called even
-// if the arguments match properly. This is a BUG in the SGI version 7.2 compiler!
-// But because we are not using this file, the use of STL may be more problematic
-// until the problem is fixed.
-// the file this effects is: /usr/include/CC/function.h
-#define FUNCTION_H
-#endif
-
 #if defined(USE_PTHREADS)
 // Turn on the use of Pthreads in A++
 #include <pthread.h>
@@ -112,13 +100,7 @@ using namespace std;
 #error "Can't define both LOCATE_EXPRESSION_TEMPLATES_IN_HEADER_FILES and LOCATE_EXPRESSION_TEMPLATES_IN_SOURCE_FILES"
 #endif
 
-// Can we use valloc with the GNU g++ compiler on the SUN?
-#if defined(sun) && !defined(GNU)
-// valloc aligns allocated memory on page boundaries
-#define APP_MALLOC(size) valloc(size)
-#else
 #define APP_MALLOC(size) malloc(size)
-#endif
 
 // We could use any unique values for these constants
 // but we need to use the macro since otherwise the switch statements won't work!
@@ -210,11 +192,8 @@ void APP_Assertion_Support ( const char* Source_File_With_Error, unsigned Line_N
           APP_Assertion_Support (__FILE__,__LINE__)
 #endif
 
-// if defined(SOLARIS)
-#if !defined(HPPA) && !defined(CRAY)
-// This does not work on the HP-UX machines (I think)
+// Enable auto-initialization of the application path name.
 #define AUTO_INITIALIZE_APPLICATION_PATH_NAME
-#endif
 
 #define DEFERED_EVALUATION TRUE 
 #undef INLINE_FUNCTIONS
@@ -236,12 +215,11 @@ void APP_Assertion_Support ( const char* Source_File_With_Error, unsigned Line_N
 #define COMPILE_AGGREGATE_OPERATOR_OPTIMIZATIONS    FALSE
 #define COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS FALSE
 #else
-// The following should be false for use with the new Solaris C++ compiler!
-// Also the RS6000 C++ compiler works only if these are set to FALSE.
-// Otherwise the new Solaris compiler will segment fault in the lazy_statement.C file!
+// The following should be false for use with some legacy compilers.
+// Otherwise the compiler may segment fault in the lazy_statement.C file.
 #define COMPILE_AGGREGATE_OPERATOR_OPTIMIZATIONS FALSE
-// The following should be false for use with the new Solaris C++ compiler!
-// the new compiler has a bug in the use of pointers to member functions!
+// The following should be false for use with some legacy compilers!
+// Some compilers have a bug in the use of pointers to member functions.
 #define COMPILE_DEFERRED_DISPLAY_AND_VIEW_FUNCTIONS FALSE
 #endif
 
@@ -362,5 +340,4 @@ extern int APP_DEBUG;
 // endif
 
 // Exit scope of initial header ifdef (this avoids errors if A++.h is included twice)
-#endif  /* !defined(_APP_ARRAY_CLASS_LIBRARY_H) */
-
+#endif /* !defined(_APP_ARRAY_CLASS_LIBRARY_H) */

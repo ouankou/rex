@@ -91,13 +91,10 @@ The POP {\em make} procedure consists of several steps that are
 governed by options in an architecture-specific {\em archdir.gnu}
 file. The correct {\em .gnu} file is chosen based on an environment
 variable called ARCHDIR, which is
-a combination of vendor name and communication paradigm. For example,
-if you are compiling for an SGI Origin you will have the choice
-of {\em sgi\_serial}, {\em sgi\_mpi}, {\em sgi\_shmem}, {\em sgi\_omp},
-or {\em sgi\_mpiomp} depending on whether you want to run serially,
-in parallel using message-passing (MPI or SHMEM), in parallel using
-thread-based parallelism (OpenMP) or in parallel using a hybrid of
-threads and message-passing.  The {\em archdir.gnu} file contains
+a combination of platform and communication paradigm. On Linux, set
+ARCHDIR to one of the provided {\em linux*.gnu} files (for example,
+{\em linux.gnu} or {\em linux\_alpha.gnu}) depending on whether you want
+serial, MPI, OpenMP, or hybrid MPI+OpenMP settings. The {\em archdir.gnu} file contains
 the proper paths and compiler options for the particular architecture
 chosen. A variety of these {\em .gnu} files have been provided
 with the standard distribution in the {\em input\_templates}
@@ -309,9 +306,8 @@ requested relatively infrequently (e.g. every 10 days) in a
 production simulation.
 
 To use this test case for validation, the user can compare their ouput
-with the file {\em pop/input\_templates/pop\_sgi.log.test} which
-contains the output of a 20 step calculation run on 4 processors of
-an SGI Origin3000.  The results from other computer platforms should
+with a reference 20-step run on 4 processors captured from a Linux system.
+The results from other Linux configurations should
 agree reasonably well -- within roundoff for the first step for
 most of the larger fields (the nearly-zero fields are very sensitive
 and my not agree to that level of precision).

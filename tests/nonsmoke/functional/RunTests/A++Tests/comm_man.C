@@ -207,27 +207,10 @@ Communication_Manager::Initialize_Runtime_System ()
 #if defined(COMPILE_APP)
 // We need to have this here for when A++ requires it
 #include <sys/time.h>
-double
-Communication_Manager::Wall_Clock_Time()
-   {
-  // this one only works for unix workstation networks
-  // and then only on the SUN using the Sun compilers (I think).
-  // make sure that sys/time.h is included somewhere
-#if defined(SUN4) && !defined(GNU)
-     unsigned long ustime;
+   double Communication_Manager::Wall_Clock_Time() {
      struct timeval tp;
-     struct timezone tzp;
-
-     gettimeofday(&tp,&tzp);
-     ustime = (unsigned long) tp.tv_sec;
-     ustime = (ustime * 1000000) + (unsigned long) tp.tv_usec;
-
-     return ((double) ustime) * 1e-6 ;
-#else
-  // Due to a silly error in the Cray T3D C compiler we can't
-  // specify 1e-6 or even 0.0!
-     return ((double) clock());
-#endif
+     gettimeofday(&tp, NULL);
+     return ((double)tp.tv_sec) + ((double)tp.tv_usec) * 1e-6;
    }
 #endif
 
@@ -249,5 +232,3 @@ Communication_Manager::Communication_Manager ( const Communication_Manager & X )
      APP_ABORT();
    }
 #endif
-
-

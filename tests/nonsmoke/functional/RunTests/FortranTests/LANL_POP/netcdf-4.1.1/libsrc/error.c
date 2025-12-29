@@ -14,20 +14,9 @@
 #include "rename.h"
 
 #ifdef HAVE_STRERROR
-#include <string.h> /* contains prototype for ansi libc function strerror() */
+#include <string.h> /* contains prototype for ANSI libc function strerror() */
 #else
-#if defined DLL_NETCDF || defined _WIN32_WCE /* define when library is a DLL */
-/* provide a strerror function for older windows systems */
-
-char w32_tmp[NC_MAX_NAME];
-static char *
-strerror(int errnum)
-{
-	sprintf(w32_tmp, "Windows: %d", errnum);
-	return w32_tmp;
-}
-#else
-/* provide a strerror function for older unix systems */
+/* Provide a strerror function for older Unix systems. */
 static char *
 strerror(int errnum)
 {
@@ -36,44 +25,9 @@ strerror(int errnum)
 
     if(errnum < 0 || errnum >= sys_nerr) return NULL;
     /* else */
-	return (char *)(sys_errlist[errnum]);
+    return (char *)(sys_errlist[errnum]);
 }
-#endif
 #endif /* NO_STRERROR */
-
-
-#ifdef vms
-/* UNTESTED */
-/*
- * On the vms system, when a system error occurs which is not
- * mapped into the unix styled errno values, errno is set EVMSERR
- * and a VMS error code is set in vaxc$errno.
- * This routine prints the systems message associated with status return
- * from a system services call.
- */
-
-#include <errno.h>
-#include <descrip.h>
-#include <ssdef.h>
-
-static const char *
-vms_strerror( int status )
-{
-	short msglen;
-	static char msgbuf[256];
-	$DESCRIPTOR(message, msgbuf);
-	register ret;
-
-	msgbuf[0] = 0;
-	ret = SYS$GETMSG(status, &msglen, &message, 15, 0);
-	
-	if(ret != SS$_BUFFEROVF && ret != SS$_NORMAL) {
-		(void) strcpy(msgbuf, "EVMSERR");
-	}
-	return(msgbuf);
-}
-#endif /* vms */
-
 
 static char unknown[] = "Unknown Error";
 
@@ -82,15 +36,7 @@ const char *
 nc_strerror(int err)
 {
 
-#ifdef vms 
-	if(err == EVMSERR)
-	{
-		return vms_strerror(err);
-	}	
-	/* else */
-#endif /* vms */
-
-	if(NC_ISSYSERR(err))
+        if(NC_ISSYSERR(err))
 	{
 		const char *cp = (const char *) strerror(err);
 		if(cp == NULL)

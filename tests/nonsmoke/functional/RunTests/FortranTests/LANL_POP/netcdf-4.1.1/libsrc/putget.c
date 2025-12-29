@@ -14,7 +14,6 @@
 #include "fbits.h"
 #include "onstack.h"
 #ifdef LOCKNUMREC
-#  include <mpp/shmem.h>	/* for SGI/Cray SHMEM routines */
 #  ifdef LN_TEST
 #    include <stdio.h>
 #  endif
@@ -11675,4 +11674,3 @@ nc_put_vars (
 	return nc_put_varm (ncid, varid, start, edges,
 			 stride, 0, value);
 }
-

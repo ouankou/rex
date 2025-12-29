@@ -94,7 +94,7 @@ FixupAstDefiningAndNondefiningDeclarations::visit ( SgNode* node )
                   {
                   // DQ (10/10/2006): This should have already been setup (it could have been a declaration built for a SgClassType and it was missed)!
                   // MLOG_WARN_C("astPostProcessing", "In FixupAstDefiningAndNondefiningDeclarations: fixup a non-defining class declaration with a NULL pointer, to its defining declaration, indirectly through its valid firstNondefiningDeclaration! \n");
-                  // ROSE_ASSERT(false);
+                  // ROSE_ABORT();
 
                      definingDeclaration = firstNondefiningClassDeclaration->get_definingDeclaration();
                      ROSE_ASSERT(definingDeclaration != NULL);
@@ -299,8 +299,6 @@ FixupAstDefiningAndNondefiningDeclarations::visit ( SgNode* node )
                     if (firstNondefiningDeclarationScope == NULL) {
 
                       // Only report this if it is not someting defined in a typedef.
-                      // PP: (21/10/21) add EXPERIMENTAL exception for SgAdaDiscriminatedTypeDecl
-                      //     alternatively, firstNondefiningDeclarationScope = isSgScopeStatement(SgAdaDiscriminatedTypeDecl::get_parent()) could be used
                        if (  (!isSgTypedefDeclaration(firstNondefiningDeclaration->get_parent())) ) {
                     	  MLOG_ERROR_C("astPostProcessing", "Error: firstNondefiningDeclaration->get_parent() = %p \n",firstNondefiningDeclaration->get_parent());
                     	  MLOG_WARN_C("astPostProcessing", "     firstNondefiningDeclaration = %p = %s \n",firstNondefiningDeclaration,firstNondefiningDeclaration->class_name().c_str());
@@ -694,7 +692,7 @@ FixupAstDefiningAndNondefiningDeclarations::visit ( SgNode* node )
 #endif
                  // MLOG_WARN_C("astPostProcessing", "Error: memberFunctionDeclaration->get_associatedClassDeclaration() == NULL for memberFunctionDeclaration = %p = %s = %s \n",
                  //      memberFunctionDeclaration,memberFunctionDeclaration->class_name().c_str(),SageInterface::get_name(memberFunctionDeclaration).c_str());
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                   }
 
                break;

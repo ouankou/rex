@@ -546,7 +546,7 @@ getFortranFixedFormatPreprocessorDirectives( std::string fileName )
             else 
              {
                printf ("Error: can't find the requested file (%s) \n",fileName.c_str()); 
-               assert(false);
+               ROSE_ABORT();
              }
         }
 

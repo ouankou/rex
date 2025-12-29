@@ -80,8 +80,7 @@
 //                              is building in C++11/C++98 mode.
 //   GTEST_LINKED_AS_SHARED_LIBRARY
 //                            - Define to 1 when compiling tests that use
-//                              Google Test as a shared library (known as
-//                              DLL on Windows).
+//                              Google Test as a shared library.
 //   GTEST_CREATE_SHARED_LIBRARY
 //                            - Define to 1 when compiling Google Test itself
 //                              as a shared library.
@@ -90,31 +89,7 @@
 //
 // Macros indicating the current platform (defined to 1 if compiled on
 // the given platform; otherwise undefined):
-//   GTEST_OS_AIX      - IBM AIX
-//   GTEST_OS_CYGWIN   - Cygwin
-//   GTEST_OS_HPUX     - HP-UX
 //   GTEST_OS_LINUX    - Linux
-//     GTEST_OS_LINUX_ANDROID - Google Android
-//   GTEST_OS_MAC      - Mac OS X
-//     GTEST_OS_IOS    - iOS
-//       GTEST_OS_IOS_SIMULATOR - iOS simulator
-//   GTEST_OS_NACL     - Google Native Client (NaCl)
-//   GTEST_OS_OPENBSD  - OpenBSD
-//   GTEST_OS_QNX      - QNX
-//   GTEST_OS_SOLARIS  - Sun Solaris
-//   GTEST_OS_SYMBIAN  - Symbian
-//   GTEST_OS_WINDOWS  - Windows (Desktop, MinGW, or Mobile)
-//     GTEST_OS_WINDOWS_DESKTOP  - Windows Desktop
-//     GTEST_OS_WINDOWS_MINGW    - MinGW
-//     GTEST_OS_WINDOWS_MOBILE   - Windows Mobile
-//   GTEST_OS_ZOS      - z/OS
-//
-// Among the platforms, Cygwin, Linux, Max OS X, and Windows have the
-// most stable support.  Since core members of the Google Test project
-// don't have access to other platforms, support for them may be less
-// stable.  If you notice any problems on your platform, please notify
-// googletestframework@googlegroups.com (patches for fixing them are
-// even more welcome!).
 //
 // Note that it is possible that none of the GTEST_OS_* macros are defined.
 //
@@ -149,18 +124,17 @@
 //                         and Google Test is thread-safe; or 0 otherwise.
 //
 // Template meta programming:
-//   is_pointer     - as in TR1; needed on Symbian and IBM XL C/C++ only.
+//   is_pointer     - as in TR1; needed on some older compilers only.
 //   IteratorTraits - partial implementation of std::iterator_traits, which
-//                    is not available in libCstd when compiled with Sun C++.
+//                    is not available in some standard libraries.
 //
 // Smart pointers:
 //   scoped_ptr     - as in TR2.
 //
 // Regular expressions:
 //   RE             - a simple regular expression class using the POSIX
-//                    Extended Regular Expression syntax on UNIX-like
-//                    platforms, or a reduced regular exception syntax on
-//                    other platforms, including Windows.
+//                    Extended Regular Expression syntax, or a reduced
+//                    regular expression syntax when POSIX isn't available.
 //
 // Logging:
 //   GTEST_LOG_()   - logs messages at the specified severity level.
@@ -193,20 +167,13 @@
 //   Int32FromGTestEnv()  - parses an Int32 environment variable.
 //   StringFromGTestEnv() - parses a string environment variable.
 
-#include <ctype.h>   // for isspace, etc
-#include <stddef.h>  // for ptrdiff_t
-#include <stdlib.h>
+#include <ctype.h>  // for isspace, etc
+#include <stddef.h> // for ptrdiff_t
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#ifndef _WIN32_WCE
-# include <sys/types.h>
-# include <sys/stat.h>
-#endif  // !_WIN32_WCE
-
-#if defined __APPLE__
-# include <AvailabilityMacros.h>
-# include <TargetConditionals.h>
-#endif
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <iostream>  // NOLINT
 #include <sstream>  // NOLINT
@@ -227,47 +194,10 @@
 #endif  // __GNUC__
 
 // Determines the platform on which Google Test is compiled.
-#ifdef __CYGWIN__
-# define GTEST_OS_CYGWIN 1
-#elif defined __SYMBIAN32__
-# define GTEST_OS_SYMBIAN 1
-#elif defined _WIN32
-# define GTEST_OS_WINDOWS 1
-# ifdef _WIN32_WCE
-#  define GTEST_OS_WINDOWS_MOBILE 1
-# elif defined(__MINGW__) || defined(__MINGW32__)
-#  define GTEST_OS_WINDOWS_MINGW 1
-# else
-#  define GTEST_OS_WINDOWS_DESKTOP 1
-# endif  // _WIN32_WCE
-#elif defined __APPLE__
-# define GTEST_OS_MAC 1
-# if TARGET_OS_IPHONE
-#  define GTEST_OS_IOS 1
-#  if TARGET_IPHONE_SIMULATOR
-#   define GTEST_OS_IOS_SIMULATOR 1
-#  endif
-# endif
-#elif defined __linux__
-# define GTEST_OS_LINUX 1
-# if defined __ANDROID__
-#  define GTEST_OS_LINUX_ANDROID 1
-# endif
-#elif defined __MVS__
-# define GTEST_OS_ZOS 1
-#elif defined(__sun) && defined(__SVR4)
-# define GTEST_OS_SOLARIS 1
-#elif defined(_AIX)
-# define GTEST_OS_AIX 1
-#elif defined(__hpux)
-# define GTEST_OS_HPUX 1
-#elif defined __native_client__
-# define GTEST_OS_NACL 1
-#elif defined __OpenBSD__
-# define GTEST_OS_OPENBSD 1
-#elif defined __QNX__
-# define GTEST_OS_QNX 1
-#endif  // __CYGWIN__
+#if !defined(__linux__)
+#error "REX Google Test support is Linux-only."
+#endif
+#define GTEST_OS_LINUX 1
 
 #ifndef GTEST_LANG_CXX11
 // gcc and clang define __GXX_EXPERIMENTAL_CXX0X__ when
@@ -283,32 +213,13 @@
 #endif
 
 // Brings in definitions for functions used in the testing::internal::posix
-// namespace (read, write, close, chdir, isatty, stat). We do not currently
-// use them on Windows Mobile.
-#if !GTEST_OS_WINDOWS
-// This assumes that non-Windows OSes provide unistd.h. For OSes where this
-// is not the case, we need to include headers that provide the functions
-// mentioned above.
-# include <unistd.h>
-# include <strings.h>
-#elif !GTEST_OS_WINDOWS_MOBILE
-# include <direct.h>
-# include <io.h>
-#endif
-
-#if GTEST_OS_LINUX_ANDROID
-// Used to define __ANDROID_API__ matching the target NDK API level.
-#  include <android/api-level.h>  // NOLINT
-#endif
+// namespace (read, write, close, chdir, isatty, stat).
+#include <strings.h>
+#include <unistd.h>
 
 // Defines this to true iff Google Test can use POSIX regular expressions.
 #ifndef GTEST_HAS_POSIX_RE
-# if GTEST_OS_LINUX_ANDROID
-// On Android, <regex.h> is only available starting with Gingerbread.
-#  define GTEST_HAS_POSIX_RE (__ANDROID_API__ >= 9)
-# else
-#  define GTEST_HAS_POSIX_RE (!GTEST_OS_WINDOWS)
-# endif
+#define GTEST_HAS_POSIX_RE 1
 #endif
 
 #if GTEST_HAS_POSIX_RE
@@ -321,51 +232,17 @@
 
 # define GTEST_USES_POSIX_RE 1
 
-#elif GTEST_OS_WINDOWS
-
-// <regex.h> is not available on Windows.  Use our own simple regex
-// implementation instead.
-# define GTEST_USES_SIMPLE_RE 1
-
-#else
-
-// <regex.h> may not be available on this platform.  Use our own
-// simple regex implementation instead.
-# define GTEST_USES_SIMPLE_RE 1
-
 #endif  // GTEST_HAS_POSIX_RE
 
 #ifndef GTEST_HAS_EXCEPTIONS
 // The user didn't tell us whether exceptions are enabled, so we need
 // to figure it out.
-# if defined(_MSC_VER) || defined(__BORLANDC__)
-// MSVC's and C++Builder's implementations of the STL use the _HAS_EXCEPTIONS
-// macro to enable exceptions, so we'll do the same.
-// Assumes that exceptions are enabled by default.
-#  ifndef _HAS_EXCEPTIONS
-#   define _HAS_EXCEPTIONS 1
-#  endif  // _HAS_EXCEPTIONS
-#  define GTEST_HAS_EXCEPTIONS _HAS_EXCEPTIONS
-# elif defined(__GNUC__) && __EXCEPTIONS
-// gcc defines __EXCEPTIONS to 1 iff exceptions are enabled.
-#  define GTEST_HAS_EXCEPTIONS 1
-# elif defined(__SUNPRO_CC)
-// Sun Pro CC supports exceptions.  However, there is no compile-time way of
-// detecting whether they are enabled or not.  Therefore, we assume that
-// they are enabled unless the user tells us otherwise.
-#  define GTEST_HAS_EXCEPTIONS 1
-# elif defined(__IBMCPP__) && __EXCEPTIONS
-// xlC defines __EXCEPTIONS to 1 iff exceptions are enabled.
-#  define GTEST_HAS_EXCEPTIONS 1
-# elif defined(__HP_aCC)
-// Exception handling is in effect by default in HP aCC compiler. It has to
-// be turned of by +noeh compiler option if desired.
+#if defined(__EXCEPTIONS)
 #  define GTEST_HAS_EXCEPTIONS 1
 # else
-// For other compilers, we assume exceptions are disabled to be
-// conservative.
+// For other compilers, assume exceptions are disabled unless overridden.
 #  define GTEST_HAS_EXCEPTIONS 0
-# endif  // defined(_MSC_VER) || defined(__BORLANDC__)
+#endif
 #endif  // GTEST_HAS_EXCEPTIONS
 
 #if !defined(GTEST_HAS_STD_STRING)
@@ -391,11 +268,7 @@
 // TODO(wan@google.com): uses autoconf to detect whether ::std::wstring
 //   is available.
 
-// Cygwin 1.7 and below doesn't support ::std::wstring.
-// Solaris' libc++ doesn't support it either.  Android has
-// no support for it at least as recent as Froyo (2.2).
-# define GTEST_HAS_STD_WSTRING \
-    (!(GTEST_OS_LINUX_ANDROID || GTEST_OS_CYGWIN || GTEST_OS_SOLARIS))
+#define GTEST_HAS_STD_WSTRING 1
 
 #endif  // GTEST_HAS_STD_WSTRING
 
@@ -411,28 +284,11 @@
 // The user didn't tell us whether RTTI is enabled, so we need to
 // figure it out.
 
-# ifdef _MSC_VER
-
-#  ifdef _CPPRTTI  // MSVC defines this macro iff RTTI is enabled.
-#   define GTEST_HAS_RTTI 1
-#  else
-#   define GTEST_HAS_RTTI 0
-#  endif
-
 // Starting with version 4.3.2, gcc defines __GXX_RTTI iff RTTI is enabled.
-# elif defined(__GNUC__) && (GTEST_GCC_VER_ >= 40302)
+#if defined(__GNUC__) && (GTEST_GCC_VER_ >= 40302)
 
 #  ifdef __GXX_RTTI
-// When building against STLport with the Android NDK and with
-// -frtti -fno-exceptions, the build fails at link time with undefined
-// references to __cxa_bad_typeid. Note sure if STL or toolchain bug,
-// so disable RTTI when detected.
-#   if GTEST_OS_LINUX_ANDROID && defined(_STLPORT_MAJOR) && \
-       !defined(__EXCEPTIONS)
-#    define GTEST_HAS_RTTI 0
-#   else
-#    define GTEST_HAS_RTTI 1
-#   endif  // GTEST_OS_LINUX_ANDROID && __STLPORT_MAJOR && !__EXCEPTIONS
+#define GTEST_HAS_RTTI 1
 #  else
 #   define GTEST_HAS_RTTI 0
 #  endif  // __GXX_RTTI
@@ -444,22 +300,12 @@
 
 #  define GTEST_HAS_RTTI __has_feature(cxx_rtti)
 
-// Starting with version 9.0 IBM Visual Age defines __RTTI_ALL__ to 1 if
-// both the typeid and dynamic_cast features are present.
-# elif defined(__IBMCPP__) && (__IBMCPP__ >= 900)
-
-#  ifdef __RTTI_ALL__
-#   define GTEST_HAS_RTTI 1
-#  else
-#   define GTEST_HAS_RTTI 0
-#  endif
-
 # else
 
 // For all other compilers, we assume RTTI is enabled.
 #  define GTEST_HAS_RTTI 1
 
-# endif  // _MSC_VER
+#endif
 
 #endif  // GTEST_HAS_RTTI
 
@@ -471,13 +317,9 @@
 
 // Determines whether Google Test can use the pthreads library.
 #ifndef GTEST_HAS_PTHREAD
-// The user didn't tell us explicitly, so we assume pthreads support is
-// available on Linux and Mac.
-//
 // To disable threading support in Google Test, add -DGTEST_HAS_PTHREAD=0
 // to your compiler flags.
-# define GTEST_HAS_PTHREAD (GTEST_OS_LINUX || GTEST_OS_MAC || GTEST_OS_HPUX \
-    || GTEST_OS_QNX)
+#define GTEST_HAS_PTHREAD 1
 #endif  // GTEST_HAS_PTHREAD
 
 #if GTEST_HAS_PTHREAD
@@ -493,13 +335,8 @@
 // this macro to 0 to prevent Google Test from using tuple (any
 // feature depending on tuple with be disabled in this mode).
 #ifndef GTEST_HAS_TR1_TUPLE
-# if GTEST_OS_LINUX_ANDROID && defined(_STLPORT_MAJOR)
-// STLport, provided with the Android NDK, has neither <tr1/tuple> or <tuple>.
-#  define GTEST_HAS_TR1_TUPLE 0
-# else
 // The user didn't tell us not to do it, so we assume it's OK.
-#  define GTEST_HAS_TR1_TUPLE 1
-# endif
+#define GTEST_HAS_TR1_TUPLE 1
 #endif  // GTEST_HAS_TR1_TUPLE
 
 // Determines whether Google Test's own tr1 tuple implementation
@@ -508,23 +345,15 @@
 // The user didn't tell us, so we need to figure it out.
 
 // We use our own TR1 tuple if we aren't sure the user has an
-// implementation of it already.  At this time, libstdc++ 4.0.0+ and
-// MSVC 2010 are the only mainstream standard libraries that come
-// with a TR1 tuple implementation.  NVIDIA's CUDA NVCC compiler
-// pretends to be GCC by defining __GNUC__ and friends, but cannot
-// compile GCC's tuple implementation.  MSVC 2008 (9.0) provides TR1
-// tuple in a 323 MB Feature Pack download, which we cannot assume the
-// user has.  QNX's QCC compiler is a modified GCC but it doesn't
-// support TR1 tuple.  libc++ only provides std::tuple, in C++11 mode,
-// and it can be used with some compilers that define __GNUC__.
-# if (defined(__GNUC__) && !defined(__CUDACC__) && (GTEST_GCC_VER_ >= 40000) \
-      && !GTEST_OS_QNX && !defined(_LIBCPP_VERSION)) || _MSC_VER >= 1600
+// implementation of it already.  libc++ only provides std::tuple in
+// C++11 mode, and it can be used with some compilers that define __GNUC__.
+#if (defined(__GNUC__) && !defined(__CUDACC__) && (GTEST_GCC_VER_ >= 40000) && \
+     !defined(_LIBCPP_VERSION))
 #  define GTEST_ENV_HAS_TR1_TUPLE_ 1
 # endif
 
 // C++11 specifies that <tuple> provides std::tuple. Use that if gtest is used
-// in C++11 mode and libstdc++ isn't very old (binaries targeting OS X 10.6
-// can build with clang but need to use gcc4.2's libstdc++).
+// in C++11 mode and libstdc++ isn't very old.
 # if GTEST_LANG_CXX11 && (!defined(__GLIBCXX__) || __GLIBCXX__ > 20110325)
 #  define GTEST_ENV_HAS_STD_TUPLE_ 1
 # endif
@@ -560,10 +389,6 @@ using ::std::tuple_size;
 }
 }
 
-# elif GTEST_OS_SYMBIAN
-
-#  include <tuple>
-
 # elif defined(__GNUC__) && (GTEST_GCC_VER_ >= 40000)
 // GCC 4.0+ implements tr1/tuple in the <tr1/tuple> header.  This does
 // not conform to the TR1 spec, which requires the header to be <tuple>.
@@ -598,16 +423,7 @@ using ::std::tuple_size;
 // The user didn't tell us, so we need to figure it out.
 
 # if GTEST_OS_LINUX && !defined(__ia64__)
-#  if GTEST_OS_LINUX_ANDROID
-// On Android, clone() is only available on ARM starting with Gingerbread.
-#    if defined(__arm__) && __ANDROID_API__ >= 9
-#     define GTEST_HAS_CLONE 1
-#    else
-#     define GTEST_HAS_CLONE 0
-#    endif
-#  else
-#   define GTEST_HAS_CLONE 1
-#  endif
+#define GTEST_HAS_CLONE 1
 # else
 #  define GTEST_HAS_CLONE 0
 # endif  // GTEST_OS_LINUX && !defined(__ia64__)
@@ -617,54 +433,36 @@ using ::std::tuple_size;
 // Determines whether to support stream redirection. This is used to test
 // output correctness and to implement death tests.
 #ifndef GTEST_HAS_STREAM_REDIRECTION
-// By default, we assume that stream redirection is supported on all
-// platforms except known mobile ones.
-# if GTEST_OS_WINDOWS_MOBILE || GTEST_OS_SYMBIAN
-#  define GTEST_HAS_STREAM_REDIRECTION 0
-# else
-#  define GTEST_HAS_STREAM_REDIRECTION 1
-# endif  // !GTEST_OS_WINDOWS_MOBILE && !GTEST_OS_SYMBIAN
+// By default, we assume that stream redirection is supported.
+#define GTEST_HAS_STREAM_REDIRECTION 1
 #endif  // GTEST_HAS_STREAM_REDIRECTION
 
 // Determines whether to support death tests.
-// Google Test does not support death tests for VC 7.1 and earlier as
-// abort() in a VC 7.1 application compiled as GUI in debug config
-// pops up a dialog window that cannot be suppressed programmatically.
-#if (GTEST_OS_LINUX || GTEST_OS_CYGWIN || GTEST_OS_SOLARIS || \
-     (GTEST_OS_MAC && !GTEST_OS_IOS) || GTEST_OS_IOS_SIMULATOR || \
-     (GTEST_OS_WINDOWS_DESKTOP && _MSC_VER >= 1400) || \
-     GTEST_OS_WINDOWS_MINGW || GTEST_OS_AIX || GTEST_OS_HPUX || \
-     GTEST_OS_OPENBSD || GTEST_OS_QNX)
+#if GTEST_OS_LINUX
 # define GTEST_HAS_DEATH_TEST 1
 # include <vector>  // NOLINT
 #endif
 
-// We don't support MSVC 7.1 with exceptions disabled now.  Therefore
-// all the compilers we care about are adequate for supporting
+// All compilers we care about are adequate for supporting
 // value-parameterized tests.
 #define GTEST_HAS_PARAM_TEST 1
 
 // Determines whether to support type-driven tests.
 
-// Typed tests need <typeinfo> and variadic macros, which GCC, VC++ 8.0,
-// Sun Pro CC, IBM Visual Age, and HP aCC support.
-#if defined(__GNUC__) || (_MSC_VER >= 1400) || defined(__SUNPRO_CC) || \
-    defined(__IBMCPP__) || defined(__HP_aCC)
+// Typed tests need <typeinfo> and variadic macros.
+#if defined(__GNUC__) || defined(__clang__)
 # define GTEST_HAS_TYPED_TEST 1
 # define GTEST_HAS_TYPED_TEST_P 1
 #endif
 
 // Determines whether to support Combine(). This only makes sense when
-// value-parameterized tests are enabled.  The implementation doesn't
-// work on Sun Studio since it doesn't understand templated conversion
-// operators.
-#if GTEST_HAS_PARAM_TEST && GTEST_HAS_TR1_TUPLE && !defined(__SUNPRO_CC)
+// value-parameterized tests are enabled.
+#if GTEST_HAS_PARAM_TEST && GTEST_HAS_TR1_TUPLE
 # define GTEST_HAS_COMBINE 1
 #endif
 
 // Determines whether the system compiler uses UTF-16 for encoding wide strings.
-#define GTEST_WIDE_STRING_USES_UTF16_ \
-    (GTEST_OS_WINDOWS || GTEST_OS_CYGWIN || GTEST_OS_SYMBIAN || GTEST_OS_AIX)
+#define GTEST_WIDE_STRING_USES_UTF16_ 0
 
 // Determines whether test results can be streamed to a socket.
 #if GTEST_OS_LINUX
@@ -726,31 +524,14 @@ using ::std::tuple_size;
 # define GTEST_MUST_USE_RESULT_
 #endif  // __GNUC__ && (GTEST_GCC_VER_ >= 30400) && !COMPILER_ICC
 
-// Determine whether the compiler supports Microsoft's Structured Exception
-// Handling.  This is supported by several Windows compilers but generally
-// does not exist on any other system.
+// Determine whether the compiler supports Structured Exception Handling.
 #ifndef GTEST_HAS_SEH
 // The user didn't tell us, so we need to figure it out.
 
-# if defined(_MSC_VER) || defined(__BORLANDC__)
-// These two compilers are known to support SEH.
-#  define GTEST_HAS_SEH 1
-# else
 // Assume no SEH.
-#  define GTEST_HAS_SEH 0
-# endif
+#define GTEST_HAS_SEH 0
 
 #endif  // GTEST_HAS_SEH
-
-#ifdef _MSC_VER
-
-# if GTEST_LINKED_AS_SHARED_LIBRARY
-#  define GTEST_API_ __declspec(dllimport)
-# elif GTEST_CREATE_SHARED_LIBRARY
-#  define GTEST_API_ __declspec(dllexport)
-# endif
-
-#endif  // _MSC_VER
 
 #ifndef GTEST_API_
 # define GTEST_API_
@@ -1237,8 +1018,8 @@ class ThreadWithParamBase {
 
 // pthread_create() accepts a pointer to a function type with the C linkage.
 // According to the Standard (7.5/1), function types with different linkages
-// are different even if they are otherwise identical.  Some compilers (for
-// example, SunStudio) treat them as different types.  Since class methods
+// are different even if they are otherwise identical.  Some compilers treat
+// them as different types.  Since class methods
 // cannot be defined with C-linkage we need to define a free C-function to
 // pass into pthread_create().
 extern "C" inline void* ThreadFuncWithCLinkage(void* thread) {
@@ -1573,27 +1354,8 @@ class ThreadLocal {
 // we cannot detect it.
 GTEST_API_ size_t GetThreadCount();
 
-// Passing non-POD classes through ellipsis (...) crashes the ARM
-// compiler and generates a warning in Sun Studio.  The Nokia Symbian
-// and the IBM XL C/C++ compiler try to instantiate a copy constructor
-// for objects passed through ellipsis (...), failing for uncopyable
-// objects.  We define this to ensure that only POD is passed through
-// ellipsis on these systems.
-#if defined(__SYMBIAN32__) || defined(__IBMCPP__) || defined(__SUNPRO_CC)
-// We lose support for NULL detection where the compiler doesn't like
-// passing non-POD classes through ellipsis (...).
-# define GTEST_ELLIPSIS_NEEDS_POD_ 1
-#else
-# define GTEST_CAN_COMPARE_NULL 1
-#endif
-
-// The Nokia Symbian and IBM XL C/C++ compilers cannot decide between
-// const T& and const T* in a function template.  These compilers
-// _can_ decide between class template specializations for T and T*,
-// so a tr1::type_traits-like is_pointer works.
-#if defined(__SYMBIAN32__) || defined(__IBMCPP__)
-# define GTEST_NEEDS_IS_POINTER_ 1
-#endif
+// We can compare NULL in this configuration.
+#define GTEST_CAN_COMPARE_NULL 1
 
 template <bool bool_value>
 struct bool_constant {
@@ -1626,16 +1388,9 @@ struct IteratorTraits<const T*> {
   typedef T value_type;
 };
 
-#if GTEST_OS_WINDOWS
-# define GTEST_PATH_SEP_ "\\"
-# define GTEST_HAS_ALT_PATH_SEP_ 1
-// The biggest signed integer type the compiler supports.
-typedef __int64 BiggestInt;
-#else
-# define GTEST_PATH_SEP_ "/"
-# define GTEST_HAS_ALT_PATH_SEP_ 0
-typedef long long BiggestInt;  // NOLINT
-#endif  // GTEST_OS_WINDOWS
+#define GTEST_PATH_SEP_ "/"
+#define GTEST_HAS_ALT_PATH_SEP_ 0
+typedef long long BiggestInt; // NOLINT
 
 // Utilities for char.
 
@@ -1678,51 +1433,11 @@ inline char ToUpper(char ch) {
 }
 
 // The testing::internal::posix namespace holds wrappers for common
-// POSIX functions.  These wrappers hide the differences between
-// Windows/MSVC and POSIX systems.  Since some compilers define these
-// standard functions as macros, the wrapper cannot have the same name
-// as the wrapped function.
+// POSIX functions. These wrappers hide platform differences. Since some
+// compilers define these standard functions as macros, the wrapper cannot
+// have the same name as the wrapped function.
 
 namespace posix {
-
-// Functions with a different name on Windows.
-
-#if GTEST_OS_WINDOWS
-
-typedef struct _stat StatStruct;
-
-# ifdef __BORLANDC__
-inline int IsATTY(int fd) { return isatty(fd); }
-inline int StrCaseCmp(const char* s1, const char* s2) {
-  return stricmp(s1, s2);
-}
-inline char* StrDup(const char* src) { return strdup(src); }
-# else  // !__BORLANDC__
-#  if GTEST_OS_WINDOWS_MOBILE
-inline int IsATTY(int /* fd */) { return 0; }
-#  else
-inline int IsATTY(int fd) { return _isatty(fd); }
-#  endif  // GTEST_OS_WINDOWS_MOBILE
-inline int StrCaseCmp(const char* s1, const char* s2) {
-  return _stricmp(s1, s2);
-}
-inline char* StrDup(const char* src) { return _strdup(src); }
-# endif  // __BORLANDC__
-
-# if GTEST_OS_WINDOWS_MOBILE
-inline int FileNo(FILE* file) { return reinterpret_cast<int>(_fileno(file)); }
-// Stat(), RmDir(), and IsDir() are not needed on Windows CE at this
-// time and thus not defined there.
-# else
-inline int FileNo(FILE* file) { return _fileno(file); }
-inline int Stat(const char* path, StatStruct* buf) { return _stat(path, buf); }
-inline int RmDir(const char* dir) { return _rmdir(dir); }
-inline bool IsDir(const StatStruct& st) {
-  return (_S_IFDIR & st.st_mode) != 0;
-}
-# endif  // GTEST_OS_WINDOWS_MOBILE
-
-#else
 
 typedef struct stat StatStruct;
 
@@ -1736,38 +1451,19 @@ inline char* StrDup(const char* src) { return strdup(src); }
 inline int RmDir(const char* dir) { return rmdir(dir); }
 inline bool IsDir(const StatStruct& st) { return S_ISDIR(st.st_mode); }
 
-#endif  // GTEST_OS_WINDOWS
-
-// Functions deprecated by MSVC 8.0.
-
-#ifdef _MSC_VER
-// Temporarily disable warning 4996 (deprecated function).
-# pragma warning(push)
-# pragma warning(disable:4996)
-#endif
-
 inline const char* StrNCpy(char* dest, const char* src, size_t n) {
   return strncpy(dest, src, n);
 }
 
-// ChDir(), FReopen(), FDOpen(), Read(), Write(), Close(), and
-// StrError() aren't needed on Windows CE at this time and thus not
-// defined there.
-
-#if !GTEST_OS_WINDOWS_MOBILE
-inline int ChDir(const char* dir) { return chdir(dir); }
-#endif
+inline int ChDir(const char *dir) { return chdir(dir); }
 inline FILE* FOpen(const char* path, const char* mode) {
   return fopen(path, mode);
 }
-#if !GTEST_OS_WINDOWS_MOBILE
 inline FILE *FReopen(const char* path, const char* mode, FILE* stream) {
   return freopen(path, mode, stream);
 }
-inline FILE* FDOpen(int fd, const char* mode) { return fdopen(fd, mode); }
-#endif
-inline int FClose(FILE* fp) { return fclose(fp); }
-#if !GTEST_OS_WINDOWS_MOBILE
+inline FILE *FDOpen(int fd, const char *mode) { return fdopen(fd, mode); }
+inline int FClose(FILE *fp) { return fclose(fp); }
 inline int Read(int fd, void* buf, unsigned int count) {
   return static_cast<int>(read(fd, buf, count));
 }
@@ -1775,53 +1471,13 @@ inline int Write(int fd, const void* buf, unsigned int count) {
   return static_cast<int>(write(fd, buf, count));
 }
 inline int Close(int fd) { return close(fd); }
-inline const char* StrError(int errnum) { return strerror(errnum); }
-#endif
-inline const char* GetEnv(const char* name) {
-#if GTEST_OS_WINDOWS_MOBILE
-  // We are on Windows CE, which has no environment variables.
-  return NULL;
-#elif defined(__BORLANDC__) || defined(__SunOS_5_8) || defined(__SunOS_5_9)
-  // Environment variables which we programmatically clear will be set to the
-  // empty string rather than unset (NULL).  Handle that case.
-  const char* const env = getenv(name);
-  return (env != NULL && env[0] != '\0') ? env : NULL;
-#else
-  return getenv(name);
-#endif
-}
-
-#ifdef _MSC_VER
-# pragma warning(pop)  // Restores the warning state.
-#endif
-
-#if GTEST_OS_WINDOWS_MOBILE
-// Windows CE has no C library. The abort() function is used in
-// several places in Google Test. This implementation provides a reasonable
-// imitation of standard behaviour.
-void Abort();
-#else
+inline const char *StrError(int errnum) { return strerror(errnum); }
+inline const char *GetEnv(const char *name) { return getenv(name); }
 inline void Abort() { abort(); }
-#endif  // GTEST_OS_WINDOWS_MOBILE
 
 }  // namespace posix
 
-// MSVC "deprecates" snprintf and issues warnings wherever it is used.  In
-// order to avoid these warnings, we need to use _snprintf or _snprintf_s on
-// MSVC-based platforms.  We map the GTEST_SNPRINTF_ macro to the appropriate
-// function in order to achieve that.  We use macro definition here because
-// snprintf is a variadic function.
-#if _MSC_VER >= 1400 && !GTEST_OS_WINDOWS_MOBILE
-// MSVC 2005 and above support variadic macros.
-# define GTEST_SNPRINTF_(buffer, size, format, ...) \
-     _snprintf_s(buffer, size, size, format, __VA_ARGS__)
-#elif defined(_MSC_VER)
-// Windows CE does not define _snprintf_s and MSVC prior to 2005 doesn't
-// complain about _snprintf.
-# define GTEST_SNPRINTF_ _snprintf
-#else
-# define GTEST_SNPRINTF_ snprintf
-#endif
+#define GTEST_SNPRINTF_ snprintf
 
 // The maximum number a BiggestInt can represent.  This definition
 // works no matter BiggestInt is represented in one's complement or
@@ -1863,25 +1519,17 @@ class TypeWithSize {
 template <>
 class TypeWithSize<4> {
  public:
-  // unsigned int has size 4 in both gcc and MSVC.
-  //
-  // As base/basictypes.h doesn't compile on Windows, we cannot use
-  // uint32, uint64, and etc here.
-  typedef int Int;
-  typedef unsigned int UInt;
+   // unsigned int has size 4 on typical platforms.
+   typedef int Int;
+   typedef unsigned int UInt;
 };
 
 // The specialization for size 8.
 template <>
 class TypeWithSize<8> {
- public:
-#if GTEST_OS_WINDOWS
-  typedef __int64 Int;
-  typedef unsigned __int64 UInt;
-#else
+public:
   typedef long long Int;  // NOLINT
-  typedef unsigned long long UInt;  // NOLINT
-#endif  // GTEST_OS_WINDOWS
+  typedef unsigned long long UInt; // NOLINT
 };
 
 // Integer types of known sizes.

@@ -549,7 +549,7 @@ int yyerror(const char *s) {
     assert (lnode);
     printf("Error when parsing pragma:\n\t %s \n\t associated with node at line %d\n", orig_str, lnode->get_file_info()->get_line()); 
     printf(" %s!\n", s);
-    assert(0);
+    ROSE_ABORT();
     return 0; // we want to the program to stop on error
 }
 

@@ -88,14 +88,12 @@ extern "C"
 // include "../../PADRE/PARTI/bsparti.h"
 // We use a link to represent this file within the P++/include directory
 
-// (DQ 3/26/2000) New versions of MPI include mpi++.h if defined(__cplusplus) == TRUE
-// This is a problem on the NCSA SGI Origin 2000 machine. But we can't redefine a predefined macro!!!
-// if defined(__cplusplus)
-// undef __cplusplus
-// endif
+// (DQ 3/26/2000) New versions of MPI include mpi++.h if defined(__cplusplus) ==
+// TRUE This is a problem on some legacy platforms. But we can't redefine a
+// predefined macro!!! if defined(__cplusplus) undef __cplusplus endif
 #include "bsparti.h"
 // define __cplusplus 1
-   }
+}
 #endif
 
 // Header file for Block Parti (low level parallel support for P++)
@@ -160,5 +158,4 @@ extern "C"
 // DEFINE scanf Parallel_Scanf
 
 // Exit scope of initial header ifdef (this avoids errors if A++.h is included twice)
-#endif  /* !defined(_PPP_ARRAY_CLASS_LIBRARY_H) */
-
+#endif /* !defined(_PPP_ARRAY_CLASS_LIBRARY_H) */

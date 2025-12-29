@@ -1037,7 +1037,7 @@ TimingPerformance::endTimer()
           printf ("WARNING: value returned from ProcessingPhase::getCurrentDelta(timer) is negative in ~TimingPerformance() (value = %6.10f) \n",p);
 
        // DQ (6/24/2013): This fails on rare ocassions, I don't think it is important enough to cause us to fail tests (appears to be a OS issue).
-       // ROSE_ASSERT(false);
+       // ROSE_ABORT();
 #endif
         }
      localData->set_performance(ProcessingPhase::getCurrentDelta(timer));

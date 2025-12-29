@@ -27,41 +27,7 @@ case "$CXX_ID" in
     CXX_STATIC_LIB_UPDATE='${AR} ruv'
     # I tried 'gcc -o' for static libraries, but got unresolved symbols
     # and no library.  BTNG.
-    case "$host_os" in
-      sun*|solaris*)	CXX_SHARED_LIB_UPDATE='${CC} -shared -o' ;;
-      # Note that CC is used instead of CXX if CXX is GNU compiler.
-      # Assume that if CXX is g++, then CC had better be gcc.
-      # For some reason, running "g++ -shared" on the Sun writes
-      # a perfectly good file then due to an error on ld, removes
-      # that file.  Maybe a future version will correct this.  BTNG
-      *)		CXX_SHARED_LIB_UPDATE='${CXX} -shared -o' ;;
-      # Manual says I should also include the compile flags such as
-      # -fpic and -fPIC but this seems to be working right now and I
-      # fear breaking it.  BTNG
-    esac
-  ;;
-  sunpro)
-    CXX_STATIC_LIB_UPDATE='${CXX} -xar -o'
-    CXX_SHARED_LIB_UPDATE='${CXX} -G -o'
-  ;;
-  dec)
-    CXX_STATIC_LIB_UPDATE='${AR} ruv'
-    # I tried 'cxx -o' for static libraries, but got unresolved symbols
-    # and no library.  BTNG.
     CXX_SHARED_LIB_UPDATE='${CXX} -shared -o'
-  ;;
-  kai)
-    CXX_STATIC_LIB_UPDATE='${CXX} -o'
-    CXX_SHARED_LIB_UPDATE='${CXX} -o'
-    # The KAI compiler generates shared or static based on name of output file.
-  ;;
-  sgi)
-    CXX_STATIC_LIB_UPDATE='${AR} ruv'
-    CXX_SHARED_LIB_UPDATE='${CXX} -64 -shared -o'
-  ;;
-  ibm)
-    CXX_STATIC_LIB_UPDATE='${AR} -r -u -v'
-    # IBM does not provide a method for creating shared libraries.
   ;;
   *)
     # Set the default values.

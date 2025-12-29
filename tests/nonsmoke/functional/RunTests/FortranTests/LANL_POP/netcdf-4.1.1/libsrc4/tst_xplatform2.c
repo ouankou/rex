@@ -370,7 +370,7 @@ main(int argc, char **argv)
       if (nc_close(ncid)) ERR;
    }
    SUMMARIZE_ERR;
-   printf("*** testing Solaris-written vlen of compound type...");
+   printf("*** testing reference vlen of compound type...");
    {
       char file_in[NC_MAX_NAME + 1];
 
@@ -429,7 +429,8 @@ main(int argc, char **argv)
       if (nc_close(ncid)) ERR;
    }
    SUMMARIZE_ERR;
-   printf("*** testing Solaris-written compound type containing array of compound type...");
+   printf("*** testing reference compound type containing array of compound "
+          "type...");
    {
       char file_in[NC_MAX_NAME + 1];
 
@@ -492,15 +493,16 @@ main(int argc, char **argv)
       if (nc_close(ncid)) ERR;
    }
    SUMMARIZE_ERR;
-/*    printf("*** testing Solaris-written compound containing array of vlen of compound type..."); */
-/*    { */
-/*       /\* Check out the same file, generated on buddy and included with */
-/*        * the distribution. *\/ */
-/*       if (nc_open(REF_FILE_NAME_3, NC_NOWRITE, &ncid)) ERR; */
-/*       if (check_file_3(ncid, comp_array_of_vlen_of_comp_out)) ERR; */
-/*       if (nc_close(ncid)) ERR; */
-/*    } */
-/*    SUMMARIZE_ERR; */
+   /*    printf("*** testing reference compound containing array of vlen of
+    * compound type..."); */
+   /*    { */
+   /*       /\* Check out the same file, generated on buddy and included with */
+   /*        * the distribution. *\/ */
+   /*       if (nc_open(REF_FILE_NAME_3, NC_NOWRITE, &ncid)) ERR; */
+   /*       if (check_file_3(ncid, comp_array_of_vlen_of_comp_out)) ERR; */
+   /*       if (nc_close(ncid)) ERR; */
+   /*    } */
+   /*    SUMMARIZE_ERR; */
    printf("*** testing compound variable containing array of vlen of compound type...");
    {
       nc_type vlen_typeid, s3_typeid, s1_typeid;
@@ -557,5 +559,3 @@ main(int argc, char **argv)
 
    FINAL_RESULTS;
 }
-
-

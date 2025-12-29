@@ -1131,7 +1131,7 @@ HiddenListTraversal::nameQualificationDepth ( SgDeclarationStatement* declaratio
                               printf ("Error: Skipping name qualification for enum types (sorry, not implemented) \n");
 
                            // We do reach this point in test2004_105.C
-                           // ROSE_ASSERT(false);
+                           // ROSE_ABORT();
 
                               break;
                             }
@@ -1849,7 +1849,7 @@ HiddenListTraversal::nameQualificationDepth ( SgInitializedName* initializedName
              {
             // This can be the case of ??? "catch (Overflow)" (see test2004_43.C) instead of "catch (Overflow xxx)" (see test2011_71.C).
                printf ("In HiddenListTraversal::nameQualificationDepth(SgInitializedName*): declaration == NULL, why is this? initializedName->get_scope() = %p = %s \n",initializedName->get_scope(),initializedName->get_scope()->class_name().c_str());
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
         }
 
@@ -2323,13 +2323,13 @@ HiddenListTraversal::evaluateInheritedAttribute(SgNode* n, HiddenListInheritedAt
                     printf ("name qualification for classDeclaration->get_scope()  = %p = %s \n",classDeclaration->get_scope(),classDeclaration->get_scope()->class_name().c_str());
                     printf ("classDeclaration->get_parent()                        = %p = %s \n",classDeclaration->get_parent(),classDeclaration->get_parent()->class_name().c_str());
 
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                   }
              }
             else
              {
                printf ("WARNING: SgClassDeclaration -- currentScope is not available, not clear why! \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
         }
 
@@ -2596,7 +2596,7 @@ HiddenListTraversal::evaluateInheritedAttribute(SgNode* n, HiddenListInheritedAt
             // Note that test2005_57.C presents an example that triggers this case and so might be a relevant 
             // test code.  Example: "template<typename T> void foobar (T x){ }".
                printf ("WARNING: SgFunctionDeclaration -- currentScope is not available, not clear why! \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
         }
 
@@ -2661,7 +2661,7 @@ HiddenListTraversal::evaluateInheritedAttribute(SgNode* n, HiddenListInheritedAt
                   {
                  // Don't know what test code exercises this case (see test2005_73.C).
                     printf ("WARNING: SgMemberFunctionDeclaration -- currentScope is not available through predicate (currentScope != memberFunctionDeclaration->get_scope()), not clear why! \n");
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                   }
              }
             else
@@ -2685,7 +2685,7 @@ HiddenListTraversal::evaluateInheritedAttribute(SgNode* n, HiddenListInheritedAt
                   }
 
                printf ("WARNING: SgMemberFunctionDeclaration -- currentScope is not available, not clear why! \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
              }
         }
 
@@ -2931,7 +2931,7 @@ HiddenListTraversal::evaluateInheritedAttribute(SgNode* n, HiddenListInheritedAt
             // This is a problem for test2004_130.C (at line 165 col = 14 file = /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-cxx-rc/include-staging/g++_HEADERS/hdrs3/bits/stl_iterator_base_types.h).
             // Need to investigate this later (it is strange that it is not an issue in test2011_63.C, but it is a struct instead of a class and that might be why).
                printf ("WARNING: memberFunctionDeclaration == NULL in SgConstructorInitializer for name qualification support! \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 
             // DQ (6/4/2011): Added support for this case.
                SgClassDeclaration* classDeclaration = constructorInitializer->get_class_decl();
@@ -3217,7 +3217,7 @@ HiddenListTraversal::evaluateInheritedAttribute(SgNode* n, HiddenListInheritedAt
                       declaration, declaration->class_name().c_str(),
                       declaration->get_parent(),
                       declaration->get_parent()->class_name().c_str());
-               // ROSE_ASSERT(false);
+               // ROSE_ABORT();
              }
 
           ROSE_ASSERT(declarationForReferencedNameSet != NULL);
@@ -3909,7 +3909,7 @@ HiddenListTraversal::setNameQualification(SgInitializedName* initializedName,SgD
 
 #if 1
                printf ("WARNING: name in qualifiedNameMapForTypes already exists and is different... \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 #endif
              }
 #if 0
@@ -4057,7 +4057,7 @@ HiddenListTraversal::setNameQualification(SgTemplateArgument* templateArgument, 
 
 #if 1
                printf ("WARNING: name in qualifiedNameMapForTypes already exists and is different... \n");
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
 #endif
 
                SgName testNameInMap = templateArgument->get_qualified_name_prefix();
@@ -4288,11 +4288,16 @@ HiddenListTraversal::setNameQualificationSupport(SgScopeStatement* scope, const 
           if (outputGlobalQualification == true)
              {
             // Avoid out put of "::::" as substrings.
-               qualifierString = "::" + qualifierString;
+               if (qualifierString.rfind("::", 0) != 0) {
+                 qualifierString = "::" + qualifierString;
+               }
              }
             else
              {
             // qualifierString = scope_name + "::" + qualifierString;
+               if (scope_name.rfind("::", 0) == 0) {
+                 scope_name.erase(0, 2);
+               }
                if (scope_name.length() == 0)
                   {
                  // Nothing to do for this case of an empty string for a scope name (see test2006_121.C).
@@ -4310,6 +4315,12 @@ HiddenListTraversal::setNameQualificationSupport(SgScopeStatement* scope, const 
      printf ("In HiddenListTraversal::setNameQualificationSupport(): outputGlobalQualification = %s output_amountOfNameQualificationRequired = %d qualifierString = %s \n",outputGlobalQualification ? "true" : "false",output_amountOfNameQualificationRequired,qualifierString.c_str());
 
   // DQ (6/12/2011): Make sure we have not generated a qualified name with "::::" because of an scope translated to an empty name.
+     size_t duplicate_colons = qualifierString.find("::::");
+     while (duplicate_colons != string::npos)
+        {
+          qualifierString.replace(duplicate_colons, 4, "::");
+          duplicate_colons = qualifierString.find("::::");
+        }
      ROSE_ASSERT(qualifierString.find("::::") == string::npos);
 
      return qualifierString;

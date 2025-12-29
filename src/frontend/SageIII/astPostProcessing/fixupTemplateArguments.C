@@ -93,7 +93,7 @@ bool FixupTemplateArguments::contains_private_type (SgType* type, SgScopeStateme
 #if 0
                printf ("In contains_private_type(SgType*): This is a typedef type from the same scope as the target declaration \n");
 #endif
-            // ROSE_ASSERT(false);
+            // ROSE_ABORT();
             // return false;
                isVisable = true;
              }
@@ -106,7 +106,7 @@ bool FixupTemplateArguments::contains_private_type (SgType* type, SgScopeStateme
 #if 0
                     printf ("In contains_private_type(SgType*): This is not in the current scope but can be reached from the current scope \n");
 #endif
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                  // return false;
                     isVisable = true;
                   }
@@ -115,7 +115,7 @@ bool FixupTemplateArguments::contains_private_type (SgType* type, SgScopeStateme
 #if 0
                     printf ("Symbol for typedef name = %s not found in parent scopes \n",typedefDeclaration->get_name().str());
 #endif
-                 // ROSE_ASSERT(false);
+                 // ROSE_ABORT();
                   }
              }
 #if 0

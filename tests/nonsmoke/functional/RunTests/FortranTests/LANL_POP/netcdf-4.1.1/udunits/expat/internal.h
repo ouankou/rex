@@ -23,7 +23,7 @@
 #if defined(__GNUC__) && defined(__i386__)
 /* We'll use this version by default only where we know it helps.
 
-   regparm() generates warnings on Solaris boxes.   See SF bug #692878.
+   regparm() can generate warnings on some toolchains.
 
    Instability reported with egcs on a RedHat Linux 7.3.
    Let's comment out:
@@ -34,13 +34,8 @@
 #define PTRFASTCALL __attribute__((regparm(3)))
 #endif
 
-/* Using __fastcall seems to have an unexpected negative effect under
-   MS VC++, especially for function pointers, so we won't use it for
-   now on that platform. It may be reconsidered for a future release
-   if it can be made more effective.
-   Likely reason: __fastcall on Windows is like stdcall, therefore
-   the compiler cannot perform stack optimizations for call clusters.
-*/
+/* Using __fastcall can have negative effects for some compilers, especially
+   for function pointers, so we don't use it here. */
 
 /* Make sure all of these are defined if they aren't already. */
 

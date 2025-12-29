@@ -2,11 +2,7 @@
 ! pr18983
 ! could not write to /dev/null
 
-#if defined  _WIN32
-#define DEV_NULL "nul"
-#else
 #define DEV_NULL "/dev/null"
-#endif
 
        integer i
        open(10,file=DEV_NULL)
