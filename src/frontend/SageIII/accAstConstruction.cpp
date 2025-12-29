@@ -150,9 +150,20 @@ SgOmpExpressionClause *convertOpenACCExpressionClause(
   std::vector<OpenACCExpressionItem> *current_expressions =
       current_acc_clause->getExpressions();
   if (!current_expressions->empty()) {
-    for (const auto &expr_item : *current_expressions) {
+    if (clause_kind == ACCC_wait && current_expressions->size() > 1) {
+      SgExprListExp *expr_list = SageBuilder::buildExprListExp();
+      for (const auto &expr_item : *current_expressions) {
+        SageInterface::appendExpression(
+            expr_list, parseAccExpression(current_OpenACCIR_to_SageIII.first,
+                                          expr_item.text));
+      }
+      clause_expression = expr_list;
+    } else {
+      if (clause_kind != ACCC_wait) {
+        ROSE_ASSERT(current_expressions->size() == 1);
+      }
       clause_expression = parseAccExpression(current_OpenACCIR_to_SageIII.first,
-                                             expr_item.text);
+                                             current_expressions->back().text);
     }
   }
 
