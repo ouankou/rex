@@ -254,10 +254,6 @@ install(FILES
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC ")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC ")
 
-  if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    add_compile_options(-w)
-  endif()
-
   # Ensure C++11 ABI compatibility
   if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=1")
