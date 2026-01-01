@@ -107,9 +107,6 @@ docs/doxygen-xml/
 # Jupyter temporary files
 **/.ipynb_checkpoints/
 
-/tests/
-/projects/
-
 # Internal build directories
 /_build
 /_build_*
