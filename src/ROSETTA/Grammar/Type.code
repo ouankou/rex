@@ -1933,13 +1933,13 @@ SgType::stripType(unsigned char bit_array) const
 
           if (counter >= 100)
              {
-            // Exit loop and return the currentType...
-               printf ("In loop of SgType::stripType(bit_array = %u): exiting loop using currentType (counter = %" PRIuPTR ") currentType = %p = %s \n",bit_array,counter,currentType,currentType->class_name().c_str());
-#if 0
-               break;
-#endif
+               fprintf(stderr,
+                       "FATAL: SgType::stripType exceeded iteration limit "
+                       "(counter=%" PRIuPTR ", bit_array=%u, currentType=%p %s).\n",
+                       counter, bit_array, currentType,
+                       currentType ? currentType->class_name().c_str() : "<null>");
+               ROSE_ABORT();
              }
-          ROSE_ASSERT(counter < 100);
 
           counter++;
         }

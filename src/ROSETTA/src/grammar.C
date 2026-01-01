@@ -293,9 +293,10 @@ Grammar::writeFile ( const StringUtility::FileWithLineNumbers & outputString,
      ofstream ROSE_ShowFile(outputFilename.c_str());
      if (ROSE_ShowFile.good() == false)
         {
-          fprintf(stderr, "outputFilename = %s could not be opened, likely the directory is missing...\n",outputFilename.c_str());
-       // retry opening the file...
-          ROSE_ShowFile.open(outputFilename.c_str());
+          fprintf(stderr,
+                  "FATAL: outputFilename = %s could not be opened; likely the directory is missing.\n",
+                  outputFilename.c_str());
+          ROSE_ABORT();
         }
      ROSE_ASSERT (ROSE_ShowFile.good() == true);
 
