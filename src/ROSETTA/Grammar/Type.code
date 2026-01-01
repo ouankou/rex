@@ -1514,14 +1514,8 @@ SgType::matchModifiers (unsigned int f)
 bool
 SgType::isIntegerType() const
    {
-     const $CLASSNAME* t = this;
+     const SgType* t = stripTypedefsAndModifiers();
      ROSE_ASSERT(t != NULL);
-
-     while (t->variant() == T_TYPEDEF)
-        {
-          t = isSgTypedefType(t)->get_base_type();
-          ROSE_ASSERT(t != NULL);
-        }
 
      return isSgIntegralType(t);
    }
@@ -1529,14 +1523,8 @@ SgType::isIntegerType() const
 bool
 SgType::isFloatType() const
    {
-     const SgType* t = this;
+     const SgType* t = stripTypedefsAndModifiers();
      ROSE_ASSERT(t != NULL);
-
-     while (t->variant() == T_TYPEDEF)
-        {
-          t = isSgTypedefType(t)->get_base_type();
-          ROSE_ASSERT(t != NULL);
-        }
 
      return isSgFloatingPointType(t);
    }
@@ -1544,14 +1532,8 @@ SgType::isFloatType() const
 bool
 SgType::isUnsignedType() const
    {
-     const SgType* t = this;
+     const SgType* t = stripTypedefsAndModifiers();
      ROSE_ASSERT(t != NULL);
-
-     while (t->variant() == T_TYPEDEF)
-        {
-          t = isSgTypedefType(t)->get_base_type();
-          ROSE_ASSERT(t != NULL);
-        }
 
      return isSgUnsignedIntegralType(t);
    }
