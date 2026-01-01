@@ -602,7 +602,7 @@ resetEndingSourcePosition( SgLocatedNode* targetLocatedNode, Token_t* token )
     // Liao 2/1/2010. The SgBasicBlock of a SgFortranDo has to be adjusted also
     // 1. the begin construct should be the same as the one of its first child statement
     // 2. the end construct should be the same as SgFortranDo's end of construct
-    // This is the fix to bug 495: https://outreach.scidac.gov/tracker/index.php?func=detail&aid=495&group_id=24&atid=185
+    // This is the fix to bug 495.
     SgFortranDo  * f_do = isSgFortranDo(targetLocatedNode);
     if (f_do != NULL)
     {
@@ -3797,7 +3797,7 @@ LRSHFT
    }
 
 bool
-isIntrinsicFunctionReturningNonmatchingType( string s)
+isIntrinsicFunctionReturningNonmatchingType(string)
    {
   // Later we can figure out exactly which intrinsic function return type different from their
   // input types.  Examples include: sign, modulo (I think).

@@ -6,7 +6,7 @@
 // though I think it is handled sufficiently differently in different compilers o make 
 // it painful.
 // More info at:
-//      http://www.cqf.info/forum/viewtopic.php?t=876&view=previous
+//      http://www.cqf.info/forum/
 //      C++ static double in class
 
 // #include<stdlib.h>

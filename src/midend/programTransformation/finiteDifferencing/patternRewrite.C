@@ -224,7 +224,7 @@ class ConstantPattern: public Pattern {
   public:
   ConstantPattern(Data value): value(value) {}
 
-  virtual bool match(SgNode* n, PatternVariables& vars) const {
+  virtual bool match(SgNode* n, PatternVariables&) const {
     NodeClass* n2 = dynamic_cast<NodeClass*>(n);
     if (n2 && n2->get_value() == value) {
       return true;
@@ -232,7 +232,7 @@ class ConstantPattern: public Pattern {
       return false;
   }
 
-  virtual SgNode* subst(PatternVariables& vars) const {
+  virtual SgNode* subst(PatternVariables&) const {
     NodeClass* n = new NodeClass(SgNULL_FILE, value);
     n->set_endOfConstruct(SgNULL_FILE);
     return n;
@@ -275,7 +275,7 @@ class AddIntsPattern: public Pattern {
   public:
   AddIntsPattern(string a, string b): a(a), b(b) {}
 
-  virtual bool match(SgNode* top, PatternVariables& vars) const {
+  virtual bool match(SgNode*, PatternVariables&) const {
     ROSE_ABORT ();
     return false;
   }

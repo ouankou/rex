@@ -10,6 +10,8 @@
 #include <string>
 #include <set>
 #include <map>
+#include <unordered_set>
+#include <unordered_map>
 #include <sstream>
 
 // DQ (10/21/2004): See comments in sage3basic.h; this must be consistent

@@ -90,7 +90,7 @@ void graphNodesAfterCopy(const set<SgNode*>& oldNodes, string filename)
                           "/tests/nonsmoke/functional/CompileTests/copyAST_tests/make_copy_graph.tcl " +
                           old_nodes_filename + " " + temp_filename + ".dot " + filename + ".dot";
         if (system(cmd.c_str()))
-            MLOG_ERROR_CXX("astVisualization") <<"command failed: \"" + Rose::StringUtility::cEscape(cmd) <<"\"\n";
+            MLOG_ERROR_CXX("astDump") <<"command failed: \"" + Rose::StringUtility::cEscape(cmd) <<"\"\n";
   // system("rm temp.dot");
   // system("rm old_nodes");
    }

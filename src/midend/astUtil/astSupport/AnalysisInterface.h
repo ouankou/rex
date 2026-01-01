@@ -5,43 +5,68 @@
 #include "SymbolicVal.h"
 #include <functional>
 
+class AstNodePtr;
 class FunctionSideEffectInterface
 {
  public:
+  //! traverses a function call to collect data being modified. 
   // returns false if unknown function encountered
   virtual bool get_modify(AstInterface& fa, const AstNodePtr& fc,
                                CollectObject<AstNodePtr>* collect = 0) = 0 ;
 
+  //! traverses a function call to collect data being read. Returns the callee if requested.
   virtual bool get_read(AstInterface& fa, const AstNodePtr& fc,
                                CollectObject<AstNodePtr>* collect = 0) = 0;
+  virtual bool get_call(AstInterface&, const AstNodePtr& /*fc*/, CollectObject<AstNodePtr>* = nullptr)  {
+     return false;
+  }
   virtual ~FunctionSideEffectInterface() {}
 };
 
 class NoFunctionSideEffectAnalysis : public FunctionSideEffectInterface
 {
  public:
-  virtual bool get_modify(AstInterface& fa, const AstNodePtr& fc,
-                               CollectObject<AstNodePtr>* collect = 0) 
-   { return false; }
-  virtual bool get_read(AstInterface& fa, const AstNodePtr& fc,
-                               CollectObject<AstNodePtr>* collect = 0) 
-   { return false; }
+  virtual bool get_modify(AstInterface&, const AstNodePtr&, CollectObject<AstNodePtr>* = nullptr) override {
+      return false;
+  }
+  virtual bool get_read(AstInterface&, const AstNodePtr&, CollectObject<AstNodePtr>* = nullptr) override {
+      return false;
+  }
+  virtual bool get_call( AstInterface&, const AstNodePtr&, CollectObject<AstNodePtr>* = nullptr) override {
+      return false;
+  }
   virtual ~NoFunctionSideEffectAnalysis() {}
 };
 
-template <class AstNodePtr>
 class SideEffectAnalysisInterface 
 {
  public:
   typedef std::function<bool(AstNodePtr,AstNodePtr)> CollectObject;
+  SideEffectAnalysisInterface()
+      : modcollect(0),
+        readcollect(0),
+        killcollect(0),
+        callcollect(0),
+        varcollect(0),
+        allocate_collect(0),
+        free_collect(0),
+        alias_collect(0) {}
  
   // returns false if stmts may ---modify-- unknown (non-collected) locations
-  virtual bool 
-   get_side_effect( AstInterface& fa, const AstNodePtr& stmts,
-                    CollectObject* mod,
-                    CollectObject* read= 0,
-                    CollectObject* kill = 0) = 0;
+  virtual bool get_side_effect( AstInterface& fa, const AstNodePtr& stmts) = 0;
   virtual ~SideEffectAnalysisInterface() {}
+
+  void set_modify_collect(CollectObject& c) { modcollect = &c; }
+  void set_read_collect(CollectObject& c) { readcollect = &c; }
+  void set_kill_collect(CollectObject& c) { killcollect = &c; }
+  void set_call_collect(CollectObject& c) { callcollect = &c; }
+  void set_new_var_collect(CollectObject& c) { varcollect = &c; }
+  void set_allocate_collect(CollectObject& c) { allocate_collect = &c; }
+  void set_free_collect(CollectObject& c) { free_collect = &c; }
+  void set_alias_collect(CollectObject& c) { alias_collect = &c; }
+ protected:
+    CollectObject *modcollect, *readcollect, *killcollect, *callcollect, *varcollect,
+        *allocate_collect, *free_collect, *alias_collect;
 };
 
 class FunctionAliasInterface
@@ -61,26 +86,26 @@ class NoFunctionAliasAnalysis : public FunctionAliasInterface
 {
  public:
   virtual bool
-    may_alias(AstInterface& fa, const AstNodePtr& fc, const AstNodePtr& result,
-              CollectObject< std::pair<AstNodePtr, int> >& collectalias) 
-   { return false; }
+    may_alias(AstInterface&, const AstNodePtr&, const AstNodePtr&, CollectObject< std::pair<AstNodePtr, int>>&) {
+      return false;
+  }
   virtual ~NoFunctionAliasAnalysis() {}
 };
 
 class AliasAnalysisInterface
 {
  public:
-  virtual void analyze(AstInterface& fa, const AstNodePtr& f) {}
-  virtual bool
-     may_alias(AstInterface& fa, const AstNodePtr& r1, const AstNodePtr& r2) = 0;
+  virtual void analyze(AstInterface&, const AstNodePtr&) {}
+  virtual bool may_alias(AstInterface& fa, const AstNodePtr& r1, const AstNodePtr& r2) = 0;
   virtual ~AliasAnalysisInterface() {}
 };
 
 class AssumeNoAlias : public AliasAnalysisInterface
 {
  public:
-  virtual bool may_alias(AstInterface& fa, const AstNodePtr& r1, const AstNodePtr& r2)
-   { return false; }
+  virtual bool may_alias(AstInterface&, const AstNodePtr&, const AstNodePtr&) {
+      return false;
+  }
 };
 
 // This is the interface to access loop structure stored in AST.

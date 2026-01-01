@@ -52,7 +52,6 @@ Different ROSE Translators (for testing different levels of infrastructure):
    to pass undetected but permits the basic code generation infrastructure to be
    tested.
 
-   (AST File I/O test) testAstFileIO.C:
       This translator tests the support in ROSE to generate the AST and dump it
    to a file and read it back in.  This AST File I/O is a critical piece of ROSE
    infrastructure for future work on AST merge, it writes and reads the AST as a

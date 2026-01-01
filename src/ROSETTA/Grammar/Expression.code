@@ -1244,26 +1244,6 @@ HEADER_ASSIGNMENT_INITIALIZER_EXPRESSION_START
 HEADER_ASSIGNMENT_INITIALIZER_EXPRESSION_END
 
 
-HEADER_ADA_ANCESTOR_INITIALIZER_EXPRESSION_START
-#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-          virtual std::vector<VirtualCFG::CFGEdge> cfgOutEdges(unsigned int index) override;
-          virtual std::vector<VirtualCFG::CFGEdge> cfgInEdges(unsigned int index) override;
-#endif
-
-          /// returns the ancestor (operand)
-          SgExpression * get_operand() const;
-
-          /// sets the ancestor (operand) and the ancestor's parent
-          void set_operand(SgExpression * exp);
-
-          // SgType* get_type() const;
-
-       // get lvalue
-          bool isLValue() const override;
-          bool isChildUsedAsLValue(const SgExpression*) const override;
-HEADER_ADA_ANCESTOR_INITIALIZER_EXPRESSION_END
-
-
 HEADER_BRACED_INITIALIZER_EXPRESSION_START
 HEADER_LIST_DECLARATIONS
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
@@ -1448,11 +1428,6 @@ HEADER_DESIGNATED_INITIALIZER_START
           virtual unsigned int cfgFindChildIndex(SgNode* n) override;
 #endif
 HEADER_DESIGNATED_INITIALIZER_END
-
-
-HEADER_JOVIAL_PRESET_POSITION_EXP_START
-int replace_expression (SgExpression *o, SgExpression *n) override;
-HEADER_JOVIAL_PRESET_POSITION_EXP_END
 
 
 HEADER_USER_DEFINED_UNARY_EXPRESSION_START

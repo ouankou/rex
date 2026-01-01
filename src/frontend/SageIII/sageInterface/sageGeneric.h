@@ -297,6 +297,10 @@ namespace sg
     GEN_VISIT(SgFloatVal)
     GEN_VISIT(SgFloat128Val)
     GEN_VISIT(SgFloat80Val)
+    GEN_VISIT(SgBFloat16Val)
+    GEN_VISIT(SgFloat16Val)
+    GEN_VISIT(SgFloat32Val)
+    GEN_VISIT(SgFloat64Val)
     GEN_VISIT(SgFoldExpression)
     GEN_VISIT(SgFlushStatement)
     GEN_VISIT(SgForAllStatement)
@@ -648,6 +652,10 @@ namespace sg
     GEN_VISIT(SgToken)
     GEN_VISIT(SgTryStmt)
     GEN_VISIT(SgType)
+    GEN_VISIT(SgIntegralType)
+    GEN_VISIT(SgSignedIntegralType)
+    GEN_VISIT(SgUnsignedIntegralType)
+    GEN_VISIT(SgFloatingPointType)
     GEN_VISIT(SgTypeBool)
     GEN_VISIT(SgTypeChar)
     GEN_VISIT(SgTypeChar16)
@@ -661,6 +669,13 @@ namespace sg
     GEN_VISIT(SgTypeFloat)
     GEN_VISIT(SgTypeFloat128)
     GEN_VISIT(SgTypeFloat80)
+    GEN_VISIT(SgTypeFloat16)
+    GEN_VISIT(SgTypeFp16)
+    GEN_VISIT(SgTypeBFloat16)
+    GEN_VISIT(SgTypeFloat32x)
+    GEN_VISIT(SgTypeFloat64x)
+    GEN_VISIT(SgTypeFloat32)
+    GEN_VISIT(SgTypeFloat64)
     GEN_VISIT(SgTypeGlobalVoid)
     GEN_VISIT(SgTypeIdOp)
     GEN_VISIT(SgTypeImaginary)
@@ -699,6 +714,7 @@ namespace sg
     GEN_VISIT(SgUnknownArrayOrFunctionReference)
     GEN_VISIT(SgUnknownFile)
     GEN_VISIT(SgUnparse_Info)
+    GEN_VISIT(SgSignedCharVal)
     GEN_VISIT(SgUnsignedCharVal)
     GEN_VISIT(SgUnsignedIntVal)
     GEN_VISIT(SgUnsignedLongLongIntVal)
@@ -765,7 +781,7 @@ namespace sg
                                       std::is_lvalue_reference<RoseVisitor>()
                                     );
 
-    n->accept(vis);
+    n->accept(static_cast<ROSE_VisitorPattern &>(vis));
     return std::move(vis).rv;
   }
 

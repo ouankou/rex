@@ -153,9 +153,10 @@ class Grammar
            */
           Grammar ( const std::string& inputGrammarName, 
                     const std::string& inputPrefixName,
-                    const std::string& inputGrammarNameBaseClass = "ROSE_BaseGrammar",
-                    const Grammar* parentGrammar = NULL,
-                    const std::string& t_directory = "");
+                    const std::string& inputGrammarNameBaseClass,
+                    const Grammar* parentGrammar,
+                    const std::string& t_directory,
+                    const std::string &smallHeadersDir);
          ~Grammar ();
 
      public:
@@ -166,6 +167,9 @@ class Grammar
 
           //The directory name we should generate the files to
           std::string target_directory;
+
+       // The optional directory for small headers
+          std::string smallHeadersDir;
 
           AstNodeClass* rootNode;
 
@@ -277,14 +281,9 @@ class Grammar
           Rose::StringUtility::FileWithLineNumbers buildHeaderStringAfterMarker  ( const std::string& marker, const std::string& fileName );
           Rose::StringUtility::FileWithLineNumbers buildHeaderStringBeforeMarker ( const std::string& marker, const std::string& fileName );
 
-          std::string sourceCodeDirectoryName();
-
           static Rose::StringUtility::FileWithLineNumbers readFileWithPos ( const std::string& inputFileName );
 
-       // DQ (12/28/2009): I don't think we want this to be static, since I want to call sourceCodeDirectoryName().
-       // static void writeFile ( const StringUtility::FileWithLineNumbers& outputString, const std::string& directoryName, 
-       //                         const std::string& className, const std::string& fileExtension );
-          void writeFile  ( const Rose::StringUtility::FileWithLineNumbers& outputString, const std::string& directoryName, 
+          void writeFile  ( const Rose::StringUtility::FileWithLineNumbers& outputString, const std::string& directoryName,
                             const std::string& className, const std::string& fileExtension );
        // DQ (12/31/2009): Added mechanism to append generated text to files.
           void appendFile ( const Rose::StringUtility::FileWithLineNumbers& outputString, const std::string& directoryName, 
@@ -309,16 +308,15 @@ class Grammar
           std::string generateRTICode(GrammarString* gs, std::string successorContainerName, std::string className, size_t index);
           void buildRTIFile(AstNodeClass* rootNode, Rose::StringUtility::FileWithLineNumbers& rttiFile);
           Rose::StringUtility::FileWithLineNumbers buildVariants ();
+          void emitForwardDeclarations(std::ostream&) const;
+          void emitIsaDeclarations(std::ostream&);
           Rose::StringUtility::FileWithLineNumbers buildForwardDeclarations ();
-
-       // DQ (12/28/2009): Added to support optionally smaller (but more numerous header files for ROSE).
-       // StringUtility::FileWithLineNumbers buildIncludesForSeparateHeaderFiles();
-          void buildIncludesForSeparateHeaderFiles( AstNodeClass & node, Rose::StringUtility::FileWithLineNumbers & outputFile );
 
        // DQ (10/26/2007): Add the protytype for the Cxx_GrammarTerminalNames
           void buildVariantsStringPrototype ( Rose::StringUtility::FileWithLineNumbers & outputFile );
           void buildVariantsStringDataBase ( Rose::StringUtility::FileWithLineNumbers & outputFile );
 
+          void buildClassDefinition(AstNodeClass&, Rose::StringUtility::FileWithLineNumbers&);
           void buildHeaderFiles ( AstNodeClass & node, Rose::StringUtility::FileWithLineNumbers & outputFile );
 
           std::string buildStringForPrototypes( AstNodeClass & node );
@@ -582,7 +580,8 @@ class Grammar
        // MK: We need this function to determine if the object itself is an STL container
           bool isSTLContainer(const std::string& typeString);
 
-       // MK: Method to build the iterator declaration for traversing an STL container
+       // MK: Method to build the const_iterator declaration for traversing an STL container
+       // PP: changed from iterator to const_iterator
           std::string getIteratorString(const std::string& typeString);
 
        // DQ (5/24/2005): Added support to output sizes of IR nodes 

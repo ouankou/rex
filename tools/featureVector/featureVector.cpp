@@ -151,8 +151,6 @@ void nodeTraversal::visit(SgNode* n)
             case PreprocessingInfo::DirectiveType::CplusplusStyleComment:
             case PreprocessingInfo::DirectiveType::FortranStyleComment:
             case PreprocessingInfo::DirectiveType::F90StyleComment:
-            case PreprocessingInfo::DirectiveType::AdaStyleComment:
-            case PreprocessingInfo::DirectiveType::JovialStyleComment:
             case PreprocessingInfo::DirectiveType::CpreprocessorBlankLine:
             case PreprocessingInfo::DirectiveType::CpreprocessorIncludeDeclaration:
             case PreprocessingInfo::DirectiveType::CpreprocessorIncludeNextDeclaration:

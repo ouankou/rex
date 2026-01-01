@@ -890,6 +890,46 @@ Grammar::setUpExpressions () {
     Float80Val.editSubstitute             ( "GENERIC_TYPE", "SgTypeFloat80" );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    NEW_TERMINAL_MACRO (BFloat16Val,        "BFloat16Val",        "BFLOAT_16_VAL" );
+    BFloat16Val.setFunctionSource  ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
+    BFloat16Val.setDataPrototype ( "float", "value", "= 0",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    BFloat16Val.setDataPrototype ( "std::string", "valueString", "= \"\"",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    BFloat16Val.setFunctionSource        ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
+    BFloat16Val.editSubstitute        ( "GENERIC_TYPE", "SgTypeBFloat16" );
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    NEW_TERMINAL_MACRO (Float16Val,        "Float16Val",        "FLOAT_16_VAL" );
+    Float16Val.setFunctionSource  ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
+    Float16Val.setDataPrototype ( "float", "value", "= 0",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    Float16Val.setDataPrototype ( "std::string", "valueString", "= \"\"",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    Float16Val.setFunctionSource        ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
+    Float16Val.editSubstitute        ( "GENERIC_TYPE", "SgTypeFloat16" );
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    NEW_TERMINAL_MACRO (Float32Val,        "Float32Val",        "FLOAT_32_VAL" );
+    Float32Val.setFunctionSource  ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
+    Float32Val.setDataPrototype ( "float", "value", "= 0",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    Float32Val.setDataPrototype ( "std::string", "valueString", "= \"\"",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    Float32Val.setFunctionSource        ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
+    Float32Val.editSubstitute        ( "GENERIC_TYPE", "SgTypeFloat32" );
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    NEW_TERMINAL_MACRO (Float64Val,        "Float64Val",        "FLOAT_64_VAL" );
+    Float64Val.setFunctionSource  ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
+    Float64Val.setDataPrototype ( "double", "value", "= 0",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    Float64Val.setDataPrototype ( "std::string", "valueString", "= \"\"",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    Float64Val.setFunctionSource        ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
+    Float64Val.editSubstitute        ( "GENERIC_TYPE", "SgTypeFloat64" );
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     NEW_TERMINAL_MACRO (FloatVal,               "FloatVal",               "FLOAT_VAL" );
     FloatVal.setFunctionSource         ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
     FloatVal.setDataPrototype ( "float", "value", "= 0.0",
@@ -1212,8 +1252,7 @@ Grammar::setUpExpressions () {
     LongLongIntVal.setDataPrototype ( "std::string", "valueString", "= \"\"",
                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
     LongLongIntVal.setFunctionSource         ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
-    // LongLongIntVal should return a value of type TypeLongLong (I think!)
-    LongLongIntVal.editSubstitute         ( "GENERIC_TYPE", "SgTypeLong" );
+    LongLongIntVal.editSubstitute         ( "GENERIC_TYPE", "SgTypeLongLong" );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     NEW_TERMINAL_MACRO (LshiftAssignOp,         "LshiftAssignOp",         "LSHIFT_ASSIGN_OP" );
@@ -2013,6 +2052,23 @@ Grammar::setUpExpressions () {
 #endif
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // PL (1/21/2025): Despite C++ not having a signed char literal (only char and unsigned char literals), signed chars can come out of the frontend
+    // constant folding. For example, an expression like `(signed char)0` can get constant folded into a signed char literal with
+    // value 0, despite there not being a syntactic construct in C++ that can directly generate such a node. We don't want to just emit an SgCharVal
+    // when encountering this, because the C++ standard does not specify the signedness of the native `char` type. We need to emit an SgSignedCharVal
+    // to enforce signedness.
+    //
+    // This solution was discussed with and agreed by DQ.
+    NEW_TERMINAL_MACRO (SignedCharVal,        "SignedCharVal",        "SIGNED_CHAR_VAL" );
+    SignedCharVal.setFunctionSource  ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
+    SignedCharVal.setDataPrototype ( "signed char", "value", "= 0",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    SignedCharVal.setDataPrototype ( "std::string", "valueString", "= \"\"",
+                                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+    SignedCharVal.setFunctionSource        ( "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
+    SignedCharVal.editSubstitute        ( "GENERIC_TYPE", "SgTypeSignedChar" );
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     NEW_TERMINAL_MACRO (UnsignedCharVal,        "UnsignedCharVal",        "UNSIGNED_CHAR_VAL" );
     UnsignedCharVal.setFunctionSource  ( "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
     UnsignedCharVal.setDataPrototype ( "unsigned char", "value", "= 0",
@@ -2463,15 +2519,16 @@ Grammar::setUpExpressions () {
      // MK: UnaryOp.excludeDataPrototype ( "SgUnaryOp::Sgop_mode", "mode", "= prefix");
 
      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-     // DQ (11/21/2017): This was removed in favor of using the SgLabelRefExp.
-     // DQ (11/21/2017): Added support for label address value (see test2017_73.C).
-     NEW_NONTERMINAL_MACRO (ValueExp,
-                            BoolValExp           | StringVal        | ShortVal               | CharVal         | UnsignedCharVal |
+    // DQ (11/21/2017): This was removed in favor of using the SgLabelRefExp.
+    // DQ (11/21/2017): Added support for label address value (see test2017_73.C).
+    NEW_NONTERMINAL_MACRO (ValueExp,
+                            BoolValExp           | StringVal        | ShortVal               | CharVal         | SignedCharVal   | UnsignedCharVal |
                             WcharVal             | UnsignedShortVal | IntVal                 | EnumVal         | UnsignedIntVal  |
                             LongIntVal           | LongLongIntVal   | UnsignedLongLongIntVal | UnsignedLongVal | FloatVal        |
                             DoubleVal            | LongDoubleVal    | ComplexVal             |
                             TemplateParameterVal | NullptrValExp    | Char16Val              | Char32Val       | Float80Val      |
-                            Float128Val          | VoidVal,
+                            Float128Val          | BFloat16Val      | Float16Val             | Float32Val      |
+                            Float64Val           | VoidVal,
                             "ValueExp","ValueExpTag", false);
 
      ValueExp.excludeFunctionPrototype        ( "HEADER_GET_TYPE", "../Grammar/Expression.code" );

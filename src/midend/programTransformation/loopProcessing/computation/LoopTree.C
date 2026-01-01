@@ -265,7 +265,7 @@ LoopInfo:: LoopInfo( SymbolicVar ivar,SymbolicVal lb, SymbolicVal ub,
 }
 
 std::string LoopTreeLoopNode :: toString() const
-{ return preAnnot + info.toString() + postAnnot;
+{ return preAnnot + "LoopNode: " + info.toString() + postAnnot;
 
 }
 
@@ -330,7 +330,7 @@ std::string LoopTreeNode :: TreeToString() const
 std::string LoopTreeRoot :: toString() const
 {
   char buf[20];
-  sprintf( buf, "%d", level);
+  snprintf(buf, sizeof(buf), "%d", level);
   return "LOOP_TREE_ROOT at level" + std::string(buf);
 }
 
@@ -366,4 +366,3 @@ LoopTreeNode* LoopTreeNode:: CloneTree()
   }
   return n1;
 }
-

@@ -1,8 +1,8 @@
-
-
 #include "AnnotDescriptors.h"
 #include <list>
 #include <sstream>
+#include <ROSE_ASSERT.h>
+#include "AstInterface.h"
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
@@ -38,14 +38,7 @@ void WriteContainer<Container, sep, left, right>::write(const Container &c,
     if (!first)
       out << sep;
 
-// DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not
-// compile using ROSE. The error is: sage_gen_be.C:10043: SgExpression*
-// sage_gen_expr(an_expr_node*, a_boolean,
-// DataRequiredForComputationOfSourcePostionInformation*): Assertion
-// `optionalSourcePositionData->ok() == true' failed.
-#ifndef USE_ROSE
     (*p).write(out);
-#endif
 
     first = false;
   }
@@ -55,13 +48,6 @@ void WriteContainer<Container, sep, left, right>::write(const Container &c,
 
 template <class First, class Second, char sep>
 bool CollectPair<First, Second, sep>::read(istream &in) {
-
-  // pmp 08JUN05
-  //    made first snf second dependent on this->
-  //    was: if (!first.read(in))
-  //           return false;
-  //         ...
-  //         second.read(in);
   if (!this->first.read(in))
     return false;
 
@@ -75,9 +61,6 @@ bool CollectPair<First, Second, sep>::read(istream &in) {
 
 template <class First, class Second, char sep, char sel>
 bool SelectPair<First, Second, sep, sel>::read(istream &in) {
-  // pmp 08JUN05
-  //   cmp previous comment
-
   if (!this->first.read(in))
     return false;
   bool succ = true;
@@ -93,9 +76,6 @@ bool SelectPair<First, Second, sep, sel>::read(istream &in) {
 
 template <class First, class Second, char sep>
 void CollectPair<First, Second, sep>::write(ostream &out) const {
-  // pmp 08JUN05
-  //   cmp previous comment
-
   this->first.write(out);
   if (sep != 0)
     out << sep;
@@ -166,6 +146,29 @@ bool NameDescriptor::read(istream &in) {
     read_ch(in, ':');
     get_name() = get_name() + "::" + read_id(in);
     c = peek_ch(in);
+  }
+  return true;
+}
+
+//! Read in a variable name, supporting qualified names
+bool NameDescriptor::write(std::ostream& out) const
+{
+  std::string content = get_name();
+  auto output_char = [&out] (const char c) {
+       if (std::isalnum(c) || c == ':') {
+         out << c;
+       } else if (c == '_' || c == ',' || c == '(' || c == ')') {
+         out << '_';
+       } else if (c == '&') {
+         out << "_ref_";
+       } else if (c == ' ' || c == '\t' || c == '\n') {
+         /* skip empty space */
+       } else {
+          out << c;
+       }
+  };
+  for (const char c : content) {
+     output_char(c);
   }
   return true;
 }

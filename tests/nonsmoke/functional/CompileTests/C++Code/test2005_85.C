@@ -7,7 +7,6 @@ struct foo {
   mutable bool c;
 };
 
-// This currently fails for some reason in MSTL
 int foo() {
   int x;
   int y;

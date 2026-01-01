@@ -7,7 +7,7 @@ Produced at the Lawrence Livermore National Laboratory.
                 All rights reserved.
 
 This file is part of LULESH, Version 1.0.
-Please also read this link -- http://www.opensource.org/licenses/index.php
+Please also read this link -- http://www.opensource.org/licenses/
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -2917,4 +2917,3 @@ int main(int argc, char *argv[])
                
    return 0 ;
 }
-

@@ -90,7 +90,7 @@ typedef struct {
   const XML_Memory_Handling_Suite *mem;
 } HASH_TABLE;
 
-/* Basic character hash algorithm, taken from Python's string hash:
+/* Basic character hash algorithm:
    h = h * 1000003 ^ character, the constant being a prime number.
 
 */

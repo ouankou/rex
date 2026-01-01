@@ -4,7 +4,6 @@ include $(top_srcdir)/config/Makefile.for.ROSE.includes.and.libs
 # These are testcodes specific to the ROSE mechanism to merge different ASTs #
 ##############################################################################
 
-# AM_CPPFLAGS = $(ROSE_INCLUDES) -I$(srcdir)/../colorAST_tests
 AM_CPPFLAGS = $(ROSE_INCLUDES)
 AM_LDFLAGS = $(ROSE_RPATHS)
 
@@ -255,10 +254,6 @@ ROSE_FLAGS =  -w  -rose:ast:merge
 PASSING_TEST_Objects = ${TESTCODES:.C=.o}
 TEST_Objects = ${ALL_TESTCODES:.C=.o}
 
-# Use ../colorAST_tests/colorTraversal.h
-#$(TEST_Objects): merge
-#	./merge $(ROSE_FLAGS) -I../colorAST_tests -c $(srcdir)/$(@:.o=.C)
-
 $(TEST_Objects): testMerge
 	@echo "Copy the file $@ to build a second alternative one to test the AST merge ..."
 	@cp $(srcdir)/$(@:.o=.C) $(@:.o=_alt.C)
@@ -319,4 +314,3 @@ clean-local:
 
 distclean-local:
 	rm -rf Templates.DB *alt.C
-

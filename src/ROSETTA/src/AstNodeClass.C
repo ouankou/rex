@@ -95,6 +95,11 @@ AstNodeClass::setCppCondition(const std::string &s) {
 }
 
 void
+AstNodeClass::appendPreDefinitionText(const std::string &text) {
+    preDefinitionText += text;
+}
+
+void
 AstNodeClass::setBaseClass(AstNodeClass* bc) {baseClass = bc;}
 
 AstNodeClass*
@@ -2376,9 +2381,11 @@ AstNodeClass::typeEvaluationName ( TypeEvaluation x )
           case SGCLASS_POINTER_VECTOR_NAMED_LIST:          s = "SGCLASS_POINTER_VECTOR_NAMED_LIST"; break;
           case STL_CONTAINER:                              s = "STL_CONTAINER"; break;
           case STL_SET:                                    s = "STL_SET";       break;
+          case STL_UNORDERED_SET:                          s = "STL_UNORDERED_SET"; break;
        // DQ (4/30/2009): Added case of STL_MULTIMAP
           case STL_MULTIMAP:                               s = "STL_MULTIMAP";  break;
           case STL_MAP:                                    s = "STL_MAP";       break;
+          case STL_UNORDERED_MAP:                          s = "STL_UNORDERED_MAP"; break;
           case STRING:                                     s = "STRING";        break;
           case SGNAME:                                     s = "SGNAME";        break;
           case BIT_VECTOR:                                 s = "BIT_VECTOR";    break;

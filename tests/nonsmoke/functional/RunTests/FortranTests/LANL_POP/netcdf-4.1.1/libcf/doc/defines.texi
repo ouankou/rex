@@ -26,8 +26,8 @@
 @set docs-url @value{netcdf-url}/docs
 
 @c urls to search on-line stuff
-@set libcf-support-search-url @value{unidata-url}/mailsearchform.php?archive=libcf&archivename=LibCF
-@set libcf-list-search-url @value{unidata-url}/mailsearchform.php?archive=libcfgroup-list&archivename=LibCF_Group
+@set libcf-support-search-url @value{unidata-url}/mailsearchform?archive=libcf&archivename=LibCF
+@set libcf-list-search-url @value{unidata-url}/mailsearchform?archive=libcfgroup-list&archivename=LibCF_Group
 
 @c places to get downloads
 @set ftp-site ftp://ftp.unidata.ucar.edu/pub/libcf

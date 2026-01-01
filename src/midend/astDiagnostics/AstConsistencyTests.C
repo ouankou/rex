@@ -4234,6 +4234,7 @@ TestLValues::visit ( SgNode* node )
                         }
                         case V_SgShortVal:
                         case V_SgCharVal:
+                        case V_SgSignedCharVal:
                         case V_SgUnsignedCharVal:
                         case V_SgWcharVal:
                         case V_SgUnsignedShortVal:
@@ -4358,8 +4359,8 @@ TestMangledNames::visit ( SgNode* node )
      SgGlobal* global = isSgGlobal(node);
      if (global != NULL)
         {
-          const std::map<std::string, int>& shortMangledNameCache = global->get_shortMangledNameCache();
-          for (std::map<std::string, int>::const_iterator i = shortMangledNameCache.begin(); i != shortMangledNameCache.end(); ++i) {
+          const std::map<std::string, uint64_t>& shortMangledNameCache = global->get_shortMangledNameCache();
+          for (std::map<std::string, uint64_t>::const_iterator i = shortMangledNameCache.begin(); i != shortMangledNameCache.end(); ++i) {
             this->totalLongMangledNameSize += i->first.size();
             ++this->totalNumberOfLongMangledNames;
           }
@@ -4571,8 +4572,8 @@ TestMangledNames::test()
      TestMangledNames t;
 
   // DQ (6/26/2007): Added code by Jeremiah for shorter mangled names
-     const std::map<std::string, int>& shortMangledNameCache = SgNode::get_shortMangledNameCache();
-     for (std::map<std::string, int>::const_iterator i = shortMangledNameCache.begin(); i != shortMangledNameCache.end(); ++i)
+     const std::map<std::string, uint64_t>& shortMangledNameCache = SgNode::get_shortMangledNameCache();
+     for (std::map<std::string, uint64_t>::const_iterator i = shortMangledNameCache.begin(); i != shortMangledNameCache.end(); ++i)
         {
           t.totalLongMangledNameSize += i->first.size();
           ++(t.totalNumberOfLongMangledNames);
@@ -5811,81 +5812,9 @@ TestMultiFileConsistancy::test()
 
 
 void
-TestMultiFileConsistancy::visit( SgNode* node)
+TestMultiFileConsistancy::visit(SgNode* /*node*/)
    {
-  // TV (09/15/2018): Nothing really happens in there anymore. Commented everything out as "declaration->get_scope() != NULL" fails for some non-real declarations
-#if 0
-  // DQ (2/23/2009): added testing to support outlining to a separate file.
-  // This test is helpful for the outlining to a separate file, where we want to make sure
-  // that the transformations required do not build a locally inconsistant AST for each file.
-     SgDeclarationStatement* declaration = isSgDeclarationStatement(node);
-
-     if (declaration != NULL)
-        {
-          SgDeclarationStatement* firstDefiningDeclaration = declaration->get_firstNondefiningDeclaration();
-#if 1
-          ROSE_ASSERT(declaration != NULL);
-       // ROSE_ASSERT(declaration->get_firstNondefiningDeclaration() != NULL);
-          if (firstDefiningDeclaration != NULL)
-             {
-               ROSE_ASSERT(declaration->get_scope() != NULL);
-               SgSourceFile* declarationFile              = SageInterface::getEnclosingSourceFile(declaration);
-               SgSourceFile* declarationScopeFile         = SageInterface::getEnclosingSourceFile(declaration->get_scope());
-               SgSourceFile* firstDefiningDeclarationFile = SageInterface::getEnclosingSourceFile(firstDefiningDeclaration);
-               if (declarationScopeFile != firstDefiningDeclarationFile || declarationFile != firstDefiningDeclarationFile)
-                  {
-#if 0
-                 // DQ (3/4/2009): Supporess the output here so we can pass the tests in tests/nonsmoke/functional/CompilerOptionsTests/testForSpuriousOutput
-                    printf ("TestMultiFileConsistancy::visit(): declaration              = %p = %s = %s \n",declaration,declaration->class_name().c_str(),SageInterface::get_name(declaration).c_str());
-                    printf ("TestMultiFileConsistancy::visit(): declaration->get_scope() = %p = %s = %s \n",declaration->get_scope(),declaration->get_scope()->class_name().c_str(),SageInterface::get_name(declaration->get_scope()).c_str());
-                    printf ("TestMultiFileConsistancy::visit(): firstDefiningDeclaration = %p = %s = %s \n",firstDefiningDeclaration,firstDefiningDeclaration->class_name().c_str(),SageInterface::get_name(firstDefiningDeclaration).c_str());
-                    printf ("TestMultiFileConsistancy::visit(): firstDefiningDeclaration = %p = %s = %s \n",firstDefiningDeclaration,firstDefiningDeclaration->class_name().c_str(),SageInterface::get_name(firstDefiningDeclaration).c_str());
-
-                 // DQ (3/3/2009): Some template arguments are setting off these new tests (e.g. test2004_35.C), need to look into this.
-                    if (declarationFile != NULL)
-                         printf ("TestMultiFileConsistancy::visit(): declarationFile              = %p = %s = %s \n",declarationFile,declarationFile->class_name().c_str(),SageInterface::get_name(declarationFile).c_str());
-                    if (declarationScopeFile != NULL)
-                         printf ("TestMultiFileConsistancy::visit(): declarationScopeFile         = %p = %s = %s \n",declarationScopeFile,declarationScopeFile->class_name().c_str(),SageInterface::get_name(declarationScopeFile).c_str());
-                    if (firstDefiningDeclarationFile != NULL)
-                         printf ("TestMultiFileConsistancy::visit(): firstDefiningDeclarationFile = %p = %s = %s \n",firstDefiningDeclarationFile,firstDefiningDeclarationFile->class_name().c_str(),SageInterface::get_name(firstDefiningDeclarationFile).c_str());
-#endif
-                  }
-#if 0
-            // DQ (3/3/2009): Some template arguments are setting off these new tests (e.g. test2004_35.C), need to look into this.
-               ROSE_ASSERT(declarationFile == firstDefiningDeclarationFile);
-
-            // DQ (3/3/2009): Some template arguments are setting off these new tests (e.g. test2004_35.C), need to look into this.
-               if (firstDefiningDeclarationFile != NULL)
-                    ROSE_ASSERT(declarationScopeFile == firstDefiningDeclarationFile);
-#endif
-             }
-#if 0
-       // DQ (3/3/2009): Some template arguments are setting off these new tests (e.g. test2004_35.C), need to look into this.
-          if (firstDefiningDeclaration != NULL)
-             {
-               ROSE_ASSERT(SageInterface::getEnclosingSourceFile(firstDefiningDeclaration) == SageInterface::getEnclosingSourceFile(firstDefiningDeclaration->get_firstNondefiningDeclaration()));
-               ROSE_ASSERT(SageInterface::getEnclosingSourceFile(firstDefiningDeclaration->get_scope()) == SageInterface::getEnclosingSourceFile(firstDefiningDeclaration->get_firstNondefiningDeclaration()));
-             }
-#endif
-#if 0
-       // DQ (3/3/2009): Some template arguments are setting off these new tests (e.g. test2004_35.C), need to look into this.
-          SgDeclarationStatement* definingDeclaration      = declaration->get_definingDeclaration();
-          if (definingDeclaration != NULL)
-             {
-               SgDeclarationStatement* alt_firstDefiningDeclaration = definingDeclaration->get_firstNondefiningDeclaration();
-               if (alt_firstDefiningDeclaration != NULL)
-                  {
-                    ROSE_ASSERT(SageInterface::getEnclosingSourceFile(definingDeclaration) == SageInterface::getEnclosingSourceFile(definingDeclaration->get_firstNondefiningDeclaration()));
-                    ROSE_ASSERT(SageInterface::getEnclosingSourceFile(definingDeclaration->get_scope()) == SageInterface::getEnclosingSourceFile(definingDeclaration->get_firstNondefiningDeclaration()));
-
-                    ROSE_ASSERT(SageInterface::getEnclosingSourceFile(alt_firstDefiningDeclaration) == SageInterface::getEnclosingSourceFile(alt_firstDefiningDeclaration->get_firstNondefiningDeclaration()));
-                    ROSE_ASSERT(SageInterface::getEnclosingSourceFile(alt_firstDefiningDeclaration->get_scope()) == SageInterface::getEnclosingSourceFile(alt_firstDefiningDeclaration->get_firstNondefiningDeclaration()));
-                  }
-             }
-#endif
-#endif
-        }
-#endif
+  // TV (09/15/2018): Nothing really happens here anymore. Commented everything out as "declaration->get_scope() != NULL" fails for some non-real declarations
    }
 
 
@@ -5903,9 +5832,6 @@ BuildListOfConnectedNodesInAST::visit(SgNode * node)
      if (nodeSet.find(node) == nodeSet.end())
         {
        // Not found in the set, add to the set and call visit function on all children.
-#if 0
-          printf ("Adding to nodeSet = %p = %s \n",node,node->class_name().c_str());
-#endif
           nodeSet.insert(node);
 
           typedef vector<pair<SgNode*,string> > DataMemberMapType;
@@ -5920,8 +5846,6 @@ BuildListOfConnectedNodesInAST::visit(SgNode * node)
 
                if (childPointer != NULL)
                   {
-                 // printf ("visit node = %p = %s on edge %s found child %p = %s \n",node,node->class_name().c_str(),debugString.c_str(),childPointer,childPointer->class_name().c_str());
-
                  // Make the recursive call
                     visit(childPointer);
 

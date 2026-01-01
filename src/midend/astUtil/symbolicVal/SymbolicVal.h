@@ -10,6 +10,7 @@
 #include <vector>
 #include <ostream>
 
+class SymbolicValImpl;
 class SymbolicConst;
 class SymbolicVar;
 class SymbolicFunction;
@@ -20,34 +21,37 @@ class SymbolicVisitor
  protected:
   virtual void Default() {}
  public:
-  virtual void VisitConst( const SymbolicConst &v) { Default(); }
-  virtual void VisitVar( const SymbolicVar &v) { Default(); }
-  virtual void VisitFunction( const SymbolicFunction &v) { Default(); }
-  virtual void VisitAstWrap( const SymbolicAstWrap& v) { Default(); }
-  virtual void VisitExpr( const SymbolicExpr& exp) { Default(); }
+  virtual void VisitConst(const SymbolicConst&) { Default(); }
+  virtual void VisitVar(const SymbolicVar&) { Default(); }
+  virtual void VisitFunction(const SymbolicFunction&) { Default(); }
+  virtual void VisitAstWrap(const SymbolicAstWrap&) { Default(); }
+  virtual void VisitExpr(const SymbolicExpr&) { Default(); }
+  virtual void VisitUnknown(const SymbolicValImpl&) { Default(); }
   virtual ~SymbolicVisitor() {}
 };
 
-typedef enum {VAL_BASE = 0, VAL_CONST = 1, VAL_VAR = 2, VAL_AST = 4, 
-              VAL_FUNCTION = 8, VAL_EXPR = 16}
+typedef enum {VAL_BASE = 0, VAL_CONST = 1, VAL_VAR = 2, VAL_AST = 4,
+              VAL_FUNCTION = 8, VAL_EXPR = 16, VAL_UNKNOWN = 32}
       SymbolicValType;
-typedef enum { SYMOP_NIL = 0, SYMOP_MULTIPLY=1, SYMOP_PLUS = 2,
-               SYMOP_MIN=3, SYMOP_MAX=4, SYMOP_POW = 5} SymOpType;
+typedef enum { SYMOP_NIL = 0, SYMOP_MULTIPLY = 1, SYMOP_PLUS = 2,
+               SYMOP_MIN = 3, SYMOP_MAX = 4, SYMOP_POW = 5,
+               SYMOP_AND = 6, SYMOP_OR = 7, SYMOP_EQ = 8,
+               SYMOP_NOT = 9 } SymOpType;
 
 class SymbolicValImpl 
 {
  protected:
   virtual ~SymbolicValImpl() {}
  public:
-  virtual std:: string toString() const { return ""; }
+  virtual std:: string toString() const { return "UNKNOWN"; }
   virtual void Dump() const;
 
   virtual SymOpType GetOpType() const { return SYMOP_NIL; }
-  virtual SymbolicValType GetValType() const { return VAL_BASE; }
+  virtual SymbolicValType GetValType() const { return VAL_UNKNOWN; }
   virtual std:: string GetTypeName() const { return "unknown"; }
-  virtual void Visit( SymbolicVisitor *op) const = 0;
-  virtual AstNodePtr  CodeGen(AstInterface &fa) const = 0;
-  virtual SymbolicValImpl* Clone() const = 0;
+  virtual void Visit( SymbolicVisitor *op) const { return op->VisitUnknown(*this); }
+  virtual AstNodePtr  CodeGen(AstInterface &) const { return AST_UNKNOWN; }
+  virtual SymbolicValImpl* Clone() const { return new SymbolicValImpl(); }
 
  friend class CountRefHandle<SymbolicValImpl>;
 };
@@ -75,7 +79,7 @@ class SymbolicConst : public SymbolicValImpl
   virtual void Dump() const { std:: cerr << val << "(" << type << ")"; }
   SymbolicValType GetValType() const { return VAL_CONST; }
   std:: string GetTypeName() const { return type; }
-  AstNodePtr  CodeGen(AstInterface &fa) const;
+  AstNodePtr  CodeGen(AstInterface &) const;
   void Visit( SymbolicVisitor *op) const { op->VisitConst(*this); }
   bool GetIntVal( int &val1, int &val2) const
           { 
@@ -94,17 +98,17 @@ class SymbolicConst : public SymbolicValImpl
 class SymbolicVar : public SymbolicValImpl
 {
   std:: string varname;
-  AstNodePtr scope;
+  AstNodePtr scope, exp_;
   SymbolicValImpl* Clone() const { return new SymbolicVar(*this); }
  public:
-  SymbolicVar( std:: string name, const AstNodePtr& sc) : varname(name), scope(sc) {}
-  SymbolicVar() : varname(""), scope(AST_NULL) {}
-  SymbolicVar(const SymbolicVar& that) : varname(that.varname), scope(that.scope) {}
+  SymbolicVar( std:: string name, const AstNodePtr& sc, const AstNodePtr exp = AST_NULL) : varname(name), scope(sc), exp_(exp) {}
+  SymbolicVar() : varname(""), scope(AST_NULL), exp_(AST_NULL) {}
+  SymbolicVar(const SymbolicVar& that) : varname(that.varname), scope(that.scope), exp_(that.exp_) {}
   ~SymbolicVar() {}
   virtual std:: string toString() const;
   virtual void Dump() const { std:: cerr << varname; }
   SymbolicValType GetValType() const { return VAL_VAR; }
-  AstNodePtr  CodeGen( AstInterface &fa) const;
+  AstNodePtr  CodeGen( AstInterface &) const;
 
   std:: string GetVarName() const { return varname; }
   AstNodePtr GetVarScope() const  { return scope; }
@@ -132,7 +136,7 @@ class SymbolicAstWrap : public SymbolicValImpl
 
   SymbolicValType GetValType() const { return VAL_AST; }
   virtual std:: string GetTypeName() const { return "astwrap"; }
-  AstNodePtr CodeGen( AstInterface &fa) const ;
+  AstNodePtr CodeGen( AstInterface &) const ;
 
   void Visit( SymbolicVisitor *op) const { op->VisitAstWrap(*this); }
   bool operator == (const SymbolicAstWrap& that) const
@@ -148,6 +152,8 @@ class SymbolicVal : public CountRefHandle <SymbolicValImpl>
     : CountRefHandle <SymbolicValImpl>(_impl) {}
   SymbolicVal( const SymbolicValImpl& _impl)
     : CountRefHandle <SymbolicValImpl>(_impl) {}
+  SymbolicVal( const std::string& val, const std::string& valtype) 
+    : CountRefHandle <SymbolicValImpl>(new SymbolicConst(val,valtype)) {}
   SymbolicVal (int val) ;
   SymbolicVal( const SymbolicVal& that)
    : CountRefHandle <SymbolicValImpl>(that) {}
@@ -200,7 +206,7 @@ class SymbolicVal : public CountRefHandle <SymbolicValImpl>
    }
    return false;
   }
-  bool isFunction(std:: string& name, std:: vector<SymbolicVal>* argp=0) const;
+  bool isFunction(std::string& name, std:: vector<SymbolicVal>* argp=0) const;
 
   SymbolicValType GetValType() const 
       { return (ConstPtr()== 0)? VAL_BASE : ConstRef().GetValType(); }
@@ -212,7 +218,7 @@ class SymbolicVal : public CountRefHandle <SymbolicValImpl>
 
 class SymbolicFunction : public SymbolicValImpl
 {
-  std:: string op;
+  SymbolicVal op;
   std:: vector<SymbolicVal> args;
  protected:
   typedef AstInterface::OperatorEnum OpType;
@@ -221,25 +227,28 @@ class SymbolicFunction : public SymbolicValImpl
  public:
   typedef std:: vector<SymbolicVal> Arguments;
   typedef std:: vector<SymbolicVal>::const_iterator const_iterator;
-  SymbolicFunction( AstInterface::OperatorEnum _t, const std::string& _op, 
+  SymbolicFunction( AstInterface::OperatorEnum _t, const SymbolicVal& _op, 
                     const Arguments& v)
     : op(_op), args(v), t(_t) {} 
   SymbolicFunction( AstInterface::OperatorEnum _t, const std::string& _op, 
+                    const Arguments& v)
+    : op(new SymbolicConst(_op, "function")), args(v), t(_t) {} 
+  SymbolicFunction( AstInterface::OperatorEnum _t, const std::string& _op, 
                     const SymbolicVal& v1, const SymbolicVal& v2)
-    : op(_op), t(_t) { args.push_back(v1); args.push_back(v2); }
+    : op(new SymbolicConst(_op, "function")), t(_t) { args.push_back(v1); args.push_back(v2); }
   SymbolicFunction( AstInterface::OperatorEnum _t, const std::string& _op, 
                     const SymbolicVal& v)
-    : op(_op), t(_t) { args.push_back(v); }
+    : op(new SymbolicConst(_op, "function")), t(_t) { args.push_back(v); }
   SymbolicFunction( const SymbolicFunction& that)
     : op(that.op), args(that.args), t(that.t) {}
 
   virtual ~SymbolicFunction() {}
   virtual std:: string toString() const;
   SymbolicValType GetValType() const { return VAL_FUNCTION; }
-  AstNodePtr CodeGen( AstInterface &fa) const;
+  AstNodePtr CodeGen( AstInterface &) const;
   virtual void Visit( SymbolicVisitor *v) const { v->VisitFunction(*this); }
   bool operator == (const SymbolicFunction& that) const;
-  std:: string GetOp() const { return op; }
+  SymbolicVal GetOp() const { return op; }
   const Arguments& get_args() const { return args; }
   SymbolicVal get_arg(int index) const { return args[index]; }
   const_iterator args_begin() const { return args.begin(); }
@@ -249,18 +258,18 @@ class SymbolicFunction : public SymbolicValImpl
   unsigned NumOfArgs() const { return args.size(); }
   virtual SymbolicVal GetUnknownOpds() const 
       { return SymbolicVal(); }
-  virtual bool GetConstOpd(int &val1, int &val2) const { return false; }
+  virtual bool GetConstOpd(int&, int&) const { return false; }
   SymbolicValImpl* Clone() const { return new SymbolicFunction(*this); }
   virtual SymbolicFunction* cloneFunction(const Arguments& args) const
      { return  new SymbolicFunction(t, op,args); }
 };
 
 inline bool 
-SymbolicVal:: isFunction(std:: string& name, std:: vector<SymbolicVal>* argp) const
+SymbolicVal:: isFunction(std::string& name, std:: vector<SymbolicVal>* argp) const
 {
    if (ConstPtr() != 0 && ConstRef().GetValType() == VAL_FUNCTION) {
      const SymbolicFunction& c = static_cast<const SymbolicFunction&>(ConstRef());
-     name = c.GetOp();
+     name = c.GetOp().toString();
      if (argp != 0)
        *argp = c.get_args();
      return true;
@@ -292,13 +301,17 @@ class SymbolicValGenerator
 {
  public:
  static SymbolicVal GetSymbolicVal( AstInterface &fa, const AstNodePtr& exp);
- static bool IsFortranLoop(AstInterface& fa, const AstNodePtr& s, 
+ static SymbolicVal GetSymbolicVal( const std::string& sig);
+ static SymbolicVal get_null() { return SymbolicVal(); }
+ static SymbolicVal get_unknown() { return new SymbolicValImpl(); }
+ static bool IsFortranLoop(AstInterface& , const AstNodePtr& s, 
         SymbolicVar* ivar =0,
         SymbolicVal* lb =0, SymbolicVal* ub=0, SymbolicVal* step=0, AstNodePtr* body=0);
 };
 
 SymbolicVal ApplyBinOP( SymOpType t, const SymbolicVal &v1,
                         const SymbolicVal &v2);
+SymbolicVal ApplyUnaryOP(SymOpType t, const SymbolicVal &v);
 inline SymbolicVal operator + (const SymbolicVal &v1, const SymbolicVal &v2)
   { return ApplyBinOP(SYMOP_PLUS, v1, v2); }
 SymbolicVal operator * (const SymbolicVal &v1, const SymbolicVal &v2);
@@ -333,7 +346,7 @@ class SymbolicCond
                                                                                           
   void Dump() const;
   std:: string toString () const;
-  AstNodePtr  CodeGen(AstInterface &fa) const;
+  AstNodePtr  CodeGen(AstInterface&) const;
 };
 
 struct SymbolicBound{
@@ -431,4 +444,3 @@ class AstTreeReplaceVar : public ProcessAstNode<AstNodePtr>
 };
 
 #endif
-

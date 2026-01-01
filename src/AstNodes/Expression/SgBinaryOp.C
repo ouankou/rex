@@ -90,8 +90,8 @@ SgBinaryOp::get_type() const
              }
           else if (lhsBase != NULL && rhsBase != NULL && variantT() == V_SgSubtractOp)
              {
-            // TODO: return ptrdiff_t
-               return lhsType;
+            // Return long as a stand-in for ptrdiff_t in the ROSE type system.
+               return SgTypeLong::createType();
              }
         }
 

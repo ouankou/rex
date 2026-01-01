@@ -1,5 +1,3 @@
-# tps (04/01/2010) : Added  GENERATED_CODE_DIRECTORY_Cxx_Grammar subdirectory
-add_subdirectory(GENERATED_CODE_DIRECTORY_Cxx_Grammar)
 add_subdirectory(astFixup)
 add_subdirectory(astPostProcessing)
 add_subdirectory(sageInterface)
@@ -14,7 +12,7 @@ if(TARGET accparser)
   target_compile_options(accparser PRIVATE -include ROSE_ABORT.h)
 endif()
 
-if(NOT enable-internalFrontendDevelopment)
+if(NOT ENABLE-INTERNALFRONTENDDEVELOPMENT)
   ##AS Commented out for simpler build
   add_subdirectory(astHiddenTypeAndDeclarationLists)
   add_subdirectory(astTokenStream)
@@ -46,7 +44,7 @@ add_custom_command(
     ${ROSE_TOP_SRC_DIR}/scripts/to-c-string.pl < ${ROSE_TOP_SRC_DIR}/LicenseInformation/ROSE_BSD_License.txt > ${CMAKE_BINARY_DIR}/src/frontend/SageIII/license_string.h
   DEPENDS  ${ROSE_TOP_SRC_DIR}/LicenseInformation/ROSE_BSD_License.txt)
 
-if(enable-cpp)
+if(ENABLE-CPP)
   # GENERATING THE ROSE PREPROCESSOR
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/src/frontend/SageIII/lex.yy.C
@@ -100,6 +98,8 @@ install(
     sage3basic.hhh sage_support/cmdline.h sage_support/sage_support.h
     sage_support/utility_functions.h sage_support/utility_functionsImpl.C
     ${CMAKE_CURRENT_BINARY_DIR}/Cxx_Grammar.h
+    ${CMAKE_CURRENT_BINARY_DIR}/Cxx_GrammarDeclarations.h
+    ${CMAKE_CURRENT_BINARY_DIR}/Cxx_GrammarVariants.h
     ${CMAKE_CURRENT_BINARY_DIR}/Cxx_GrammarTreeTraversalAccessEnums.h
     ${CMAKE_CURRENT_BINARY_DIR}/AstQueryMemoryPool.h
   DESTINATION ${INCLUDE_INSTALL_DIR})

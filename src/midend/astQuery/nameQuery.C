@@ -1047,10 +1047,8 @@ NameQuerySynthesizedAttributeType
  * performa the action specified by the second argument and return a NodeQuerySynthesizedAttributeType.
  ********************************************************************************/
 NameQuerySynthesizedAttributeType
-  NameQuery::queryMemoryPool
-    (
-     std::string traversal,
-     NameQuery::roseFunctionPointerOneParameter querySolverFunction, VariantVector* targetVariantVector)
+NameQuery::queryMemoryPool(std::string /*traversal*/,
+                           NameQuery::roseFunctionPointerOneParameter querySolverFunction, VariantVector* targetVariantVector)
    {
    return  AstQueryNamespace::queryMemoryPool(
                                   querySolverFunction,targetVariantVector);
@@ -1101,6 +1099,5 @@ NameQuerySynthesizedAttributeType
      return AstQueryNamespace::queryMemoryPool(getFunction(elementReturnType), targetVariantVector);
  
     };
-
 
 

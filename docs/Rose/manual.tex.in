@@ -29,7 +29,6 @@ linkcolor=black,
 
 \newcommand{\TranslatorExampleDirectory}{@top_srcdir@/exampleTranslators/documentedExamples/simpleTranslatorExamples}
 \newcommand{\TranslatorExampleCompileTreeDirectory}{@top_pwd@/exampleTranslators/documentedExamples/simpleTranslatorExamples}
-\newcommand{\AstRewriteExampleDirectory}{@top_srcdir@/exampleTranslators/documentedExamples/AstRewriteExamples}
 \newcommand{\TutorialExampleDirectory}{@top_srcdir@/tutorial}
 \newcommand{\TutorialExampleBuildDirectory}{@top_builddir@/tutorial}
 \newcommand{\TopSourceDirectory}{@top_srcdir@}
@@ -182,7 +181,6 @@ linkcolor=black,
 
 \input{AstProcessing}
 
-\input{AstRewrite}
 
 \input{ProgramAnalysis}
 
@@ -207,7 +205,6 @@ linkcolor=black,
 % Liao, 9/23/2009: describing the support of OpenMP
 \input{OpenMPsupport}
 
-\input{binaryAnalysis}
 
 % djh, 10/28/2009: putting RTED manual/chapter here for lack of a better place.
 % Perhaps it should be moved.
@@ -240,7 +237,5 @@ linkcolor=black,
 % }
 
 \end{document}
-
-
 
 

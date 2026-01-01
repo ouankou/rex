@@ -182,7 +182,7 @@ static int identify_operator_matching(string str)
 }
 #endif
 
-static void process_operator(string op) 
+static void process_operator(string) 
 {
 
 }
@@ -613,4 +613,3 @@ int main(int argc, char *argv[])
 
 #endif
 // }//This ends the namespace Rose_Fortran_free_format_namespace
-

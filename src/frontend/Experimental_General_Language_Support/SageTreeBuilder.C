@@ -93,8 +93,8 @@ SageTreeBuilder::attachComments(SgLocatedNode* node, const PosInfo &pos, bool at
         SI::attachComment(last, token->getLexeme(), PreprocessingInfo::after, fortranStyle);
       }
       else {
-        if (TRACE_ATTACH_COMMENT) MLOG_TRACE_CXX(MLOG_FRONTEND) << "---> attach end_of comment to: " << node->class_name() << ": " << *token;
-        SI::attachComment(node, token->getLexeme(), PreprocessingInfo::end_of, fortranStyle);
+        if (TRACE_ATTACH_COMMENT) MLOG_TRACE_CXX(MLOG_FRONTEND) << "---> attach end comment to: " << node->class_name() << ": " << *token;
+        SI::attachComment(node, token->getLexeme(), PreprocessingInfo::after, fortranStyle);
       }
       tokens_->consumeNextToken();
     }
@@ -121,7 +121,7 @@ SageTreeBuilder::attachComments(SgLocatedNode* node, const PosInfo &pos, bool at
       if (token->getTokenType() == TokenKind::comment) {
         auto commentPosition = PreprocessingInfo::before;
         if (token->getStartLine() == pos.getStartLine()) {
-          commentPosition = PreprocessingInfo::end_of;
+          commentPosition = PreprocessingInfo::after;
           // check for comment following a variable initializer
           if (SgVariableDeclaration* varDecl = isSgVariableDeclaration(stmt)) {
             for (SgInitializedName* name : varDecl->get_variables()) {
@@ -293,7 +293,7 @@ void SageTreeBuilder::Leave(SgScopeStatement* scope)
 
 // Clear any dangling forward references
    if (!forward_var_refs_.empty()) {
-     std::map<const std::string, SgVarRefExp*>::iterator it = forward_var_refs_.begin();
+     auto it = forward_var_refs_.begin();
      while (it != forward_var_refs_.end()) {
        if (SgFunctionSymbol* func_sym = SageInterface::lookupFunctionSymbolInParentScopes(it->first, scope)) {
          SgVarRefExp* prev_var_ref = it->second;
@@ -346,7 +346,6 @@ void SageTreeBuilder::Leave(SgScopeStatement* scope)
          }
        }
        else {
-         MLOG_WARN_CXX(MLOG_FRONTEND) << "{" << it->first << ": " << it->second << "}\n";
          it++;
        }
      }
@@ -1542,20 +1541,24 @@ Enter(SgVariableDeclaration* &var_decl, const std::string &name, SgType* type, S
 // Look for a symbol previously implicitly declared and fix the variable reference
    if (forward_var_refs_.find(name) != forward_var_refs_.end()) {
      if (SgVariableSymbol* var_sym = SI::lookupVariableSymbolInParentScopes(name)) {
-        SgVarRefExp* prev_var_ref = forward_var_refs_[name];
-        SgVariableSymbol* prev_var_sym = prev_var_ref->get_symbol();
-        ASSERT_not_null(prev_var_sym);
+        auto range = forward_var_refs_.equal_range(name);
+        for (auto it = range.first; it != range.second; ++it) {
+          SgVarRefExp* prev_var_ref = it->second;
+          SgVariableSymbol* prev_var_sym = prev_var_ref->get_symbol();
+          ASSERT_not_null(prev_var_sym);
 
-        SgInitializedName* prev_init_name = prev_var_sym->get_declaration();
-        ASSERT_require(prev_init_name->get_name() == init_name->get_name());
+          SgInitializedName* prev_init_name = prev_var_sym->get_declaration();
+          ASSERT_require(prev_init_name->get_name() == init_name->get_name());
 
-     // Reset the symbol for the variable reference to the symbol for the explicit variable declaration
-        prev_var_ref->set_symbol(var_sym);
-        forward_var_refs_.erase(name); // The dangling variable reference has been fixed
+       // Reset the symbol for the variable reference to the symbol for the explicit variable declaration
+          prev_var_ref->set_symbol(var_sym);
 
-     // Delete the previous symbol and initialized name
-        delete prev_var_sym;
-        delete prev_init_name;
+       // Delete the previous symbol and initialized name
+          delete prev_var_sym;
+          delete prev_init_name;
+        }
+        // Remove all variable refs associated with name
+        forward_var_refs_.erase(name);
      }
    }
 }
@@ -1760,14 +1763,14 @@ Leave(SgCommonBlock* common_block)
 // name and symbol information so that the variable reference can be cleaned/fixed up when
 // the explicit declaration is seen.
 SgVarRefExp* SageTreeBuilder::
-buildVarRefExp_nfi(const std::string & name)
+buildVarRefExp_nfi(const std::string &name)
 {
    SgVarRefExp* var_ref = SageBuilder::buildVarRefExp(name, SageBuilder::topScopeStack());
    ASSERT_not_null(var_ref);
    SageInterface::setSourcePosition(var_ref);
 
    if (SageInterface::lookupSymbolInParentScopes(name) == nullptr) {
-      forward_var_refs_[name] = var_ref;
+      forward_var_refs_.insert({name, var_ref});
    }
    return var_ref;
 }

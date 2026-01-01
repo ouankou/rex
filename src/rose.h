@@ -38,7 +38,6 @@
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 // DQ (6/3/2007): added internal support for AST visualization
-// // #include "astVisualization/wholeAST_API.h"
 #include "wholeAST_API.h"
 #endif
 
@@ -58,18 +57,12 @@
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 // JH (01/18/2006): adding the include file for the AST file I/O (by Jochen)
-// DQ (9/9/2007): Can't use astVisualization/ prefix since it then does not permit use from the install tree
-// DQ (5/27/2007): Added astVisualization/ prefix to the header file
 // DQ (2/22/2006): Added Andreas' work to graph the AST.
-// #include "astVisualization/astGraph.h"
 #include "astGraph.h"
 #endif
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-// DQ (9/9/2007): Can't use astVisualization/ prefix since it then does not permit use from the install tree
-// DQ (5/27/2007): Added astVisualization/ prefix to the header file
 // DQ (6/23/2006): Added Andreas's work to support custom DOT graphs using persistant attributes.
-// #include "astVisualization/AstAttributeDOT.h"
 #include "AstAttributeDOT.h"
 #endif
 

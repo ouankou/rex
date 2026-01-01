@@ -40,9 +40,6 @@ void AstTreeDepGraphAnal ::ComputeStmtDep(const StmtNodeInfo &n1,
   DepGraphEdgeCreate deps1(graph, n1.node, n2.node),
       deps2(graph, n2.node, n1.node);
   AstNodePtr s1 = n1.start, s2 = n2.start;
-  if (DebugDep())
-    std::cerr << "Computing Stmt Dep between " << AstInterface::AstToString(s1)
-              << " and " << AstInterface::AstToString(s2) << "\n";
   if (s1 != s2 && ((fa.IsIOInputStmt(s1) && fa.IsIOInputStmt(s2)) ||
                    (fa.IsIOOutputStmt(s1) && fa.IsIOOutputStmt(s2)))) {
     if (t & DEPTYPE_IO)
@@ -173,7 +170,9 @@ void BuildAstTreeDepGraph ::TranslateCtrlDeps() {
                  graph->GetDepInfoIteratorImpl(e2, DEPTYPE_DATA);
              !depIter2.ReachEnd(); depIter2++) {
           DepInfo tmpd = cd1 * depIter2.Current();
-          graph->CreateEdgeImpl(n1, n2, tmpd);
+          if (tmpd.GetDepType() != DEPTYPE_NONE) {
+            graph->CreateEdgeImpl(n1, n2, tmpd);
+          }
         }
       }
       for (p2 = g->GetNodeEdgeIterator(ctrl, GraphAccess::EdgeIn);
@@ -185,7 +184,9 @@ void BuildAstTreeDepGraph ::TranslateCtrlDeps() {
                  graph->GetDepInfoIteratorImpl(e2, DEPTYPE_DATA);
              !depIter2.ReachEnd(); depIter2++) {
           DepInfo tmpd = depIter2.Current() * cd;
-          graph->CreateEdgeImpl(n2, n1, tmpd);
+          if (tmpd.GetDepType() != DEPTYPE_NONE) {
+            graph->CreateEdgeImpl(n2, n1, tmpd);
+          }
         }
       }
     }

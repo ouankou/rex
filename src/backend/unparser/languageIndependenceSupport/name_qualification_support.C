@@ -113,7 +113,7 @@ Unparser_Nameq::lookup_generated_qualified_name ( SgNode* referencedNode )
             // std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTypedefDeclaration*>(this));
             // std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(node);
             // std::map<SgNode*,std::string>::iterator i = SgNode::get_qualifiedNameMapForNames().find(node);
-               std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(node);
+               SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(node);
 
             // if (i != SgNode::get_globalQualifiedNameMapForTypes().end())
                if (i != SgNode::get_globalQualifiedNameMapForNames().end())
@@ -287,10 +287,10 @@ Unparser_Nameq::lookup_generated_qualified_name ( SgNode* referencedNode )
 
 // DQ (3/14/2019): Adding debugging support to output the map of names.
 void
-Unparser_Nameq::outputNameQualificationMap( const std::map<SgNode*,std::string> & qualifiedNameMap )
+Unparser_Nameq::outputNameQualificationMap( const SgUnorderedMapNodeToString & qualifiedNameMap )
    {
      printf ("qualifiedNameMap.size() = %zu \n",qualifiedNameMap.size());
-     std::map<SgNode*,std::string>::const_iterator i = qualifiedNameMap.begin();
+     SgUnorderedMapNodeToString::const_iterator i = qualifiedNameMap.begin();
      while (i != qualifiedNameMap.end())
        {
          ASSERT_not_null(i->first);
@@ -359,7 +359,7 @@ Unparser_Nameq::generateNameQualifierSupport ( SgScopeStatement* scope, const Sg
              {
                if (qualificationOfType == false)
                   {
-                    std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(nameQualificationReferenceNode);
+                    SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(nameQualificationReferenceNode);
                     if (i != SgNode::get_globalQualifiedNameMapForNames().end())
                        {
                          qualifiedName = i->second;
@@ -374,7 +374,7 @@ Unparser_Nameq::generateNameQualifierSupport ( SgScopeStatement* scope, const Sg
                   }
                  else
                   {
-                    std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(nameQualificationReferenceNode);
+                    SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(nameQualificationReferenceNode);
                     if (i != SgNode::get_globalQualifiedNameMapForTypes().end())
                        {
                          qualifiedName = i->second;

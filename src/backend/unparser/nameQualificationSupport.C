@@ -202,8 +202,10 @@ get_template_name_for_instantiation(SgDeclarationStatement *declaration) {
 // Main calling function to support name qualification support
 // ***********************************************************
 
+// void generateNameQualificationSupport( SgNode* node, std::set<SgNode*>& referencedNameSet )
 void
-generateNameQualificationSupport( SgNode* node, std::set<SgNode*>& referencedNameSet )
+generateNameQualificationSupport(SgNode* node,
+                                 SgUnorderedNodeSet & referencedNameSet)
    {
   // This function is the top level API for Name Qualification support.
   // This is the only function that need be seen by ROSE.  This function
@@ -250,16 +252,70 @@ generateNameQualificationSupport( SgNode* node, std::set<SgNode*>& referencedNam
      MLOG_WARN_C(MLOG_UNPARSER, "Calling SageInterface::buildDeclarationSets(node = %p = %s) \n",node,node->class_name().c_str());
 #endif
 
-  // DQ (4/3/2014): Added assertion.
-     t.declarationSet = SageInterface::buildDeclarationSets(node);
-     ASSERT_not_null(t.declarationSet);
+     {
+    // DQ (8/14/2025): Adding performance timer for call to buildDeclarationSets().
+       TimingPerformance timer ("Name qualification support: buildDeclarationSets");
+
+    // DQ (4/3/2014): Added assertion.
+       t.declarationSet = SageInterface::buildDeclarationSets(node);
+       ASSERT_not_null(t.declarationSet);
+     }
 
 #if 0
      MLOG_WARN_C(MLOG_UNPARSER, "DONE: Calling SageInterface::buildDeclarationSets(node = %p = %s) t.declarationSet = %p \n",node,node->class_name().c_str(),t.declarationSet);
 #endif
 
+  // DQ (8/14/2025): Adding a performance optimization to only do name qualification on the part of the AST that will unparsed.
+  // This should be a significant subset of the number of lines of code (O(1000) or so, since the source files is typically
+  // such a small part of the whole translation unit.  Note that the default is still to process the whole translation unit,
+  // but this optimization will support the better handling of large files ($1M line translation units).
   // Call the traversal.
-     t.traverse(node,ih);
+  // t.traverse(node,ih);
+  // Pei-Hung (8/19/2025): revert to use the traversal over parents
+  // SageInterface::getProject() would find multiple SgProject in copyAST_tests and break the assertion
+
+  // Get the project from a traversal over the parents back to the root of the AST.
+     SgProject* project = SageInterface::getProject(node);
+  // Or we can use this function which does not require a traversal.
+  //   SgProject* project = SageInterface::getProject();
+     ROSE_ASSERT(project != NULL);
+
+#if 0
+     printf ("project->get_suppressNameQualificationAcrossWholeTranslationUnit() = %s \n",project->get_suppressNameQualificationAcrossWholeTranslationUnit() ? "true" : "false");
+#endif
+
+#if 0
+  // DQ (8/18/2025): We do not call this function recursively, but for the case of multiple files
+  // on the command line we do call it multiple times, which is not a problem for the
+  // suppressNameQualificationAcrossWholeTranslationUnit mode.
+  // DQ (8/14/2025): Since we are using the traverseInputFiles() based traversal, we have to input
+  // the project, and so we need to make sure this function is not called recursively.
+     static int invocation = 0;
+     invocation++;
+     if (invocation > 1)
+        {
+          printf("Error: We can't be calling this function recursively: invocation = %d \n",invocation);
+          ROSE_ASSERT(false);
+        }
+#endif
+
+     if (project->get_suppressNameQualificationAcrossWholeTranslationUnit() == true)
+        {
+          t.set_suppressNameQualificationAcrossWholeTranslationUnit(true);
+
+       // DQ (8/14/2025): Adding performance timer for call to traverseInputFiles().
+          TimingPerformance timer ("Name qualification support: traverseInputFiles:");
+
+       // t.traverseInputFiles(node,ih);
+          t.traverseInputFiles(project,ih);
+        }
+       else
+        {
+       // DQ (8/14/2025): Adding performance timer for call to traverse().
+          TimingPerformance timer ("Name qualification support: traverse:");
+
+          t.traverse(node,ih);
+        }
 
 
 #if 0
@@ -476,13 +532,20 @@ NameQualificationSynthesizedAttribute::NameQualificationSynthesizedAttribute ( c
 // NameQualificationTraversal
 // *******************
 
+// NameQualificationTraversal::NameQualificationTraversal(
+//      std::map<SgNode*,std::string> & input_qualifiedNameMapForNames,
+//      std::map<SgNode*,std::string> & input_qualifiedNameMapForTypes,
+//      std::map<SgNode*,std::string> & input_qualifiedNameMapForTemplateHeaders,
+//      std::map<SgNode*,std::string> & input_typeNameMap,
+//      std::map<SgNode*,std::map<SgNode*,std::string> > & input_qualifiedNameMapForMapsOfTypes,
+//      std::set<SgNode*> & input_referencedNameSet)
 NameQualificationTraversal::NameQualificationTraversal(
-     std::map<SgNode*,std::string> & input_qualifiedNameMapForNames,
-     std::map<SgNode*,std::string> & input_qualifiedNameMapForTypes,
-     std::map<SgNode*,std::string> & input_qualifiedNameMapForTemplateHeaders,
-     std::map<SgNode*,std::string> & input_typeNameMap,
-     std::map<SgNode*,std::map<SgNode*,std::string> > & input_qualifiedNameMapForMapsOfTypes,
-     std::set<SgNode*> & input_referencedNameSet)
+     NameQualificationMapType & input_qualifiedNameMapForNames,
+     NameQualificationMapType & input_qualifiedNameMapForTypes,
+     NameQualificationMapType & input_qualifiedNameMapForTemplateHeaders,
+     NameQualificationMapType & input_typeNameMap,
+     NameQualificationMapOfMapsType & input_qualifiedNameMapForMapsOfTypes,
+     NameQualificationSetType & input_referencedNameSet)
    : referencedNameSet(input_referencedNameSet),
      qualifiedNameMapForNames(input_qualifiedNameMapForNames),
      qualifiedNameMapForTypes(input_qualifiedNameMapForTypes),
@@ -504,33 +567,63 @@ NameQualificationTraversal::NameQualificationTraversal(
      SgSymbolTable::get_aliasSymbolCausalNodeSet().clear();
      ROSE_ASSERT(SgSymbolTable::get_aliasSymbolCausalNodeSet().empty() == true);
 
+  // DQ (7/19/2025): This is how we are turning on and off a special name qualification mode
+  // required in the symbol table support.  In general, is is too expensive to be use everywhere,
+  // and has a dramatic imact on the support for SgAliasSymbols within the AST_PostProcessing()
+  // (specifically the support for using directives such as "using namespace std;", which can
+  // take 80% of the compilation time).
+  // ROSE_ASSERT(SgSymbolTable::get_name_qualification_mode() == false);
+
+#if 0
+     printf ("In NameQualificationTraversal() constructor: SgSymbolTable::get_name_qualification_mode() = %s \n",
+          (SgSymbolTable::get_name_qualification_mode() == true) ? "true" : "false");
+#endif
+
+     SgSymbolTable::set_name_qualification_mode(true);
+
+     ROSE_ASSERT(SgSymbolTable::get_name_qualification_mode() == true);
+
      declarationSet = NULL;
+
+  // DQ (5/22/2024): Building a mechanism to turn off name qualification after a specific
+  // template instantiation function has been processed.  This is debug code to trace down
+  // a problem with name qualification growing too large and consuming all memory.
+     disableNameQualification = false;
+
+  // DQ (8/14/2025): Adding optimization (default is false) to support name qualification
+  // retricted to just the input source file (instead of the whole translation unit).
+     suppressNameQualificationAcrossWholeTranslationUnit = false;
    }
 
 
 // DQ (5/28/2011): Added support to set the static global qualified name map in SgNode.
-const std::map<SgNode*,std::string> &
+// const std::map<SgNode*,std::string> &
+const NameQualificationTraversal::NameQualificationMapType &
 NameQualificationTraversal::get_qualifiedNameMapForNames() const
    {
      return qualifiedNameMapForNames;
    }
 
 // DQ (5/28/2011): Added support to set the static global qualified name map in SgNode.
-const std::map<SgNode*,std::string> &
+// const std::map<SgNode*,std::string> &
+const NameQualificationTraversal::NameQualificationMapType &
 NameQualificationTraversal::get_qualifiedNameMapForTypes() const
    {
      return qualifiedNameMapForTypes;
    }
 
 // DQ (3/13/2019): Added support to set the static global qualified name map in SgNode.
-const std::map<SgNode*,std::map<SgNode*,std::string> > &
+// const std::map<SgNode*,std::map<SgNode*,std::string> > &
+// const std::map<SgNode*,NameQualificationTraversal::NameQualificationMapType> &
+const NameQualificationTraversal::NameQualificationMapOfMapsType &
 NameQualificationTraversal::get_qualifiedNameMapForMapsOfTypes() const
    {
      return qualifiedNameMapForMapsOfTypes;
    }
 
 // DQ (9/7/2014): Added support to set the template headers in template declarations.
-const std::map<SgNode*,std::string> &
+// const std::map<SgNode*,std::string> &
+const NameQualificationTraversal::NameQualificationMapType &
 NameQualificationTraversal::get_qualifiedNameMapForTemplateHeaders() const
    {
      return qualifiedNameMapForTemplateHeaders;
@@ -739,121 +832,12 @@ NameQualificationTraversal::associatedDeclaration(SgType* type)
                break;
              }
 
-       // DQ (11/20/2011): Adding support for template declarations in the AST.
-          case V_SgTemplateType:
-             {
-               SgTemplateType* templateType = isSgTemplateType(strippedType);
-               ASSERT_not_null(templateType);
-#if 0
-               SgTemplateDeclaration* declaration = isSgTemplateDeclaration(templateType->get_declaration());
-               ASSERT_not_null(declaration);
-
-               return_declaration = declaration;
-#else
-               return_declaration = NULL;
-#endif
-               break;
-             }
-
-          case V_SgFunctionType:
-          case V_SgMemberFunctionType:
-             {
-            // Not clear if I have to resolve declarations associated with function types.
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 0)
-            	 MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::associatedDeclaration(): Case of SgFunctionType not implemented strippedType = %s \n",strippedType->class_name().c_str());
-#endif
-               return_declaration = NULL;
-               break;
-             }
-
-       // DQ (6/25/2011): Demonstrated by calling unparseToString on all possible type.
-          case V_SgTypeDefault:
-
-       // Some scopes don't have an associated declaration (return NULL in these cases).
-       // Also missing some of the Fortran specific scopes.
-          case V_SgTypeInt:
-          case V_SgTypeUnsignedLong:
-          case V_SgTypeUnsignedLongLong:
-          case V_SgTypeUnsignedChar:
-          case V_SgTypeUnsignedShort:
-          case V_SgTypeUnsignedInt:
-          case V_SgTypeSignedChar:
-          case V_SgTypeSignedShort:
-          case V_SgTypeSignedInt:
-          case V_SgTypeSignedLong:
-          case V_SgTypeSignedLongLong:
-
-       // DQ (11/6/2014): Added support for C++11 rvalue references.
-          case V_SgRvalueReferenceType:
-
-       // DQ (3/24/2014): Added support for 128-bit integers.
-          case V_SgTypeSigned128bitInteger:
-          case V_SgTypeUnsigned128bitInteger:
-
-       // DQ (7/30/2014): Adding C++11 support.
-          case V_SgTypeNullptr:
-
-       // DQ (8/12/2014): Adding C++11 support.
-          case V_SgDeclType:
-
-       // DQ (3/28/2015): Adding GNU C language extension.
-          case V_SgTypeOfType:
-
-       // DQ (4/29/2016): Added support for complex types.
-          case V_SgTypeComplex:
-          case V_SgTypeShort:
-          case V_SgTypeLong:
-          case V_SgTypeLongLong:
-          case V_SgTypeVoid:
-          case V_SgTypeChar:
-
-       // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11 specific types).
-          case V_SgTypeChar16:
-          case V_SgTypeChar32:
-
-          case V_SgTypeFloat:
-          case V_SgTypeDouble:
-          case V_SgTypeLongDouble:
-          case V_SgTypeBool:
-          case V_SgTypeWchar:
-
-          case V_SgTypeFloat80:
-          case V_SgTypeFloat128:
-       // TV (09/06/2018): Type of an unresolved auto keyword
-          case V_SgAutoType:
-             {
-               return_declaration = NULL;
-               break;
-             }
-
           case V_SgNonrealType:
              {
                SgNonrealType * nrtype = isSgNonrealType(strippedType);
                ASSERT_not_null(nrtype);
                return_declaration = nrtype->get_declaration();
                ASSERT_not_null(return_declaration);
-               break;
-             }
-
-       // DQ (4/10/2019): Needing to support this case after recompiling ROSE (debugging SgPointerMemberType
-       // and cleaning up handling of SgInitializedName name qualification support).
-          case V_SgTypeEllipse:
-             {
-               return_declaration = NULL;
-               break;
-             }
-
-       // DQ (4/11/2019): This case appears in the testRoseHeaders_03.C test code (ROSE compiling ROSE).
-          case V_SgTypeUnknown:
-             {
-               return_declaration = NULL;
-               break;
-             }
-
-       // DQ (4/12/2019): This case appears in the roseTests/astInterfaceTests/inputbuildIfStmt.C code.
-          case V_SgTypeString:
-             {
-               return_declaration = NULL;
                break;
              }
 
@@ -865,11 +849,21 @@ NameQualificationTraversal::associatedDeclaration(SgType* type)
                ASSERT_not_null(return_declaration);
                break;
              }
-       // Catch anything that migh have been missed (and exit so it can be identified and fixed).
+       // Catch anything that might have been missed (and exit so it can be identified and fixed).
           default:
              {
-               MLOG_WARN_C(MLOG_UNPARSER, "Default reached in NameQualificationTraversal::associatedDeclaration() type = %s strippedType = %s \n",type->class_name().c_str(),strippedType->class_name().c_str());
-               ROSE_ABORT();
+            // PL (10/15/2025): Replacing long list of cases with a simple check for isSgNamedType.
+            // Recommended change by DQ.
+               if (isSgNamedType(strippedType))
+                  {
+                    MLOG_WARN_C(MLOG_UNPARSER, "Default reached in NameQualificationTraversal::associatedDeclaration() type = %s strippedType = %s \n",type->class_name().c_str(),strippedType->class_name().c_str());
+                    ROSE_ABORT();
+                  }
+                 else
+                  {
+                  // All types that are not an SgNamedType have a nullptr declaration.
+                    return_declaration = nullptr;
+                  }
              }
         }
 
@@ -907,7 +901,49 @@ NameQualificationTraversal::evaluateTemplateInstantiationDeclaration ( SgDeclara
      MLOG_WARN_C(MLOG_UNPARSER, "In evaluateTemplateInstantiationDeclaration(): nonconst_def = %p \n",nonconst_def);
 #endif
 
-     if (MangledNameSupport::visitedTemplateDefinitions.find(nonconst_def) != MangledNameSupport::visitedTemplateDefinitions.end())
+  // DQ (5/22/2024): Count the number of function invocations so that we can turn on forceSkip selectively.
+     static size_t functionCallCounter = 0;
+
+     functionCallCounter++;
+
+#if DEBUG_TEMPINSTDECL
+     printf ("In evaluateTemplateInstantiationDeclaration(): functionCallCounter = %zu \n",functionCallCounter);
+#endif
+
+     bool forceSkip = false;
+
+#if 0
+  // DQ (5/12/2024): Skipping the handling of template instantiations in the name qualification as a test!
+  // forceSkip = true;
+  // if (functionCallCounter >= 50000) // working
+  // if (functionCallCounter >= 70000) // working
+  // if (functionCallCounter >= 90000) // working
+  // if (functionCallCounter >= 91000) // working
+  // if (functionCallCounter >= 93000) // max is 91224
+  // if (functionCallCounter >= 120000) // max is 91224? it changes as we increase the bound.
+     if (functionCallCounter >= 150000) // max is 149764 before failing.
+        {
+       // DQ (5/22/2024): Use the disableNameQualification flag and set it to true when the qualified name sizes reach 5000 or so in length, then just disable further name qualification.
+          forceSkip = true;
+        }
+#endif
+#if 1
+  // DQ (5/22/2024): Building a mechanism to turn off name qualification after a specific
+  // template instantiation function has been processed.  This is debug code to trace down
+  // a problem with name qualification growing too large and consuming all memory.
+     if (disableNameQualification == true)
+        {
+#if DEBUG_NONTERMINATION || DEBUG_TEMPINSTDECL || 0
+          printf ("In evaluateTemplateInstantiationDeclaration(): Setting forceSkip = true \n");
+#endif
+          forceSkip = true;
+        }
+#endif
+
+  // DQ (5/12/2024): Make sure that we don't have any NULL entries.
+     ROSE_ASSERT(MangledNameSupport::visitedTemplateDefinitions.find(NULL) == MangledNameSupport::visitedTemplateDefinitions.end());
+
+     if (forceSkip == true || MangledNameSupport::visitedTemplateDefinitions.find(nonconst_def) != MangledNameSupport::visitedTemplateDefinitions.end())
         {
        // Skip the call that would result in infinte recursion.
 #if 0
@@ -2811,7 +2847,16 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
 #endif
                            // Reset the symbol to be consistant with the unique scope (in case the currentScope was reset above.
                               symbol = SageInterface::lookupFunctionSymbolInParentScopes(name,currentScope);
-                              ASSERT_not_null(symbol);
+
+                           // DQ (7/21/2024): Added debugging output for testing.
+                              if (symbol == NULL)
+                                 {
+                                   printf ("SageInterface::lookupFunctionSymbolInParentScopes() returned NULL: name = %s currentScope = %p = %s = %s \n",
+                                        name.str(),currentScope,currentScope->class_name().c_str(),SageInterface::get_name(currentScope).c_str());
+                                 }
+
+                           // DQ (7/21/2024): This can be NULL for the processing of nlohmann/json.hpp with ROSE
+                           // ASSERT_not_null(symbol);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                               MLOG_WARN_C(MLOG_UNPARSER, "@@@@@@@@ name = %s declaration = %p = %s symbol = %s \n",name.str(),declaration,declaration->class_name().c_str(),symbol->class_name().c_str());
@@ -3807,14 +3852,19 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                            // SgClassDeclaration* associatedClassDeclaration = baseClass->get_base_class();
                               SgClassDeclaration* associatedClassDeclaration = classSymbol->get_declaration();
 
-                              ASSERT_not_null(classDeclaration);
+                           // DQ (7/21/2024): This can be a namespaceDeclaration (for the case of processing the nlohmann/json header file).
+                           // ASSERT_not_null(classDeclaration);
                               ASSERT_not_null(associatedClassDeclaration);
 
-                              bool same_declaration =
-                                  (associatedClassDeclaration
-                                       ->get_firstNondefiningDeclaration() ==
-                                   classDeclaration
-                                       ->get_firstNondefiningDeclaration());
+                              bool same_declaration = false;
+                              if (classDeclaration != NULL)
+                                 {
+                                   same_declaration =
+                                       (associatedClassDeclaration
+                                            ->get_firstNondefiningDeclaration() ==
+                                        classDeclaration
+                                            ->get_firstNondefiningDeclaration());
+                                 }
                               if (same_declaration == false) {
                                 SgTemplateInstantiationDecl
                                     *templateInstantiationDecl =
@@ -4856,13 +4906,13 @@ NameQualificationTraversal::evaluateNameQualificationForTemplateArgumentList (Sg
    {
   // DQ (6/4/2011): Note that test2005_73.C demonstrate where the Template arguments are shared between template instantiations.
 
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
   // DQ (9/24/2012): Track the recursive depth in computing name qualification for template arguments of template instantiations used as template arguments.
      static int recursiveDepth = 0;
 
   // Used for debugging...
      int counter = 0;
 
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
      MLOG_WARN_C(MLOG_UNPARSER, "\n\n*********************************************************************************************************************\n");
      MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::evaluateNameQualificationForTemplateArgumentList(): templateArgumentList.size() = %" PRIuPTR " recursiveDepth = %d \n",templateArgumentList.size(),recursiveDepth);
      MLOG_WARN_C(MLOG_UNPARSER, "*********************************************************************************************************************\n");
@@ -5009,9 +5059,13 @@ NameQualificationTraversal::evaluateNameQualificationForTemplateArgumentList (Sg
                               SgTemplateInstantiationDecl* templateClassInstantiationDeclaration = isSgTemplateInstantiationDecl(classDeclaration);
                               if (templateClassInstantiationDeclaration != NULL)
                                  {
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                                    recursiveDepth++;
+#endif
                                    evaluateNameQualificationForTemplateArgumentList(templateClassInstantiationDeclaration->get_templateArguments(),currentScope,positionStatement);
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                                    recursiveDepth--;
+#endif
                                  }
                             }
                            else if (nrType == NULL)
@@ -5030,9 +5084,13 @@ NameQualificationTraversal::evaluateNameQualificationForTemplateArgumentList (Sg
                            MLOG_WARN_C(MLOG_UNPARSER, "namedType is a SgNonrealType: nrdecl = %p = %s \n",nrdecl,nrdecl->class_name().c_str());
 #endif
                            do {
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                              recursiveDepth++;
+#endif
                              evaluateNameQualificationForTemplateArgumentList(nrdecl->get_tpl_args(), currentScope, positionStatement);
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                              recursiveDepth--;
+#endif
 
                              if (nrdecl->get_templateDeclaration() != NULL) {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_NAME_QUALIFICATION_LEVEL_FOR_TEMPLATE_ARGUMENTS
@@ -5145,24 +5203,18 @@ NameQualificationTraversal::evaluateNameQualificationForTemplateArgumentList (Sg
           MLOG_WARN_C(MLOG_UNPARSER, "===== templateArgument->unparseToString() = %s \n",templateArgument->unparseToString().c_str());
 #endif
 
-//        ROSE_ASSERT(templateArgument->unparseToString() != "allocator< int >");
-
           i++;
 
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
        // Used for debugging...
           counter++;
+#endif
         }
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_NAME_QUALIFICATION_LEVEL_FOR_TEMPLATE_ARGUMENTS
      MLOG_WARN_C(MLOG_UNPARSER, "*****************************************************************************************************************************\n");
      MLOG_WARN_C(MLOG_UNPARSER, "Leaving NameQualificationTraversal::evaluateNameQualificationForTemplateArgumentList(): templateArgumentList.size() = %" PRIuPTR " recursiveDepth = %d \n",templateArgumentList.size(),recursiveDepth);
      MLOG_WARN_C(MLOG_UNPARSER, "*****************************************************************************************************************************\n\n");
-#endif
-
-#if 0
-  // DQ (7/22/2017): Added for testing only.
-     MLOG_WARN_C(MLOG_UNPARSER, "Exiting as a test! \n");
-     ROSE_ABORT();
 #endif
 
    }
@@ -5179,9 +5231,6 @@ NameQualificationTraversal::nameQualificationDepth ( SgType* type, SgScopeStatem
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_NAME_QUALIFICATION_LEVEL_FOR_NAME_QUALIFICATION_DEPTH || 0
      MLOG_WARN_C(MLOG_UNPARSER, "In nameQualificationDepth(SgType*): type = %p = %s \n",type,type->class_name().c_str());
 #endif
-
-  // DQ (7/23/2011): Test if we see array types here (looking for way to process all array types).
-  // ROSE_ASSERT(isSgArrayType(type) == NULL);
 
   // DQ (7/23/2011): If this is an array type, then we need special processing for any name qualification of its index expressions.
      processNameQualificationForPossibleArrayType(type,currentScope);
@@ -5211,7 +5260,6 @@ NameQualificationTraversal::nameQualificationDepth ( SgType* type, SgScopeStatem
    }
 
 
-// int NameQualificationTraversal::nameQualificationDepthForType ( SgInitializedName* initializedName, SgStatement* positionStatement )
 int
 NameQualificationTraversal::nameQualificationDepthForType ( SgInitializedName* initializedName, SgScopeStatement* currentScope, SgStatement* positionStatement )
    {
@@ -5224,9 +5272,8 @@ NameQualificationTraversal::nameQualificationDepthForType ( SgInitializedName* i
 
      SgType* initializedNameType = initializedName->get_type();
 
-  // DQ (4/9/2019): Adding support for SgPointerMemberType.
      SgPointerMemberType* pointerMemberType = isSgPointerMemberType(initializedNameType);
-     if (pointerMemberType != NULL)
+     if (pointerMemberType != nullptr)
         {
           SgType* baseType = pointerMemberType->get_base_type();
           ASSERT_not_null(baseType);
@@ -5250,11 +5297,8 @@ NameQualificationTraversal::nameQualificationDepthForType ( SgInitializedName* i
              }
         }
 
-  // return nameQualificationDepth(initializedName->get_type(),initializedName->get_scope(),positionStatement);
-  // return nameQualificationDepth(initializedName->get_type(),currentScope,positionStatement);
      return nameQualificationDepth(initializedNameType,currentScope,positionStatement);
    }
-
 
 int
 NameQualificationTraversal::nameQualificationDepth ( SgInitializedName* initializedName, SgScopeStatement* currentScope, SgStatement* positionStatement )
@@ -5585,13 +5629,15 @@ NameQualificationTraversal::nameQualificationDepth ( SgInitializedName* initiali
 
 
 // DQ (3/14/2019): Adding debugging support to output the map of names.
+// void NameQualificationTraversal::outputNameQualificationMap( const std::map<SgNode*,std::string> & qualifiedNameMap )
 void
-NameQualificationTraversal::outputNameQualificationMap( const std::map<SgNode*,std::string> & qualifiedNameMap )
+NameQualificationTraversal::outputNameQualificationMap( const NameQualificationMapType & qualifiedNameMap )
    {
      MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::outputNameQualificationMap(): qualifiedNameMap.size() = %zu \n",qualifiedNameMap.size());
 
      int counter = 0;
-     std::map<SgNode*,std::string>::const_iterator i = qualifiedNameMap.begin();
+  // std::map<SgNode*,std::string>::const_iterator i = qualifiedNameMap.begin();
+     NameQualificationMapType::const_iterator i = qualifiedNameMap.begin();
      while (i != qualifiedNameMap.end())
        {
          ASSERT_not_null(i->first);
@@ -5601,6 +5647,22 @@ NameQualificationTraversal::outputNameQualificationMap( const std::map<SgNode*,s
          counter++;
          i++;
        }
+   }
+
+// DQ (8/14/2025): Adding optimization (default is false) to support name qualification
+// retricted to just the input source file (instead of the whole translation unit).
+void
+NameQualificationTraversal::set_suppressNameQualificationAcrossWholeTranslationUnit(bool value)
+   {
+     suppressNameQualificationAcrossWholeTranslationUnit = value;
+   }
+
+// DQ (8/14/2025): Adding optimization (default is false) to support name qualification
+// retricted to just the input source file (instead of the whole translation unit).
+bool
+NameQualificationTraversal::get_suppressNameQualificationAcrossWholeTranslationUnit()
+   {
+     return suppressNameQualificationAcrossWholeTranslationUnit;
    }
 
 
@@ -5730,9 +5792,9 @@ NameQualificationTraversal::addToNameMap ( SgNode* reference_node, SgNode* type_
           SgNode* contextKey = (context_node != NULL) ? context_node : reference_node;
           if (type_node != NULL)
              {
-               std::map<SgNode*,std::string> & scopedTypeNameMap =
+               NameQualificationMapType & scopedTypeNameMap =
                     qualifiedNameMapForMapsOfTypes[reference_node];
-               std::map<SgNode*,std::string>::iterator scopedIter =
+               NameQualificationMapType::iterator scopedIter =
                     scopedTypeNameMap.find(contextKey);
                if (scopedIter == scopedTypeNameMap.end())
                   {
@@ -5753,7 +5815,7 @@ NameQualificationTraversal::addToNameMap ( SgNode* reference_node, SgNode* type_
                        }
                   }
 
-               std::map<SgNode*,std::string>::iterator legacyIter =
+               NameQualificationMapType::iterator legacyIter =
                     typeNameMap.find(reference_node);
                if (legacyIter == typeNameMap.end())
                   {
@@ -5780,7 +5842,7 @@ NameQualificationTraversal::addToNameMap ( SgNode* reference_node, SgNode* type_
                   }
                  else
                   {
-                    std::map<SgNode*,std::string>::iterator i = typeNameMap.find(reference_node);
+                    NameQualificationMapType::iterator i = typeNameMap.find(reference_node);
                     ROSE_ASSERT (i != typeNameMap.end());
                     if (i->second != qualified_name &&
                         should_replace_type_name(i->second, qualified_name))
@@ -6323,7 +6385,11 @@ NameQualificationTraversal::traverseType ( SgType* type, SgNode* nodeReferenceTo
 #endif
 
        // DQ (6/21/2011): Refactored this code for use in traverseTemplatedFunction()
-          addToNameMap(nodeReferenceToType,type,positionStatement,typeNameString);
+       // PL (10/24/2025): Added guard to protect a type name string from being added to the name map if we're in a template instantiation definition
+          if (isContainedInTemplateInstantiationDefn == false)
+             {
+               addToNameMap(nodeReferenceToType,type,positionStatement,typeNameString);
+             }
 
        // DQ (2/18/2013): Fixing generation of too many SgUnparse_Info object.
           delete unparseInfoPointer;
@@ -6759,7 +6825,7 @@ NameQualificationTraversal::skipNameQualificationIfNotProperlyDeclaredWhereDecla
         }
 
      printf ("Output referencedNameSet: \n");
-     for (std::set<SgNode*>::iterator i = referencedNameSet.begin(); i != referencedNameSet.end(); i++)
+     for (NameQualificationSetType::iterator i = referencedNameSet.begin(); i != referencedNameSet.end(); i++)
         {
        // printf (" --- referencedNameSet: element: \n");
 
@@ -7579,6 +7645,68 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
      MLOG_WARN_C(MLOG_UNPARSER, "****************************************************** \n");
      MLOG_WARN_C(MLOG_UNPARSER, "Inside of NameQualificationTraversal::evaluateInheritedAttribute(): node = %p = %s = %s \n",n,n->class_name().c_str(),SageInterface::get_name(n).c_str());
      MLOG_WARN_C(MLOG_UNPARSER, "****************************************************** \n");
+#endif
+
+  // DQ (8/14/2025): This is an optimization to skip the traversal of the AST outside of what is in the source tree.
+     if (suppressNameQualificationAcrossWholeTranslationUnit == true)
+        {
+       // SgStatement* statement = isSgStatement(n);
+          SgLocatedNode* locatedNode = isSgLocatedNode(n);
+       // if (statement != NULL)
+          if (locatedNode != NULL)
+             {
+            // DQ (8/14/2025): Adding support to count the number of statements traversed in the name qualification when using traverseInputFile().
+            // It should be only the statements in the source file, but it appears to include statements marked as compilerGenerated.
+               AstPerformance::numberOfStatementsProcessedInNameQualificationUsingTraverseInputFile++;
+
+            // if (statement->get_file_info()->get_filenameString() != "compilerGenerated")
+            // if (statement->isCompilerGenerated() == true)
+               if (locatedNode->isCompilerGenerated() == false)
+                  {
+                 // We could just check is the nearest parent statement is compiler generated.
+                 // Or we could see if this is from a header file...(let's not do that).
+                    SgStatement* statement = SageInterface::getEnclosingStatement(locatedNode);
+                    if (statement->isCompilerGenerated() == false)
+                       {
+#if 0
+                         printf("Inside of NameQualificationTraversal::evaluateInheritedAttribute(): counter = %d node = %s = %s = %p \n",
+                              AstPerformance::numberOfStatementsProcessedInNameQualificationUsingTraverseInputFile,n->class_name().c_str(),SageInterface::get_name(n).c_str(),n);
+                         printf(" --- statement->get_file_info()->get_filenameString() = %s \n",statement->get_file_info()->get_filenameString().c_str());
+                      // printf(" --- locatedNode->get_file_info()->get_filenameString() = %s \n",locatedNode->get_file_info()->get_filenameString().c_str());
+#endif
+                       }
+                      else
+                       {
+                         return NameQualificationInheritedAttribute(inheritedAttribute);
+                       }
+                  }
+                 else
+                  {
+                    return NameQualificationInheritedAttribute(inheritedAttribute);
+                  }
+             }
+        }
+
+#if DEBUG_NONTERMINATION
+  // DQ (5/3/2024): Debugging non-terminating name qualification case in unit testing.
+     printf("In evaluateInheritedAttribute(): n = %p = %s \n",n,n->class_name().c_str());
+     Sg_File_Info* tmp_fileInfo = n->get_file_info();
+     if (tmp_fileInfo != NULL)
+        {
+          printf("NameQualificationTraversal: --- n = %p = %s line %d col = %d file = %s \n",n,n->class_name().c_str(),tmp_fileInfo->get_line(),tmp_fileInfo->get_col(),tmp_fileInfo->get_filenameString().c_str());
+        }
+#endif
+
+#if 0
+     SgTemplateInstantiationMemberFunctionDecl* templateInstantiationMemberFunctionDecl = isSgTemplateInstantiationMemberFunctionDecl(n);
+     if (templateInstantiationMemberFunctionDecl != NULL)
+        {
+          if (templateInstantiationMemberFunctionDecl->get_name() == "allocator")
+             {
+               printf ("Setting disableNameQualification == true \n");
+               disableNameQualification = true;
+             }
+        }
 #endif
 
 #if 0
@@ -11794,7 +11922,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                             {
                            // DQ (6/20/2011): We see this case in test2011_87.C.
                            // If it already existes then overwrite the existing information.
-                              std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(memberFunctionRefExp);
+                              NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(memberFunctionRefExp);
                               ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if DEBUG_MEMBER_FUNCTION_REF
@@ -12710,7 +12838,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                             {
                            // DQ (6/20/2011): We see this case in test2011_87.C.
                            // If it already existes then overwrite the existing information.
-                              std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(varRefExp);
+                              NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(varRefExp);
                               ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -13691,6 +13819,11 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                case V_SgTypeIdOp:
                   {
                     qualifiedType = typeIdOp->get_operand_type();
+                    if (qualifiedType == NULL)
+                       {
+                         ASSERT_not_null(typeIdOp->get_operand_expr());
+                         skipQualification = true;
+                       }
                     break;
                   }
 
@@ -14408,12 +14541,10 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
              }
         }
 
-  // DQ (7/12/2014): Add any possible nodes that can generate SgAliasSymbols to the SgSymbolTable::p_aliasSymbolCausalNodeSet SgNodeSet.
+  // DQ (7/12/2014): Add any possible nodes that can generate SgAliasSymbols to the SgSymbolTable::p_aliasSymbolCausalNodeSet .
   // This is used by the symbol table to know when to use or ignore SgAliasSymbols in symbol table lookups.
      if (isSgUsingDirectiveStatement(n) != NULL || isSgUsingDeclarationStatement(n) != NULL || isSgBaseClass(n) != NULL)
         {
-       // SgNodeSet & get_aliasSymbolCausalNodeSet()
-
           SgSymbolTable::get_aliasSymbolCausalNodeSet().insert(n);
 
 #if 0
@@ -14477,6 +14608,45 @@ NameQualificationTraversal::evaluateSynthesizedAttribute(SgNode* n, NameQualific
      MLOG_WARN_C(MLOG_UNPARSER, "Inside of NameQualificationTraversal::evaluateSynthesizedAttribute(): node = %p = %s = %s \n",n,n->class_name().c_str(),SageInterface::get_name(n).c_str());
      MLOG_WARN_C(MLOG_UNPARSER, "****************************************************** \n");
 #endif
+
+  // DQ (8/14/2025): This is an optimization to skip the traversal of the AST outside of what is in the source tree.
+     if (suppressNameQualificationAcrossWholeTranslationUnit == true)
+        {
+       // SgStatement* statement = isSgStatement(n);
+          SgLocatedNode* locatedNode = isSgLocatedNode(n);
+       // if (statement != NULL)
+          if (locatedNode != NULL)
+             {
+            // DQ (8/14/2025): Adding support to count the number of statements traversed in the name qualification when using traverseInputFile().
+            // It should be only the statements in the source file, but it appears to include statements marked as compilerGenerated.
+            // AstPerformance::numberOfStatementsProcessedInNameQualificationUsingTraverseInputFile++;
+
+            // if (statement->get_file_info()->get_filenameString() != "compilerGenerated")
+            // if (statement->isCompilerGenerated() == true)
+               if (locatedNode->isCompilerGenerated() == false)
+                  {
+                 // We could just check is the nearest parent statement is compiler generated.
+                 // Or we could see if this is from a header file...(let's not do that).
+                    SgStatement* statement = SageInterface::getEnclosingStatement(locatedNode);
+                    if (statement->isCompilerGenerated() == false)
+                       {
+#if 0
+                         printf("Inside of NameQualificationTraversal::evaluateSynthesizedAttribute(): counter = %d node = %s = %s = %p \n",
+                              AstPerformance::numberOfStatementsProcessedInNameQualificationUsingTraverseInputFile,n->class_name().c_str(),SageInterface::get_name(n).c_str(),n);
+                         printf(" --- statement->get_file_info()->get_filenameString() = %s \n",statement->get_file_info()->get_filenameString().c_str());
+#endif
+                       }
+                      else
+                       {
+                         return returnAttribute;
+                       }
+                  }
+                 else
+                  {
+                    return returnAttribute;
+                  }
+             }
+        }
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
   // DQ (6/23/2013): Output the generated name with required name qualification for debugging.
@@ -14915,7 +15085,7 @@ void NameQualificationTraversal::setNameQualificationOnClassOf ( SgPointerMember
        // std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(pointerMemberType);
        // ROSE_ASSERT (i != qualifiedNameMapForNames.end());
        // std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(pointerMemberType);
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(pointerMemberType);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(pointerMemberType);
        // ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
@@ -15008,7 +15178,7 @@ void NameQualificationTraversal::setNameQualificationOnBaseType ( SgPointerMembe
        // If it already existes then overwrite the existing information.
        // std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(pointerMemberType);
        // ROSE_ASSERT (i != qualifiedNameMapForNames.end());
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(pointerMemberType);
+          NameQualificationMapType::iterator i = qualifiedNameMapForTypes.find(pointerMemberType);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -15226,7 +15396,7 @@ NameQualificationTraversal::setNameQualification(SgVarRefExp* varRefExp, SgVaria
              {
             // DQ (6/20/2011): We see this case in test2011_87.C.
             // If it already existes then overwrite the existing information.
-               std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(varRefExp);
+               NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(varRefExp);
                ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -15302,7 +15472,7 @@ NameQualificationTraversal::setNameQualification(SgVarRefExp* varRefExp, SgVaria
                   {
                  // DQ (6/20/2011): We see this case in test2011_87.C.
                  // If it already existes then overwrite the existing information.
-                    std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(varRefExp);
+                    NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(varRefExp);
                     ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -15525,7 +15695,7 @@ NameQualificationTraversal::setNameQualification(SgFunctionRefExp* functionRefEx
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(functionRefExp);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(functionRefExp);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -15592,7 +15762,7 @@ NameQualificationTraversal::setNameQualification(SgMemberFunctionRefExp* functio
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(functionRefExp);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(functionRefExp);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
@@ -15658,7 +15828,7 @@ NameQualificationTraversal::setNameQualification(SgPseudoDestructorRefExp* pseud
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(pseudoDestructorRefExp);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(pseudoDestructorRefExp);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
@@ -15736,7 +15906,7 @@ NameQualificationTraversal::setNameQualification(SgConstructorInitializer* const
           // This has been added because of the requirements of that support.
 
           // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(constructorInitializer);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(constructorInitializer);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -15807,7 +15977,7 @@ NameQualificationTraversal::setNameQualification(SgEnumVal* enumVal, SgEnumDecla
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(enumVal);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(enumVal);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -15877,7 +16047,7 @@ NameQualificationTraversal::setNameQualification ( SgBaseClass* baseClass, SgCla
        // we have to overwrite the last value as we handle it again in a different context.
 
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(baseClass);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(baseClass);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
@@ -16013,12 +16183,16 @@ NameQualificationTraversal::setNameQualification ( SgFunctionDeclaration* functi
      MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::setNameQualification(): outputGlobalQualification                                 = %s \n",outputGlobalQualification ? "true" : "false");
 #endif
 
+  // DQ (2/18/2024): Note that there may not be a nondefining declaration, and then we still don't want to output the global name qualification.
   // DQ (2/16/2013): Note that test2013_67.C is a case where name qualification of the friend function is required.
   // I think it is because it is a non defining declaration instead of a defining declaration.
   // DQ (3/31/2012): I don't think that global qualification is allowed for friend functions (so test for this).
   // test2012_57.C is an example of this issue.
   // if (outputGlobalQualification == true && functionDeclaration->get_declarationModifier().isFriend() == true)
-     if ( (outputGlobalQualification == true) && (functionDeclaration->get_declarationModifier().isFriend() == true) && (functionDeclaration == functionDeclaration->get_definingDeclaration()))
+  // if ( (outputGlobalQualification == true) && (functionDeclaration->get_declarationModifier().isFriend() == true) && (functionDeclaration == functionDeclaration->get_definingDeclaration()))
+     if ( (outputGlobalQualification == true) &&
+          (functionDeclaration->get_declarationModifier().isFriend() == true) &&
+          ( (functionDeclaration->get_definingDeclaration() == NULL) || (functionDeclaration == functionDeclaration->get_definingDeclaration()) ) )
         {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
           MLOG_WARN_C(MLOG_UNPARSER, "WARNING: We can't specify global qualification of friend function (qualifier reset to be empty string) \n");
@@ -16058,7 +16232,7 @@ NameQualificationTraversal::setNameQualification ( SgFunctionDeclaration* functi
        else
         {
        // If it already exists then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(functionDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(functionDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16105,7 +16279,7 @@ NameQualificationTraversal::setNameQualification ( SgFunctionDeclaration* functi
             else
              {
             // If it already exists then overwrite the existing information.
-               std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTemplateHeaders.find(functionDeclaration);
+               NameQualificationMapType::iterator i = qualifiedNameMapForTemplateHeaders.find(functionDeclaration);
                ROSE_ASSERT (i != qualifiedNameMapForTemplateHeaders.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16179,7 +16353,7 @@ NameQualificationTraversal::setNameQualificationReturnType ( SgFunctionDeclarati
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(functionDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForTypes.find(functionDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16246,7 +16420,7 @@ NameQualificationTraversal::setNameQualification ( SgUsingDeclarationStatement* 
           usingDeclaration->get_file_info()->display("NameQualificationTraversal::setNameQualification(SgUsingDeclarationStatement, SgDeclarationStatement,int): debug");
 #endif
        // If it already exists then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(usingDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(usingDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16559,7 +16733,7 @@ NameQualificationTraversal::setNameQualificationOnType(SgInitializedName* initia
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(initializedName);
+          NameQualificationMapType::iterator i = qualifiedNameMapForTypes.find(initializedName);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16649,7 +16823,7 @@ NameQualificationTraversal::setNameQualificationOnName(SgInitializedName* initia
        else
         {
        // If it already exists then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(initializedName);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(initializedName);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16703,7 +16877,7 @@ NameQualificationTraversal::setNameQualification(SgVariableDeclaration* variable
      MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::setNameQualification(): variableDeclaration->get_global_qualification_required() = %s \n",variableDeclaration->get_global_qualification_required() ? "true" : "false");
 #endif
 
-     std::map<SgNode*,std::string>::iterator it_qualifiedNameMapForNames = qualifiedNameMapForNames.find(variableDeclaration);
+     NameQualificationMapType::iterator it_qualifiedNameMapForNames = qualifiedNameMapForNames.find(variableDeclaration);
      if (it_qualifiedNameMapForNames == qualifiedNameMapForNames.end())
         {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16714,7 +16888,7 @@ NameQualificationTraversal::setNameQualification(SgVariableDeclaration* variable
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(variableDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(variableDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16776,7 +16950,7 @@ NameQualificationTraversal::setNameQualificationOnBaseType(SgTypedefDeclaration*
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(typedefDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForTypes.find(typedefDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16848,7 +17022,7 @@ NameQualificationTraversal::setNameQualificationOnPointerMemberClass(SgTypedefDe
        // If it already existes then overwrite the existing information.
        // std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(typedefDeclaration);
        // ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(typedefDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(typedefDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16909,6 +17083,30 @@ NameQualificationTraversal::setNameQualification(SgTemplateArgument* templateArg
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_TEMPLATE_ARGUMENT_NAME_QUALIFICATION
      MLOG_WARN_C(MLOG_UNPARSER, " - qualifier = %s\n", qualifier.c_str());
+#endif
+
+#if DEBUG_NONTERMINATION || 0
+     printf ("In setNameQualification(SgTemplateArgument*): qualifier.length() = %zu \n",qualifier.length());
+#endif
+
+#if 1
+  // DQ (5/23/2024): When the names start getting too long, use this as a way to short-circuit the runaway process.
+     const size_t qualifier_length_limit = 6000;
+     if (qualifier.length() > qualifier_length_limit)
+        {
+          static bool messageOutput = false;
+          if (messageOutput == false)
+             {
+            // MLOG_WARN_C(MLOG_UNPARSER, "In setNameQualification(SgTemplateArgument*): qualifier.length() length exceeded (qualifier_length_limit = %zu) Setting disableNameQualification == true \n",qualifier_length_limit);
+               printf ("In setNameQualification(SgTemplateArgument*): qualifier.length() length exceeded (qualifier_length_limit = %zu) Setting disableNameQualification == true \n",qualifier_length_limit);
+               messageOutput = true;
+
+               disableNameQualification = true;
+             }
+
+       // Zero out the qualifier.
+          qualifier = "";
+        }
 #endif
 
   // These may not be important under the newest version of name qualification that uses the qualified
@@ -17097,7 +17295,7 @@ NameQualificationTraversal::setNameQualification(SgTemplateArgument* templateArg
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(templateArgument);
+          NameQualificationMapType::iterator i = qualifiedNameMapForTypes.find(templateArgument);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -17128,7 +17326,7 @@ NameQualificationTraversal::setNameQualification(SgTemplateArgument* templateArg
                if (defining_templateArgument != NULL && defining_templateArgument != templateArgument)
                   {
                     ROSE_ASSERT(qualifiedNameMapForTypes.find(defining_templateArgument) != qualifiedNameMapForTypes.end());
-                    std::map<SgNode*,std::string>::iterator j = qualifiedNameMapForTypes.find(defining_templateArgument);
+                    NameQualificationMapType::iterator j = qualifiedNameMapForTypes.find(defining_templateArgument);
                     ROSE_ASSERT (j != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -17159,7 +17357,7 @@ NameQualificationTraversal::setNameQualification(SgTemplateArgument* templateArg
                if (defining_templateArgument != NULL && defining_templateArgument != templateArgument)
                   {
                     ROSE_ASSERT(qualifiedNameMapForTypes.find(defining_templateArgument) != qualifiedNameMapForTypes.end());
-                    std::map<SgNode*,std::string>::iterator j = qualifiedNameMapForTypes.find(defining_templateArgument);
+                    NameQualificationMapType::iterator j = qualifiedNameMapForTypes.find(defining_templateArgument);
                     ROSE_ASSERT (j != qualifiedNameMapForTypes.end());
                  // ROSE_ASSERT(j->second == qualifier);
                     if (j->second != qualifier)
@@ -17228,7 +17426,7 @@ NameQualificationTraversal::setNameQualification(SgExpression* exp, SgDeclaratio
        // DQ (6/21/2011): Now we are catching this case...
 
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(exp);
+          NameQualificationMapType::iterator i = qualifiedNameMapForTypes.find(exp);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -17318,7 +17516,7 @@ NameQualificationTraversal::setNameQualificationForPointerToMember(SgExpression*
 
        // If it already existes then overwrite the existing information.
        // std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(exp);
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(exp);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(exp);
        // ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
@@ -17404,7 +17602,7 @@ NameQualificationTraversal::setNameQualification(SgNonrealRefExp* exp, SgDeclara
        // DQ (6/21/2011): Now we are catching this case...
 
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(exp);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(exp);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -17480,7 +17678,7 @@ NameQualificationTraversal::setNameQualification(SgAggregateInitializer* exp, Sg
        // DQ (6/21/2011): Now we are catching this case...
 
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(exp);
+          NameQualificationMapType::iterator i = qualifiedNameMapForTypes.find(exp);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -17551,7 +17749,7 @@ NameQualificationTraversal::setNameQualification(SgClassDeclaration* classDeclar
        else
         {
        // If it already exists then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(classDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(classDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -17620,7 +17818,7 @@ NameQualificationTraversal::setNameQualification(SgEnumDeclaration* enumDeclarat
        else
         {
        // If it already exists then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(enumDeclaration);
+          NameQualificationMapType::iterator i = qualifiedNameMapForNames.find(enumDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)

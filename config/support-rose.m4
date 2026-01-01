@@ -1156,7 +1156,6 @@ tests/nonsmoke/functional/CompileTests/RoseExample_tests/Makefile
 tests/nonsmoke/functional/CompileTests/STL_tests/Makefile
 tests/nonsmoke/functional/CompileTests/UnparseHeadersTests/Makefile
 tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/Makefile
-tests/nonsmoke/functional/CompileTests/colorAST_tests/Makefile
 tests/nonsmoke/functional/CompileTests/copyAST_tests/Makefile
 tests/nonsmoke/functional/CompileTests/frontend_integration/Makefile
 tests/nonsmoke/functional/CompileTests/hiddenTypeAndDeclarationListTests/Makefile
@@ -1268,20 +1267,6 @@ tutorial/outliner/Makefile
 # developersScratchSpace/Dan/SpecCPU2006/Makefile
 # developersScratchSpace/Dan/SpecCPU2006/config/Makefile
 # developersScratchSpace/Dan/SpecCPU2006/config/rose.cfg
-
-# DQ (9/12/2008): Removed older version of QRose (now an external project)
-# src/roseIndependentSupport/graphicalUserInterface/Makefile
-# src/roseIndependentSupport/graphicalUserInterface/src/Makefile
-# src/roseIndependentSupport/graphicalUserInterface/src/QRTree/Makefile
-# src/roseIndependentSupport/graphicalUserInterface/src/QRCodeBox/Makefile
-# src/roseIndependentSupport/graphicalUserInterface/src/QRGui/Makefile
-# src/roseIndependentSupport/graphicalUserInterface/src/QRGui/icons22/Makefile
-# src/roseIndependentSupport/graphicalUserInterface/src/QRQueryBox/Makefile
-# exampleTranslators/graphicalUserInterfaceExamples/Makefile
-# exampleTranslators/graphicalUserInterfaceExamples/slicing/Makefile
-# exampleTranslators/graphicalUserInterfaceExamples/attributes/Makefile
-# exampleTranslators/graphicalUserInterfaceExamples/query/Makefile
-# exampleTranslators/graphicalUserInterfaceExamples/layout/Makefile
 
 # End macro ROSE_SUPPORT_ROSE_PART_6.
 ]

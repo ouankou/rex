@@ -4,7 +4,9 @@ set(GENERATED_HEADERS
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/ROSETTA_macros.h  
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/terminal.h
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/AstQueryMemoryPool.h  
-    ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_Grammar.h 
+    ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_Grammar.h
+    ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarDeclarations.h
+    ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarVariants.h
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarTreeTraversalAccessEnums.h
    )
 
@@ -35,4 +37,3 @@ foreach (src ${GENERATED_HEADERS} ${GENERATED_SRC})
       DEPENDS ${FILE_BASE} 
       )
 endforeach(src)
-

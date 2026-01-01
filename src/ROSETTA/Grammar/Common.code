@@ -98,22 +98,22 @@ HEADER_START
        // MS: 02/12/02 container of pointers to AST successor nodes used in the traversal
        // overridden in every class by *generated* implementation
       /*! \brief container of pointers to AST successor nodes used in the traversal overridden in every class by *generated* implementation */
-          virtual std::vector<SgNode*> get_traversalSuccessorContainer() override;
+          virtual std::vector<SgNode*> get_traversalSuccessorContainer() const override;
        // MS: 06/28/02 container of names of variables or container indices 
        // used used in the traversal to access AST successor nodes
        // overridden in every class by *generated* implementation
       /*! \brief container of names of variables or container indices used used in the traversal
           to access AST successor nodes overridden in every class by *generated* implementation */
-          virtual std::vector<std::string> get_traversalSuccessorNamesContainer() override;
+          virtual std::vector<std::string> get_traversalSuccessorNamesContainer() const override;
 
        // GB (09/25/2007): Functions for index-based access to traversal successors; these are hopefully a lot faster
        // than all the vector copies. The implementation for these functions is generated for each class.
       /*! \brief return number of children in the traversal successor list */
-          virtual size_t get_numberOfTraversalSuccessors() override;
+          virtual size_t get_numberOfTraversalSuccessors() const override;
       /*! \brief index-based access to traversal successors by index number */
-          virtual SgNode *get_traversalSuccessorByIndex(size_t idx) override;
+          virtual SgNode *get_traversalSuccessorByIndex(size_t idx) const override;
       /*! \brief index-based access to traversal successors by child node */
-          virtual size_t get_childIndex(SgNode *child) override;
+          virtual size_t get_childIndex(SgNode *child) const override;
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
        // MS: 08/16/2002 method for generating RTI information
@@ -334,7 +334,7 @@ $CLASSNAME::getVariant() const
 // though after variant() has been removed for a while we will
 // want to change the name of variantT() back to variant()
 // (since the "T" was ment to stand for temporary).
-// When this happens the variantT() will be depricated.
+// When this happens the variantT() will be deprecated.
 VariantT
 $CLASSNAME::variantT() const 
    {
@@ -385,20 +385,9 @@ void $CLASSNAME::accept (ROSE_VisitorPattern & visitor) {
 $CLASSNAME*
 $CLASSNAME::addRegExpAttribute(std::string s, AstRegExAttribute* a)
    {
-#ifdef ROSE_ENABLE_BINARY_ANALYSIS
-  // This function is currently only supported for the AST used the represent Binary executables.
-     if (0 /* isSgAsmNode(this) != NULL */)
-        {
-       // Support for regex specification.
-          std::string prefixCode = "REGEX:";
-          addNewAttribute(prefixCode + s,a);
-        }
-#endif
-
   /* Return "this" so that it can be used with the build function interface to add regex attributes. */
      return this;
    }
 
 // *** COMMON CODE SECTION ENDS HERE ***
 SOURCE_END
-

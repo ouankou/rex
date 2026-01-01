@@ -35,7 +35,7 @@ only included to make the example a little more interesting.
    Nearly all translators can be expected to have a similar design, but include a
 separate function call to process the AST. The other chapters in this ROSE manual
 depend upon a simple understanding of this section.  Other chapters, in particular
-the AstProcessing and AstRewrite chapters will detail how to build alternative
+the AstProcessing chapter will detail how to build alternative
 functions which will read or read/write the AST.  The AST is the principal
 data structure which is modified to introduce transformations in any input application.
 
@@ -143,7 +143,6 @@ and translators that perform analysis.
 
 % Do this when processing latex to generate non-html (not using latex2html)
 \begin{latexonly}
-%  \lstinputlisting{\AstRewriteExampleDirectory/identityTranslator.C}
 \begin{figure}[tb]
 \begin{center}
 \begin{tabular}{|c|} \hline
@@ -212,7 +211,6 @@ AST processing that are available within ROSE.
 
 % Do this when processing latex to generate non-html (not using latex2html)
 \begin{latexonly}
-%  \lstinputlisting{\AstRewriteExampleDirectory/identityTranslator.C}
 \begin{figure}[tb]
 \begin{center}
 \begin{tabular}{|c|} \hline
@@ -315,7 +313,6 @@ simple for users.  Clearly, at this point in the presentation of ROSE, no compil
 background is required to build such translators.  Importantly, most translators 
 involve a {\tt main()} function which is not much more complex that the ones presented
 in this chapter.
-
 
 
 

@@ -22,7 +22,6 @@ ROSE_INCLUDES = \
      -I$(top_srcdir)/src \
      -I$(top_srcdir)/src/frontend/SageIII \
      -I$(top_srcdir)/src/frontend/SageIII/astPostProcessing \
-     -I$(top_srcdir)/src/frontend/SageIII/astVisualization \
      -I$(top_srcdir)/src/frontend/SageIII/sageInterface \
 
 

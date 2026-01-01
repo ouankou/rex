@@ -247,7 +247,7 @@ void ModuleBuilder::loadSymbol(SgVariableSymbol* symbol, SgSymbolTable* symbol_t
 
 void ModuleBuilder::loadTypeSymbol(SgType* type, SgSymbolTable* symbol_table, SgGlobal* file_scope)
 {
-  if (SgNamedType* named_type = isSgNamedType(type)) {
+  if (auto named_type = isSgNamedType(type)) {
     SgName type_name = named_type->get_name();
     // Ensure the symbol already exists, otherwise could lead to an infinite recursion
     if (file_scope->symbol_exists(type_name) == false) {
@@ -267,8 +267,11 @@ void ModuleBuilder::loadTypeSymbol(SgType* type, SgSymbolTable* symbol_table, Sg
       }
     }
   }
-  else if (SgPointerType* pointer_type = isSgPointerType(type)) {
+  else if (auto pointer_type = isSgPointerType(type)) {
     loadTypeSymbol(pointer_type->get_base_type(), symbol_table, file_scope);
+  }
+  else if (auto modifier_type = isSgModifierType(type)) {
+    loadTypeSymbol(modifier_type->get_base_type(), symbol_table, file_scope);
   }
 }
 

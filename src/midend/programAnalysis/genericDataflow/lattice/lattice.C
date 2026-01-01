@@ -432,7 +432,7 @@ for(varIDSet::iterator it = refVars.begin(); it!= refVars.end(); it++)
 }
 
 // copy constructor
-VariablesProductLattice::VariablesProductLattice(const VariablesProductLattice& that) : func(that.func)
+VariablesProductLattice::VariablesProductLattice(const VariablesProductLattice& that) : ProductLattice(), func(that.func)
 {
         this->includeScalars   = that.includeScalars;
         this->includeArrays    = that.includeArrays;

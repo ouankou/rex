@@ -1,5 +1,5 @@
 if(enable-fortran AND enable-fortran-ofp)
-  include_directories(${CMAKE_SOURCE_DIR}/src/frontend/OpenFortranParser_SAGE_Connection ${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
+  include_directories(${CMAKE_SOURCE_DIR}/src/frontend/OpenFortranParser_SAGE_Connection)
 
 
   ########### next target ###############
@@ -16,8 +16,6 @@ if(enable-fortran AND enable-fortran-ofp)
 
   add_library(fortran_ofp_parser_c_jni_FortranParserActionJNI SHARED
     ${fortran_ofp_parser_c_jni_FortranParserActionJNI_LIB_SRCS})
-  target_link_libraries(fortran_ofp_parser_c_jni_FortranParserActionJNI
-    ${KDE4_KDECORE_LIBS})
   add_dependencies(fortran_ofp_parser_c_jni_FortranParserActionJNI
     rosetta_generated)
 

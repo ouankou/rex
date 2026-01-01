@@ -216,7 +216,9 @@
 #cmakedefine SIZEOF_WCHAR_T_IS_4 1
 
 /* Is this a GNU compiler being used to compile ROSE generated code */
-#define BACKEND_CXX_IS_GNU_COMPILER "${BACKEND_CXX_IS_GNU_COMPILER}"
+#cmakedefine BACKEND_CXX_IS_GNU_COMPILER @BACKEND_CXX_IS_GNU_COMPILER@
+#cmakedefine BACKEND_CXX_IS_CLANG_COMPILER @BACKEND_CXX_IS_CLANG_COMPILER@
+#cmakedefine BACKEND_CXX_IS_INTEL_COMPILER @BACKEND_CXX_IS_INTEL_COMPILER@
 
 /* Name of backend C++ compiler including path (may or may not explicit
    include path; used to call backend). */
@@ -224,7 +226,7 @@
 
 /* Name of backend C++ compiler excluding path (used to select code generation
    options). */
-#define BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH "${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}"
+#define BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH "@BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH@"
 
 /* Major version number of backend C++ compiler. */
 #define BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER ${BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER}
@@ -253,6 +255,8 @@
 
 /* Minor version number of backend Fortran compiler. */
 #define BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER}
+
+#cmakedefine BACKEND_FORTRAN_IS_GNU_COMPILER @BACKEND_FORTRAN_IS_GNU_COMPILER@
 
 
 /* REX: legacy frontend-specific consistency tests removed - not applicable to Clang frontend */
@@ -605,6 +609,8 @@
 #define ROSE_OFP_MAJOR_VERSION_NUMBER 0
 #define ROSE_OFP_MINOR_VERSION_NUMBER 8
 #define ROSE_OFP_PATCH_VERSION_NUMBER 3
+
+#define ROSE_OFP_VERSION_NUMBER "@ROSE_OFP_VERSION_NUMBER@"
 
 /* REX: legacy frontend version numbers removed - Clang/LLVM is now the only frontend */
 

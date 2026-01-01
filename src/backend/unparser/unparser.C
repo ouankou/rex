@@ -10,6 +10,7 @@
 
 // include "array_class_interface.h"
 #include "unparser.h"
+#include "nameQualificationSupport.h"
 #include "keep_going.h"
 
 // DQ (10/21/2010):  This should only be included by source files that require it.
@@ -185,7 +186,7 @@ using namespace Rose;
 // extern ROSEAttributesList *getPreprocessorDirectives( char *fileName); // [DT] 3/16/2000
 
 // DQ (6/25/2011): Forward declaration for new name qualification support.
-void generateNameQualificationSupport( SgNode* node, std::set<SgNode*> & referencedNameSet );
+// void generateNameQualificationSupport( SgNode* node, std::set<SgNode*> & referencedNameSet );
 
 // DQ (12/6/2014): The call to this function has been moved to the sage_support.C file
 // so that it can be called on the AST before transformations.  However it is now
@@ -224,7 +225,7 @@ void buildTokenStreamFrontier(SgSourceFile* sourceFile, bool traverseHeaderFiles
 // to unparse a specific line, now replaced by the unparseToString() member function on each IR node.
 // Unparser::Unparser( ostream* nos, string fname, Unparser_Opt nopt, int nline, UnparseFormatHelp *h, UnparseDelegate* r)
 Unparser::Unparser( ostream* nos, string fname, Unparser_Opt nopt, UnparseFormatHelp *h, UnparseDelegate* r)
-   : cur(nos, h), repl(r)
+   : cur(nos, h), delegate(r)
    {
      u_type     = new Unparse_Type(this);
      u_name     = new Unparser_Nameq(this);
@@ -292,59 +293,6 @@ Unparser::~Unparser()
      delete u_exprStmt;
      delete u_fortran_type;
      delete u_fortran_locatedNode;
-   }
-
-
-Unparser::Unparser(const Unparser & X)
-   {
-  // DQ (9/11/2011): Added explicit copy constructor to avoid possible double free of formatHelpInfo (reported by static analysis).
-  // DQ (9/11/2011): This function is provided to make this code better so that can be analyized using static analysis
-  // (static analysis tools don't understand access functions).
-
-  // Call the operator=() member function.
-     *this = X;
-
-     printf ("Error: I think we likely don't want to be using this constructor (UnparseFormat(const UnparseFormat & X)). \n");
-     ROSE_ABORT();
-   }
-
-Unparser & Unparser::operator=(const Unparser & X)
-   {
-  // DQ (9/11/2011): Added explicit operator=() to avoid possible double free of formatHelpInfo (reported by static analysis).
-  // DQ (9/11/2011): This function is provided to make this code better so that can be analyized using static analysis
-  // (static analysis tools don't understand access functions).
-
-  // DQ (9/12/2011): This avoids the memory leak that could happend with self assignment.
-     if (&X == this)
-        {
-          return *this;
-        }
-
-     u_type      = NULL; // new Unparse_Type(this);
-     u_name      = NULL; // new Unparser_Nameq(this);
-     u_sym       = NULL; // new Unparse_Sym(this);
-     u_debug     = NULL; // new Unparse_Debug(this);
-     u_sage      = NULL; // new Unparse_MOD_SAGE(this);
-     u_exprStmt  = NULL; // new Unparse_ExprStmt(this, fname);
-
-     opt         = X.opt;
-     cur_index   = 0;
-     currentFile = NULL;
-
-     prevdir_was_cppDeclaration = false;
-
-     cur         = X.cur;
-     repl        = X.repl;
-
-     embedColorCodesInGeneratedCode = 0;
-     generateSourcePositionCodes    = 0;
-
-     p_resetSourcePosition = false;
-
-     printf ("Error: I think we likely don't want to be using this operator (UnparseFormat::operator=(const UnparseFormat & X)). \n");
-     ROSE_ABORT();
-
-     return *this;
    }
 
 UnparseFormat& Unparser::get_output_stream()
@@ -507,7 +455,7 @@ Unparser::computeNameQualification(SgSourceFile* file)
        // SgNode::clearGlobalMangledNameMap();
 
        // Build the local set to use to record when declaration that might required qualified references have been seen.
-          std::set<SgNode*> referencedNameSet;
+          NameQualificationTraversal::NameQualificationSetType referencedNameSet;
 
        // DQ (6/11/2015): Added to support debugging the difference between C and C++ support for token-based unparsing.
           std::set<SgLocatedNode*> modifiedLocatedNodesSet_1 = SageInterface::collectModifiedLocatedNodes(file);
@@ -1271,7 +1219,7 @@ Unparser::unparseFile ( SgSourceFile* file, SgUnparse_Info& info, SgScopeStateme
                     SgGlobal* globalScope_from_currentFile = currentSourceFile->get_globalScope();
 
                  // DQ (4/11/2021): Added assertion.
-                    ROSE_ASSERT(globalScope == globalScope_from_currentFile);
+                    ASSERT_require(globalScope == globalScope_from_currentFile);
 
                     u_exprStmt->unparseStatement(globalScope, info);
 #if DEBUG_UNPARSE_FILE
@@ -1464,7 +1412,7 @@ Unparser::getNumberOfLines( std::string internalString )
    {
   // This code is copied from the similar support in rose_attributes_list.C.
 
-  // ASSERT_not_null(this);
+  // ASSERT_this();
 
      int line = 0;
      int i    = 0;
@@ -2471,8 +2419,11 @@ globalUnparseToString_OpenMPSafe ( const SgNode* astNode, const SgTemplateArgume
 #endif
        // If no input parameter has been specified then allocate one
        // inheritedAttributeInfoPointer = new SgUnparse_Info (NO_UNPARSE_INFO);
+          bool prev_state = SgUnparse_Info::get_forceDefaultConstructorToTriggerError();
+          SgUnparse_Info::set_forceDefaultConstructorToTriggerError(false);
           inheritedAttributeInfoPointer = new SgUnparse_Info();
           ASSERT_not_null(inheritedAttributeInfoPointer);
+          SgUnparse_Info::set_forceDefaultConstructorToTriggerError(prev_state);
 
        // DQ (2/18/2013): Keep track of local allocation of the SgUnparse_Info object in this function
           allocatedSgUnparseInfoObjectLocally = true;
@@ -3928,41 +3879,15 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
 
                     SgTemplateInstantiationDecl*               templateInstantiationDecl               = isSgTemplateInstantiationDecl(node);
                     SgTemplateInstantiationMemberFunctionDecl* templateInstantiationMemberFunctionDecl = isSgTemplateInstantiationMemberFunctionDecl(node);
-                 // SgTemplateTypedefDeclaration*              templateTypedefDeclaration              = isSgTemplateTypedefDeclaration(node);
 
                  // IR nodes for which we don't want to identify as the first or last statement of a file (header file).
-                 // bool processStatement = globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL &&
-                 //                         templateInstantiationDecl == NULL && templateInstantiationMemberFunctionDecl == NULL &&
-                 //                         templateTypedefDeclaration == NULL;
                     bool processStatement = globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL &&
                                             templateInstantiationDecl == NULL && templateInstantiationMemberFunctionDecl == NULL;
-#if 0
-                 // DQ (5/22/2021): Just added this, but I think we don't need it now.
-                    if (statement != NULL && processStatement == true)
-                       {
-                         Sg_File_Info* file_info = statement->get_file_info();
-                         ROSE_ASSERT(file_info != NULL);
-                         string processStatement_filename = file_info->get_physical_filename();
-                         int    processStatement_physical_file_id  = file_info->get_physical_file_id();
-
-#if DEBUG_FIRST_LAST_STMTS || 0
-                         printf ("processStatement_physical_file_id = %d \n",processStatement_physical_file_id);
-#endif
-                         if (processStatement_physical_file_id < 0)
-                            {
-#if DEBUG_FIRST_LAST_STMTS || 0
-                              printf ("physical_file_id < 0: processStatement_physical_file_id = %d so setting processStatement = false \n",processStatement_physical_file_id);
-#endif
-                              processStatement = false;
-                            }
-                       }
-#endif
 
 #if DEBUG_FIRST_LAST_STMTS
                     printf ("statement        = %p \n",statement);
                     printf ("processStatement = %s \n",processStatement ? "true" : "false");
 #endif
-                 // if (statement != NULL && globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL && templateInstantiationDecl == NULL)
                     if (statement != NULL && processStatement == true)
                        {
                          Sg_File_Info* file_info = statement->get_file_info();
@@ -4011,7 +3936,7 @@ void buildFirstAndLastStatementsForIncludeFiles ( SgProject* project )
 #if DEBUG_FIRST_LAST_STMTS
                               printf ("Found an SgIncludeFile: includeFile = %p header_file_asssociated_source_file = %p \n",includeFile,header_file_asssociated_source_file);
 #endif
-                           // DQ (3/14/2021): This is null for rose_edg_required_macros_and_functions.h (pre-included for all ROSE processed code).
+                           // DQ (3/14/2021): This is null for the ROSE-required macro header (pre-included for all ROSE processed code).
                            // ROSE_ASSERT(header_file_asssociated_source_file != NULL);
                               if (header_file_asssociated_source_file != NULL)
                                  {
@@ -4474,12 +4399,8 @@ void buildFirstAndLastStatementsForScopes ( SgProject* project )
 
                     SgTemplateInstantiationDecl*               templateInstantiationDecl               = isSgTemplateInstantiationDecl(node);
                     SgTemplateInstantiationMemberFunctionDecl* templateInstantiationMemberFunctionDecl = isSgTemplateInstantiationMemberFunctionDecl(node);
-                 // SgTemplateTypedefDeclaration*              templateTypedefDeclaration              = isSgTemplateTypedefDeclaration(node);
 
                  // IR nodes for which we don't want to identify as the first or last statement of a file (header file).
-                 // bool processStatement = globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL &&
-                 //                         templateInstantiationDecl == NULL && templateInstantiationMemberFunctionDecl == NULL &&
-                 //                         templateTypedefDeclaration == NULL;
                     bool processStatement = globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL &&
                                             templateInstantiationDecl == NULL && templateInstantiationMemberFunctionDecl == NULL;
 
@@ -4510,7 +4431,6 @@ void buildFirstAndLastStatementsForScopes ( SgProject* project )
                             }
                        }
 
-                 // if (statement != NULL && globalScope == NULL && functionParameterList == NULL && ctorInitializerList == NULL && templateInstantiationDecl == NULL)
                     if (statement != NULL && processStatement == true)
                        {
                          Sg_File_Info* file_info = statement->get_file_info();
@@ -4573,7 +4493,7 @@ void buildFirstAndLastStatementsForScopes ( SgProject* project )
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                               printf ("Found an SgIncludeFile: includeFile = %p header_file_asssociated_source_file = %p \n",includeFile,header_file_asssociated_source_file);
 #endif
-                           // DQ (3/14/2021): This is null for rose_edg_required_macros_and_functions.h (pre-included for all ROSE processed code).
+                           // DQ (3/14/2021): This is null for the ROSE-required macro header (pre-included for all ROSE processed code).
                            // ROSE_ASSERT(header_file_asssociated_source_file != NULL);
                               if (header_file_asssociated_source_file != NULL)
                                  {

@@ -1,5 +1,3 @@
-include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
-
 set(outlineTutorial_SRCS outlineTutorial.cc)
 add_executable(outlineTutorial ${outlineTutorial_SRCS})
 target_link_libraries(outlineTutorial ROSE_DLL)

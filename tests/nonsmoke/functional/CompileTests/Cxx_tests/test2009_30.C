@@ -1,6 +1,6 @@
 /*
 bug 369: template instantiation function declaration's forward declaration should not be unparsed.
-https://outreach.scidac.gov/tracker/index.php?func=detail&aid=369&group_id=24&atid=185
+https://outreach.scidac.gov/tracker/
 
 namespace namespace1
 {
@@ -27,4 +27,3 @@ class className {
       namespace1::foo<int>(value);
     }
 };
-

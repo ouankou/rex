@@ -14,7 +14,7 @@ using namespace std;
 //   2) The filename for this source code should also be changed.
 
 void
-newBuildHiddenTypeAndDeclarationLists( SgNode* node, std::set<SgNode*> & referencedNameSet )
+newBuildHiddenTypeAndDeclarationLists( SgNode* node, SgUnorderedNodeSet & referencedNameSet )
    {
   // This function is the top level API for Name Qualification support.
   // This is the only function that need be seen by ROSE.  This function 
@@ -121,7 +121,10 @@ HiddenListTraversal::HiddenListTraversal()
   // Default constructor
    }
 #else
-HiddenListTraversal::HiddenListTraversal(std::map<SgNode*,std::string> & input_qualifiedNameMapForNames, std::map<SgNode*,std::string> & input_qualifiedNameMapForTypes,std::map<SgNode*,std::string> & input_typeNameMap, std::set<SgNode*> & input_referencedNameSet)
+HiddenListTraversal::HiddenListTraversal(SgUnorderedMapNodeToString & input_qualifiedNameMapForNames,
+                                         SgUnorderedMapNodeToString & input_qualifiedNameMapForTypes,
+                                         SgUnorderedMapNodeToString & input_typeNameMap,
+                                         SgUnorderedNodeSet & input_referencedNameSet)
    : referencedNameSet(input_referencedNameSet),
      qualifiedNameMapForNames(input_qualifiedNameMapForNames),
      qualifiedNameMapForTypes(input_qualifiedNameMapForTypes),
@@ -160,14 +163,14 @@ HiddenListTraversal::containsPossibleNameQualification(SgType* type)
 
 
 // DQ (5/28/2011): Added support to set the static global qualified name map in SgNode.
-const std::map<SgNode*,std::string> &
+const SgUnorderedMapNodeToString &
 HiddenListTraversal::get_qualifiedNameMapForNames() const
    {
      return qualifiedNameMapForNames;
    }
 
 // DQ (5/28/2011): Added support to set the static global qualified name map in SgNode.
-const std::map<SgNode*,std::string> &
+const SgUnorderedMapNodeToString &
 HiddenListTraversal::get_qualifiedNameMapForTypes() const
    {
      return qualifiedNameMapForTypes;
@@ -1952,7 +1955,7 @@ HiddenListTraversal::addToNameMap ( SgNode* nodeReferenceToType, string typeName
             else
              {
             // If it already existes then overwrite the existing information.
-               std::map<SgNode*,std::string>::iterator i = typeNameMap.find(nodeReferenceToType);
+               SgUnorderedMapNodeToString::iterator i = typeNameMap.find(nodeReferenceToType);
                ROSE_ASSERT (i != typeNameMap.end());
 
                string previousTypeName = i->second.c_str();
@@ -2045,7 +2048,7 @@ HiddenListTraversal::traverseType ( SgType* type, SgNode* nodeReferenceToType, S
                  else
                   {
                  // If it already existes then overwrite the existing information.
-                    std::map<SgNode*,std::string>::iterator i = typeNameMap.find(nodeReferenceToType);
+                    SgUnorderedMapNodeToString::iterator i = typeNameMap.find(nodeReferenceToType);
                     ROSE_ASSERT (i != typeNameMap.end());
 
                     string previousTypeName = i->second.c_str();
@@ -3352,7 +3355,7 @@ HiddenListTraversal::setNameQualification(SgVarRefExp* varRefExp, SgVariableDecl
         {
        // DQ (6/20/2011): We see this case in test2011_87.C.
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(varRefExp);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForNames.find(varRefExp);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
           string previousQualifier = i->second.c_str();
@@ -3412,7 +3415,7 @@ HiddenListTraversal::setNameQualification(SgFunctionRefExp* functionRefExp, SgFu
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(functionRefExp);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForNames.find(functionRefExp);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
           string previousQualifier = i->second.c_str();
@@ -3467,7 +3470,7 @@ HiddenListTraversal::setNameQualification(SgMemberFunctionRefExp* functionRefExp
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(functionRefExp);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForNames.find(functionRefExp);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
           string previousQualifier = i->second.c_str();
@@ -3561,7 +3564,7 @@ HiddenListTraversal::setNameQualification(SgEnumVal* enumVal, SgEnumDeclaration*
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(enumVal);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForNames.find(enumVal);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
           string previousQualifier = i->second.c_str();
@@ -3663,7 +3666,7 @@ HiddenListTraversal::setNameQualification ( SgFunctionDeclaration* functionDecla
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForNames.find(functionDeclaration);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForNames.find(functionDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForNames.end());
 
           string previousQualifier = i->second.c_str();
@@ -3724,7 +3727,7 @@ HiddenListTraversal::setNameQualificationReturnType ( SgFunctionDeclaration* fun
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(functionDeclaration);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForTypes.find(functionDeclaration);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
           string previousQualifier = i->second.c_str();
@@ -3895,7 +3898,7 @@ HiddenListTraversal::setNameQualification(SgInitializedName* initializedName,SgD
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(initializedName);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForTypes.find(initializedName);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
           string previousQualifier = i->second.c_str();
@@ -4043,7 +4046,7 @@ HiddenListTraversal::setNameQualification(SgTemplateArgument* templateArgument, 
        else
         {
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(templateArgument);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForTypes.find(templateArgument);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
           string previousQualifier = i->second.c_str();
@@ -4100,7 +4103,7 @@ HiddenListTraversal::setNameQualification(SgExpression* exp, SgDeclarationStatem
        // DQ (6/21/2011): Now we are catching this case...
 
        // If it already existes then overwrite the existing information.
-          std::map<SgNode*,std::string>::iterator i = qualifiedNameMapForTypes.find(exp);
+          SgUnorderedMapNodeToString::iterator i = qualifiedNameMapForTypes.find(exp);
           ROSE_ASSERT (i != qualifiedNameMapForTypes.end());
 
           string previousQualifier = i->second.c_str();
@@ -4241,7 +4244,7 @@ HiddenListTraversal::setNameQualificationSupport(SgScopeStatement* scope, const 
                  // Since templates arguments only have references to types, we search the qualifiedNameMapForTypes Map.
                  // Note that values can also be template arguments, but they don't get qualification (unless it is an 
                  // enum field but lets worry about that later).
-                    std::map<SgNode*,std::string>::iterator qualifiedNameMapIterator = qualifiedNameMapForTypes.find(*i);
+                    SgUnorderedMapNodeToString::iterator qualifiedNameMapIterator = qualifiedNameMapForTypes.find(*i);
                     ROSE_ASSERT (qualifiedNameMapIterator != qualifiedNameMapForTypes.end());
 
                     string template_argument_qualified_name = qualifiedNameMapIterator->second;

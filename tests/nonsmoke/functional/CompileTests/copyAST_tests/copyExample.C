@@ -1,7 +1,7 @@
 
 #include "rose.h"
 
-// DQ (2/26/2009): The copyGraph.[hC] files have been moved to the src/frontend/SageIII/astVisualization 
+// DQ (2/26/2009): The copyGraph.[hC] files have been moved to src/midend/astDump.
 // directory and are not included in librose.so.
 // #include "copyGraph.C"
 
@@ -321,4 +321,3 @@ main ( int argc, char* argv[] )
   // printf ("Exiting with errorCode = %d \n",errorCode);
      return errorCode;
    }
-

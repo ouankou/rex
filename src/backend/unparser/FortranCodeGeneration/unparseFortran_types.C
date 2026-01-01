@@ -106,17 +106,20 @@ UnparseFortran_type::unparseType(SgType* type, SgUnparse_Info& info, bool printA
 //----------------------------------------------------------------------------
 
 void 
-UnparseFortran_type::unparseTypeKind(SgType* type, SgUnparse_Info& info)
-   {
-     SgExpression* kindExpression = type->get_type_kind();
-     if (kindExpression != nullptr)
-        {
-          curprint("(");
-          curprint("kind=");
-          unp->u_fortran_locatedNode->unparseExpression(kindExpression,info);
-          curprint(")");
-        }
-   }
+UnparseFortran_type::unparseTypeKind(SgType* type, SgUnparse_Info &info) {
+  SgExpression* kindExpression = type->get_type_kind();
+  if (kindExpression != nullptr) {
+    if (type->get_hasTypeKindStar()) {
+      curprint("*");
+      unp->u_fortran_locatedNode->unparseExpression(kindExpression,info);
+    }
+    else {
+      curprint("(kind=");
+      unp->u_fortran_locatedNode->unparseExpression(kindExpression,info);
+      curprint(")");
+    }
+  }
+}
 
 void
 UnparseFortran_type::unparseTypeLengthAndKind(SgType* type, SgExpression* lengthExpression, SgUnparse_Info & info)
@@ -126,7 +129,7 @@ UnparseFortran_type::unparseTypeLengthAndKind(SgType* type, SgExpression* length
         {
           curprint("(");
 
-          if (lengthExpression != NULL)
+          if (lengthExpression != nullptr)
              {
                curprint("len=");
                unp->u_fortran_locatedNode->unparseExpression(lengthExpression,info);
@@ -156,16 +159,17 @@ UnparseFortran_type::unparseBaseType(SgType* type, const std::string & nameOfTyp
    }
 
 void 
-UnparseFortran_type::unparseStringType(SgType* type, SgUnparse_Info& info, bool printAttrs)
-   {
-     SgTypeString* string_type = isSgTypeString(type);
-     ASSERT_not_null(string_type);
-     curprint ("CHARACTER");
-     if (printAttrs)
-        unparseTypeLengthAndKind(string_type,string_type->get_lengthExpression(),info);
-     else //   the length will be printed as part of the entity_decl.
-        unparseTypeKind(type, info);
-   }
+UnparseFortran_type::unparseStringType(SgType* type, SgUnparse_Info& info, bool printAttrs) {
+  SgTypeString* stringType{isSgTypeString(type)};
+  ASSERT_not_null(stringType);
+  curprint ("CHARACTER");
+  if (printAttrs) {
+    unparseTypeLengthAndKind(stringType, stringType->get_lengthExpression(), info);
+  }
+  else { // the length will be printed as part of the entity_decl.
+    unparseTypeKind(type, info);
+  }
+}
 
 
 void 

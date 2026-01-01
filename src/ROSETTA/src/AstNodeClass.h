@@ -94,6 +94,9 @@ class AstNodeClass
   // String representation of '#if' that surrounds the class. If empty, then emits "#if 1"
   std::string cppCondition;
 
+  // Content that should appear before the start of the class definition, such as CPP include directives
+  std::string preDefinitionText;
+
   enum locationInTree
   {
     LOCAL_LIST   = 0,
@@ -132,6 +135,9 @@ class AstNodeClass
 
   std::vector<GrammarString *> & getEditSubstituteTargetList( int i, int j ) const;
   std::vector<GrammarString *> & getEditSubstituteSourceList( int i, int j ) const;
+
+  // Add text that should appear before the beginning of the class definition.
+  void appendPreDefinitionText(const std::string&);
 
   // Add additional derived class. The overload that takes a pointer had better not be a reference to a local variable! This is
   // par for the ROSETTA code quality--there are other places that do similar things.
@@ -334,9 +340,11 @@ class AstNodeClass
     SGCLASS_POINTER_VECTOR_NAMED_LIST,
     STL_CONTAINER,
     STL_SET,
+    STL_UNORDERED_SET,
     // DQ (4/30/2009): Added case of STL_MULTIMAP
     STL_MULTIMAP,
     STL_MAP,
+    STL_UNORDERED_MAP,
     STRING,
     SGNAME,
     BIT_VECTOR,

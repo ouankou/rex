@@ -1,5 +1,5 @@
 
-include_directories(${CMAKE_SOURCE_DIR}/src/util ${CMAKE_SOURCE_DIR}/src/util/support ${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
+include_directories(${CMAKE_SOURCE_DIR}/src/util ${CMAKE_SOURCE_DIR}/src/util/support)
 
 
 ########### next target ###############
@@ -7,7 +7,9 @@ include_directories(${CMAKE_SOURCE_DIR}/src/util ${CMAKE_SOURCE_DIR}/src/util/su
 
 ########### install files ###############
 
-install(FILES  SymbolicMultiply.h  SymbolicPlus.h    SymbolicVal.h                     SymbolicExpr.h  SymbolicSelect.h  SymbolicBound.h  DESTINATION ${INCLUDE_INSTALL_DIR})
+install(FILES SymbolicMultiply.h SymbolicPlus.h BooleanOperators.h UnaryOperators.h
+              SymbolicVal.h SymbolicExpr.h SymbolicSelect.h SymbolicBound.h
+              DESTINATION ${INCLUDE_INSTALL_DIR})
 
 
 

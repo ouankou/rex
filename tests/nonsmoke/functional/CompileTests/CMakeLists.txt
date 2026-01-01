@@ -59,7 +59,6 @@ if(enable-c)
   add_subdirectory(copyAST_tests)
   # ROSE-1738
   # add_subdirectory(RoseExample_tests)
-  add_subdirectory(colorAST_tests)
   add_subdirectory(unparseToString_tests)
   add_subdirectory(sourcePosition_tests)
   # requires Valgrind

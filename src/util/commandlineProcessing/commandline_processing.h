@@ -77,12 +77,11 @@ namespace CommandlineProcessing
 
       //! Build the list of isolated file names from the command line
           ROSE_DLL_API Rose_STL_Container<std::string>
-          generateSourceFilenames(Rose_STL_Container<std::string> argList);
+          generateSourceFilenames(Rose_STL_Container<std::string> argList, bool binaryMode);
 
           // DQ and PC (6/1/2006): Added Peter's suggested fixes to support
           // auto-documentation.
-          //! Add another valid source file suffix
-          ROSE_UTIL_API void addSourceFileSuffix ( const std::string &suffix );
+          //! Add another valid source file suffix (warning deprecated as it is not consistently used)
           ROSE_UTIL_API void addCppSourceFileSuffix ( const std::string &suffix );
 
           ROSE_UTIL_API bool isSourceFilename ( std::string name ); 
@@ -90,8 +89,8 @@ namespace CommandlineProcessing
           ROSE_UTIL_API bool isObjectFilename ( std::string name );
           ROSE_DLL_API bool isExecutableFilename ( std::string name );
 
-       // DQ (8/20/2008): Added test that will allow bogus exececutable files (marked as .exe but not executable) to pass
-          ROSE_DLL_API bool isValidFileWithExecutableFileSuffixes ( std::string name );
+       // DQ (8/20/2008): Added test that will allow bogus executable files (marked as .exe but not executable) to pass
+          ROSE_DLL_API bool isValidFileWithExecutableFileSuffix ( std::string name );
 
           ROSE_UTIL_API bool isCFileNameSuffix ( const std::string & suffix );
 

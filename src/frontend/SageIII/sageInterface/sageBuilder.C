@@ -748,10 +748,7 @@ SageBuilder::appendTemplateArgumentsToName( const SgName & name, const SgTemplat
 #if DEBUG_TEMPLATE_ARGUMENT_NAMES
                     printf ("In SageBuilder::appendTemplateArgumentsToName(): case SgTemplateArgument::type_argument: BEFORE stripType: type = %p = %s \n",type,type->class_name().c_str());
 #endif
-                 // I think that we need to strip off any pointer or reference modifier types.
-                 // unsigned char bit_array == (SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE | SgType::STRIP_ARRAY_TYPE | SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_POINTER_MEMBER_TYPE);
-                    unsigned char bit_array = (SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE | SgType::STRIP_ARRAY_TYPE | SgType::STRIP_POINTER_MEMBER_TYPE);
-                    type = type->stripType(bit_array);
+                 // DQ (9/4/2025): Fix suggested by Phil to support the case were subtle template arguments differences were being matched to being the same function prototype.
 
 #if DEBUG_TEMPLATE_ARGUMENT_NAMES
                     printf ("In SageBuilder::appendTemplateArgumentsToName(): case SgTemplateArgument::type_argument: AFTER stripType: type = %p = %s \n",type,type->class_name().c_str());
@@ -1686,13 +1683,19 @@ SageBuilder::buildInitializedName ( const char* name, SgType* type)
    }
 
 SgInitializedName *
-SageBuilder::buildInitializedName_nfi ( const SgName & name, SgType* type, SgInitializer* init)
+SageBuilder::buildInitializedName_nfi ( const SgName & name, SgType* type, SgInitializer* init, SgVariableDeclaration* declptr)
    {
      ASSERT_not_null(type);
 
      SgInitializedName* initializedName = new SgInitializedName(name,type,init);
      ASSERT_not_null(initializedName);
      ASSERT_require(init == nullptr || init->get_parent() == initializedName);
+
+     if (declptr != NULL)
+        {
+          initializedName->set_parent(declptr);
+          initializedName->set_declptr(declptr);
+        }
 
      setOneSourcePositionNull(initializedName);
 
@@ -2979,7 +2982,6 @@ SageBuilder::buildTemplateInstantiationTypedefDeclaration_nfi(
 
      setOneSourcePositionNull(type_decl);
 
-     SgName mangled_name = type_decl->get_mangled_name();
 #if 0
      printf ("In buildTemplateInstantiationTypedefDeclaration_nfi(): mangled_name                 = %s \n",mangled_name.str());
 #endif
@@ -3542,7 +3544,7 @@ SageBuilder::buildMemberFunctionType(SgType* return_type, SgFunctionParameterTyp
 SgType * SageBuilder::buildOpaqueType(std::string const name, SgScopeStatement * scope)
 {
   // we require users to specify a target scope
-  ROSE_ASSERT(scope);
+  ASSERT_not_null(scope);
   SgTypedefDeclaration* type_decl = NULL;
   SgTypedefType* result = NULL;
 
@@ -3554,7 +3556,9 @@ SgType * SageBuilder::buildOpaqueType(std::string const name, SgScopeStatement *
   if (type_symbol == NULL)
   {
     type_decl =  new SgTypedefDeclaration(name,buildIntType(),NULL, NULL, NULL);
-    ROSE_ASSERT(type_decl);
+    ASSERT_not_null(type_decl);
+
+    type_decl->set_scope(scope); // PP (05/29/25): set the scope of the decl
 
 #if 0
      printf ("In SageBuilder::buildOpaqueType(): calling SgTypedefType::createType() using this = %p = %s \n",type_decl,type_decl->class_name().c_str());
@@ -3589,14 +3593,14 @@ SgType * SageBuilder::buildOpaqueType(std::string const name, SgScopeStatement *
     // Hide it from unparser
     Sg_File_Info* file_info = type_decl->get_file_info();
     file_info->unsetOutputInCodeGeneration ();
-    result = new SgTypedefType(type_decl);
+    result = new SgTypedefType(type_decl);  // QUESTION: PP: why do not we return type_decl->get_type()?
   }
   else
   {
     type_decl = type_symbol->get_declaration();
     result = type_decl->get_type();
   }
-  ROSE_ASSERT(result);
+  ASSERT_not_null(result);
   return result;
 }
 
@@ -7015,6 +7019,70 @@ SgFloat80Val* SageBuilder::buildFloat80Val_nfi(long double value, const string& 
   return result;
 }
 
+SgBFloat16Val* SageBuilder::buildBFloat16Val(float value /*= 0.0*/)
+{
+  SgBFloat16Val* result = new SgBFloat16Val(value,"");
+  ROSE_ASSERT(result);
+  setOneSourcePositionForTransformation(result);
+  return result;
+}
+
+SgBFloat16Val* SageBuilder::buildBFloat16Val_nfi(float value, const string& str)
+{
+  SgBFloat16Val* result = new SgBFloat16Val(value,str);
+  ROSE_ASSERT(result);
+  setOneSourcePositionNull(result);
+  return result;
+}
+
+SgFloat16Val* SageBuilder::buildFloat16Val(float value /*= 0.0*/)
+{
+  SgFloat16Val* result = new SgFloat16Val(value,"");
+  ROSE_ASSERT(result);
+  setOneSourcePositionForTransformation(result);
+  return result;
+}
+
+SgFloat16Val* SageBuilder::buildFloat16Val_nfi(float value, const string& str)
+{
+  SgFloat16Val* result = new SgFloat16Val(value,str);
+  ROSE_ASSERT(result);
+  setOneSourcePositionNull(result);
+  return result;
+}
+
+SgFloat32Val* SageBuilder::buildFloat32Val(float value /*= 0.0*/)
+{
+  SgFloat32Val* result = new SgFloat32Val(value,"");
+  ROSE_ASSERT(result);
+  setOneSourcePositionForTransformation(result);
+  return result;
+}
+
+SgFloat32Val* SageBuilder::buildFloat32Val_nfi(float value, const string& str)
+{
+  SgFloat32Val* result = new SgFloat32Val(value,str);
+  ROSE_ASSERT(result);
+  setOneSourcePositionNull(result);
+  return result;
+}
+
+SgFloat64Val* SageBuilder::buildFloat64Val(double value /*= 0.0*/)
+{
+  SgFloat64Val* result = new SgFloat64Val(value,"");
+  ROSE_ASSERT(result);
+  setOneSourcePositionForTransformation(result);
+  return result;
+}
+
+SgFloat64Val* SageBuilder::buildFloat64Val_nfi(double value, const string& str)
+{
+  SgFloat64Val* result = new SgFloat64Val(value,str);
+  ROSE_ASSERT(result);
+  setOneSourcePositionNull(result);
+  return result;
+}
+
 SgFloat128Val* SageBuilder::buildFloat128Val(long double value /*= 0.0*/)
 {
   SgFloat128Val* result = new SgFloat128Val(value,"");
@@ -7067,6 +7135,30 @@ SgUnsignedCharVal* SageBuilder::buildUnsignedCharVal_nfi(unsigned char v, const 
 {
   SgUnsignedCharVal* result = new SgUnsignedCharVal(v,str);
   ROSE_ASSERT(result);
+  setOneSourcePositionNull(result);
+  return result;
+}
+
+SgSignedCharVal* SageBuilder::buildSignedCharVal(signed char v)
+{
+  SgSignedCharVal* result = new SgSignedCharVal(v,"");
+  ASSERT_not_null(result);
+  setOneSourcePositionForTransformation(result);
+  return result;
+}
+
+SgSignedCharVal* SageBuilder::buildSignedCharValHex(signed char v)
+{
+  SgSignedCharVal* result = new SgSignedCharVal(v,StringUtility::intToHex(v));
+  ASSERT_not_null(result);
+  setOneSourcePositionForTransformation(result);
+  return result;
+}
+
+SgSignedCharVal* SageBuilder::buildSignedCharVal_nfi(signed char v, const string& str)
+{
+  SgSignedCharVal* result = new SgSignedCharVal(v,str);
+  ASSERT_not_null(result);
   setOneSourcePositionNull(result);
   return result;
 }
@@ -10605,6 +10697,48 @@ SgTypeFloat80*  SageBuilder::buildFloat80Type() {
 
 SgTypeFloat128* SageBuilder::buildFloat128Type() {
   SgTypeFloat128 * result = SgTypeFloat128::createType();
+  ROSE_ASSERT(result);
+  return result;
+}
+
+SgTypeFloat16* SageBuilder::buildFloat16Type() {
+  SgTypeFloat16 * result = SgTypeFloat16::createType();
+  ROSE_ASSERT(result);
+  return result;
+}
+
+SgTypeFp16* SageBuilder::buildFp16Type() {
+  SgTypeFp16 * result = SgTypeFp16::createType();
+  ROSE_ASSERT(result);
+  return result;
+}
+
+SgTypeBFloat16* SageBuilder::buildBFloat16Type() {
+  SgTypeBFloat16 * result = SgTypeBFloat16::createType();
+  ROSE_ASSERT(result);
+  return result;
+}
+
+SgTypeFloat32x* SageBuilder::buildFloat32xType() {
+  SgTypeFloat32x * result = SgTypeFloat32x::createType();
+  ROSE_ASSERT(result);
+  return result;
+}
+
+SgTypeFloat64x* SageBuilder::buildFloat64xType() {
+  SgTypeFloat64x * result = SgTypeFloat64x::createType();
+  ROSE_ASSERT(result);
+  return result;
+}
+
+SgTypeFloat32* SageBuilder::buildFloat32Type() {
+  SgTypeFloat32 * result = SgTypeFloat32::createType();
+  ROSE_ASSERT(result);
+  return result;
+}
+
+SgTypeFloat64* SageBuilder::buildFloat64Type() {
+  SgTypeFloat64 * result = SgTypeFloat64::createType();
   ROSE_ASSERT(result);
   return result;
 }
@@ -15852,7 +15986,8 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
 
   // This handles the case where the original command line may have referenced multiple files.
         Rose_STL_Container<string> fileList =
-            CommandlineProcessing::generateSourceFilenames(arglist);
+            CommandlineProcessing::generateSourceFilenames(arglist,
+                                                           project->get_binary_only());
         CommandlineProcessing::removeAllFileNamesExcept(arglist, fileList,
                                                         sourceFilename);
 
@@ -16036,7 +16171,7 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
      printf ("In SageBuilder::buildFile(): calling astPostProcessing() \n");
 #endif
 
-     AstPostProcessing(result);
+     if (!project->get_skip_post_processing()) AstPostProcessing(result);
 
 #if 0
      printf ("In SageBuilder::buildFile(): DONE: calling astPostProcessing() \n");
@@ -18525,8 +18660,8 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
                            // DQ (3/6/2014): Set the scope of the SgInitializedName IR node.
                               initializedName_copy->set_scope(targetScope);
 
-                              SgName mangledName = variableSymbol->get_mangled_name();
 #if 0
+                              SgName mangledName = variableSymbol->get_mangled_name();
                               printf ("initializedName_copy: mangledName = %s \n",mangledName.str());
 #endif
                            // DQ (3/2/2014): Make sure this is true (I think it should be, but I don't see that it was explicitly set).
@@ -19426,27 +19561,6 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
                               printf ("parentExpression = %p = %s \n",parentExpression,parentExpression->class_name().c_str());
 #endif
-                              bool handle_as_java = false;
-                              SgFunctionCallExp* functionCallExp = isSgFunctionCallExp(parentExpression);
-                              if (functionCallExp != NULL)
-                                 {
-                                // Note that this is a language-specific
-                                // organization of the SgMemberFunctionRefExp
-                                // and the SgFunctionCallExp.
-                                handle_as_java = true;
-
-                                SgExpression *parentOfFunctionCallExpression =
-                                    isSgExpression(
-                                        functionCallExp->get_parent());
-
-                                ROSE_ASSERT(parentOfFunctionCallExpression !=
-                                            NULL);
-#if DEBUG_MEMBER_FUNCTION_REF_EXP
-                                   printf ("parentOfFunctionCallExpression = %p = %s \n",parentOfFunctionCallExpression,parentOfFunctionCallExpression->class_name().c_str());
-#endif
-                                   parentExpression = parentOfFunctionCallExpression;
-                                 }
-
                               SgBinaryOp*   parentBinaryOp   = isSgBinaryOp(parentExpression);
                               SgDotExp*     parentDotExp     = isSgDotExp(parentExpression);
                               SgArrowExp*   parentArrowExp   = isSgArrowExp(parentExpression);
@@ -19463,19 +19577,7 @@ SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(SgStatement* insertio
 
                                    // This will be true for C++, but not for all
                                    // languages.
-                                   if (handle_as_java == true)
-                                      {
-                                     // The rhs is the SgFunctionCallExp in this
-                                     // case.
-                                     ROSE_ASSERT(
-                                         parentBinaryOp->get_rhs_operand() ==
-                                         functionCallExp);
-                                      }
-                                     else
-                                      {
-                                     // This is what we expect to be true for C++.
-                                        ROSE_ASSERT(parentBinaryOp->get_rhs_operand() == memberFunctionRefExp_copy);
-                                      }
+                                   ROSE_ASSERT(parentBinaryOp->get_rhs_operand() == memberFunctionRefExp_copy);
 #if DEBUG_MEMBER_FUNCTION_REF_EXP
                                    printf ("lhs = %p = %s \n",lhs,lhs->class_name().c_str());
 #endif
@@ -20101,11 +20203,17 @@ SgExpression *instantiateNonrealRefExps(
             << std::endl;
   std::cout << "  expr    = " << std::hex << expr << " : "
             << (expr ? expr->class_name() : "") << std::endl;
+  std::cout << "          = " << (expr ? expr->unparseToString() : "")
+            << std::endl;
 #endif
   if (!expr) {
     return nullptr;
   } else if (isSgNonrealRefExp(expr)) {
-    ROSE_ABORT();
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealRefExps
+    std::cerr << "Error: In instantiateNonrealRefExps: case of a SgNonrealRefExp!!!"
+              << std::endl;
+#endif
+    return nullptr;
   } else if (isSgVarRefExp(expr)) {
     SgVarRefExp *vref = (SgVarRefExp *)expr;
     SgInitializedName *iname = vref->get_symbol()->get_declaration();
@@ -20124,12 +20232,6 @@ SgExpression *instantiateNonrealRefExps(
               << iname->get_parent() << " : "
               << (iname->get_parent() ? iname->get_parent()->class_name()
                                       : "")
-              << std::endl;
-    std::cout << "  iname->get_parent()->get_parent()    = " << std::hex
-              << iname->get_parent()->get_parent() << " : "
-              << (iname->get_parent()->get_parent()
-                      ? iname->get_parent()->get_parent()->class_name()
-                      : "")
               << std::endl;
 #endif
 
@@ -20174,17 +20276,51 @@ SgExpression *instantiateNonrealRefExps(
     return cond;
   } else if (isSgSizeOfOp(expr)) {
     SgSizeOfOp *szo = (SgSizeOfOp *)expr;
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealRefExps
+    std::cout << "  szo->get_operand_expr() = " << std::hex
+              << szo->get_operand_expr() << " : "
+              << (szo->get_operand_expr()
+                      ? szo->get_operand_expr()->class_name()
+                      : "")
+              << std::endl;
+    std::cout << "  szo->get_operand_type() = " << std::hex
+              << szo->get_operand_type() << " : "
+              << (szo->get_operand_type()
+                      ? szo->get_operand_type()->class_name()
+                      : "")
+              << std::endl;
+#endif
     szo->set_operand_expr(instantiateNonrealRefExps(
         szo->get_operand_expr(), tpl_params, tpl_args));
     szo->set_operand_type(
         instantiateNonrealTypes(szo->get_operand_type(), tpl_params, tpl_args));
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealRefExps
+    std::cout << "  szo->get_operand_expr() = " << std::hex
+              << szo->get_operand_expr() << " : "
+              << (szo->get_operand_expr()
+                      ? szo->get_operand_expr()->class_name()
+                      : "")
+              << std::endl;
+    std::cout << "  szo->get_operand_type() = " << std::hex
+              << szo->get_operand_type() << " : "
+              << (szo->get_operand_type()
+                      ? szo->get_operand_type()->class_name()
+                      : "")
+              << std::endl;
+#endif
     return szo;
   } else if (isSgCastExp(expr)) {
     SgCastExp *cast = (SgCastExp *)expr;
-    cast->set_operand_i(
-        instantiateNonrealRefExps(cast->get_operand_i(), tpl_params, tpl_args));
-    cast->set_type(
-        instantiateNonrealTypes(cast->get_type(), tpl_params, tpl_args));
+    auto operand = instantiateNonrealRefExps(cast->get_operand_i(), tpl_params,
+                                             tpl_args);
+    if (operand == nullptr)
+      return nullptr;
+    auto type =
+        instantiateNonrealTypes(cast->get_type(), tpl_params, tpl_args);
+    if (type == nullptr)
+      return operand;
+    cast->set_operand_i(operand);
+    cast->set_type(type);
     return cast;
   } else if (isSgUnaryOp(expr)) {
     SgUnaryOp *uop = (SgUnaryOp *)expr;
@@ -20214,6 +20350,8 @@ SgType *instantiateNonrealTypes(
   std::cout << "Rose::Builder::Templates::instantiateNonrealTypes" << std::endl;
   std::cout << "  type    = " << std::hex << type << " : "
             << (type ? type->class_name() : "") << std::endl;
+  std::cout << "          = " << (type ? type->unparseToString() : "")
+            << std::endl;
 #endif
   if (!type) {
     return nullptr;
@@ -20260,63 +20398,79 @@ SgType *instantiateNonrealTypes(
 #endif
         std::vector<SgTemplateArgument *> inst_tpl_args;
         for (SgTemplateArgument *tplarg : nrdecl->get_tpl_args()) {
-          if (tplarg->get_type()) {
 #if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
-            std::cout << "      tplarg->get_type() = " << std::hex
-                      << tplarg->get_type() << " : "
-                      << (tplarg->get_type() ? tplarg->get_type()->class_name()
-                                             : "")
-                      << std::endl;
+          std::cout << "      tplarg = " << std::hex << tplarg << " : "
+                    << (tplarg ? tplarg->class_name() : "") << std::endl;
+          std::cout << "        ->get_argumentType() = "
+                    << tplarg->get_argumentType() << std::endl;
 #endif
-            auto inst_tplarg =
-                instantiateNonrealTypes(tplarg->get_type(), tpl_params,
-                                        tpl_args);
-            if (inst_tplarg)
-              inst_tpl_args.push_back(buildTemplateArgument(inst_tplarg));
-            else
-              break; // nullptr is interpreted as "use default argument from
-                     // this one"
-          } else if (tplarg->get_expression()) {
+          switch (tplarg->get_argumentType()) {
+            case SgTemplateArgument::type_argument: {
 #if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
-            std::cout << "      tplarg->get_expression() = " << std::hex
-                      << tplarg->get_expression() << " : "
-                      << (tplarg->get_expression()
-                              ? tplarg->get_expression()->class_name()
-                              : "")
-                      << std::endl;
-            std::cout << "        ->unparseToString() = "
-                      << tplarg->get_expression()->unparseToString()
-                      << std::endl;
+              std::cout << "      tplarg->get_type() = " << std::hex
+                        << tplarg->get_type() << " : "
+                        << (tplarg->get_type()
+                                ? tplarg->get_type()->class_name()
+                                : "")
+                        << std::endl;
 #endif
-            auto inst_tplarg = instantiateNonrealRefExps(
-                SageInterface::copyExpression(tplarg->get_expression()),
-                tpl_params, tpl_args);
+              auto inst_tplarg =
+                  instantiateNonrealTypes(tplarg->get_type(), tpl_params,
+                                          tpl_args);
+              if (inst_tplarg)
+                inst_tpl_args.push_back(buildTemplateArgument(inst_tplarg));
+              break;
+            }
+            case SgTemplateArgument::nontype_argument: {
 #if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
-            std::cout << "      inst_tplarg = " << std::hex << inst_tplarg
-                      << " : "
-                      << (inst_tplarg ? inst_tplarg->class_name() : "")
-                      << std::endl;
-            std::cout << "      inst_tplarg->unparseToString() = "
-                      << (inst_tplarg ? inst_tplarg->unparseToString() : "")
-                      << std::endl;
+              std::cout << "      tplarg->get_expression() = " << std::hex
+                        << tplarg->get_expression() << " : "
+                        << (tplarg->get_expression()
+                                ? tplarg->get_expression()->class_name()
+                                : "")
+                        << std::endl;
+              std::cout << "        ->unparseToString() = "
+                        << tplarg->get_expression()->unparseToString()
+                        << std::endl;
 #endif
-            if (inst_tplarg)
-              inst_tpl_args.push_back(buildTemplateArgument(inst_tplarg));
-            else
-              break; // nullptr is interpreted as "use default argument from
-                     // this one"
-          } else if (tplarg->get_templateDeclaration()) {
+              auto inst_tplarg = instantiateNonrealRefExps(
+                  SageInterface::copyExpression(tplarg->get_expression()),
+                  tpl_params, tpl_args);
 #if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
-            std::cout << "      tplarg->get_templateDeclaration() = "
-                      << std::hex << tplarg->get_templateDeclaration() << " : "
-                      << (tplarg->get_templateDeclaration()
-                              ? tplarg->get_templateDeclaration()->class_name()
-                              : "")
-                      << std::endl;
+              std::cout << "      inst_tplarg = " << std::hex << inst_tplarg
+                        << " : "
+                        << (inst_tplarg ? inst_tplarg->class_name() : "")
+                        << std::endl;
+              std::cout << "      inst_tplarg->unparseToString() = "
+                        << (inst_tplarg ? inst_tplarg->unparseToString() : "")
+                        << std::endl;
 #endif
-            ROSE_ABORT(); // TODO
-          } else {
-            ROSE_ABORT();
+              if (inst_tplarg)
+                inst_tpl_args.push_back(buildTemplateArgument(inst_tplarg));
+              break;
+            }
+            case SgTemplateArgument::template_template_argument: {
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
+              std::cout << "      tplarg->get_templateDeclaration() = "
+                        << std::hex << tplarg->get_templateDeclaration()
+                        << " : "
+                        << (tplarg->get_templateDeclaration()
+                                ? tplarg->get_templateDeclaration()
+                                      ->class_name()
+                                : "")
+                        << std::endl;
+#endif
+              ROSE_ABORT(); // TODO
+            }
+            case SgTemplateArgument::start_of_pack_expansion_argument: {
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
+              std::cout << "      start_of_pack_expansion_argument"
+                        << std::endl;
+#endif
+              break; // NOP
+            }
+            default:
+              ROSE_ABORT();
           }
         }
         SgTemplateInstantiationDecl *inst_decl =
@@ -20354,21 +20508,36 @@ SgType *instantiateNonrealTypes(
 #endif
       ROSE_ASSERT(nrdecl->get_template_parameter_position() > 0);
       if (nrdecl->get_template_parameter_position() <= tpl_args.size()) {
-        return tpl_args[nrdecl->get_template_parameter_position() - 1]
-            ->get_type();
-        //      } else if (nrdecl->get_template_parameter_position() <=
-        //                 tpl_params.size()) {
-        //        SgType * dft_tpl_arg =
-        //            tpl_params[nrdecl->get_template_parameter_position() -
-        //                       1]->get_defaultTypeParameter();
-        //        return instantiateNonrealTypes(dft_tpl_arg, tpl_params,
-        //        tpl_args);
+        SgType *res =
+            tpl_args[nrdecl->get_template_parameter_position() - 1]->get_type();
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
+        std::cout << "  tpl_args[nrdecl->get_template_parameter_position()-1]"
+                     "->get_type() = "
+                  << std::dec << res << std::endl;
+#endif
+        return res;
+      } else if (nrdecl->get_template_parameter_position() <= tpl_params.size()) {
+        SgType *dft_tpl_arg =
+            tpl_params[nrdecl->get_template_parameter_position() - 1]
+                ->get_defaultTypeParameter();
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
+        std::cout << "  dft_tpl_arg = " << std::dec << dft_tpl_arg
+                  << std::endl;
+#endif
+        dft_tpl_arg = instantiateNonrealTypes(dft_tpl_arg, tpl_params, tpl_args);
+#if DEBUG_Rose_Builder_Templates_instantiateNonrealTypes
+        std::cout << "  dft_tpl_arg = " << std::dec << dft_tpl_arg
+                  << std::endl;
+#endif
+        return dft_tpl_arg;
       } else {
         return nullptr;
       }
     }
-  } else if (isSgTypedefType(type) || isSgTypeUnsignedLong(type) ||
-             isSgTypeUnsignedInt(type)) {
+  } else if (isSgTypeVoid(type) || isSgTypeUnsignedLong(type) ||
+             isSgTypeInt(type) || isSgTypeLong(type) ||
+             isSgTypeUnsignedInt(type) || isSgTypedefType(type) ||
+             isSgClassType(type)) {
     return type;
   } else {
     std::cerr << "!!! type = " << std::hex << type << " : "

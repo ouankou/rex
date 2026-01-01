@@ -387,7 +387,7 @@ void c_action_name(Token_t *id)
  * 
  * @param id The identifier representing the named constant if present, otherwise is a literal-constant
  */
-void c_action_constant(Token_t * id)
+void c_action_constant(Token_t*)
 {
 }
 
@@ -411,7 +411,7 @@ void c_action_literal_constant()
  * 
  * @param id The identifier representing the named constant if present, otherwise is a literal-constant
  */
-void c_action_int_constant(Token_t * id)
+void c_action_int_constant(Token_t * /*id*/)
 {
 }
 
@@ -426,7 +426,7 @@ void c_action_int_constant(Token_t * id)
  * 
  * @param id The identifier representing the named constant if present, otherwise is a literal-constant
  */
-void c_action_char_constant(Token_t * id)
+void c_action_char_constant(Token_t*)
 {
 }
 
@@ -1239,7 +1239,6 @@ void c_action_label(Token_t * lbl)
      * @param kindOrLen2 Specifies whether the second kind or len type-param-value is present
      * @param hasAsterisk True if a '*' char-selector is specified
      */
-// void c_action_char_selector(int kindOrLen1, int kindOrLen2, ofp_bool hasAsterisk)
     void c_action_char_selector(Token_t * type_keyword, Token_t * optional_keyword,
             int kindOrLen1, int kindOrLen2, ofp_bool hasAsterisk)
     {
@@ -1357,7 +1356,6 @@ void c_action_label(Token_t * lbl)
      * @param kindOrLen Specifies whether a kind or len type-param-value is present
      * @param hasAsterisk True if a '*' char-selector is specified
      */
-// void c_action_length_selector(int kindOrLen, ofp_bool hasAsterisk)
     void c_action_length_selector(Token_t * len_keyword, int kindOrLen,
             ofp_bool hasAsterisk)
     {
@@ -1473,7 +1471,6 @@ void c_action_label(Token_t * lbl)
      * @param isTrue True if logical constant is true, false otherwise
      * @param kindParam The kind parameter
      */
-// void c_action_logical_literal_constant(ofp_bool isTrue, Token_t * kindParam)
     void c_action_logical_literal_constant(Token_t * logicalValue_keyword,
             ofp_bool isTrue, Token_t * kindParam)
     {
@@ -1517,7 +1514,7 @@ void c_action_label(Token_t * lbl)
      * @param eos Token for T_EOS.
      * @param type typeParam if a typeParam. compDef if a compDef.
      */
-    void c_action_type_param_or_comp_def_stmt(Token_t * eos, int type)
+    void c_action_type_param_or_comp_def_stmt(Token_t* /*eos*/, int type)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_type_param_or_comp_def_stmt() type = %d \n", type);
@@ -1531,8 +1528,6 @@ void c_action_label(Token_t * lbl)
      *
      * @param type typeParam if a typeParam. compDef if a compDef.
      */
-// void c_action_type_param_or_comp_def_stmt(int type)
-// void c_action_type_param_or_comp_def_stmt(Token_t *eos, int type)
     void c_action_type_param_or_comp_def_stmt_list()
     {
     }
@@ -1550,8 +1545,8 @@ void c_action_label(Token_t * lbl)
      * @param hasTypeAttrSpecList True if a type-attr-spec-list is present.
      * @param hasGenericNameList True if a generic-name-list is present.
      */
-    void c_action_derived_type_stmt(Token_t * label, Token_t * keyword, Token_t * id, Token_t * eos,
-            ofp_bool hasTypeAttrSpecList, ofp_bool hasGenericNameList)
+    void c_action_derived_type_stmt(Token_t* label, Token_t* keyword, Token_t* id, Token_t* /*eos*/,
+            ofp_bool /*hasTypeAttrSpecList*/, ofp_bool /*hasGenericNameList*/)
     {
         // Build a SgClassDeclaration to hold the Fortran Type (maybe it should be a SgFortranType derived from a SgClassDeclaration?)
 
@@ -1711,9 +1706,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param id The identifier.
      */
-// void c_action_end_type_stmt(Token_t * label, Token_t * id)
-    void c_action_end_type_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *typeKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_type_stmt(Token_t* label, Token_t* endKeyword,
+                                Token_t* /*typeKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_end_type_stmt() label = %p id = %p \n", label, id);
@@ -1749,14 +1743,11 @@ void c_action_label(Token_t * lbl)
      *
      * @param label The label.
      */
-// void c_action_sequence_stmt(Token_t * label)
-    void c_action_sequence_stmt(Token_t *label, Token_t *sequenceKeyword,
-            Token_t *eos)
+    void c_action_sequence_stmt(Token_t* /*label*/, Token_t* /*sequenceKeyword*/, Token_t* /*eos*/)
     {
         // The sequence statement is really a type attribute, so we implement it as such in ROSE.
-        SgClassDefinition* classDefinition = isSgClassDefinition(
-                astScopeStack.front());
-        ROSE_ASSERT(classDefinition != NULL);
+        SgClassDefinition* classDefinition = isSgClassDefinition(astScopeStack.front());
+        ASSERT_not_null(classDefinition);
         classDefinition->set_isSequence(true);
     }
 
@@ -1768,7 +1759,7 @@ void c_action_label(Token_t * lbl)
      * @param id Identifier equal to the parameter.
      * @param hasInit True if is initialized.
      */
-    void c_action_type_param_decl(Token_t * id, ofp_bool hasInit)
+    void c_action_type_param_decl(Token_t * /*id*/, ofp_bool /*hasInit*/)
     {
     }
 
@@ -1782,7 +1773,7 @@ void c_action_label(Token_t * lbl)
     void c_action_type_param_decl_list__begin()
     {
     }
-    void c_action_type_param_decl_list(int count)
+    void c_action_type_param_decl_list(int)
     {
     }
 
@@ -1814,8 +1805,7 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param hasSpecList Boolean true if has a component_attr_spec(_list).
      */
-// void c_action_data_component_def_stmt(Token_t * label, ofp_bool hasSpec)
-    void c_action_data_component_def_stmt(Token_t *label, Token_t *eos,
+    void c_action_data_component_def_stmt(Token_t* label, Token_t* eos,
             ofp_bool hasSpec)
     {
         // This is where we build the declaration using whatever was pushed onto the stack (nameStack)
@@ -1859,7 +1849,6 @@ void c_action_label(Token_t * lbl)
      *
      * @param specType  Type of spec in enum form: pointer, dimension_paren,  dimension_bracket, allocable, access_spec, kind, or len.
      */
-// void c_action_component_attr_spec(int specType)
     void c_action_component_attr_spec(Token_t * attrKeyword, int specType)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -2202,9 +2191,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param hasInterface Boolean true if has a nonempty interface.
      */
-// void c_action_proc_component_def_stmt(Token_t * label, ofp_bool hasInterface)
-    void c_action_proc_component_def_stmt(Token_t *label,
-            Token_t *procedureKeyword, Token_t *eos, ofp_bool hasInterface)
+    void c_action_proc_component_def_stmt(Token_t* /*label*/,
+            Token_t* /*procedureKeyword*/, Token_t* /*eos*/, ofp_bool /*hasInterface*/)
     {
     }
 
@@ -2219,9 +2207,8 @@ void c_action_label(Token_t * lbl)
      * @param id Identifier if present in pass.
      * @param specType  "Enum" to specify type of spec: pointer, pass, nopass, or access_spec
      */
-// void c_action_proc_component_attr_spec(Token_t * id, int specType)
-    void c_action_proc_component_attr_spec(Token_t * attrSpecKeyword, Token_t * id,
-            int specType)
+    void c_action_proc_component_attr_spec(Token_t* /*attrSpecKeyword*/, Token_t* /*id*/,
+            int /*specType*/)
     {
     }
 
@@ -2234,7 +2221,7 @@ void c_action_label(Token_t * lbl)
     void c_action_proc_component_attr_spec_list__begin()
     {
     }
-    void c_action_proc_component_attr_spec_list(int count)
+    void c_action_proc_component_attr_spec_list(int)
     {
     }
 
@@ -2244,9 +2231,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param label The label.
      */
-// void c_action_private_components_stmt(Token_t * label)
-    void c_action_private_components_stmt(Token_t *label, Token_t *privateKeyword,
-            Token_t *eos)
+    void c_action_private_components_stmt(Token_t* /*label*/, Token_t* privateKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -2294,9 +2279,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param label The label.
      */
-// void c_action_binding_private_stmt(Token_t * label)
-    void c_action_binding_private_stmt(Token_t *label, Token_t *privateKeyword,
-            Token_t *eos)
+    void c_action_binding_private_stmt(Token_t* /*label*/, Token_t* /*privateKeyword*/, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_binding_private_stmt() \n");
@@ -2310,8 +2293,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param label The label.
      */
-// void c_action_proc_binding_stmt(Token_t * label, int type)
-    void c_action_proc_binding_stmt(Token_t *label, int type, Token_t *eos)
+    void c_action_proc_binding_stmt(Token_t * /*label*/, int type, Token_t*)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("c_action_proc_binding_stmt(): type = %d \n", type);
@@ -2338,8 +2320,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param hasAccessSpec True if has public or private access spec.
      */
-// void c_action_generic_binding(ofp_bool hasAccessSpec)
-    void c_action_generic_binding(Token_t * genericKeyword, ofp_bool hasAccessSpec)
+    void c_action_generic_binding(Token_t*, ofp_bool /*hasAccessSpec*/)
     {
     }
 
@@ -2354,8 +2335,7 @@ void c_action_label(Token_t * lbl)
      * @param attr The binding attribute.
      * @param id Optional identifier in pass attribute.
      */
-// void c_action_binding_attr(int attr, Token_t * id)
-    void c_action_binding_attr(Token_t * bindingAttr, int attr, Token_t * id)
+    void c_action_binding_attr(Token_t*, int, Token_t*)
     {
     }
 
@@ -2369,7 +2349,7 @@ void c_action_label(Token_t * lbl)
     void c_action_binding_attr_list__begin()
     {
     }
-    void c_action_binding_attr_list(int count)
+    void c_action_binding_attr_list(int)
     {
     }
 
@@ -2457,7 +2437,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param keyWord Keywod if of the form kw = foo. Null otherwise.
      */
-    void c_action_type_param_spec(Token_t * keyWord)
+    void c_action_type_param_spec(Token_t * /*keyWord*/)
     {
     }
 
@@ -2509,7 +2489,7 @@ void c_action_label(Token_t * lbl)
     void c_action_component_spec_list__begin()
     {
     }
-    void c_action_component_spec_list(int count)
+    void c_action_component_spec_list(int)
     {
     }
 
@@ -2521,7 +2501,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param numEls Number of elements in the enum.
      */
-    void c_action_enum_def(int numEls)
+    void c_action_enum_def(int /*numEls*/)
     {
     }
 
@@ -2532,9 +2512,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param id The identifier.
      */
-// void c_action_enum_def_stmt(Token_t * label, Token_t * id)
-    void c_action_enum_def_stmt(Token_t *label, Token_t *enumKeyword,
-            Token_t *bindKeyword, Token_t *id, Token_t *eos)
+    void c_action_enum_def_stmt(Token_t* /*label*/, Token_t* /*enumKeyword*/,
+            Token_t* /*bindKeyword*/, Token_t* /*id*/, Token_t* /*eos*/)
     {
     }
 
@@ -2543,9 +2522,7 @@ void c_action_label(Token_t * lbl)
      :       (label)? T_ENUMERATOR ( T_COLON_COLON )? enumerator_list T_EOS
      * @param label The label.
      */
-// void c_action_enumerator_def_stmt(Token_t * label)
-    void c_action_enumerator_def_stmt(Token_t *label, Token_t *enumeratorKeyword,
-            Token_t *eos)
+    void c_action_enumerator_def_stmt(Token_t* /*label*/, Token_t* /*enumeratorKeyword*/, Token_t* /*eos*/)
     {
     }
 
@@ -2558,7 +2535,7 @@ void c_action_label(Token_t * lbl)
     void c_action_enumerator_list__begin()
     {
     }
-    void c_action_enumerator_list(int count)
+    void c_action_enumerator_list(int)
     {
     }
 
@@ -2569,9 +2546,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param label The label.
      */
-// void c_action_end_enum_stmt(Token_t * label)
-    void c_action_end_enum_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *enumKeyword, Token_t *eos)
+    void c_action_end_enum_stmt(Token_t* label, Token_t* endKeyword, Token_t* /*enumKeyword*/, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_end_enum_stmt() label = %p id = %p \n", label,
@@ -3040,7 +3015,6 @@ void c_action_label(Token_t * lbl)
      * @param numAttributes The number of attributes present
      * @param eos Token for the end of the statement.
      */
-// void c_action_type_declaration_stmt(Token_t * label, int numAttributes)
     void
     c_action_type_declaration_stmt(Token_t * label, int numAttributes, Token_t * eos)
     {
@@ -3052,7 +3026,7 @@ void c_action_label(Token_t * lbl)
         printf("In c_action_type_declaration_stmt: numAttributes = %d \n", numAttributes);
 
 #if !SKIP_C_ACTION_IMPLEMENTATION
-        ROSE_ASSERT(eos != NULL);
+        ASSERT_not_null(eos);
 
         initialize_global_scope_if_required();
         build_implicit_program_statement_if_required();
@@ -3667,7 +3641,8 @@ void c_action_label(Token_t * lbl)
             SgFunctionType* functionType = isSgFunctionType(functionSymbol->get_type());
             ROSE_ASSERT(functionType != NULL);
             functionType->set_return_type(entityType);
-            functionType->set_orig_return_type(entityType);
+            // PP (09/16/25): move orig_return_type into decl
+            // functionType->set_orig_return_type(entityType);
         }
         SgInitializedName* initializedName = NULL;
         if (variableSymbol != NULL)
@@ -3701,7 +3676,8 @@ void c_action_label(Token_t * lbl)
                       SgFunctionType* functionType = isSgFunctionType(functionDeclaration->get_type());
                       ROSE_ASSERT(functionType != NULL);
                       functionType->set_return_type(entityType);
-                      functionType->set_orig_return_type(entityType);
+                      // PP (09/16/25): move orig_return_type into decl
+                      // functionType->set_orig_return_type(entityType);
                   }
                   // Pei-Hung (07/19/2019) In test2019_common_block_name.f90,
                   // array dimension info can be specified in common block before the type specification
@@ -4317,7 +4293,7 @@ void c_action_label(Token_t * lbl)
      * @param eos End of statement token.
      * @param hasList True if access-id-list is present.
      */
-    void c_action_access_stmt(Token_t * label, Token_t * eos, ofp_bool hasList)
+    void c_action_access_stmt(Token_t* label, Token_t* eos, ofp_bool hasList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_access_stmt(): hasList = %s \n",
@@ -4370,7 +4346,7 @@ void c_action_label(Token_t * lbl)
     void c_action_deferred_co_shape_spec_list__begin()
     {
     }
-    void c_action_deferred_co_shape_spec_list(int count)
+    void c_action_deferred_co_shape_spec_list(int)
     {
     }
 
@@ -4409,7 +4385,7 @@ void c_action_label(Token_t * lbl)
     void c_action_access_id_list__begin()
     {
     }
-    void c_action_access_id_list(int count)
+    void c_action_access_id_list(int)
     {
     }
 
@@ -4424,12 +4400,10 @@ void c_action_label(Token_t * lbl)
      * @param eos End of statement token.
      * @param count Number of allocatable declarations.
      */
-// void c_action_allocatable_stmt(Token_t * label, int count)
 #if ROSE_OFP_MINOR_VERSION_NUMBER >= 8 & ROSE_OFP_PATCH_VERSION_NUMBER >= 0
-// void allocatable_stmt(Token label, Token keyword, Token eos);
-    void c_action_allocatable_stmt(Token_t* label, Token_t* keyword, Token_t* eos)
+    void c_action_allocatable_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
 #else
-    void c_action_allocatable_stmt(Token_t * label, Token_t * keyword, Token_t * eos, int count)
+    void c_action_allocatable_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/, int count)
 #endif
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -4528,7 +4502,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The ASYNCHRONOUS keyword token.
      * @param eos End of statement token.
      */
-    void c_action_asynchronous_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_asynchronous_stmt(Token_t* /*label*/, Token_t* /*keyword*/, Token_t* /*eos*/)
     {
     }
 
@@ -4539,7 +4513,7 @@ void c_action_label(Token_t * lbl)
      * @param label Optional statement label
      * @param eos End of statement token.
      */
-    void c_action_bind_stmt(Token_t * label, Token_t * eos)
+    void c_action_bind_stmt(Token_t* label, Token_t* eos)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_bind_stmt(): label = %p \n", label);
@@ -4664,8 +4638,7 @@ void c_action_label(Token_t * lbl)
      * @param eos End of statement token.
      * @param count The number of data statement sets.
      */
-// void c_action_data_stmt(Token_t * label, int count)
-    void c_action_data_stmt(Token_t * label, Token_t * keyword, Token_t * eos,
+    void c_action_data_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/,
             int count)
     {
         // collect the data statement groups (sets) from the astNodeStack
@@ -4994,7 +4967,6 @@ void c_action_label(Token_t * lbl)
      *
      * TODO: This action method may need params.  Look at the grammar rule.
      */
-// void c_action_data_stmt_value()
     void c_action_data_stmt_value(Token_t *asterisk)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -5041,35 +5013,27 @@ void c_action_label(Token_t * lbl)
         }
         else
         {
-            if (astExpressionStack.size() == 1)
-            {
-                if (SgProject::get_verbose() > DEBUG_COMMENT_LEVEL)
-                printf(
-                        "Case of SgDataStatementValue::e_explict_list (expression, typically a simple value) \n");
+            if (astExpressionStack.size() == 1) {
+                if (SgProject::get_verbose() > DEBUG_COMMENT_LEVEL) {
+                   printf("Case of SgDataStatementValue::e_explict_list (expression, typically a simple value)\n");
+                }
 
-                dataValue->set_data_initialization_format(
-                        SgDataStatementValue::e_explict_list);
+                dataValue->set_data_initialization_format(SgDataStatementValue::e_explict_list);
 
                 // Make sure this is not an implied DO expression
-                ROSE_ASSERT(isSgImpliedDo(astExpressionStack.front()) == NULL);
+                ASSERT_require(isSgImpliedDo(astExpressionStack.front()) == nullptr);
             }
-            else
-            {
-                if (astExpressionStack.size() == 2)
-                {
-                    if (SgProject::get_verbose() > DEBUG_COMMENT_LEVEL)
-                    printf(
-                            "Case of SgDataStatementValue::e_implicit_list (repeat * value) \n");
-
-                    dataValue->set_data_initialization_format(
-                            SgDataStatementValue::e_implicit_list);
+            else {
+                if (astExpressionStack.size() == 2) {
+                   if (SgProject::get_verbose() > DEBUG_COMMENT_LEVEL) {
+                      printf("Case of SgDataStatementValue::e_implicit_list (repeat * value)\n");
+                   }
+                   dataValue->set_data_initialization_format(SgDataStatementValue::e_implicit_list);
                 }
-                else
-                {
-                    // See test2007_107.f90
-                    printf(
-                            "This might be an implied do loop (need an example to debug this case!) \n");
-                    ROSE_ABORT();
+                else {
+                   // See test2007_107.f90
+                   printf("This might be an implied do loop (need an example to debug this case!)\n");
+                   ROSE_ABORT();
                 }
             }
         }
@@ -5107,11 +5071,6 @@ void c_action_label(Token_t * lbl)
                 ROSE_ABORT();
             }
         }
-
-        // We should have a SgDataStatementObject at the top of the astNodeStack...
-        // SgDataStatementObject* dataObject = isSgDataStatementObject(astNodeStack.front());
-        // ROSE_ASSERT(dataObject != NULL);
-
         dataGroup->get_value_list().push_back(dataValue);
 
 #if 0
@@ -5194,7 +5153,7 @@ void c_action_label(Token_t * lbl)
      * @param eos End of statement token.
      * @param count The number of dimension declarations.
      */
-    void c_action_dimension_stmt(Token_t * label, Token_t * keyword, Token_t * eos,
+    void c_action_dimension_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/,
             int count)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -5232,8 +5191,6 @@ void c_action_label(Token_t * lbl)
      * @param hasCoArraySpec True if has a co array spec.
      */
 #if ROSE_OFP_MINOR_VERSION_NUMBER >= 8 & ROSE_OFP_PATCH_VERSION_NUMBER >= 0
-// public abstract void codimension_decl(Token coarrayName, Token lbracket, Token rbracket);
-// void c_action_dimension_decl(Token_t *id, Token_t *lbracket, Token_t *rbracket)
     void c_action_dimension_decl(Token_t *id)
 #else
     void c_action_dimension_decl(Token_t *id, ofp_bool hasArraySpec, ofp_bool hasCoArraySpec)
@@ -5348,7 +5305,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param dimensionKeyword T_DIMENSION token.
      */
-    void c_action_dimension_spec(Token_t *dimensionKeyword)
+    void c_action_dimension_spec(Token_t* /*dimensionKeyword*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In R509-F2008 c_action_dimension_spec(): \n");
@@ -5364,8 +5321,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The INTENT keyword token.
      * @param eos End of statement token.
      */
-// void c_action_intent_stmt(Token_t * label)
-    void c_action_intent_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_intent_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -5401,8 +5357,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The OPTIONAL keyword token.
      * @param eos End of statement token.
      */
-// void c_action_optional_stmt(Token_t * label)
-    void c_action_optional_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_optional_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_optional_stmt(): label = %p \n", label);
@@ -5430,7 +5385,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The PARAMETER keyword token.
      * @param eos End of statement token.
      */
-    void c_action_parameter_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_parameter_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_parameter_stmt(): keyword = %p = %s \n", keyword,
@@ -5552,8 +5507,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The POINTER keyword token.
      * @param eos End of statement token.
      */
-// void c_action_pointer_stmt(Token_t * label)
-    void c_action_pointer_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_pointer_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -5587,7 +5541,7 @@ void c_action_label(Token_t * lbl)
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_pointer_decl_list__begin() \n");
     }
-    void c_action_pointer_decl_list(int count)
+    void c_action_pointer_decl_list(int)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_pointer_decl_list() \n");
@@ -5618,8 +5572,8 @@ void c_action_label(Token_t * lbl)
      * @param pointerTok  POINTER keyword token
      * @param eosTok end of statement token
      */
-    void c_action_cray_pointer_stmt(Token_t *labelTok, Token_t *pointerTok,
-            Token_t *eosTok)
+    void c_action_cray_pointer_stmt(Token_t* /*labelTok*/, Token_t* /*pointerTok*/,
+            Token_t* /*eosTok*/)
     {
 #if 0
         // Output debugging information about saved state (stack) information.
@@ -5638,7 +5592,7 @@ void c_action_label(Token_t * lbl)
     /**
      * @param count the number of cray pointer asscociation pairs.
      */
-    void c_action_cray_pointer_assoc_list(int count)
+    void c_action_cray_pointer_assoc_list(int /*count*/)
     {
 #if 0
         // Output debugging information about saved state (stack) information.
@@ -5685,8 +5639,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The PROTECTED keyword token.
      * @param eos End of statement token.
      */
-// void c_action_protected_stmt(Token_t * label)
-    void c_action_protected_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_protected_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_protected_stmt(): keyword = %p = %s \n", keyword,
@@ -5721,8 +5674,7 @@ void c_action_label(Token_t * lbl)
      * @param eos End of statement token.
      * @param hasSavedEntityList True if has saved-entity-list.
      */
-// void c_action_save_stmt(Token_t * label,ofp_bool hasSavedEntityList)
-    void c_action_save_stmt(Token_t * label, Token_t * keyword, Token_t * eos,
+    void c_action_save_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/,
             ofp_bool hasSavedEntityList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -5755,7 +5707,7 @@ void c_action_label(Token_t * lbl)
     {
         // I don't think I need these
     }
-    void c_action_saved_entity_list(int count)
+    void c_action_saved_entity_list(int)
     {
         // I don't think I need these
     }
@@ -5792,11 +5744,10 @@ void c_action_label(Token_t * lbl)
      * @param eos End of statement token.
      * @param count The number of target declarations.
      */
-// void c_action_target_stmt(Token_t * label, int count)
 #if ROSE_OFP_MINOR_VERSION_NUMBER >= 8 & ROSE_OFP_PATCH_VERSION_NUMBER >= 0
-    void c_action_target_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_target_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
 #else
-    void c_action_target_stmt(Token_t * label, Token_t * keyword, Token_t * eos, int count)
+    void c_action_target_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/, int count)
 #endif
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -5857,8 +5808,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The VALUE keyword token.
      * @param eos End of statement token.
      */
-// void c_action_value_stmt(Token_t * label)
-    void c_action_value_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_value_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_value_stmt(): keyword = %p = %s \n", keyword,
@@ -5887,8 +5837,7 @@ void c_action_label(Token_t * lbl)
      * @param keyword The VOLATILE keyword token.
      * @param eos End of statement token.
      */
-// void c_action_volatile_stmt(Token_t * label)
-    void c_action_volatile_stmt(Token_t * label, Token_t * keyword, Token_t * eos)
+    void c_action_volatile_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_volatile(): keyword = %p = %s \n", keyword,
@@ -5921,9 +5870,8 @@ void c_action_label(Token_t * lbl)
      * @param eos T_EOS.
      * @param hasImplicitSpecList Could be none, or it could have a list.
      */
-// void c_action_implicit_stmt(Token_t * label,ofp_bool hasImplicitSpecList)
-    void c_action_implicit_stmt(Token_t * label, Token_t * implicitKeyword,
-            Token_t * noneKeyword, Token_t * eos, ofp_bool hasImplicitSpecList)
+    void c_action_implicit_stmt(Token_t* label, Token_t* implicitKeyword,
+            Token_t* /*noneKeyword*/, Token_t* /*eos*/, ofp_bool hasImplicitSpecList)
     {
         // This is the case of an IMPICIT NONE statement
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -6135,8 +6083,7 @@ void c_action_label(Token_t * lbl)
      * @param eos End of statement token.
      * @param count Number of namelist group object lists.
      */
-// void c_action_namelist_stmt(Token_t * label, int count)
-    void c_action_namelist_stmt(Token_t * label, Token_t * keyword, Token_t * eos,
+    void c_action_namelist_stmt(Token_t* /*label*/, Token_t* keyword, Token_t* /*eos*/,
             int count)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -6274,9 +6221,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param label The label.
      */
-// void c_action_equivalence_stmt(Token_t * label)
-    void c_action_equivalence_stmt(Token_t *label, Token_t *equivalenceKeyword,
-            Token_t *eos)
+    void c_action_equivalence_stmt(Token_t* /*label*/, Token_t* equivalenceKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -6425,8 +6370,7 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param count Number of common block object lists.
      */
-// void c_action_common_stmt(Token_t * label, int count)
-    void c_action_common_stmt(Token_t *label, Token_t *commonKeyword, Token_t *eos,
+    void c_action_common_stmt(Token_t* /*label*/, Token_t* commonKeyword, Token_t* /*eos*/,
             int numBlocks)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -7582,7 +7526,7 @@ void c_action_label(Token_t * lbl)
             bool hasSelectionSubscriptList = qualifiedNameList[lastElement - i].hasSelectionSubscriptList;
             bool hasImageSelector = qualifiedNameList[lastElement - i].hasImageSelector;
             bool hasCo_deref = qualifiedNameList[lastElement - i].hasCo_deref;
-            SgCAFCoExpression* coExpr;
+            SgCAFCoExpression* coExpr = nullptr;
             if (hasImageSelector)
             {
                 coExpr = isSgCAFCoExpression(astExpressionStack.front());
@@ -7830,6 +7774,7 @@ void c_action_label(Token_t * lbl)
             // Save the expression on the stack
             if (hasImageSelector)
             {
+                ROSE_ASSERT(coExpr != nullptr);
                 ROSE_ASSERT(!coExpr->get_referData());
                 coExpr->set_referData(variable);
                 variable->set_parent(coExpr);
@@ -8315,8 +8260,8 @@ void c_action_label(Token_t * lbl)
      * @param hasTypeSpec True if type-spec is present
      * @param hasAllocOptList True if alloc-opt-list is present
      */
-    void c_action_allocate_stmt(Token_t *label, Token_t *allocateKeyword,
-            Token_t *eos, ofp_bool hasTypeSpec, ofp_bool hasAllocOptList)
+    void c_action_allocate_stmt(Token_t* label, Token_t* allocateKeyword,
+            Token_t* /*eos*/, ofp_bool hasTypeSpec, ofp_bool hasAllocOptList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -8593,9 +8538,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param label Optional statement label
      */
-// void nullifyStatement_stmt(Token_t * label)
-    void c_action_nullify_stmt(Token_t *label, Token_t *nullifyKeyword,
-            Token_t *eos)
+    void c_action_nullify_stmt(Token_t* label, Token_t* nullifyKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -8667,9 +8610,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param hasDeallocOptList True if there is an option list.
      */
-// void c_action_deallocate_stmt(Token_t * label,ofp_bool hasDeallocOptList)
-    void c_action_deallocate_stmt(Token_t *label, Token_t *deallocateKeyword,
-            Token_t *eos, ofp_bool hasDeallocOptList)
+    void c_action_deallocate_stmt(Token_t* label, Token_t* deallocateKeyword,
+            Token_t* /*eos*/, ofp_bool hasDeallocOptList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -9866,8 +9808,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param label Optional statement label
      */
-// void c_action_assignment_stmt(Token_t * label)
-    void c_action_assignment_stmt(Token_t *label, Token_t *eos)
+    void c_action_assignment_stmt(Token_t *label, Token_t*)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_assignment_stmt(): label = %p = %s \n", label,
@@ -9903,8 +9844,7 @@ void c_action_label(Token_t * lbl)
      * @param hasBoundsSpecList True if has a bounds spec list.
      * @param hasBoundsRemappingList True if has a bounds remapping list.
      */
-// void c_action_pointer_assignment_stmt(Token_t * label, ofp_bool hasBoundsSpecList, ofp_bool hasBoundsRemappingList)
-    void c_action_pointer_assignment_stmt(Token_t *label, Token_t *eos,
+    void c_action_pointer_assignment_stmt(Token_t* label, Token_t* /*eos*/,
             ofp_bool hasBoundsSpecList, ofp_bool hasBRList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -9940,7 +9880,7 @@ void c_action_label(Token_t * lbl)
     void c_action_bounds_spec_list__begin()
     {
     }
-    void c_action_bounds_spec_list(int count)
+    void c_action_bounds_spec_list(int)
     {
     }
 
@@ -9953,7 +9893,7 @@ void c_action_label(Token_t * lbl)
     void c_action_bounds_remapping_list__begin()
     {
     }
-    void c_action_bounds_remapping_list(int count)
+    void c_action_bounds_remapping_list(int)
     {
     }
 
@@ -9996,7 +9936,6 @@ void c_action_label(Token_t * lbl)
 #endif
     }
 
-// void c_action_where_stmt(Token_t * label)
     void c_action_where_stmt(Token_t *label, Token_t *whereKeyword)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -10132,9 +10071,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param id Optional name for the loop. If you use this up front, you have to use it in the end, and vice versa.
      */
-// void c_action_where_construct_stmt(Token_t * id)
-    void c_action_where_construct_stmt(Token_t *id, Token_t *whereKeyword,
-            Token_t *eos)
+    void c_action_where_construct_stmt(Token_t* id, Token_t* whereKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In R745 c_action_where_construct_stmt() id = %p = %s \n", id,
@@ -10163,13 +10100,9 @@ void c_action_label(Token_t * lbl)
         setStatementStringLabel(whereStatement, id);
 
         condition->set_parent(whereStatement);
-        // setSourcePosition(condition);
 
         body->set_parent(whereStatement);
         setSourcePosition(body);
-
-        // falseBlock->set_parent(whereStatement);
-        // setSourcePosition(falseBlock);
 
         SgScopeStatement* currentScope = astScopeStack.front();
         SgScopeStatement* currentBlockScope = isSgBasicBlock(currentScope);
@@ -10209,9 +10142,8 @@ void c_action_label(Token_t * lbl)
      *
      * @param id Optional name for the loop. If you use this up front, you have to use it in the end, and vice versa.
      */
-// void c_action_masked_elsewhere_stmt(Token_t * label, Token_t * id)
-    void c_action_masked_elsewhere_stmt(Token_t *label, Token_t *elseKeyword,
-            Token_t *whereKeyword, Token_t *id, Token_t *eos)
+    void c_action_masked_elsewhere_stmt(Token_t* label, Token_t* elseKeyword,
+                                        Token_t* /*whereKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -10320,9 +10252,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label
      * @param id Optional name for the loop. If you use this up front, you have to use it in the end, and vice versa.
      */
-// void c_action_elsewhere_stmt(Token_t * label, Token_t * id)
-    void c_action_elsewhere_stmt(Token_t *label, Token_t *elseKeyword,
-            Token_t *whereKeyword, Token_t *id, Token_t *eos)
+    void c_action_elsewhere_stmt(Token_t* label, Token_t* elseKeyword,
+                                 Token_t* /*whereKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In R750 c_action_elsewhere_stmt() label = %p id = %p = %s \n",
@@ -10407,9 +10338,7 @@ void c_action_label(Token_t * lbl)
 
         ROSE_ASSERT(astScopeStack.empty() == false);
         SgBasicBlock* basicBlock = isSgBasicBlock(astScopeStack.front());
-        ROSE_ASSERT(basicBlock != NULL);
-
-        // astScopeStack.pop_front();
+        ROSE_ASSERT(basicBlock != nullptr);
     }
 
     /** R751
@@ -10421,19 +10350,14 @@ void c_action_label(Token_t * lbl)
      * @param label The label
      * @param id Optional name for the loop. If you use this up front, you have to use it in the end, and vice versa.
      */
-// void c_action_end_where_stmt(Token_t * label, Token_t * id)
-    void c_action_end_where_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *whereKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_where_stmt(Token_t* label, Token_t* endKeyword, Token_t* /*whereKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In R751 c_action_end_where_stmt() label = %p id = %p = %s \n",
-                label, id, id ? id->text : "NULL");
+               label, id, id ? id->text : "NULL");
 
-        // DQ (10/10/2010): Test ending position
-        ROSE_ASSERT(astScopeStack.front()->get_endOfConstruct() != NULL);
-
-        // DQ (10/10/2010): Set the end position using the endKeyword.
-        ROSE_ASSERT(endKeyword != NULL);
+        ASSERT_not_null(astScopeStack.front()->get_endOfConstruct());
+        ASSERT_not_null(endKeyword);
         resetEndingSourcePosition(astScopeStack.front(), endKeyword);
 
         ROSE_ASSERT(astScopeStack.front()->get_endOfConstruct()->get_line() != astScopeStack.front()->get_startOfConstruct()->get_line());
@@ -10452,9 +10376,7 @@ void c_action_label(Token_t * lbl)
      * @param label The label
      * @param id Optional name for the forall loop. If you use this up front, you have to use it in the end, and vice versa.
      */
-// void c_action_forall_construct_stmt(Token_t * label, Token_t * id)
-    void c_action_forall_construct_stmt(Token_t *label, Token_t *id,
-            Token_t *forallKeyword, Token_t *eos)
+    void c_action_forall_construct_stmt(Token_t* label, Token_t* id, Token_t* forallKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -10602,7 +10524,7 @@ void c_action_label(Token_t * lbl)
      *
      * @param isPointerAssignment True if this is pointer assignment statement.
      */
-    void c_action_forall_assignment_stmt(ofp_bool isPointerAssignment)
+    void c_action_forall_assignment_stmt(ofp_bool /*isPointerAssignment*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_forall_assignment_stmt() \n");
@@ -10617,8 +10539,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param id Optional identifier for the loop.
      */
-    void c_action_end_forall_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *forallKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_forall_stmt(Token_t* label, Token_t* endKeyword,
+            Token_t* forallKeyword, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -10814,8 +10736,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param id Optional identifier used for the statement.
      */
-    void c_action_if_then_stmt(Token_t *label, Token_t *id, Token_t *ifKeyword,
-            Token_t *thenKeyword, Token_t *eos)
+    void c_action_if_then_stmt(Token_t* label, Token_t* id, Token_t* ifKeyword,
+            Token_t* thenKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_if_then_stmt(): label = %p id = %p = %s \n", label,
@@ -11008,7 +10930,7 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param id Optional identifier used for the statement.
      */
-    void c_action_else_stmt(Token_t *label, Token_t *elseKeyword, Token_t *id, Token_t *eos)
+    void c_action_else_stmt(Token_t* label, Token_t* elseKeyword, Token_t* id, Token_t* /*eos*/)
     {
         // Support for else in SgIfStmt
 
@@ -11054,8 +10976,6 @@ void c_action_label(Token_t * lbl)
 
         // DQ (12/16/2007): Added support for specification of label on the else part of the SgIfStmt
         setStatementElseNumericLabel(ifStatement, label);
-
-        // printf ("CLEAR THE astLabelSymbolStack (c_action_else_stmt) \n");
         astLabelSymbolStack.clear();
     }
 
@@ -11068,13 +10988,11 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param id True if has what you think it has.
      */
-// void c_action_end_if_stmt(Token_t * label, Token_t * id)
-    void c_action_end_if_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *ifKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_if_stmt(Token_t* label, Token_t* endKeyword,
+            Token_t* ifKeyword, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         {
-            // printf ("In c_action_end_if_stmt(): label = %p id = %p \n",label,id);
             printf(
                     "In R1230 c_action_end_function_stmt(): label = %p = %s endKeyword = %p = %s ifKeyword = %p = %s id = %p = %s \n",
                     label, label != NULL ? label->text : "NULL", endKeyword,
@@ -11218,7 +11136,6 @@ void c_action_label(Token_t * lbl)
 #endif
     }
 
-// void c_action_if_stmt(Token_t * label)
     void c_action_if_stmt(Token_t *label, Token_t *ifKeyword)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -11345,9 +11262,8 @@ void c_action_label(Token_t * lbl)
      * @param label The label.
      * @param id Identifier if present. Otherwise, null.
      */
-// void c_action_select_case_stmt(Token_t * label, Token_t * id)
-    void c_action_select_case_stmt(Token_t *label, Token_t *id,
-            Token_t *selectKeyword, Token_t *caseKeyword, Token_t *eos)
+    void c_action_select_case_stmt(Token_t* label, Token_t* id,
+            Token_t* selectKeyword, Token_t* caseKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -11417,7 +11333,7 @@ void c_action_label(Token_t * lbl)
  * @param label The label.
  * @param id Identifier if present. Otherwise, null.
  */
-void c_action_case_stmt(Token_t *label, Token_t *caseKeyword, Token_t *id, Token_t *eos)
+void c_action_case_stmt(Token_t* label, Token_t* caseKeyword, Token_t* id, Token_t* /*eos*/)
  {
      MLOG_TRACE_CXX("OpenFortranParser_SAGE_CONNECTION") << "In c_action_case_stmt()"
                  << " label = "       << label       << " = " << (label ? label->text : "NULL")
@@ -11494,8 +11410,8 @@ void c_action_case_stmt(Token_t *label, Token_t *caseKeyword, Token_t *id, Token
  * @param label The label.
  * @param id Identifier if present. Otherwise, null.
  */
-void c_action_end_select_stmt(Token_t *label, Token_t *endKeyword,
-                              Token_t *selectKeyword, Token_t *id, Token_t *eos)
+void c_action_end_select_stmt(Token_t* label, Token_t* endKeyword,
+        Token_t* selectKeyword, Token_t* id, Token_t* /*eos*/)
  {
     MLOG_TRACE_CXX("FortranParser") << "In c_action_end_select_stmt()"
                 << " label = "         << label         << " = " << (label ? label->text : "NULL")
@@ -11667,9 +11583,7 @@ void c_action_case_value()
      * @param label The label.
      * @param id Identifier if present. Otherwise, null.
      */
-// void c_action_associate_stmt(Token_t * label, Token_t * id)
-    void c_action_associate_stmt(Token_t *label, Token_t *id,
-            Token_t *associateKeyword, Token_t *eos)
+    void c_action_associate_stmt(Token_t* label, Token_t* id, Token_t* /*associateKeyword*/, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_associate_stmt(): label = %p id = %p \n", label, id);
@@ -11895,20 +11809,13 @@ void c_action_case_value()
      * @param label The label.
      * @param id Identifier if present. Otherwise, null.
      */
-// void c_action_end_associate_stmt(Token_t * label, Token_t * id)
-    void c_action_end_associate_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *associateKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_associate_stmt(Token_t* label, Token_t* endKeyword,
+                                     Token_t* /*associateKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_end_associate_stmt(): label = %p id = %p = %s \n",
                 label, id, id != NULL ? id->text : "NULL");
 
-        // DQ (12/12/2007): After implimenting the support for the select and case statements
-        // it made more sense to pop the scope in R801 instead of here.
-        // Pop off the body
-        // astScopeStack.pop_front();
-
-        // DQ (10/10/2010): Test ending position
         ROSE_ASSERT(astScopeStack.empty() == false);
         ROSE_ASSERT(astScopeStack.front()->get_endOfConstruct() != NULL);
 
@@ -11934,13 +11841,12 @@ void c_action_case_value()
      * @param selectConstructName Name of the select construct.
      * @param associateName Name of association.
      */
-    void c_action_select_type(Token_t *selectKeyword, Token_t *typeKeyword)
+    void c_action_select_type(Token_t*, Token_t*)
     {
     }
 
-// void c_action_select_type_stmt(Token_t * label, Token_t * selectConstructName, Token_t * associateName)
-    void c_action_select_type_stmt(Token_t *label, Token_t *selectConstructName,
-            Token_t *associateName, Token_t *eos)
+    void c_action_select_type_stmt(Token_t* /*label*/, Token_t* /*selectConstructName*/,
+            Token_t* /*associateName*/, Token_t* /*eos*/)
     {
     }
 
@@ -11954,9 +11860,8 @@ void c_action_case_value()
      * @param label The label.
      * @param selectConstructName Optional identifier immediately before end.
      */
-// void c_action_type_guard_stmt(Token_t * label, Token_t * selectConstructName)
-    void c_action_type_guard_stmt(Token_t *label, Token_t *typeKeyword,
-            Token_t *isOrDefaultKeyword, Token_t *selectConstructName, Token_t *eos)
+    void c_action_type_guard_stmt(Token_t* /*label*/, Token_t* /*typeKeyword*/,
+            Token_t* /*isOrDefaultKeyword*/, Token_t* /*selectConstructName*/, Token_t* /*eos*/)
     {
     }
 
@@ -11969,11 +11874,9 @@ void c_action_case_value()
      * @param label The label.
      * @param id The identifier, if present. Otherwise null.
      */
-    void c_action_end_select_type_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *selectKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_select_type_stmt(Token_t* /*label*/, Token_t* /*endKeyword*/,
+            Token_t* /*selectKeyword*/, Token_t* /*id*/, Token_t* /*eos*/)
     {
-
-        // DQ (10/10/2010): Test ending position
         ROSE_ASSERT(astScopeStack.empty() == false);
         ROSE_ASSERT(astScopeStack.front()->get_endOfConstruct() != NULL);
         ROSE_ASSERT(astScopeStack.front()->get_endOfConstruct()->get_line() != astScopeStack.front()->get_startOfConstruct()->get_line());
@@ -12283,8 +12186,8 @@ void c_action_case_value()
      * @param id Identifier for do construct name, if present. Otherwise, null.
      * @param hasLoopControl True if there is a loop control.
      */
-    void c_action_label_do_stmt(Token_t *label, Token_t *id, Token_t *doKeyword,
-            Token_t *digitString, Token_t *eos, ofp_bool hasLoopControl)
+    void c_action_label_do_stmt(Token_t* /*label*/, Token_t* /*id*/, Token_t* /*doKeyword*/,
+            Token_t* /*digitString*/, Token_t* /*eos*/, ofp_bool hasLoopControl)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_label_do_stmt(): hasLoopControl = %s \n",
@@ -12400,7 +12303,6 @@ void c_action_case_value()
      * @param label The label.
      * @param id The do construct name, if present. Otherwise, null.
      */
-// void c_action_end_do_stmt(Token_t * label, Token_t * id)
     void c_action_end_do_stmt(Token_t *label, Token_t *endKeyword,
             Token_t *doKeyword, Token_t *id, Token_t *eos)
     {
@@ -12462,7 +12364,7 @@ void c_action_case_value()
      * do_term_action_stmt
      */
     void c_action_do_term_action_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *doKeyword, Token_t *id, Token_t *eos, ofp_bool inserted)
+            Token_t */*doKeyword*/, Token_t */*id*/, Token_t */*eos*/, ofp_bool inserted)
     {
 #if 1 //=======================================================================================================
 #if 1
@@ -12598,9 +12500,7 @@ void c_action_case_value()
      * @param label Optional statement label
      * @param id Optional do-construct-name
      */
-// void c_action_cycle_stmt(Token_t * label, Token_t * id)
-    void c_action_cycle_stmt(Token_t *label, Token_t *cycleKeyword, Token_t *id,
-            Token_t *eos)
+    void c_action_cycle_stmt(Token_t* label, Token_t* cycleKeyword, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_cycle_stmt() label = %p = %s id = %p = %s \n",
@@ -12628,9 +12528,7 @@ void c_action_case_value()
      * @param label Optional statement label
      * @param id Optional do-construct-name
      */
-// void c_action_exit_stmt(Token_t * label, Token_t * id)
-    void c_action_exit_stmt(Token_t *label, Token_t *exitKeyword, Token_t *id,
-            Token_t *eos)
+    void c_action_exit_stmt(Token_t* label, Token_t* exitKeyword, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_exit_stmt() label = %p = %s id = %p = %s \n",
@@ -12655,8 +12553,8 @@ void c_action_case_value()
      *
      * @param target_label The branch target statement label
      */
-    void c_action_goto_stmt(Token_t *label, Token_t *goKeyword, Token_t *toKeyword,
-            Token_t *target_label, Token_t *eos)
+    void c_action_goto_stmt(Token_t* label, Token_t* goKeyword, Token_t* toKeyword,
+            Token_t* target_label, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -12674,9 +12572,6 @@ void c_action_case_value()
         SgLabelStatement* labelStatement = NULL;
         SgGotoStatement* gotoStatement = new SgGotoStatement(labelStatement);
 
-        // Set the generated SgLabelSymbol
-        // gotoStatement->set_label_symbol(target_symbol);
-
         SgLabelRefExp* labelRefExp = new SgLabelRefExp(target_symbol);
         gotoStatement->set_label_expression(labelRefExp);
         labelRefExp->set_parent(gotoStatement);
@@ -12690,8 +12585,6 @@ void c_action_case_value()
         setStatementNumericLabel(gotoStatement, label);
 
         astScopeStack.front()->append_statement(gotoStatement);
-
-        // printf ("CLEAR THE astLabelSymbolStack (c_action_goto_stmt) \n");
         astLabelSymbolStack.clear();
 
 #if 0
@@ -12708,9 +12601,8 @@ void c_action_case_value()
      *
      * @param label Optional statement label
      */
-// void c_action_computed_goto_stmt(Token_t * label)
-    void c_action_computed_goto_stmt(Token_t *label, Token_t *goKeyword,
-            Token_t *toKeyword, Token_t *eos)
+    void c_action_computed_goto_stmt(Token_t* label, Token_t* goKeyword,
+            Token_t* toKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -12777,7 +12669,7 @@ void c_action_case_value()
      * Note: This is a deleted feature.
      */
     void c_action_assign_stmt(Token_t* label1, Token_t* assignKeyword,
-            Token_t* label2, Token_t* toKeyword, Token_t* name, Token_t* eos)
+            Token_t* label2, Token_t* toKeyword, Token_t* name, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -12803,7 +12695,7 @@ void c_action_case_value()
      * Note: This is a deleted feature.
      */
     void c_action_assigned_goto_stmt(Token_t* label, Token_t* goKeyword,
-            Token_t* toKeyword, Token_t* name, Token_t* eos)
+            Token_t* toKeyword, Token_t* name, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -12837,7 +12729,7 @@ void c_action_case_value()
      * Note: This is a deleted feature.
      */
     void c_action_pause_stmt(Token_t* label, Token_t* pauseKeyword,
-            Token_t* constant, Token_t* eos)
+            Token_t* constant, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -12911,9 +12803,8 @@ void c_action_case_value()
      * @param label2 The second branch target statement label
      * @param label3 The third branch target statement label
      */
-// void c_action_arithmetic_if_stmt(Token_t * label, Token_t * label1, Token_t * label2, Token_t * label3)
-    void c_action_arithmetic_if_stmt(Token_t *label, Token_t *ifKeyword,
-            Token_t *label1, Token_t *label2, Token_t *label3, Token_t *eos)
+    void c_action_arithmetic_if_stmt(Token_t* label, Token_t* ifKeyword,
+            Token_t* label1, Token_t* label2, Token_t* label3, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -12974,9 +12865,7 @@ void c_action_case_value()
      *
      * @param label  Optional statement label
      */
-// void c_action_continue_stmt(Token_t * label)
-    void c_action_continue_stmt(Token_t *label, Token_t *continueKeyword,
-            Token_t *eos)
+    void c_action_continue_stmt(Token_t* label, Token_t* continueKeyword, Token_t* /*eos*/)
     {
         // A Fortran "CONTINUE" statement is mapped to a C "label" statement, so we use the existing SgLabelStatement IR node.
 
@@ -13099,8 +12988,7 @@ void c_action_case_value()
      *@param label Optional statement label
      *@param hasStopCode True if the stop-code is present, false otherwise
      */
-// void c_action_stop_stmt(Token_t * label, ofp_bool hasStopCode)
-    void c_action_stop_stmt(Token_t *label, Token_t *stopKeyword, Token_t *eos,
+    void c_action_stop_stmt(Token_t* label, Token_t* stopKeyword, Token_t* /*eos*/,
             ofp_bool hasStopCode)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -13186,11 +13074,10 @@ void c_action_case_value()
      *
      * New v0.7.2
      */
-    void c_action_allstop_stmt(Token_t * label, Token_t * allKeyword,
-            Token_t * stopKeyword, Token_t * eos, ofp_bool hasStopCode)
+    void c_action_allstop_stmt(Token_t* /*label*/, Token_t* /*allKeyword*/,
+            Token_t* /*stopKeyword*/, Token_t* /*eos*/, ofp_bool /*hasStopCode*/)
     {
-        printf(
-                "In c_action_allstop_stmt() - this function needs to be implemented.\n");
+        printf("In c_action_allstop_stmt() - this function needs to be implemented.\n");
     }
 
     /*
@@ -13206,11 +13093,10 @@ void c_action_case_value()
      *
      * New v0.7.2
      */
-    void c_action_sync_all_stmt(Token_t * label, Token_t * syncKeyword,
-            Token_t * allKeyword, Token_t * eos, ofp_bool hasStopCode)
+    void c_action_sync_all_stmt(Token_t* /*label*/, Token_t* /*syncKeyword*/,
+            Token_t* /*allKeyword*/, Token_t* /*eos*/, ofp_bool /*hasStopCode*/)
     {
-        printf(
-                "In c_action_sync_all_stmt() - this function needs to be implemented.\n");
+        printf("In c_action_sync_all_stmt() - this function needs to be implemented.\n");
     }
 
     /*
@@ -13224,7 +13110,7 @@ void c_action_case_value()
      *
      * New v0.7.2
      */
-    void c_action_sync_stat(Token_t * syncStat)
+    void c_action_sync_stat(Token_t* /*syncStat*/)
     {
         printf("In c_action_sync_stat() - this function needs to be implemented.\n");
     }
@@ -13248,7 +13134,7 @@ void c_action_case_value()
      *
      * New v0.7.2
      */
-    void c_action_sync_stat_list(int count)
+    void c_action_sync_stat_list(int /*count*/)
     {
         printf(
                 "In c_action_sync_stat_list() - this function needs to be implemented.\n");
@@ -13372,8 +13258,7 @@ void c_action_case_value()
      *
      * @param label The label.
      */
-// void c_action_open_stmt(Token_t * label)
-    void c_action_open_stmt(Token_t *label, Token_t *openKeyword, Token_t *eos)
+    void c_action_open_stmt(Token_t *label, Token_t *openKeyword, Token_t*)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -13542,7 +13427,7 @@ void c_action_case_value()
         printf("In c_action_connect_spec_list__begin() \n");
     }
 
-    void c_action_connect_spec_list(int count)
+    void c_action_connect_spec_list(int)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_connect_spec_list() \n");
@@ -13555,8 +13440,7 @@ void c_action_case_value()
      *
      * @param label The label.
      */
-// void c_action_close_stmt(Token_t * label)
-    void c_action_close_stmt(Token_t *label, Token_t *closeKeyword, Token_t *eos)
+    void c_action_close_stmt(Token_t *label, Token_t *closeKeyword, Token_t*)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -13687,7 +13571,7 @@ void c_action_case_value()
      * @param label The label.
      * @param hasInputItemList True if has an input item list.
      */
-void c_action_read_stmt(Token_t *label, Token_t *readKeyword, Token_t *eos, ofp_bool hasInputItemList)
+void c_action_read_stmt(Token_t* label, Token_t* readKeyword, Token_t* /*eos*/, ofp_bool hasInputItemList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -13911,7 +13795,7 @@ void c_action_read_stmt(Token_t *label, Token_t *readKeyword, Token_t *eos, ofp_
      * @param label The statement label
      * @param hasOutputItemList True if output-item-list is present
      */
-void c_action_write_stmt(Token_t *label, Token_t *writeKeyword, Token_t *eos, ofp_bool hasOutputItemList)
+void c_action_write_stmt(Token_t* label, Token_t* writeKeyword, Token_t* /*eos*/, ofp_bool hasOutputItemList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -14229,7 +14113,7 @@ void c_action_write_stmt(Token_t *label, Token_t *writeKeyword, Token_t *eos, of
      * @param label The label.
      * @param hasOutputItemList True if output-item-list is present
      */
-void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, ofp_bool hasOutputItemList)
+void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/, ofp_bool hasOutputItemList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -14247,19 +14131,11 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
         ROSE_ASSERT(printKeyword != NULL);
         setSourcePosition(printStatement, printKeyword);
 
-        // Set below in this function...
-        // setStatementNumericLabel(printStatement,label);
-
-        // ioStatement->set_io_statement(SgIOStatement::e_print);
-
 #if 1
         // Output debugging information about saved state (stack) information.
         outputState("At TOP of R912 c_action_print_stmt()");
 #endif
 
-        // DQ (12/20/2007): Handle the case of print without an argument.
-        // ROSE_ASSERT(astExpressionStack.empty() == false);
-        // SgExprListExp* exprListExp = isSgExprListExp(astExpressionStack.front());
         SgExprListExp* exprListExp = NULL;
         if (astExpressionStack.empty() == true)
         {
@@ -14290,8 +14166,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
         // there was a format label then we will have a integer literal on the stack.
 
         // DQ (1/26/2009): Avoid getting things from the stack that are at least wrong to be used in a print format.
-        // if (astExpressionStack.empty() == false)
-        // if (astExpressionStack.empty() == false && isSgBinaryOp(astExpressionStack.front()) == NULL)
         if (astExpressionStack.empty() == false)
         {
             SgExpression* formatLabel = astExpressionStack.front();
@@ -14301,13 +14175,10 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
             // ROSE_ASSERT(isSgBinaryOp(formatLabel) == NULL);
 
             // R914 should have pushed a "fmt" token onto the astNameStack
-            // ROSE_ASSERT(astNameStack.empty() == false);
             if (astNameStack.empty() == false)
             {
                 Token_t* name = astNameStack.front();
-
-                // printf ("In c_action_print_stmt(): processing token = %s with expression = %p = %s \n",name->text,formatLabel,formatLabel->class_name().c_str());
-                ROSE_ASSERT (strncasecmp(name->text,"fmt",3) == 0);
+                ASSERT_require(strncasecmp(name->text,"fmt",3) == 0);
 
                 // The "unit=" string is optional, if it was not present then a toekn was pushed onto the stack with the text value "defaultString"
                 // if ( (strncasecmp(name->text,"fmt",3) == 0) || (strncmp(name->text,"defaultString",13) == 0) && (writeStatement->get_format() == NULL) && numberOfDefaultOptions == 2)
@@ -14956,7 +14827,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      *
      * @param typeKeyword T_TYPE or T_CLASS token.
      */
-    void c_action_dtv_type_spec(Token_t * typeKeyword)
+    void c_action_dtv_type_spec(Token_t * /*typeKeyword*/)
     {
     }
 
@@ -14967,8 +14838,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      *
      * @param label The label.
      */
-// void c_action_wait_stmt(Token_t * label)
-    void c_action_wait_stmt(Token_t *label, Token_t *waitKeyword, Token_t *eos)
+    void c_action_wait_stmt(Token_t* /*label*/, Token_t* waitKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_wait_stmt(): waitKeyword = %p = %s \n",
@@ -15081,9 +14951,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param hasPositionSpecList True if there is a position spec list. False is there is a file unit number.
      */
-// void c_action_backspace_stmt(Token_t * label, ofp_bool hasPositionSpecList)
-    void c_action_backspace_stmt(Token_t *label, Token_t *backspaceKeyword,
-            Token_t *eos, ofp_bool hasPositionSpecList)
+    void c_action_backspace_stmt(Token_t* /*label*/, Token_t* backspaceKeyword,
+            Token_t* /*eos*/, ofp_bool /*hasPositionSpecList*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_backspace_stmt(): waitKeyword = %p = %s \n",
@@ -15105,7 +14974,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
         outputState("At BOTTOM of R923 c_action_backspace_stmt()");
 #endif
 
-        // printf ("Warning: Ignoring all but the 'unit' in the OpenStatement \n");
         while (astExpressionStack.empty() == false)
         {
             // DQ (12/5/2010): This fails for test2010_129.f90.
@@ -15162,9 +15030,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param hasPositionSpecList True if there is a position spec list. False is there is a file unit number.
      */
-// void c_action_endfile_stmt(Token_t * label, ofp_bool hasPositionSpecList)
-    void c_action_endfile_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *fileKeyword, Token_t *eos, ofp_bool hasPositionSpecList)
+    void c_action_endfile_stmt(Token_t* /*label*/, Token_t* endKeyword,
+            Token_t* fileKeyword, Token_t* /*eos*/, ofp_bool hasPositionSpecList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -15185,7 +15052,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
         outputState("At BOTTOM of R924 c_action_endfile_stmt()");
 #endif
 
-        // printf ("Warning: Ignoring all but the 'unit' in the OpenStatement \n");
         while (astExpressionStack.empty() == false)
         {
             ROSE_ASSERT(astNameStack.empty() == false);
@@ -15238,7 +15104,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param hasPositionSpecList True if there is a position spec list. False is there is a file unit number.
      */
-    void c_action_rewind_stmt(Token_t *label, Token_t *rewindKeyword, Token_t *eos,
+    void c_action_rewind_stmt(Token_t* /*label*/, Token_t* rewindKeyword, Token_t* /*eos*/,
             ofp_bool hasPositionSpecList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -15355,7 +15221,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     void c_action_position_spec_list__begin()
     {
     }
-    void c_action_position_spec_list(int count)
+    void c_action_position_spec_list(int)
     {
     }
 
@@ -15369,8 +15235,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param hasFlushSpecList True if there is a flush spec list. False is there is a file unit number.
      */
-// void c_action_flush_stmt(Token_t * label, ofp_bool hasFlushSpecList)
-    void c_action_flush_stmt(Token_t *label, Token_t *flushKeyword, Token_t *eos,
+    void c_action_flush_stmt(Token_t* label, Token_t* flushKeyword, Token_t* /*eos*/,
             ofp_bool hasFlushSpecList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -15473,7 +15338,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     void c_action_flush_spec_list__begin()
     {
     }
-    void c_action_flush_spec_list(int count)
+    void c_action_flush_spec_list(int)
     {
     }
 
@@ -15491,7 +15356,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 // used to communicate # inquire specs from 'c_action_inquire_spec_list' to 'c_action_inquire_stmt'
     static int inquireSpecListCount;
 
-    void c_action_inquire_stmt(Token_t *label, Token_t *inquireKeyword, Token_t *id, Token_t *eos, ofp_bool isType2)
+    void c_action_inquire_stmt(Token_t */*label*/, Token_t *inquireKeyword, Token_t *id, Token_t*, ofp_bool isType2)
     {
         if ( SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL )
         printf ("In c_action_inquire_stmt(): inquireKeyword = %p = %s id = %s isType2 = %s \n",inquireKeyword,inquireKeyword != NULL ? inquireKeyword->text : "NULL",id != NULL ? id->text : "NULL",isType2 ? "true" : "false");
@@ -15755,8 +15620,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      *
      * @param label The label.
      */
-// void c_action_format_stmt(Token_t * label)
-    void c_action_format_stmt(Token_t *label, Token_t *formatKeyword, Token_t *eos)
+    void c_action_format_stmt(Token_t *label, Token_t *formatKeyword, Token_t*)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -16090,8 +15954,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 #endif
     }
 
-    void c_action_main_program(ofp_bool hasProgramStmt, ofp_bool hasExecutionPart,
-            ofp_bool hasInternalSubprogramPart)
+    void c_action_main_program(ofp_bool /*hasProgramStmt*/, ofp_bool /*hasExecutionPart*/,
+            ofp_bool /*hasInternalSubprogramPart*/)
     {
         // Now can we setup the endOfConstruct in the global scope! But we have no token to use to do this!
 
@@ -16109,9 +15973,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 
         ROSE_ASSERT(astScopeStack.empty() == false);
 
-        // resetSourcePosition(astScopeStack.front(),endKeyword);
         SgStatement* lastStatement = astScopeStack.front()->lastStatement();
-        // printf ("In c_action_main_program__begin(): lastStatement = %p \n",lastStatement);
         if (lastStatement != NULL)
         {
             resetEndingSourcePosition(astScopeStack.front(), lastStatement);
@@ -16151,7 +16013,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      *
      * @param hasPrefix True if has a prefix.
      */
-    void c_action_ext_function_subprogram(ofp_bool hasPrefix)
+    void c_action_ext_function_subprogram(ofp_bool /*hasPrefix*/)
     {
     }
 
@@ -16162,7 +16024,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label Optional statement label
      * @param id Optional program name
      */
-    void c_action_program_stmt(Token_t *label, Token_t *programKeyword, Token_t *id, Token_t *eos)
+    void c_action_program_stmt(Token_t *label, Token_t *programKeyword, Token_t *id, Token_t*)
     {
         // If this is called then we want to mark the SgProgramHeaderStatement (derived from a SgFunctionDeclaration)
         // as explicit in the source code (using the tokens to communicate the source position information)
@@ -16284,9 +16146,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label Optional statement label
      * @param id Optional program name
      */
-// void c_action_end_program_stmt(Token_t * label, Token_t * id)
-    void c_action_end_program_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *programKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_program_stmt(Token_t* label, Token_t* endKeyword,
+            Token_t* /*programKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_end_program_stmt() label = %s id = %s \n",
@@ -16381,7 +16242,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param id The identifier, if present, otherwise null.
      */
-    void c_action_module_stmt(Token_t *label, Token_t *moduleKeyword, Token_t *id, Token_t *eos)
+    void c_action_module_stmt(Token_t* label, Token_t* moduleKeyword, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -16418,17 +16279,12 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param id The identifier, if present, otherwise null.
      */
-    void c_action_end_module_stmt(Token_t *label, Token_t *endKeyword, Token_t *moduleKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_module_stmt(Token_t* label, Token_t* endKeyword, Token_t* /*moduleKeyword*/,
+            Token_t* id, Token_t* /*eos*/)
     {
-        // printf ("SgProject::get_verbose() = %d \n",SgProject::get_verbose());
-        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
-        printf("In c_action_end_module_stmt(): id = %p = %s \n", id,
-                id != NULL ? id->text : "NULL");
-
-#if 0
-        printf ("In c_action_end_module_stmt(): id = %p = %s \n",id,id != NULL ? id->text : "NULL");
-#endif
-
+        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL) {
+           printf("In c_action_end_module_stmt(): id = %p = %s \n", id, id != NULL ? id->text : "NULL");
+        }
 #if 1
         // Output debugging information about saved state (stack) information.
         outputState("At TOP of R1106 c_action_end_module_stmt()");
@@ -16441,7 +16297,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 
         SgClassDefinition* moduleScope = isSgClassDefinition(astScopeStack.front());
         ROSE_ASSERT(moduleScope != NULL);
-        // printf ("moduleScope = %p = %s \n",moduleScope,moduleScope->class_name().c_str());
 
         // FMZ: 05/30/2008  add the subtree root to the map
         string fileName = moduleStatement->get_name();
@@ -16451,7 +16306,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
                 StringUtility::convertToLowerCase(fileName).c_str(),
                 fileName.c_str());
 
-        // DQ (11/12/2008): Modified to force filename to lower case.
         fileName = StringUtility::convertToLowerCase(fileName);
 
         setStatementNumericLabel(moduleStatement, label);
@@ -16598,9 +16452,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param containsKeyword T_CONTAINS token.
      * @param eos T_EOS token.
      */
-
-// DQ (2/18/2008): New version of OFP does not have function parameters for this function.
-// void c_action_module_subprogram_part(Token_t* containsKeyword, Token_t* eos)
 #if ROSE_OFP_MINOR_VERSION_NUMBER >= 8 & ROSE_OFP_PATCH_VERSION_NUMBER >= 0
     void c_action_module_subprogram_part(int count)
 #else
@@ -16655,8 +16506,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param hasRenameList True if has a rename list.
      * @param hasOnly True if has an only statement, regardless of whether a list is present.
      */
-    void c_action_use_stmt(Token_t *label, Token_t *useKeyword, Token_t *id,
-            Token_t *onlyKeyword, Token_t *eos, ofp_bool hasModuleNature,
+    void c_action_use_stmt(Token_t* label, Token_t* useKeyword, Token_t* id,
+            Token_t* onlyKeyword, Token_t* /*eos*/, ofp_bool hasModuleNature,
             ofp_bool hasRenameList, ofp_bool hasOnly)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -17256,15 +17107,13 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      *
      * Modified v0.7.2 (new arguments added)
      */
-    void c_action_only(ofp_bool hasGenericSpec, ofp_bool hasRename,
-            ofp_bool hasOnlyUseName)
+    void c_action_only(ofp_bool /*hasGenericSpec*/, ofp_bool /*hasRename*/,
+            ofp_bool /*hasOnlyUseName*/)
     {
         //  - boolean hasGenericSpec, boolean hasRename, boolean hasOnlyUseName
-
-        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
-        printf("In c_action_only() \n");
-
-        // outputState("At BOTTOM of R1112 c_action_only()");
+        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL) {
+           printf("In c_action_only() \n");
+        }
     }
 
     /** R1112 list
@@ -17385,9 +17234,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param id Identifier if it exists. Otherwise, null.
      */
-// void c_action_block_data_stmt(Token_t * label, Token_t * id)
-    void c_action_block_data_stmt(Token_t *label, Token_t *blockKeyword,
-            Token_t *dataKeyword, Token_t *id, Token_t *eos)
+    void c_action_block_data_stmt(Token_t* label, Token_t* blockKeyword,
+            Token_t* /*dataKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         // The block data statement is implemented to build a function (which initializes data)
         // Note that it can be declared with the "EXTERNAL" statement and as such it works much
@@ -17452,9 +17300,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param id Identifier if it exists. Otherwise, null.
      */
-// void c_action_end_block_data_stmt(Token_t * label, Token_t * id)
-    void c_action_end_block_data_stmt(Token_t *label, Token_t *endKeyword,
-            Token_t *blockKeyword, Token_t *dataKeyword, Token_t *id, Token_t *eos)
+    void c_action_end_block_data_stmt(Token_t* label, Token_t* endKeyword,
+            Token_t* /*blockKeyword*/, Token_t* /*dataKeyword*/, Token_t* id, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_end_block_data_stmt(): label = %p id= %p \n",
@@ -17553,8 +17400,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param eos End of statement token.
      * @param hasGenericSpec True if has a generic spec.
      */
-    void c_action_interface_stmt(Token_t *label, Token_t *abstractToken,
-            Token_t *keyword, Token_t *eos, ofp_bool hasGenericSpec)
+    void c_action_interface_stmt(Token_t* /*label*/, Token_t* abstractToken,
+            Token_t* keyword, Token_t* /*eos*/, ofp_bool hasGenericSpec)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -17569,7 +17416,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
         outputState("At TOP of R1203 c_action_interface_stmt()");
 #endif
 
-        // This could be the first stament in a program.
+        // This could be the first statement in a program.
         build_implicit_program_statement_if_required();
 
         // Note that an interface need not have a name!
@@ -17597,8 +17444,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
             // DQ (10/10/2008): We want to use the actual operator name if it is a .xxx. form
             interfaceNameString = interfaceOperatorNameString;
 
-            // printf ("interfaceNameString = %s \n",interfaceNameString.c_str());
-            // ROSE_ASSERT(interfaceNameString.size() > 1);
             astNameStack.pop_front();
 
             generic_spec_kind = SgInterfaceStatement::e_operator_interface_type;
@@ -17625,8 +17470,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
         ROSE_ASSERT(currentScope != NULL);
 
         SgName interfaceName = interfaceNameString;
-        // SgInterfaceStatement* interfaceStatement = new SgInterfaceStatement(interfaceName,body,currentScope);
-        // SgInterfaceStatement* interfaceStatement = new SgInterfaceStatement(interfaceName,NULL);
 
         // DQ (10/1/2008): Changed interface to support a list of interface blocks (now a SgDeclarationStatementPtrList).
         SgInterfaceStatement* interfaceStatement = new SgInterfaceStatement(
@@ -17639,8 +17482,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 
         // DQ (10/2/2008): Push the new SgInterfaceStatement onto the astInterfaceStack.
         astInterfaceStack.push_front(interfaceStatement);
-
-        // astScopeStack.push_front(body);
 
         // DQ (10/8/2008): Fixup astNameStack to clear any remaining entries (see test2008_55.f90)
         if (astNameStack.empty() == false)
@@ -17671,8 +17512,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param eos End of statement token.
      * @param hasGenericSpec True if has a generic spec.
      */
-    void c_action_end_interface_stmt(Token_t *label, Token_t *kw1, Token_t *kw2,
-            Token_t *eos, ofp_bool hasGenericSpec)
+    void c_action_end_interface_stmt(Token_t* /*label*/, Token_t* kw1, Token_t* kw2,
+            Token_t* /*eos*/, ofp_bool hasGenericSpec)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -17731,9 +17572,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label The label.
      * @param module Name of the module, if present.
      */
-// void c_action_procedure_stmt(Token_t * label, Token_t * module)
-    void c_action_procedure_stmt(Token_t *label, Token_t *module,
-            Token_t *procedureKeyword, Token_t *eos)
+    void c_action_procedure_stmt(Token_t* /*label*/, Token_t* module,
+            Token_t* procedureKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -17878,19 +17718,17 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param eos T_EOS token.
      * @param hasGenericNameList True if has generic name list.
      */
-    void c_action_import_stmt(Token_t *label, Token_t *importKeyword, Token_t *eos,
+    void c_action_import_stmt(Token_t* /*label*/, Token_t* importKeyword, Token_t* /*eos*/,
             ofp_bool hasGenericNameList)
     {
-        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
-        printf(
-                "In c_action_import_stmt(): importKeyword = %p = %s hasGenericNameList = %s \n",
-                importKeyword,
-                importKeyword != NULL ? importKeyword->text : "NULL",
-                hasGenericNameList ? "true" : "false");
+        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL) {
+          printf("In c_action_import_stmt(): importKeyword = %p = %s hasGenericNameList = %s \n",
+                 importKeyword,
+                 importKeyword != NULL ? importKeyword->text : "NULL",
+                 hasGenericNameList ? "true" : "false");
+        }
 
         SgImportStatement* importStatement = new SgImportStatement();
-
-        // DQ (10/6/2008): It seems that we all of a sudden need thes to be set!
         importStatement->set_definingDeclaration(importStatement);
         importStatement->set_firstNondefiningDeclaration(importStatement);
 
@@ -17933,9 +17771,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param externalKeyword T_EXTERNAL token.
      * @param eos T_EOS token.
      */
-// void c_action_external_stmt(Token_t * label)
-    void c_action_external_stmt(Token_t *label, Token_t *externalKeyword,
-            Token_t *eos)
+    void c_action_external_stmt(Token_t* label, Token_t* externalKeyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_external_stmt(): label = %p \n", label);
@@ -18014,9 +17850,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param hasProcInterface True if has a procedure interface.
      * @param count Number of procedure attribute specifications.
      */
-// void c_action_procedure_declaration_stmt(Token_t * label, ofp_bool hasProcInterface, int count)
-    void c_action_procedure_declaration_stmt(Token_t *label,
-            Token_t *procedureKeyword, Token_t *eos, ofp_bool hasProcInterface,
+    void c_action_procedure_declaration_stmt(Token_t* label,
+            Token_t* procedureKeyword, Token_t* eos, ofp_bool hasProcInterface,
             int count)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -18058,7 +17893,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      *
      * @param spec The procedure attribute specification.
      */
-// void c_action_proc_attr_spec(int spec)
     void c_action_proc_attr_spec(Token_t * attrKeyword, Token_t * id, int spec)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -18272,9 +18106,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      *
      * @param label The label.
      */
-// void c_action_intrinsic_stmt(Token_t * label)
-    void c_action_intrinsic_stmt(Token_t *label, Token_t *intrinsicToken,
-            Token_t *eos)
+    void c_action_intrinsic_stmt(Token_t* label, Token_t* intrinsicToken, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf("In c_action_intrinsic_stmt(): label = %p \n", label);
@@ -18314,8 +18146,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label Optional statement label
      * @param hasActionArgSpecList True if an actual-arg-spec-list is present
      */
-// void c_action_call_stmt(Token_t * label, ofp_bool hasActualArgSpecList)
-    void c_action_call_stmt(Token_t *label, Token_t *callKeyword, Token_t *eos,
+    void c_action_call_stmt(Token_t* label, Token_t* callKeyword, Token_t* /*eos*/,
             ofp_bool hasActualArgSpecList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -18617,8 +18448,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     }
     ;
 
-    void c_action_function_stmt(Token_t * label, Token_t * keyword, Token_t * name,
-            Token_t * eos, ofp_bool hasGenericNameList, ofp_bool hasSuffix)
+    void c_action_function_stmt(Token_t* label, Token_t* keyword, Token_t* name,
+            Token_t* /*eos*/, ofp_bool hasGenericNameList, ofp_bool hasSuffix)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -18855,9 +18686,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param eos End of statement token.
      * @param id The identifier, if present. Otherwise null.
      */
-// void c_action_end_function_stmt(Token_t * label, Token_t * id)
-    void c_action_end_function_stmt(Token_t * label, Token_t * keyword1,
-            Token_t * keyword2, Token_t * name, Token_t * eos)
+    void c_action_end_function_stmt(Token_t* label, Token_t* keyword1,
+            Token_t* keyword2, Token_t* name, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         {
@@ -18975,9 +18805,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param hasBindingSpec True is has a binding spec.
      * @param hasArgSpecifier True if has anything between parentheses following statement.
      */
-// void c_action_subroutine_stmt(Token_t * label, Token_t * routineName, ofp_bool hasPrefix, ofp_bool hasDummyArgList, ofp_bool hasBindingSpec, ofp_bool hasArgSpecifier)
-    void c_action_subroutine_stmt(Token_t * label, Token_t * keyword,
-            Token_t * name, Token_t * eos, ofp_bool hasPrefix,
+    void c_action_subroutine_stmt(Token_t* label, Token_t* keyword,
+            Token_t* name, Token_t* /*eos*/, ofp_bool hasPrefix,
             ofp_bool hasDummyArgList, ofp_bool hasBindingSpec,
             ofp_bool hasArgSpecifier)
     {
@@ -19127,9 +18956,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param name The name of the subroutine (may be null).
      * @param eos End of statement token.
      */
-// void c_action_end_subroutine_stmt(Token_t * label, Token_t * id)
-    void c_action_end_subroutine_stmt(Token_t * label, Token_t * keyword1,
-            Token_t * keyword2, Token_t * name, Token_t * eos)
+    void c_action_end_subroutine_stmt(Token_t* label, Token_t* keyword1,
+            Token_t* keyword2, Token_t* name, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         {
@@ -19248,10 +19076,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param hasDummyArgList True if has a dummy argument list.
      * @param hasSuffix True if has a suffix.
      */
-// void c_action_entry_stmt(Token_t * label, ofp_bool hasDummyArgList, ofp_bool hasSuffix)
-// void c_action_entry_stmt(Token_t * label, Token_t * keyword, Token_t * eos, ofp_bool hasDummyArgList, ofp_bool hasSuffix)
-    void c_action_entry_stmt(Token_t * label, Token_t * keyword, Token_t * id,
-            Token_t * eos, ofp_bool hasDummyArgList, ofp_bool hasSuffix)
+    void c_action_entry_stmt(Token_t* label, Token_t* keyword, Token_t* id,
+            Token_t* /*eos*/, ofp_bool hasDummyArgList, ofp_bool hasSuffix)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         {
@@ -19412,8 +19238,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param eos End of statement token.
      * @param hasScalarIntExpr True if there is a scalar in in the return;
      */
-// void c_action_return_stmt(Token_t * label, ofp_bool hasScalarIntExpr)
-    void c_action_return_stmt(Token_t * label, Token_t * keyword, Token_t * eos,
+    void c_action_return_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/,
             ofp_bool hasScalarIntExpr)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
@@ -19563,7 +19388,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param keyword The CONTAINS keyword token.
      * @param eos End of statement token.
      */
-    void c_action_contains_stmt(Token_t *label, Token_t *keyword, Token_t *eos)
+    void c_action_contains_stmt(Token_t* label, Token_t* keyword, Token_t* /*eos*/)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -19590,10 +19415,8 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param functionName The name of the function.
      * @param hasGenericNameList True if there is a list in the statement.
      */
-// void c_action_stmt_function_stmt(Token_t * label, ofp_bool hasGenericNameList)
-// void c_action_stmt_function_stmt(Token_t * label, Token_t * functionName, ofp_bool hasGenericNameList)
-    void c_action_stmt_function_stmt(Token_t *label, Token_t *functionName,
-            Token_t *eos, ofp_bool hasGenericNameList)
+    void c_action_stmt_function_stmt(Token_t* label, Token_t* functionName,
+            Token_t* /*eos*/, ofp_bool hasGenericNameList)
     {
         if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
         printf(
@@ -19602,9 +19425,9 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
                 hasGenericNameList ? "true" : "false");
     }
 
-    void c_action_end_of_stmt(Token_t * eos)
+    void c_action_end_of_stmt(Token_t* eos)
     {
-        ROSE_ASSERT(eos != NULL);
+        ASSERT_not_null(eos);
 
         if ( SgProject::get_verbose() > 0)
         printf("^^^^^^^^^^^^^^^^^^^^^^^^^^ c_action_end_of_stmt: line %d col %d\n", eos->line, eos->col);
@@ -19750,11 +19573,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * Modified v0.7.2 (filename argument added)
      * Modified v0.8.3 (filepath argument added)
      */
-#if ROSE_OFP_MINOR_VERSION_NUMBER >= 8 & ROSE_OFP_PATCH_VERSION_NUMBER >= 3
-    void c_action_end_of_file(const char *filename, const char *filepath)
-#else
-    void c_action_end_of_file(const char *filepath)
-#endif
+    void c_action_end_of_file(const char* /*filename*/, const char* /*filepath*/)
     {
         // New function to support Fortran include mechanism
         ROSE_ASSERT(astIncludeStack.empty() == false);
@@ -19871,10 +19690,11 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 #endif
     }
 
-    void c_action_rice_co_shape_spec(const char *arg)
+    void c_action_rice_co_shape_spec(const char* /*arg*/)
     {
-        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL)
-        printf("In c_action_co_shape_spec() \n");
+        if (SgProject::get_verbose() > DEBUG_RULE_COMMENT_LEVEL) {
+           printf("In c_action_co_shape_spec() \n");
+        }
     }
 
     void c_action_allocate_coarray_spec()
@@ -19944,8 +19764,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     /**
      * Copointer dereference.
      */
-    void c_action_rice_co_dereference_op(Token_t *leftBracket,
-            Token_t *rightBracket)
+    void c_action_rice_co_dereference_op(Token_t* /*leftBracket*/, Token_t* /*rightBracket*/)
     {
         MultipartReferenceType& mprt = astMultipartReferenceStack.front();
         mprt.hasCo_deref = true;
@@ -20015,7 +19834,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label: label of the statement
      * @param team_id: the team ID
      */
-    void c_action_rice_co_with_team_stmt(Token_t *label, Token_t *team_id)
+    void c_action_rice_co_with_team_stmt(Token_t* /*label*/, Token_t* team_id)
     {
         if (team_id == NULL)
         printf("ERROR: Rice 'with team' statement without identifier\n");
@@ -20062,9 +19881,9 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param label: label of the statement
      * @param team_id: the team ID (optional)
      */
-    void c_action_rice_end_with_team_stmt(Token_t *label, Token_t *team_id, Token_t *eos)
+    void c_action_rice_end_with_team_stmt(Token_t* /*label*/, Token_t* /*team_id*/, Token_t* eos)
     {
-        ROSE_ASSERT(eos != NULL);
+        ASSERT_not_null(eos);
 
         ROSE_ASSERT(astScopeStack.empty() == false);
         setSourceEndPosition(getTopOfScopeStack(), eos);
@@ -20081,7 +19900,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     static const char * FINISH_SUBR_NAME = "CAF_FINISH";
     static const char * ENDFINISH_SUBR_NAME = "CAF_END_FINISH";
 
-    void c_action_rice_finish_stmt(Token_t *label, Token_t *teamToken, Token_t *eos)
+    void c_action_rice_finish_stmt(Token_t* label, Token_t* teamToken, Token_t* eos)
     {
 #if 0
         outputState("At TOP of c_action_rice_finish_stmt()");
@@ -20089,7 +19908,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
 
         finish_stack.push(teamToken);
 
-        ROSE_ASSERT(eos != NULL);
+        ASSERT_not_null(eos);
         ROSE_ASSERT(label == NULL || label->text != NULL);
         ROSE_ASSERT(teamToken == NULL || teamToken->text != NULL);
 
@@ -20160,8 +19979,6 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
             ROSE_ABORT();
         }
 
-        ROSE_ASSERT(eos != NULL);
-
         // add translation to current scope
         Token * caf_end_finish = create_token(eos->line, eos->col, 0, ENDFINISH_SUBR_NAME);
         c_action_section_subscript_list__begin();// R619
@@ -20186,7 +20003,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
      * @param hasArgs True if an actual-arg-spec-list is present.
      * @param hasWhere True if a 'processor@team' is present; if so, a processor number is on expr stack.
      */
-    void c_action_rice_spawn_stmt(Token_t * label, Token_t * spawn, Token_t * eos, ofp_bool hasEvent)
+    void c_action_rice_spawn_stmt(Token_t* /*label*/, Token_t* spawn, Token_t* /*eos*/, ofp_bool hasEvent)
     {
 #if 0
         outputState("At TOP of c_action_rice_spawn_stmt()");
@@ -20286,7 +20103,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     void c_action_component_initialization()
     {
     }
-    void c_action_allocate_co_shape_spec(ofp_bool carg_0)
+    void c_action_allocate_co_shape_spec(ofp_bool)
     {
     }
     void c_action_bounds_remapping()
@@ -20298,7 +20115,7 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     void c_action_component_data_source()
     {
     }
-    void c_action_component_spec(Token_t *carg_0)
+    void c_action_component_spec(Token_t*)
     {
     }
     void c_action_data_pointer_object()
@@ -20307,10 +20124,10 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     void c_action_deferred_co_shape_spec()
     {
     }
-    void c_action_enumerator(Token_t *carg_0, ofp_bool carg_1)
+    void c_action_enumerator(Token_t*, ofp_bool)
     {
     }
-    void c_action_final_binding(Token_t *carg_0)
+    void c_action_final_binding(Token_t*)
     {
     }
     void c_action_forall_body_construct()
@@ -20319,13 +20136,13 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     void c_action_forall_construct()
     {
     }
-    void c_action_image_selector(Token_t *leftBracket, Token_t *rightBracket)
+    void c_action_image_selector(Token_t*, Token_t*)
     {
     }
     void c_action_pointer_object()
     {
     }
-    void c_action_proc_interface(Token_t *carg_0)
+    void c_action_proc_interface(Token_t*)
     {
     }
     void c_action_proc_pointer_object()
@@ -20337,14 +20154,13 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     void c_action_select_type_construct()
     {
     }
-    void c_action_specific_binding(Token_t *carg_0, Token_t *carg_1,
-            Token_t *carg_2, Token_t *carg_3, ofp_bool carg_4)
+    void c_action_specific_binding(Token_t*, Token_t*, Token_t*, Token_t*, ofp_bool)
     {
     }
-    void c_action_structure_constructor(Token_t *carg_0)
+    void c_action_structure_constructor(Token_t*)
     {
     }
-    void c_action_type_param_attr_spec(Token_t *carg_0)
+    void c_action_type_param_attr_spec(Token_t*)
     {
     }
     void c_action_type_spec()
@@ -20354,13 +20170,11 @@ void c_action_print_stmt(Token_t *label, Token_t *printKeyword, Token_t *eos, of
     {
     }
 
-// DQ (11/20/2010): Added Token support using newest version of OFP 0.8.2.
-    void c_action_next_token(Token_t *token)
+    void c_action_next_token(Token_t* token)
     {
         // This parser action is used in a separate mode to read the tokens from
         // the file as part of a separate pass over the AST.
-
-        ROSE_ASSERT(token != NULL);
+        ASSERT_not_null(token);
 
         string text = token->text;
         string currentFilename = getCurrentFilename();

@@ -22,8 +22,7 @@
 extern DepTestStatistics DepStats;
 #endif
 
-
-extern bool DebugDep();
+DebugLog DebugDepInfo("-debugdeupinfo");
 
 void PrintResults(const std::string buffer) {
    std::string filename;
@@ -46,13 +45,26 @@ bool AnalyzeStmtRefs( AstInterface& fa, const AstNodePtr& n,
                       CollectObject<AstNodePtr> &wRefs,
                       CollectObject<AstNodePtr> &rRefs)
 {
-  std::function<bool(AstNodePtr, AstNodePtr)> colw = [&wRefs]
-          (AstNodePtr mod_first, AstNodePtr mod_second) {
+  bool has_unknown = false;
+  std::function<bool(AstNodePtr, AstNodePtr)> colw = [&wRefs, &has_unknown]
+          (AstNodePtr mod_first, AstNodePtr /*mod_second*/) {
+                  if (mod_first == AST_UNKNOWN) {
+                     has_unknown = true;
+                     return true;
+                  }
                   return wRefs(mod_first); };
-  std::function<bool(AstNodePtr, AstNodePtr)> colr = [&rRefs]
-          (AstNodePtr read_first, AstNodePtr read_second) {
+  std::function<bool(AstNodePtr, AstNodePtr)> colr = [&rRefs, &has_unknown]
+          (AstNodePtr read_first, AstNodePtr /*read_second*/) {
+                  if (read_first == AST_UNKNOWN) {
+                     has_unknown = true;
+                     return true;
+                  }
                   return rRefs(read_first); };
-  return StmtSideEffectCollect<AstNodePtr>(fa, LoopTransformInterface::getSideEffectInterface())(n,&colw,&colr);
+  StmtSideEffectCollect op(fa, LoopTransformInterface::getSideEffectInterface());
+  op.set_modify_collect(colw);
+  op.set_read_collect(colr);
+  op(n);
+  return !has_unknown;
 }
 
 std::string toString( std::vector<SymbolicVal> & analvec)
@@ -159,18 +171,18 @@ GetLoopInfo( const AstNodePtr& s)
        lbvec.push_back(-lbleft);
        SetDep op(info.domain, DomainCond(), 0);
        if (!AnalyzeEquation(lbvec, info.ivarbounds, boundop, op, DepRel(DEPDIR_LE, 0)))
-         if (DebugDep())
+         if (DebugDepInfo())
             std::cerr << "unable to analyze equation: " << toString(lbvec) << std::endl;
        SymbolicVal ubleft =
          DecomposeAffineExpression(ub,info1.ivars,ubvec,dim1);
        ubvec.push_back(-1);
        ubvec.push_back(-ubleft);
        if (!AnalyzeEquation(ubvec, info.ivarbounds, boundop, op, DepRel(DEPDIR_GE, 0)))
-          if (DebugDep())
+          if (DebugDepInfo())
              std::cerr << "unable to analyze equation: " << toString(ubvec) << std::endl;
        info.domain = op.get_domain1();
        info.domain.ClosureCond();
-       if (DebugDep())
+       if (DebugDepInfo())
          std::cerr << "domain of statement " << AstInterface::AstToString(s) << " is : " << info.domain.toString() << std::endl;
     }
     assert(!info.IsTop());
@@ -389,7 +401,7 @@ int adhocProbNum = 0;
 DepInfo AdhocDependenceTesting::ComputeArrayDep( DepInfoAnal& anal,
                        const DepInfoAnal::StmtRefDep& ref, DepType deptype)
 {
-  if (DebugDep())
+  if (DebugDepInfo())
      std::cerr << "compute array dep between " << AstInterface::AstToString(ref.r1.ref) << " and " << AstInterface::AstToString(ref.r2.ref) << std::endl;
 
   const DepInfoAnal::LoopDepInfo& info1 = anal.GetStmtInfo(ref.r1.stmt);
@@ -455,7 +467,7 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep( DepInfoAnal& anal,
     for (; i < dim; ++i) {
        cur[i] = varop(ref.commLoop, ref.r2.ref, cur[i], varpostfix2.str());
     }
-    if (DebugDep()) {
+    if (DebugDepInfo()) {
        std::cerr << "analyzing array subscripts: " << val1.toString() << " .vs. " << val2.toString() << "\n";
        std::cerr << "remaining value assumed to be loop invarient: " << left1.toString() << " + " << left2.toString() << "\n";
     }
@@ -464,7 +476,7 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep( DepInfoAnal& anal,
     SymbolicVal leftVal = -left2 - left1;
     cur.push_back(leftVal);
     assert(dim+1 == cur.size());
-    if (DebugDep()) {
+    if (DebugDepInfo()) {
        std::cerr << "coefficients for induction variables (" << dim1 << " + " << dim2 << "+ 1)\n";
        for (size_t i = 0; i < dim; ++i)
          std::cerr << cur[i].toString() << bounds[i].toString() << "\n" ;
@@ -481,7 +493,7 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep( DepInfoAnal& anal,
     }
     analMatrix.push_back(cur);
   }
-  if (DebugDep())
+  if (DebugDepInfo())
       std::cerr << "analyzing relation matrix : \n" <<  toString(analMatrix) << std::endl;
 
 #ifdef OMEGA
@@ -492,7 +504,7 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep( DepInfoAnal& anal,
   {
         return false;
   }
-  if (DebugDep())
+  if (DebugDepInfo())
       std::cerr << "after normalization, relation matrix = \n" << toString(analMatrix) << std::endl;
    DepInfo result=DepInfoGenerator::GetDepInfo(dim1, dim2, deptype, ref.r1.ref, ref.r2.ref, false, ref.commLevel);
   SetDep setdep( info1.domain, info2.domain, &result);
@@ -509,7 +521,7 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep( DepInfoAnal& anal,
        if (!AnalyzeEquation( analMatrix[k], bounds, boundop,setdep, DepRel(DEPDIR_EQ,0)))
                  {
            precise = false;
-           if (DebugDep())
+           if (DebugDepInfo())
               std::cerr << "unable to analyze equation " << k  << std::endl;
        }
   }
@@ -535,10 +547,10 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep( DepInfoAnal& anal,
       return DepInfo();
   if (precise)
       result.set_precise();
-  if (DebugDep())
+  if (DebugDepInfo())
        std::cerr << "after analyzing relation matrix, result =: \n" << result.toString() << std::endl;
   setdep.finalize();
-  if (DebugDep())
+  if (DebugDepInfo())
        std::cerr << "after restrictions from stmt domain, result =: \n" << result.toString() << std::endl;
   return result;
 }
@@ -667,7 +679,7 @@ ComputeDataDep( const AstNodePtr& s1,  const AstNodePtr& s2,
   CollectDoublyLinkedList<AstNodePtr> crRef1(rRef1),cwRef1(wRef1),crRef2(rRef2),cwRef2(wRef2);
   if (!AnalyzeStmtRefs( fa, s1, cwRef1, crRef1) ||
         (s1 != s2 && !AnalyzeStmtRefs( fa, s2, cwRef2, crRef2))) {
-       if (DebugDep())
+       if (DebugDepInfo())
           std::cerr << "cannot determine side effects of statements: " << AstInterface::AstToString(s1) << "; or " << AstInterface::AstToString(s2) << std::endl;
        ComputeIODep( s1, s2, outDeps, inDeps, DEPTYPE_IO);
   }
@@ -707,4 +719,3 @@ ComputeDataDep( const AstNodePtr& s1,  const AstNodePtr& s2,
                             DEPTYPE_INPUT, outDeps, inDeps);
    }
 }
-

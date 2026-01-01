@@ -31,7 +31,6 @@ error:
    Finished building legacy frontend AST, now build the SAGE AST ...
    DONE: frontend_main
    Warnings in legacy frontend/Sage III Translation Processing! (continuing ...)
-   identity-astFileIO:
 /g/g18/vuduc2/projects/ROSE/src-0.8.7a/src/frontend/SageIII/astPostProcessing/fixupDefiningAndNondefiningDeclarations.C:113:
 virtual void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode*):
 Assertion `declaration == definingDeclaration' failed.

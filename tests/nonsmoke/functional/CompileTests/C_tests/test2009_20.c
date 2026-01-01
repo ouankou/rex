@@ -1,6 +1,6 @@
 /*
  * bug 368
- * https://outreach.scidac.gov/tracker/index.php?func=detail&aid=368&group_id=24&atid=185
+ * https://outreach.scidac.gov/tracker/
  *
  * ROSE (or legacy frontend) tries to be smart when a possible out of bound
  * pointer access is encountered. e.g. double x[NUM]; if x -1 is used, the
@@ -28,4 +28,3 @@ int main()
   assert (x[0]==0.5);
   return 0;
 }
-

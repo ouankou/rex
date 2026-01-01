@@ -329,7 +329,6 @@
             OLD_FAILING_ORIGINAL_EXPRESSION_TREE_FIXUP_ORIGINAL_EXPRESSION_TREE_ELIMINATION =
         test2006_112.C test2010_25.C
 
-# DQ (9/24/2011): Failing astFileIO test as a result of making replacing constant folded values with the original expression trees.
             OLD_FAILING_ORIGINAL_EXPRESSION_TREE_FIXUP_CONSTANT_FOLDING_ELIMINATION_FOR_FILE_IO_TESTS =
             test2006_125.C
 
@@ -402,7 +401,6 @@ EXAMPLE_TESTCODES_REQUIRED_TO_PASS +=
 # This test code fails with Insure++
         EXAMPLE_TESTCODES_REQUIRED_TO_PASS += test2003_24.C test2004_82.C
 
-# DQ (2/12/2011): This test fails for the astFileIO tests in tests/nonsmoke/functional/roseTests/astFileIOTests.
 # test2011_08.C 
 
 # DQ (6/25/2010): Removed as part of testing!

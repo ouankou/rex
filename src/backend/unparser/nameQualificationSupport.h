@@ -22,7 +22,8 @@
 
 
 // API function for new hidden list support.
-void generateNameQualificationSupport( SgNode* node, std::set<SgNode*> & referencedNameSet );
+// void generateNameQualificationSupport( SgNode* node, std::set<SgNode*> & referencedNameSet );
+// void generateNameQualificationSupport( SgNode* node, NameQualificationSetType & referencedNameSet );
 
 class NameQualificationInheritedAttribute
    {
@@ -33,26 +34,6 @@ class NameQualificationInheritedAttribute
        // of types to support name qualification for SgPointerMemberType).
           SgStatement* currentStatement;
           SgNode* referenceNode;
-
-#if 0
-       // DQ (2/8/2019): And then I woke up in the morning and had a better idea.
-
-       // DQ (2/7/2019): Namen qaulification can under rare circumstances depende on the type.  And we need 
-       // to pass the type through from the lhs to the rhs to get the name qualification correct on the rhs.
-       // See Cxx11_tests/test2019_80.C and test2019_81.C for examples of this.
-          SgPointerMemberType* usingPointerToMemberType;
-
-          bool containsFunctionArgumentsOfPointerMemberType;
-#endif
-
-#if 0
-       // DQ (8/1/2020): Namespace alias need to have a priority when they are available.
-       // std::map<SgDeclarationStatement*,SgNamespaceAliasDeclarationStatement*> namespaceAliasDeclarationMap;
-          namespaceAliasMapType namespaceAliasDeclarationMap;
-     public:
-          typedef std::map<SgDeclarationStatement*,SgNamespaceAliasDeclarationStatement*> namespaceAliasMapType;
-#endif
-
 
      public:
 
@@ -91,6 +72,12 @@ class NameQualificationInheritedAttribute
 #endif
    };
 
+// DQ (8/1/2025): This has been moved to after the NameQualificationTraversal so that we could use the same typedef.
+/// API function for new hidden list support.
+// void generateNameQualificationSupport( SgNode* node, std::set<SgNode*> & referencedNameSet );
+void generateNameQualificationSupport(SgNode* node,
+                                      SgUnorderedNodeSet & referencedNameSet);
+
 
 class NameQualificationSynthesizedAttribute
    {
@@ -105,6 +92,29 @@ class NameQualificationSynthesizedAttribute
 
 class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQualificationInheritedAttribute, NameQualificationSynthesizedAttribute>
    {
+     public:
+       // DQ (8/1/2025): Adding support for typedef to this map so that we can later change it to an unordered_map.
+#if 0
+          typedef std::map<SgNode*,std::string> NameQualificationMapType;
+#else
+       // DQ (8/1/2025): This does not work yet, we need to change other references to std::map<SgNode*,std::string>
+       // to be consistant with this change.
+       // Try out the use of the std::unordered_map.
+       // typedef std::unordered_map<SgNode*,std::string> NameQualificationMapType;
+          typedef SgUnorderedMapNodeToString NameQualificationMapType;
+#endif
+
+          typedef std::map<SgNode*,NameQualificationMapType> NameQualificationMapOfMapsType;
+
+#if 0
+          typedef std::set<SgNode*> NameQualificationSetType;
+#else
+       // DQ (8/1/2025): This now compiles, with some changes in the unparser.C file.
+       // Try out the use of the std::unordered_set.
+       // typedef std::unordered_set<SgNode*> NameQualificationSetType;
+          typedef SgUnorderedNodeSet NameQualificationSetType;
+#endif
+
      private:
        // We might want to keep track of types that have been seen already.
        // Though, as a detail, all names in a class would be included as 
@@ -117,27 +127,34 @@ class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQuali
        // Data
        // DQ (6/21/2011): since this is used recursively we can't have this be a new set each time.
        // Build the local set to use to record when declaration that might required qualified references have been seen.
-          std::set<SgNode*> & referencedNameSet;
+       // std::set<SgNode*> & referencedNameSet;
+          NameQualificationSetType & referencedNameSet;
 
        // We keep the qualified names as a map of strings with keys defined by the SgNode pointer values.
        // These are referenced to the static data members in SgNode (SgNode::get_globalQualifiedNameMapForNames() 
        // and SgNode::get_globalQualifiedNameMapForTypes()).  A later implementation could reference the versions
        // in SgNode directly. Initially in the design these were not references, they were built up and assigned 
-       // to the static data members in SgNode, but this does not permit the proper handling of nexted types in 
-       // templates since the unparser uses the SgNode static members directly.  so the switch to make this a 
+       // to the static data members in SgNode, but this does not permit the proper handling of existing types in 
+       // templates since the unparser uses the SgNode static members directly.  So the switch to make this a 
        // reference fixes this problem.
-          std::map<SgNode*,std::string> & qualifiedNameMapForNames;
-          std::map<SgNode*,std::string> & qualifiedNameMapForTypes;
+       // std::map<SgNode*,std::string> & qualifiedNameMapForNames;
+       // std::map<SgNode*,std::string> & qualifiedNameMapForTypes;
+          NameQualificationMapType & qualifiedNameMapForNames;
+          NameQualificationMapType & qualifiedNameMapForTypes;
 
        // DQ (9/7/2014): Modified to handle template header map (for template declarations).
-          std::map<SgNode*,std::string> & qualifiedNameMapForTemplateHeaders;
+       // std::map<SgNode*,std::string> & qualifiedNameMapForTemplateHeaders;
+          NameQualificationMapType & qualifiedNameMapForTemplateHeaders;
 
        // DQ (6/3/2011): This is to save the names of types where they can be named differently when referenced 
        // from different locations in the source code.
-          std::map<SgNode*,std::string> & typeNameMap;
+       // std::map<SgNode*,std::string> & typeNameMap;
+          NameQualificationMapType & typeNameMap;
 
        // DQ (3/13/2019): Adding support for name qualification of the many parts of more complex types such as template types.
-          std::map<SgNode*,std::map<SgNode*,std::string> > & qualifiedNameMapForMapsOfTypes;
+       // std::map<SgNode*,std::map<SgNode*,std::string> > & qualifiedNameMapForMapsOfTypes;
+       // std::map<SgNode*,NameQualificationMapType> & qualifiedNameMapForMapsOfTypes;
+          NameQualificationMapOfMapsType & qualifiedNameMapForMapsOfTypes;
 
        // DQ (1/24/2019): We need to accumulate the list of possible classes that are private base classes so 
        // that additional name qualification can be added to prevent the access of base classes that have been 
@@ -183,6 +200,15 @@ class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQuali
           namespaceAliasMapType namespaceAliasDeclarationMap;
 #endif
 
+       // DQ (5/22/2024): Building a mechanism to turn off name qualification after a specific
+       // template instantiation function has been processed.  This is debug code to trace down
+       // a problem with name qualification growing too large and consuming all memory.
+          bool disableNameQualification;
+
+       // DQ (8/14/2025): Adding optimization (default is false) to support name qualification
+       // retricted to just the input source file (instead of the whole translation unit).
+          bool suppressNameQualificationAcrossWholeTranslationUnit;
+
      public:
        // DQ (4/3/2014): This map of sets is build once and then used to resolve when declarations have been
        // placed into scopes where they would permit name qualification (see test2014_32.C).
@@ -193,12 +219,18 @@ class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQuali
        // HiddenListTraversal(SgNode* root);
 
        // DQ (9/7/2014): Modified to handle template header map (for template declarations).
-          NameQualificationTraversal(std::map<SgNode*,std::string> & input_qualifiedNameMapForNames,
-                                     std::map<SgNode*,std::string> & input_qualifiedNameMapForTypes,
-                                     std::map<SgNode*,std::string> & input_qualifiedNameMapForTemplateHeaders,
-                                     std::map<SgNode*,std::string> & input_typeNameMap,
-                                     std::map<SgNode*,std::map<SgNode*,std::string> > & input_qualifiedNameMapForMapsOfTypes, 
-                                     std::set<SgNode*> & input_referencedNameSet);
+       // NameQualificationTraversal(std::map<SgNode*,std::string> & input_qualifiedNameMapForNames,
+       //                            std::map<SgNode*,std::string> & input_qualifiedNameMapForTypes,
+       //                            std::map<SgNode*,std::string> & input_qualifiedNameMapForTemplateHeaders,
+       //                            std::map<SgNode*,std::string> & input_typeNameMap,
+       //                            std::map<SgNode*,std::map<SgNode*,std::string> > & input_qualifiedNameMapForMapsOfTypes,
+       //                            std::set<SgNode*> & input_referencedNameSet);
+          NameQualificationTraversal(NameQualificationMapType & input_qualifiedNameMapForNames,
+                                     NameQualificationMapType & input_qualifiedNameMapForTypes,
+                                     NameQualificationMapType & input_qualifiedNameMapForTemplateHeaders,
+                                     NameQualificationMapType & input_typeNameMap,
+                                     NameQualificationMapOfMapsType & input_qualifiedNameMapForMapsOfTypes,
+                                     NameQualificationSetType & input_referencedNameSet);
 
        // DQ (4/19/2019): When a type is the input we need the current statement as well, might want to require this uniformally.
        // DQ (7/23/2011): This permits recursive calls to the traversal AND specification of the current scope
@@ -328,14 +360,19 @@ class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQuali
           void evaluateNameQualificationForTemplateArgumentList ( SgTemplateArgumentPtrList & templateArgumentList, SgScopeStatement* currentScope, SgStatement* positionStatement );
 
        // DQ (5/28/2011): Added support to set the global qualified name map.
-          const std::map<SgNode*,std::string> & get_qualifiedNameMapForNames() const;
-          const std::map<SgNode*,std::string> & get_qualifiedNameMapForTypes() const;
-          const std::map<SgNode*,std::string> & get_qualifiedNameMapForTemplateHeaders() const;
+       // const std::map<SgNode*,std::string> & get_qualifiedNameMapForNames() const;
+       // const std::map<SgNode*,std::string> & get_qualifiedNameMapForTypes() const;
+       // const std::map<SgNode*,std::string> & get_qualifiedNameMapForTemplateHeaders() const;
+          const NameQualificationMapType & get_qualifiedNameMapForNames() const;
+          const NameQualificationMapType & get_qualifiedNameMapForTypes() const;
+          const NameQualificationMapType & get_qualifiedNameMapForTemplateHeaders() const;
 
        // DQ (3/13/2019): Adding support for name qualification to support multiple types that may be asociated with a 
        // single type used as a function return type (for example, always a template type containing multiple template 
        // arguments that require additional name qualification).
-          const std::map<SgNode*,std::map<SgNode*,std::string> > & get_qualifiedNameMapForMapsOfTypes() const;
+       // const std::map<SgNode*,std::map<SgNode*,std::string> > & get_qualifiedNameMapForMapsOfTypes() const;
+       // const std::map<SgNode*,NameQualificationMapType> & get_qualifiedNameMapForMapsOfTypes() const;
+          const NameQualificationMapOfMapsType & get_qualifiedNameMapForMapsOfTypes() const;
 
        // DQ (6/3/2011): Evaluate types to permit the strings representing unparsing the types 
        // are saved in a separate map associated with the IR node referencing the type.  This 
@@ -382,6 +419,11 @@ class NameQualificationTraversal : public AstTopDownBottomUpProcessing<NameQuali
           void displayBaseClassMap ( const std::string & label, BaseClassSetMap & x );
 
        // DQ (3/14/2019): Adding debugging support to output the map of names.
-          void outputNameQualificationMap( const std::map<SgNode*,std::string> & qualifiedNameMap );
-   };
+       // void outputNameQualificationMap( const std::map<SgNode*,std::string> & qualifiedNameMap );
+          void outputNameQualificationMap( const NameQualificationMapType & qualifiedNameMap );
 
+       // DQ (8/14/2025): Adding optimization (default is false) to support name qualification
+       // retricted to just the input source file (instead of the whole translation unit).
+          void set_suppressNameQualificationAcrossWholeTranslationUnit(bool value);
+          bool get_suppressNameQualificationAcrossWholeTranslationUnit();
+   };

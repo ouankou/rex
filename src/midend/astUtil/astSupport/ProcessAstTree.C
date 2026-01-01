@@ -85,7 +85,7 @@ bool ProcessAstTreeBase<AstNodePtr>:: operator()( AstInterface &fa, const AstNod
     }
 
 template <class AstNodePtr>
-bool ProcessAstTree<AstNodePtr>:: ProcessLoop(AstInterface &fa, const AstNodePtr& s, const AstNodePtr& body,
+bool ProcessAstTree<AstNodePtr>:: ProcessLoop(AstInterface &/*fa*/, const AstNodePtr& s, const AstNodePtr& body,
                        AstInterface::TraversalVisitType t)
      {
         if (t == AstInterface::PreVisit) {
@@ -95,10 +95,10 @@ bool ProcessAstTree<AstNodePtr>:: ProcessLoop(AstInterface &fa, const AstNodePtr
         return true;
      }
 template <class AstNodePtr>
-bool ProcessAstTree<AstNodePtr>:: ProcessIf( AstInterface &fa, const AstNodePtr& s,
-                             const AstNodePtr& cond, const AstNodePtr& truebody,
-                             const AstNodePtr& falsebody,
-                             AstInterface::TraversalVisitType t)
+bool ProcessAstTree<AstNodePtr>:: ProcessIf(AstInterface &/*fa*/, const AstNodePtr& /*s*/,
+                              const AstNodePtr& /*cond*/, const AstNodePtr& truebody,
+                              const AstNodePtr& /*falsebody*/,
+                              AstInterface::TraversalVisitType t)
      {
         if (t == AstInterface::PreVisit) {
            SkipUntil( truebody );
@@ -107,33 +107,37 @@ bool ProcessAstTree<AstNodePtr>:: ProcessIf( AstInterface &fa, const AstNodePtr&
      }
 template <class AstNodePtr>
 bool ProcessAstTree<AstNodePtr>::
-ProcessFunctionDefinition( AstInterface &fa, const AstNodePtr& s,
-                         const AstNodePtr& body, AstInterface::TraversalVisitType t)
-          { return true;}
+ProcessFunctionDefinition(AstInterface&, const AstNodePtr&, AstInterface::AstList&, AstInterface::AstList&,
+                          const AstNodePtr&, AstInterface::TraversalVisitType)
+{ 
+   return true;
+}
 template <class AstNodePtr>
 bool ProcessAstTree<AstNodePtr>::
-ProcessBlock( AstInterface &fa, const AstNodePtr& s,
-                                  AstInterface::TraversalVisitType t)
-  { return true;}
+ProcessBlock( AstInterface &, const AstNodePtr&, AstInterface::TraversalVisitType) {
+    return true;
+}
 template <class AstNodePtr>
-bool ProcessAstTree<AstNodePtr>:: ProcessGoto( AstInterface &fa, const AstNodePtr& s,
-                               const AstNodePtr& dest)
+bool ProcessAstTree<AstNodePtr>:: ProcessGoto(AstInterface&, const AstNodePtr& s, const AstNodePtr&) {
+    Skip(s);
+    return true;
+}
+template <class AstNodePtr>
+bool ProcessAstTree<AstNodePtr>:: ProcessDecls(AstInterface &/*fa*/, const AstNodePtr &s)
+                                 { Skip(s); return true; }
+template <class AstNodePtr>
+bool ProcessAstTree<AstNodePtr>:: ProcessStmt(AstInterface &/*fa*/, const AstNodePtr &s)
                                 { Skip(s); return true; }
 template <class AstNodePtr>
-bool ProcessAstTree<AstNodePtr>:: ProcessDecls(AstInterface &fa, const AstNodePtr& s)
-                                { Skip(s); return true; }
-template <class AstNodePtr>
-bool ProcessAstTree<AstNodePtr>:: ProcessStmt(AstInterface &fa, const AstNodePtr& s)
-                               { Skip(s); return true; }
-template <class AstNodePtr>
-bool ProcessAstTree<AstNodePtr>:: ProcessTree( AstInterface &_fa, const AstNodePtr& s,
+bool ProcessAstTree<AstNodePtr>:: ProcessTree(AstInterface &_fa, const AstNodePtr &s,
                        AstInterface::TraversalVisitType t)
    {
      AstInterface& fa = static_cast<AstInterface&>(_fa);
      AstNodePtr init, cond, incr, body;
+     AstInterface::AstList params, outParams;
      bool success = true;
-     if (fa.IsFunctionDefinition(s, 0, 0, 0, &body)) {
-        success = ProcessFunctionDefinition(fa, s, body, t);
+     if (fa.IsFunctionDefinition(s, 0, &params, &outParams, &body)) {
+        success = ProcessFunctionDefinition(fa, s, params, outParams, body, t);
      }
      if (fa.IsBlock(s)) {
         success = ProcessBlock( fa, s, t);

@@ -235,7 +235,7 @@ void calc_geocoords_centerpole(int nx, int ny, double *x, double *y)
   to (X,Y,Z) coordinates in physical space. 
   Face is oriented normal to Z-axis with  X and Y increasing with lx and ly
   valid ranges:  -1 < lx < 1   -1 < ly < 1
-  Based on matlab scripts from Alistair  ???? 
+  Based on scripts from Alistair  ????
 **************************************************************************/
   
 void conformal_map_coords2xyz ( int ni, int nj, double *lx, double *ly,

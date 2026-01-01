@@ -19,12 +19,21 @@ sub badTitleCategory {
     return;
 }
 
-# Return an error message if the title contains what looks like a JIRA issue.
-# Jira issues should be in the body of the commit because they don't mean much
-# to users that are looking at the titles.
+# Finds a ticket number within a string and returns it.
+sub findTicketNumber {
+    my($s) = @_;
+    #---------------------- Upper-case word, hyphen, number     |Gen. Gitlab  |Gitlab project
+    my($ticket) = $s =~ /\b([A-Z][A-Z0-9]*(_[A-Z][A-Z0-9]*)*-\d+|Issue #\d+\+?|\w+(\/\w+)*#\d+\+?)\b/;
+    return $ticket;
+}
+
+# Return an error message if the title contains what looks like an issue tracker ticket number.
+# Ticket numbers should not be in the body of the commit because they don't mean much to users that
+# are looking at the titles.
 sub badTitleIssue {
     my($title) = @_;
-    return "jira issue should not be in title" if $title =~ /\b[A-Z]+-\d+/;
+    my($ticket) = findTicketNumber($title);
+    return "issue tracker ticket number \"$ticket\" should not be in the title" if $ticket;
     return;
 }
 
@@ -37,11 +46,27 @@ sub badTitle {
     return;
 }
 
-# Return an error message if the commit lacks at least one JIRA issue
+# Return an error message if the commit body doesn't end with one or more issue references.
 sub badBodyIssue {
     my($body) = @_;
-    return "body lacks JIRA issue line(s)" unless $body =~ /^[A-Z]+-\d+\s*$/m;
-    return;
+    my $ends_with_ticket_reference = 0;
+    my $last_line = "";
+    for my $line (map {s/^(.*?)\s+$/\1/; $_} (split /\n/, $body)) {
+	if ($line =~ /\S/) {
+	    $last_line = $line;
+	    my($ticket) = findTicketNumber($line);
+	    if ($ticket && $ticket == $line) {
+		++$ends_with_ticket_reference;
+	    } else {
+		$ends_with_ticket_reference = 0;
+	    }
+	}
+    }
+    if ($ends_with_ticket_reference) {
+	return "";
+    } else {
+	return "body doesn't end with ticket number lines (last is \"$last_line\")";
+    }
 }
 
 # Returns an error message if anything is wrong with the commit message body
@@ -77,15 +102,28 @@ sub getCommitInfo {
     return { author => $author, message => $message };
 }
 
+# Format a commit message into a quote
+sub quotedCommit {
+    my($hash) = @_;
+    my($mesg) = git "log", $hash, "^$hash^";
+    return "  +" . ('-' x 80) . "\n" .
+	   (join "\n", map {"  |" . $_} split "\n", $mesg) .
+           "\n  +" . ('-' x 80) . "\n";
+}
+
 # Build a histogram for each user and display it
 sub showHistogram {
     my %histogram;
+    my $bad_example;
     for my $hash (split /\n/, git "log", @_, '--format=%H') {
 	my($commit) = getCommitInfo($hash);
 	my($err) = badMessage($commit->{message});
 	$histogram{$commit->{author}} ||= [0, 0]; # errors and non-errors
 	++$histogram{$commit->{author}}[$err?0:1];
 	print STDERR ".";
+	if ($err && !$bad_example && $commit->{author} ne "hudson-rose") {
+	    $bad_example = $err . "\n" . quotedCommit($hash);
+	}
     }
     print STDERR "\n";
 
@@ -125,6 +163,13 @@ sub showHistogram {
 	       $record->{ngood}, $record->{total},
 	       $record->{author});
     }
+    printf "----- ------- ---------- --------------------\n";
+
+    # Print an example of a bad commit
+    if ($bad_example) {
+	print "\nHere's an example of a bad commit message: ";
+	print $bad_example;
+    }
 }
 
 # Show errors for specified commits
@@ -133,6 +178,10 @@ sub showEachCommit {
 	my($commit) = getCommitInfo($hash);
 	my($err) = badMessage($commit->{message}) || "good";
 	printf "%8s %-32s %s\n", substr($hash,0,8), $commit->{author}, $err;
+
+	if ($err ne "good") {
+	    print quotedCommit($hash);
+	}
     }
 }
     
@@ -146,4 +195,3 @@ if (@ARGV == 0) {
 } else {
     showEachCommit @ARGV;
 }
-

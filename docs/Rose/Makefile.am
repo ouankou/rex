@@ -46,8 +46,7 @@ RoseDocsDependencies = \
      $(top_srcdir)/src/util/utilDocumentation.docs \
      $(top_srcdir)/src/midend/astQuery/QueryLib.docs \
      $(top_srcdir)/src/midend/astProcessing/AstProcessing.docs \
-     $(top_srcdir)/src/backend/unparser/unparser.docs \
-     $(top_srcdir)/src/midend/astDump/MSTL.docs
+     $(top_srcdir)/src/backend/unparser/unparser.docs
 
 # If the generated sage source code is older than the code used to
 # generate the sage source code then regenerate the sage source code
@@ -206,7 +205,7 @@ make-web-pages: $(RoseDoxygenDocumentation) $(PACKAGE_NAME)-$(PACKAGE_VERSION)-U
 	cp -f $(srcdir)/WEB_DOCS_README ROSE_WebPages
 	cp -f $(PACKAGE_NAME)-$(PACKAGE_VERSION)-UserManual.pdf ROSE_WebPages/ROSE_UserManual/$(PACKAGE_NAME)-$(PACKAGE_VERSION)-UserManual.pdf
 # add a copy without version number as a permanent URL for external reference by 
-# https://outreach.scidac.gov/docman/index.php?group_id=24&selected_doc_group_id=29&language_id=1
+# https://outreach.scidac.gov/docman/
 	cp -f $(PACKAGE_NAME)-$(PACKAGE_VERSION)-UserManual.pdf ROSE_WebPages/ROSE_UserManual/ROSE-UserManual.pdf
 
 # Upload web pages to the LBL server 
@@ -330,7 +329,7 @@ EXTRA_DIST = CMakeLists.txt \
    mm.tex preprocessorDesign.tex tridvpk.tex writingYourFirstTranslator.tex appendix.tex \
    developersAppendix.tex designOfRose.tex  FAQ.tex glossary.tex introduction.tex lu.tex \
    preface.tex rose-processing-phases.pdf compass_rose.gif SageIII.tex QueryLibrary.tex \
-   AstRewrite.tex ProgramAnalysis.tex AstProcessing.tex testing.tex astMerge.tex installRose.tex \
+   ProgramAnalysis.tex AstProcessing.tex testing.tex astMerge.tex installRose.tex \
    roseExecutionOutput.txt roseHelpOutput.txt asm_code_samples_gcc.pdf introduction_start.tex \
    rose_exam_1.tex rose_exam_traversals_1.tex git_collaboration_diagram.pdf \
    HowToDocument.dox Attributes.dox
@@ -346,7 +345,7 @@ clean-web-pages:
 clean-local: clean-web-pages
 
 CLEANFILES = roseDoxygen.tags SageIntermediateForm *.log *.aux *.dvi \
-	     AstProcessing AstRewrite *.gz a.out roseDirectoryMap.ps roseDirectoryMap.pdf \
+	     AstProcessing *.gz a.out roseDirectoryMap.ps roseDirectoryMap.pdf \
 	     manual.pdf $(PACKAGE_NAME)-$(PACKAGE_VERSION)-UserManual.pdf \
         ROSE_InstallationInstructions.pdf ROSE_Exam.pdf \
 	     rose.cfg roseCommandline.txt roseConfigureOptions* roseExecutionOutput.txt \

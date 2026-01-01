@@ -24,7 +24,7 @@ MacroExpansion::MacroExpansion (const string & name) : macro_name(name), shared(
 // Inherited attribute member functions
 DetectMacroOrIncludeFileExpansionsInheritedAttribute::DetectMacroOrIncludeFileExpansionsInheritedAttribute()
    {
-     macroExpansion = NULL;
+     macroExpansion = nullptr;
    }
 
 DetectMacroOrIncludeFileExpansionsInheritedAttribute::
@@ -37,14 +37,14 @@ DetectMacroOrIncludeFileExpansionsInheritedAttribute( const DetectMacroOrInclude
 // Synthesized attribute member functions
 DetectMacroOrIncludeFileExpansionsSynthesizedAttribute::DetectMacroOrIncludeFileExpansionsSynthesizedAttribute()
    {
-     node = NULL;
-     macroExpansion = NULL;
+     node = nullptr;
+     macroExpansion = nullptr;
    }
 
 DetectMacroOrIncludeFileExpansionsSynthesizedAttribute::DetectMacroOrIncludeFileExpansionsSynthesizedAttribute( SgNode* n )
    {
      node = n;
-     macroExpansion = NULL;
+     macroExpansion = nullptr;
    }
 
 DetectMacroOrIncludeFileExpansionsSynthesizedAttribute::
@@ -61,7 +61,7 @@ DetectMacroOrIncludeFileExpansionsSynthesizedAttribute( const DetectMacroOrInclu
 DetectMacroOrIncludeFileExpansions::DetectMacroOrIncludeFileExpansions( SgSourceFile* input_sourceFile, std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & input_tokenStreamSequenceMap )
   : tokenStreamSequenceMap(input_tokenStreamSequenceMap), sourceFile(input_sourceFile)
    {
-     ROSE_ASSERT(sourceFile != NULL);
+     ASSERT_not_null(sourceFile);
    }
 
 
@@ -78,20 +78,20 @@ DetectMacroOrIncludeFileExpansions::evaluateInheritedAttribute(
 
 #if USE_STATEMENT_LEVEL_RESOLUTION
      SgStatement* currentStatement = isSgStatement(n);
-     if (currentStatement != NULL)
+     if (currentStatement != nullptr)
         {
 #else
      SgLocatedNode* locatedNode = isSgLocatedNode(n);
 
-     if (locatedNode != NULL)
+     if (locatedNode != nullptr)
         {
           SgStatement* currentStatement = isSgStatement(locatedNode);
-          if (currentStatement == NULL)
+          if (currentStatement == nullptr)
              {
                currentStatement = SageInterface::getEnclosingStatement(locatedNode);
-               ROSE_ASSERT(currentStatement != NULL);
+               ASSERT_not_null(currentStatement);
              }
-          ROSE_ASSERT(currentStatement != NULL);
+          ASSERT_not_null(currentStatement);
 #endif
 
 #if DEBUG_MARCO_EXPANSION_DETECTION
@@ -112,12 +112,12 @@ DetectMacroOrIncludeFileExpansions::evaluateInheritedAttribute(
           printf ("   --- macroExpansion = %p \n",macroExpansion);
           printf ("   --- macroExpansionStack.size() = %zu \n",macroExpansionStack.size());
 #endif
-          if (macroExpansion != NULL)
+          if (macroExpansion != nullptr)
              {
 #if DEBUG_MARCO_EXPANSION_DETECTION
                printf ("   --- --- macroExpansion = %p name = %s \n",macroExpansion,macroExpansion->macro_name.c_str());
 #endif
-               MacroExpansion* topOfStackMacroExpansion = NULL;
+               MacroExpansion* topOfStackMacroExpansion = nullptr;
 
                if (macroExpansionStack.empty() == false)
                   {
@@ -129,7 +129,7 @@ DetectMacroOrIncludeFileExpansions::evaluateInheritedAttribute(
                printf ("   --- macroExpansionStack.size() = %zu \n",macroExpansionStack.size());
 #endif
 
-               if (topOfStackMacroExpansion != NULL)
+               if (topOfStackMacroExpansion != nullptr)
                   {
 #if DEBUG_MARCO_EXPANSION_DETECTION
                     printf ("   --- macroExpansion->line           = %d macroExpansion->column           = %d \n",macroExpansion->line,macroExpansion->column);
@@ -166,7 +166,7 @@ DetectMacroOrIncludeFileExpansions::evaluateInheritedAttribute(
                     macroExpansionStack.push_back(macroExpansion);
                   }
 
-               ROSE_ASSERT(macroExpansion != NULL);
+               ASSERT_not_null(macroExpansion);
 
 #if USE_STATEMENT_LEVEL_RESOLUTION
             // Save each SgStatement that is associated with this macro expansion.
@@ -199,14 +199,14 @@ DetectMacroOrIncludeFileExpansions::evaluateInheritedAttribute(
 
 #if USE_STATEMENT_LEVEL_RESOLUTION
 MacroExpansion*
-DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgLocatedNode* locatedNode, std::string & name, int & startingToken, int & endingToken )
+DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* /*locatedNode*/, std::string& /*name*/, int& /*startingToken*/, int& /*endingToken*/)
    {
      printf ("Not implemented! \n");
      ROSE_ABORT();
    }
 #else
 MacroExpansion*
-DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgStatement* currentStatement, std::string & name, int & startingToken, int & endingToken )
+DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgStatement* /*currentStatement*/, std::string& /*name*/, int& /*startingToken*/, int& /*endingToken*/)
    {
      printf ("Not implemented! \n");
      ROSE_ABORT();
@@ -218,7 +218,7 @@ MacroExpansion*
 DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgStatement* currentStatement, std::string & name, int & startingToken, int & endingToken )
 #else
 MacroExpansion*
-DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgLocatedNode* locatedNode, std::string & name, int & startingToken, int & endingToken )
+DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* locatedNode, std::string &name, int &startingToken, int &endingToken)
 #endif
    {
 
@@ -230,14 +230,14 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgLocatedNode* locat
 
 #if !USE_STATEMENT_LEVEL_RESOLUTION
      SgStatement* currentStatement = isSgStatement(locatedNode);
-     if (currentStatement == NULL)
+     if (currentStatement == nullptr)
         {
           currentStatement = SageInterface::getEnclosingStatement(locatedNode);
-          ROSE_ASSERT(currentStatement != NULL);
+          ASSERT_not_null(currentStatement);
         }
 #endif
 
-     ROSE_ASSERT(currentStatement != NULL);
+     ASSERT_not_null(currentStatement);
 
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION
      printf ("currentStatement = %p = %s \n",currentStatement,currentStatement->class_name().c_str());
@@ -254,19 +254,19 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgLocatedNode* locat
      Sg_File_Info* end   = locatedNode->get_endOfConstruct();
 #endif
 
-     ROSE_ASSERT(start != NULL);
-     ROSE_ASSERT(end   != NULL);
+     ASSERT_not_null(start);
+     ASSERT_not_null(end);
 
-     MacroExpansion* macroExpansion = NULL;
+     MacroExpansion* macroExpansion = nullptr;
 
      if ( (start->get_line() > 0) && (start->get_line() == end->get_line()) && (start->get_col() == end->get_col()) )
         {
        // Filter out the only case of a single character statement ";", that I know of at the moment.
           bool detectedNullExpression = false;
           SgExprStatement* expressionStatement = isSgExprStatement(currentStatement);
-          if (expressionStatement != NULL)
+          if (expressionStatement != nullptr)
              {
-               detectedNullExpression = (isSgNullExpression(expressionStatement->get_expression()) != NULL);
+               detectedNullExpression = (isSgNullExpression(expressionStatement->get_expression()) != nullptr);
              }
 
           if (detectedNullExpression == false)
@@ -276,7 +276,6 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgLocatedNode* locat
 #endif
             // Build a macro data structure, and add to set (or multi-map) of macro expansions.
 
-            // ROSE_ASSERT(tokenStreamSequenceMap.find(currentStatement) != tokenStreamSequenceMap.end());
                if (tokenStreamSequenceMap.find(currentStatement) != tokenStreamSequenceMap.end())
                   {
                     TokenStreamSequenceToNodeMapping* tokenStreamSequence = tokenStreamSequenceMap[currentStatement];
@@ -291,10 +290,10 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgLocatedNode* locat
 
                     SgTokenPtrList & roseTokenList = sourceFile->get_token_list();
 
-                    ROSE_ASSERT(roseTokenList.empty() == false);
+                    ASSERT_require(roseTokenList.empty() == false);
 
                     SgToken* tokenAssociatedWithMacroCall = roseTokenList[token_subsequence_start];
-                    ROSE_ASSERT(tokenAssociatedWithMacroCall != NULL);
+                    ASSERT_not_null(tokenAssociatedWithMacroCall);
 
                     string macroName = tokenAssociatedWithMacroCall->get_lexeme_string();
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION
@@ -332,14 +331,14 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion( SgLocatedNode* locat
                   }
 
 #if USE_STATEMENT_LEVEL_RESOLUTION
-               ROSE_ASSERT(macroExpansion != NULL);
+               ASSERT_not_null(macroExpansion);
 
             // Fill in the line and column information for the macro expansion.
                macroExpansion->line   = start->get_line();
                macroExpansion->column = start->get_col();
 #else
-            // If the macro name is length one then the macroExpansion == NULL.
-               if (macroExpansion != NULL)
+            // If the macro name is length one then the macroExpansion == null.
+               if (macroExpansion != nullptr)
                   {
                     macroExpansion->line   = start->get_line();
                     macroExpansion->column = start->get_col();
@@ -356,7 +355,7 @@ DetectMacroOrIncludeFileExpansionsSynthesizedAttribute
 DetectMacroOrIncludeFileExpansions::evaluateSynthesizedAttribute ( 
    SgNode* n, 
    DetectMacroOrIncludeFileExpansionsInheritedAttribute inheritedAttribute, 
-   SubTreeSynthesizedAttributes synthesizedAttributeList )
+   SubTreeSynthesizedAttributes /*synthesizedAttributeList*/ )
    {
      DetectMacroOrIncludeFileExpansionsSynthesizedAttribute returnAttribute(n);
 
@@ -364,24 +363,11 @@ DetectMacroOrIncludeFileExpansions::evaluateSynthesizedAttribute (
   // This is becasue the inherited attribute is the first point in the AST traversal to see a statement that is 
   // associated with a macro expansion and so we need to detect it there (as early in the traversal as possible).
 
-#if 0
-     printf ("In evaluateSynthesizedAttribute(): n = %p = %s \n",n,n->class_name().c_str());
-#endif
-
      MacroExpansion* macroExpansion = inheritedAttribute.macroExpansion;
 
-     if (macroExpansion != NULL)
+     if (macroExpansion != nullptr)
         {
-#if 0
-          printf ("   --- macroExpansion being passed from inherited attribute: macroExpansion = %p name = %s \n",macroExpansion,macroExpansion->macro_name.c_str());
-#endif
           returnAttribute.macroExpansion = macroExpansion;
-        }
-       else
-        {
-#if 0
-          printf ("   --- no macroExpansion availble in inheritedAttribute \n");
-#endif
         }
 
      return returnAttribute;
@@ -390,23 +376,15 @@ DetectMacroOrIncludeFileExpansions::evaluateSynthesizedAttribute (
 void
 detectMacroOrIncludeFileExpansions ( SgSourceFile* sourceFile )
    {
-  // sourceFile->set_tokenSubsequenceMap(tokenMappingTraversal.tokenStreamSequenceMap);
-  // tokenMappingTraversal = sourceFile->get_tokenSubsequenceMap();
      map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
 
-  // DQ (11/8/2015): Note that this call to the constructor fails to compile (when called with "()") (GNU g++ version 8.4.3 compiler).
-  // DetectMacroExpansionsToBeUnparsedAsAstTransformationsInheritedAttribute inheritedAttribute();
      DetectMacroOrIncludeFileExpansionsInheritedAttribute inheritedAttribute;
 
-  // DetectMacroOrIncludeFileExpansions traversal(tokenStreamSequenceMap);
      DetectMacroOrIncludeFileExpansions traversal(sourceFile,tokenStreamSequenceMap);
 
-  // DetectMacroExpansionsToBeUnparsedAsAstTransformationsSynthesizedAttribute topAttribute = fdTraversal.traverseWithinFile(sourceFile,inheritedAttribute);
-  // DetectMacroExpansionsToBeUnparsedAsAstTransformationsSynthesizedAttribute topAttribute = fdTraversal.traverse(sourceFile,inheritedAttribute);
-  // traversal.traverse(sourceFile,inheritedAttribute);
      DetectMacroOrIncludeFileExpansionsSynthesizedAttribute topAttribute = traversal.traverseWithinFile(sourceFile,inheritedAttribute);
 
-     ROSE_ASSERT(topAttribute.node != NULL);
+     ASSERT_not_null(topAttribute.node);
 
      std::vector<MacroExpansion*> macroExpansionStack = traversal.macroExpansionStack;
 
@@ -430,7 +408,7 @@ detectMacroOrIncludeFileExpansions ( SgSourceFile* sourceFile )
      for (size_t i = 0; i < macroExpansionStack.size(); i++)
         {
           MacroExpansion* macroExpansion = macroExpansionStack[i];
-          ROSE_ASSERT(macroExpansion != NULL);
+          ASSERT_not_null(macroExpansion);
 
 #if DEBUG_MACRO_EXPANSION_SUMMARY
           printf ("Processing macroExpansion = %p name = %s \n",macroExpansion,macroExpansion->macro_name.c_str());
@@ -438,21 +416,17 @@ detectMacroOrIncludeFileExpansions ( SgSourceFile* sourceFile )
           for (size_t j = 0; j < macroExpansion->associatedStatementVector.size(); j++)
              {
                SgStatement* statement = macroExpansion->associatedStatementVector[j];
-               ROSE_ASSERT(statement != NULL);
+               ASSERT_not_null(statement);
 
 #if DEBUG_MACRO_EXPANSION_SUMMARY
             // printf ("Processing macroExpansion = %p name = %s with statement = %p = %s \n",macroExpansion,macroExpansion->macro_name.c_str(),statement,statement->class_name().c_str());
                printf ("   --- statement = %p = %s \n",statement,statement->class_name().c_str());
 #endif
             // No statement should be used as a key to more than one macroExpansion (no key should have been previously used).
-               ROSE_ASSERT(macroExpansionMap.find(statement) == macroExpansionMap.end());
+               ASSERT_require(macroExpansionMap.find(statement) == macroExpansionMap.end());
 
                macroExpansionMap[statement] = macroExpansion;
              }
         }
 
-#if 0
-     printf ("Completed detection of macro expansions requiring unparsing from the AST (instead of the token stream if they are not transformed) \n");
-     ROSE_ABORT();
-#endif
    }

@@ -4,11 +4,12 @@
 
 #include <CommandOptions.h>
 #include <PtrAnal.h>
-#include <cassert>
+#include <ROSE_ASSERT.h>
 
 using namespace std;
 
-extern bool DebugAliasAnal();
+DebugLog DebugPtrAnal("-debugptranal");
+DebugLog DebugAliasAnal("-debugaliasanal");
 
 inline void stmts_pushback(std::vector<PtrAnal::Stmt> &stmts, PtrAnal::Stmt s) {
   if (s != 0)
@@ -24,20 +25,6 @@ inline PtrAnal::Stmt stmts_back(std::vector<PtrAnal::Stmt> &stmts) {
 static std::string func_return_name(const std::string fname) {
   return InterProcVariableUniqueRepr::get_unique_name(fname, 0);
 }
-
-#if 0
-static bool is_constant(const std::string& name)
-{
-  if ( name != "" && name[0] == 'c') {
-     if (DebugAliasAnal())
-        std::cerr << " constant : " << name << "\n";
-     return true;
-  }
-  if (DebugAliasAnal())
-     std::cerr << " not constant : " << name << "\n";
-  return false;
-}
-#endif
 
 static std::string Local_GetFieldName(AstInterface &fa,
                                       const AstNodePtr &field) {
@@ -56,7 +43,7 @@ static std::string Local_GetVarName(AstInterface &fa, const AstNodePtr &scope,
   return "v:" + InterProcVariableUniqueRepr::get_unique_name(fa, scope, name);
 }
 
-static std::string Local_GetConstName(AstInterface &fa, std::string val) {
+static std::string Local_GetConstName(AstInterface &, std::string val) {
   return "c:" + val;
 }
 
@@ -365,9 +352,8 @@ void PtrAnal::ProcessAssign(AstInterface &fa, const AstNodePtr &mod,
 
 bool PtrAnal::may_alias(AstInterface &fa, const AstNodePtr &_r1,
                         const AstNodePtr &_r2) {
-  AstNodePtr r1 = fa.IsExpression(_r1);
-  AstNodePtr r2 = fa.IsExpression(_r2);
-  if (r1 == AST_NULL || r2 == AST_NULL)
+  AstNodePtr r1, r2;
+  if (!fa.IsExpression(_r1, 0, &r1) || !fa.IsExpression(_r2, 0, &r2))
     ROSE_ABORT();
   std::string varname1 = Get_VarName(fa, r1), varname2 = Get_VarName(fa, r2);
   return may_alias(varname1, varname2);
@@ -420,8 +406,7 @@ bool PtrAnal::ProcessTree(AstInterface &fa, const AstNodePtr &s,
     AstNodePtr lhs, rhs;
     AstInterface::AstNodeList vars, args;
     if (fa.IsStatement(s)) {
-      if (DebugAliasAnal())
-        std::cerr << "pre visiting " << AstInterface::AstToString(s) << "\n";
+      DebugAliasAnal([&s](){ return "pre visiting " + AstInterface::AstToString(s); });
       stmt_active.push_back(stmts.size());
     }
 
@@ -451,23 +436,22 @@ bool PtrAnal::ProcessTree(AstInterface &fa, const AstNodePtr &s,
         ++pa;
       }
       Skip(s);
-    } else if ((lhs = fa.IsExpression(s)) != AST_NULL) {
+    } else if (fa.IsExpression(s, 0, &lhs)) {
       ProcessExpression(fa, "", lhs);
       Skip(s);
     }
   } else {
-    if (DebugAliasAnal())
-      std::cerr << "post visiting " << AstInterface::AstToString(s) << "\n";
+   DebugPtrAnal([&s](){ return "post visiting " + AstInterface::AstToString(s); });
     if (fa.IsStatement(s)) {
       size_t stmt_firstIndex = stmt_active.back();
       stmt_active.pop_back();
       if (stmt_firstIndex < stmts.size()) {
-        if (DebugAliasAnal())
-          std::cerr << "setting stmt mapping \n";
+          DebugPtrAnal([](){ return "setting stmt mapping"; });
         stmtmap[s.get_ptr()] =
             pair<size_t, size_t>(stmt_firstIndex, stmts.size() - 1);
-      } else if (DebugAliasAnal())
-        std::cerr << "no translation: " << AstInterface::AstToString(s) << "\n";
+      } else {
+          DebugAliasAnal([&s](){ return "no translation: " + AstInterface::AstToString(s); });
+      }
     }
   }
   return true;

@@ -22,7 +22,6 @@ Local repository:
 Old projects:
   SimpleCallGraph
   CompassDist
-  BinaryContextlookup
   DatalogAnalysis
   MOPS
   A++1999/2003
@@ -38,7 +37,6 @@ Sub directories :
     P++ Y
     OvertureCode Y
     SLA Y
-    MSTL Y
   remove (N)
     OpenAnalysis N
     Open64 N
@@ -1106,8 +1104,6 @@ DONE: Specify where to get DOT (GraphViz) and Doxygen software used in ROSE
 developers (added where to find MySQL as well).
 
  
-
-
 
 
 

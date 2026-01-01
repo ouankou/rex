@@ -18,7 +18,6 @@ AstWarnings::~AstWarnings()
    }
 
 void
-AstWarnings::visit ( SgNode* node )
+AstWarnings::visit ( SgNode* )
    {
    }
-

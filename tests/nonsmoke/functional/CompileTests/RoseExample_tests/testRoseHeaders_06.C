@@ -48,16 +48,10 @@
 // DQ (8/1/2005): Included Milind's AstMerge mechanism as standard part of ROSE.
 // #include "AstMerge.h"
 
-// DQ (9/9/2007): Can't use astVisualization/ prefix since it then does not permit use from the install tree
-// DQ (5/27/2007): Added astVisualization/ prefix to the header file
 // DQ (2/22/2006): Added Andreas' work to graph the AST.
-// #include "astVisualization/astGraph.h"
 #include "astGraph.h"
 
-// DQ (9/9/2007): Can't use astVisualization/ prefix since it then does not permit use from the install tree
-// DQ (5/27/2007): Added astVisualization/ prefix to the header file
 // DQ (6/23/2006): Added Andreas's work to support custom DOT graphs using persistant attributes.
-// #include "astVisualization/AstAttributeDOT.h"
 #include "AstAttributeDOT.h"
 
 // DQ (3/11/2006): Jeremiah Willcock's inliner

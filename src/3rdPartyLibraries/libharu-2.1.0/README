@@ -59,7 +59,6 @@ Haru can work as both static-library (.a, .lib) and shared-library (.so, .dll).
 When you use it as static-library, It can be used by C and a C++.
 But when you use it as shared-library, it can be used by many development 
 languages which support shared library.
-So far, Haru provides bindings for Ruby, Delphi/Free Pascal and C#.
 
 If you write bindings for other programing languages, please notice me!
 

@@ -1,4 +1,4 @@
-if(NOT disable-tutorial-directory)
+if(ENABLE-TUTORIAL-DIRECTORY)
   include_directories(${ROSE_INCLUDES})
 
   add_subdirectory(outliner)

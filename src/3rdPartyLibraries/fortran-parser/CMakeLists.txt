@@ -1,4 +1,4 @@
-if(enable-fortran AND enable-fortran-ofp)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   set(enable-ofp-version "20200819-JDK8" CACHE STRING "version number for OFP")
 
   ########### install files ###############
@@ -16,6 +16,11 @@ install(
   FILES OpenFortranParser-20200819-JDK8.jar
         ${jar_file}
   DESTINATION ${ROSE_LIB_DIR_NAME})
+  install(
+    FILES
+      iso_c_binding.rmod
+      openacc.rmod
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/share/rose/)
 
   # this file also needs to be in the binary directory for
   # related tests to pass

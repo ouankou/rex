@@ -251,7 +251,7 @@ class BlockSpec : public OptSpec
    POETCode* compute_blockDim(LocalVar* paramVar);
 
  public:
-  BlockSpec(HandleMap& handleMap, LocalVar* outerHandle, LoopTreeNode* innerLoop, LoopBlocking* config, const std::vector<FuseLoopInfo>* nonperfect=0); 
+  BlockSpec(HandleMap& /*handleMap*/, LocalVar* outerHandle, LoopTreeNode* innerLoop, LoopBlocking* config, const std::vector<FuseLoopInfo>* nonperfect=0); 
   virtual OptEnum get_enum() const { return BLOCK; }
   virtual OptLevel get_opt_level() const { return OPT_CACHE_REG_CLEANUP_LEVEL; }
   virtual std::string get_opt_prefix(OptLevel optLevel) 

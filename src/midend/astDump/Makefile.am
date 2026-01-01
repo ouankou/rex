@@ -36,4 +36,4 @@ if ROSE_WITH_LIBHARU
 pkginclude_HEADERS += AstPDFGeneration.h PDFGeneration.h
 endif
 
-EXTRA_DIST = CMakeLists.txt MSTL.docs
+EXTRA_DIST = CMakeLists.txt

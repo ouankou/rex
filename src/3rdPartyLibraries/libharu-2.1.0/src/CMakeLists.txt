@@ -1,5 +1,5 @@
 
-include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} ${ROSE_INCLUDES} )
+include_directories(${ROSE_INCLUDES})
 
 #set 
 set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DHAVE_CONFIG_H  -DHPDF_NOZLIB -DHPDF_NOPNGLIB"  )
@@ -62,7 +62,6 @@ set(hpdf_LIB_SRCS
 add_library(libhpdf STATIC ${hpdf_LIB_SRCS})
 
 
-#target_link_libraries(libhpdf ${KDE4_KDECORE_LIBS})
 
 #set_target_properties(hpdf PROPERTIES VERSION 1.0.0 SOVERSION 1)
 install(TARGETS libhpdf DESTINATION lib)

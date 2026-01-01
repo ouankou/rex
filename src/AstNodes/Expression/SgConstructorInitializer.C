@@ -61,15 +61,6 @@ SgConstructorInitializer::post_construction_initialization()
        // This can be NULL for the case of an undeclared constructor.
 
        // DQ (1/19/2019): This is failing in the copyAST tests for test2005_24.C
-          if ( !((isSgClassType(p_expression_type) != NULL) || (p_associated_class_unknown == true)) )
-             {
-               printf ("In SgConstructorInitializer::post_construction_initialization(): What is this failing case?  p_expression_type = %p \n",p_expression_type);
-               if (p_expression_type != NULL)
-                  {
-                    printf ("   --- What is this failing case?  p_expression_type = %p = %s \n",p_expression_type,p_expression_type->class_name().c_str());
-                  }
-             }
-
           ROSE_ASSERT((isSgTypedefType(p_expression_type) || isSgClassType(p_expression_type) != NULL) || (p_associated_class_unknown == true));
         }
 

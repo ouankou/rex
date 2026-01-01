@@ -44,14 +44,6 @@ IsMemberAccess( const AstNodePtr& _s,  AstNodePtr* obj, std::string* field)
 }
 
 AstNodePtr CPPAstInterface::
-CreateFieldRef(std::string classname, std::string fieldname)
-{ return AstNodePtrImpl(impl->CreateFieldRef(classname, fieldname));  }
-
-AstNodePtr CPPAstInterface::
-CreateMethodRef(std::string classname, std::string fieldname, bool createIfNotFound)
-{ return AstNodePtrImpl(impl->CreateMethodRef(classname,fieldname,createIfNotFound)); }
-
-AstNodePtr CPPAstInterface::
 CreateFunctionCall( const AstNodePtr& func, const AstNodeList& args)
 {
   return AstNodePtrImpl(impl->CreateFunctionCall(AstNodePtrImpl(func).get_ptr(), args.begin(), args.end()));
@@ -89,13 +81,22 @@ IsMemberFunctionCall( const AstNodePtr& _s,  AstNodePtr* obj,
   if (func != 0)
     *func = isSgMemberFunctionRefExp(f)->get_symbol()->get_name().str();
 
+  SgDeclarationStatement* fun_decl = isSgMemberFunctionRefExp(f)->getAssociatedMemberFunctionDeclaration();
+  SgDeclarationStatement* defn_decl = fun_decl->get_definingDeclaration();
+  bool is_static = (fun_decl == 0)? false : (fun_decl->get_declarationModifier().get_storageModifier().isStatic()
+             || (defn_decl != 0 && defn_decl->get_declarationModifier().get_storageModifier().isStatic()));
   //Store object from the first argument
   if (obj != 0) {
-     assert(args.size() > 0);
-     *obj = AstNodePtrImpl((SgNode*)args.front());
+     if (is_static) {
+       *obj = 0;
+     } else if (args.size() > 0) {
+       *obj = AstNodePtrImpl(args.front());
+     } else {
+       std::cerr << "Error: non static member function call should have at least one argument.\n";
+     }
   }
   //Store function call arguments, excluding the firt one
-  if (_args != 0) {
+  if (_args != 0 && !is_static) {
      args.erase( args.begin());
      *_args = args;
    }
@@ -140,7 +141,7 @@ bool CPPAstInterface :: IsPlusPlus( const AstNodePtr& _s, AstNodePtr* opd)
   AstNodeList args;
   if ( IsFunctionCall(s, &op, &args) && IsVarRef(op,0,&fname) 
        && strstr(fname.c_str(),"operator++") != 0) {
-      if (opd != 0) *opd = AstNodePtrImpl((SgNode*)args.front());
+      if (opd != 0) *opd = AstNodePtrImpl(args.front());
       return true;
   }
   if ( s->variantT() == V_SgPlusPlusOp)  {
@@ -149,4 +150,3 @@ bool CPPAstInterface :: IsPlusPlus( const AstNodePtr& _s, AstNodePtr* opd)
   }
   return false;
 }
-

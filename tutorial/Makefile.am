@@ -642,7 +642,7 @@ testSeedBugsExample_arrayIndexing: seedBugsExample_arrayIndexing
 testVolatileTypeModifier: volatileTypeModifier
 	./volatileTypeModifier -rose:verbose 0 -c $(srcdir)/inputCode_volatileTypeModifier.C
 
-# DQ (3/20/2017): Added test to include DOTGraphEdges and DOTGraphNodes from src/frontend/SageIII/astVisualization/AstAttributeDOT.* files.
+# DQ (3/20/2017): Added test to include DOTGraphEdges and DOTGraphNodes from src/midend/astDump/AstAttributeDOT.* files.
 testWholeGraphFilterOnPersistantAttributes: wholeGraphFilterOnPersistantAttributes
 	@echo "Generating dot file ..."
 	@cp $(srcdir)/inputCode_2.C input_wholeGraphFilterOnPersistantAttributes.C
@@ -1240,7 +1240,7 @@ rose_inputCode_seedBugsExample_arrayIndexing.C: seedBugsExample_arrayIndexing
 rose_inputCode_VolatileTypeModifier.C: volatileTypeModifier
 	./volatileTypeModifier $(ROSE_FLAGS) -c $(srcdir)/inputCode_VolatileTypeModifier.C
 
-# DQ (3/20/2017): Added test to include DOTGraphEdges and DOTGraphNodes from src/frontend/SageIII/astVisualization/AstAttributeDOT.* files.
+# DQ (3/20/2017): Added test to include DOTGraphEdges and DOTGraphNodes from src/midend/astDump/AstAttributeDOT.* files.
 wholeGraphFilterOnPersistantAttributes.dot: wholeGraphFilterOnPersistantAttributes
 	@echo "Generating dot file ..."
 	@cp $(srcdir)/inputCode_2.C input_wholeGraphFilterOnPersistantAttributes.C

@@ -3,12 +3,20 @@
 
 #include "fixupFunctionDefaultArguments.h"
 
+
+// DQ (7/20/2025): Added performance tracing using Matt's tool (built on top of the default performance analysis in ROSE).
+#define USING_PERFORMANCE_TRACING 0
+
 bool
 containsLambdaSupportForFixupFunctionDefaultArguments (SgExpression* node)
    {
   // This function takes the initializer for any default initialization.
   // I need it becasue the SageInterface::deleteAST is not robust enough to support the rather complicated 
   // case of deleting a lambda expression and allof the associated generated classes and member functions.
+
+#if USING_PERFORMANCE_TRACING || 0
+     TimingPerformance timer ("Fixup function default arguments: containsLambdaSupportForFixupFunctionDefaultArguments");
+#endif
 
      class LambdaTestTraversal : public AstSimpleProcessing
         {
@@ -19,7 +27,7 @@ containsLambdaSupportForFixupFunctionDefaultArguments (SgExpression* node)
                void visit (SgNode* node)
                   {
                     SgLambdaExp* lambda = isSgLambdaExp(node);
-                    if (lambda != NULL)
+                    if (lambda != nullptr)
                        {
                          foundLambda = true;
                        }
@@ -33,31 +41,54 @@ containsLambdaSupportForFixupFunctionDefaultArguments (SgExpression* node)
      return traversal.foundLambda;
    }
 
+size_t
+numberOfNodeInAST (SgExpression* node)
+   {
+  // DQ (7/20/2025): This function is for debugging information, it counts the number
+  // of nodes in the subtrees represented by the input expression.
+
+#if USING_PERFORMANCE_TRACING
+     TimingPerformance timer ("Fixup function default arguments: numberOfNodeInAST");
+#endif
+
+     class NodeCounter : public AstSimpleProcessing
+        {
+          public:
+               size_t nodeCount;
+
+               NodeCounter() : nodeCount(0) {}
+               void visit (SgNode* /*node*/)
+                  {
+                    nodeCount++;
+                  }
+        };
+
+  // Now build the traveral object and call the traversal (preorder) on the AST subtree.
+     NodeCounter traversal;
+     traversal.traverse(node, preorder);
+
+     return traversal.nodeCount;
+   }
+
 
 void
 fixupFunctionDefaultArguments( SgNode* node )
    {
-  // This function determins the best function declaration where to associate default arguments.
+  // This function determines the best function declaration where to associate default arguments.
+     ASSERT_not_null(node);
 
-     ROSE_ASSERT(node != NULL);
-
-#if 0
-     printf ("In fixupFunctionDefaultArguments(): This function detects the correct function declaration to associated default arguments node = %p = %s \n",node,node->class_name().c_str());
-#endif
-
-  // DQ (7/7/2005): Introduce tracking of performance of ROSE.
      TimingPerformance timer ("Fixup function default arguments:");
 
-     SgSourceFile* file = NULL;
+     SgSourceFile* file = nullptr;
 
-     if (node->get_parent() == NULL)
+     if (node->get_parent() == nullptr)
         {
-#if 0
-          printf ("In fixupFunctionDefaultArguments(): Detected AST fragement not associated with primary AST, ignore template handling ... \n");
-#endif
           SgProject *project = isSgProject(node);
-          if (project != NULL)
+          if (project != nullptr)
              {
+#if USING_PERFORMANCE_TRACING
+               TimingPerformance timer ("Fixup function default arguments: processing the SgProject");
+#endif
             // GB (9/4/2009): Added this case for handling SgProject nodes. We do
             // this simply by iterating over the list of files in the project and
             // calling this function recursively. This is only one level of
@@ -67,64 +98,49 @@ fixupFunctionDefaultArguments( SgNode* node )
                for (fIterator = files.begin(); fIterator != files.end(); ++fIterator)
                   {
                     SgFile *file = *fIterator;
-                    ROSE_ASSERT(file != NULL);
-#if 0
-                    printf ("Calling fixupFunctionDefaultArguments() for file = %p = %s \n",file,file->class_name().c_str());
-#endif
+                    ASSERT_not_null(file);
                     fixupFunctionDefaultArguments(file);
-#if 0
-                    printf ("DONE: Calling fixupFunctionDefaultArguments() for file = %p = %s \n",file,file->class_name().c_str());
-#endif
                   }
-             }
-            else
-             {
-            // DQ (4/25/2013): Output at least a warning message.
-#if 0
-               printf ("WARNING: In fixupFunctionDefaultArguments(): This is not a proper AST, default arguments not processed... \n");
-#endif
              }
         }
        else
         {
-#if 0
-          printf ("In fixupFunctionDefaultArguments(): Getting the SgFile from the AST node \n");
-#endif
-          file = SageInterface::getEnclosingSourceFile(node);
        // When processing templates we need to get the SgFile so that we can check the command line options.
-       // ROSE_ASSERT(file != NULL);
-#if 0
-          printf ("current file is: %s \n",(file != NULL) ? file->getFileName().c_str() : "NULL SgFile pointer");
-#endif
-          if (file != NULL)
+          file = SageInterface::getEnclosingSourceFile(node);
+          if (file != nullptr)
              {
+#if USING_PERFORMANCE_TRACING
+               TimingPerformance timer ("Fixup function default arguments: processing the SgSourceFile");
+#endif
             // This simplifies how the traversal is called!
                FixupFunctionDefaultArguments declarationFixupTraversal(file);
 
             // This inherited attribute is used for all traversals (within the iterative approach we define)
                FixupFunctionDefaultArgumentsInheritedAttribute inheritedAttribute;
 
+               {
+#if USING_PERFORMANCE_TRACING
+               TimingPerformance timer ("Fixup function default arguments: traversal to generate map of sets");
+#endif
             // This will be called iteratively so that we can do a fixed point iteration
                declarationFixupTraversal.traverse(node,inheritedAttribute);
+               }
 
+               {
+#if USING_PERFORMANCE_TRACING
+               TimingPerformance timer ("Fixup function default arguments: processing the map of sets");
+#endif
             // Now we have assembled the global data structure to represent the function declarations using
             // default arguments and we have to use this data to eliminate the redundant default entries.
-#if 0
-               printf ("NOTE: In fixupFunctionDefaultArguments(): Use assembled data structure of functions containing defaut arguments to eliminate redundant default arguments \n");
-#endif
                std::map<SgFunctionDeclaration*,FixupFunctionDefaultArguments::SetStructure*>::iterator i = declarationFixupTraversal.mapOfSetsOfFunctionDeclarations.begin();
                while (i != declarationFixupTraversal.mapOfSetsOfFunctionDeclarations.end())
                   {
                     SgFunctionDeclaration* firstNondefiningDeclaration        = i->first;
                     FixupFunctionDefaultArguments::SetStructure* setStructure = i->second;
 
-                    ROSE_ASSERT(firstNondefiningDeclaration != NULL);
-                    ROSE_ASSERT(setStructure != NULL);
-
+                    ASSERT_not_null(firstNondefiningDeclaration);
+                    ASSERT_not_null(setStructure);
                     SgFunctionDeclaration* bestFunctionDeclarationForDefaultArguments = setStructure->associatedFunctionDeclaration;
-#if 0
-                    printf ("In fixupFunctionDefaultArguments(): best function = %p associated distance = %d \n",bestFunctionDeclarationForDefaultArguments,setStructure->distanceInSourceSequence);
-#endif
                     std::set<SgFunctionDeclaration*> & setOfFunctionDeclarations = setStructure->setOfFunctionDeclarations;
                     std::set<SgFunctionDeclaration*>::iterator j = setOfFunctionDeclarations.begin();
                     while (j != setOfFunctionDeclarations.end())
@@ -132,60 +148,55 @@ fixupFunctionDefaultArguments( SgNode* node )
                          SgFunctionDeclaration* functionDeclarationFromSet = *j;
                          if (functionDeclarationFromSet != bestFunctionDeclarationForDefaultArguments)
                             {
-                              SgFunctionDeclaration* functionDeclarationWithRedundantDefaultArguments = functionDeclarationFromSet;
-#if 0
-                              printf ("In fixupFunctionDefaultArguments(): Remove this function declaration's default arguments: functionDeclarationWithRedundantDefaultArguments = %p \n",functionDeclarationWithRedundantDefaultArguments);
+#if USING_PERFORMANCE_TRACING
+                              TimingPerformance timer ("Fixup function default arguments: processing a function");
 #endif
+                              SgFunctionDeclaration* functionDeclarationWithRedundantDefaultArguments = functionDeclarationFromSet;
                               SgInitializedNamePtrList & argList = functionDeclarationWithRedundantDefaultArguments->get_args();
                               SgInitializedNamePtrList::iterator k = argList.begin();
                               while (k != argList.end())
                                  {
                                    SgInitializedName* arg = *k;
-#if 0
-                                   printf ("arg = %p name = %s \n",arg,arg->get_name().str());
-#endif
                                    SgExpression* defaultArgument = arg->get_initializer();
-                                   if (defaultArgument != NULL)
+                                   if (defaultArgument != nullptr)
                                       {
-#if 0
-                                        printf ("In fixupFunctionDefaultArguments(): Found a redundant default argument = %p = %s \n",defaultArgument,defaultArgument->class_name().c_str());
-#endif
                                      // DQ (1/27/2019): Test this for a Lambda Expression: see Cxx11_tests/test2019_38.C.
                                      // This sort of test would not be suffient, comment out the call to delete instead.
-                                     // printf ("Commenting out call to SageInterface::deleteAST(): for default argument \n");
-                                     // SageInterface::deleteAST(defaultArgument);
-
                                         bool foundLambda = containsLambdaSupportForFixupFunctionDefaultArguments(defaultArgument);
                                         if (foundLambda == false)
                                            {
-                                             SageInterface::deleteAST(defaultArgument);
+#if USING_PERFORMANCE_TRACING
+                                             TimingPerformance timer ("Fixup function default arguments: traversal to process sets: deleteAST (now skipping deleteAST)");
+#endif
+                                          // DQ (7/20/2025): After discussion with Tristan, we will skip the call to deleteAST() because
+                                          // it is expensive (after the performance bug with symbol table fixup, it now takes 1/3 of the
+                                          // time to just call deleteAST() (on a input program including rose.h header file as a benchmark).
+                                          // Note that for this input program, there are 20M IR nodes, but only 1700 need to be deleted,
+                                          // so this is an insignificant memory issue. A plan is to at a later date use a function that
+                                          // Tristan wrote to identify and delete all of the IR nodes that are disconected from the AST
+                                          // (as defined with a root at SgProject).
+                                             defaultArgument->set_parent(NULL);
+                                             arg->set_initializer(NULL);
                                            }
                                           else
                                            {
                                              printf ("NOTE: Skipping call to SageInterface::deleteAST() for default arguments containing lambda expressions \n");
                                            }
 
-                                        defaultArgument = NULL;
-
-                                        arg->set_initializer(NULL);
+                                        defaultArgument = nullptr;
+                                        arg->set_initializer(nullptr);
                                       }
-                                   
+
                                    k++;
                                  }
                             }
+
                          j++;
                        }
-                    
+
                     i++;
                   }
-             }
-            else
-             {
-            // DQ (4/25/2013): Output at least a warning message.
-#if 0
-            // DQ (5/25/2013): Comment out this warning message since I think it is causing the binaryAnalysis tests to fail.
-               printf ("WARNING: In fixupFunctionDefaultArguments(): This function handles only SgProject and SgFile IR nodes as input, default arguments not processed... \n");
-#endif
+               } // end of timer
              }
         }
    }
@@ -195,13 +206,13 @@ FixupFunctionDefaultArgumentsInheritedAttribute::FixupFunctionDefaultArgumentsIn
    }
 
 
-FixupFunctionDefaultArguments::FixupFunctionDefaultArguments(SgSourceFile* file)
+FixupFunctionDefaultArguments::FixupFunctionDefaultArguments(SgSourceFile* /*file*/)
    {
    }
 
 
 FixupFunctionDefaultArgumentsInheritedAttribute
-FixupFunctionDefaultArguments::evaluateInheritedAttribute ( SgNode* node, FixupFunctionDefaultArgumentsInheritedAttribute inheritedAttribute )
+FixupFunctionDefaultArguments::evaluateInheritedAttribute(SgNode* node, FixupFunctionDefaultArgumentsInheritedAttribute /*inheritedAttribute*/)
    {
   // This function generates a data structure of function declarations using
   // default arguments so that we can determine the function declaration that is
@@ -214,30 +225,30 @@ FixupFunctionDefaultArguments::evaluateInheritedAttribute ( SgNode* node, FixupF
      FixupFunctionDefaultArgumentsInheritedAttribute returnValue;
 
      SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(node);
-     if (functionDeclaration != NULL)
+     if (functionDeclaration != nullptr)
         {
 #if 0
           printf ("In FixupFunctionDefaultArguments::evaluateInheritedAttribute(): functionDeclaration = %p = %s name = %s \n",
                functionDeclaration,functionDeclaration->class_name().c_str(),functionDeclaration->get_name().str());
 #endif
           SgFunctionParameterList* parameterList = functionDeclaration->get_parameterList();
-          ROSE_ASSERT(parameterList != NULL);
+          ASSERT_not_null(parameterList);
           SgInitializedNamePtrList & initializedNameList = parameterList->get_args();
           SgInitializedNamePtrList::iterator i = initializedNameList.begin();
 
           bool functionNotProcessed = false;
           while (functionNotProcessed == false && i != initializedNameList.end())
              {
-               if ( (*i)->get_initializer() != NULL)
+               if ((*i)->get_initializer() != nullptr)
                   {
                     SgInitializedName* initializedName = *i;
                     SgExpression* defaultExpression = initializedName->get_initializer();
-                    ROSE_ASSERT(defaultExpression != NULL);
+                    ASSERT_not_null(defaultExpression);
 #if 0
                     printf ("Found a default argument: initializedName = %p = %s \n",initializedName,initializedName->get_name().str());
 #endif
                     SgFunctionDeclaration* firstNondefiningFunctionDeclaration = isSgFunctionDeclaration(functionDeclaration->get_firstNondefiningDeclaration());
-                    ROSE_ASSERT(firstNondefiningFunctionDeclaration != NULL);
+                    ASSERT_not_null(firstNondefiningFunctionDeclaration);
                     std::map<SgFunctionDeclaration*,SetStructure*>::iterator existingSetIterator = mapOfSetsOfFunctionDeclarations.find(firstNondefiningFunctionDeclaration);
                     int d = defaultExpression->get_file_info()->get_source_sequence_number() - functionDeclaration->get_file_info()->get_source_sequence_number();
 #if 0
@@ -315,4 +326,3 @@ FixupFunctionDefaultArguments::evaluateInheritedAttribute ( SgNode* node, FixupF
 
      return returnValue;
    }
-

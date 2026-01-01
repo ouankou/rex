@@ -1519,43 +1519,11 @@ SgType::isIntegerType() const
 
      while (t->variant() == T_TYPEDEF)
         {
-          t = ((SgTypedefType *) t)->get_base_type();
+          t = isSgTypedefType(t)->get_base_type();
           ROSE_ASSERT(t != NULL);
         }
 
-     switch (variant())
-        {
-          case T_CHAR:
-          case T_SIGNED_CHAR:
-          case T_UNSIGNED_CHAR:
-          case T_SHORT:
-          case T_SIGNED_SHORT:
-          case T_UNSIGNED_SHORT:
-          case T_INT:
-          case T_SIGNED_INT:
-          case T_UNSIGNED_INT:
-          case T_LONG:
-          case T_SIGNED_LONG:
-          case T_UNSIGNED_LONG:
-          case T_WCHAR:
-
-       // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11 specific types).
-          case T_CHAR16:
-          case T_CHAR32:
-
-          case T_LONG_LONG:
-          case T_SIGNED_LONG_LONG:
-          case T_UNSIGNED_LONG_LONG:
-       // DQ (3/24/2014): Added support for 128 bit integers.
-          case T_SIGNED_128BIT_INTEGER:
-          case T_UNSIGNED_128BIT_INTEGER:
-          case T_BOOL:
-               return true; // 1
-               break;
-
-          default:
-               return false; // 0
-        }
+     return isSgIntegralType(t);
    }
 
 bool
@@ -1565,44 +1533,27 @@ SgType::isFloatType() const
      ROSE_ASSERT(t != NULL);
 
      while (t->variant() == T_TYPEDEF)
-          t = ((SgTypedefType *) t)->get_base_type();
-
-     switch (t->variant())
         {
-          case T_FLOAT :
-
-       // DQ (4/20/2019): Added additional floating point types to be classified as (isFloatType() == true) by this function.
-          case T_FLOAT80 :
-          case T_FLOAT128 :
-
-          case T_DOUBLE:
-          case T_LONG_DOUBLE:
-               return 1;
-               break;
-
-          default:
-               return 0;
+          t = isSgTypedefType(t)->get_base_type();
+          ROSE_ASSERT(t != NULL);
         }
+
+     return isSgFloatingPointType(t);
    }
 
 bool
 SgType::isUnsignedType() const
    {
-     switch (variant())
-        {
-          case T_UNSIGNED_CHAR:
-          case T_UNSIGNED_SHORT:
-          case T_UNSIGNED_INT:
-          case T_UNSIGNED_LONG:
-       // DQ (3/24/2014): Added support for 128 bit integers.
-          case T_UNSIGNED_LONG_LONG:
-          case T_UNSIGNED_128BIT_INTEGER:
-               return 1;
-               break;
+     const SgType* t = this;
+     ROSE_ASSERT(t != NULL);
 
-          default:
-               return 0;
+     while (t->variant() == T_TYPEDEF)
+        {
+          t = isSgTypedefType(t)->get_base_type();
+          ROSE_ASSERT(t != NULL);
         }
+
+     return isSgUnsignedIntegralType(t);
    }
 
 
@@ -1613,58 +1564,31 @@ SgType::isPrimativeType() const
   // Note that a typedef type is not a primative type, even if it resolves to such a type (because it can be name qualified).
   // A typedef type may be otherwise type equvalent to a primative type.
 
-     switch (variant())
+     if (isSgFloatingPointType(this) || isSgIntegralType(this))
         {
-       // The list of types from isIntegerType() function
-          case T_CHAR:
-          case T_SIGNED_CHAR:
-          case T_UNSIGNED_CHAR:
-          case T_SHORT:
-          case T_SIGNED_SHORT:
-          case T_UNSIGNED_SHORT:
-          case T_INT:
-          case T_SIGNED_INT:
-          case T_UNSIGNED_INT:
-          case T_LONG:
-          case T_SIGNED_LONG:
-          case T_UNSIGNED_LONG:
-          case T_WCHAR:
+          return true; // 1
+        }
+       else
+        {
+          switch (variant())
+             {
+            // Other kinds of float types.
+               case T_COMPLEX:
+               case T_IMAGINARY:
 
-       // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11 specific types).
-          case T_CHAR16:
-          case T_CHAR32:
+            // Other types
+               case T_VOID:
+               case T_LABEL:
+               case T_NULLPTR:
+               case T_DECLTYPE:
+               case T_STRING:
 
-          case T_LONG_LONG:
-          case T_SIGNED_LONG_LONG:
-          case T_UNSIGNED_LONG_LONG:
-       // DQ (3/24/2014): Added support for 128 bit integers.
-          case T_SIGNED_128BIT_INTEGER:
-          case T_UNSIGNED_128BIT_INTEGER:
-          case T_BOOL:
+                    return true; // 1
+                    break;
 
-       // float types
-          case T_FLOAT :
-          case T_FLOAT80 :
-          case T_FLOAT128 :
-          case T_DOUBLE:
-          case T_LONG_DOUBLE:
-
-       // Other kinds of float types.
-          case T_COMPLEX:
-          case T_IMAGINARY:
-
-       // Other types
-          case T_VOID:
-          case T_LABEL:
-          case T_NULLPTR:
-          case T_DECLTYPE:
-          case T_STRING:
-
-               return true; // 1
-               break;
-
-          default:
-               return false; // 0
+               default:
+                    return false; // 0
+             }
         }
    }
 
@@ -3325,7 +3249,7 @@ SgPointerMemberType::get_qualified_name_prefix_for_class_of() const
      SgName nameQualifier;
   // std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgPointerMemberType*>(this));
   // std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgPointerMemberType*>(this));
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgPointerMemberType*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgPointerMemberType*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
   // if (i != SgNode::get_globalQualifiedNameMapForNames().end())
@@ -3384,7 +3308,7 @@ SgPointerMemberType::get_qualified_name_prefix_for_base_type() const
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
   // std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgPointerMemberType*>(this));
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgPointerMemberType*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgPointerMemberType*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
   // if (i != SgNode::get_globalQualifiedNameMapForNames().end())
@@ -3487,7 +3411,6 @@ SgDeclType::get_mangled (void) const
      mangled_name << "__bdecltype__"
                   << mangleExpression(p_base_expression)
                   << "__edecltype__";
-
 
      return mangled_name;
    }
@@ -4622,7 +4545,7 @@ SgFunctionType::SgFunctionType(SgPartialFunctionType *ft)
 void
 SgFunctionType::post_construction_initialization ()
    {
-     p_orig_return_type = NULL;
+     // p_orig_return_type = nullptr;
 
   // DQ (12/6/2012): Added assertion.
      ROSE_ASSERT(p_argument_list == NULL);
@@ -4634,10 +4557,7 @@ SgFunctionType::post_construction_initialization ()
   // DQ (5/11/2006): Set the parent to avoid having NULL pointers
      p_argument_list->set_parent(this);
 
-  // DQ (6/22/2006): Initialize the orig_return_type
      ROSE_ASSERT(p_return_type != NULL);
-     set_orig_return_type(p_return_type);
-     ROSE_ASSERT(p_orig_return_type != NULL);
 
    }
 
@@ -6151,7 +6071,7 @@ $CLASSNAME::createType(SgExpression* optional_fortran_type_kind)
 #endif
 
   // DQ (10/31/2016): Added assertion.
-     ROSE_ASSERT(get_globalTypeTable() != NULL);
+     ASSERT_not_null(get_globalTypeTable());
 
      SgType* t = get_globalTypeTable()->lookup_type(name);
 
@@ -6189,13 +6109,13 @@ $CLASSNAME::createType(SgExpression* optional_fortran_type_kind)
 
        // Reuse this tempType variable so we can use the same code below.
           temp_type = is$CLASSNAME(t);
-          ROSE_ASSERT(temp_type != NULL);
         }
 
 #if 0
      printf ("Leaving $CLASSNAME::createType(): temp_type = %p \n",temp_type);
 #endif
 
+     ASSERT_not_null(temp_type);
      return temp_type;
    }
 
@@ -6234,10 +6154,10 @@ SgTypedefType*
 SgTypedefType::createType(SgTypedefDeclaration *decl, SgExpression* optional_fortran_type_kind)
    {
   // printf ("Inside of SgTypedefType::createType() \n");
-     assert(decl != NULL);
+     ASSERT_not_null(decl);
 
   // DQ (10/4/2010): I don't think this type can have a fortran type kind parameter.
-     ROSE_ASSERT(optional_fortran_type_kind == NULL);
+     ROSE_ASSERT(optional_fortran_type_kind == nullptr);
 
 #if 0
      printf ("In SgTypedefType::createType() (CREATE_TYPE_FOR_TYPEDEF_TYPE) \n");
@@ -6246,10 +6166,8 @@ SgTypedefType::createType(SgTypedefDeclaration *decl, SgExpression* optional_for
   // if (!decl->get_type())
      if (decl->get_type() == NULL)
         {
-          assert(decl->get_base_type() != NULL);
-
-          ROSE_ASSERT (decl->get_base_type() != NULL);
-          ROSE_ASSERT (decl->get_base_type()->p_typedefs != NULL);
+          ASSERT_not_null (decl->get_base_type());
+          ASSERT_not_null (decl->get_base_type()->p_typedefs);
        // printf ("Before loop over typedef chain: (decl->get_base_type()->p_typedefs)->get_typedefs().size() = %d \n",
        //      (decl->get_base_type()->p_typedefs)->get_typedefs().size());
 
@@ -6350,9 +6268,13 @@ SgTypedefType::createType(SgTypedefDeclaration *decl, SgExpression* optional_for
        // We have to build the type before we can generate a mangle name for it.
           SgTypedefType* tempType = new SgTypedefType(decl, decl->get_parent_scope());
           SgName name = tempType->get_mangled();
-          ROSE_ASSERT(name.is_null() == false);
+          ASSERT_require(name.is_null() == false);
 
           SgScopeStatement* currentScope = getCurrentScope();
+          if (currentScope == nullptr)
+            currentScope = decl->get_scope();
+
+          ASSERT_not_null(currentScope);
 
        // ROSE_ASSERT(currentScope != NULL);
           if (currentScope != NULL)
@@ -6375,7 +6297,7 @@ SgTypedefType::createType(SgTypedefDeclaration *decl, SgExpression* optional_for
 #if 0
                     printf ("Mangled type name for $CLASSNAME = %s (already exists in type table) \n",name.str());
 #endif
-                    ROSE_ASSERT(t != tempType);
+                    ASSERT_require(t != tempType);
 
 #if ALLOW_DELETE_OF_EXPLORATORY_NODE
                  // DQ (10/26/2016): Suppress the delete to test mergeTest_04 behavior.
@@ -6390,12 +6312,12 @@ SgTypedefType::createType(SgTypedefDeclaration *decl, SgExpression* optional_for
                   }
              }
 #endif
-          ROSE_ASSERT (tempType != NULL);
+          ASSERT_not_null (tempType);
           decl->set_type(tempType);
 
-          ROSE_ASSERT (decl->get_type() != NULL);
-          ROSE_ASSERT (decl->get_base_type() != NULL);
-          ROSE_ASSERT (decl->get_base_type()->p_typedefs != NULL);
+          ASSERT_not_null (decl->get_type());
+          ASSERT_not_null (decl->get_base_type());
+          ASSERT_not_null (decl->get_base_type()->p_typedefs);
 
        // printf ("Before updating list: (decl->get_base_type()->p_typedefs)->get_typedefs().size() = %d \n",
        //      (decl->get_base_type()->p_typedefs)->get_typedefs().size());
@@ -6405,10 +6327,9 @@ SgTypedefType::createType(SgTypedefDeclaration *decl, SgExpression* optional_for
 
   // printf ("Leaving SgTypedefType::createType() \n");
 
-     ROSE_ASSERT(decl != NULL);
-     ROSE_ASSERT(decl->get_type() != NULL);  // I think we can assert this!
-
-     ROSE_ASSERT ((decl->get_base_type()->p_typedefs)->get_typedefs().size() > 0);
+     ASSERT_not_null (decl);
+     ASSERT_not_null (decl->get_type());  // I think we can assert this!
+     ASSERT_require ((decl->get_base_type()->p_typedefs)->get_typedefs().size() > 0);
 
      return decl->get_type();
    }
@@ -6447,7 +6368,6 @@ SgFunctionType::createType(SgPartialFunctionType* ft, SgExpression* optional_for
   // return types.  Here we set the orig_return_type stored explicitly (it seems it is always the
   // same as the return_type.
      ROSE_ASSERT (ft->get_return_type() != NULL);
-     theType->set_orig_return_type(ft->get_return_type());
 #else
   // printf ("In $CLASSNAME::createType(SgPartialFunctionType* ft): calling ft->get_mangled_type \n");
   // SgName nname = ft->get_mangled_type();
@@ -6487,7 +6407,6 @@ SgFunctionType::createType(SgPartialFunctionType* ft, SgExpression* optional_for
         }
        else
         {
-          theType->set_orig_return_type(ft->get_return_type());
         }
 
   // Commented out to avoid deleting the input data (poor design, I think)
@@ -6532,7 +6451,6 @@ SgMemberFunctionType::createType(SgPartialFunctionType* ft, SgExpression* option
   // return types.  Here we set the orig_return_type stored explicitly (it seems it is always the
   // same as the return_type.
      ROSE_ASSERT (ft->get_return_type() != NULL);
-     theType->set_orig_return_type(ft->get_return_type());
 #else
   // DQ (3/29/2006): experiment with generating a unique name for the function type table lookup
   // This will avoid calling the get_mangled_type() function durring the construction
@@ -6568,7 +6486,6 @@ SgMemberFunctionType::createType(SgPartialFunctionType* ft, SgExpression* option
        else
         {
        // printf ("In $CLASSNAME::createType(): function type found in symbol table: nname = %s \n",nname.str());
-          theType->set_orig_return_type(ft->get_return_type());
         }
 
   // DQ: commented out the delete of the input structure (poor design, I think)
@@ -7478,6 +7395,7 @@ SgDeclType::createType(SgExpression* base_expression, SgExpression* optional_for
      ROSE_ASSERT(optional_fortran_type_kind == NULL);
 
      SgDeclType* newType = new SgDeclType(base_expression);
+/*
      assert(newType != NULL);
 #define INSERT_DECL_TYPE_IN_GLOBAL_TYPE_TABLE 1
 #if INSERT_DECL_TYPE_IN_GLOBAL_TYPE_TABLE
@@ -7491,6 +7409,7 @@ SgDeclType::createType(SgExpression* base_expression, SgExpression* optional_for
        get_globalTypeTable()->insert_type(name,newType);
      }
 #endif
+*/
      return newType;
 #else
   // DQ (8/2/2014): The decltype takes an expression (and stores it) but references the type of that expression.

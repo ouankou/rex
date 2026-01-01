@@ -5,7 +5,7 @@
 
 #include "fixupDefiningAndNondefiningDeclarations.h"
 
-void fixupAstDefiningAndNondefiningDeclarations( SgNode* node )
+void fixupAstDefiningAndNondefiningDeclarations(SgNode* /*node*/)
    {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
      TimingPerformance timer ("Fixup defining and non-defining declarations:");

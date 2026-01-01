@@ -351,8 +351,6 @@ WARN_LOGFILE           =
 
 # INPUT                  = 
 # INPUT                  = @top_srcdir@/AST_RewriteMechanism
-# INPUT                  = @top_srcdir@/AST_RewriteMechanism @top_srcdir@/AstProcessingLib @top_srcdir@/MSTL @top_srcdir@/QueryLibs/BooleanQuery @top_srcdir@/QueryLibs/NameQuery @top_srcdir@/QueryLibs/NumberQuery @top_srcdir@/QueryLibs/NodeQuery @top_srcdir@/ROSETTA @top_srcdir@/SAGE @top_srcdir@/util
-# INPUT                  = @top_srcdir@/AST_RewriteMechanism @top_srcdir@/AstProcessingLib @top_srcdir@/MSTL @top_srcdir@/QueryLibs/BooleanQuery @top_srcdir@/QueryLibs/NameQuery @top_srcdir@/QueryLibs/NumberQuery @top_srcdir@/QueryLibs/NodeQuery @top_srcdir@/QueryLibs @top_srcdir@/util
 # INPUT                  = @top_srcdir@/AST_RewriteMechanism/rewrite.h @top_srcdir@/AST_RewriteMechanism/extra.docs
 
 # The order of appearance determines the order of the modules in the generated
@@ -364,7 +362,6 @@ INPUT                  = @top_srcdir@ \
                          @top_srcdir@/src/midend/astQuery \
                          @top_srcdir@/src \
                          @top_srcdir@/src/backend/unparser \
-                         @top_srcdir@/src/3rdPartyLibraries/MSTL \
                          @top_srcdir@/src/util \
                          @top_srcdir@/docs
 
@@ -867,7 +864,7 @@ SEARCH_INCLUDES        = YES
 # the preprocessor.
 
 # INCLUDE_PATH           = 
-INCLUDE_PATH           = @top_pwd@ @top_pwd@/src/frontend/SageIII @top_srcdir@/src/midend/astProcessing @top_srcdir@/src @top_srcdir@/src/backend/unparser @top_srcdir@/src/util @top_srcdir@/src/3rdPartyLibraries/MSTL @top_srcdir@/src/midend/astQuery
+INCLUDE_PATH           = @top_pwd@ @top_pwd@/src/frontend/SageIII @top_srcdir@/src/midend/astProcessing @top_srcdir@/src @top_srcdir@/src/backend/unparser @top_srcdir@/src/util @top_srcdir@/src/midend/astQuery
 
 # You can use the INCLUDE_FILE_PATTERNS tag to specify one or more wildcard 
 # patterns (like *.h and *.hpp) to filter out the header-files in the 

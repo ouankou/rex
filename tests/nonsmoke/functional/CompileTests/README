@@ -42,11 +42,6 @@ C++Code:
    is done using applications that are not distributed with ROSE, but are a part of 
    all commit level tests.
  
-colorAST_tests:
-   This tests a mechanism to color parts of the AST when generated as dot file for the 
-   GraphViz project (an external graph visualization project, open source, from AT&T).
-   Dot files are used extensively within the ROSE project.
-
 copyAST_tests:
    This directory has test code that test the AST subtree copy mechanism that is a
    part of ROSE and used as an atomic operation in transformations.

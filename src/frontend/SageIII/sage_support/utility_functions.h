@@ -122,11 +122,8 @@ struct generateDOTExtendedforMultipleFile ;
 #endif
 
 #ifndef SWIG
-// DQ (3/10/2013): Swig has a problem with:
-// src/roseSupport/utility_functions.h:138: Error: 'stripPathFromFileName' is multiply defined in the generated target language module in scope 'roseJNI'.
-// src/util/stringSupport/string_functions.h:221: Error: Previous declaration of 'stripPathFromFileName'
-// src/util/stringSupport/string_functions.h:223: Error: Previous declaration of 'getPathFromFileName'
-// So exclude this code below.
+// DQ (3/10/2013): Swig has a problem with duplicate declarations in generated
+// bindings, so exclude this code below.
 
 namespace Rose
    {
