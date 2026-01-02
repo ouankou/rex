@@ -1,7 +1,0 @@
-.. _page_index:
-
-This directory contains input that describes ROSE's IR types
-============================================================
-
-.. doxygenpage:: index
-   :project: rex
