@@ -21541,19 +21541,6 @@ SgTemplateArgument::get_qualified_name_prefix_for_type() const
           max_size = nameQualifier.get_length();
         }
 #endif
-#if 1
-  // DQ (5/3/2024): Debugging non-terminating name qualification for unit testing.
-  // printf ("Leaving SgTemplateArgument::get_qualified_name_prefix(): nameQualifier = %s \n",nameQualifier.str());
-
-     if (nameQualifier.get_length() > 10000)
-        {
-          this->display("Exiting because the type has exceeded a reasonable length");
-          printf ("Exiting because the type has exceeded a reasonable length: %u \n",nameQualifier.get_length());
-       // ROSE_ASSERT(nameQualifier.get_length() <= 500);
-          flush(cout);
-          ROSE_ASSERT(false);
-        }
-#endif
      return nameQualifier;
    }
 
