@@ -92,42 +92,44 @@ exhale_args = {
 autosectionlabel_prefix_document = True
 todo_include_todos = True
 
-# Work around incomplete Doxygen XML entries; remove if Exhale handles missing nodes upstream.
-_ORIG_FILE_POST_PROCESS = exhale.graph.ExhaleRoot.filePostProcess
-_ORIG_NODE_COMPOUND_XML_CONTENTS = exhale.utils.nodeCompoundXMLContents
-_missing_refids = set()
+# Work around incomplete Doxygen XML entries; keep this local for easy removal later.
+def _apply_exhale_xml_workarounds():
+    """Apply temporary Exhale workarounds for missing/invalid Doxygen XML."""
+    orig_file_post_process = exhale.graph.ExhaleRoot.filePostProcess
+    orig_node_compound_xml_contents = exhale.utils.nodeCompoundXMLContents
+    missing_refids = set()
 
-
-def _node_compound_xml_contents_with_placeholder(node):
-    contents = _ORIG_NODE_COMPOUND_XML_CONTENTS(node)
-    if contents is None:
-        if node.refid not in _missing_refids:
-            sys.stderr.write(
-                f"[exhale] Missing XML for refid {node.refid}; inserting placeholder.\n"
+    def _node_compound_xml_contents_with_placeholder(node):
+        contents = orig_node_compound_xml_contents(node)
+        if contents is None:
+            if node.refid not in missing_refids:
+                sys.stderr.write(
+                    f"[exhale] Missing XML for refid {node.refid}; inserting placeholder.\n"
+                )
+                missing_refids.add(node.refid)
+            kind = getattr(node, "kind", "file")
+            return (
+                "<doxygen>"
+                f"<compounddef id=\"{node.refid}\" kind=\"{kind}\"></compounddef>"
+                "</doxygen>"
             )
-            _missing_refids.add(node.refid)
-        kind = getattr(node, "kind", "file")
-        return (
-            "<doxygen>"
-            f"<compounddef id=\"{node.refid}\" kind=\"{kind}\"></compounddef>"
-            "</doxygen>"
-        )
-    return contents
+        return contents
+
+    def _skip_files_without_soup(self):
+        """Work around Doxygen XML entries that lack associated soup data."""
+        missing = [f for f in self.files if getattr(f, "soup", None) is None]
+        if missing:
+            self.files = [f for f in self.files if getattr(f, "soup", None) is not None]
+            sys.stderr.write(
+                f"[exhale] Skipped {len(missing)} file entries missing XML; continuing.\n"
+            )
+        return orig_file_post_process(self)
+
+    exhale.utils.nodeCompoundXMLContents = _node_compound_xml_contents_with_placeholder
+    exhale.graph.ExhaleRoot.filePostProcess = _skip_files_without_soup
 
 
-def _skip_files_without_soup(self):
-    """Work around Doxygen XML entries that lack associated soup data."""
-    missing = [f for f in self.files if getattr(f, "soup", None) is None]
-    if missing:
-        self.files = [f for f in self.files if getattr(f, "soup", None) is not None]
-        sys.stderr.write(
-            f"[exhale] Skipped {len(missing)} file entries missing XML; continuing.\n"
-        )
-    return _ORIG_FILE_POST_PROCESS(self)
-
-
-exhale.utils.nodeCompoundXMLContents = _node_compound_xml_contents_with_placeholder
-exhale.graph.ExhaleRoot.filePostProcess = _skip_files_without_soup
+_apply_exhale_xml_workarounds()
 
 if not (_DOXYGEN_XML / "index.xml").exists():
     raise FileNotFoundError(
