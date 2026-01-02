@@ -4282,6 +4282,10 @@ int SgProject::link ( std::string linkerName )
              {
                argcArgvList.erase(find(argcArgvList.begin(),argcArgvList.end(),*i));
              }
+#else
+          argcArgvList.erase(
+              std::remove(argcArgvList.begin(), argcArgvList.end(), *i),
+              argcArgvList.end());
 #endif
         }
 
