@@ -435,7 +435,8 @@ CommandlineProcessing::isOptionTakingThirdParameter( string argument )
             {
                if (!isSourceFilename(arg) &&
                        (binaryMode || !isObjectFilename(arg)) &&
-                       (binaryMode || isExecutableFilename(arg)))
+                       (binaryMode || isExecutableFilename(arg) ||
+                           isValidFileWithExecutableFileSuffix(arg)))
                  {
                     if (isSourceCodeCompiler == false || binaryMode == true) {
                        sourceFileList.push_back(arg);
