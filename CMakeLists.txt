@@ -231,6 +231,7 @@ set(USE_CMAKE 1)
 
 # Generate version file for package configuration
 include(CMakePackageConfigHelpers)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
 write_basic_package_version_file(
   ${CMAKE_CURRENT_BINARY_DIR}/cmake/RoseConfigVersion.cmake
   VERSION ${ROSE_PACKAGE_VERSION}
