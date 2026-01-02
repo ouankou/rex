@@ -79,7 +79,7 @@ fi
 
 
 # Patch all the libraries and executables so they have the correct rpath.
-for file in "$ROOT"/bin/* "$ROOT"/lib/lib*.so; do
+for file in "$ROOT"/bin/* "$ROOT"/lib/lib*.so*; do
     if [ -r "$file" ]; then
 	echo -n "$arg0: adjusting rpath for $file... " >&2
 	case "$rpath_changer" in
