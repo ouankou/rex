@@ -116,6 +116,32 @@ process_headers()
   cd "$current_dir"
 }
 
+resolve_target_header()
+{
+  local compiler="$1"
+  local header_name="$2"
+  local header_dirs
+
+  header_dirs=$(sh "$roseHome/config/get_compiler_header_dirs" "$compiler" "$language" "$compilerVendorName")
+  if [ $? -ne 0 ] || [ -z "$header_dirs" ]; then
+    return 1
+  fi
+
+  local header_idx=0
+  local dirName
+  while IFS= read -r dirName; do
+    header_idx=$((header_idx + 1))
+    if [ -e "$mainTargetDir/hdrs${header_idx}/${header_name}" ]; then
+      echo "$mainTargetDir/hdrs${header_idx}/${header_name}"
+      return 0
+    fi
+  done <<EOF
+$header_dirs
+EOF
+
+  return 1
+}
+
 ######################################################################################
 # start of main
 # check for correct number of arguments and 
@@ -467,16 +493,7 @@ then
       # PL (9/9/2025): Need to make this specific fix for GNU 13.3, as a concept in a header file is not properly wrapped by a feature macro guard
         if [ "x$compilerMajorVersion" = "x13" ]; then
             if [ "x$compilerMinorVersion" = "x3" ]; then
-                type_traits_target="$system_headers_directory/../hdrs1/type_traits"
-                if [ ! -e "$type_traits_target" ]; then
-                    type_traits_candidates=$(find "$mainTargetDir" -type f -path "*/hdrs*/type_traits" -print 2>/dev/null)
-                    if [ -n "$type_traits_candidates" ]; then
-                        type_traits_target=$(printf '%s\n' "$type_traits_candidates" | head -n1)
-                        if [ "$(printf '%s\n' "$type_traits_candidates" | wc -l)" -gt 1 ]; then
-                            [ -n "$VERBOSE" ] && echo "Multiple type_traits headers found; using $type_traits_target" >&2
-                        fi
-                    fi
-                fi
+                type_traits_target=$(resolve_target_header "$1" "type_traits")
                 if [ -z "$type_traits_target" ] || [ ! -e "$type_traits_target" ]; then
                     echo "$0: error: expected type_traits header not found under $mainTargetDir; refusing to apply ROSE-specific patch." >&2
                     exit 1
