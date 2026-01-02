@@ -15,6 +15,7 @@ author = "REX contributors"
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent.parent
 _DOXYGEN_XML = _REPO_ROOT / "docs" / "doxygen-xml" / "xml"
+_REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "ouankou/rex")
 
 version = ""
 release = ""
@@ -57,7 +58,7 @@ html_title = "REX Documentation"
 html_show_sourcelink = False
 html_theme_options = {
     "path_to_docs": "docs/sphinx",
-    "repository_url": "https://github.com/ouankou/rex",
+    "repository_url": f"https://github.com/{_REPO_SLUG}",
     "use_repository_button": False,
     "use_issues_button": False,
     "use_download_button": False,
