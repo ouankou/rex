@@ -95,7 +95,7 @@ Logger::Logger(const char * function_, const char * mnemonic_, void * const ptr_
 #if DEBUG__Rose__Loggers
   auto it_m2f = mnemonic_to_function.find(mnemonic);
   if (it_m2f == mnemonic_to_function.end()) {
-    mnemonic_to_function.insert(std::pair<std::string const, std::string const>(mnemonic, function))
+    mnemonic_to_function.insert(std::pair<std::string const, std::string const>(mnemonic, function));
   } else {
     assert(it_m2f->second == function);
   }
