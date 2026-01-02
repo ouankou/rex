@@ -30,7 +30,7 @@
 
 ## Publish automation
 
-- A GitHub Actions workflow (`.github/workflows/docs-publish.yml`) runs on a weekly schedule (Thu 00:00 UTC) or manually via `workflow_dispatch`. It builds the docs and deploys to `gh-pages` with CNAME `rex.ouankou.com`.
+- A GitHub Actions workflow (`.github/workflows/docs-publish.yml`) runs on a weekly schedule (Thu 00:00 UTC) or manually via `workflow_dispatch`. It builds the docs and deploys to `gh-pages`.
 - The workflow installs Doxygen, builds the XML, builds Sphinx HTML, and pushes to `gh-pages`. No manual steps are needed once changes land on `main`.
 
 ## Scope

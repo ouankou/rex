@@ -12,7 +12,7 @@ author = "REX contributors"
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent.parent
 _DOXYGEN_XML = _REPO_ROOT / "docs" / "doxygen-xml" / "xml"
-_REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "ouankou/rex")
+_REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "passlab/rexompiler")
 
 version = ""
 release = ""

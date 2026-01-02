@@ -2,14 +2,14 @@
 
 ## Build the compiler
 
-REX uses LLVM/Clang 20. The fastest way to build and install locally is:
+REX uses LLVM/Clang 20.x or later. The fastest way to build and install locally is:
 
 ```bash
 ./build-rex.sh "$HOME/rex-install" Release
 ```
 
 For a manual CMake flow, see the root `BUILDING_WITH_CLANG.md` guide. Be sure that
-`llvm-config` from LLVM 20 is on your `PATH`.
+`llvm-config` from LLVM 20.x or later is on your `PATH`.
 
 ## Generate the docs locally
 
