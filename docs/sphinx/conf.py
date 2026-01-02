@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
+from html import escape
 from pathlib import Path
 
 import exhale.graph
@@ -97,6 +98,9 @@ _ORIG_NODE_COMPOUND_XML_CONTENTS = exhale.utils.nodeCompoundXMLContents
 _missing_refids = set()
 
 
+# Temporary Exhale workarounds for missing Doxygen XML entries.
+# Context: https://github.com/ouankou/rex/issues/70
+# TODO: File an upstream Exhale issue so these patches can be removed.
 def _node_compound_xml_contents_with_placeholder(node):
     contents = _ORIG_NODE_COMPOUND_XML_CONTENTS(node)
     if contents is None:
@@ -108,7 +112,8 @@ def _node_compound_xml_contents_with_placeholder(node):
         kind = getattr(node, "kind", "file")
         return (
             "<doxygen>"
-            f"<compounddef id=\"{node.refid}\" kind=\"{kind}\"></compounddef>"
+            f"<compounddef id=\"{escape(str(node.refid), quote=True)}\" "
+            f"kind=\"{escape(str(kind), quote=True)}\"></compounddef>"
             "</doxygen>"
         )
     return contents
