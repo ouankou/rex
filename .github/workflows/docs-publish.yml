@@ -23,7 +23,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-          persist-credentials: false
 
       - name: Prepare build directories
         run: |

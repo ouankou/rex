@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
+import exhale.graph
 import exhale.utils
 
 project = "REX"
@@ -12,7 +14,6 @@ author = "REX contributors"
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent.parent
 _DOXYGEN_XML = _REPO_ROOT / "docs" / "doxygen-xml" / "xml"
-_REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "passlab/rexompiler")
 
 version = ""
 release = ""
@@ -55,7 +56,7 @@ html_title = "REX Documentation"
 html_show_sourcelink = False
 html_theme_options = {
     "path_to_docs": "docs/sphinx",
-    "repository_url": f"https://github.com/{_REPO_SLUG}",
+    "repository_url": "https://github.com/ouankou/rex",
     "use_repository_button": False,
     "use_issues_button": False,
     "use_download_button": False,
@@ -90,6 +91,42 @@ exhale_args = {
 
 autosectionlabel_prefix_document = True
 todo_include_todos = True
+
+_ORIG_FILE_POST_PROCESS = exhale.graph.ExhaleRoot.filePostProcess
+_ORIG_NODE_COMPOUND_XML_CONTENTS = exhale.utils.nodeCompoundXMLContents
+_missing_refids = set()
+
+
+def _node_compound_xml_contents_with_placeholder(node):
+    contents = _ORIG_NODE_COMPOUND_XML_CONTENTS(node)
+    if contents is None:
+        if node.refid not in _missing_refids:
+            sys.stderr.write(
+                f"[exhale] Missing XML for refid {node.refid}; inserting placeholder.\n"
+            )
+            _missing_refids.add(node.refid)
+        kind = getattr(node, "kind", "file")
+        return (
+            "<doxygen>"
+            f"<compounddef id=\"{node.refid}\" kind=\"{kind}\"></compounddef>"
+            "</doxygen>"
+        )
+    return contents
+
+
+def _skip_files_without_soup(self):
+    """Work around Doxygen XML entries that lack associated soup data."""
+    missing = [f for f in self.files if getattr(f, "soup", None) is None]
+    if missing:
+        self.files = [f for f in self.files if getattr(f, "soup", None) is not None]
+        sys.stderr.write(
+            f"[exhale] Skipped {len(missing)} file entries missing XML; continuing.\n"
+        )
+    return _ORIG_FILE_POST_PROCESS(self)
+
+
+exhale.utils.nodeCompoundXMLContents = _node_compound_xml_contents_with_placeholder
+exhale.graph.ExhaleRoot.filePostProcess = _skip_files_without_soup
 
 if not (_DOXYGEN_XML / "index.xml").exists():
     raise FileNotFoundError(
