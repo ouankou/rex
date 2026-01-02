@@ -3,7 +3,7 @@
 SPHINXOPTS    ?=
 SPHINXBUILD   ?= sphinx-build
 DOXYGEN       ?= doxygen
-REPO_ROOT     := $(abspath ..)
+REPO_ROOT     := $(abspath ../..)
 DOXYFILE      ?= $(REPO_ROOT)/docs/Doxyfile
 SOURCEDIR     = .
 BUILDDIR      = ../_build

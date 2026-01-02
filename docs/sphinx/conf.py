@@ -92,6 +92,7 @@ exhale_args = {
 autosectionlabel_prefix_document = True
 todo_include_todos = True
 
+# Work around incomplete Doxygen XML entries; remove if Exhale handles missing nodes upstream.
 _ORIG_FILE_POST_PROCESS = exhale.graph.ExhaleRoot.filePostProcess
 _ORIG_NODE_COMPOUND_XML_CONTENTS = exhale.utils.nodeCompoundXMLContents
 _missing_refids = set()
