@@ -2,10 +2,10 @@
 PROJECT_NAME           = "REX API"
 PROJECT_BRIEF          = "Modernized ROSE compiler infrastructure (Clang/LLVM 20)"
 
-OUTPUT_DIRECTORY       = docs/doxygen-xml
-GENERATE_XML           = YES
+OUTPUT_DIRECTORY       = docs/_build
+GENERATE_HTML          = YES
+GENERATE_XML           = NO
 XML_OUTPUT             = xml
-GENERATE_HTML          = NO
 GENERATE_LATEX         = NO
 GENERATE_MAN           = NO
 GENERATE_RTF           = NO
