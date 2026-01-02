@@ -7,10 +7,10 @@ target_link_libraries(tools_globalVariablesInLambdas_exe PRIVATE ROSE_DLL)
 
 # TODO: When the refactor goes live, link libraries instead of doing this
 # include hack.
-target_include_directories(
-  tools_globalVariablesInLambdas_exe
-  PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}
-          ${CMAKE_PREFIX_INSTALL}/include/rose ${ROSE_INCLUDES})
+  target_include_directories(
+    tools_globalVariablesInLambdas_exe
+    PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_INSTALL_PREFIX}/include/rose ${ROSE_INCLUDES})
 
 set_target_properties(tools_globalVariablesInLambdas_exe
                       PROPERTIES OUTPUT_NAME "globalVariablesInLambdas")
