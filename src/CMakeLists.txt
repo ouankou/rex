@@ -455,7 +455,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 file(REMOVE ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg)
-set(ROSE_CXXFLAGS "${CMAKE_CXX_FLAGS} -std=c++${CMAKE_CXX_STANDARD}")
+set(ROSE_CXXFLAGS "${CMAKE_CXX_FLAGS}")
 file(WRITE  ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "# Things that the 'rose-config' tool can report\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CC           = ${ACTUAL_CC}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CCPATH       = ${CMAKE_C_COMPILER}\n")
