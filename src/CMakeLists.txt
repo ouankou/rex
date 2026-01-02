@@ -289,7 +289,7 @@ install(TARGETS rose-compiler DESTINATION bin)
 add_custom_target(
   check-core
   COMMENT "Running check-core")
-add_dependencies(check-core rose-compiler)
+add_dependencies(check-core rose-compiler rose-config)
 
 #Check that the other links are correct
 add_custom_command(
@@ -297,8 +297,7 @@ add_custom_command(
   POST_BUILD
   COMMENT "  TEST     whether a trivial ROSE program runs [rose-compiler]"
   COMMAND /bin/sh -c "if ! ${PROJECT_BINARY_DIR}/bin/rose-compiler --version ; then echo \"error: You cannot run a program linked with ROSE. Please be sure that your\" >&2; echo \"error: LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (Mac OSX) contains the\" >&2; echo \"error: correct libraries (JVM, librose.so, etc.)\" >&2; exit 1; fi;"
-  VERBATIM
-  DEPENDS rose-compiler)
+  VERBATIM)
 
 #Check that rose-config works
 add_custom_command(
@@ -306,8 +305,7 @@ add_custom_command(
   POST_BUILD
   COMMENT "  TEST     ROSE configuration tool [rose-config]"
   COMMAND rose-config --version
-  VERBATIM
-  DEPENDS rose-config)
+  VERBATIM)
 
 if(ENABLE-C)
   add_custom_target(check-hello-cxx)
@@ -328,7 +326,6 @@ if(ENABLE-C)
     COMMAND rm -f hello-world.c hello-world-c hello-world-c.ast hello-world.o rose_hello-world.c
       rose_odr_class.log rose_odr_function.log rose_odr_variable.log
     VERBATIM
-    DEPENDS rose-compiler
     COMMENT "  TEST     ROSE C compiler")
 
   #Check that we can compile & run a simple C++ program
@@ -346,7 +343,6 @@ if(ENABLE-C)
     COMMAND rm -f hello-world.cpp hello-world-cpp hello-world-cxx.ast hello-world.o hello-world.ti
       rose_hello-world.cpp rose_odr_class.log rose_odr_function.log rose_odr_variable.log
     VERBATIM
-    DEPENDS rose-compiler
     COMMENT "  TEST     ROSE C++ compiler")
 endif()
 
@@ -363,7 +359,6 @@ if(ENABLE-FORTRAN)
 #    COMMAND rose-compiler -rose:ast:read hello-world-f90.ast
     COMMAND rm -f hello-world.f90 hello-world-f90 hello-world-f90.ast hello-world.o rose_hello-world.f90
     VERBATIM
-    DEPENDS rose-compiler
     COMMENT "  TEST     ROSE Fortran compiler")
 endif()
 

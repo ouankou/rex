@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include <strstream>
+#include <sstream>
 #include <LoopTreeDepComp.h>
 #include <LoopTreeBuild.h>
 
@@ -120,7 +120,7 @@ std::string LoopTreeDepComp :: DepToString() const
    GraphAccessTemplate<LoopTreeDepGraphNode, DepInfoEdge>::NodeIterator nodes
              = GetDepGraph()->GetNodeIterator();
    assert(!nodes.ReachEnd());
-   std::strstream out;
+   std::ostringstream out;
    write_graph(*GetDepGraph(), out, std::string("dep"));
    return out.str();
 }

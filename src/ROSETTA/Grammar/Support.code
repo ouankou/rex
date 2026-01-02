@@ -21533,7 +21533,7 @@ SgTemplateArgument::get_qualified_name_prefix_for_type() const
      if (nameQualifier.get_length() > 10000)
         {
           this->display("Exiting because the type has exceeded a reasonable length");
-          printf ("Exiting because the type has exceeded a reasonable length: %zu \n",nameQualifier.get_length());
+          printf ("Exiting because the type has exceeded a reasonable length: %u \n",nameQualifier.get_length());
        // ROSE_ASSERT(nameQualifier.get_length() <= 500);
           flush(cout);
           ROSE_ASSERT(false);

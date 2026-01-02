@@ -466,7 +466,7 @@ frontendShell (const std::vector<std::string> &argv)
           CommandlineProcessing::removeArgs(local_argv, "-rose:skip_rose");
 
        // Set the new commandline (without the "-rose:skip_rose" option)
-          file->set_originalCommandLineArgumentList(local_argv);
+          file->get_originalCommandLineArgumentList() = local_argv;
 
        // Things set by "-rose:skip_rose" option, which must be unset (reset to default valees)!
           file->set_skip_transformation(false);

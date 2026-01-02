@@ -890,17 +890,9 @@ Grammar::setUpSupport ()
 
      HeaderFileReport.setDataPrototype ( "SgSourceFilePtrList", "include_file_list", "",
                                      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-  // DQ (9/28/2022): Modified to use the BUILD_LIST_ACCESS_FUNCTIONS macro.
-#if 1
-     File.setDataPrototype("SgStringList","originalCommandLineArgumentList", "",
-            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#else
+  // DQ (9/28/2022): Use BUILD_LIST_ACCESS_FUNCTIONS for list access.
      File.setDataPrototype("SgStringList","originalCommandLineArgumentList", "",
             NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-
-// DQ (4/25/2009): Must fix code in sageInterface/sageBuilder.C before we can use the proper BUILD_LIST_ACCESS_FUNCTIONS macro above.
-#warning "This should be using the BUILD_LIST_ACCESS_FUNCTIONS"
   // Modified ROSE to hold variables into the File object
   // DQ (8/10/2004): modified to be an int instead of a bool
      File.setDataPrototype         ( "int", "verbose", "= 0",
@@ -1558,20 +1550,9 @@ Grammar::setUpSupport ()
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // Project.setDataPrototype("std::list<std::string>","originalCommandLineArgumentList", "",
-  // DQ (9/28/2022): Modified to use the BUILD_LIST_ACCESS_FUNCTIONS macro.
-#if 1
-     Project.setDataPrototype("SgStringList","originalCommandLineArgumentList", "",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#else
-  // DQ (9/28/2022): This version of the code fails in src/roseSupport/utility_functions.C
+  // DQ (9/28/2022): Use BUILD_LIST_ACCESS_FUNCTIONS for list access.
      Project.setDataPrototype("SgStringList","originalCommandLineArgumentList", "",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-
-#if !ROSE_MICROSOFT_OS
-// DQ (4/25/2009): Must fix code in sageInterface/sageBuilder.C before we can use the proper BUILD_LIST_ACCESS_FUNCTIONS macro above.
-#warning "This should be using the BUILD_LIST_ACCESS_FUNCTIONS"
-#endif
 
      Project.setDataPrototype("int","frontendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);

@@ -3653,13 +3653,13 @@ void prependIncludeOptionsToCommandLine(SgProject* project, const list<string>& 
   // Note: Insert -I options starting from the second argument, because the first argument is the name of the executable.
      argumentList.insert(++argumentList.begin(), includeCompilerOptions.begin(), includeCompilerOptions.end());
 
-     project -> set_originalCommandLineArgumentList(argumentList);
+     project->get_originalCommandLineArgumentList() = argumentList;
      const SgFilePtrList& fileList = project -> get_fileList();
      for (SgFilePtrList::const_iterator sgFilePtr = fileList.begin(); sgFilePtr != fileList.end(); sgFilePtr++)
         {
           argumentList = (*sgFilePtr) -> get_originalCommandLineArgumentList();
           argumentList.insert(++argumentList.begin(), includeCompilerOptions.begin(), includeCompilerOptions.end());
-          (*sgFilePtr) -> set_originalCommandLineArgumentList(argumentList);
+          (*sgFilePtr)->get_originalCommandLineArgumentList() = argumentList;
        }
    }
 

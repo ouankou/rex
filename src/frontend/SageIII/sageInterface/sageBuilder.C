@@ -15883,7 +15883,7 @@ SageBuilder::buildFile(const std::string& inputFileName, const std::string& outp
 
           arglist.push_back("cc");
           arglist.push_back("-c");
-          project->set_originalCommandLineArgumentList (arglist);
+          project->get_originalCommandLineArgumentList() = arglist;
         }
        else
         {

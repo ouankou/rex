@@ -544,7 +544,7 @@ SgProject::processCommandLine(const vector<string>& input_argv)
 
   // Save a deep copy fo the original command line input the the translator
   // pass in out copies of the argc and argv to make clear that we don't modify argc and argv
-     set_originalCommandLineArgumentList( local_commandLineArgumentList );
+     get_originalCommandLineArgumentList() = local_commandLineArgumentList;
 
   // printf ("DONE with copy of command line in SgProject constructor! \n");
 

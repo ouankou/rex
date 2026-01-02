@@ -219,7 +219,7 @@ string get_type_name(SgType* t)
                 if (usingGcc) {
                   // Handle special case of GNU compilers
                 } else {
-                  returnString + " _Imaginary";
+                  returnString += " _Imaginary";
                 }
                return returnString;
              }

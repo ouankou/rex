@@ -1703,7 +1703,7 @@ SgFile::doSetupForConstructor(const vector<string>& argv, SgProject* project)
      vector<string> local_commandLineArgumentList = argv;
 
   // Save the commandline as a list of strings (we made a deep copy because the "callFrontEnd()" function might change it!
-     set_originalCommandLineArgumentList( local_commandLineArgumentList );
+     get_originalCommandLineArgumentList() = local_commandLineArgumentList;
 
   // DQ (5/22/2005): Store the file name index in the SgFile object so that it can figure out
   // which file name applies to it.  This helps support functions such as "get_filename()"
