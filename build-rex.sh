@@ -90,9 +90,9 @@ cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 
 cmake .. \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-    -Denable-c=ON \
-    -Denable-fortran=ON \
-    -Denable-fortran-ofp=ON \
+    -DENABLE-C=ON \
+    -DENABLE-FORTRAN=ON \
+    -DENABLE-FORTRAN-OFP=ON \
     -DCMAKE_CXX_STANDARD=17 \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 

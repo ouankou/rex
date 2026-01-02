@@ -59,7 +59,7 @@ cmake -L | grep -i test
 
 **Step 2: Enable tests if needed** (during reconfiguration)
 ```bash
-cmake .. -Denable-fortran=ON -Denable-fortran-ofp=ON -Ddisable-tests-directory=OFF
+cmake .. -DENABLE-FORTRAN=ON -DENABLE-FORTRAN-OFP=ON -Ddisable-tests-directory=OFF
 ```
 
 **Step 3: Build test executables**

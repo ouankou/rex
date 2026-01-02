@@ -486,7 +486,6 @@ class ClangToSageTranslator : public clang::ASTConsumer {
                                     SgNode **node);
 
         void populateClassDefinition(clang::RecordDecl* record_decl, SgClassDefinition* class_def);
-        struct CapturedPragma;
         bool collectOpenMPPragmas(clang::Stmt* stmt, std::vector<CapturedPragma>& pragmas);
         SgPragmaDeclaration* buildOpenMPPragmaDeclaration(const std::string& directive, unsigned pragma_line, SgScopeStatement* scope);
         void appendOpenMPPragmasBefore(clang::Stmt* stmt, SgScopeStatement* scope);

@@ -2661,9 +2661,9 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
        // Note that "-c" is required to enforce that we only compile and not link the result (even though -fno-backend is specified)
        // A web page specific to -fno-backend suggests using -fsyntax-only instead (so the "-c" options is not required).
+          const string syntaxCheckerName = fortranCommandLine.empty() ? string() : fortranCommandLine.front();
 #if 1
        // if ( SgProject::get_verbose() > 0 )
-          const string syntaxCheckerName = fortranCommandLine.empty() ? string() : fortranCommandLine.front();
           if ( get_verbose() > 0 )
              {
                printf ("Checking syntax of input program using %s: syntaxCheckingCommandline = %s \n",
@@ -2689,7 +2689,6 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
             // the CPP generated one, if one was generated).
                fortranCommandLine.push_back(get_sourceFileNameWithPath());
              }
-#endif
 
        // At this point we have the full command line with the source file name
           if ( get_verbose() > 0 )
@@ -3087,8 +3086,10 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
         currStks = nullptr;
 
         return frontendErrorLevel;
+#else
      fprintf(stderr, "Fortran parser not supported \n");
      ROSE_ABORT();
+#endif
    }
 
 //-----------------------------------------------------------------------------

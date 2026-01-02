@@ -9,16 +9,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <vector>
 
 namespace Rose {
 
-static const char * print_to_string(const char * format, va_list va_args) {
-  size_t req_sz = vsnprintf(nullptr, 0, format, va_args);
-  char * buffer = (char*)malloc(req_sz+1);
-  assert(buffer != nullptr);
-  buffer[req_sz] = '\0';
-  vsnprintf(buffer, req_sz+1, format, va_args);
-  return buffer;
+static std::string format_message(const char * format, va_list va_args) {
+  va_list va_args_copy;
+  va_copy(va_args_copy, va_args);
+  int required = vsnprintf(nullptr, 0, format, va_args_copy);
+  va_end(va_args_copy);
+  if (required < 0) {
+    return std::string();
+  }
+  std::vector<char> buffer(static_cast<size_t>(required) + 1);
+  vsnprintf(buffer.data(), buffer.size(), format, va_args);
+  return std::string(buffer.data(), static_cast<size_t>(required));
 }
 
 static const char * level_to_string(Logger::Level lvl) {
@@ -65,7 +70,7 @@ void Logger::display(Level const lvl, std::string const & message) {
 void Logger::display(Level const lvl, const char * format, ...) {
   va_list va_args;
   va_start(va_args, format);
-  std::string message(print_to_string(format, va_args));
+  std::string message(format_message(format, va_args));
   va_end(va_args);
   display(lvl, message);
 }
@@ -116,7 +121,7 @@ void Logger::debug(const char * format, ...) {
   if (level > Level::debug) return; 
   va_list va_args;
   va_start(va_args, format);
-  std::string message(print_to_string(format, va_args));
+  std::string message(format_message(format, va_args));
   va_end(va_args);
   display(Level::debug, message);
 }
@@ -125,7 +130,7 @@ void Logger::info(const char * format, ...) {
   if (level > Level::info) return;
   va_list va_args;
   va_start(va_args, format);
-  std::string message(print_to_string(format, va_args));
+  std::string message(format_message(format, va_args));
   va_end(va_args);
   display(Level::info, message);
 }
@@ -134,7 +139,7 @@ void Logger::warning(const char * format, ...) {
   if (level > Level::warning) return;
   va_list va_args;
   va_start(va_args, format);
-  std::string message(print_to_string(format, va_args));
+  std::string message(format_message(format, va_args));
   va_end(va_args);
   display(Level::warning, message);
 }
@@ -143,7 +148,7 @@ void Logger::error(const char * format, ...) {
   if (level > Level::error) return;
   va_list va_args;
   va_start(va_args, format);
-  std::string message(print_to_string(format, va_args));
+  std::string message(format_message(format, va_args));
   va_end(va_args);
   display(Level::error, message);
 }
@@ -151,7 +156,7 @@ void Logger::error(const char * format, ...) {
 void Logger::fatal(const char * format, ...) {
   va_list va_args;
   va_start(va_args, format);
-  std::string message(print_to_string(format, va_args));
+  std::string message(format_message(format, va_args));
   va_end(va_args);
   display(Level::fatal, message);
 }

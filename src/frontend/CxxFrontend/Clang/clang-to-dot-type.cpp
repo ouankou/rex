@@ -815,6 +815,10 @@ bool ClangToDotTranslator::VisitBuiltinType(clang::BuiltinType * builtin_type, N
         case clang::BuiltinType::UnknownAny:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("type", "UnknownAny"));
             break; 
+        default:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>(
+                "type", builtin_type->getName(p_compiler_instance->getLangOpts()).str()));
+            break;
     }
 
 

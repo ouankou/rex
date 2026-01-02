@@ -34,8 +34,8 @@ mkdir build && cd build
 cmake .. \
     -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_INSTALL_PREFIX=$HOME/rex-install \
-    -Denable-c=ON \
-    -Denable-fortran=ON \
+    -DENABLE-C=ON \
+    -DENABLE-FORTRAN=ON \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build . -j$(nproc)
 cmake --install .

@@ -145,15 +145,15 @@ cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$HOME/rex-install \
     -Denable-clang-frontend=ON \
-    -Denable-c=ON \
-    -Denable-fortran=OFF \
+    -DENABLE-C=ON \
+    -DENABLE-FORTRAN=OFF \
     -DCMAKE_CXX_STANDARD=17
 ```
 
 **Key CMake Options:**
 - `-Denable-clang-frontend=ON` - **Required** to use Clang frontend
-- `-Denable-c=ON` - Enable C language support
-- `-Denable-fortran=OFF` - Disable Fortran (not supported with Clang frontend)
+- `-DENABLE-C=ON` - Enable C language support
+- `-DENABLE-FORTRAN=OFF` - Disable Fortran (not supported with Clang frontend)
 - `-DCMAKE_CXX_STANDARD=17` - Required by LLVM 20
 
 ### 4. Build

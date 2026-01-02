@@ -121,11 +121,11 @@ process_headers()
 # check for correct number of arguments and 
 # whether a source directory has been specified
 # if [ $# -eq 3 ]; then
-if [ $# -eq 6 ]; then
+if [ $# -ge 6 ] && [ $# -le 7 ]; then
   :
 else
 #  echo "ERROR: Usage is $0 <compiler> <target_dir> <source_dir>"
-   echo "usage: $0 <compiler> <target_dir> <source_dir> <language> <compilerVendorName> <compilerMajorVersion>" >&2
+   echo "usage: $0 <compiler> <target_dir> <source_dir> <language> <compilerVendorName> <compilerMajorVersion> [compilerMinorVersion]" >&2
    exit 1
 fi
 
@@ -140,6 +140,10 @@ roseHome="$3"
 language="$4"
 compilerVendorName="$5"
 compilerMajorVersion="$6"
+compilerMinorVersion="$7"
+if [ -z "$compilerMinorVersion" ] && [ -n "$GCC_MINOR_VERSION" ]; then
+    compilerMinorVersion="$GCC_MINOR_VERSION"
+fi
 
 # echo "In script file: create system headers: Using back-end compiler = \"$1\" compiler vendor name = $compilerVendorName for processing of unparsed source files from ROSE preprocessors."
 if [ -n "$VERBOSE" ]; then
@@ -149,6 +153,7 @@ if [ -n "$VERBOSE" ]; then
     echo "language             = $language"
     echo "compilerVendorName   = $compilerVendorName"
     echo "compilerMajorVersion = $compilerMajorVersion"
+    echo "compilerMinorVersion = $compilerMinorVersion"
 fi
 
 # DQ (2/2/2016): We don't compiler ROSE using ROSE as the backend (this was from when we had 
@@ -461,14 +466,35 @@ then
 
       # PL (9/9/2025): Need to make this specific fix for GNU 13.3, as a concept in a header file is not properly wrapped by a feature macro guard
         if [ "x$compilerMajorVersion" = "x13" ]; then
-            type_traits_target="$system_headers_directory/../hdrs1/type_traits"
-            if [ ! -e "$type_traits_target" ]; then
-                echo "$0: error: expected type_traits header not found at $type_traits_target; refusing to apply ROSE-specific patch." >&2
-                exit 1
+            if [ "x$compilerMinorVersion" = "x3" ]; then
+                type_traits_target="$system_headers_directory/../hdrs1/type_traits"
+                if [ ! -e "$type_traits_target" ]; then
+                    type_traits_candidates=$(find "$mainTargetDir" -type f -path "*/hdrs*/type_traits" -print 2>/dev/null)
+                    if [ -n "$type_traits_candidates" ]; then
+                        type_traits_target=$(printf '%s\n' "$type_traits_candidates" | head -n1)
+                        if [ "$(printf '%s\n' "$type_traits_candidates" | wc -l)" -gt 1 ]; then
+                            [ -n "$VERBOSE" ] && echo "Multiple type_traits headers found; using $type_traits_target" >&2
+                        fi
+                    fi
+                fi
+                if [ -z "$type_traits_target" ] || [ ! -e "$type_traits_target" ]; then
+                    echo "$0: error: expected type_traits header not found under $mainTargetDir; refusing to apply ROSE-specific patch." >&2
+                    exit 1
+                fi
+                if [ ! -e "$roseHome/config/rose_specific_type_traits" ]; then
+                    echo "$0: error: ROSE-specific type_traits not found at $roseHome/config/rose_specific_type_traits" >&2
+                    exit 1
+                fi
+                if cmp -s "$roseHome/config/rose_specific_type_traits" "$type_traits_target"; then
+                    [ -n "$VERBOSE" ] && echo "ROSE-specific type_traits already installed at $type_traits_target" >&2
+                else
+                    [ -n "$VERBOSE" ] && echo "We are handling a case where a concept is not wrapped by a feature macro guard, so copy the ROSE specific fix to $type_traits_target" >&2
+                    mv "$type_traits_target" "${type_traits_target}_original"
+                    cp "$roseHome/config/rose_specific_type_traits" "$type_traits_target"
+                fi
+            else
+                [ -n "$VERBOSE" ] && echo "Skipping GNU 13 type_traits patch (minor version ${compilerMinorVersion:-unknown})." >&2
             fi
-            [ -n "$VERBOSE" ] && echo "We are handling a case where a concept is not wrapped by a feature macro guard, so copy the ROSE specific fix to $type_traits_target" >&2
-            mv "$type_traits_target" "${type_traits_target}_original"
-            cp "$roseHome/config/rose_specific_type_traits" "$type_traits_target"
          fi
     fi
 fi

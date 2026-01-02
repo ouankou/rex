@@ -3984,6 +3984,9 @@ bool ClangToDotTranslator::VisitCharacterLiteral(clang::CharacterLiteral * chara
         case clang::CharacterLiteralKind::Wide:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "Wide"));
             break;
+        case clang::CharacterLiteralKind::UTF8:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "UTF8"));
+            break;
         case clang::CharacterLiteralKind::UTF16:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "UTF16"));
             break;
@@ -6329,6 +6332,18 @@ bool ClangToDotTranslator::VisitPredefinedExpr(clang::PredefinedExpr * predefine
           case clang::PredefinedIdentKind::PrettyFunctionNoVirtual:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "pretty_function_no_virtual"));
                break;
+          case clang::PredefinedIdentKind::LFunction:
+               node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "l_function"));
+               break;
+          case clang::PredefinedIdentKind::FuncDName:
+               node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "func_dname"));
+               break;
+          case clang::PredefinedIdentKind::FuncSig:
+               node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "func_sig"));
+               break;
+          default:
+               node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "unknown"));
+               break;
         }
 
     return VisitExpr(predefined_expr, node_desc);
@@ -6818,6 +6833,24 @@ bool ClangToDotTranslator::VisitUnaryExprOrTypeTraitExpr(clang::UnaryExprOrTypeT
         case clang::UETT_VecStep:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "vecstep"));
             break;
+        case clang::UETT_DataSizeOf:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "datasizeof"));
+            break;
+        case clang::UETT_PreferredAlignOf:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "preferred_alignof"));
+            break;
+        case clang::UETT_PtrAuthTypeDiscriminator:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "ptrauth_type_discriminator"));
+            break;
+        case clang::UETT_OpenMPRequiredSimdAlign:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "openmp_required_simd_align"));
+            break;
+        case clang::UETT_VectorElements:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "vector_elements"));
+            break;
+        default:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "unknown"));
+            break;
     }
 
     return VisitStmt(unary_expr_or_type_trait_expr, node_desc) && res;
@@ -6991,6 +7024,12 @@ bool ClangToDotTranslator::VisitUnaryOperator(clang::UnaryOperator * unary_opera
             break;
         case clang::UO_Extension:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("opcode", "Extension"));
+            break;
+        case clang::UO_Coawait:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("opcode", "Coawait"));
+            break;
+        default:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>("opcode", "Unknown"));
             break;
     }
 

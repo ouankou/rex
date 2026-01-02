@@ -14,7 +14,7 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
     -DCMAKE_CXX_COMPILER=/usr/lib/llvm-20/bin/clang++ \
     -DCMAKE_Fortran_COMPILER=/usr/lib/llvm-20/bin/flang \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-    -Denable-c=ON -Denable-fortran=ON
+    -DENABLE-C=ON -DENABLE-FORTRAN=ON
   cmake --build build-clang -j$(nproc)
   ```
 - All invocations of `rose-compiler` require `LD_LIBRARY_PATH` to point at the

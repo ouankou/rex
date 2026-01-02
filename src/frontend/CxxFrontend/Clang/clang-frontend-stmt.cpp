@@ -354,6 +354,8 @@ ExplicitQualifierInfo getExplicitQualifierInfo(
     }
     if (token.empty()) {
       switch (nns->getKind()) {
+      case clang::NestedNameSpecifier::Global:
+        break;
       case clang::NestedNameSpecifier::Namespace: {
         const clang::NamespaceDecl *ns = nns->getAsNamespace();
         if (ns != nullptr) {
