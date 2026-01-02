@@ -461,10 +461,14 @@ then
 
       # PL (9/9/2025): Need to make this specific fix for GNU 13.3, as a concept in a header file is not properly wrapped by a feature macro guard
         if [ "x$compilerMajorVersion" = "x13" ]; then
-            [ ! -e $system_headers_directory/../hdrs1 ] && mkdir -p $system_headers_directory/../hdrs1
-            [ -n "$VERBOSE" ] && echo "We are handling a case where a concept is not wrapped by a feature macro guard, so copy the ROSE specific fix to $system_headers_directory" >&2
-            [ -e "$system_headers_directory/../hdrs1/type_traits" ] && mv "$system_headers_directory/../hdrs1/type_traits" "$system_headers_directory/../hdrs1/type_traits_original"
-            cp "$roseHome/config/rose_specific_type_traits" "$system_headers_directory/../hdrs1/type_traits"
+            type_traits_target="$system_headers_directory/../hdrs1/type_traits"
+            if [ ! -e "$type_traits_target" ]; then
+                echo "$0: error: expected type_traits header not found at $type_traits_target; refusing to apply ROSE-specific patch." >&2
+                exit 1
+            fi
+            [ -n "$VERBOSE" ] && echo "We are handling a case where a concept is not wrapped by a feature macro guard, so copy the ROSE specific fix to $type_traits_target" >&2
+            mv "$type_traits_target" "${type_traits_target}_original"
+            cp "$roseHome/config/rose_specific_type_traits" "$type_traits_target"
          fi
     fi
 fi
