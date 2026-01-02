@@ -1,0 +1,14 @@
+.. _exhale_typedef_omp_8h_1a25845e6e7e97052484da79cdc47a09dd:
+
+Typedef omp_depend_t
+====================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: omp_depend_t
+   :project: rex

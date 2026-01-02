@@ -1,0 +1,14 @@
+.. _exhale_define_sla_8h_1a145f9b70288d580ad5af733f399587d7:
+
+Define ARGVCONST
+================
+
+- Defined in :ref:`file_src_util_commandlineProcessing_sla.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: ARGVCONST
+   :project: rex

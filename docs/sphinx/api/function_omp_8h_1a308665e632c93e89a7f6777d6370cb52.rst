@@ -1,0 +1,14 @@
+.. _exhale_function_omp_8h_1a308665e632c93e89a7f6777d6370cb52:
+
+Function omp_set_num_threads
+============================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_set_num_threads(int)
+   :project: rex

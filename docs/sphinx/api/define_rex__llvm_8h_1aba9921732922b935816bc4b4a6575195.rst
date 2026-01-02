@@ -1,0 +1,14 @@
+.. _exhale_define_rex__llvm_8h_1aba9921732922b935816bc4b4a6575195:
+
+Define SCHEDULE_HAS_NONMONOTONIC
+================================
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_rex_llvm.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SCHEDULE_HAS_NONMONOTONIC
+   :project: rex

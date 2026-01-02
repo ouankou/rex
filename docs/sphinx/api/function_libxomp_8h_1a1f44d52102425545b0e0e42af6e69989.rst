@@ -1,0 +1,14 @@
+.. _exhale_function_libxomp_8h_1a1f44d52102425545b0e0e42af6e69989:
+
+Function xomp_deviceDataEnvironmentExit
+=======================================
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_libxomp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: xomp_deviceDataEnvironmentExit(int)
+   :project: rex

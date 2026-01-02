@@ -1,0 +1,14 @@
+.. _exhale_function_omp_8h_1a82155d9463eefbda8252f2675839f15f:
+
+Function omp_set_nested
+=======================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_set_nested(int)
+   :project: rex

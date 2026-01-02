@@ -1,0 +1,14 @@
+.. _exhale_define_Copy_8hh_1a254060e200243403f9b9bfa03846123b:
+
+Define INC_ASTTOOLS_COPY_HH
+===========================
+
+- Defined in :ref:`file_src_midend_programTransformation_astOutlining_Copy.hh`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: INC_ASTTOOLS_COPY_HH
+   :project: rex

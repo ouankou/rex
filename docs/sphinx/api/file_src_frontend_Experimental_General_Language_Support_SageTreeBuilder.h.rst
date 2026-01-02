@@ -1,0 +1,179 @@
+
+.. _file_src_frontend_Experimental_General_Language_Support_SageTreeBuilder.h:
+
+File SageTreeBuilder.h
+======================
+
+|exhale_lsh| :ref:`Parent directory <dir_src_frontend_Experimental_General_Language_Support>` (``src/frontend/Experimental_General_Language_Support``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``src/frontend/Experimental_General_Language_Support/SageTreeBuilder.h``)
+-------------------------------------------------------------------------------------
+
+
+
+
+
+
+Includes
+--------
+
+
+- ``PosInfo.h`` (:ref:`file_src_frontend_Experimental_General_Language_Support_PosInfo.h`)
+
+- ``Tokens.h`` (:ref:`file_src_frontend_Experimental_General_Language_Support_Tokens.h`)
+
+- ``general_language_translation.h`` (:ref:`file_src_frontend_Experimental_General_Language_Support_general_language_translation.h`)
+
+- ``optional``
+
+- ``sstream``
+
+- ``tuple``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_Rose`
+
+- :ref:`namespace_Rose__builder`
+
+- :ref:`namespace_Rose__builder__SageBuilderCpp17`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structRose_1_1builder_1_1SourcePosition`
+
+- :ref:`exhale_struct_structRose_1_1builder_1_1TraversalContext`
+
+- :ref:`exhale_class_classRose_1_1builder_1_1SageTreeBuilder`
+
+- :ref:`exhale_class_classRose_1_1builder_1_1SageTreeBuilderNull`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1af5db3abb096e93c79ae178836a88f4de`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1aade54a9dc9788f24ebbe733c031c0b89`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a1faf98b6d45b570890b9b31e6e3b3f38`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a33bbc7a6cc477ffed2809517956e3142`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a5637e9c181ab39222ae81b0bc6b63f56`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1ab21b05b4b12675a312f979066a013374`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a99fc7c80b4fc96ad66f8f16f78b5d32a`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a3e1fef66d50c6694a18a4a5a2a587f21`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a16e7820557b421bbad83640f4edb7980`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a25b5494069eb666cd9da71576fa5d7ea`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a5bd5257074a96a0fb219bb281a0bf932`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1aac2724d1c21c93daa6783752a40fe62d`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a7926f669876a621368a99ae3e2e6f721`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1ad221d61ec92dc7d777968aff2f24713c`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a4d1348fa15bf50d94ba28a39bd98e9c3`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1aa5740b9091a0205eb574f3822a75244b`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a27f8f90b750b1f73e749f6b2f2a00ec5`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a0b816c09df6d48a5d84d447e5c233883`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a12f768dbe786298ce7517dc5e55b38db`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a9fd9c4a6014c2497ed47367cb238e396`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a4d2cc1a43a2d157923f137594886496f`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a1dcff6ccedb4cefd01967ef7cfe409de`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a4088ce30851ab13ecb61aa3d58c100c3`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a7986758a56a6b88ba364d5f034049078`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a14c010f0fe5cdae734cd4084a10b4525`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a5cda98d52b97c6ead3e108a7ec567f67`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a87c8699ae7e6565d94dee26d34444bff`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a81448b07c634ffaff9fa08e0308cff7d`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a89b105d93de113ef79b6a55baf38373e`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1aee01f8bfdeda4867317cbce15f8c97a7`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1aaba347025ee48c5020b24884d31d6917`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a120e5155fe1705f8b07a2d67b84f77d0`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a75287ab59215152039f5958725fb0de1`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1af025b46845b212aadb4c939cb8a3a112`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1acae6289c3f58f70f8751e31acc0add07`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a4b7bb4ee54f7cf777de636131da287c4`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1adf3f8cad0e4d3aff2d909d817b9a0be4`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a21b1e90b81383614bc41149cbea3eb48`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a67ed8358669cbe759e0e3482053a0900`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a514fba358e852fc59a6329725b37f5c3`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a67304c8bcecd1c394ec088d9eb700e22`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1ab65f44a578e4c6999b7d2fc6fa98a2d7`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a4af10d92ce3a0ccf88f8b0128e5e5a1b`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a8f73bf0964dc8a10e00cccea16681d7a`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1aaaa6c92523ba88319f272d383f1f0b18`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a849b0b7589dcf25fdd26aa5e7fb139f3`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a5181ddfe6c1b05be5f0c09c1491e2968`
+
+- :ref:`exhale_function_namespaceRose_1_1builder_1_1SageBuilderCpp17_1a333fa288abc9346a43966f97a6fdcf32`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespaceRose_1_1builder_1ab5060f1b3c5b0f9b9816d4a3e3c80ea1`
+
+- :ref:`exhale_typedef_namespaceRose_1_1builder_1ad97e78c7a95f998563f4cce7b00aabf8`
+
+- :ref:`exhale_typedef_SageTreeBuilder_8h_1a3e7ca563887e794ecb5b17cc99a1c0d1`
+

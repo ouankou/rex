@@ -1,0 +1,14 @@
+.. _exhale_function_DepInfo_8h_1a3f09b63d5869f637498026e1542c42aa:
+
+Function Reverse(const DepInfo&)
+================================
+
+- Defined in :ref:`file_src_midend_programTransformation_loopProcessing_depInfo_DepInfo.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: Reverse(const DepInfo&)
+   :project: rex

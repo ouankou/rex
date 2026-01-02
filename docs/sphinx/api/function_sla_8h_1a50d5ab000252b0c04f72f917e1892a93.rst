@@ -1,0 +1,14 @@
+.. _exhale_function_sla_8h_1a50d5ab000252b0c04f72f917e1892a93:
+
+Function sla_str
+================
+
+- Defined in :ref:`file_src_util_commandlineProcessing_sla.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sla_str(int *, char **, const char *, const char *, const char *, char **, int)
+   :project: rex

@@ -1,0 +1,14 @@
+.. _exhale_define_newCallGraph_8h_1af767c929344b301769602448933f459d:
+
+Define directoryLength
+======================
+
+- Defined in :ref:`file_src_midend_programAnalysis_CallGraphAnalysis_newCallGraph.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: directoryLength
+   :project: rex

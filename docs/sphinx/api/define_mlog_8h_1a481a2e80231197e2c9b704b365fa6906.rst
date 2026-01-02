@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1a481a2e80231197e2c9b704b365fa6906:
+
+Define MLOG_WARN_CXX
+====================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: MLOG_WARN_CXX
+   :project: rex

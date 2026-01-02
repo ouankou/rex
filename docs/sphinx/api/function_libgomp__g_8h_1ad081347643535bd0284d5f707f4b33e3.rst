@@ -1,0 +1,14 @@
+.. _exhale_function_libgomp__g_8h_1ad081347643535bd0284d5f707f4b33e3:
+
+Function GOMP_loop_ordered_dynamic_next
+=======================================
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_libgomp_g.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: GOMP_loop_ordered_dynamic_next(long *, long *)
+   :project: rex

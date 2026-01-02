@@ -1,0 +1,14 @@
+.. _exhale_function_omp_8h_1a9ed0474735f00e49f9e37e8c76e935e5:
+
+Function omp_get_num_threads
+============================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_get_num_threads(void)
+   :project: rex

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesg_1a91351a81d99e4846a19091fb87330205:
+
+Template Function sg::linkParentChild
+=====================================
+
+- Defined in :ref:`file_src_frontend_SageIII_sageInterface_sageGeneric.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sg::linkParentChild(SageParent&, SageChild&, void(SageParent::*)(SageChild *))
+   :project: rex

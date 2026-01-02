@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1a1c82458817962b54bc57b32c1032c078:
+
+Define MLOG_FATAL_MORE_C
+========================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: MLOG_FATAL_MORE_C
+   :project: rex

@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1a2e7a812c4b9a9d034380f3151660a59b:
+
+Define MLOG_CHECK_WARN_RETURN_C
+===============================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: MLOG_CHECK_WARN_RETURN_C
+   :project: rex

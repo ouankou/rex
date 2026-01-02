@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1af787340f206cd29e0723719670a516f1:
+
+Define MLOG_MARCH_C
+===================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: MLOG_MARCH_C
+   :project: rex

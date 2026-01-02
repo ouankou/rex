@@ -1,0 +1,14 @@
+.. _exhale_define_unparser_8h_1a14867171f520c81dd210d2f66286c6fc:
+
+Define USE_RICE_FORTRAN_WRAPPING
+================================
+
+- Defined in :ref:`file_src_backend_unparser_unparser.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: USE_RICE_FORTRAN_WRAPPING
+   :project: rex

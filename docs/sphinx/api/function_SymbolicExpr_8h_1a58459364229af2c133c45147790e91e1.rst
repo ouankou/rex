@@ -1,0 +1,14 @@
+.. _exhale_function_SymbolicExpr_8h_1a58459364229af2c133c45147790e91e1:
+
+Function ApplyBinOP(SymOpType, const SymbolicVal&, const SymbolicVal&)
+======================================================================
+
+- Defined in :ref:`file_src_midend_astUtil_symbolicVal_SymbolicExpr.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: ApplyBinOP(SymOpType, const SymbolicVal&, const SymbolicVal&)
+   :project: rex

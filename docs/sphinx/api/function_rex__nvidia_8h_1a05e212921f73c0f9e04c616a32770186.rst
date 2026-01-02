@@ -1,0 +1,14 @@
+.. _exhale_function_rex__nvidia_8h_1a05e212921f73c0f9e04c616a32770186:
+
+Function XOMP_static_sched_next
+===============================
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_rex_nvidia.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: XOMP_static_sched_next(int *, int, int, int, int, int, int, int *, int *)
+   :project: rex

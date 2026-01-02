@@ -1,0 +1,14 @@
+.. _exhale_enum_omp__simd_8h_1a32d1e48241b180cce73c19856009aaa4:
+
+Enum SimdType
+=============
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_omp_simd.h`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: SimdType
+   :project: rex

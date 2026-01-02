@@ -1,0 +1,14 @@
+.. _exhale_function_libompc_8h_1ab89e8097273224a1c05d8efd45312766:
+
+Function _ompc_flush
+====================
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_libompc.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: _ompc_flush(char *, int)
+   :project: rex

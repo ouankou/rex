@@ -1,0 +1,14 @@
+.. _exhale_function_AnnotIO_8h_1a167f0034ea31f5207348e42407614c04:
+
+Function read_id(std::istream&, const std::string&)
+===================================================
+
+- Defined in :ref:`file_src_midend_astUtil_annotation_AnnotIO.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: read_id(std::istream&, const std::string&)
+   :project: rex

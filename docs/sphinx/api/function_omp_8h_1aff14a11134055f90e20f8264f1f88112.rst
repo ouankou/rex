@@ -1,0 +1,14 @@
+.. _exhale_function_omp_8h_1aff14a11134055f90e20f8264f1f88112:
+
+Function omp_get_max_task_priority
+==================================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_get_max_task_priority(void)
+   :project: rex

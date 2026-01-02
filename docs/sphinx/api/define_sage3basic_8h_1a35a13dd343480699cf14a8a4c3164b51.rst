@@ -1,0 +1,14 @@
+.. _exhale_define_sage3basic_8h_1a35a13dd343480699cf14a8a4c3164b51:
+
+Define ROSE_MALLOC
+==================
+
+- Defined in :ref:`file_src_frontend_SageIII_sage3basic.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: ROSE_MALLOC
+   :project: rex

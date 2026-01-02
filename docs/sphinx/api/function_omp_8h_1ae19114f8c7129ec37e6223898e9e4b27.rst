@@ -1,0 +1,14 @@
+.. _exhale_function_omp_8h_1ae19114f8c7129ec37e6223898e9e4b27:
+
+Function omp_destroy_lock
+=========================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_destroy_lock(omp_lock_t *)
+   :project: rex

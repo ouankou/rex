@@ -1,0 +1,14 @@
+.. _exhale_function_mlog_8h_1a69e16b746c7462966069ff3bb78304a7:
+
+Function mlogAssertFail_C
+=========================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: mlogAssertFail_C(const char *, const char *, const char *, int, const char *, const char *, ...)
+   :project: rex

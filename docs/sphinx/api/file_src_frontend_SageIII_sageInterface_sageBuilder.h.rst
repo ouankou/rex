@@ -1,0 +1,1211 @@
+
+.. _file_src_frontend_SageIII_sageInterface_sageBuilder.h:
+
+File sageBuilder.h
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_src_frontend_SageIII_sageInterface>` (``src/frontend/SageIII/sageInterface``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``src/frontend/SageIII/sageInterface/sageBuilder.h``)
+-----------------------------------------------------------------
+
+
+
+
+
+
+Includes
+--------
+
+
+- ``sageInterface.h`` (:ref:`file_src_frontend_SageIII_sageInterface_sageInterface.h`)
+
+- ``string``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_src_frontend_SageIII_sage3.h`
+
+- :ref:`file_src_frontend_SageIII_sageInterface_sageFunctors.h`
+
+- :ref:`file_src_frontend_SageIII_sage_support_sage_support.h`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_Rose`
+
+- :ref:`namespace_Rose__Builder`
+
+- :ref:`namespace_Rose__Builder__Templates`
+
+- :ref:`namespace_SageBuilder`
+
+- :ref:`namespace_SageInterface`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structRose_1_1Builder_1_1Templates_1_1TemplateArgumentList`
+
+- :ref:`exhale_struct_structRose_1_1Builder_1_1Templates_1_1TemplateArgumentList_3_01T_01_4`
+
+- :ref:`exhale_struct_structRose_1_1Builder_1_1Templates_1_1TemplateArgumentList_3_01T_00_01Args_8_8_8_01_4`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespaceSageBuilder_1a088b0a7cc7de512b6d4a48e8f2951ae6`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a8de4e749bbbca37bf4acdd08ee3f738b`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1afc8e7a5be56baff761670426695a6844`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a31e6e8417c08ad0892534b9775caa7f9`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1af46d868a60373555a17d749e798dcc65`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1ac3a3a49e1a8536f8c8c646fa1cc53666`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1aa06633435929d745e0dafbbd41574aa0`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1ad4faccdcc8601ba9472f7a774c893960`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a1001f3b6dfa3bfe9786958503ebf65f8`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1abf7e4043799c1d954f5f2f04c725977e`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a8b3355bf65453ad33ba836cf7f616e08`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a9fe75ea598084b1afee688078da8a9eb`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a500a46574f9b623ee6a8ca9bf55ac51f`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a2d3e1ed4755988dd78545bc85a9047d2`
+
+- :ref:`exhale_function_namespaceRose_1_1Builder_1_1Templates_1a747d4c0417712121129029a26fceae1d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abffc239fe36cd026ebb20f2da654a9f5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac2a01399186b2841305f033a957c7089`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae45103704dee77f89f3e7f9e341734f5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1ca882deda9772545a84b7baca9c8ff9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa5489ad36a94441a39a99fc4e509093d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab54a5c8267e2b21d242907a61243b415`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a22dc59ea59411a6f9dd6bb51378348cb`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adebdc502501a6e4f2a8c77a232892433`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a785fb25ea96f4bfcd28042304b4d20e0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aabc1509fe3db08b050136a22e938e9bc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1f4c18f513eaa31ffe2ed5214578746d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acf382a4a90fab89bf8db15b158447ba2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a24426c091490f7e94a7ec772c8018c90`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a99078bce2e08766b3026532445913744`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac6eded1dc173e9e5040211c29ffbedff`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8f80acb0e6c15d9bcc17f85c75088aef`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a62ca6fd59a7f12a30432417db5293476`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a76f1872264fc2949ebb68bd78c9ab2e7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab196219e222e4b84d5ca733da486c64a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af6cba5df691071e503568c7712c75b05`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac185fa37590fa37fbe1a7a9b2ef9d9a9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a79d6c5e014c9fcedcb0a9e1071651731`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac2238b1fd2845cf7dfe3ea082cd90f5c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9cca47024b38499b85bf61676c3037ad`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a86968ec71e3f7e9cd90c49fc34febb25`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8814e7b5bb6cb92086326bb2e2d93b62`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab28395b31ab784b15378c2e19c9ae101`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adaf871ca4a2a941f7e206cdb47c9d217`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa162f468238889e45706685813cae3e0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae26f76a2ae58d0e61a569a4cbc4d20d8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad185d3f0af7884c9702ce51e8ba3e02f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a82306e8312e4969eb99551e6ba43669c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af0b5e038b365c2d2bc3cc4871addb1fa`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4524740df56e51d031480f83bb115ef3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a99a459e6b4eb17c3e7a7bc99f7ef9ca8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0889c00077beffb9ea31e1b83b501c42`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ade62c9001a859ecf8a4884fcf80742b9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4627dcf73730671d1e3622da03b7e00b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0b0eacb61f19f225e3e3f0b86d0ded66`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1a3686df22a612b7b44122ffd1490037`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8015e648b461317c71695b2269203e31`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0685a38745847f4924fc1cd0a4c39fea`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7326953019dff809d17985ceddb9dc35`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa5e138bc5a7daef752f1bb72c2bc2c0b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac9f34a65dd5c1f819711a6b65d16b112`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a41726ee2e94b6ea6a6c38e720eb02ad4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae1b1782a18a50f247a74a3b7c71f308c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a236753581c02c18f1a34d8707c50c11f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8d0ea20940008ea5cb0d40762578dfbd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4c2bc9f2c6890d606fcc99b4444eef5b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab2885e57ec2d18a1bd759a3ec2b186e3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abe877b5636931da6025c267e30c0f5e2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab647e42f4043f6ebae7b7e8313196a6c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2c8a8d79ed75194dd69b02777c656b69`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8457f8663e24b5dbe2e2fe34a7d12462`
+
+- :ref:`exhale_function_namespaceSageBuilder_1afcc72608422be88274f44ac79fc8d14b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a46106b933bc7b6008e7d419eec299a09`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac763e144a9c115622ec9e357f7cff772`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8f2fabed3e1529876158c1acb819fe39`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a234c22e8f8dcfcb452d0c70e480b8800`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6a206fe1a380ffd53e4d11a54722884b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aca8fba24574a0df56591e6da45e55f1c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a023dd89f4392da7c145bca78a0295df8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a24617d6b41f22be11e9159ce74e5ca4b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a37d9f12870425f49dbea10d574fac8f3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a859b959b14174fff97129cb52e19f940`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a44f478c32820ced1fce9a56f91ec4f66`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6f6caa328677bb18245c51e45ef74152`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab7d9b03e3b1cd945a421201569d92ade`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa5b77bb813f4207a9453a3b04f80ca46`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af7573a87981312e07f709ed6fa3fac31`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac6544e26ce662639f3b7099ac4f52778`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae4113dec0ffa42446ba8544942a8935a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4bd56dbfd8fe02ad9641c13395c5515a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a92d402ccb10ce7bee0fc150e96f6c7d4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0d55f2663f6e0640155ffa79388f31a1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2ccd4f4ceb131545c48f81f03e50a9d2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1a893640f5764e3ac4baaa6e177f71a7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae0c65736a7301f73ce7c8ca6c9894ae4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4ad3c5cc6c08b479aa1bb78b1ec92222`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a92e717374615b27560532c402567d3b9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a851708b3fea2cbbe9689f413e7b9bc1d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac713d1a663237997bb3629e9e8d58159`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a941213b849ba3cd80f0be181d0444ce0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad6103bd72a155e22b7dd9d6b0fbb377a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a79f4f60f1df99031501c824d8d6de0b6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac56a5d3a2a2c321d62774acb60f1816d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aaa15912e4a8c1edb0310babc59227555`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4d18c91ab1770491b9519d15ba2d638e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4eef88a249515fc3584c7e0296c7fa05`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4de5eaafc8df428057d703cbf91486ce`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a702a40d62de4e3be2f9b26792339605c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af5402da5ba390887c60d869a08e52434`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6a84e1abcee2c20e7b54d0fe2ea8224d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a21b9277fe7828a58b395e481658e9e03`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a364bd2d7254af906de605eda911e26f0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae59f774dba2796450e0c5e3b9c09e697`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6df5fb69ecc8d1c6e38427148e4c92bf`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae5cd55f4e3e977623ea6584d2fea252a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af43f7eca96b103fb08cb503e38ec7948`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a52f358c4e137b53b48efc55f7210e746`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4da83aeb44fedfccbd7e8357b5237299`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8e76473c6fac8b03ee5e219f4c2f62fd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aca41dddaab7083f3b10a00b15698f0c1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a804dc7af580fb25e558837ba67a93d61`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab89fda0e760e634660cca51e21390977`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acb8bfcf466a0745a695908066f36036d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1afa28c6078df28ea60b2815482cbe7a71`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8f6a9438efea1a66d47a52534eeffb89`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a508091c0320d47bb1a1f65e62bcf0fd9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a88088eb22f2df54101ce0367037a0f1c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa04af4d27afcdf90c52abf8e861157ad`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a49e7e06bf579e3db50463a1d4540e5d1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6b44de5ba9d4a93579aae9fd8b58b52f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4e802ddeb2b7eade6d9c4ec01b8ef4a6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a971645cb3438748c27e7ee2f55808961`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abfb071d826dc910182eec5533b2f6a42`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4142b1915cda760cfe6a147f6e8f38e2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aef7577979d5ee9c5b323c262781b9701`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4e3599675504f9aeff2670cd954c1407`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac13aa6a2e91defb2209ee0a67f9779e1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac4f7bac662c9f4da39049014451d10d3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae123a976307085f79ac4b690d048405a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac9ed9ee54b324f6ffcae0745388dd3be`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a79e53a6d7917d849fc48ab9e47b7ebf6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7900f939d9c35d0956901cf0ec400787`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9118eaac94939002280a13337a3036f2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a371bbd9f8afb0dd558e5ed4bcfcde1e6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7177bd44da2bbb5e83a68d8b85a6c415`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad27fd27bf019197bb22ad5341d63c62e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a45ae4c2befb18bc201113813c87b9f6b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a141e4daab3ca33f82d11761b789fd33b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8bfee471f3f129118c7670b9c6c0ab4d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae9fbe2072e9e448c1dd47e3959bf3ef6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a450a16bce6b026ea3cbc87bf47ee5490`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a15fdea6cd2c0d69c7ae9e551a7a0dd48`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1913b87712a237d7d24d3736ee55d140`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6e02add58227f67eb9a3a257ce76c7ec`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a25726e88f46543cd8c3cc89371d7030f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2c07bd1a927677f845d296f543c34908`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa09cb7683b64ba01af4202837fa72804`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aef4dda236be67b2e5ed7b01d815a5da1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9ecda071dd15fe43858ab8b6da1d5422`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7bb4586d516ba82f6fc843bcf40c0c0a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a807517953768b690b6afd3180c42806d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a119f454b85087663b5da00c91bebd6b4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acda51b3247a50d0e80333d4fcff8c1f3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a511318152d5d09041ab5ce313bd96b2d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8bbfab8f8e0183fbb35a56125b73c59a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3ac987cde100ae104efb37180b435f18`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8c3b5743ace585df5df2877563e52273`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abe69da402a0146106956067ca9e0061a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8c487d6121a93246032e4c9a38c9155e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a23f5801147bac567b6eea80b8647fc85`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a867a503cabe3cde7e50e785cbc7d53f3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5ec58292c28dce5835a55831fec4c537`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2b9bc85a2d8b432dcbf2b67549fed9e8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6564cf8b52006e376a0c8a52e463d212`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a28c4b963c53a65b40a745bb6b80b59cc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2d92580185efb2511bd12aa4bb41a00d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5b42f38dea7af6bcbee90f7a2d4248ba`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aca7b0360c6b47e0210f3be9241173bd6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae6087a78471767c6d9ac28a4fcad24dc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa84019454b8f99dff8fe1db48005f764`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa2a1bf00f3da7b7b6dcb9a9ea4600483`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6532266d747a96b314f16c040f6d87ef`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab33771d8ee665da65497e4094a5c5eaa`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a70d02ed360558a1d3e8aab1c556da8f7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8d6ef8858a6b600367dca306c2025056`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab5ea2c86ad35ac01f5166fec9602a180`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8ecace87c94a83f7f085a7b3fcc647e5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a55226a27502e00979e6de5a27c04c326`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad6d8b8285ef1af80d70515eaad1c35ad`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad1985a598f315163fcdbf2399a987731`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa9d3614fa5bccba8badec8ce076e9cdf`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9128a627a2893599b35f35e39a19c078`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a523f6239ac9f1f1645f092b9271391ad`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae12de180aeea4805c68e3d3651faa77d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab010a5285df9bb91b4ae19a2d02b6b6d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae1e07243b5ed08cf2589163b0fd677e6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a45eb0e6362752803a1e155f4fff46dc2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acd9106949ba6b02c76166209fe64d5ba`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7da5f5a8af494253c74479cda7b11dc5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4ccbe8f392ef0a4a34f09bf156f2c1d2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac788fbf21e6e467d83f64e1d54b253c1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a258b222d73b7023fdf3fb6464897b6a8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a93186ac6dcc4c607734d3e96cebefe00`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abfe9d58490f0bcdebd39308204f24843`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a33db7f204d9614a7744038a80e75cc62`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab5a4dc3fefad71e7c5668ed004ada15c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a260c59ba1c9d4f5a53c558803237cfc9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa5feae02f7085a1170a733edb1fdb0ac`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a57fbe2b311f2dc308d684bfa31ae142f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a24463b9f94d3e436b2043e1dcbf9f37c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8501079f33b9501d93d2de20b423eded`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa8e36d4826195e3972764dfddd6150d9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a32638a82cbc8feb5c2f06388d013cba9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5fabb3adb7f576d41f1ea756b4c738b3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7012b5ddcb9b4d3d25c9b59d2515b543`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab07af8e6fa1da228e9fc9cccb93c462b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1464e306f2f3a81c5ea8b0c80c5bfeac`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abdd4baac8b509a1e14cd5ca1ef119931`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa775cc80737ca719bcf03b2bd42a567a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5415d6a16b7e7a49a41255b3956219c8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2a59ad643ab7a0fc45b94638f2710446`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab9e55869cfb226d4177bcf9d96f1497c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa334dd553d8287e3e3753a8753e3d14d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0a53fe92149d9fd04293be7764577f3a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac069b659cb550062c70146a0599fa08e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abc16780b9979677186e311358db3f139`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1c7185a5b5f90958814bf834dfd37f6c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adb41ad406d561e9f409a57d5a20457d4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a993b1198732f458b00cdc47ac9b00c76`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad2605873abf186d720ef267fe4f56ef2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a93128138bcb51c7da48c9978e45dc048`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af8c97b486804036f416a4744f1c93bbf`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adb05710867d5ac253319a995e2a4da41`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae3bc84c0e19ced0c5a86e8a19c24e10b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2741e8628808a4ac21aff72ce74ca766`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad056f12833219ad5b576431f643607b9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a33ee4460bd27043ad79f983f7c7dba6b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acab1d681c6d1f25f8ab2f08718ae1cf0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac5d81894c2be2d00bb9fa50bbc180dea`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aeff960d3f6d2987a579f4282ef0d31be`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a32ce519f48159855a52545edf87a5a66`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a397688a34aeeb5386bd1c4c4b79aa202`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a44605af67a65d38eb76edf17c0151791`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae656ef1cae4b146f449552cf538c56e2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac378549eee25aaa697c87b2bbf521857`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa6ed218ba023af2ebc4e741bf9e6b5c2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa7a24714add1841b53d208c1769ca10c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a427d3deadeb49ebe95aa6b1155537223`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adaec981e89e8493d61b6b0ef86a657ef`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a61c4027fc4bfe6e1d4762426b6333794`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a964dafc8aa707ca924bc864552da1603`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a31f44efeca2e2f61b2ac356834c8980a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af11bb2c9e54bbd6fc963032b59fdb770`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1cb4bc6c06a6740716420ad2044332b7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a38ed4e319d824e99bd2e1b3665ec753d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae71005541316f59d61e3e939454d6b7d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a82fe9bec7d9a7a899ffe422e9414c0c2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a21a11c5ef73e88bfcd9147e2160b3164`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5d900272e0694a6263129f888a458ffd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a89dcd1a1706eabc374e59fbe9456a15a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a553189af5f17c4ead013984aa2f58303`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad3c9db9253de6819d3864badbc7391e9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a539aa037bf1b0d63409590aa4d47b08f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7c579f704a41a4e8a60042d8a70e51bc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af61dc9c05155d9b67d3a879b08cda8fd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a28e585af36bed5019b5f1d41665b7d0e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a94f0c3f7ddf707a609ca70962741a955`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a31842289fe185d0bd120e9e3be6d4415`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3e361c8db8456ab3368f39bd27fbb126`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adfc273b7335cb65ffec6cefe8cc4997b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a674371e0b5a2178e95d587d7b37553de`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a351ed5ccb3ee65137a71f0b0e4379294`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a26dd892e35236f510d6c53467989720a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa9d5d9c3478a4629ab931beaa825566e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8b05dc24fbd2406bbd4b977237ea5c18`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a61d0b2a3379b9a6f31b97a111aa5657d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1afe2c29af913be37f877bbe47a8962c62`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9c31af5d8e987e6d6dcdef42adbf9332`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8626e76694da6638ababdda8d0dea47e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5fee75d4cc9e5cbaf761f0d1f1d22bec`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5f519e8d94572f4b470ad5ac12c46e7b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a607642ea44adb983e61ac47fcbbafa2f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adb621a16fb7a1048a77f43987f2726b5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a559aa8eac7e5f98edffbb18d94553243`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa19215cc898b77bfeee076433859ed5a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a291225a2d2daeab7289cf71653e60c5b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab4980e120a5df062dae36da05c81adb2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a44c6629930f8505aae7a344c65c795d1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa32879318909538da7dfdf27abd95806`
+
+- :ref:`exhale_function_namespaceSageBuilder_1afb9293008d6e1b7695da8b5bb5eb3132`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7504029b306a4d347e9b15639dba0bb6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2511d67ad10d7385239486ec10d57dce`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abb96747f2f66aed2a86ae6ed392da37f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a70ab9a27375c84b50e345c7a9bccf0a1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa22f74c67639bdf3c82a8b07207de018`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa466f55bf95fea3a2f37b79b973bb262`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acba8f1b0cec2247b7739ed6ff1ea56bc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac61521358d2803fff4b3c12af422135f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4f08194e3883ba7ccecb80ca1247696e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac1152a524fc64cf6f3e550a90ff89e9c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a02b31f298056edca5e6ed3cc1cf4fed9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af15b77fc87bdf859d7ccd9e900581606`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a33529f95381fc792243df48605d3801a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4617cb8da7f71e5f78a19696a294f0b5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6bb52484dd7fd3ab74d950f0af2dee13`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab2d48ce9497799b6e5856fd6b6362d54`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac6904d89b35c20394b429f988c5a9030`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a94b7bea1b068b136003c45585b386dbe`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a73d083014f9b238d0ae6c86c3df63762`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a143fe8a3899b2ba8198ff01c05eacf47`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3a9323b728b259d89fb136cfa2ba4d52`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae39f2be3de1c2fb054102e996763f712`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac7aa6632979e3709749461c9e83b15eb`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac1fd683c4ff9781d572773b9b8f02ae7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0790b8316453a8f46212f6e0c2da5283`
+
+- :ref:`exhale_function_namespaceSageBuilder_1afaee4daaa15af04e809ad9f712c51274`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae61b1010878cb23087ebfd53a0e1ff45`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3a8963a43a803ce1fcccafb8361d4348`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa6c42a112a63c985f431efc73eb110a4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4158f1d1895f0506634a1db83d6484f4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab580fcce69a003bbe3c15327f0be8bd0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4fe3e53cddec804bde89347a3dfd6560`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3204a13bd34d2d5157d4f52e680cb9f8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a98929f95b87d3740047bee625524cc12`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2e28d6a3caa037dfed0aca1e4cf258b0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acf5cce258522a2ee6b6b74dbd4c095c9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a286b2480459cb3cfd3bd29488fa03692`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4a23395636e9ee78a62925e817820981`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a77be53b84b7d7995fad8ef15e8e0bbc0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af595c34f7d125b8d93d3b3f83099b999`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4da95e3e2a4a537bd73960833c63a5f2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1ab5b30cd141f02ae5827dc40a8b65be`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a327c24ec64937e2b7b6c41e133930145`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae0bbbeea44df639e153e6dc35372f6f9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a32d20f57657b8479f3d6997f5e49aa0a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acbc71301e01e15710780422f841420a1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a61789d8f5e8acf00207419272fda7ba1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad2a547f05fee3686f91c47b764c37ef6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3021032ebcf8c0eef65d147268b3523d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ade7a5eb28b93ac983033f9201f8546c0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1f88bbd41c57878d1db792ad40e81595`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a727271f1e0699c49639cd1992d46d9c3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a48e5f3c5f76c5c50a5d8f585c13f3c75`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3f3ad6ff82a38a7390faa71559a022b1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9f97e2042fb646315422c325fc65956c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa83b9330af2e6a90c74517cd019dd534`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae7610d93ea70d8a36722c2effafa6db9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3b62a5e111b273b2a0879ea27ffb9366`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab000320fc7d2d5f1cd8c9dae67b89435`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abed67f904fc6df1d5a3b6f3a72c1a2a0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab5afff4bf3454e0262b205e1f08b5478`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae1840893cdb2fcd6d3cd4ff92229a296`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4a2e163c320472cca08f80240f28048d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3d4bf76b3d94c18613218cd2bd59f495`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aaf743fe87941f46218af912fe1467928`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a955463414c81765ca2e16fecf6164a7a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac05c9ce742f9e0967de26ce3c1e7f384`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad1060ef195a1702e6e226efdd1f20d7b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a639a476330b8132d48d10ebeda138ecd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a13e02a65b9a2e421e9e68458b7bb14bc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af96041f29a0e6da04d314aa3a3c1980d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1df16fa1340dd8f165329f225000d682`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab7a2525001c4e0374743aed18893d086`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae9591e530bbbd458202efd1b0982157f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a71af174a4664fd3229c5aac33aa2b8e9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad0c9e577ccf2f5e8a9e7ba7180f967e6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a97afe307e59fb4a06e47edc127068def`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac2fd21d447cd1336abf7571cf567c951`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af830e22b96cf451854bbb8b704576805`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a81e39f96ffec7ccf7724a05c68ad5488`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a52ab48570351986af2f1b03788d452bd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a86d3b8104a6ef7836a67de820e57adf7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0d5ab44d5111f33484d146e0216e30f1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a95ce2446958f488b9d4365c1f11061e8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab871d97d757463b2f642254e32b8c1c9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2561a2fa14a2c1538c55478534528fae`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0c03b33f344f629e8b08ec4d3773b62a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad82983af13be8b7ac7d4e3f028b5e34d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0c44f2ffd795ab3deaf09ddf1a3decfb`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa9686074d52c35eb0519191cd82d75fc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1355cf2d2f13684ec44ef13f18a3909a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abc3a0138520f446ec79bb31a31df49eb`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a63b5ec63a68d3c5023a07198e2d25326`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5d26f9bef00023229ff37e054ce96451`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8bbcfe8349d546641be8822fd06028ae`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a67ed264b17cb18d97122fd6a73af10eb`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a978eeb66a52695b13695285350789503`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aef6c0384b1724b2233f067a64891bf89`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9694cf9a3e985427aff41919f9b4f2a8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a27f294649656fa5b45c435505ebd8498`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6968c66760be017b3fdabde8a9151230`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a847f601b3c9a9beb4b483abe394fbdff`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a36d20ac9e1dc8e6f1f0b523abe271797`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ada3eafcea3344c5269efc6a18259aa1a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a95ed1cb996657201a1fbbe1a80db4c82`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7fa8a1874becd9c2f7bac98723d32e8e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acb7b3fa6ba0d713eabf81eac0f882d13`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3df832a4a18f2c0673bd4c80a94050c7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a668962b3f323d1534d5538a8e1fcc0d3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aaf7fa853cd2df4f9a506779289a404ea`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9cb0aaf23672ae7e8e82893f4a9aa263`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a444483bf52a23717396840d5a9f8a527`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1a5947ad74773b7bddaf842bbf307b79`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7bbdef61b91b8995c73aa4899bc0c7c9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aee8e39cf142cb3d43e5f74617d50e910`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae7a90e02a38fd3e7fdecb52f6f3e1028`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1aaeefc1796f87753453e33e3b93a95e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac4e03d9913d1339b9c593d2da49c25d3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac915bf6be757b01354b62c49ae12034a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae4bd5fc4106e109ff73e1100df80d584`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a13719fd9c7a1d075e5467c7325eda075`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa62f3ce7385688f9440fa2b14c446e98`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1103735b872dd3655577d2f7a79a4039`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a60c385e2c80113ced32a109129d90b67`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad6281780ccc51a5e318c3f1528245253`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9820e5e68867f25cc2cff317501b6020`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6d5329b4635742284875f66524f4e36d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aee8a975f0215265adab32e0b1f47ff8c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a98e4f9a0bae83a4ef951d7a3b98e871a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac04002ae01be2735007ca5a9727a3a37`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a996b3f2cf6b3bb2b2f25bf162d9bdf57`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acc997f232d762e14d6954f702206b1ec`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a223304e5527c49c7bac9ea1e8e14b4b1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a12064110f9833a73542983960b350668`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac40c4ffc530d4a9074689555df723656`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a96d1259a6f8fafeeaf5b573a18b60830`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a49920e78194c648c4edc32ac792956bc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1dd27c8f14494509475d217fc312a4bc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aeede126f7efa99ea59a1645108300767`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a55735249cff230611606e2be55a6f552`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9fedff46d4c9fcd1db252df479c43a63`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7eb740d01c1e8e41d0c6a3b966468997`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5ada79e300a6a65d2a58848bd778d7e2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7688a30909175217faed2716a87a5fde`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab73b86daf94ac2ea7a617edac2c5ee56`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aca4a5ee1438148597fe3bb20a5f9d934`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a070a74066bdf465f16bf8ac328bb4dc6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a601f7e5b9ec1bf8e1b600656db9dd2d2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a54c6a7db582fee0fd9c5c2f321dac6f5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a950f1bb7f67d89b2ce119df44b2f03a2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab52040a87a2063b263427d789481fe0c`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af8e3b5cdd9f85a92680ef7116b50fac0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a593ad8f07eeb3b12d3be4cf255ae9ddd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acac86c385e9e99d636f6aa39a0088168`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a327b0bb850d4ca222671e3191ff2be86`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a60abfbe26072396f9e5c763bda5062fd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab4f7f01c9ede8f57080b53504a901a53`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9aac707fb51e58156aaec1faa3e24889`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a518f8edad800869aac58ff9f4c618ad4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa340a23e184b10d5f6328ce6eb7963b4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7a898a43a61ce16b2213d0c3f42fdb36`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6814e07afccf31c3f0375086e452f15d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3c017070ab180f4f042486c875652b9e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3a78761bdfb39ce42273fde1e58b9c58`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0bb6d15161282fd8ed6848fa8b30476b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3900fc92b810f9134f4a1b8df9d2906e`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab4e515c9d3be9f7611a885eb03e767b6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a797a8cdd5fce61d3515034a11b262a3d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a65771f280ec1d8edce0345bb38460478`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae2278a37be376cf03e8f39dc74c36414`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad2ff56170056769ca36038d9eebe7869`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae5776b1befed716cf67dfd1c2f754247`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0f58cee0a34ec8ae68205368ab881256`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a08364afe5f91be2305af5f55baabd14f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab7aad7a9c95056da41ea8cf427091a37`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad0a6ece087919bfcc325620ec7012096`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae0d440c9c4a25cdc09d81fbd5012e820`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae27f646ea5b2d30a0d95cab04c400cf0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aea2d1310f185aa53474eb3f85054e2b7`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa97e32e631ae1152c9a4d5a841cdfe2f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7e07895879016a5ea84aa1f9651672a2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5f2a1e720ea1f33d0674694cbeb1d900`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a54ead5e9b6892b36cc0ad66f56e7cf04`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a98d9d2ac8fdb855c6d56f76571d3a12f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae3046804f9483fccaa5542e6f275b9a6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aeba6e67493b46ce4a000f2051fd38521`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a512cba681681ff8ce958cf47e89818d0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a75715500366b694a226bcb929524c727`
+
+- :ref:`exhale_function_namespaceSageBuilder_1af03938f4e2e96a5000c48323a1fa1993`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a841bb1ee4b6258d200e494dc2afa5791`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a2154c8d2454a3cfc71e2e25e214adcf4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aac8ac2e73cdc99783d10313301d5de35`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a530bdc7a6496c74eb075f176139a47b6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a346cb0ac9579a893e7bdd1e2e32f68ea`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a101de82efcdba03b615e13fc5404ba78`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a796d3a4f1c4a163f109baefceb667fa5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9ed2d094711bbe4d5f7019ad2f2fca65`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a422449272cb35b4f4ff0e1316935bfdf`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae8a4de45315786bbdcb33c75ed4ea2ac`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac9cfbff4683844025b297672c8857f2b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad80b4ceb6ff79bd9323319fb24eb52b1`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae381d07605ec81bc1471ad725f7aa4e3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab5d093b2bca2bc3cbd2f323fa747c52d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a71a0422c53919f4612e8f59c8fe40180`
+
+- :ref:`exhale_function_namespaceSageBuilder_1acf68072adc6689afba40300933a2abf9`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a800eebd407357598085ccffa3244f044`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a90ec263b3c0788665426daee0164c8cc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a99e1185826bd45263af900bd835ce01d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab0755aaa55000a9aab7a3ef50f5d1cfe`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8cc08438aecc6243269f592b6ae1fd99`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a128707ac84db14a630ebaee482222265`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6326734ae519d4b2c6c54c1a9f4e0d78`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae22026571b0ec00b831baf73d8cdbf8d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a462791ff1fb56562444dbf8237788cf3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae735d224ab3ee282abc3a2a68d26d357`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a741be096fc6840c4fe817c3d8348a258`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad95f77d0e3b406ad217ede37dc0d63c3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6363369666686269b60032cf7e69c959`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a23c2b5973b5d3d58e58eaa1a6ab6c681`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a1ed1ecbeaaae2d40d7b9368812c09a87`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7caeb3583e7c0826728bd0bfd4394e2a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab3ce0858ba3aa10470fc87164f2e772f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab10ec546b4451d476f5ee892badae8a6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad4dba0dcd20924317f10852f2eea0510`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad792b6c3a26fa45d6ab426b4ed516eaa`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a7301dbd7091fea226d5651c76c1e783f`
+
+- :ref:`exhale_function_namespaceSageBuilder_1adc9b0e7ba04892d49fa661fcc4900215`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae8862bbcd2ca51999383317fa6244e24`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a910e7fa1e46c8d61822b49cf16dc7dfd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a05c78cc4be3ad69c87a0fef11de7c5cd`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5e402b83889879505c4f8f91ef6693c5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a542b57ed8d7177ff00e5c0d9cdd47a16`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6c7fa44e7769300003c51788184d6ed2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8ffc27a3aa2d2ac5e7053f47cdf02bc2`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a4470987e89d3382b0d78114fa3192467`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac5f033d209139a023d5fe11043390996`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad5e477d3435a5d86bd0c7e3d45c248b4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a80ea15ec6d522e0133418ea347f331b3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1abceab8b7c2bf4f9c2832133ceff8117d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3c8bf0ff8119a22fd1b376acfd019c18`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a6465cc82573b3a9fa4d0c18cbecb117b`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae8714a51eadc783855917eaaf6fd19d8`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ab261ac86ce38fc01838f37c08b2224e5`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aa39fafb1c5ca1599ff178d6ec83a446d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a92b65caa8e0d404e3e984875bd561712`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9313644b052fb88ebac19a750fecdfaa`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a32657cf9e152a422eafcc7c616248ce0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ae71672df6a942783eae2855f2b05d47a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a06a845b59edfd2bd5d0731a7b38f2f24`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac6df84f39d52164f73a45ee640e824a6`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aac237837181eb39bbdb281abec69a9e4`
+
+- :ref:`exhale_function_namespaceSageBuilder_1aceda258954243150625b5adc9054f600`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac7b08b71dc6e0a8450d07efdc80bb609`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a494ed7113313adb944962078828d2723`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a995ead7be00de92d56739e1e94be0e2d`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a9e5d39156dac979ed346c5eb11131fa0`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a8c8f23015306694123fccc557b5f3626`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ac7a58e7aebc83b5fee26214b89fdeeaa`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a3f49626236ae52e21281d1635ba0fafc`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a60d9b7b76741e16f3d8d73def1bdf79a`
+
+- :ref:`exhale_function_namespaceSageBuilder_1ad0ff9822b57ec9860aa1f63aa8ede217`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a0ce28f360ec5c46aa06cc7e8c94400f3`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a91dd7801401056f4e5690ba905054928`
+
+- :ref:`exhale_function_namespaceSageBuilder_1a5ab5f439307ab09f75dac88cc6186a50`
+
+- :ref:`exhale_function_namespaceSageInterface_1a2d9f0cac1a208b285896a8f38d24910c`
+
+- :ref:`exhale_function_namespaceSageInterface_1a5f850caf33a789c71d6aeda65952019a`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_sageBuilder_8h_1afe0eda6430d9207aaef447bdd5df9ab0`
+
+- :ref:`exhale_define_sageBuilder_8h_1ade9d6006dcae089daa24de1fffa1c6bd`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespaceSageBuilder_1aafcc2855e686302dc3377058fe5f52f8`
+
+- :ref:`exhale_variable_namespaceSageBuilder_1acc6ac3a98b00b269a8b2c1818a31345e`
+
+- :ref:`exhale_variable_namespaceSageBuilder_1a7e07e30696ec9655f4c94608a803e910`
+

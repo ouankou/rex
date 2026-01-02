@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1abf5b0c138c9711362bd04daa877a7759:
+
+Define MLOG_DEBUG_CXX
+=====================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: MLOG_DEBUG_CXX
+   :project: rex

@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1a5bf94698243e55044b0733246ba8d881:
+
+Define ASSERT_forbid
+====================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: ASSERT_forbid
+   :project: rex

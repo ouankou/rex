@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1ab130bc3f040ff491dcd819167d8b3539:
+
+Define MLOG_ERROR_MORE_CXX
+==========================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: MLOG_ERROR_MORE_CXX
+   :project: rex

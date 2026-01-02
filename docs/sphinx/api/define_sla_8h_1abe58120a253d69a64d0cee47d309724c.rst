@@ -1,0 +1,14 @@
+.. _exhale_define_sla_8h_1abe58120a253d69a64d0cee47d309724c:
+
+Define SLA_FCN_BEGIN
+====================
+
+- Defined in :ref:`file_src_util_commandlineProcessing_sla.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SLA_FCN_BEGIN
+   :project: rex

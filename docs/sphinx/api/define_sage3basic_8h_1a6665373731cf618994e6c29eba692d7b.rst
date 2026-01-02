@@ -1,0 +1,14 @@
+.. _exhale_define_sage3basic_8h_1a6665373731cf618994e6c29eba692d7b:
+
+Define PRINT_SIDE_EFFECT_WARNINGS
+=================================
+
+- Defined in :ref:`file_src_frontend_SageIII_sage3basic.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: PRINT_SIDE_EFFECT_WARNINGS
+   :project: rex

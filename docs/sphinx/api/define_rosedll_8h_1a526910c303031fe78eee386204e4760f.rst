@@ -1,0 +1,14 @@
+.. _exhale_define_rosedll_8h_1a526910c303031fe78eee386204e4760f:
+
+Define ROSE_DLL_API
+===================
+
+- Defined in :ref:`file_src_frontend_SageIII_rosedll.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: ROSE_DLL_API
+   :project: rex

@@ -1,0 +1,14 @@
+.. _exhale_function_omp_8h_1ae38677c47009ff12f70bb19549130823:
+
+Function omp_get_place_num_procs
+================================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_get_place_num_procs(int)
+   :project: rex

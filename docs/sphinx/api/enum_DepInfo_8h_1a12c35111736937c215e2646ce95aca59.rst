@@ -1,0 +1,14 @@
+.. _exhale_enum_DepInfo_8h_1a12c35111736937c215e2646ce95aca59:
+
+Enum DepDirection
+=================
+
+- Defined in :ref:`file_src_midend_programTransformation_loopProcessing_depInfo_DepInfo.h`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: DepDirection
+   :project: rex

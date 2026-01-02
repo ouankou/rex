@@ -1,0 +1,14 @@
+.. _exhale_function_libompc_8h_1a99b7ea2202439940f1e20c57891a194a:
+
+Function _ompc_runtime_sched_next
+=================================
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_libompc.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: _ompc_runtime_sched_next(int *, int *)
+   :project: rex

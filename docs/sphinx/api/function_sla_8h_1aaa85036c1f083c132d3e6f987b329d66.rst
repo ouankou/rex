@@ -1,0 +1,14 @@
+.. _exhale_function_sla_8h_1aaa85036c1f083c132d3e6f987b329d66:
+
+Function sla_none
+=================
+
+- Defined in :ref:`file_src_util_commandlineProcessing_sla.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sla_none(int *, char **, const char *, const char *, const char *, int)
+   :project: rex

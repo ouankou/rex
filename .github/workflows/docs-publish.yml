@@ -27,15 +27,28 @@ jobs:
 
       - name: Prepare build directories
         run: |
-          mkdir -p docs/_build
+          mkdir -p docs/doxygen-xml docs/_build/html docs/_build/doctrees
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y doxygen graphviz
 
-      - name: Build Doxygen HTML
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r docs/requirements.txt
+
+      - name: Build Doxygen XML
         run: doxygen docs/Doxyfile
+
+      - name: Build Sphinx HTML
+        run: python -m sphinx -j auto -d docs/_build/doctrees -b html docs/sphinx docs/_build/html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

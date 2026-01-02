@@ -1,0 +1,14 @@
+.. _exhale_function_sla_8h_1a0175641df8d463216e12bb21e332af88:
+
+Function sla_short
+==================
+
+- Defined in :ref:`file_src_util_commandlineProcessing_sla.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sla_short(int *, char **, const char *, const char *, const char *, short *, int)
+   :project: rex

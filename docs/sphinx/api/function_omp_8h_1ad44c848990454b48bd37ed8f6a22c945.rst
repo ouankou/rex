@@ -1,0 +1,14 @@
+.. _exhale_function_omp_8h_1ad44c848990454b48bd37ed8f6a22c945:
+
+Function omp_get_num_devices
+============================
+
+- Defined in :ref:`file_src_frontend_SageIII_omp.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_get_num_devices(void)
+   :project: rex

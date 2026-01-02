@@ -1,0 +1,14 @@
+.. _exhale_function_libompc_8h_1a30343aa643d1747aa5d02506412801fc:
+
+Function omp_get_wtick()
+========================
+
+- Defined in :ref:`file_src_midend_programTransformation_ompLowering_libompc.h`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: omp_get_wtick()
+   :project: rex

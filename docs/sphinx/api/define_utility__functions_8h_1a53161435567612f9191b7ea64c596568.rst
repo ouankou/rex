@@ -1,0 +1,14 @@
+.. _exhale_define_utility__functions_8h_1a53161435567612f9191b7ea64c596568:
+
+Define BACKEND_VERBOSE_LEVEL
+============================
+
+- Defined in :ref:`file_src_frontend_SageIII_sage_support_utility_functions.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: BACKEND_VERBOSE_LEVEL
+   :project: rex

@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1a46b3ada8ae45f183561744ef85ef5571:
+
+Define MLOG_MORE_CXX
+====================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: MLOG_MORE_CXX
+   :project: rex

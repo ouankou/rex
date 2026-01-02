@@ -1,0 +1,14 @@
+.. _exhale_define_mlog_8h_1a55f6c59805cd7c5b659a5c5603118f18:
+
+Define ASSERT_not_null2
+=======================
+
+- Defined in :ref:`file_src_util_mlog.h`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: ASSERT_not_null2
+   :project: rex
