@@ -26,13 +26,27 @@ SgPntrArrRefExp::get_type() const
      SgType *lhsBase = SageInterface::getElementType(lhsType);
      SgType *rhsBase = SageInterface::getElementType(rhsType);
 
+     bool isArraySubRange = false;
+     SgExprListExp* indices = isSgExprListExp(get_rhs_operand());
+     if (indices != nullptr)
+        {
+          for (SgExpression* expr : indices->get_expressions())
+             {
+               if (isSgRangeExp(expr) != nullptr)
+                  {
+                    isArraySubRange = true;
+                    break;
+                  }
+             }
+        }
+
      SgType* someType = nullptr;
 
-     if (lhsBase != nullptr && rhsBase == nullptr)
+     if (isArraySubRange == false && lhsBase != nullptr && rhsBase == nullptr)
         {
           someType = SgPointerType::createType(lhsBase);
         }
-     else if (lhsBase == nullptr && rhsBase != nullptr)
+     else if (isArraySubRange == false && lhsBase == nullptr && rhsBase != nullptr)
         {
           someType = SgPointerType::createType(rhsBase);
         }
@@ -66,12 +80,6 @@ SgPntrArrRefExp::get_type() const
              }
           case V_SgArrayType:
              {
-               SgExprListExp* indices = isSgExprListExp(get_rhs_operand());
-               bool isArraySubRange = false;
-               if (indices && !indices->get_expressions().empty()) {
-                 isArraySubRange = isSgRangeExp(indices->get_expressions().front());
-               }
-
                returnType = isArraySubRange ? someType
                                             : isSgArrayType(someType)->get_base_type();
                break;
