@@ -926,7 +926,7 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
 
                  // if (StringUtility::isCppFileNameSuffix(filenameExtension) == true)
                     if (CommandlineProcessing::isCppFileNameSuffix(filenameExtension) == true &&
-                        (SageInterface::is_C_language() == false) )
+                        project->get_C_only() == false)
                        {
                       // file = new SgSourceFile ( argv,  project );
                          SgSourceFile* sourceFile = new SgSourceFile ( argv,  project );
@@ -956,7 +956,7 @@ determineFileType ( vector<string> argv, int & nextErrorCode, SgProject* project
                        {
                          if (CommandlineProcessing::isCFileNameSuffix(
                                  filenameExtension) == true ||
-                             (SageInterface::is_C_language() == true)) {
+                             project->get_C_only() == true) {
                            // file = new SgSourceFile ( argv,  project );
                               SgSourceFile* sourceFile = new SgSourceFile ( argv,  project );
                               file = sourceFile;
