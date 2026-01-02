@@ -209,7 +209,8 @@ SgValueExp::get_constant_folded_value_as_string() const
             // the bug was the the dot file had a non-printable character and caused zgrviewer to crash).
             // s = charValueExpression->get_value();
                char value = charValueExpression->get_value();
-               if (isalnum(value) == true)
+               unsigned char classificationValue = static_cast<unsigned char>(value);
+               if (isalnum(classificationValue) == true)
                   {
                  // Leave this as a alpha or numeric value where possible.
                     s = charValueExpression->get_value();
@@ -251,7 +252,8 @@ SgValueExp::get_constant_folded_value_as_string() const
                ASSERT_not_null(charValueExpression);
 
                signed char value = charValueExpression->get_value();
-               if (isalnum(value) == true)
+               unsigned char classificationValue = static_cast<unsigned char>(value);
+               if (isalnum(classificationValue) == true)
                   {
                  // Leave this as a alpha or numeric value where possible.
                     s = charValueExpression->get_value();
