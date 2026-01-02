@@ -2315,6 +2315,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 #if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
        status = experimental_fortran_main(flangArgc, flangArgv, const_cast<SgSourceFile*>(this));
        ROSE_ASSERT(status == 0);
+#else
        ROSE_ASSERT(! "[FATAL] [ROSE] [frontend] [Fortran] "
                      "error: ROSE was not configured to support the Fortran Flang frontend.");
 #endif
