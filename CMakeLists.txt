@@ -937,20 +937,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Set up RPATH so that our executables will be able to find their dependent
 # libraries using relative paths.
-if(APPLE)
-  set(origin "@executable_path")
-  set(CMAKE_INSTALL_RPATH "${origin}/../lib;${origin}/") # May rm this
-endif()
-
 if(NOT DEFINED CMAKE_INSTALL_RPATH)
   message(STATUS "Setting CMAKE_INSTALL_RPATH")
-  if(APPLE)
-    set(CMAKE_INSTALL_RPATH "${origin}/../lib;${origin}/")
-  else()
-    set(origin "$ORIGIN")
-    set(CMAKE_INSTALL_RPATH "${origin}/../lib:${origin}")
-    list(APPEND CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib" "${CMAKE_INSTALL_PREFIX}/bin")
-  endif()
+  set(origin "$ORIGIN")
+  set(CMAKE_INSTALL_RPATH "${origin}/../lib:${origin}")
+  list(APPEND CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib" "${CMAKE_INSTALL_PREFIX}/bin")
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH}")
   endif()
