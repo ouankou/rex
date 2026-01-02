@@ -43,7 +43,7 @@ fixupAstSymbolTablesToSupportAliasedSymbols (SgNode* node)
 #if ALIAS_SYMBOL_DEBUGGING
      printf ("In fixupAstSymbolTablesToSupportAliasedSymbols(): SgSymbolTable::get_aliasSymbolCausalNodeSet().size() = %zu (should be cleared) \n",SgSymbolTable::get_aliasSymbolCausalNodeSet().size());
 #endif
-     SgSymbolTable::get_aliasSymbolCausalNodeSet().clear();
+     SgSymbolTable::clear_aliasSymbolCausalNodeSet();
      ROSE_ASSERT(SgSymbolTable::get_aliasSymbolCausalNodeSet().empty() == true);
    }
 
@@ -380,13 +380,13 @@ FixupAstSymbolTablesToSupportAliasedSymbols::isDefinedThroughPrivateBaseClass ( 
          TimingPerformance timer1 ("Fixup symbol tables: injectSymbolsFromReferencedScopeIntoCurrentScope: get_aliasSymbolCausalNodeSet().find(causalNode):");
 #endif
 
-         SgSymbolTable::get_aliasSymbolCausalNodeSet().insert(causalNode);
+         SgSymbolTable::insert_aliasSymbolCausalNodeSet(causalNode);
 
 #if OBSOLETE_1
       // DQ (1/23/2019): Also need to add this to the aliasSymbolCausalNodeSet.
          if (SgSymbolTable::get_aliasSymbolCausalNodeSet().find(causalNode) == SgSymbolTable::get_aliasSymbolCausalNodeSet().end())
             {
-              SgSymbolTable::get_aliasSymbolCausalNodeSet().insert(causalNode);
+              SgSymbolTable::insert_aliasSymbolCausalNodeSet(causalNode);
 
 #if ALIAS_SYMBOL_DEBUGGING
           printf ("@@@@@@@@@@@@ Inserted causalNode = %p into SgSymbolTable::get_aliasSymbolCausalNodeSet().size() = %zu \n",causalNode,SgSymbolTable::get_aliasSymbolCausalNodeSet().size());

@@ -564,7 +564,7 @@ NameQualificationTraversal::NameQualificationTraversal(
 #endif
 
   // DQ (8/3/2019): Reset the static data member that holds the aliasSymbolCausalNodeSet.
-     SgSymbolTable::get_aliasSymbolCausalNodeSet().clear();
+     SgSymbolTable::clear_aliasSymbolCausalNodeSet();
      ROSE_ASSERT(SgSymbolTable::get_aliasSymbolCausalNodeSet().empty() == true);
 
   // DQ (7/19/2025): This is how we are turning on and off a special name qualification mode
@@ -8049,7 +8049,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
                   }
 
             // DQ (12/23/2015): Also need to add this to the aliasSymbolCausalNodeSet.
-               SgSymbolTable::get_aliasSymbolCausalNodeSet().insert(baseClass);
+               SgSymbolTable::insert_aliasSymbolCausalNodeSet(baseClass);
 
 #if 1
             // DQ (4/12/2019): New code to uniformally support template instantiations that are referenced (shared), where they are shared.
@@ -14545,7 +14545,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
   // This is used by the symbol table to know when to use or ignore SgAliasSymbols in symbol table lookups.
      if (isSgUsingDirectiveStatement(n) != NULL || isSgUsingDeclarationStatement(n) != NULL || isSgBaseClass(n) != NULL)
         {
-          SgSymbolTable::get_aliasSymbolCausalNodeSet().insert(n);
+          SgSymbolTable::insert_aliasSymbolCausalNodeSet(n);
 
 #if 0
        // DQ (8/3/2019): Output the aliasSymbolCausalNodeSet.  To support multiple files, or the stame file read twice,

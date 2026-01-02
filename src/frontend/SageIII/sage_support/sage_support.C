@@ -4406,6 +4406,7 @@ int SgProject::link ( const std::vector<std::string>& argv, std::string linkerNa
           ROSE_ASSERT (gomp_lib_path.size() != 0);
           linkingCommand.push_back(gomp_lib_path+"/libgomp.a");
           linkingCommand.push_back("-lpthread");
+#else
   // GOMP has higher priority when both GOMP and OMNI are specified (wrongfully)
   #ifdef OMNI_OPENMP_LIB_PATH
        // a little redundant code to defer supporting 'ROSE_INSTALLATION_PATH' in cmake

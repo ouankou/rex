@@ -4598,7 +4598,9 @@ HEADER_SYMBOL_TABLE_START
           static void set_force_search_of_base_classes( bool value );
 
        // DQ (7/12/2014): Adding support for static data member.
-          static std::unordered_set<SgNode*> & get_aliasSymbolCausalNodeSet();
+          static const SgUnorderedNodeSet & get_aliasSymbolCausalNodeSet();
+          static void clear_aliasSymbolCausalNodeSet();
+          static void insert_aliasSymbolCausalNodeSet(SgNode* node);
 
        // DQ (8/3/2019): Display function for static data member.
           static void display_aliasSymbolCausalNodeSet();
@@ -11362,10 +11364,23 @@ SgSymbolTable::set_name_qualification_mode( bool value )
    }
 
 // DQ (7/12/2014): Access function for static data member.
-SgUnorderedNodeSet&
+const SgUnorderedNodeSet&
 SgSymbolTable::get_aliasSymbolCausalNodeSet()
    {
      return p_aliasSymbolCausalNodeSet;
+   }
+
+void
+SgSymbolTable::clear_aliasSymbolCausalNodeSet()
+   {
+     p_aliasSymbolCausalNodeSet.clear();
+   }
+
+void
+SgSymbolTable::insert_aliasSymbolCausalNodeSet(SgNode* node)
+   {
+     ASSERT_not_null(node);
+     p_aliasSymbolCausalNodeSet.insert(node);
    }
 
 

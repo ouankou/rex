@@ -156,7 +156,21 @@ string get_type_name(SgType* t)
           case T_FLOAT32:                 return "_Float32";
           case T_FLOAT64:                 return "_Float64";
 
-        case T_DECLTYPE:                 return get_type_name(isSgDeclType(t)->get_base_type()) + "<" + isSgDeclType(t)->get_base_expression()->unparseToString() + ">";
+          case T_DECLTYPE:
+             {
+               SgDeclType* decltype_node = isSgDeclType(t);
+               ASSERT_not_null(decltype_node);
+               SgExpression* base_expression = decltype_node->get_base_expression();
+               ASSERT_not_null(base_expression);
+
+               if (isSgFunctionParameterRefExp(base_expression) != NULL)
+                  {
+                    ASSERT_not_null(decltype_node->get_base_type());
+                    return get_type_name(decltype_node->get_base_type());
+                  }
+
+               return string("decltype(") + base_expression->unparseToString() + ")";
+             }
        // DQ (3/24/2014): Added support for 128-bit integers.
           case T_SIGNED_128BIT_INTEGER:   return "__int128";
           case T_UNSIGNED_128BIT_INTEGER: return "unsigned __int128";

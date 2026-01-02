@@ -6341,8 +6341,11 @@ bool ClangToDotTranslator::VisitPredefinedExpr(clang::PredefinedExpr * predefine
           case clang::PredefinedIdentKind::FuncSig:
                node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "func_sig"));
                break;
+          case clang::PredefinedIdentKind::LFuncSig:
+               node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "l_func_sig"));
+               break;
           default:
-               node_desc.attributes.push_back(std::pair<std::string, std::string>("ident_type", "unknown"));
+               ROSE_ASSERT(!"Unhandled clang::PredefinedIdentKind");
                break;
         }
 
@@ -6849,7 +6852,7 @@ bool ClangToDotTranslator::VisitUnaryExprOrTypeTraitExpr(clang::UnaryExprOrTypeT
             node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "vector_elements"));
             break;
         default:
-            node_desc.attributes.push_back(std::pair<std::string, std::string>("kind", "unknown"));
+            ROSE_ASSERT(!"Unhandled clang::UnaryExprOrTypeTrait");
             break;
     }
 
@@ -7029,7 +7032,7 @@ bool ClangToDotTranslator::VisitUnaryOperator(clang::UnaryOperator * unary_opera
             node_desc.attributes.push_back(std::pair<std::string, std::string>("opcode", "Coawait"));
             break;
         default:
-            node_desc.attributes.push_back(std::pair<std::string, std::string>("opcode", "Unknown"));
+            ROSE_ASSERT(!"Unhandled clang::UnaryOperatorKind");
             break;
     }
 

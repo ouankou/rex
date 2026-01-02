@@ -806,9 +806,13 @@ void ClangToDotTranslator::VisitNestedNameSpecifier(clang::NestedNameSpecifier *
             );
             break;
         case clang::NestedNameSpecifier::TypeSpec:
-        case clang::NestedNameSpecifier::TypeSpecWithTemplate:
             node_desc.successors.push_back(
                 std::pair<std::string, std::string>(prefix + " type_specifier", Traverse(nested_name_specifier->getAsType()))
+            );
+            break;
+        case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+            node_desc.successors.push_back(
+                std::pair<std::string, std::string>(prefix + " type_specifier_with_template", Traverse(nested_name_specifier->getAsType()))
             );
             break;
         case clang::NestedNameSpecifier::Super:
@@ -837,7 +841,13 @@ void ClangToDotTranslator::VisitTemplateName(const clang::TemplateName & templat
         }
         case clang::TemplateName::AssumedTemplate:
             oss << " assumed_template";
-            node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), ""));
+            {
+                std::string name;
+                if (const clang::AssumedTemplateStorage * assumed = template_name.getAsAssumedTemplateName()) {
+                    name = assumed->getDeclName().getAsString();
+                }
+                node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), name));
+            }
             break;
         case clang::TemplateName::QualifiedTemplate:
             oss << " qualified_template";
@@ -845,7 +855,7 @@ void ClangToDotTranslator::VisitTemplateName(const clang::TemplateName & templat
             // In LLVM 20, getDecl() and getTemplateDecl() were removed from QualifiedTemplateName
             // Use getUnderlyingTemplate() instead
             node_desc.successors.push_back(
-                std::pair<std::string, std::string>(oss.str() + "template_declaration", Traverse(template_name.getAsQualifiedTemplateName()->getUnderlyingTemplate().getAsTemplateDecl()))
+                std::pair<std::string, std::string>(oss.str() + "declaration", Traverse(template_name.getAsQualifiedTemplateName()->getUnderlyingTemplate().getAsTemplateDecl()))
             );
             break;
         case clang::TemplateName::DependentTemplate:
@@ -867,7 +877,12 @@ void ClangToDotTranslator::VisitTemplateName(const clang::TemplateName & templat
             break;
         case clang::TemplateName::DeducedTemplate:
             oss << " deduced_template";
-            node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), ""));
+            if (const clang::DeducedTemplateStorage * deduced = template_name.getAsDeducedTemplateName()) {
+                VisitTemplateName(deduced->getUnderlying(), node_desc, oss.str() + " underlying");
+            }
+            else {
+                node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), ""));
+            }
             break;
     }
 }
