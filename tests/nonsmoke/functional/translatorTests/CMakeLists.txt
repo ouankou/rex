@@ -1,6 +1,6 @@
 include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES})
 
-if(enable-c)
+if(ENABLE-C)
   add_executable(bug125 bug125.C)
   add_executable(qualifiedName qualifiedName.C)
   add_executable(testTranslator2010_02 testTranslator2010_02.C)

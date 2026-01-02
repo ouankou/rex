@@ -1,4 +1,4 @@
-if(enable-fortran AND enable-fortran-flang)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   add_library(general_language_support OBJECT
     ModuleBuilder.C
     PosInfo.C

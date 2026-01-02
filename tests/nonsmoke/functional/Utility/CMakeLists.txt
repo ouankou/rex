@@ -1,9 +1,9 @@
 include_directories(${ROSE_INCLUDES})
 
 set(minimal_input_code "")
-if(enable-c)
+if(ENABLE-C)
   set(minimal_input_code ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/input_codes/minimal/minimal.cpp)
-elseif(enable-fortran)
+elseif(ENABLE-FORTRAN)
   set(minimal_input_code ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/input_codes/minimal/minimal.f90)
 endif()
 

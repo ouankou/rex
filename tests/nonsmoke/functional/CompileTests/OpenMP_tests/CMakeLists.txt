@@ -1,15 +1,15 @@
 add_executable(parseOmp parseOmp.C)
 target_link_libraries(parseOmp ROSE_DLL ${link_with_libraries})
 
-if(enable-c)
+if(ENABLE-C)
   add_subdirectory(cvalidation)
 endif()
 
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   add_subdirectory(fortran)
 endif()
 
-if(NOT enable-c)
+if(NOT ENABLE-C)
   return()
 endif()
 

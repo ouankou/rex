@@ -1,7 +1,7 @@
 # DQ (4/17/2010): These directories are now organized based on what sets of
 # languages are enabled in ROSE.
 
-if(enable-c)
+if(ENABLE-C)
   add_subdirectory (astMergeTests)
   add_subdirectory (astPerformanceTests)
   add_subdirectory (astProcessingTests)

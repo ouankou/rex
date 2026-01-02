@@ -1,4 +1,4 @@
-if(enable-fortran AND enable-fortran-flang)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   add_library(flang_parser OBJECT
     flang-external-builder-main.cc)
 

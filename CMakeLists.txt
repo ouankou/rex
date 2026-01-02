@@ -311,20 +311,6 @@ option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." 
 option(ENABLE-FORTRAN-FLANG "Enable experimental Flang frontend (f18) support." OFF)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
-# Keep legacy lowercase cache options in sync with the newer uppercase options.
-if(DEFINED enable-fortran AND NOT ENABLE-FORTRAN)
-  set(ENABLE-FORTRAN ${enable-fortran} CACHE BOOL "Enable Fortran analysis." FORCE)
-endif()
-if(DEFINED enable-fortran-ofp AND NOT ENABLE-FORTRAN-OFP)
-  set(ENABLE-FORTRAN-OFP ${enable-fortran-ofp} CACHE BOOL "Enable JVM-based Open Fortran Parser (OFP) support." FORCE)
-endif()
-if(DEFINED enable-fortran-flang AND NOT ENABLE-FORTRAN-FLANG)
-  set(ENABLE-FORTRAN-FLANG ${enable-fortran-flang} CACHE BOOL "Enable experimental Flang frontend (f18) support." FORCE)
-endif()
-set(enable-fortran ${ENABLE-FORTRAN} CACHE BOOL "Legacy alias for ENABLE-FORTRAN." FORCE)
-set(enable-fortran-ofp ${ENABLE-FORTRAN-OFP} CACHE BOOL "Legacy alias for ENABLE-FORTRAN-OFP." FORCE)
-set(enable-fortran-flang ${ENABLE-FORTRAN-FLANG} CACHE BOOL "Legacy alias for ENABLE-FORTRAN-FLANG." FORCE)
-
 if(ENABLE-FORTRAN AND NOT (ENABLE-FORTRAN-OFP OR ENABLE-FORTRAN-FLANG))
   message(FATAL_ERROR "Fortran analysis requires at least one frontend: OFP or Flang. Set -DENABLE-FORTRAN-OFP=ON or -DENABLE-FORTRAN-FLANG=ON, or disable Fortran.")
 endif()
