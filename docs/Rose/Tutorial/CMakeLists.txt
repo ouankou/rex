@@ -1,7 +1,4 @@
 
-include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
-
-
 ########### install files ###############
 
 
@@ -18,7 +15,7 @@ include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
 ## I have been unable to have the links be built unless I build them all the file.
 #latexFiles = \
 #   introduction.tex ASTGraphGenerator.tex AST_PDF_Generator.tex \
-#   identityTranslator.tex queryLibraryExample.tex abstractHandle.tex \
+#   identityTranslator.tex queryLibraryExample.tex \
 #   traversal.tex loopRecognition.tex typeInfoFromFunctionParameters.tex resolveOverloadedFunction.tex \
 #   templateParameter.tex instrumentationExample.tex addVariableDeclaration.tex \
 #   addAssignmentStmt.tex addExpression.tex\
@@ -27,9 +24,9 @@ include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
 #   parser-docs.tex codeCoverage.tex globalVariableHandling.tex scopeInformation.tex sideeffect-docs.tex \
 #   tauInstrumentation.tex templateSupport.tex dataBaseSupport.tex recognitionOfAbstractions.tex \
 #   debuggingSupport.tex commandlineProcessing.tex customGraphs.tex tutorialMakefile.tex wrapup.tex \
-#   appendix.tex astFileIO.tex uniqueNames.tex wholeGraphAST.tex addingComments.tex \
+#   appendix.tex uniqueNames.tex wholeGraphAST.tex addingComments.tex \
 #   partialRedundancyElimination.tex codeGenerationFormatControl.tex copyHelp.tex \
-#   roseHPCT.tex sharedMemoryTraversals.tex distributedMemoryTraversals.tex bugSeeding.tex \
+#   sharedMemoryTraversals.tex distributedMemoryTraversals.tex bugSeeding.tex \
 #   modifiers.tex howToContribute.tex virtualCFG.tex reductionRecognition.tex \
 #   haskell.tex
 #
@@ -46,8 +43,7 @@ include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
 #   $(top_builddir)/tutorial/rose_inputCode_ExampleDebugging.C \
 #   $(top_builddir)/tutorial/codeCoverage.out \
 #   $(top_builddir)/tutorial/vcfg.pdf \
-#   $(top_builddir)/tutorial/rose_inputCode_inlineTransformations.C \
-#   $(top_builddir)/tutorial/roseHPCT/profiled.out
+#   $(top_builddir)/tutorial/rose_inputCode_inlineTransformations.C
 #
 #$(generatedCodeExamples):
 #	cd $(top_builddir)/tutorial; $(MAKE) docs

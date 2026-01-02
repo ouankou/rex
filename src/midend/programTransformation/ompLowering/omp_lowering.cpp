@@ -2991,7 +2991,7 @@ void extractMapClauses(
 
 static int generate_mapping_variable_type(
     /* the array and the map information */
-    SgSymbol *sym, SgOmpMapClause *map_alloc_clause,
+    SgSymbol *sym, SgOmpMapClause * /*map_alloc_clause*/,
     SgOmpMapClause *map_to_clause, SgOmpMapClause *map_from_clause,
     SgOmpMapClause *map_tofrom_clause,
     std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
@@ -6743,6 +6743,11 @@ void transOmpSingle(SgNode *node) {
 
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
+
+  // target vs. if_stmt should not share a subtree of AST (the body)
+  // We need to disconnect it from old statement (target)
+  // Later replaceStement has the logic to move dangling directives. repeated subtree will cause troubles.
+  target->set_body(NULL);
 
   SgIfStmt *if_stmt = NULL;
 

@@ -634,12 +634,12 @@ int main()
    - **MUST use Clang/LLVM 20.x as compiler** (not GCC)
    - Set `CC=clang-20 CXX=clang++-20` for cmake
    - C++17 standard required
-   - Enable Clang frontend: `-Denable-clang-frontend=ON -Denable-c=ON`
+   - Enable Clang frontend: `-Denable-clang-frontend=ON -DENABLE-C=ON`
 
 5. **Testing Workflow**:
    ```bash
    # Build
-   CC=clang-20 CXX=clang++-20 cmake . -Denable-clang-frontend=ON -Denable-c=ON
+   CC=clang-20 CXX=clang++-20 cmake . -Denable-clang-frontend=ON -DENABLE-C=ON
    make -j8 rose-compiler
 
    # Test (ignore cleanup warning)

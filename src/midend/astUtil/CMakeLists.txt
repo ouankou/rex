@@ -15,11 +15,16 @@ add_library(midend_util OBJECT
   annotation/OperatorDescriptors.C
   annotation/AnnotExpr.C
   annotation/TypeAnnotation.C
+  dependenceTracking/dependence_analysis.C
+  dependenceTracking/dependence_table.C
   astSupport/StmtInfoCollect.C
   AstUtilInterface.C)
 add_dependencies(midend_util rosetta_generated)
+target_include_directories(midend_util PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/midend/astUtil)
 
 add_subdirectory(astInterface)
 add_subdirectory(astSupport)
 add_subdirectory(symbolicVal)
 add_subdirectory(annotation)
+add_subdirectory(dependenceTracking)

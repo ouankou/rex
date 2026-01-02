@@ -2409,7 +2409,7 @@ SgDefaultOptionStmt::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
    }
 
 void
-SgTemplateArgument::fixupCopy_scopes(SgNode* copy, SgCopyHelp & help) const
+SgTemplateArgument::fixupCopy_scopes(SgNode* copy, SgCopyHelp&) const
    {
      SgTemplateArgument* templateArgument_copy = isSgTemplateArgument(copy);
      ROSE_ASSERT(templateArgument_copy != NULL);

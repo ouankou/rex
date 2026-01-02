@@ -35,7 +35,6 @@ linkcolor=black,
 \newcommand{\TOPBUILDDIR}{@top_builddir@}
 \newcommand{\TranslatorExampleDirectory}{@top_srcdir@/exampleTranslators/documentedExamples/simpleTranslatorExamples}
 \newcommand{\TranslatorExampleCompileTreeDirectory}{@top_pwd@/exampleTranslators/documentedExamples/simpleTranslatorExamples}
-\newcommand{\AstRewriteExampleDirectory}{@top_srcdir@/exampleTranslators/documentedExamples/AstRewriteExamples}
 \newcommand{\TutorialExampleDirectory}{@top_srcdir@/tutorial}
 \newcommand{\TutorialExampleBuildDirectory}{@top_builddir@/tutorial}
 \newcommand{\DatabaseExampleDirectory}{@top_srcdir@/exampleTranslators/documentedExamples/dataBaseExamples}
@@ -238,7 +237,6 @@ visualization, traversal, query, and debugging.}
 % So I moved it after the traversal chapter.  Liao 3/3/2010
 \input{scopeInformation}
 \input{queryLibraryExample}
-\input{astFileIO}
 \input{debuggingSupport}
 
 %-----------------------------------------------------------
@@ -309,7 +307,6 @@ transformations and optimizations.}
 %\input{globalVariableHandling}
 %-------end of chapter for AST construction
 
-%\input{parserBuildingBlocks}
 % This project has been removed.
 
 \input{addingComments}  % handling preprocessing information
@@ -339,7 +336,6 @@ debugging.}
 \vspace{1.0in}
 \normalsize{How to build interoperable tools using ROSE.}
 }
-\input{abstractHandle}
 
 %-----------------------------------------------------------
 %          Parallelism
@@ -388,7 +384,6 @@ debugging.}
 
 % Disabled as it breaks new assertion in Copy Mechanism, Liao, 2/7/2008
 %\input{copyHelp}
-
 
 
 

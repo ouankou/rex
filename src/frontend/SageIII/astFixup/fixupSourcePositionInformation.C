@@ -212,7 +212,7 @@ FixupSourcePositionInformation::fixupSourcePositionUnavailableInFrontendToBeUnif
 
 FixupSourcePositionInformationSynthesizedAttribute
 FixupSourcePositionInformation::evaluateSynthesizedAttribute 
-   ( SgNode* node, FixupSourcePositionInformationInheritedAttribute ia, SynthesizedAttributesList l )
+   ( SgNode* node, FixupSourcePositionInformationInheritedAttribute, SynthesizedAttributesList l )
    {
 #if 1
      printf ("In evaluateSynthesizedAttribute(): node = %p = %s \n",node,node->class_name().c_str());
@@ -670,7 +670,7 @@ fixupSourcePositionConstructs()
    }
 
 void
-FixupSourcePositionConstructs::visit(SgNode* node)
+FixupSourcePositionConstructs::visit(SgNode*)
    {
 // Rasmussen (08/25/2022): Removed all untyped Sage nodes.
    }

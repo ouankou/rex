@@ -14,7 +14,7 @@ public:
 
   virtual SymOpType GetOpType() const { return SYMOP_PLUS; }
   virtual void ApplyOpd(const SymbolicVal &v);
-  SymbolicExpr *DistributeExpr(SymOpType t, const SymbolicVal &that) const {
+  SymbolicExpr *DistributeExpr(SymOpType, const SymbolicVal &) const {
     return new SymbolicPlus();
   }
 

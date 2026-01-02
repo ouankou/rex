@@ -185,6 +185,35 @@ class ROSE_DLL_API AstPerformance
           std::string label;
           static SgProject* project;
 
+       // DQ (7/16/2025): Added counters for a suspected performance issue in ROSE.
+       // Specifically when processing large projects we spend a significant amount of time in
+       // FixupAstSymbolTablesToSupportAliasedSymbols().
+          static size_t numberOfCallsToInjectSymbolsFromReferencedScopeIntoCurrentScope;
+          static size_t numberOfSymbolsCopiedIntoAliasSymbols;
+          static size_t numberOfUsingDirectivesProcessingAliasSymbols;
+          static size_t numberOfUsingBaseClassesProcessingAliasSymbols;
+          static size_t isSubset_numberOfCalls;
+          static size_t isSubset_numberOf_a_vector_size;
+          static size_t isSubset_numberOf_b_set_size;
+          static size_t isSubset_a_vector_size_max;
+          static size_t isSubset_b_set_size_max;
+
+       // DQ (7/19/2025): Adding more debugging...
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_true_range_size_max;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfBaseClass;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_symbolExistsInBaseScope;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_symbolExistsInBaseScope_SgVariableSymbol;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_calledFromUsingDirective;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_alreadyExistsAndIsInterestingCase;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_true_range_count;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_false_addingNewSgAliasSymbol;
+          static size_t injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_true_addingCausalNode;
+
+       // DQ (8/14/2025): Adding support to count the number of statements traversed in the name qualification when using traverseInputFile().
+       // It should be only the statements in the source file, but it appears to include statements marked as compilerGenerated.
+          static size_t numberOfStatementsProcessedInNameQualificationUsingTraverseInputFile;
+          static size_t numberOfCallsToHashOperator;
+
           static void set_project(SgProject* projectParameter);
 
           bool outputReportInDestructor;

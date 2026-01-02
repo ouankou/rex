@@ -13,14 +13,14 @@ This document tracks the evaluation of Fortran support in the REX compiler (ROSE
 **Error**:
 ```
 CMake Error at CMakeLists.txt:357 (message):
-  Fortran analysis currently requires the JVM-based Open Fortran Parser (OFP). Set -Denable-fortran-ofp=ON or disable Fortran.
+  Fortran analysis currently requires the JVM-based Open Fortran Parser (OFP). Set -DENABLE-FORTRAN-OFP=ON or disable Fortran.
 ```
 
 **Root Cause**: The Fortran frontend uses OpenFortranParser (OFP), which is JVM-based.
 
 **Solution**: Modified `build-rex.sh` to enable Fortran and OFP explicitly:
-- Line 78: Changed `-Denable-fortran=OFF` to `-Denable-fortran=ON`
-- Line 79: Added `-Denable-fortran-ofp=ON`
+- Line 78: Changed `-DENABLE-FORTRAN=OFF` to `-DENABLE-FORTRAN=ON`
+- Line 79: Added `-DENABLE-FORTRAN-OFP=ON`
 
 ### Issue 2: Fortran Compiler Version Detection Failure
 

@@ -19,7 +19,7 @@ NameGenerator::NameGenerator (const string& pre,
                               const string& suf)
   : prefix_ (pre), suffix_ (suf)
 {
-  first_id = first_id; 
+  first_id_ = first_id;
   cur_id_[""]=first_id_;
 }
 

@@ -7,6 +7,7 @@
 #include "mlog.h"
 #include <vector>
 #include <algorithm>
+#include <filesystem>
 #include <rose_paths.h>
 
 // Use Brian Gunney's String List Assignent (SLA) library
@@ -545,31 +546,42 @@ CommandlineProcessing::generateSourceFilenames ( Rose_STL_Container<string> argL
 
 // PC (4/27/2006): Support for custom source file suffixes
 bool
-CommandlineProcessing::isSourceFilename ( string name )
-   {
-     initSourceFileSuffixList();
+CommandlineProcessing::isSourceFilename(string name)
+{
+    initSourceFileSuffixList();
 
-     int length = name.size();
-     for ( Rose_STL_Container<string>::iterator j = validSourceFileSuffixes.begin(); j != validSourceFileSuffixes.end(); j++ )
-        {
-          int jlength = (*j).size();
-          if ( (length > jlength) && (name.compare(length - jlength, jlength, *j) == 0) )
-             {
-               return true;
-             }
-        }
+ // Move to using a consistent mechanism for determining source file names
+ // using CommandlineProcessing [Rasmussen 2024.04.19]
 
-     for ( Rose_STL_Container<string>::iterator j = extraCppSourceFileSuffixes.begin(); j != extraCppSourceFileSuffixes.end(); j++ )
-        {
-          int jlength = (*j).size();
-          if ( (length > jlength) && (name.compare(length - jlength, jlength, *j) == 0) )
-             {
-               return true;
-             }
-        }
+ // Use std::filesystem for file suffix inspection.
+    string suffix = std::filesystem::path(name).extension().string();
+    if (suffix.size() && suffix[0] == '.') {
+      // Remove '.' from filename extension
+      suffix = suffix.substr(1, suffix.size() - 1);
+    }
 
-     return false;
-   }
+    if (CommandlineProcessing::isFortranFileNameSuffix(suffix)) return true;
+
+    int length = name.size();
+    for (string &suffix : validSourceFileSuffixes)
+       {
+         int jlength = suffix.size();
+         if ( (length > jlength) && (name.compare(length - jlength, jlength, suffix) == 0) )
+            {
+              return true;
+            }
+       }
+
+    for (string &suffix : extraCppSourceFileSuffixes)
+       {
+         int jlength = suffix.size();
+         if ( (length > jlength) && (name.compare(length - jlength, jlength, suffix) == 0) )
+            {
+              return true;
+            }
+       }
+    return false;
+}
 
 bool
 CommandlineProcessing::isObjectFilename ( string name )
@@ -577,24 +589,16 @@ CommandlineProcessing::isObjectFilename ( string name )
      initObjectFileSuffixList();
 
      int length = name.size();
-     for ( Rose_STL_Container<string>::iterator j = validObjectFileSuffixes.begin(); j != validObjectFileSuffixes.end(); j++ )
+     for (string &suffix : validObjectFileSuffixes)
         {
-          int jlength = (*j).size();
-          if ( (length > jlength) && (name.compare(length - jlength, jlength, *j) == 0) )
+          int jlength = suffix.size();
+          if ( (length > jlength) && (name.compare(length - jlength, jlength, suffix) == 0) )
              {
                return true;
              }
         }
 
      return false;
-   }
-
-void
-CommandlineProcessing::addSourceFileSuffix ( const string &suffix )
-   {
-  // DQ (8/7/2007): This function appears to be used only in the projects/DocumentationGenerator project.
-     initSourceFileSuffixList();
-     validSourceFileSuffixes.push_back(suffix);
    }
 
 void
@@ -970,29 +974,12 @@ CommandlineProcessing::initSourceFileSuffixList ( )
           validSourceFileSuffixes.push_back(".cxx");
           validSourceFileSuffixes.push_back(".C");
           validSourceFileSuffixes.push_back(".CPP");
-          validSourceFileSuffixes.push_back(".f");
-          validSourceFileSuffixes.push_back(".f77");
-          validSourceFileSuffixes.push_back(".f90");
-          validSourceFileSuffixes.push_back(".f95");
-          validSourceFileSuffixes.push_back(".f03");
-          validSourceFileSuffixes.push_back(".f08");
-          validSourceFileSuffixes.push_back(".caf");
      /*
           validSourceFileSuffixes.push_back(".CC");
           validSourceFileSuffixes.push_back(".CP");
           validSourceFileSuffixes.push_back(".C++");
           validSourceFileSuffixes.push_back(".CXX");
      */
-          validSourceFileSuffixes.push_back(".F");
-          validSourceFileSuffixes.push_back(".F77");
-          validSourceFileSuffixes.push_back(".F90");
-          validSourceFileSuffixes.push_back(".F95");
-          validSourceFileSuffixes.push_back(".F03");
-          validSourceFileSuffixes.push_back(".F08");
-          validSourceFileSuffixes.push_back(".CAF");
-
-       // FMZ 5/28/2008
-          validSourceFileSuffixes.push_back(".rmod");
 
        // TV (05/17/2010) Support for CUDA
           validSourceFileSuffixes.push_back(".cu");
@@ -1015,23 +1002,6 @@ CommandlineProcessing::initSourceFileSuffixList ( )
           validSourceFileSuffixes.push_back(".C++");
           validSourceFileSuffixes.push_back(".CPP");
           validSourceFileSuffixes.push_back(".CXX");
-          validSourceFileSuffixes.push_back(".f");
-          validSourceFileSuffixes.push_back(".f77");
-          validSourceFileSuffixes.push_back(".f90");
-          validSourceFileSuffixes.push_back(".f95");
-          validSourceFileSuffixes.push_back(".f03");
-          validSourceFileSuffixes.push_back(".f08");
-          validSourceFileSuffixes.push_back(".caf");
-          validSourceFileSuffixes.push_back(".F");
-          validSourceFileSuffixes.push_back(".F77");
-          validSourceFileSuffixes.push_back(".F90");
-          validSourceFileSuffixes.push_back(".F95");
-          validSourceFileSuffixes.push_back(".F03");
-          validSourceFileSuffixes.push_back(".F08");
-          validSourceFileSuffixes.push_back(".CAF");
-
-       // FMZ 5/28/2008
-          validSourceFileSuffixes.push_back(".rmod");
 
        // TV (05/17/2010) Support for CUDA
           validSourceFileSuffixes.push_back(".cu");

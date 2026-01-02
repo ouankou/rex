@@ -61,11 +61,6 @@ message(STATUS "Clang frontend using LLVM includes: ${LLVM_INCLUDE_DIRS}")
 target_compile_definitions(libroseClangFrontend PRIVATE
   ${LLVM_DEFINITIONS})
 
-# Compiler flags
-target_compile_options(libroseClangFrontend PRIVATE
-  -w  # Suppress warnings during initial development
-)
-
 # Copy builtin headers to staging directory for build-tree usage
 # (Install tree headers are handled by install() commands below)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/clang)

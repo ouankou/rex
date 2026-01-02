@@ -11,6 +11,7 @@
 #include <cctype>
 #include <sstream>
 #include <fstream>
+#include <algorithm>
 #include <map>
 #include <iostream>
 
@@ -34,10 +35,6 @@ vector<GrammarFile*> Grammar::fileList;
 // #                   Grammar Member Functions                   #
 // ################################################################
 
-#ifdef ROSE_USE_SMALLER_GENERATED_FILES
-#define WRITE_SEPARATE_FILES_FOR_EACH_CLASS 1
-#endif
-
 Grammar::~Grammar ()
 {
 }
@@ -46,7 +43,9 @@ Grammar::Grammar ( const string& inputGrammarName,
                    const string& inputPrefixName,
                    const string& inputGrammarNameBaseClass,
                    const Grammar* inputParentGrammar,
-                   const string& t_directory)
+                   const string& t_directory,
+                   const string& smallHeadersDir)
+    : smallHeadersDir(smallHeadersDir)
    {
 
   // Intialize some member data
@@ -294,19 +293,10 @@ Grammar::writeFile ( const StringUtility::FileWithLineNumbers & outputString,
      ofstream ROSE_ShowFile(outputFilename.c_str());
      if (ROSE_ShowFile.good() == false)
         {
-          fprintf(stderr, "outputFilename = %s could not be opened, likely the directory is missing...\n",outputFilename.c_str());
-          string command = "mkdir -p " + target_directory + sourceCodeDirectoryName();
-
-       // DQ (12/28/2009): As I recall there is a more secure way to do this...see sage_support.C for an example.
-          if (verbose)
-              printf("Calling system(%s): making a new directory in the build tree...\n",command.c_str());
-          if (system(command.c_str())) {
-              std::cerr <<"command failed: \"" <<StringUtility::cEscape(command) <<"\"\n";
-              exit(1);
-          }
-
-       // retry opening the file...
-          ROSE_ShowFile.open(outputFilename.c_str());
+          fprintf(stderr,
+                  "FATAL: outputFilename = %s could not be opened; likely the directory is missing.\n",
+                  outputFilename.c_str());
+          ROSE_ABORT();
         }
      ROSE_ASSERT (ROSE_ShowFile.good() == true);
 
@@ -345,13 +335,6 @@ Grammar::appendFile ( const StringUtility::FileWithLineNumbers & outputString,
 
      ROSE_ShowFile.close();
      ROSE_ASSERT (outputStream.good() == true);
-   }
-
-
-string
-Grammar::sourceCodeDirectoryName ()
-   {
-     return "GENERATED_CODE_DIRECTORY_" + getGrammarName();
    }
 
 
@@ -420,6 +403,7 @@ Grammar::generateStringListsFromSubtreeLists ( AstNodeClass & node,
   checkListOfGrammarStrings(excludeList);
 #endif
 
+#endif
    }
 
 
@@ -719,16 +703,7 @@ Grammar::buildNewAndDeleteOperators( AstNodeClass & node, StringUtility::FileWit
    {
      StringUtility::FileWithLineNumbers editString = buildStringForNewAndDeleteOperatorSource(node);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-  // Now write out the file (each class in its own file)!
-     string fileExtension = ".C";
-     string directoryName = target_directory + sourceCodeDirectoryName();
-
-  // This should append the string to the target file.
-     appendFile ( editString, directoryName, node.getName(), fileExtension );
-#else
      outputFile += editString;
-#endif
 
   // Call this function recursively on the children of this node in the tree
      vector<AstNodeClass *>::iterator treeNodeIterator;
@@ -772,16 +747,7 @@ Grammar::buildTraverseMemoryPoolSupport( AstNodeClass & node, StringUtility::Fil
 
      StringUtility::FileWithLineNumbers editString = buildStringForTraverseMemoryPoolSource(node);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-  // Now write out the file (each class in its own file)!
-     string fileExtension = ".C";
-     string directoryName = target_directory + sourceCodeDirectoryName();
-
-  // This should append the string to the target file.
-     appendFile ( editString, directoryName, node.getName(), fileExtension );
-#else
      outputFile += editString;
-#endif
 
   // Call this function recursively on the children of this node in the tree
      vector<AstNodeClass *>::iterator treeNodeIterator;
@@ -843,18 +809,7 @@ Grammar::buildStringForCheckingIfDataMembersAreInMemoryPoolSupport( AstNodeClass
 
   // printf ("editString = %s \n",editString.c_str());
 
-
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-  // Now write out the file (each class in its own file)!
-     string fileExtension = ".C";
-     string directoryName = target_directory + sourceCodeDirectoryName();
-  // printf ("In buildStringForCheckingIfDataMembersAreInMemoryPoolSupport(): directoryName = %s \n",directoryName.c_str());
-
-  // This should append the string to the target file.
-     appendFile ( editString, directoryName, node.getName(), fileExtension );
-#else
      outputFile += editString;
-#endif
 
   // Call this function recursively on the children of this node in the tree
      vector<AstNodeClass *>::iterator treeNodeIterator;
@@ -1622,17 +1577,7 @@ Grammar::buildCopyMemberFunctions ( AstNodeClass & node, StringUtility::FileWith
    {
      StringUtility::FileWithLineNumbers editString = buildCopyMemberFunctionSource(node);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-  // Now write out the file (each class in its own file)!
-     string fileExtension = ".C";
-     string directoryName = target_directory + sourceCodeDirectoryName();
-  // printf ("In buildCopyMemberFunctions(): directoryName = %s \n",directoryName.c_str());
-
-  // This should append the string to the target file.
-     appendFile ( editString, directoryName, node.getName(), fileExtension );
-#else
      outputFile += editString;
-#endif
 
   // Call this function recursively on the children of this node in the tree
      vector<AstNodeClass *>::iterator treeNodeIterator;
@@ -1730,12 +1675,13 @@ Grammar::buildHeaderStringAfterMarker( const string& marker, const string& fileN
    }
 
 void
-Grammar::buildHeaderFiles( AstNodeClass & node, StringUtility::FileWithLineNumbers & outputFile )
-   {
+Grammar::buildClassDefinition(AstNodeClass &node, StringUtility::FileWithLineNumbers &outputFile) {
      string marker   = "MEMBER_FUNCTION_DECLARATIONS";
      string fileName = "../Grammar/grammarClassDeclarationMacros.macro";
 
-     StringUtility::FileWithLineNumbers headerBeforeInsertion = buildHeaderStringBeforeMarker(marker,fileName);
+     StringUtility::FileWithLineNumbers headerBeforeInsertion;
+     headerBeforeInsertion << node.preDefinitionText;
+     headerBeforeInsertion += buildHeaderStringBeforeMarker(marker,fileName);
      StringUtility::FileWithLineNumbers headerAfterInsertion  = buildHeaderStringAfterMarker (marker,fileName);
 
   // DQ (3/24/2006): Have this be generated from the CommonCode.code file
@@ -1812,16 +1758,27 @@ Grammar::buildHeaderFiles( AstNodeClass & node, StringUtility::FileWithLineNumbe
 
      editedHeaderFileString = editSubstitution (node,editedHeaderFileString);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-  // Now write out the file (each class in its own file)!
-     string fileExtension = ".h";
-     string directoryName = target_directory + sourceCodeDirectoryName();
-     writeFile ( editedHeaderFileString, directoryName, node.getName(), fileExtension );
-#endif
-
-  // Also output strings to single file (this outputs everything to a single file)
+  // Output strings to single file (this outputs everything to a single file)
      outputFile += editedHeaderFileString;
 
+     if (!smallHeadersDir.empty()) {
+         // Now write out the header file (each class in its own file)!
+         editedHeaderFileString.insert(editedHeaderFileString.begin(),
+                                       StringUtility::StringWithLineNumber("#ifndef ROSE_" + node.getName() + "_H\n"
+                                                                           "#define ROSE_" + node.getName() + "_H\n"
+                                                                           "#include <RoseFirst.h>\n"
+                                                                           "#include <Cxx_GrammarDeclarations.h>\n",
+                                                                           __FILE__, __LINE__));
+         editedHeaderFileString.push_back(StringUtility::StringWithLineNumber("#endif // ROSE_" + node.getName() + "_H",
+                                                                              __FILE__, __LINE__));
+         writeFile(editedHeaderFileString, smallHeadersDir, node.getName(), ".h");
+     }
+}
+
+void
+Grammar::buildHeaderFiles( AstNodeClass & node, StringUtility::FileWithLineNumbers & outputFile )
+   {
+     buildClassDefinition(node, outputFile);
      vector<AstNodeClass *>::iterator treeListIterator;
      for( treeListIterator = node.subclasses.begin(); treeListIterator != node.subclasses.end(); treeListIterator++ )
         {
@@ -2030,15 +1987,8 @@ Grammar::buildSourceFiles( AstNodeClass & node, StringUtility::FileWithLineNumbe
      // BP : 10/25/2001, no need to duplicate here
 
      StringUtility::FileWithLineNumbers sourceBeforeInsertion;
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-     // DQ (12/29/2009): Add this to the top of each file.
-     string sourceHeader = "#include \"sage3basic.h\"   // sage3 from "
-                           "grammar.C \nusing namespace std;\n\n";
-     sourceBeforeInsertion.push_back(StringUtility::StringWithLineNumber(sourceHeader, "", 1));
-#else
   // StringUtility::FileWithLineNumbers sourceBeforeInsertion = buildHeaderStringBeforeMarker(sourceFileInsertionSeparator, fileName);
      sourceBeforeInsertion += buildHeaderStringBeforeMarker(sourceFileInsertionSeparator, fileName);
-#endif
 
      StringUtility::FileWithLineNumbers sourceAfterInsertion = buildHeaderStringAfterMarker(sourceFileInsertionSeparator, fileName);
 
@@ -2069,15 +2019,7 @@ Grammar::buildSourceFiles( AstNodeClass & node, StringUtility::FileWithLineNumbe
   // Now apply the edit/subsitution specified within the grammar (by the user)
      editedSourceFileString = editSubstitution (node,editedSourceFileString);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-  // Now write out the file!
-     string fileExtension = ".C";
-     string directoryName = target_directory + sourceCodeDirectoryName();
-
-     writeFile ( editedSourceFileString, directoryName, node.getName(), fileExtension );
-#endif
-
-// Also output strings to single file
+  // Also output strings to single file
      outputFile += editedSourceFileString;
 
   // Call this function recursively on the children of this node in the tree
@@ -2089,7 +2031,6 @@ Grammar::buildSourceFiles( AstNodeClass & node, StringUtility::FileWithLineNumbe
 
           buildSourceFiles(**treeNodeIterator,outputFile);
         }
-#endif
    }
 
 void
@@ -2192,33 +2133,55 @@ Grammar::buildVariants()
    }
 
 
+// Emit a forward declaration for each class of the grammar.
 void
-Grammar::buildIncludesForSeparateHeaderFiles( AstNodeClass & node, StringUtility::FileWithLineNumbers & outputFile )
-   {
-  // DQ (12/28/2009): New function to support generation of includes for
-  // separate header files. This work is optionally included as an alternative
-  // to the generation of huge 300K line files. This is primarily a performance
-  // issue and can help work around compiler limits for extremely large
-  // translation units.
+Grammar::emitForwardDeclarations(std::ostream &s) const {
+    std::vector<std::string> names;
+    names.reserve(terminalList.size());
+    for (const auto &terminal: terminalList)
+        names.push_back(terminal->name);
 
-     string includeDerictive = string("#include \"") + sourceCodeDirectoryName() + "/" + node.name + ".h\"";
-     outputFile.push_back(StringUtility::StringWithLineNumber(includeDerictive,"",1));
+    std::sort(names.begin(), names.end());
+    for (const std::string &name: names)
+        s <<"class " <<name <<";\n";
+}
 
-  // Call this function recursively on the children of this node in the tree
-     vector<AstNodeClass *>::iterator treeNodeIterator;
-     for( treeNodeIterator = node.subclasses.begin();
-          treeNodeIterator != node.subclasses.end();
-          treeNodeIterator++ )
-        {
-          ROSE_ASSERT ((*treeNodeIterator) != NULL);
-          ROSE_ASSERT ((*treeNodeIterator)->getBaseClass() != NULL);
+// Emit a declaration for each of the isSg* functions
+void
+Grammar::emitIsaDeclarations(std::ostream &out) {
+    out <<"#include <rosedll.h>\n";
+    for (const auto &terminal: terminalList) {
+        const std::string name = terminal->name;
+        out <<"ROSE_DLL_API "+ name + "* is" + name + "(SgNode* node);\n"
+            <<"ROSE_DLL_API const " + name + "* is" + name + "(const SgNode* node);\n";
+    }
 
-          buildIncludesForSeparateHeaderFiles(**treeNodeIterator,outputFile);
-        }
-   }
+    out <<"\n"
+        <<"extern const uint8_t rose_ClassHierarchyCastTable"
+        <<"[" <<getRowsInClassHierarchyCastTable() <<"]"
+        <<"[" <<getColumnsInClassHierarchyCastTable() <<"];\n"
+        <<"\n";
 
-
-
+    // Milind Chabbi (8/28/2013): Performance refactoring.  Providing additional MACRO for each isSgXXX() function.  One can
+    // substitue each isSgXXX() function with IS_SgXXX_FAST_MACRO() function.  Being a macro, IS_SgXXX_FAST_MACRO() is unsafe and
+    // should be used with care.  Using IS_SgXXX_FAST_MACRO() with side effect expressions. e.g., IS_SgXXX_FAST_MACRO(*it++) will
+    // cause undefined effects.  However, it can be used safely for side effect free expressions e.g., IS_SgXXX_FAST_MACRO(node) and
+    // this will improve performance.  A good use case of using IS_SgXXX_FAST_MACRO() is in places where isSgXXX() is very heavily
+    // used.  Substituting all isSgXXX() with IS_SgXXX_FAST_MACRO() worked fine for entire of rose but failed in unsafe uses in
+    // tests e.g. src/optimizer/programAnalysis/StencilAnalysis.C
+    for (const auto &terminal: terminalList) {
+        const std::string className = terminal->name;
+        const std::string fromVariantString = "(node)->variantT()";
+        const std::string toVariantString = className +"::static_variant";
+        const std::string toVariantBytePositionString = toVariantString + " >> 3";
+        const std::string toVariantbitMaskPositionString =  "(1 << (" +  toVariantString + " & 7))";
+        const std::string rose_ClassHierarchyCastTableAccessString = " (rose_ClassHierarchyCastTable[" + fromVariantString + "]"
+                                                                     "[" + toVariantBytePositionString + "] & " +
+                                                                     toVariantbitMaskPositionString   + ")";
+        out <<"#define IS_" + className + "_FAST_MACRO(node) ( (node) ? ((" + rose_ClassHierarchyCastTableAccessString + ") ? "
+            <<"((" + className + "*) (node)) : NULL) : NULL)\n";
+    }
+}
 
 StringUtility::FileWithLineNumbers
 Grammar::buildForwardDeclarations ()
@@ -2272,6 +2235,9 @@ Grammar::buildForwardDeclarations ()
           // One can replace all isSgXXX() with IS_SgXXX_FAST_MACRO() by enabling the line below. This exists for possible future use.
           //returnString.push_back(StringUtility::StringWithLineNumber("#define is" + className + "(node) IS_" + className + "_FAST_MACRO(node)", "" /* "<MACRO replacement for " + className + ">" */, 1));
         }
+
+  // printf ("In Grammar::buildForwardDeclarations (): returnString = \n%s\n",returnString.c_str());
+  // ROSE_ASSERT(false);
 
      return returnString;
    }
@@ -2719,24 +2685,43 @@ Grammar::buildCode ()
      footerString = GrammarString::copyEdit (footerString,"$IFDEF_MARKER",getGrammarName());
      ROSE_ArrayGrammarHeaderFile << headerString;
 
-  // Build (old) ast node variants and write them to the header file ...
-  // BP 10/19/2001, bugfix to prevent memory leak
-  // OLD variants
-     StringUtility::FileWithLineNumbers variantsString = buildVariants();
-     variantsString = GrammarString::copyEdit ( variantsString,"$MARKER",getGrammarName());
-     ROSE_ArrayGrammarHeaderFile += variantsString;
+     // Generate type variant enums
+     {
+         // Old enum
+         StringUtility::FileWithLineNumbers variantsSource;
+         variantsSource <<"#ifndef ROSE_Cxx_GrammarVariants_H\n";
+         variantsSource <<"#define ROSE_Cxx_GrammarVariants_H\n";
+         StringUtility::FileWithLineNumbers tmp = buildVariants();
+         variantsSource += GrammarString::copyEdit(tmp, "$MARKER", getGrammarName());
 
-  // MS: NEW variants
-  // build new variants (access with variantT())
-     string variantEnumString = buildVariantEnums();
-     ROSE_ArrayGrammarHeaderFile << variantEnumString;
+         // New enum
+         variantsSource <<buildVariantEnums();
+         variantsSource <<"#endif\n";
+         Grammar::writeFile(variantsSource, target_directory, getGrammarName() + "Variants", ".h");
+     }
+     ROSE_ArrayGrammarHeaderFile <<"#include <" + getGrammarName() + "Variants.h>\n";
 
-  // DQ (10/26/2007): Add the protytype for the Cxx_GrammarTerminalNames
-     buildVariantsStringPrototype ( ROSE_ArrayGrammarHeaderFile );
+     // DQ (10/26/2007): Add the protytype for the Cxx_GrammarTerminalNames
+     buildVariantsStringPrototype(ROSE_ArrayGrammarHeaderFile);
 
-     StringUtility::FileWithLineNumbers forwardDeclString = buildForwardDeclarations();
-     forwardDeclString = StringUtility::copyEdit (forwardDeclString,"$MARKER",getGrammarName());
-     ROSE_ArrayGrammarHeaderFile += forwardDeclString;
+     // Forward declarations
+     {
+         const std::string fileName = target_directory + "/" + getGrammarName() + "Declarations.h";
+         std::ofstream declarations(fileName.c_str());
+         declarations <<"#ifndef ROSE_Cxx_GrammarDeclarations_H\n"
+                      <<"#define ROSE_Cxx_GrammarDeclarations_H\n"
+                      <<"#line " <<__LINE__ <<" \"" <<__FILE__ <<"\"\n";
+         emitForwardDeclarations(declarations);
+         declarations <<"#endif\n";
+     }
+     ROSE_ArrayGrammarHeaderFile <<"#include <" + getGrammarName() + "Declarations.h>\n";
+
+     // Is-a predicates
+     {
+         StringUtility::FileWithLineNumbers sourceLines = buildForwardDeclarations();
+         sourceLines = StringUtility::copyEdit(sourceLines, "$MARKER", getGrammarName());
+         ROSE_ArrayGrammarHeaderFile += sourceLines;
+     }
 
      ROSE_ArrayGrammarHeaderFile << "\n\n";
      ROSE_ArrayGrammarHeaderFile << "ROSE_DLL_API std::ostream& operator<<(std::ostream&, const SgName&);\n\n";
@@ -2768,35 +2753,9 @@ Grammar::buildCode ()
   // and post order components. The user doesn't notice this change.
      ROSE_ArrayGrammarHeaderFile << "typedef enum \n{preorder = 1, postorder = 2, preandpostorder = preorder | postorder} t_traverseOrder;\n\n";
 
-  // DQ (12/28/2009): Make this a configure option to use the separate, dramatically smaller but more numerous header files for each IR node.
-     StringUtility::FileWithLineNumbers includesForSeparateHeaderFilesString;
-
-  // Note that this macro is defined in sage3.h.
-     includesForSeparateHeaderFilesString.push_back(StringUtility::StringWithLineNumber(string("#if ROSE_USING_SMALL_GENERATED_HEADER_FILES"),string(""),1));
-
-  // Build the includes for each of the files (later build in groups of N IR nodes at a time; rather than based on file length).
-  // Note that these files must exist so we can't have the include list be dependent upon file length triggered elsewhere in ROSETTA.
-  // includesForSeparateHeaderFilesString += buildIncludesForSeparateHeaderFiles();
-     buildIncludesForSeparateHeaderFiles(*rootNode,includesForSeparateHeaderFilesString);
-
-  // Close off the list with "#else".
-     includesForSeparateHeaderFilesString.push_back(StringUtility::StringWithLineNumber(string("#else // else for ifdef ROSE_USING_SMALL_GENERATED_HEADER_FILES"),string(""),1));
-
-  // includesForSeparateHeaderFilesString.push_back(StringUtility::StringWithLineNumber(string("#endif // endif for ifdef ROSE_USING_SMALL_GENERATED_HEADER_FILES"),string(""),1));
-  // includesForSeparateHeaderFilesString = GrammarString::copyEdit ( includesForSeparateHeaderFilesString,"$MARKER",getGrammarName());
-     ROSE_ArrayGrammarHeaderFile += includesForSeparateHeaderFilesString;
-
   // Now declare the classes representing the terminals and nonterminals within the grammar
      ROSE_ASSERT (rootNode != NULL);
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-     StringUtility::FileWithLineNumbers ROSE_ArrayGrammarEmptyHeaderFile;
-     buildHeaderFiles(*rootNode,ROSE_ArrayGrammarEmptyHeaderFile);
-#else
      buildHeaderFiles(*rootNode,ROSE_ArrayGrammarHeaderFile);
-#endif
-
-  // DQ (12/29/2009): Attach endif associated with optional separate (smaller) header files.
-     ROSE_ArrayGrammarHeaderFile.push_back(StringUtility::StringWithLineNumber(string("#endif // endif for ifdef ROSE_USING_SMALL_GENERATED_HEADER_FILES"),string(""),1));
 
   // DQ (11/26/2005): Support for visitor pattern.
      string visitorSupport = buildVisitorBaseClass();
@@ -2849,19 +2808,7 @@ Grammar::buildCode ()
 
   // Now build the source code for the terminals and non-terminals in the grammar
      ROSE_ASSERT (rootNode != NULL);
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-     printf ("Skipping output of source files into Cxx_Grammar.C ...\n");
-     StringUtility::FileWithLineNumbers ROSE_ArrayGrammarEmptySourceFile;
-
-  // Output all the source for each IR node into a single smaller file (one for each IR node).
-     buildSourceFiles(*rootNode,ROSE_ArrayGrammarEmptySourceFile);
-     buildNewAndDeleteOperators(*rootNode,ROSE_ArrayGrammarEmptySourceFile);
-     buildCopyMemberFunctions(*rootNode,ROSE_ArrayGrammarEmptySourceFile);
-     buildTraverseMemoryPoolSupport(*rootNode,ROSE_ArrayGrammarEmptySourceFile);
-     buildStringForCheckingIfDataMembersAreInMemoryPoolSupport(*rootNode,ROSE_ArrayGrammarEmptySourceFile);
-#else
      buildSourceFiles(*rootNode,ROSE_ArrayGrammarSourceFile);
-#endif
      if (verbose)
          cout << "DONE: buildSourceFiles()" << endl;
 
@@ -2885,11 +2832,7 @@ Grammar::buildCode ()
   // Now build the source code for the terminals and non-terminals in the grammar
      ROSE_ASSERT (rootNode != NULL);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-     printf ("When generating small files we combine the New and Delete oporators into the source files above. \n");
-#else
      buildNewAndDeleteOperators(*rootNode,ROSE_NewAndDeleteOperatorSourceFile);
-#endif
      if (verbose)
          cout << "DONE: buildNewAndDeletOperators()" << endl;
 
@@ -2905,11 +2848,7 @@ Grammar::buildCode ()
   // Now build the source code for the terminals and non-terminals in the grammar
      ROSE_ASSERT (rootNode != NULL);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-     printf ("When generating small files we combine the Traversal Memory Pool support into the source files above. \n");
-#else
      buildTraverseMemoryPoolSupport(*rootNode,ROSE_TraverseMemoryPoolSourceFile);
-#endif
      if (verbose)
          cout << "DONE: buildTraverseMemoryPoolSupport()" << endl;
 
@@ -2924,11 +2863,7 @@ Grammar::buildCode ()
   // Now build the source code for the terminals and non-terminals in the grammar
      ROSE_ASSERT (rootNode != NULL);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-     printf ("When generating small files we combine the CheckingIfDataMembersAreInMemoryPool support into the source files above. \n");
-#else
      buildStringForCheckingIfDataMembersAreInMemoryPoolSupport(*rootNode,ROSE_CheckingIfDataMembersAreInMemoryPoolSourceFile);
-#endif
      if (verbose)
          cout << "DONE: buildStringForCheckingIfDataMembersAreInMemoryPoolSupport()" << endl;
 
@@ -3023,11 +2958,7 @@ Grammar::buildCode ()
   // Now build the source code for the terminals and non-terminals in the grammar
      ROSE_ASSERT (rootNode != NULL);
 
-#if WRITE_SEPARATE_FILES_FOR_EACH_CLASS
-     printf ("When generating small files we combine the Copy Member functions into the source files above. \n");
-#else
      buildCopyMemberFunctions(*rootNode,ROSE_CopyMemberFunctionsSourceFile);
-#endif
      if (verbose)
          cout << "DONE: buildCopyMemberFunctions()" << endl;
 
@@ -3389,7 +3320,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
              }
        // start: generate get_traversalSuccessorContainer() method
           outputFile << "vector<" << grammarPrefixName << "Node*>\n"
-                     << node.getName() << "::get_traversalSuccessorContainer() {\n"
+                     << node.getName() << "::get_traversalSuccessorContainer() const {\n"
                      << "  vector<" << grammarPrefixName << "Node*> " << successorContainerName << ";\n";
        // GB (8/1/2007): Preallocating the memory needed for the traversal successors to avoid frequent reallocations on
        // push_back. This makes things a little more efficient.
@@ -3443,7 +3374,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
 
        // start: generate get_traversalSuccessorNamesContainer() method
           outputFile << "vector<string>\n"
-                     << node.getName() << "::get_traversalSuccessorNamesContainer() {\n"
+                     << node.getName() << "::get_traversalSuccessorNamesContainer() const {\n"
                      << "vector<string> " << successorContainerName << ";\n";
        // GB (8/16/2007): Moved the variable i here. It is initialized to the number of single traversal successors and
        // will be the starting index for the numbering of container successors (if any).
@@ -3463,7 +3394,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
        // start: generate get_numberOfTraversalSuccessors() method
        // GB (09/25/2007): Added this method.
           outputFile << "size_t\n"
-                     << node.getName() << "::get_numberOfTraversalSuccessors() {\n";
+                     << node.getName() << "::get_numberOfTraversalSuccessors() const {\n";
           if (traverseDataMemberList.size() > 0)
              {
                outputFile << "return "
@@ -3483,7 +3414,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
        // start: generate get_traversalSuccessorByIndex() method
        // GB (09/25/2007): Added this method.
           outputFile << "SgNode *\n"
-                     << node.getName() << "::get_traversalSuccessorByIndex(size_t idx) {\n";
+                     << node.getName() << "::get_traversalSuccessorByIndex(size_t idx) const {\n";
           if (traverseDataMemberList.size() > 0)
              {
                GrammarString *gs = traverseDataMemberList.front();
@@ -3638,7 +3569,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
        // start: generate get_childIndex() method
        // GB (09/25/2007): Added this method.
           outputFile << "size_t\n"
-                     << node.getName() << "::get_childIndex(SgNode *child) {\n";
+                     << node.getName() << "::get_childIndex(SgNode *child) const {\n";
           if (traverseDataMemberList.size() > 0)
              {
                GrammarString *gs = traverseDataMemberList.front();
@@ -3652,7 +3583,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
                   {
                     outputFile << "if (child == compute_baseTypeDefiningDeclaration()) return 0;\n"
                                << "else {\n"
-                               << "SgInitializedNamePtrList::iterator itr = find(p_variables.begin(), p_variables.end(), child);\n"
+                               << "SgInitializedNamePtrList::const_iterator itr = find(p_variables.begin(), p_variables.end(), child);\n"
                                << "if (itr != p_variables.end()) return (itr - p_variables.begin()) + 1;\n"
                                << "else return (size_t) -1;\n"
                                << "}\n";
@@ -3722,7 +3653,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
                   {
                      outputFile << "if (child == p_body) return 0;\n"
                                << "else {\n"
-                               << "SgOmpClausePtrList::iterator itr = find(p_clauses.begin(), p_clauses.end(), child);\n"
+                               << "SgOmpClausePtrList::const_iterator itr = find(p_clauses.begin(), p_clauses.end(), child);\n"
                                << "if (itr != p_clauses.end()) return (itr - p_clauses.begin()) + 1;\n"
                                << "else return (size_t) -1;\n"
                                << "}\n";
@@ -3796,7 +3727,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
        // *** and causes the program to abort. Build this code string and write it to
        // *** the outputFile
 
-          outputFile << "vector<" << grammarPrefixName << "Node*>\n" << node.getName() << "::get_traversalSuccessorContainer() {\n"
+          outputFile << "vector<" << grammarPrefixName << "Node*>\n" << node.getName() << "::get_traversalSuccessorContainer() const {\n"
                      << "vector<" << grammarPrefixName << "Node*> " << successorContainerName << ";\n";
           outputFile << "   cerr << \"Internal error(!): called tree traversal mechanism for illegal object: \" << endl\n"
                      << "<< \"static: " << node.getName() << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
@@ -3804,7 +3735,7 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
                      << "ROSE_ABORT();\n"
                      << "return " << successorContainerName << ";\n }\n\n";
 
-          outputFile << "vector<string>\n" << node.getName() << "::get_traversalSuccessorNamesContainer() {\n"
+          outputFile << "vector<string>\n" << node.getName() << "::get_traversalSuccessorNamesContainer() const {\n"
                      << "vector<string> " << successorContainerName << ";\n";
           outputFile << "   cerr << \"Internal error(!): called tree traversal mechanism for illegal object: \" << endl\n"
                      << "<< \"static: " << node.getName() << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
@@ -3813,21 +3744,21 @@ Grammar::buildTreeTraversalFunctions(AstNodeClass& node, StringUtility::FileWith
                      << "return " << successorContainerName << ";\n }\n\n";
 
        // GB (09/25/2007): Added implementations for the new methods get_numberOfTraversalSuccessors, get_traversalSuccessorByIndex, and get_childIndex.
-          outputFile << "size_t\n" << node.getName() << "::get_numberOfTraversalSuccessors() {\n";
+          outputFile << "size_t\n" << node.getName() << "::get_numberOfTraversalSuccessors() const {\n";
           outputFile << "   cerr << \"Internal error(!): called tree traversal mechanism for illegal object: \" << endl\n"
                      << "<< \"static: " << node.getName() << "\" << endl << \"dynamic:  this = \" << this << \" = \" << this->sage_class_name() << endl;\n"
                      << "cerr << \"Aborting ...\" << endl;\n"
                      << "ROSE_ABORT();\n"
                      << "return 42;\n }\n\n";
 
-          outputFile << "SgNode*\n" << node.getName() << "::get_traversalSuccessorByIndex(size_t) {\n";
+          outputFile << "SgNode*\n" << node.getName() << "::get_traversalSuccessorByIndex(size_t) const {\n";
           outputFile << "   cerr << \"Internal error(!): called tree traversal mechanism for illegal object: \" << endl\n"
                      << "<< \"static: " << node.getName() << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
                      << "cerr << \"Aborting ...\" << endl;\n"
                      << "ROSE_ABORT();\n"
                      << "return NULL;\n }\n\n";
 
-          outputFile << "size_t\n" << node.getName() << "::get_childIndex(SgNode *) {\n";
+          outputFile << "size_t\n" << node.getName() << "::get_childIndex(SgNode *) const {\n";
           outputFile << "   cerr << \"Internal error(!): called tree traversal mechanism for illegal object: \" << endl\n"
                      << "<< \"static: " << node.getName() << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
                      << "cerr << \"Aborting ...\" << endl;\n"
@@ -4009,12 +3940,12 @@ string Grammar::generateTraverseSuccessorNamesForLoopSource(string typeString,
      travSuccSource+="char buf[20];\n";
      if (typeString.find("PtrList") != string::npos || typeString.find("PtrVector") != string::npos)
         {
-          travSuccSource+="sprintf(buf,\"*[%d]\",i);\n"; // pointers are represented as '*'
+          travSuccSource+="snprintf(buf,sizeof(buf),\"*[%d]\",i);\n"; // pointers are represented as '*'
           travSuccSource += successorContainerName + ".push_back(buf);\n"; // It contains pointers to AST objects
         }
        else
         {
-          travSuccSource+="sprintf(buf,\"[%d]\",i);\n";
+          travSuccSource+="snprintf(buf,sizeof(buf),\"[%d]\",i);\n";
           travSuccSource += successorContainerName + ".push_back(buf);\n";  // It contains AST objects
         }
 
@@ -4103,7 +4034,7 @@ string Grammar::EnumStringForNode(AstNodeClass& node, string s) {
 // Arguments: 1. GrammarNode,
 //            2. a function like evaluateSynthesizedAttribute,
 //               with string being the synthesized attribute type
-// (can be replaced by MSTL/DSProcessing.C (when finished))
+// (can be replaced by DSProcessing when finished)
 //////////////////////////////////////////////////////////////////////////////////////////
 Grammar::GrammarSynthesizedAttribute
 Grammar::BottomUpProcessing(AstNodeClass* node,
@@ -4205,7 +4136,7 @@ Grammar::getIteratorString(const string& typeString)
      if (ts.size() >= 3 && ts.substr(ts.size() - 3) == "Ptr") {
        ts = ts.substr(0, ts.size() - 3);
      }
-     return ts + "::iterator";
+     return ts + "::const_iterator";
    }
 
 AstNodeClass* lookupTerminal(const vector<AstNodeClass*>& tl, const std::string& name) {

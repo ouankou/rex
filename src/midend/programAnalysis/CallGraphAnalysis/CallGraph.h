@@ -2,7 +2,6 @@
 #ifndef CALL_GRAPH_H
 #define CALL_GRAPH_H
 
-#include <AstInterface.h>
 #include <GraphDotOutput.h>
 #include <VirtualGraphCreate.h>
 #include <nodeQuery.h>
@@ -18,20 +17,15 @@
 
 class FunctionData;
 
-typedef Rose_STL_Container<SgFunctionDeclaration *> SgFunctionDeclarationPtrList;
-typedef Rose_STL_Container<SgClassDefinition *> SgClassDefinitionPtrList;
-
 // DQ (1/31/2006): Changed name and made global function type symbol table a static data member.
 // extern SgFunctionTypeTable Sgfunc_type_table;
-// This header has to be here since it uses type SgFunctionDeclarationPtrList 
+// This header has to be here since it uses type SgFunctionDeclarationPtrList
 #include "ClassHierarchyGraph.h"
 
 
 //AS(090707) Added the CallTargetSet namespace to replace the CallGraphFunctionSolver class
 namespace CallTargetSet
 {
-  typedef Rose_STL_Container<SgFunctionDeclaration *> SgFunctionDeclarationPtrList;
-  typedef Rose_STL_Container<SgClassDefinition *> SgClassDefinitionPtrList;
   /**
    * CallTargetSet::solveFunctionPointerCall
    *
@@ -130,18 +124,16 @@ class ROSE_DLL_API FunctionData
 //! A function object to be used as a predicate to filter out functions in a call graph: it does not filter out anything.
 struct dummyFilter
 {
-  using argument_type = SgFunctionDeclaration*;
   using result_type = bool;
-  bool operator() (SgFunctionDeclaration* node) const; // always return true
+  result_type operator() (SgFunctionDeclaration* node) const; // always return true
 }; 
 
 //! A function object to filter out builtin functions in a call graph (only non-builtin functions will be considered)
 // Liao, 6/17/2012
 struct ROSE_DLL_API builtinFilter
 {
-  using argument_type = SgFunctionDeclaration*;
   using result_type = bool;
-  bool operator() (SgFunctionDeclaration* node) const;
+  result_type operator() (SgFunctionDeclaration* node) const;
 }; 
 
 class ROSE_DLL_API CallGraphBuilder
@@ -178,12 +170,10 @@ class ROSE_DLL_API CallGraphBuilder
 // AstDOTGeneration::writeIncidenceGraphToDOTFile() is used instead in the tutorial. Liao 6/17/2012
 void GenerateDotGraph ( SgIncidenceDirectedGraph *graph, std::string fileName );
 
-class ROSE_DLL_API GetOneFuncDeclarationPerFunction
+struct GetOneFuncDeclarationPerFunction
 {
-  public:
-    using argument_type = SgNode*;
-    using result_type = Rose_STL_Container<SgNode*>;
-    result_type operator()(SgNode* node );
+  using result_type = Rose_STL_Container<SgNode*>;
+  result_type operator()(SgNode* node);
 };
 
 template<typename Predicate>

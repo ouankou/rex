@@ -33,13 +33,13 @@ endfunction()
 
 # determine what subdirectories to enter based on our configuration settings.
 
-if(enable-cuda)
+if(ENABLE-CUDA)
   add_subdirectory(CudaTests)
 endif()
 
 # REX: Fortran tests are independent of which C/C++ compiler is used to build REX itself
 # Move Fortran test registration outside the Clang-specific if/else block
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   add_subdirectory(Fortran_tests)
   # DQ (7/14/2013): Temporarily commented out this test to evaluate
   # progress on tests/nonsmoke/functional/CompileTests directory.
@@ -47,7 +47,7 @@ if(enable-fortran)
 endif()
 
 # REX: Enable all tests regardless of compiler (Clang frontend is now standard)
-if(enable-c)
+if(ENABLE-C)
   add_subdirectory(C_tests)
   add_subdirectory(C89_std_c89_tests)
   add_subdirectory(C_subset_of_Cxx_tests)
@@ -59,7 +59,6 @@ if(enable-c)
   add_subdirectory(copyAST_tests)
   # ROSE-1738
   # add_subdirectory(RoseExample_tests)
-  add_subdirectory(colorAST_tests)
   add_subdirectory(unparseToString_tests)
   add_subdirectory(sourcePosition_tests)
   # requires Valgrind

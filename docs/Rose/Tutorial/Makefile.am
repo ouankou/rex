@@ -7,7 +7,7 @@ PDFLATEX = env TEXINPUTS=$(srcdir):$(srcdir)/..:$(top_srcdir)/tests:.: pdflatex
 # I have been unable to have the links be built unless I build them all the file.
 latexFiles = \
    introduction.tex ASTGraphGenerator.tex AST_PDF_Generator.tex \
-   identityTranslator.tex queryLibraryExample.tex abstractHandle.tex \
+   identityTranslator.tex queryLibraryExample.tex \
    traversal.tex loopRecognition.tex typeInfoFromFunctionParameters.tex resolveOverloadedFunction.tex \
    templateParameter.tex \
    buildCFG.tex parallelChecker.tex defuseAnalysis.tex \
@@ -15,11 +15,11 @@ latexFiles = \
    parser-docs.tex codeCoverage.tex scopeInformation.tex sideeffect-docs.tex \
    tauInstrumentation.tex templateSupport.tex dataBaseSupport.tex recognitionOfAbstractions.tex \
    debuggingSupport.tex commandlineProcessing.tex customGraphs.tex tutorialMakefile.tex wrapup.tex \
-   appendix.tex astFileIO.tex uniqueNames.tex wholeGraphAST.tex addingComments.tex \
+   appendix.tex uniqueNames.tex wholeGraphAST.tex addingComments.tex \
    partialRedundancyElimination.tex codeGenerationFormatControl.tex copyHelp.tex \
    sharedMemoryTraversals.tex distributedMemoryTraversals.tex bugSeeding.tex \
    modifiers.tex howToContribute.tex virtualCFG.tex reductionRecognition.tex \
-   livenessAnalysis.tex CFGTraversalTutorial.tex parserBuildingBlocks.tex astConstruction.tex
+   livenessAnalysis.tex CFGTraversalTutorial.tex astConstruction.tex
 
 # This is an evolving list, but these are a few of the required files
 generatedCodeExamples = \

@@ -5,6 +5,7 @@
 #include <DepInfo.h>
 #include <TransDepGraph.h>
 #include <DepGraph.h>
+#include <CommandOptions.h>
 
 template <class Node>
 LoopAlignInfo TransLoopFusible<Node>::
@@ -57,6 +58,7 @@ template <class Edge,class GraphCreate>
 bool PerfectLoopSlicable<Edge,GraphCreate>::
 operator()(GraphCreate *g, int level)
 {
+  DebugLog DebugSlice("-debugslice");
   DepDirType cur = DEPDIR_EQ;
   for ( GraphEdgeIterator<GraphCreate> edgeIter(g);
        !edgeIter.ReachEnd(); ++edgeIter) {
@@ -68,11 +70,14 @@ operator()(GraphCreate *g, int level)
        int a1 = r.GetMinAlign(), a2 = r.GetMaxAlign();
        if (cur == DEPDIR_EQ)
            cur = dir;
-       else if (dir != DEPDIR_EQ && cur != dir)
+       else if (dir != DEPDIR_EQ && cur != dir) {
+           DebugSlice([&r](){ return "Loop not slideable b/c of conflicting dependence direction: " + r.toString(); });
            return false;
+       }
        if ( (dir == DEPDIR_LE && a2 <= 0) || (dir == DEPDIR_GE && a1 >= 0)
              || (dir == DEPDIR_EQ && a2 <= 0))
           continue;
+       DebugSlice([&r](){ return "Loop not slideable b/c of dependence direction: " + r.toString(); });
        return false;
      }
   }
@@ -143,4 +148,3 @@ operator () ( TransDepGraphCreate<Node> *graph, const LoopAnalInfo<Node> &l1,
   }
   return result;
 }
-

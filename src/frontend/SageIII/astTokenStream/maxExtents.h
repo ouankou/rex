@@ -1,3 +1,4 @@
+#include "sage3basic.h"
 
 // Support to the evaluation of source positions of subtrees to propagate source positions start and end positions to 
 // compiler generated SgStatement IR nodes (that don't have a source position) that contain valid subtrees.  Where the 

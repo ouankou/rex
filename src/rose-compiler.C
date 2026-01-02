@@ -32,5 +32,8 @@ int main( int argc, char * argv[] ) {
   }
   int status = backend(project);
 
+// DQ (7/14/2025): Adding performance reporting.
+  TimingPerformance::generateReport();
+
   return status;
 }

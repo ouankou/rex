@@ -34,10 +34,9 @@ struct FunctionFilter
 
 struct OnlyNonCompilerGenerated
 {
-  using argument_type = SgFunctionDeclaration*;
   using result_type = bool;
 
-    bool operator() (SgFunctionDeclaration * node) const
+    result_type operator() (SgFunctionDeclaration * node) const
     {
         // false will filter out ALL nodes
         bool filterNode = true;

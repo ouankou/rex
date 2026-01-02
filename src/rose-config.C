@@ -35,9 +35,11 @@ static const char *description =
 #include <rose.h>                                       // POLICY_OK -- this is not a ROSE library source file
 #include <rose_getline.h>
 
+#include <filesystem>
 #include <regex>
 #include <map>
 #include <string>
+#include <system_error>
 #include <vector>
 
 using namespace Rose;
@@ -49,8 +51,23 @@ struct Settings {
   std::filesystem::path configFile;
 
   // When compiling this program, LIBDIR C preprocessor symbol should be the name of the installation path for libraries.
-  Settings()
-    : searchDirs(LIBDIR) {}
+  Settings() {
+    if (LIBDIR && *LIBDIR) {
+      searchDirs = LIBDIR;
+    }
+
+    std::error_code ec;
+    std::filesystem::path exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (!ec && !exePath.empty()) {
+      std::filesystem::path prefix = exePath.parent_path().parent_path();
+      if (!prefix.empty()) {
+        if (!searchDirs.empty()) {
+          searchDirs += ":";
+        }
+        searchDirs += (prefix / "lib").string();
+      }
+    }
+  }
 };
 
 static const std::vector<std::string>&

@@ -2,7 +2,7 @@
 // Files are classified at either unknown, user, 
 // or system (system includes system libaries).
 
-// The support for this work is in ROSE/src/util/stringSupport/FileNameClassifier.C
+// The support for this work is in ROSE/src/util/StringUtility/FileNameClassifier.C
 
 
 #include "rose.h"
@@ -78,5 +78,4 @@ main(int argc, char * argv[])
 
      return backend(project);
    }
-
 

@@ -53,6 +53,7 @@ Makefile.in
 /*.tar.gz
 /libltdl
 /configure.orig
+/build-rose.sh
 
 # Integrated Development Evironment files
 GPATH
@@ -104,7 +105,11 @@ docs/doxygen-xml/
 *.pyo
 
 # Jupyter temporary files
-.ipynb_checkpoints
+**/.ipynb_checkpoints/
+
+# Internal build directories
+/_build
+/_build_*
 
 # CMake build directory
 /build/

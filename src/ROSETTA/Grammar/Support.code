@@ -2327,7 +2327,7 @@ SOURCE_ATTRIBUTE_SUPPORT_END
 
 SOURCE_MODIFIER_START
 
-SgModifier::SgModifier ( const SgModifier & X )
+SgModifier::SgModifier(const SgModifier & /*X*/)
    {
   // DQ (4/13/2004): Nothing to do here, but this function prevents the SgSupport copy
   // constructor from being called and we would like to keep that copy constructor
@@ -2335,7 +2335,7 @@ SgModifier::SgModifier ( const SgModifier & X )
    }
 
 SgModifier &
-SgModifier::operator= ( const SgModifier & X )
+SgModifier::operator= (const SgModifier & /*X*/)
    {
      return *this;
    }
@@ -4598,10 +4598,23 @@ HEADER_SYMBOL_TABLE_START
           static void set_force_search_of_base_classes( bool value );
 
        // DQ (7/12/2014): Adding support for static data member.
-          static SgNodeSet & get_aliasSymbolCausalNodeSet();
+          static const SgUnorderedNodeSet & get_aliasSymbolCausalNodeSet();
+          static void clear_aliasSymbolCausalNodeSet();
+          static void insert_aliasSymbolCausalNodeSet(SgNode* node);
 
        // DQ (8/3/2019): Display function for static data member.
           static void display_aliasSymbolCausalNodeSet();
+
+       // DQ (7/19/2025): This is to support the new name qualification mode.  It allows us to have a more expensive cost
+       // of processing the symbol table lookups to support the name qualifiaction (required) and have a much less
+       // expensive cost of lookup normally (outside of the name qualification).  This is related to the support for
+       // alias nodes, and causal nodes and is a result of name qualification being required before seeing the causal
+       // nodes in a traversal (such as the traversal for the name qualification) and not being required (and sometimes
+       // an error) after the causal nodes in the traversal.  More information on this is in the declaration of the static
+       // data member (name_qualification_mode, in src/ROSETTA/src/support.C). This has become a significant performance
+       // problem.
+          static bool get_name_qualification_mode();
+          static void set_name_qualification_mode( bool value );
 
      protected:
 
@@ -5701,14 +5714,17 @@ public:
                e_c90_standard,
                e_c99_standard,
                e_c11_standard,
-               e_c14_standard,
-               e_c18_standard,
+               e_c17_standard,
+               e_c23_standard,
+               e_c2y_standard,
                e_cxx98_standard,
                e_cxx03_standard,
                e_cxx11_standard,
                e_cxx14_standard,
                e_cxx17_standard,
                e_cxx20_standard,
+               e_cxx23_standard,
+               e_cxx26_standard,
                e_f77_standard,
                e_f90_standard,
                e_f95_standard,
@@ -5753,17 +5769,23 @@ public:
           bool get_C11_gnu_only (void) const;
           void set_C11_gnu_only (void);
 
-          bool get_C14_only (void) const;
-          void set_C14_only (void);
+          bool get_C17_only (void) const;
+          void set_C17_only (void);
 
-          bool get_C14_gnu_only (void) const;
-          void set_C14_gnu_only (void);
+          bool get_C17_gnu_only (void) const;
+          void set_C17_gnu_only (void);
 
-          bool get_C18_only (void) const;
-          void set_C18_only (void);
+          bool get_C23_only (void) const;
+          void set_C23_only (void);
 
-          bool get_C18_gnu_only (void) const;
-          void set_C18_gnu_only (void);
+          bool get_C23_gnu_only (void) const;
+          void set_C23_gnu_only (void);
+
+          bool get_C2y_only (void) const;
+          void set_C2y_only (void);
+
+          bool get_C2y_gnu_only (void) const;
+          void set_C2y_gnu_only (void);
 
           bool get_Cxx98_only (void) const;
           void set_Cxx98_only (void);
@@ -5800,6 +5822,18 @@ public:
 
           bool get_Cxx20_gnu_only (void) const;
           void set_Cxx20_gnu_only (void);
+
+          bool get_Cxx23_only (void) const;
+          void set_Cxx23_only (void);
+
+          bool get_Cxx23_gnu_only (void) const;
+          void set_Cxx23_gnu_only (void);
+
+          bool get_Cxx26_only (void) const;
+          void set_Cxx26_only (void);
+
+          bool get_Cxx26_gnu_only (void) const;
+          void set_Cxx26_gnu_only (void);
 
           bool get_F77_only     (void) const;
           void set_F77_only     (void);
@@ -6287,9 +6321,12 @@ HEADER_APPLICATION_PROJECT_START
       //! global concept of verbose level which controls useful output from the compiler (values greater than zero increase output level)
           static int p_verbose;
 
-       // DQ (4/4/2020): Adding support for unparse headers feature specific diagnostics.
-      //! global concept of verbose level which controls useful output from the unparse headers feature (values greater than zero increase output level)
+      // DQ (4/4/2020): Adding support for unparse headers feature specific diagnostics.
+     //! global concept of verbose level which controls useful output from the unparse headers feature (values greater than zero increase output level)
           static int p_unparseHeaderFilesDebug;
+
+      //! global to output the command line that goes to the backend compiler. Default is false.
+          static bool p_showBackendCommandLine;
 
       //! Save the command line arguments (argc and argv) for the project (these are needed to process transformations)
        // static int project_argc;
@@ -6309,9 +6346,12 @@ HEADER_APPLICATION_PROJECT_START
           static int get_verbose (void);
           static void set_verbose (int);
 
-       // DQ (4/4/2020): Added debugging support for feature specific unparsing of header files.
+      // DQ (4/4/2020): Added debugging support for feature specific unparsing of header files.
           static int get_unparseHeaderFilesDebug (void);
           static void set_unparseHeaderFilesDebug (int);
+
+          static bool get_showBackendCommandLine (void);
+          static void set_showBackendCommandLine ( bool show );
 
        // DQ: bool values on the SgFile nodes which can be queried on the SgProject
        // nodes (must be the same across all SgFile nodes in the project).
@@ -6337,8 +6377,12 @@ HEADER_APPLICATION_PROJECT_START
           bool get_C99_gnu_only (void) const;
           bool get_C11_only (void) const;
           bool get_C11_gnu_only (void) const;
-          bool get_C14_only (void) const;
-          bool get_C14_gnu_only (void) const;
+          bool get_C17_only (void) const;
+          bool get_C17_gnu_only (void) const;
+          bool get_C23_only (void) const;
+          bool get_C23_gnu_only (void) const;
+          bool get_C2y_only (void) const;
+          bool get_C2y_gnu_only (void) const;
 
           void set_Cxx_only     (bool value);
           bool get_Cxx_only (void) const;
@@ -6353,6 +6397,12 @@ HEADER_APPLICATION_PROJECT_START
           bool get_Cxx14_gnu_only (void) const;
           bool get_Cxx17_only (void) const;
           bool get_Cxx17_gnu_only (void) const;
+          bool get_Cxx20_only (void) const;
+          bool get_Cxx20_gnu_only (void) const;
+          bool get_Cxx23_only (void) const;
+          bool get_Cxx23_gnu_only (void) const;
+          bool get_Cxx26_only (void) const;
+          bool get_Cxx26_gnu_only (void) const;
 
           void set_Fortran_only (bool value);
           bool get_Fortran_only (void) const;
@@ -6662,6 +6712,10 @@ HEADER_UNPARSE_INFO_START
             // regarding the static previouslyUnparsedTokenSubsequences which is required to support multiple statements (e.g. a variable declarations
             // with containing multiple variables which translates (typically) to multiple variable declarations (each with one variable) within the AST).
                b_usedInUparseToStringFunction = 55, /*!< Mark this use as being called from the unparseToString() functions (used in debugging) */
+
+            // PL (7/9/2025): Adding support to properly unparse the "restrict" keyword when used inside array brackets.
+            // Example: void foo(int arr[restrict]);
+               b_useRestrictKeywordInsideArrayBrackets = 56, /*!< Note to the array second-half unparser to generate the restrict keyword */
 
             //! DQ (12/6/2003): Added last value to use a upper bound in loops
                UNPARSE_TYPE_LAST /*!< last value used for debugging */
@@ -7010,6 +7064,12 @@ HEADER_UNPARSE_INFO_START
        // DQ (11/21/2021): Adding support for types to be unparsed with the context of the correct declaration to support multi-file handling.
           void unset_declaration_of_context();
 
+       // PL (7/9/2025): Adding support to properly unparse the "restrict" keyword when used inside array brackets.
+       // Example: void foo(int arr[restrict]);
+          bool useRestrictKeywordInsideArrayBrackets() const;
+          void set_useRestrictKeywordInsideArrayBrackets();
+          void unset_useRestrictKeywordInsideArrayBrackets();
+
 #if 0
    // MK: These access functions are now automatically generated!
           SgNamedType *get_current_context();
@@ -7307,6 +7367,9 @@ eqstr::operator()(const SgName & s1, const SgName & s2) const
   // return s1 == s2;
 
      ROSE_ASSERT(hash_multimap != NULL);
+
+  // DQ (8/15/2025): Tracking the number of times this function is called...
+     AstPerformance::numberOfCallsToHashOperator++;
   // MLOG_INFO_C("ROSETTA", "@@@@@ hash_multimap->get_case_insensitive_semantics() = %s s1 = %s s2 = %s \n",(hash_multimap->get_case_insensitive_semantics() == true) ? "true" : "false",s1.str(),s2.str());
   // ROSE_ASSERT(hash_multimap->get_case_insensitive_semantics() == true);
 
@@ -7381,7 +7444,10 @@ hash_Name::operator()(const SgName & name) const
         }
        else
         {
-          return hasher(name.str());
+       // DQ (8/14/2025): Since we are using a C++ string now, we don't want to convert this
+       // to a C stype string, just to have it be converted back into a C++ string later.
+       // return hasher(name.str());
+          return hasher(name.getString());
         }
    }
 
@@ -7725,7 +7791,7 @@ SgSymbolTable::insert ( const SgName & nm , SgSymbol *sp )
 #endif
 
   // DQ (2/14/2007): Added assertion!
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
   // DQ (2/19/2007): Added additional assertion!
      ROSE_ASSERT (p_table != NULL);
@@ -8163,10 +8229,6 @@ SgSymbolTable::find( const SgFunctionType* functionType)
      ROSE_ASSERT(p_table != NULL);
      ROSE_ASSERT(functionType != NULL);
 
-#if 0
-     MLOG_INFO_C("ROSETTA", "Inside of SgSymbolTable::find( const SgFunctionType* ): functionType = %p = %s \n",functionType,SageInterface::get_name(functionType).c_str());
-#endif
-
      SgSymbol* returnSymbol = NULL;
 
      SgName name = functionType->get_mangled();
@@ -8471,10 +8533,6 @@ SgSymbolTable::find_aliased_symbol(const SgName & nm, SgSymbol *sp)
 
      ROSE_ASSERT(sp != NULL);
 
-#if 0
-     MLOG_INFO_C("ROSETTA", "In SgSymbolTable::find_aliased_symbol(): We are only using the name = %s sp = %p = %s (not any template arguments or template parameters) \n",nm.str(),sp,sp->class_name().c_str());
-#endif
-
      p_iterator = p_table->find(nm);
 
      while (p_iterator != p_table->end() && get_table()->key_eq()(p_iterator->first,nm))
@@ -8483,10 +8541,6 @@ SgSymbolTable::find_aliased_symbol(const SgName & nm, SgSymbol *sp)
           p_no_name = false;
 
           ROSE_ASSERT(p_iterator->second != NULL);
-#if 0
-          MLOG_INFO_C("ROSETTA", "In SgSymbolTable::find_aliased_symbol(): in loop: nm = %s p_iterator->second = %p = %s \n",nm.str(),p_iterator->second,p_iterator->second->class_name().c_str());
-#endif
-
           SgAliasSymbol* aliasSymbol = isSgAliasSymbol(p_iterator->second);
           if ( (aliasSymbol != NULL) && (aliasSymbol->get_alias() == sp) )
              {
@@ -8570,43 +8624,34 @@ SgSymbolTable::findany(const SgName &nm)
    }
 #endif
 
+// DQ (7/14/2025): Adding timers to support Matt's tool.
+#define USING_PERFORMANCE_TRACING 0
+
 // SgSymbol* SgSymbolTable::find_any(const SgName & nm)
 SgSymbol*
 SgSymbolTable::find_any(const SgName & nm, SgTemplateParameterPtrList* templateParameterList, SgTemplateArgumentPtrList* templateArgumentList)
-   {
-  // DQ (8/21/2013): Modified to use single supporting templated lower level function.
-  // DQ (6/24/2013): This special case requires some special support in find_symbol_support.
-  // return find_symbol_support<SgSymbol>(nm,templateParameterList,templateArgumentList);
-     bool filterTemplateSymbols = false;
-     return find_symbol_with_type_support<SgSymbol>(nm,NULL,templateParameterList,templateArgumentList,filterTemplateSymbols);
-   }
+{
+    bool filterTemplateSymbols = false;
+    return find_symbol_with_type_support<SgSymbol>(nm,NULL,templateParameterList,templateArgumentList,filterTemplateSymbols);
+}
 
-// DQ (1/30/2007): Added these back into ROSE.
 SgTypedefSymbol*
 SgSymbolTable::find_typedef(const SgName & nm)
    {
-  // DQ (8/21/2013): Modified to use single supporting templated lower level function.
-  // return find_symbol_support<SgTypedefSymbol>(nm,NULL,NULL);
      bool filterTemplateSymbols = false;
      return find_symbol_with_type_support<SgTypedefSymbol>(nm,NULL,NULL,NULL,filterTemplateSymbols);
    }
 
-// DQ (1/30/2007): Added these back into ROSE.
 SgEnumSymbol*
 SgSymbolTable::find_enum(const SgName & nm)
    {
-  // DQ (8/21/2013): Modified to use single supporting templated lower level function.
-  // return find_symbol_support<SgEnumSymbol>(nm,NULL,NULL);
      bool filterTemplateSymbols = false;
      return find_symbol_with_type_support<SgEnumSymbol>(nm,NULL,NULL,NULL,filterTemplateSymbols);
    }
 
-// DQ (1/30/2007): Added these back into ROSE.
 SgEnumFieldSymbol*
 SgSymbolTable::find_enum_field(const SgName & nm)
    {
-  // DQ (8/21/2013): Modified to use single supporting templated lower level function.
-  // return find_symbol_support<SgEnumFieldSymbol>(nm,NULL,NULL);
      bool filterTemplateSymbols = false;
      return find_symbol_with_type_support<SgEnumFieldSymbol>(nm,NULL,NULL,NULL,filterTemplateSymbols);
    }
@@ -8651,8 +8696,6 @@ SgSymbolTable::findclass(const SgName &nm)
 SgClassSymbol*
 SgSymbolTable::find_class(const SgName & nm)
    {
-  // DQ (8/21/2013): Modified to use single supporting templated lower level function.
-  // SgClassSymbol* s = find_symbol_support<SgClassSymbol>(nm,NULL,NULL);
      bool filterTemplateSymbols = false;
      SgClassSymbol* s = find_symbol_with_type_support<SgClassSymbol>(nm,NULL,NULL,NULL,filterTemplateSymbols);
 
@@ -8686,6 +8729,11 @@ SgSymbolTable::find_alias(const SgName & nm)
 bool
 SgSymbolTable::hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArguments(SgTemplateParameterPtrList* templateParameterList, SgTemplateArgumentPtrList* templateArgumentsList, SgSymbol* symbol)
    {
+#if USING_PERFORMANCE_TRACING
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+     TimingPerformance timer1 ("SgSymbolTable::hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArguments: whole function:");
+#endif
+
   // DQ (8/8/2013): I don't think that we need to handle the case of where there is both a valid SgTemplateParameterPtrList and SgTemplateArgumentPtrList.
      bool returnValue = false;
 
@@ -8695,6 +8743,9 @@ SgSymbolTable::hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArgum
 
      if (templateParameterList != NULL)
         {
+       // DQ (7/14/2025): Adding timers to support Matt's tool.
+       // TimingPerformance timer1 ("SgSymbolTable::hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArguments: valid templateParameterList:");
+
        // Note that this should be a template case if template parameters were specified.
 
        // DQ (8/19/2013): template classes need to use both the template parameter list and the template argument list.
@@ -8714,18 +8765,13 @@ SgSymbolTable::hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArgum
                   {
                     returnValue = hasMatchingTemplateArgumentsOrNoTemplateArguments(templateArgumentsList,symbol);
                   }
-                 else
-                  {
-                 // DQ (5/22/2016): Isn't this an error to not also test the template arguments for non-class templates.
-#if 0
-                    MLOG_WARN_C("ROSETTA", "WARNING: Isn't this an error to not also test the template arguments for non-class templates. \n");
-#endif
-                 // return "returnValue == true" for all other cases.
-                  }
              }
         }
        else
         {
+       // DQ (7/14/2025): Adding timers to support Matt's tool.
+       // TimingPerformance timer1 ("SgSymbolTable::hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArguments: null templateParameterList:");
+
        // This is not a template and is either an instantiation of a template or non-instantiation (normal class, function, etc.).
           returnValue = hasMatchingTemplateArgumentsOrNoTemplateArguments(templateArgumentsList,symbol);
         }
@@ -8740,6 +8786,9 @@ SgSymbolTable::hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArgum
 bool
 SgSymbolTable::hasMatchingTemplateParametersOrNoTemplateParameters(SgTemplateParameterPtrList* templateParameterList, SgSymbol* symbol)
    {
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+  // TimingPerformance timer1 ("SgSymbolTable::hasMatchingTemplateParametersOrNoTemplateParameters: whole function:");
+
   // This is an overloaded function.
 
   // This function hides the details of calling the template version of the function.
@@ -8750,6 +8799,9 @@ SgSymbolTable::hasMatchingTemplateParametersOrNoTemplateParameters(SgTemplatePar
 bool
 SgSymbolTable::hasMatchingTemplateArgumentsOrNoTemplateArguments(SgTemplateArgumentPtrList* templateArgumentsList, SgSymbol* symbol)
    {
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+  // TimingPerformance timer1 ("SgSymbolTable::hasMatchingTemplateArgumentsOrNoTemplateArguments: whole function:");
+
   // This is an overloaded function.
 
   // This is the refactored version of the previous function API.
@@ -8761,6 +8813,9 @@ SgSymbolTable::hasMatchingTemplateArgumentsOrNoTemplateArguments(SgTemplateArgum
 // DQ (8/10/2013): Base template for specializations specific to template arguments and template parameters.
 template <class T> std::vector<T*> getTemplateParametersOrArgumentsList(SgSymbol* symbol)
    {
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+  // TimingPerformance timer1 ("getTemplateParametersOrArgumentsList: whole function:");
+
      return std::vector<T*>();
    }
 
@@ -8773,11 +8828,8 @@ std::vector<SgTemplateArgument*> getTemplateParametersOrArgumentsList<SgTemplate
      std::vector<SgTemplateArgument*> returnList;
 
      ROSE_ASSERT(symbol != NULL);
-#if 0
-     MLOG_INFO_C("ROSETTA", "In getTemplateParametersOrArgumentsList<SgTemplateArgument>(): symbol = %p = %s \n",symbol,symbol->class_name().c_str());
-#endif
-     switch(symbol->variantT())
-        {
+      switch(symbol->variantT())
+         {
           case V_SgClassSymbol:
              {
                SgClassSymbol* classSymbol = isSgClassSymbol(symbol);
@@ -8856,13 +8908,8 @@ std::vector<SgTemplateArgument*> getTemplateParametersOrArgumentsList<SgTemplate
                break;
              }
 
-       // DQ (9/12/2016): Providing better implementation for template typedef symbol support.
-       // DQ (11/10/2014): Providing an initial implementation for template typedef symbol support.
           case V_SgTemplateTypedefSymbol:
              {
-#if 0
-               MLOG_WARN_C("ROSETTA", "WARNING: returning NULL in SgSymbolTable::getTemplateParametersOrArgumentsList<SgTemplateArgument>(): symbol = %p = %s \n",symbol,symbol->class_name().c_str());
-#endif
                SgTemplateTypedefSymbol* templateTypedefSymbol = isSgTemplateTypedefSymbol(symbol);
                ROSE_ASSERT(templateTypedefSymbol != NULL);
 
@@ -8872,22 +8919,10 @@ std::vector<SgTemplateArgument*> getTemplateParametersOrArgumentsList<SgTemplate
 
                if (templateTypedefDeclaration != NULL)
                   {
-                 // returnList = templateTypedefDeclaration->get_templateArguments();
                     returnList = templateTypedefDeclaration->get_templateSpecializationArguments();
                   }
                break;
              }
-
-#if 0
-       // We have to support these sorts of declarations in the name qualifiaction.
-          SgClassDeclaration*              classDeclaration     = isSgClassDeclaration(declaration);
-          SgVariableDeclaration*           variableDeclaration  = isSgVariableDeclaration(declaration);
-          SgFunctionDeclaration*           functionDeclaration  = isSgFunctionDeclaration(declaration);
-          SgTypedefDeclaration*            typedefDeclaration   = isSgTypedefDeclaration(declaration);
-          SgTemplateDeclaration*           templateDeclaration  = isSgTemplateDeclaration(declaration);
-          SgEnumDeclaration*               enumDeclaration      = isSgEnumDeclaration(declaration);
-          SgNamespaceDeclarationStatement* namespaceDeclaration = isSgNamespaceDeclarationStatement(declaration);
-#endif
 
        // DQ (4/10/2017): Added case for other symbols (but we only return the empty list for this case).
           case V_SgLabelSymbol:
@@ -8905,11 +8940,8 @@ std::vector<SgTemplateArgument*> getTemplateParametersOrArgumentsList<SgTemplate
                break;
              }
 
-          case V_SgNonrealSymbol:
+         case V_SgNonrealSymbol:
              {
-#if 0
-               MLOG_INFO_C("ROSETTA", "In SgSymbolTable::getTemplateParametersOrArgumentsList<SgTemplateArgument>(): Case of SgNonrealSymbol\n");
-#endif
                SgNonrealSymbol * nrsym = isSgNonrealSymbol(symbol);
                ROSE_ASSERT(nrsym != NULL);
                SgNonrealDecl * nrdecl = isSgNonrealDecl(nrsym->get_declaration());
@@ -8945,10 +8977,6 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
 
      ROSE_ASSERT(symbol != NULL);
 
-#if 0
-     MLOG_INFO_C("ROSETTA", "In getTemplateParametersOrArgumentsList<SgTemplateParameter>(): symbol = %p = %s \n",symbol,symbol->class_name().c_str());
-#endif
-
      switch(symbol->variantT())
         {
           case V_SgTemplateClassSymbol:
@@ -8976,10 +9004,6 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
                SgTemplateFunctionDeclaration* templateFunctionDeclaration = isSgTemplateFunctionDeclaration(functionDeclaration);
                if (templateFunctionDeclaration != NULL)
                   {
-#if 0
-                    MLOG_INFO_C("ROSETTA", "In getTemplateParametersOrArgumentsList<SgTemplateParameter>(): Get the template parameter lise from templateFunctionDeclaration = %p = %s name = %s \n",
-                         templateFunctionDeclaration,templateFunctionDeclaration->class_name().c_str(),templateFunctionDeclaration->get_name().str());
-#endif
                     returnList = templateFunctionDeclaration->get_templateParameters();
                   }
                  else
@@ -9001,10 +9025,6 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
                SgTemplateMemberFunctionDeclaration* templateMemberFunctionDeclaration = isSgTemplateMemberFunctionDeclaration(memberFunctionDeclaration);
                if (templateMemberFunctionDeclaration != NULL)
                   {
-#if 0
-                    MLOG_INFO_C("ROSETTA", "In getTemplateParametersOrArgumentsList<SgTemplateParameter>(): Get the template parameter lise from templateFunctionDeclaration = %p = %s name = %s \n",
-                         templateMemberFunctionDeclaration,templateMemberFunctionDeclaration->class_name().c_str(),templateMemberFunctionDeclaration->get_name().str());
-#endif
                     returnList = templateMemberFunctionDeclaration->get_templateParameters();
                   }
                  else
@@ -9038,16 +9058,6 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
                MLOG_INFO_C("ROSETTA", "WARNING: returning NULL in SgSymbolTable::getTemplateParametersOrArgumentsList<SgTemplateParameter>(): symbol = %p = %s \n",symbol,symbol->class_name().c_str());
                break;
              }
-#if 0
-       // We have to support these sorts of declarations in the name qualifiaction.
-          SgClassDeclaration*              classDeclaration     = isSgClassDeclaration(declaration);
-          SgVariableDeclaration*           variableDeclaration  = isSgVariableDeclaration(declaration);
-          SgFunctionDeclaration*           functionDeclaration  = isSgFunctionDeclaration(declaration);
-          SgTypedefDeclaration*            typedefDeclaration   = isSgTypedefDeclaration(declaration);
-          SgTemplateDeclaration*           templateDeclaration  = isSgTemplateDeclaration(declaration);
-          SgEnumDeclaration*               enumDeclaration      = isSgEnumDeclaration(declaration);
-          SgNamespaceDeclarationStatement* namespaceDeclaration = isSgNamespaceDeclarationStatement(declaration);
-#endif
        // DQ (8/19/2013): Added case for other symbols (but we only return the empty list for this case).
           case V_SgClassSymbol:
           case V_SgVariableSymbol:
@@ -9099,6 +9109,11 @@ template <class T>
 bool
 SgSymbolTable::hasMatchingTemplateParametersOrArgumentsOrNoTemplateParametersOrArguments(std::vector<T*>* templateParametersOrArgumentsList, SgSymbol* symbol)
    {
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+#if USING_PERFORMANCE_TRACING
+     TimingPerformance timer1 ("SgSymbolTable::hasMatchingTemplateParametersOrArgumentsOrNoTemplateParametersOrArguments: whole function:");
+#endif
+
   // DQ (8/8/2013): I needed to change the API to be more generic to support template for functions (and not just classes).
 
   // DQ (1/30/2013): Note that this function only supports the evaluation of template arguments for classes (and structs, and unions),
@@ -9835,8 +9850,14 @@ symbolFilter(ReturnSymbolType* symbol, SgTemplateParameterPtrList* templateParam
   // DQ (8/13/2013): This function filters types of IR nodes that could not be considered given the rules
   // for what IR nodes apply when template parameters lists and template argument lists are provided.
 
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+  // TimingPerformance timer1 ("symbolFilter: whole function:");
+
      if (symbol != NULL)
         {
+       // DQ (7/14/2025): Adding timers to support Matt's tool.
+       // TimingPerformance timer1 ("symbolFilter: valid symbol:");
+
           VariantT symbolVariant = symbol->variantT();
 
 #if DEBUG_SYMBOL_FILTER
@@ -9973,7 +9994,7 @@ symbolFilter(ReturnSymbolType* symbol, SgTemplateParameterPtrList* templateParam
    }
 
 bool
-isSubset(const std::vector<SgNode*>& a_vector, const std::set<SgNode*>& b_set)
+isSubset(const std::vector<SgNode*>& a_vector, const SgUnorderedNodeSet& b_set)
    {
   // DQ (7/12/2014): I am not aware of a faster algorithm for this. Using the shorter
   // vector (from the SgAliasSymbol) first will generally reduce the complexity for
@@ -9981,46 +10002,12 @@ isSubset(const std::vector<SgNode*>& a_vector, const std::set<SgNode*>& b_set)
   // causal nodes for any SgAliasSymbol (typically one) and Nb would be the number
   // of causal SgNode objects (e.g. SgUsingDirectiveStatement, SgUsingDeclarationStatement,
   // SgBaseClass, etc.).
-
-#define DEBUG_IS_SUBSET 0
-
-#if DEBUG_IS_SUBSET
-     MLOG_INFO_C("ROSETTA", "In isSubset(): a_vector.size() = %zu b_set.size() = %zu \n",a_vector.size(),b_set.size());
-#endif
-
-     for (std::vector<SgNode*>::const_iterator i = a_vector.begin(); i != a_vector.end(); i++)
-        {
-          bool found = false;
-#if 0
-          for (std::set<SgNode*>::const_iterator j = b_set.begin(); j != b_set.end(); j++)
-             {
-               if (*i == *j)
-                  {
-                    found = true;
-                    break;
-                  }
-             }
-#else
-          std::set<SgNode*>::const_iterator j = find(b_set.begin(),b_set.end(),*i);
-          found = (j != b_set.end());
-#endif
-#if DEBUG_IS_SUBSET
-          MLOG_INFO_C("ROSETTA", "In isSubset(): loop: found = %s *i = %p = %s \n",found ? "true" : "false",*i,(*i)->class_name().c_str());
-#endif
-          if (!found)
-             {
-#if DEBUG_IS_SUBSET
-               MLOG_INFO_C("ROSETTA", "Leaving isSubset(): returning false \n");
-#endif
-               return false;
-             }
-        }
-
-#if DEBUG_IS_SUBSET
-     MLOG_INFO_C("ROSETTA", "Leaving isSubset(): returning true \n");
-#endif
-
-     return true;
+     return std::all_of( a_vector.begin(), a_vector.end(),
+                         [&b_set](SgNode* ptr) -> bool
+                         {
+                           return b_set.count(ptr) != 0;
+                         }
+                       );
    }
 
 
@@ -10061,6 +10048,11 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
 
   // DQ (5/20/2013): Newer implementation of the symbol table handling to account for the template type, SgRenameSymbol, and SgAliasSymbols (in that order).
 
+#if USING_PERFORMANCE_TRACING
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+     TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: whole function:");
+#endif
+
      ROSE_ASSERT(p_table != NULL);
 
 #if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
@@ -10076,6 +10068,12 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
      std::pair<hash_iterator, hash_iterator> save_original_range = range;
 
   // First look through only the local (non-aliased) symbols.
+
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+     {
+#if USING_PERFORMANCE_TRACING
+     TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: loop over multimap range:");
+#endif
 
      for (hash_iterator i = range.first; i != range.second; ++i)
         {
@@ -10163,6 +10161,9 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
        // if ( (symbol != NULL) && (symbol->get_declaration()->get_type() == type) )
           if ( (symbol != NULL) && ( (type == NULL) || ( (type != NULL) && (getTypeOfDeclaration(symbol) == type) ) ) )
              {
+            // DQ (7/14/2025): Adding timers to support Matt's tool.
+            // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over multimap range: symbol found and type handling");
+
                p_name    = nm;
                p_no_name = false;
 #if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
@@ -10202,6 +10203,9 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
              }
             else
              {
+            // DQ (7/14/2025): Adding timers to support Matt's tool.
+            // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over multimap range: symbol not found or type not handled");
+
             // DQ (10/11/2008): Added support to find renamed functions (common in Fortran 90)
             // F90 permits interface statements to effectively rename functions is scope,
             // SgRenameSymbol IR nodes are used to represent the renamed functions.  This
@@ -10231,6 +10235,9 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
        // p_iterator++;
         }
 
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+     }
+
   // DQ (9/30/2008): If we have not found a symbol from the current scope, search for symbols
   // injected from other scopes using the Fortran "use" statment (or in a future implementation
   // the C++ "using" directive or "using" declaration).
@@ -10241,6 +10248,12 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
   // Reset the range so we can look for SgAliasSymbols.
      range = save_original_range;
 
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+     {
+#if USING_PERFORMANCE_TRACING
+     TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols:");
+#endif
+
   // Iterate through the list that match the name to find the one that is a SgTemplateSymbol and has a matching SgType pointer.
      for (hash_iterator i = range.first; i != range.second; ++i)
         {
@@ -10250,6 +10263,9 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
           SgAliasSymbol* aliasedSymbol = isSgAliasSymbol(p_iterator->second);
           if (aliasedSymbol != NULL)
              {
+            // DQ (7/14/2025): Adding timers to support Matt's tool.
+            // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols: found alias symbol:");
+
             // DQ (10/9/2008): Resolve the last link in any chain of alias symbols
                ReturnType* original_aliased_symbol = dynamic_cast<ReturnType*>(aliasedSymbol->get_base());
 
@@ -10268,25 +10284,32 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
 
             // Liao 9/15/2016
             // Allow template function type match. They may have arguments of template types
-            SgFunctionType* f1 = NULL;
-            if (original_aliased_symbol != NULL && isSgFunctionSymbol(original_aliased_symbol))
-              f1= isSgFunctionType(isSgFunctionSymbol(original_aliased_symbol)->get_declaration()->get_type());
-            SgFunctionType* f2 = NULL;
-            if (type != NULL)
-              f2 = isSgFunctionType (const_cast <SgType*> (type));
+               SgFunctionType* f1 = NULL;
+               if (original_aliased_symbol != NULL && isSgFunctionSymbol(original_aliased_symbol))
+                  {
+                    f1= isSgFunctionType(isSgFunctionSymbol(original_aliased_symbol)->get_declaration()->get_type());
+                  }
+               SgFunctionType* f2 = NULL;
+               if (type != NULL)
+                  {
+                   f2 = isSgFunctionType (const_cast <SgType*> (type));
+                  }
 
 #if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
-            MLOG_INFO_C("ROSETTA", "In loop over target ALIASED symbols associated with nm = %s compare types = %p and %p \n",nm.str(),f1, f2);
+               MLOG_INFO_C("ROSETTA", "In loop over target ALIASED symbols associated with nm = %s compare types = %p and %p \n",nm.str(),f1, f2);
 #endif
 
-            bool equavilentFunctionType= ( (f1!= NULL && f2!= NULL) && (SageInterface::isEquivalentFunctionType(f1, f2)) );
+               bool equavilentFunctionType = ( (f1!= NULL && f2!= NULL) && (SageInterface::isEquivalentFunctionType(f1, f2)) );
 
 #if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
-            MLOG_INFO_C("ROSETTA", "  -- equavilentFunctionType = %s\n", equavilentFunctionType ? "true" : "false");
+               MLOG_INFO_C("ROSETTA", "  -- equavilentFunctionType = %s\n", equavilentFunctionType ? "true" : "false");
 #endif
 
                if ( (original_aliased_symbol != NULL) && ( (type == NULL) || ((type != NULL) && (getTypeOfDeclaration(original_aliased_symbol) == type || equavilentFunctionType)) ) )
                   {
+                 // DQ (7/14/2025): Adding timers to support Matt's tool.
+                 // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols: found alias symbol: not found original_aliased_symbol:");
+
                     p_name    = nm;
                     p_no_name = false;
 
@@ -10296,6 +10319,9 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
                  // being constructed).
                     if (hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArguments(templateParameterList,templateArgumentList,original_aliased_symbol) == true)
                        {
+                      // DQ (7/14/2025): Adding timers to support Matt's tool.
+                      // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols: found alias symbol: not found original_aliased_symbol: hasMatchingTemplateParametersArgumentsOrNoTemplateParametersArguments is true:");
+
 #if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
                          MLOG_INFO_C("ROSETTA", "In SgSymbolTable::find_symbol_with_type_support(): Found a match: return original_aliased_symbol = %p = %s nm = %s \n",original_aliased_symbol,original_aliased_symbol->class_name().c_str(),nm.str());
 #endif
@@ -10310,48 +10336,61 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
                       // of possible causal nodes for alias symbols to be inserted is held in a static member of the
                       // SgSymbolTable (new modification to SgSymbolTable).
 
-                         bool foundCausalNode = isSubset(aliasedSymbol->get_causal_nodes(),get_aliasSymbolCausalNodeSet());
-                         if (foundCausalNode == true)
+                         if (get_name_qualification_mode() == true)
                             {
-                           // DQ (1/23/2019): I think that this support is specific to the references to a symbol before
-                           // a using directive that would make is visible vs after the using directive.  Unfortunately it
-                           // is not sufficent to support when a class is derivied from another class and private derivation
-                           // would cause alis symbols to be seen or not seen in the subsequent coass derivations (see
-                           // Cxx_tests/test2019_21.C).
-                           // NOTE: the set defined by get_aliasSymbolCausalNodeSet() is only maintained in the name qualification
-                           // support and so it is useless within the
-                           // FixupAstSymbolTablesToSupportAliasedSymbols::injectSymbolsFromReferencedScopeIntoCurrentScope()
-                           // function.  So to fix this we have added to code in this function to insert the causal nodes into
-                           // the required set.  It might be that this set should be cleared before starting the namequalification
-                           // phase.
+                           // DQ (7/19/2025): This is now only executed as part of special support for the name qualifiacation.
+                           // In general is is too expensive to be use everywhere, and has a dramatic imact on the support
+                           // for SgAliasSymbols within the AST_PostProcessing() (specifically the support for using directives
+                           // such as "using namespace std;", which can take 80% of the compilation time).
+
+                              bool foundCausalNode = isSubset(aliasedSymbol->get_causal_nodes(),get_aliasSymbolCausalNodeSet());
+                              if (foundCausalNode == true)
+                                 {
+                                // DQ (1/23/2019): I think that this support is specific to the references to a symbol before
+                                // a using directive that would make is visible vs after the using directive.  Unfortunately it
+                                // is not sufficent to support when a class is derivied from another class and private derivation
+                                // would cause alis symbols to be seen or not seen in the subsequent coass derivations (see
+                                // Cxx_tests/test2019_21.C).
+                                // NOTE: the set defined by get_aliasSymbolCausalNodeSet() is only maintained in the name qualification
+                                // support and so it is useless within the
+                                // FixupAstSymbolTablesToSupportAliasedSymbols::injectSymbolsFromReferencedScopeIntoCurrentScope()
+                                // function.  So to fix this we have added to code in this function to insert the causal nodes into
+                                // the required set.  It might be that this set should be cleared before starting the namequalification
+                                // phase.
 
 #if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
-                              MLOG_INFO_C("ROSETTA", "Found causal node for SgAliasSymbol: aliasedSymbol = %p = %s original_aliased_symbol = %p = %s \n",
-                                   aliasedSymbol,aliasedSymbol->class_name().c_str(),original_aliased_symbol,original_aliased_symbol->class_name().c_str());
-                              ROSE_ASSERT(aliasedSymbol->get_alias() != NULL);
-                              MLOG_INFO_C("ROSETTA", " --- aliasedSymbol = %p aliasedSymbol->get_alias() = %p = %s \n",aliasedSymbol,aliasedSymbol->get_alias(),aliasedSymbol->get_alias()->class_name().c_str());
-                              MLOG_INFO_C("ROSETTA", " --- aliasedSymbol->get_causal_nodes().size() = %" PRIuPTR " \n",aliasedSymbol->get_causal_nodes().size());
-                              MLOG_INFO_C("ROSETTA", " --- get_aliasSymbolCausalNodeSet().size()    = %" PRIuPTR " \n",get_aliasSymbolCausalNodeSet().size());
+                                   MLOG_INFO_C("ROSETTA", "Found causal node for SgAliasSymbol: aliasedSymbol = %p = %s original_aliased_symbol = %p = %s \n",
+                                        aliasedSymbol,aliasedSymbol->class_name().c_str(),original_aliased_symbol,original_aliased_symbol->class_name().c_str());
+                                   ROSE_ASSERT(aliasedSymbol->get_alias() != NULL);
+                                   MLOG_INFO_C("ROSETTA", " --- aliasedSymbol = %p aliasedSymbol->get_alias() = %p = %s \n",aliasedSymbol,aliasedSymbol->get_alias(),aliasedSymbol->get_alias()->class_name().c_str());
+                                   MLOG_INFO_C("ROSETTA", " --- aliasedSymbol->get_causal_nodes().size() = %" PRIuPTR " \n",aliasedSymbol->get_causal_nodes().size());
+                                   MLOG_INFO_C("ROSETTA", " --- get_aliasSymbolCausalNodeSet().size()    = %" PRIuPTR " \n",get_aliasSymbolCausalNodeSet().size());
 #endif
-                              return original_aliased_symbol;
+                                   return original_aliased_symbol;
+                                 }
+                                else
+                                 {
+                                // DQ (7/12/2014): If we didn't find the causal node then we can't consider the alias to exist
+                                // yet in the traversal of the AST represented by the symbol table query at this point.
+                                   original_aliased_symbol = NULL;
+
+#if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
+                                   MLOG_INFO_C("ROSETTA", "associated causal nodes not seen yet in traversal of AST: \n");
+                                   ROSE_ASSERT(aliasedSymbol->get_alias() != NULL);
+                                   MLOG_INFO_C("ROSETTA", " --- aliasedSymbol = %p aliasedSymbol->get_alias() = %p = %s \n",aliasedSymbol,aliasedSymbol->get_alias(),aliasedSymbol->get_alias()->class_name().c_str());
+                                   MLOG_INFO_C("ROSETTA", " --- aliasedSymbol->get_causal_nodes().size() = %zu \n",aliasedSymbol->get_causal_nodes().size());
+                                   MLOG_INFO_C("ROSETTA", " --- get_aliasSymbolCausalNodeSet().size()    = %zu \n",get_aliasSymbolCausalNodeSet().size());
+                                   for (std::vector<SgNode*>::iterator i = aliasedSymbol->get_causal_nodes().begin(); i != aliasedSymbol->get_causal_nodes().end(); i++)
+                                      {
+                                        MLOG_INFO_C("ROSETTA", "   --- causal node = %p = %s \n",*i,(*i)->class_name().c_str());
+                                      }
+#endif
+                                 }
                             }
                            else
                             {
-                           // DQ (7/12/2014): If we didn't find the causal node then we can't consider the alias to exist
-                           // yet in the traversal of the AST represented by the symbol table query at this point.
-                              original_aliased_symbol = NULL;
-
-#if DEBUG_FIND_SYMBOL_WITH_TEMPLATE_ARGUMENTS
-                              MLOG_INFO_C("ROSETTA", "associated causal nodes not seen yet in traversal of AST: \n");
-                              ROSE_ASSERT(aliasedSymbol->get_alias() != NULL);
-                              MLOG_INFO_C("ROSETTA", " --- aliasedSymbol = %p aliasedSymbol->get_alias() = %p = %s \n",aliasedSymbol,aliasedSymbol->get_alias(),aliasedSymbol->get_alias()->class_name().c_str());
-                              MLOG_INFO_C("ROSETTA", " --- aliasedSymbol->get_causal_nodes().size() = %zu \n",aliasedSymbol->get_causal_nodes().size());
-                              MLOG_INFO_C("ROSETTA", " --- get_aliasSymbolCausalNodeSet().size()    = %zu \n",get_aliasSymbolCausalNodeSet().size());
-                              for (std::vector<SgNode*>::iterator i = aliasedSymbol->get_causal_nodes().begin(); i != aliasedSymbol->get_causal_nodes().end(); i++)
-                                 {
-                                   MLOG_INFO_C("ROSETTA", "   --- causal node = %p = %s \n",*i,(*i)->class_name().c_str());
-                                 }
-#endif
+                           // DQ (7/19/2025): This is the mode outside of the name qualification support.
+                              return original_aliased_symbol;
                             }
                        }
                       else
@@ -10366,9 +10405,15 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
              }
         }
 
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+     }
+
 #if 1
      if (this->get_force_search_of_base_classes() == true)
         {
+       // DQ (7/14/2025): Adding timers to support Matt's tool.
+       // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols: found alias symbol: force_search_of_base_classes:");
+
        // DQ (3/28/2014): If we reach this point, we have to search base class definitions because
        // symbols are not injected into the derived class symbol table.
           SgNode* parentNode = this->get_parent();
@@ -10376,6 +10421,10 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
           SgClassDefinition* classDefinition = isSgClassDefinition(parentNode);
           if (classDefinition != NULL)
              {
+#if USING_PERFORMANCE_TRACING
+            // DQ (7/14/2025): Adding timers to support Matt's tool.
+               TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols: found alias symbol: force_search_of_base_classes: classDefinition:");
+#endif
 #if 0
                MLOG_INFO_C("ROSETTA", "Found SgClassDefinition as parent of SgSymbolTable \n");
 #endif
@@ -10384,6 +10433,9 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
                SgBaseClassPtrList::iterator i = base_classes.begin();
                while (i != base_classes.end())
                   {
+                 // DQ (7/14/2025): Adding timers to support Matt's tool.
+                 // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols: found alias symbol: force_search_of_base_classes: classDefinition: in loop over base blass list:");
+
                     SgBaseClass* baseClass = *i;
                     ROSE_ASSERT(baseClass != NULL);
                     SgClassDeclaration* baseClassDeclaration = baseClass->get_base_class();
@@ -10396,6 +10448,9 @@ ReturnType* SgSymbolTable::find_symbol_with_type_support (const SgName & nm, con
                  // DQ: Note that we have to implement conditional lookup based on base class permissions, plus the access permissions of base class members.
                     if (baseClassDeclaration_defining != NULL)
                        {
+                      // DQ (7/14/2025): Adding timers to support Matt's tool.
+                      // TimingPerformance timer1 ("SgSymbolTable::find_symbol_with_type_support: in loop over alias symbols: found alias symbol: force_search_of_base_classes: classDefinition: in loop over base blass list: baseClassDeclaration_defining:");
+
                          SgClassDefinition* baseClassDefinition = baseClassDeclaration_defining->get_definition();
                          ROSE_ASSERT(baseClassDefinition != NULL);
 
@@ -11279,7 +11334,7 @@ SgSymbolTable::maxCollisions()
 bool SgSymbolTable::p_force_search_of_base_classes = false;
 
 // DQ (7/12/2014): Declaration of space for static data member.
-SgNodeSet SgSymbolTable::p_aliasSymbolCausalNodeSet;
+SgUnorderedNodeSet SgSymbolTable::p_aliasSymbolCausalNodeSet;
 
 bool
 SgSymbolTable::get_force_search_of_base_classes()
@@ -11293,11 +11348,39 @@ SgSymbolTable::set_force_search_of_base_classes( bool value )
      p_force_search_of_base_classes = value;
    }
 
+// DQ (7/19/2025): Declaration of space for static data member.
+bool SgSymbolTable::p_name_qualification_mode = false;
+
+bool
+SgSymbolTable::get_name_qualification_mode()
+   {
+     return p_name_qualification_mode;
+   }
+
+void
+SgSymbolTable::set_name_qualification_mode( bool value )
+   {
+     p_name_qualification_mode = value;
+   }
+
 // DQ (7/12/2014): Access function for static data member.
-SgNodeSet &
+const SgUnorderedNodeSet&
 SgSymbolTable::get_aliasSymbolCausalNodeSet()
    {
      return p_aliasSymbolCausalNodeSet;
+   }
+
+void
+SgSymbolTable::clear_aliasSymbolCausalNodeSet()
+   {
+     p_aliasSymbolCausalNodeSet.clear();
+   }
+
+void
+SgSymbolTable::insert_aliasSymbolCausalNodeSet(SgNode* node)
+   {
+     ASSERT_not_null(node);
+     p_aliasSymbolCausalNodeSet.insert(node);
    }
 
 
@@ -11305,7 +11388,7 @@ SgSymbolTable::get_aliasSymbolCausalNodeSet()
 void
 SgSymbolTable::display_aliasSymbolCausalNodeSet()
    {
-     SgNodeSet::iterator i = p_aliasSymbolCausalNodeSet.begin();
+     auto i = p_aliasSymbolCausalNodeSet.begin();
      while (i != p_aliasSymbolCausalNodeSet.end())
         {
           printf ("SgSymbolTable::p_aliasSymbolCausalNodeSet: *i = %p = %s \n",*i,(*i)->class_name().c_str());
@@ -11453,7 +11536,7 @@ SgBaseClass::get_qualified_name_prefix() const
   // different and so it depends upon where the type is referenced.  Thus the qualified name is
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgBaseClass*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgBaseClass*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
      if (i != SgNode::get_globalQualifiedNameMapForNames().end())
@@ -11692,7 +11775,7 @@ SgInitializedName::get_qualified_name_prefix() const
   // DQ (12/16/2013): Added support for name qualification on SgInitializedName for use in preinitialization lists.
 
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgInitializedName*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgInitializedName*>(this));
 
      if (i != SgNode::get_globalQualifiedNameMapForNames().end())
         {
@@ -11719,7 +11802,7 @@ SgInitializedName::get_qualified_name_prefix_for_type() const
   // different and so it depends upon where the type is referenced.  Thus the qualified name is
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgInitializedName*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgInitializedName*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
      if (i != SgNode::get_globalQualifiedNameMapForTypes().end())
@@ -12012,7 +12095,8 @@ SgInitializedName::SgInitializedName (const SgInitializedName& ptr)
 SgInitializedName&
 SgInitializedName::operator= (const SgInitializedName& ptr)
    {
-     assert(this != NULL);
+     ASSERT_this();
+     ASSERT_this();
 
   /* check they are not the same name */
      if (this != &ptr)
@@ -12259,7 +12343,7 @@ SgInitializedName::set_name(SgName new_name)
 SgType*
 SgInitializedName::get_type() const
    {
-     assert(this != NULL);
+     ASSERT_this();
      return p_typeptr;
    }
 
@@ -12280,7 +12364,7 @@ SgInitializedName::get_initializer() const
   // DQ (12/17/2006): These should be able to be generated by ROSETTA!
   // The semantics of p_is_initializer appears to not be required.
 
-     assert(this != NULL);
+     ASSERT_this();
      if (p_is_initializer)
           return p_initptr;
        else
@@ -12293,7 +12377,7 @@ SgInitializedName::set_initializer(SgInitializer* i)
   // DQ (12/17/2006): These should be able to be generated by ROSETTA!
   // The semantics of p_is_initializer appears to not be required.
 
-     assert(this != NULL);
+     ASSERT_this();
 
   // DQ (4/14/2015): Added call to set_isModified() function to record change to this IR node.
      set_isModified(true);
@@ -12733,7 +12817,7 @@ SgName::SgName()
 unsigned int
 SgName::get_length() const
    {
-     assert(this != NULL);
+     ASSERT_this();
      return p_char.size();
    }
 
@@ -12778,14 +12862,14 @@ SgName::SgName(const SgName& n): p_char(n.p_char)
 int
 SgName::operator!=(const SgName& n1) const
    {
-     assert(this != NULL);
+     ASSERT_this();
      return p_char != n1.p_char;
    }
 
 int
 SgName::operator==(const SgName& n1) const
    {
-     assert(this != NULL);
+     ASSERT_this();
 
      return p_char == n1.p_char;
    }
@@ -13604,7 +13688,7 @@ Sg_File_Info::Sg_File_Info()
      p_fileIDsToUnparse(),
      p_fileLineNumbersToUnparse()
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      post_construction_initialization();
    }
 
@@ -13663,7 +13747,7 @@ Sg_File_Info::Sg_File_Info( int file_id, int line, int column )
 void
 Sg_File_Info::post_construction_initialization()
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
   // JJW 10-26-2007 ensure that this object is not on the stack
      preventConstructionOnStack(this);
 
@@ -13877,7 +13961,7 @@ int
 Sg_File_Info::get_physical_file_id(int input_file_id) const
    {
   // DQ (12/18/2012): Added support for physical file position information.
-     assert (this != NULL);
+     ASSERT_this();
 
   // Initialize to error value.
      int return_physical_file_id = NULL_FILE_ID;
@@ -14628,7 +14712,7 @@ Sg_File_Info::getCurrentFilename () const
 bool
 Sg_File_Info::hasPositionInSource() const
    {
-     assert(this != NULL);
+     ASSERT_this();
   // DQ (1/11/2006): Modified to not use the output function which mixed
   // concepts of compiler generated with output (deprecated function).
   // bool result = ( ! ( isTransformation() || isCompilerGenerated() || isCompilerGeneratedNodeToBeUnparsed() ) );
@@ -14652,7 +14736,7 @@ Sg_File_Info::isSameFile(SgFile* file) const
   // testing if two file info objects represent the same file (an integer equality test instead of string comparision).
   // File names are particularly long (since they include full path), so this will allow us to save a lot of space.
 
-     assert(this != NULL);
+     ASSERT_this();
 
      assert(file != NULL);
 
@@ -15425,7 +15509,7 @@ SgFile::getFileName () const
    {
   // Get the filename from the Sage III file object
 
-     assert(this != NULL);
+     ASSERT_this();
 
   // assert(get_fileInfo() != NULL);
 #if 0
@@ -15808,14 +15892,17 @@ std::string SgFile::display_standard(enum standard_enum e_std)
           case e_c90_standard: s = "e_c90_standard"; break;
           case e_c99_standard: s = "e_c99_standard"; break;
           case e_c11_standard: s = "e_c11_standard"; break;
-          case e_c14_standard: s = "e_c14_standard"; break;
-          case e_c18_standard: s = "e_c18_standard"; break;
+          case e_c17_standard: s = "e_c17_standard"; break;
+          case e_c23_standard: s = "e_c23_standard"; break;
+          case e_c2y_standard: s = "e_c2y_standard"; break;
           case e_cxx98_standard: s = "e_cxx98_standard"; break;
           case e_cxx03_standard: s = "e_cxx03_standard"; break;
           case e_cxx11_standard: s = "e_cxx11_standard"; break;
           case e_cxx14_standard: s = "e_cxx14_standard"; break;
           case e_cxx17_standard: s = "e_cxx17_standard"; break;
           case e_cxx20_standard: s = "e_cxx20_standard"; break;
+          case e_cxx23_standard: s = "e_cxx23_standard"; break;
+          case e_cxx26_standard: s = "e_cxx26_standard"; break;
           case e_f77_standard: s = "e_f77_standard"; break;
           case e_f90_standard: s = "e_f90_standard"; break;
           case e_f95_standard: s = "e_f95_standard"; break;
@@ -15861,17 +15948,23 @@ void SgFile::set_C11_only (void) { set_C_only(true); set_Cxx_only(false); p_stan
 bool SgFile::get_C11_gnu_only (void) const { return p_standard == e_c11_standard && p_gnu_standard; }
 void SgFile::set_C11_gnu_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c11_standard; p_gnu_standard = true; }
 
-bool SgFile::get_C14_only (void) const { return p_standard == e_c14_standard; }
-void SgFile::set_C14_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c14_standard; }
+bool SgFile::get_C17_only (void) const { return p_standard == e_c17_standard; }
+void SgFile::set_C17_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c17_standard; }
 
-bool SgFile::get_C14_gnu_only (void) const { return p_standard == e_c14_standard && p_gnu_standard; }
-void SgFile::set_C14_gnu_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c14_standard; p_gnu_standard = true; }
+bool SgFile::get_C17_gnu_only (void) const { return p_standard == e_c17_standard && p_gnu_standard; }
+void SgFile::set_C17_gnu_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c17_standard; p_gnu_standard = true; }
 
-bool SgFile::get_C18_only (void) const { return p_standard == e_c18_standard; }
-void SgFile::set_C18_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c18_standard; }
+bool SgFile::get_C23_only (void) const { return p_standard == e_c23_standard; }
+void SgFile::set_C23_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c23_standard; }
 
-bool SgFile::get_C18_gnu_only (void) const { return p_standard == e_c18_standard && p_gnu_standard; }
-void SgFile::set_C18_gnu_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c18_standard; p_gnu_standard = true; }
+bool SgFile::get_C23_gnu_only (void) const { return p_standard == e_c23_standard && p_gnu_standard; }
+void SgFile::set_C23_gnu_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c23_standard; p_gnu_standard = true; }
+
+bool SgFile::get_C2y_only (void) const { return p_standard == e_c2y_standard; }
+void SgFile::set_C2y_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c2y_standard; }
+
+bool SgFile::get_C2y_gnu_only (void) const { return p_standard == e_c2y_standard && p_gnu_standard; }
+void SgFile::set_C2y_gnu_only (void) { set_C_only(true); set_Cxx_only(false); p_standard = e_c2y_standard; p_gnu_standard = true; }
 
 bool SgFile::get_Cxx98_only (void) const { return p_standard == e_cxx98_standard; }
 void SgFile::set_Cxx98_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx98_standard; }
@@ -15908,6 +16001,18 @@ void SgFile::set_Cxx20_only (void) { set_C_only(false); set_Cxx_only(true); p_st
 
 bool SgFile::get_Cxx20_gnu_only (void) const { return p_standard == e_cxx20_standard && p_gnu_standard; }
 void SgFile::set_Cxx20_gnu_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx20_standard; p_gnu_standard = true; }
+
+bool SgFile::get_Cxx23_only (void) const { return p_standard == e_cxx23_standard; }
+void SgFile::set_Cxx23_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx23_standard; }
+
+bool SgFile::get_Cxx23_gnu_only (void) const { return p_standard == e_cxx23_standard && p_gnu_standard; }
+void SgFile::set_Cxx23_gnu_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx23_standard; p_gnu_standard = true; }
+
+bool SgFile::get_Cxx26_only (void) const { return p_standard == e_cxx26_standard; }
+void SgFile::set_Cxx26_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx26_standard; }
+
+bool SgFile::get_Cxx26_gnu_only (void) const { return p_standard == e_cxx26_standard && p_gnu_standard; }
+void SgFile::set_Cxx26_gnu_only (void) { set_C_only(false); set_Cxx_only(true); p_standard = e_cxx26_standard; p_gnu_standard = true; }
 
 bool SgFile::get_F77_only     (void) const { return p_standard == e_f77_standard; }
 void SgFile::set_F77_only     (void) { set_Fortran_only(true); p_standard = e_f77_standard; }
@@ -15952,7 +16057,7 @@ SgFile::compileOutput ( int fileNameIndex )
 
         }
 
-  // Pei-Hung: 12/20/2021, strip out options for frontend parsing.  Needed by ada2cpp
+  // Pei-Hung: 12/20/2021, strip out options for frontend parsing. Needed by frontend conversion tools.
      if (get_Cxx_only())
         {
           stripTranslationCommandLineOptions( argv );
@@ -16992,7 +17097,7 @@ SgSourceFile::get_token_unparse_frontier()
   // multiple files (or header files in addition to the source file).
   // return Rose::frontierNodes;
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      ROSE_ASSERT(this->get_startOfConstruct() != NULL);
 
      int index = this->get_startOfConstruct()->get_file_id();
@@ -17077,7 +17182,7 @@ SgSourceFile::get_token_unparse_frontier_adjacency()
   // DQ (10/28/2013): Not sure I want this to be copy by value, but OK for now.
   // return Rose::previousAndNextNodeMap;
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      ROSE_ASSERT(this->get_startOfConstruct() != NULL);
 
      int index = this->get_startOfConstruct()->get_file_id();
@@ -17171,7 +17276,7 @@ SgSourceFile::get_redundantlyMappedTokensToStatementMultimap()
    {
   // return Rose::redundantlyMappedTokensToStatementMultimap;
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      ROSE_ASSERT(this->get_startOfConstruct() != NULL);
 
      int index = this->get_startOfConstruct()->get_file_id();
@@ -17256,7 +17361,7 @@ SgSourceFile::get_redundantTokenEndingsSet()
    {
   // return Rose::redundantTokenEndingsSet;
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      ROSE_ASSERT(this->get_startOfConstruct() != NULL);
 
      int index = this->get_startOfConstruct()->get_file_id();
@@ -17362,7 +17467,7 @@ SgSourceFile::get_representativeWhitespaceStatementMap()
   // DQ (11/20/2015): Not sure I want this to be copy by value, but OK for now.
   // return Rose::representativeWhitespaceStatementMap;
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      ROSE_ASSERT(this->get_startOfConstruct() != NULL);
 
      int index = this->get_startOfConstruct()->get_file_id();
@@ -17447,7 +17552,7 @@ SgSourceFile::get_macroExpansionMap()
   // DQ (11/30/2015): Not sure I want this to be copy by value, but OK for now.
   // return Rose::macroExpansionMap;
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      ROSE_ASSERT(this->get_startOfConstruct() != NULL);
 
      int index = this->get_startOfConstruct()->get_file_id();
@@ -17511,7 +17616,7 @@ SgHeaderFileReport::display( const string & label) const
   // DQ (6/25/2020): If we call display, then we mean for it to be displayed, not hidden.
      printf ("\nIn HeaderFileReport::display(): label = %s \n",label.c_str());
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
 #if 1
      printf ("In HeaderFileReport::display(): p_source_file = %p \n",p_source_file);
@@ -17672,6 +17777,9 @@ int SgProject::p_verbose = 0;
 // DQ (4/4/2020): Adding support for unparse headers feature specific diagnostics.
 int SgProject::p_unparseHeaderFilesDebug = 0;
 
+//! global to output the command line that goes to the backend compiler. Default is false.
+bool SgProject::p_showBackendCommandLine = false;
+
 //! this can constructor can be used but parse(int argc, char** argv) needs to be called
 SgProject::SgProject()
    {
@@ -17707,7 +17815,7 @@ SgProject::SgProject( const SgProject & project )
 SgProject::SgProject ( int argc, char** argv, bool frontendConstantFolding)
    {
   // DQ (11/4/2015): Added assertion.
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
      initialization();
 
@@ -17727,7 +17835,7 @@ SgProject::SgProject ( int argc, char** argv, bool frontendConstantFolding)
 SgProject::SgProject ( const std::vector<std::string>& argv, bool frontendConstantFolding )
    {
   // DQ (11/4/2015): Added assertion.
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
      initialization();
 
@@ -17966,14 +18074,14 @@ SgProject::parse()
 SgFilePtrList &
 SgProject::get_fileList() const
    {
-     assert (this != NULL);
+     ASSERT_this();
      return p_fileList_ptr->get_listOfFiles();
    }
 
 void
 SgProject::set_fileList( SgFilePtrList & fileList )
    {
-     assert (this != NULL);
+     ASSERT_this();
      set_isModified(true);
 
      p_fileList_ptr->get_listOfFiles() = fileList;
@@ -18208,6 +18316,18 @@ SgProject::set_unparseHeaderFilesDebug ( int x )
      p_unparseHeaderFilesDebug = x;
    }
 
+bool
+SgProject::get_showBackendCommandLine (void)
+   {
+     return p_showBackendCommandLine;
+   }
+
+void
+SgProject::set_showBackendCommandLine ( bool show )
+   {
+     p_showBackendCommandLine = show;
+   }
+
 
 
 
@@ -18281,21 +18401,21 @@ SgProject::get_skipfinalCompileStep (void) const
 void
 SgProject::set_C_only       (bool value)
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      p_C_only = value;
    }
 
 void
 SgProject::set_Cxx_only     (bool value)
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      p_Cxx_only = value;
    }
 
 void
 SgProject::set_Fortran_only (bool value)
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
      p_Fortran_only = value;
    }
 
@@ -18409,25 +18529,73 @@ SgProject::get_C11_gnu_only (void) const
    }
 
 bool
-SgProject::get_C14_only (void) const
+SgProject::get_C17_only (void) const
    {
      bool result = false;
      for (int i = 0; i < numberOfFiles(); i++)
         {
           SgFile & file = get_file(i);
-          result = result || (bool) file.get_C14_only();
+          result = result || (bool) file.get_C17_only();
         }
      return result;
    }
 
 bool
-SgProject::get_C14_gnu_only (void) const
+SgProject::get_C17_gnu_only (void) const
    {
      bool result = false;
      for (int i = 0; i < numberOfFiles(); i++)
         {
           SgFile & file = get_file(i);
-          result = result || (bool) file.get_C14_gnu_only();
+          result = result || (bool) file.get_C17_gnu_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_C23_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_C23_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_C23_gnu_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_C23_gnu_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_C2y_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_C2y_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_C2y_gnu_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_C2y_gnu_only();
         }
      return result;
    }
@@ -18560,6 +18728,78 @@ SgProject::get_Cxx17_gnu_only (void) const
         {
           SgFile & file = get_file(i);
           result = result || (bool) file.get_Cxx17_gnu_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_Cxx20_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_Cxx20_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_Cxx20_gnu_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_Cxx20_gnu_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_Cxx23_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_Cxx23_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_Cxx23_gnu_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_Cxx23_gnu_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_Cxx26_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_Cxx26_only();
+        }
+     return result;
+   }
+
+bool
+SgProject::get_Cxx26_gnu_only (void) const
+   {
+     bool result = false;
+     for (int i = 0; i < numberOfFiles(); i++)
+        {
+          SgFile & file = get_file(i);
+          result = result || (bool) file.get_Cxx26_gnu_only();
         }
      return result;
    }
@@ -20062,6 +20302,20 @@ void
 SgUnparse_Info::unset_usedInUparseToStringFunction()
    { unsetBit(b_usedInUparseToStringFunction); }
 
+// PL (7/9/2025): Adding support to properly unparse the "restrict" keyword when used inside array brackets.
+// Example: void foo(int arr[restrict]);
+bool
+SgUnparse_Info::useRestrictKeywordInsideArrayBrackets() const
+    { return checkBit(b_useRestrictKeywordInsideArrayBrackets); }
+
+void
+SgUnparse_Info::set_useRestrictKeywordInsideArrayBrackets()
+    { setBit(b_useRestrictKeywordInsideArrayBrackets); }
+
+void
+SgUnparse_Info::unset_useRestrictKeywordInsideArrayBrackets()
+    { unsetBit(b_useRestrictKeywordInsideArrayBrackets); }
+
 
 void
 SgUnparse_Info::display ( const std::string & label ) const
@@ -20596,7 +20850,7 @@ SgTemplateParameter::is_matching_kind (const SgTemplateParameter & X, const SgTe
 SgName
 SgTemplateParameter::get_mangled_name (void) const
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
 #if 0
   // MLOG_INFO_C("ROSETTA", "In SgTemplateParameter::get_mangled_name(): this = %p get_argumentType() = %d unparseToString() = %s \n",this,get_argumentType(),unparseToString().c_str());
@@ -20610,7 +20864,7 @@ SgTemplateParameter::get_mangled_name (void) const
           case SgTemplateParameter::type_parameter:
              {
                const SgType* type = get_type();
-               assert (type != NULL);
+               ASSERT_not_null (type);
                mangled_name << type->get_mangled().str();
                break;
              }
@@ -20797,7 +21051,7 @@ SgTemplateArgument::SgTemplateArgument ( bool explicitlySpecified )
 SgName
 SgTemplateArgument::get_mangled_name (void) const
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
 #if DEBUG_TEMPLATE_ARGUMENT_GET_MANGLED_NAME
   // MLOG_INFO_C("ROSETTA", "In SgTemplateArgument::get_mangled_name(): this = %p get_argumentType() = %d unparseToString() = %s \n",this,get_argumentType(),unparseToString().c_str());
@@ -20841,7 +21095,8 @@ SgTemplateArgument::get_mangled_name (void) const
 #if DEBUG_TEMPLATE_ARGUMENT_GET_MANGLED_NAME
                     MLOG_INFO_C("ROSETTA", "In SgTemplateArgument::get_mangled_name(): case SgTemplateArgument::type_argument: templateClassInstantiationDeclaration = %p name = %s \n",templateClassInstantiationDeclaration,templateClassInstantiationDeclaration->get_name().str());
 #endif
-                    mangled_type += Rose::StringUtility::numberToString(templateClassInstantiationDeclaration);
+                 // PP (05/05/25) produces unstable mangled names
+                 // mangled_type += Rose::StringUtility::numberToString(templateClassInstantiationDeclaration);
 
                  // DQ (12/26/2012): This assert fails for copyAST_tests/copytest2007_40.C, but I think it is unreasonable
                  // to expect it to always be true.  So I have made it a warning for now.
@@ -21225,7 +21480,7 @@ SgTemplateArgument::get_qualified_name_prefix() const
   // different and so it depends upon where the type is referenced.  Thus the qualified name is
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTemplateArgument*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTemplateArgument*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
      if (i != SgNode::get_globalQualifiedNameMapForTypes().end())
@@ -21248,13 +21503,44 @@ SgTemplateArgument::get_qualified_name_prefix_for_type() const
   // different and so it depends upon where the type is referenced.  Thus the qualified name is
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTemplateArgument*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTemplateArgument*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
+
+#if 0
+  // DQ (5/3/2024): Debugging non-terminating name qualification for unit testing.
+     printf ("In SgTemplateArgument::get_qualified_name_prefix(): this = %p SgNode::get_globalQualifiedNameMapForTypes().size() = %zu \n",this,SgNode::get_globalQualifiedNameMapForTypes().size());
+#endif
 
      if (i != SgNode::get_globalQualifiedNameMapForTypes().end())
         {
           nameQualifier = i->second;
+#if 0
+       // DQ (5/3/2024): Debugging non-terminating name qualification for unit testing.
+          printf ("Setting nameQualifier: length: %zu \n",nameQualifier.get_length());
+#endif
+#if 0
+       // DQ (5/3/2024): Debugging non-terminating name qualification for unit testing.
+          printf ("In SgTemplateArgument::get_qualified_name_prefix(): this = %p length: %zu SgNode::get_globalQualifiedNameMapForTypes().size() = %zu \n",
+               this,nameQualifier.get_length(),SgNode::get_globalQualifiedNameMapForTypes().size());
+#endif
         }
+       else
+        {
+#if 0
+       // DQ (5/3/2024): Debugging non-terminating name qualification for unit testing.
+          printf ("In SgTemplateArgument::get_qualified_name_prefix(): this = %p not found in globalQualifiedNameMapForTypes \n",this);
+#endif
+        }
+
+#if 0
+  // DQ (5/23/2024): This tracks the size of the qualified names.
+     static long int max_size = 4000;
+     if (nameQualifier.get_length() > max_size)
+        {
+       // printf ("nameQualifier.get_length() = %zu \n",nameQualifier.get_length());
+          max_size = nameQualifier.get_length();
+        }
+#endif
      return nameQualifier;
    }
 
@@ -21421,7 +21707,10 @@ SgTemplateArgument::display( const std::string & label) const
    {
   // DQ (5/22/2016): Adding display function for debugging.
 
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
+
+  // DQ (5/12/2024): Added debugging information.
+     printf ("In SgTemplateArgument::display(label = %s): get_argumentType() = %s \n",label.c_str(),this->template_argument_kind().c_str()); 
 
      switch (get_argumentType())
         {
@@ -21436,11 +21725,22 @@ SgTemplateArgument::display( const std::string & label) const
                Rose_STL_Container<SgType*> typeChain = type->getInternalTypes();
 
             // Debugging output.
-               MLOG_INFO_C("ROSETTA", " --- Output of type chain for template argument \n");
+            // MLOG_INFO_C("ROSETTA", " --- Output of type chain for template argument \n");
+               printf (" --- Output of type chain for template argument \n");
                for (size_t i = 0; i < typeChain.size(); i++)
                   {
                     SgType* element_type = typeChain[i];
-                    printf ("   --- element_type = %p = %s \n",element_type,element_type->class_name().c_str());
+
+                 // DQ (5/12/2024): Added debugging support.
+                    string name;
+                    SgNamedType* namedType = isSgNamedType(element_type);
+                    if (namedType != NULL)
+                       {
+                      // printf (" ------ name = %s \n",namedType->get_name().str());
+                         name = namedType->get_name().str();
+                       }
+
+                    printf ("   --- element_type = %p = %s name = %s \n",element_type,element_type->class_name().c_str(),name.c_str());
                     SgModifierType* modifierType = isSgModifierType(element_type);
                     if (modifierType != NULL)
                        {
@@ -21521,7 +21821,7 @@ std::string
 SgTemplateArgument::unparseToStringSupport()
    {
   // DQ (3/10/2018): This is a function mostly used for debugging.
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
      SgUnparse_Info *info = new SgUnparse_Info();
      ROSE_ASSERT(info != NULL);

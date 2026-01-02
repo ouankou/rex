@@ -604,7 +604,6 @@ librose-lcov.info: all-lcov.info
         "$(top_srcdir)/src/frontend/SageIII/sageInterface/sageGeneric.h" \
          -o librose-lcov.info
 
-# Note: astVisualization is only approriate for small ASTs and for debugging so excluded from code coverage analysis.
 #       sageGeneric.h causes 1274 template instantiations, and we only have a test for one of them (so this file is a problem due to how lcov handles template instantaitions.
 #       DQ (3/30/2017): Removed src/midend/astProcessing/AstProcessing.h file because it's template use is not handled accurately by lcov (wildly incorrect).
 

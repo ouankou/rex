@@ -32,21 +32,143 @@ if USE_ROSE_IN_BUILD_TREE_VAR
 export ROSE_IN_BUILD_TREE=$(top_builddir)
 endif
 
-# Force C++17 (-std=c++17) to enable modern language features across all compilers.
-AM_CXXFLAGS = -std=c++17
+# SQLite is a simpler database to use than MySQL
+if ROSE_USE_SQLITE_DATABASE
+   ROSE_SQLITE_DATABASE_INCLUDE  = $(SQLITE3_CFLAGS)
+   SQLITE_DATABASE_INCLUDE       = $(SQLITE3_CFLAGS) -I$(top_srcdir)/src/roseExtensions/sqlite3x
+   SQLITE_DATABASE_LIBS          = $(SQLITE3_LDFLAGS)
+#   ROSE_SQLITE_DATABASE_OBJS     = $(top_builddir)/src/roseExtensions/sqlite3x/*o
+   ROSE_SQLITE_DATABASE_LIB_NAME = RoseSQLite3xDatabase
+   ROSE_SQLITE_DATABASE_LIB_FILE = lib$(ROSE_SQLITE_DATABASE_LIB_NAME).la
+   ROSE_SQLITE_DATABASE_LIBS     = -l$(ROSE_SQLITE_DATABASE_LIB_NAME)
 
-# This is properly handled by automake even when specified in an include file
+   ROSE_SIDEEFFECT_INCLUDE						 = -I$(top_srcdir)/src/midend/programAnalysis/sideEffectAnalysis
+endif
+
+if ROSE_HAVE_LIBZ3
+  Z3_LIB_NAME = z3
+  Z3_LIB_FILE = lib$(Z3_LIB_NAME).so
+  Z3_LIBS = -l$(Z3_LIB_NAME)
+
+  Z3_INCLUDES = -I$(Z3_PREFIX)/include
+  Z3_LIB_INCLUDES = -L$(Z3_PREFIX)/lib
+
+  # The previous "Z3_*" variables should have been named "ROSE_Z3_*" following the pattern in the rest of this
+  # makefile. I don't want to break code that uses the wrong names, so I'll just add the correct ones. [Matzke 2017-10-17]
+  ROSE_Z3_INCLUDES = -I@ROSE_Z3_PREFIX@/include
+  ROSE_Z3_LIBS = -lz3
+  ROSE_Z3_LIBS_WITH_PATH = -L@ROSE_Z3_PREFIX@/lib -lz3
+endif
 
 RT_LIBS = @RT_LIBS@
 
 VALGRIND_BINARY = @VALGRIND_BINARY@
 
+if ROSE_USE_QT
+  ROSE_GUI_INCLUDE =
+  ROSE_GUI_LIBS_WITH_PATH =
+endif
+
+if ROSE_USE_QT
+  ROSE_QT_INCLUDE = $(QT_INCLUDES)
+# ROSE_QT_LIBS = -lqt
+  ROSE_QT_LIBS_WITH_PATH = ${QT_LDFLAGS}
+# ROSE_QT_LIB_FILE = libqt.a
+endif
+
+# ROSE-HPCToolkit module
+if ROSE_BUILD_ROSEHPCT
+  ROSE_ROSEHPCT_INCLUDES = -I$(top_srcdir)/src/roseExtensions/roseHPCToolkit/include
+  ROSE_ROSEHPCT_LIBS = -lrosehpct
+  ROSE_ROSEHPCT_LIBS_WITH_PATH = $(top_builddir)/src/roseExtensions/roseHPCToolkit/src/librosehpct.la
+# ROSE_ROSEHPCT_LIB_FILE = librosehpct.so
+endif
+
+# ROSE-YICES Package (destributed by SRI as a static library)
+if ROSE_HAVE_LIBYICES
+  ROSE_YICES_INCLUDES = -I@ROSE_YICES_PREFIX@/include
+  ROSE_YICES_LIBS = -lyices
+  ROSE_YICES_LIBS_WITH_PATH = @ROSE_YICES_PREFIX@/lib/libyices.a
+endif
+
+# GNU readline
+if ROSE_WITH_LIBREADLINE
+  ROSE_READLINE_INCLUDES = -I@LIBREADLINE_INCLUDE_PATH@
+  ROSE_READLINE_LIBS = @LIBREADLINE_LIBS@
+  ROSE_READLINE_LIBS_WITH_PATH = -L@LIBREADLINE_LIBRARY_PATH@ $(ROSE_READLINE_LIBS)
+endif
+
+# libmagic for identifying file types based on magic numbers
+if ROSE_HAVE_LIBMAGIC
+  ROSE_LIBMAGIC_INCLUDES = -I@ROSE_LIBMAGIC_PREFIX@/include
+  ROSE_LIBMAGIC_LIBS = -lmagic
+  ROSE_LIBMAGIC_LIBS_WITH_PATH = -L@ROSE_LIBMAGIC_PREFIX@/lib -lmagic
+endif
+
+# PostgreSQL C++ API
+if ROSE_HAVE_LIBPQXX
+  ROSE_LIBPQXX_INCLUDES = -I@ROSE_LIBPQXX_PREFIX@/include
+  ROSE_LIBPQXX_LIBS = -lpqxx -lpq
+  ROSE_LIBPQXX_LIBS_WITH_PATH = -L@ROSE_LIBPQXX_PREFIX@/lib -lpqxx -lpq
+endif
+
+# Capstone disassembler
+if ROSE_HAVE_CAPSTONE
+  ROSE_CAPSTONE_INCLUDES = -I@ROSE_CAPSTONE_PREFIX@/include
+  ROSE_CAPSTONE_LIBS = -lcapstone
+  ROSE_CAPSTONE_LIBS_WITH_PATH = -L@ROSE_CAPSTONE_PREFIX@/lib -lcapstone
+endif
+
+# Math algorithms from http://dlib.net.
+if ROSE_HAVE_DLIB
+  ROSE_DLIB_INCLUDES = -I@DLIB_PREFIX@/include
+  ROSE_DLIB_LIBS = -ldlib
+  ROSE_DLIB_LIBS_WITH_PATH = -L@DLIB_PREFIX@/lib -ldlib
+endif
+
 # DQ (11/4/2016): Adding support for use of Address Sanitizer (for where the ROSE Test Handler (RTH) is used.
 # Note the quotes and escapes that are required:
-ADDRESS_SANITIZER_OPTIONS = "ASAN_OPTIONS=halt_on_error=0:symbolize=1:detect_leaks=0 ASAN_SYMBOLIZER_PATH=\`which llvm-symbolizer\`"
+# ADDRESS_SANITIZER_OPTIONS = "ASAN_OPTIONS=halt_on_error=0:symbolize=1:detect_leaks=0 ASAN_SYMBOLIZER_PATH=\`which llvm-symbolizer\`"
+ADDRESS_SANITIZER_OPTIONS = "ASAN_OPTIONS=halt_on_error=0:symbolize=1:detect_leaks=1 ASAN_SYMBOLIZER_PATH=\`which llvm-symbolizer\`"
 
 # DQ(11/4/2016): Need a version when not using the ROSE Test Handler (RTH):
 NON_RTH_ADDRESS_SANITIZER_OPTIONS = ASAN_OPTIONS=halt_on_error=1:symbolize=1:detect_leaks=0 ASAN_SYMBOLIZER_PATH=`which llvm-symbolizer`
+
+GLUT_LIBS = ${glut_path}
+
+if ROSE_HAVE_LIBELF
+  ROSE_ELF_INCLUDES = @LIBELF_CPPFLAGS@
+  ROSE_ELF_LIBS_WITH_PATH = @LIBELF_LDFLAGS@
+endif
+
+# ROSE gcrypt support (for things like md5, sha1, etc)
+if ROSE_HAVE_LIBGCRYPT
+  ROSE_GCRYPT_INCLUDES = @LIBGCRYPT_CPPFLAGS@
+  ROSE_GCRYPT_LIBS_WITH_PATH = @LIBGCRYPT_LDFLAGS@
+endif
+
+# ROSE-DWARF libdwarf support
+if ROSE_HAVE_LIBDWARF
+  ROSE_DWARF_INCLUDES = @LIBDWARF_CPPFLAGS@
+
+if ROSE_USE_INTEL_PIN
+# DQ (3/13/2009):
+# If Dwarf is used with Intel Pin then reference the same copy of libdwarf.a (in the same
+# directory).  However, it does NOT work to link both references to libdwarf into more
+# than one dynamic (shared) library, so we need to link libdwarf dynamically.
+# To avoid additional LD_LIBRARY_PATH requirements, we do so using rpath.
+# To support this the libdwarf.so should be placed into $(INTEL_PIN_PATH)/intel64/lib-ext
+# and the static libdwarf.a moved out (renamed) so that it will not be used.
+# Note that this will also cause librose.so to use the shared library for
+# dwarf when used with Intel Pin.
+  ROSE_DWARF_LIBS_WITH_PATH = -L$(INTEL_PIN_PATH)/intel64/lib-ext -ldwarf -lelf
+# DQ (3/14/2009): This factors the lib paths.
+  INTEL_PIN_WITH_DWARF_LIBS_PATH = $(INTEL_PIN_LIB_PATHS) -lpin -lxed -ldl $(ROSE_DWARF_LIBS_WITH_PATH)
+else
+  ROSE_DWARF_LIBS_WITH_PATH = @LIBDWARF_LDFLAGS@ @LIBDWARF_LIBS@
+endif
+endif
+
 
 # ASR (06/09/2010): adding llvm support variables
 if ROSE_USE_LLVM
@@ -57,10 +179,51 @@ if ROSE_USE_LLVM
 
 endif
 
+# SSL support permits use of MD5 checksums internally for binary library identification.
+if ROSE_USE_SSL_SUPPORT
+  ROSE_SSL_LIBS = -lssl -lcrypto
+endif
+
 # support for precompiled headers
 if ROSE_PCH
   ROSE_PCH_INCLUDE = -Winvalid-pch -fPIC -DPIC
 endif
+
+if ROSE_USE_INTEL_PIN
+  INTEL_PIN_PATH          = @IntelPin_path@
+  INTEL_PIN_INCLUDE_PATHS = -I$(INTEL_PIN_PATH)/source/include -I$(INTEL_PIN_PATH)/source/include/gen -I$(INTEL_PIN_PATH)/extras/xed2-intel64/include -I$(INTEL_PIN_PATH)/source/tools/InstLib
+
+# DQ (3/8/2009): These cause rose/src/testSharedRoseLib to fail, I don't know why (fails in system call to map()).
+# INTEL_PIN_LIB_PATHS     = -L$(INTEL_PIN_PATH)/intel64/lib -L$(INTEL_PIN_PATH)/extras/xed2-intel64/lib -L$(INTEL_PIN_PATH)/intel64/lib-ext
+  INTEL_PIN_LIB_PATHS     = -L$(INTEL_PIN_PATH)/intel64/lib -L$(INTEL_PIN_PATH)/extras/xed2-intel64/lib
+
+# Do we want to handle this differently when Dwarf is used optionally with ROSE.
+  INTEL_PIN_LIBS          = -lpin -lxed -ldwarf -lelf -ldl
+#if ROSE_HAVE_LIBDWARF
+#  INTEL_PIN_LIBS          = -lpin -lxed -lelf -ldl
+#else
+#  INTEL_PIN_LIBS          = -lpin -lxed -ldwarf -lelf -ldl
+#endif
+endif
+
+if ROSE_USE_ETHER
+  ROSE_ETHER_INCLUDE = -I$(ETHER_PREFIX)/include
+  ROSE_ETHER_LIBS    = -L$(ETHER_PREFIX)/lib -lxenctrl
+endif
+
+if ROSE_WITH_ATERM
+  ROSE_ATERM_INCLUDE = -I$(ATERM_LIBRARY_PATH)/../include
+  ROSE_ATERM_LIBS    = -L$(ATERM_LIBRARY_PATH) -lATerm
+endif
+
+# Added support for Fortran front-end development using the flang (F18) compiler [Rasmussen 8/12/2019]
+if ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION
+  ROSE_FLANG_INCLUDES = -I$(FLANG_INSTALL_PATH)/include
+  ROSE_FLANG_LIBS     = -L$(FLANG_INSTALL_PATH)/lib -lLLVMDemangle -lLLVMSupport -lLLVMFrontendDirective -lLLVMFrontendOpenMP -lLLVMFrontendOpenACC -lFortranParser -lFortranSemantics -lFortranEvaluate -lFortranCommon -lFortranSupport -lFortranDecimal -lFortranLower -lncurses
+endif
+
+ROSE_QUAD_FLOAT_MATH =
+
 
 # DQ (1/9/2010): Added use of libimf with libm (the two go together when using Intel icc and icpc)
 if USING_INTEL_COMPILER
@@ -79,50 +242,51 @@ if USING_CLANG_COMPILER
 endif
 
 # DQ (3/6/2013): We need to build a SWIG path that can't include the isystem option.
-# if ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-# ROSE_INCLUDES =
-ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH_ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT = \
+if ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
+ROSE_INCLUDES_PATHS = \
+     $(ROSE_DWARF_INCLUDES) \
+     $(ROSE_ELF_INCLUDES) \
+     -I$(top_builddir)/src/roseSupport \
      -I$(top_builddir)/src/frontend/SageIII \
      -I$(top_srcdir)/src \
      -I$(top_srcdir)/src/frontend \
      -I$(top_srcdir)/src/frontend/SageIII \
-     -I$(top_srcdir)/src/frontend/SageIII/accparser/src \
      -I$(top_srcdir)/src/frontend/SageIII/astFixup \
      -I$(top_srcdir)/src/frontend/SageIII/astPostProcessing \
      -I$(top_srcdir)/src/frontend/SageIII/sageInterface \
      -I$(top_srcdir)/src/frontend/SageIII/includeDirectivesProcessing \
-     -I$(top_srcdir)/src/frontend/SageIII/ompparser/src \
      -I$(top_srcdir)/src/frontend/SageIII/sage_support \
      -I$(top_srcdir)/src/frontend/OpenFortranParser_SAGE_Connection \
-     $(JAVA_JVM_INCLUDE) \
      -I$(top_srcdir)/src/backend/unparser \
      -I$(top_srcdir)/src/backend/unparser/formatSupport \
      -I$(top_srcdir)/src/backend/unparser/languageIndependenceSupport \
      -I$(top_srcdir)/src/backend/unparser/CxxCodeGeneration \
+     -I$(top_srcdir)/src/backend/unparser/FortranCodeGeneration \
      -I$(top_srcdir)/src/util \
      -I$(top_srcdir)/src/util/support \
      -I$(top_srcdir)/src/util/graphs  \
-     -I$(top_srcdir)/src/util/StringUtility \
      -I$(top_srcdir)/src/util/commandlineProcessing \
      -I$(top_srcdir)/src/midend \
      -I$(top_srcdir)/src/midend/astDiagnostics \
-     -I$(top_srcdir)/src/midend/astDump \
      -I$(top_srcdir)/src/midend/astProcessing \
      -I$(top_srcdir)/src/midend/astQuery \
      -I$(top_srcdir)/src/midend/programAnalysis \
+     -I$(top_srcdir)/src/roseSupport \
      -I$(top_srcdir)/src/util/graphs \
+     -I$(top_srcdir)/src/roseExtensions/failSafe \
+     $(ROSE_ATERM_INCLUDE) \
      $(ROSE_FLANG_INCLUDES)
-# else # ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-# ROSE_INCLUDES =
-ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH = \
+else
+ROSE_INCLUDES_PATHS = \
+     $(ROSE_DWARF_INCLUDES) \
+     $(ROSE_ELF_INCLUDES) \
+     -I$(top_builddir)/src/roseSupport \
      -I$(top_builddir)/src/frontend/SageIII \
      -I$(top_srcdir)/src \
      -I$(top_srcdir)/src/frontend \
      -I$(top_srcdir)/src/frontend/SageIII \
-     -I$(top_srcdir)/src/frontend/SageIII/accparser/src \
      -I$(top_srcdir)/src/frontend/SageIII/astFixup \
      -I$(top_srcdir)/src/frontend/SageIII/astPostProcessing \
-     -I$(top_srcdir)/src/frontend/SageIII/ompparser/src \
      -I$(top_srcdir)/src/frontend/SageIII/sageInterface \
      -I$(top_srcdir)/src/frontend/SageIII/virtualCFG \
      -I$(top_srcdir)/src/frontend/SageIII/astTokenStream \
@@ -130,7 +294,6 @@ ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH = \
      -I$(top_srcdir)/src/frontend/SageIII/includeDirectivesProcessing \
      -I$(top_srcdir)/src/frontend/SageIII/sage_support \
      -I$(top_srcdir)/src/frontend/OpenFortranParser_SAGE_Connection \
-     $(JAVA_JVM_INCLUDE) \
       $(ROSE_CLANG_FRONTEND_INCLUDE) \
       $(ROSE_CLANG_INCLUDE) \
      -I$(top_srcdir)/src/backend/unparser \
@@ -141,21 +304,21 @@ ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH = \
      -I$(top_srcdir)/src/util \
      -I$(top_srcdir)/src/util/support \
      -I$(top_srcdir)/src/util/graphs  \
-     -I$(top_srcdir)/src/util/StringUtility \
      -I$(top_srcdir)/src/util/commandlineProcessing \
      -I$(top_srcdir)/src/midend \
      -I$(top_srcdir)/src/midend/abstractLayer \
      -I$(top_srcdir)/src/midend/astDiagnostics \
-     -I$(top_srcdir)/src/midend/astDump \
      -I$(top_srcdir)/src/midend/programTransformation/astInlining \
      -I$(top_srcdir)/src/midend/programTransformation/astOutlining  \
      -I$(top_srcdir)/src/midend/programTransformation/transformationTracking \
      -I$(top_srcdir)/src/midend/astProcessing \
      -I$(top_srcdir)/src/midend/astQuery \
+     -I$(top_srcdir)/src/midend/astUtil \
      -I$(top_srcdir)/src/midend/astUtil/annotation \
      -I$(top_srcdir)/src/midend/astUtil/astInterface \
      -I$(top_srcdir)/src/midend/astUtil/astSupport \
      -I$(top_srcdir)/src/midend/astUtil/symbolicVal \
+     -I$(top_srcdir)/src/midend/astUtil/dependenceTracking \
      -I$(top_srcdir)/src/midend/programTransformation/loopProcessing/computation \
      -I$(top_srcdir)/src/midend/programTransformation/loopProcessing/depGraph \
      -I$(top_srcdir)/src/midend/programTransformation/loopProcessing/depInfo \
@@ -166,30 +329,53 @@ ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH = \
      -I$(top_srcdir)/src/midend/programTransformation/extractFunctionArgumentsNormalization \
      -I$(top_srcdir)/src/midend/programTransformation/singleStatementToBlockNormalization \
      -I$(top_srcdir)/src/midend/programAnalysis \
+     -I$(top_srcdir)/src/midend/programAnalysis/arithmeticIntensity \
+     -I$(top_srcdir)/src/midend/programAnalysis/annotationLanguageParser \
      -I$(top_srcdir)/src/midend/programAnalysis/CFG \
      -I$(top_srcdir)/src/midend/programAnalysis/CallGraphAnalysis \
      -I$(top_srcdir)/src/midend/programAnalysis/OAWrap \
      -I$(top_srcdir)/src/midend/programAnalysis/bitvectorDataflow \
      -I$(top_srcdir)/src/midend/programAnalysis/VirtualFunctionAnalysis \
      -I$(top_srcdir)/src/midend/programAnalysis/defUseAnalysis \
+     -I$(top_srcdir)/src/midend/programAnalysis/distributedMemoryAnalysis \
      -I$(top_srcdir)/src/midend/programAnalysis/dominanceAnalysis \
      -I$(top_srcdir)/src/midend/programAnalysis/pointerAnal \
      -I$(top_srcdir)/src/midend/programAnalysis/staticInterproceduralSlicing \
      -I$(top_srcdir)/src/midend/programAnalysis/valuePropagation \
      -I$(top_srcdir)/src/midend/programAnalysis/variableRenaming \
+      $(ROSE_SIDEEFFECTS_INCLUDE) \
+      $(ROSE_DATABASE_INCLUDE) \
+      $(ROSE_GUI_INCLUDE) \
+      $(ROSE_QT_INCLUDE) \
+      $(ROSE_SQLITE_DATABASE_INCLUDE) \
+			$(ROSE_SIDEEFFECT_INCLUDE) \
+      $(SQLITE_DATABASE_INCLUDE) \
      -I$(top_srcdir)/src/midend/programTransformation/partialRedundancyElimination \
      -I$(top_srcdir)/src/midend/programTransformation/finiteDifferencing \
      -I$(top_srcdir)/src/midend/programTransformation/functionCallNormalization \
      -I$(top_srcdir)/src/midend/programTransformation/constantFolding \
      -I$(top_srcdir)/src/midend/programTransformation/implicitCodeGeneration \
-     -I$(top_srcdir)/src/3rdPartyLibraries/libharu-2.1.0/include \
-     -I$(top_builddir)/src/3rdPartyLibraries/libharu-2.1.0/include \
+     -I$(top_srcdir)/src/roseSupport \
      -I$(top_srcdir)/src/util/graphs \
      -I$(top_srcdir)/src/midend/astUtil/astInterface \
      -I$(top_srcdir)/libltdl \
+     -I$(top_srcdir)/src/roseExtensions/failSafe \
+     $(ROSE_YICES_INCLUDES) \
+     $(ROSE_Z3_INCLUDES) \
+     $(ROSE_LIBPQXX_INCLUDES) \
+     $(ROSE_CAPSTONE_INCLUDES) \
+     $(ROSE_READLINE_INCLUDES) \
+     $(ROSE_LIBMAGIC_INCLUDES) \
+     $(ROSE_DLIB_INCLUDES) \
+     $(ROSE_GCRYPT_INCLUDES) \
      $(VALGRIND_CFLAGS) \
-     $(ROSE_PCH_INCLUDE)
-# endif # ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
+     $(SQLITE3_CFLAGS) \
+     $(ROSE_PCH_INCLUDE) \
+     $(INTEL_PIN_INCLUDE_PATHS) \
+     $(ROSE_ETHER_INCLUDE) \
+     $(ROSE_ATERM_INCLUDE) \
+     $(ROSE_FLANG_INCLUDES)
+endif
 
 # DQ (10/23/2015): These paths have been replaces with the following variables.
 # These variable are empty for now (reflecting the default usage, and need to
@@ -199,24 +385,46 @@ ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH = \
 #    $(ROSE_CLANG_FRONTEND_INCLUDE)
 #    $(ROSE_CLANG_INCLUDE)
 
-SWIG_ROSE_INCLUDES = $(ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH)
-ROSE_INCLUDES = -I$(top_builddir) -I$(top_builddir)/src $(ROSE_INCLUDES_WITHOUT_ISYSTEM_PATH)
+SWIG_ROSE_INCLUDES = $(ROSE_INCLUDES_PATHS)
+ROSE_INCLUDES = -I$(top_builddir) -I$(top_builddir)/src $(ROSE_INCLUDES_PATHS)
+
+# DQ (8/15/2010): I have removed these directories from the include paths since it no longer exists.
+# I expect that the directories were removed and the include list not properly cleaned up.
+# -I$(top_srcdir)/src/midend/binaryAnalyses/graph
+# -I$(top_srcdir)/src/midend/programTransformation/runtimeTransformation
+# -I$(top_srcdir)/projects/dataBase
 
 # DQ (10/28/2008): I think these should be included, I don't know why they
-# were removed (used with some legacy tests, and Yices tests).
+# were removed (used with Microsoft Windows tests, and Yices tests).
 # DQ: Not used currently
-#     $(ROSE_WINE_INCLUDES)
+
+# DQ (5/3/2007): Removed from ROSE
+#     -I$(top_srcdir)/src/midend/programAnalysis/dominatorTreesAndDominanceFrontiers
+#     -I$(top_srcdir)/src/midend/programAnalysis/staticProgramSlicing
+
+# DQ (10/22/2004): Removed when I could not get annotation work to compile properly with make distcheck rule
+#     -I$(top_srcdir)/src/midend/programAnalysis/annotationLanguageParser
 
 # New way using two libraries
+# ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.a $(top_builddir)/src/libedg.a
+# ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.so $(top_builddir)/src/libedg.so
+# ROSE_LIBS_WITH_PATH = $(libdir)/librose.so $(libdir)/libedg.so
 # ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.la
 # ROSE_LIBS_WITH_PATH = $(top_builddir)/src/librose.la $(JAVA_JVM_LIB)
 # JJW 7/25/2008: This should probably just be the same as ROSE_LIBS
 ROSE_LIBS_WITH_PATH = $(ROSE_LIBS)
 
+# ROSE_LIBS = $(top_builddir)/src/librose.la -lm $(LEXLIB) $(SQLITE_DATABASE_LIBS) $(LIB_QT) $(WAVE_LDFLAGS) $(WAVE_LIBRARIES) $(WAVE_LIBS) $(JAVA_JVM_LIB) $(RT_LIBS)
+
 ROSE_LIBS = $(abspath $(top_builddir)/src/librose.la) -lm $(JAVA_JVM_LINK) \
-  $(RT_LIBS) \
-  $(ROSE_INTEL_COMPILER_MATH_LIBS) \
-  $(ROSE_QUAD_FLOAT_MATH)
+  $(ROSE_DWARF_LIBS_WITH_PATH) $(ROSE_ELF_LIBS_WITH_PATH) \
+  $(SQLITE_DATABASE_LIBS) $(QT_LIBS) \
+  $(SQLITE3_LDFLAGS)  $(RT_LIBS) $(ROSE_YICES_LIBS_WITH_PATH) $(ROSE_Z3_LIBS_WITH_PATH) \
+  $(ROSE_GUI_LIBS_WITH_PATH) $(ROSE_QT_LIBS_WITH_PATH) $(ROSE_SSL_LIBS) $(ROSE_ETHER_LIBS) \
+  $(ROSE_INTEL_COMPILER_MATH_LIBS) $(ROSE_ATERM_LIBS) $(ROSE_FLANG_LIBS) \
+  $(ROSE_LIBMAGIC_LIBS_WITH_PATH) $(ROSE_READLINE_LIBS_WITH_PATH) \
+  $(ROSE_DLIB_LIBS_WITH_PATH) $(ROSE_GCRYPT_LIBS_WITH_PATH) $(ROSE_LIBPQXX_LIBS_WITH_PATH) \
+  $(ROSE_QUAD_FLOAT_MATH) $(ROSE_CAPSTONE_LIBS_WITH_PATH)
 
 if ROSE_USE_CLANG_FRONTEND
 # DQ (10/23/2020): Pei-Hung and I think this may not be required (not available on my system).
@@ -226,6 +434,7 @@ if ROSE_USE_CLANG_FRONTEND
 # ROSE_LIBS += $(CLANG_LDFLAGS) -ltinfo
 ROSE_LIBS += $(CLANG_LDFLAGS)
 endif
+
 
 #========================================================================================================================
 # These are the "-R directory" switches that need to be passed to libtool running in link mode to make sure that ROSE
@@ -282,7 +491,13 @@ ROSE_RPATHS =                                                                   
           )
 
 
+# Rasmussen (3/23/2018): Added ROSE_LINK_RPATHS to enable linking on Mac OSX with ROSE installation
+if OS_MACOSX
+ROSE_LINK_RPATHS = $(addprefix -Xlinker -rpath -Xlinker , $(filter-out -R , $(ROSE_RPATHS)))
+else
+comma = ,
 ROSE_LINK_RPATHS = $(addprefix -Wl$(comma)-rpath , $(filter-out -R , $(ROSE_RPATHS)))
+endif
 
 show-rpaths:
 	@echo "ROSE_LIBS = $(ROSE_LIBS)"
@@ -342,6 +557,6 @@ clean-test-targets:
 	rm -f $(TEST_TARGETS:.passed=.out)
 	rm -f $(TEST_TARGETS:.passed=.err)
 
-# clean-local: clean-test-targets
+clean-local: clean-test-targets
 
 .PHONY: clean-test-targets

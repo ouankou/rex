@@ -5,27 +5,17 @@
 
 using namespace std;
 
-// void fixupInitializersUsingIncludeFiles( SgNode* node )
 void fixupInitializersUsingIncludeFiles( SgProject* node )
    {
-  // DQ (3/11/2006): Introduce tracking of performance of ROSE.
      TimingPerformance timer1 ("Fixup known self-referential macros:");
 
   // This inherited attribute is used for all traversals (within the iterative approach we define)
      FixupInitializersUsingIncludeFilesInheritedAttribute inheritedAttribute;
-
      FixupInitializersUsingIncludeFilesTraversal astFixupTraversal;
 
   // I think the default should be preorder so that the interfaces would be more uniform
-#if 0
-  // DQ (8/27/2020): This is a more brutal test to make sure that we have 
-  // supported the more genereal cases of expresssions and scopes.
-     printf ("In fixupInitializersUsingIncludeFiles(): This is for testing only! \n");
-     astFixupTraversal.traverse(node,inheritedAttribute);
-#else
   // DQ (8/27/2020): We will only want to address files that we will unparse.
      astFixupTraversal.traverseInputFiles(node,inheritedAttribute);
-#endif
    }
 
 
@@ -34,10 +24,10 @@ void fixupInitializersUsingIncludeFiles( SgProject* node )
 FixupInitializersUsingIncludeFilesInheritedAttribute::FixupInitializersUsingIncludeFilesInheritedAttribute()
    {
      isInsideVariableDeclaration = false;
-     variableDeclaration         = NULL;
+     variableDeclaration = nullptr;
 
      isInsideInitializer         = false;
-     initializedName             = NULL;
+     initializedName = nullptr;
    }
 
 FixupInitializersUsingIncludeFilesInheritedAttribute::FixupInitializersUsingIncludeFilesInheritedAttribute( const FixupInitializersUsingIncludeFilesInheritedAttribute & X )
@@ -52,22 +42,15 @@ FixupInitializersUsingIncludeFilesInheritedAttribute::FixupInitializersUsingIncl
 
 FixupInitializersUsingIncludeFilesSynthesizedAttribute::FixupInitializersUsingIncludeFilesSynthesizedAttribute()
    {
-#if 0
-     printf ("In FixupInitializersUsingIncludeFilesSynthesizedAttribute constructor: node = %p = %s \n",node,node->class_name().c_str());
-#endif
    }
 
-FixupInitializersUsingIncludeFilesSynthesizedAttribute::FixupInitializersUsingIncludeFilesSynthesizedAttribute( const FixupInitializersUsingIncludeFilesSynthesizedAttribute & X )
+FixupInitializersUsingIncludeFilesSynthesizedAttribute::FixupInitializersUsingIncludeFilesSynthesizedAttribute(const FixupInitializersUsingIncludeFilesSynthesizedAttribute &)
    {
    }
 
 
 FixupInitializersUsingIncludeFilesTraversal::FixupInitializersUsingIncludeFilesTraversal()
    {
-#if 0
-     printf ("In AddIncludeDirectivesTraversal constructor: include_file->get_filename() = %s \n",include_file->get_filename().str());
-#endif
-
    }
 
 
@@ -76,7 +59,7 @@ FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(SgStat
    {
   // DQ (8/27/2020): At least this code can likely be refactored with the code above to a seperate function.
      AttachedPreprocessingInfoType* comments = statement->getAttachedPreprocessingInfo();
-     if (comments != NULL)
+     if (comments != nullptr)
         {
 #if 0
           printf ("In findAndRemoveMatchingInclude(): Found attached comments (at %p of type: %s): name = %s \n",statement,
@@ -89,7 +72,7 @@ FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(SgStat
        // AttachedPreprocessingInfoType::iterator i;
           for (AttachedPreprocessingInfoType::iterator i = comments->begin(); i != comments->end(); i++)
              {
-               ROSE_ASSERT((*i) != NULL);
+               ASSERT_not_null(*i);
 #if 0
                printf ("Attached Comment (relativePosition=%s): %s\n",
                     ((*i)->getRelativePosition() == PreprocessingInfo::before) ? "before" : "after",
@@ -135,20 +118,20 @@ FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(SgStat
 
                            // string value_as_string = stringValue.value();
                               SgValueExp* valueExpression = isSgValueExp(expression);
-                              if (valueExpression == NULL)
+                              if (valueExpression == nullptr)
                                 {
                                   printf ("Error: valueExpression == NULL: expression = %p = %s name = %s \n",
                                        expression,expression->class_name().c_str(),SageInterface::get_name(expression).c_str());
                                   printf (" --- statement = %p = %s \n",statement,statement->class_name().c_str());
                                   statement->get_file_info()->display("Error: valueExpression == NULL");
                                 }
-                              ROSE_ASSERT(valueExpression != NULL);
+                              ASSERT_not_null(valueExpression);
 
                               string value_as_string = valueExpression->get_constant_folded_value_as_string();
 #if 0
                               printf ("value_as_string = %s \n",value_as_string.c_str());
 #endif
-                              bool knownSourcePositionUnavailable = (stringValue != NULL);
+                              bool knownSourcePositionUnavailable = (stringValue != nullptr);
                               if (knownSourcePositionUnavailable == true)
                                  {
 #if 0
@@ -160,9 +143,9 @@ FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(SgStat
                                    printf ("Open the file defined by: filenameFromIncludeDirective = %s \n",filenameFromIncludeDirective.c_str());
 #endif
                                    bool includingSelf = false;
-                                   ROSE_ASSERT(statement != NULL);
+                                   ASSERT_not_null(statement);
                                    SgSourceFile* sourceFile = SageInterface::getEnclosingSourceFile(statement,includingSelf);
-                                   ROSE_ASSERT(sourceFile != NULL);
+                                   ASSERT_not_null(sourceFile);
 
                                    std::string source_directory = sourceFile->getSourceDirectory();
 #if 0
@@ -333,10 +316,10 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute ( SgNode
      FixupInitializersUsingIncludeFilesInheritedAttribute return_attribute(inheritedAttribute);
 
      SgDeclarationStatement* declarationStatement = isSgDeclarationStatement(node);
-     if (declarationStatement != NULL)
+     if (declarationStatement != nullptr)
         {
           SgVariableDeclaration* variableDeclaration = isSgVariableDeclaration(declarationStatement);
-          if (variableDeclaration != NULL)
+          if (variableDeclaration != nullptr)
              {
 #if 0
                printf ("Found a SgVariableDeclaration: variableDeclaration = %p = %s \n",
@@ -350,13 +333,13 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute ( SgNode
      SgInitializedName* initializedName = isSgInitializedName(node);
      if (inheritedAttribute.isInsideVariableDeclaration == true)
         {
-          if (initializedName != NULL)
+          if (initializedName != nullptr)
              {
 #if 0
                printf ("Found a target initializedName = %p = %s name = %s \n",initializedName,initializedName->class_name().c_str(),initializedName->get_name().str());
 #endif
                SgInitializer* initializer = initializedName->get_initializer();
-               if (initializer != NULL)
+               if (initializer != nullptr)
                   {
 #if 0
                     printf ("Found an initializer = %p = %s \n",initializer,initializer->class_name().c_str());
@@ -379,16 +362,16 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute ( SgNode
           SgExprListExp* exprListExp = isSgExprListExp(expression);
           SgCastExp*     castExp     = isSgCastExp(expression);
 
-          bool ignoreSomeExpressions = (exprListExp != NULL) || (castExp != NULL);
+          bool ignoreSomeExpressions = (exprListExp != nullptr) || (castExp != nullptr);
 
-          if ( (expression != NULL) && (initializer == NULL) && (ignoreSomeExpressions == false) )
+          if ( (expression != nullptr) && (initializer == nullptr) && (ignoreSomeExpressions == false) )
              {
                string expressionFilename = expression->get_file_info()->get_filename();
 #if 0
                printf ("initalizer expression = %p = %s expressionFilename = %s \n",expression,expression->class_name().c_str(),expressionFilename.c_str());
                printf (" --- expression name = %s \n",SageInterface::get_name(expression).c_str());
 #endif
-               ROSE_ASSERT(inheritedAttribute.variableDeclaration != NULL);
+               ASSERT_not_null(inheritedAttribute.variableDeclaration);
 
             // string variableDeclarationFilename = inheritedAttribute.variableDeclaration->get_file_info()->get_filename();
                string variableDeclarationFilename = inheritedAttribute.variableDeclaration->get_file_info()->get_physical_filename();
@@ -409,7 +392,7 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute ( SgNode
 #endif
                  // DQ (8/27/2020): At least this code can likely be refactored with the code below to a seperate function.
                     AttachedPreprocessingInfoType* comments = inheritedAttribute.variableDeclaration->getAttachedPreprocessingInfo();
-                    if (comments != NULL)
+                    if (comments != nullptr)
                        {
 #if 0
                          printf ("Found attached comments (at %p of type: %s): name = %s \n",
@@ -435,7 +418,7 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute ( SgNode
                     SgIfStmt*       ifStatementScope = isSgIfStmt(scope);
                     SgRangeBasedForStatement* rangeBasedForStatement = isSgRangeBasedForStatement(scope);
 
-                    bool ignoreThisScope = (forStatementScope != NULL) || (rangeBasedForStatement != NULL) || (ifStatementScope != NULL);
+                    bool ignoreThisScope = (forStatementScope != nullptr) || (rangeBasedForStatement != nullptr) || (ifStatementScope != nullptr);
 
                     if (ignoreThisScope == false)
                        {
@@ -445,7 +428,7 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute ( SgNode
                          varDecl->get_file_info()->display("inheritedAttribute.variableDeclaration");
 #endif
                          SgStatement* next_statement = SageInterface::getNextStatement(inheritedAttribute.variableDeclaration);
-                         if (next_statement == NULL)
+                         if (next_statement == nullptr)
                             {
                            // This can happen if there is no next statement (in this scope).
 #if 0
@@ -470,17 +453,10 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute ( SgNode
 
 FixupInitializersUsingIncludeFilesSynthesizedAttribute
 FixupInitializersUsingIncludeFilesTraversal::evaluateSynthesizedAttribute (
-     SgNode* node,
-     FixupInitializersUsingIncludeFilesInheritedAttribute inheritedAttribute,
-     SubTreeSynthesizedAttributes synthesizedAttributeList )
+     SgNode* /*node*/,
+     FixupInitializersUsingIncludeFilesInheritedAttribute /*inheritedAttribute*/,
+     SubTreeSynthesizedAttributes /*synthesizedAttributeList*/ )
    {
-#if 0
-     printf ("In FixupInitializersUsingIncludeFilesTraversal::evaluateSynthesizedAttribute: node = %p = %s \n",node,node->class_name().c_str());
-#endif
-
      FixupInitializersUsingIncludeFilesSynthesizedAttribute return_attribute;
-
      return return_attribute;
    }
-
-

@@ -181,7 +181,7 @@ foreach(input_file ${C99_TESTCODES_REQUIRED_TO_PASS})
 endforeach()
 
 
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   set(F90_TESTCODES_REQUIRED_TO_PASS
     test2007_01.f90 test2007_02.f90 test2007_03.f90 test2007_04.f90
     test2007_05.f90 test2007_06.f90 test2007_07.f90 test2007_08.f90

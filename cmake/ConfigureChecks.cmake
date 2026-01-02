@@ -1,7 +1,7 @@
 # This file is part of LyX, the document processor.
 # Licence details can be found in the file COPYING.
 #
-# Copyright (c) 2006, Peter Kümmel, <syntheticpp@gmx.net>
+# Copyright (c) 2006, Peter Kmmel, <syntheticpp@gmx.net>
 #
 
 include(CheckIncludeFile)
@@ -14,13 +14,12 @@ include(CheckPrototypeExists)
 include(CheckTypeExists)
 include(CheckTypeSize)
 include(CheckCXXSourceCompiles)
-include(MacroBoolTo01)
 include(TestBigEndian)
 
 test_big_endian(WORDS_BIGENDIAN)
 
 if(CMAKE_REQUIRED_QUIET)
-  message(STATUS "Checking for common configuration values by inspecing headers...")
+  message(STATUS "Checking for common configuration values by inspecting headers...")
 endif()
 
 check_include_file(argz.h HAVE_ARGZ_H)
@@ -152,7 +151,6 @@ check_symbol_exists(uintmax_t "stdint.h" HAVE_STDINT_H_WITH_UINTMAX)
 check_symbol_exists(LC_MESSAGES "locale.h" HAVE_LC_MESSAGES)
 
 check_type_size(intmax_t HAVE_INTMAX_T)
-macro_bool_to_01(HAVE_UINTMAX_T HAVE_STDINT_H_WITH_UINTMAX)
 
 check_type_size("long double"  HAVE_LONG_DOUBLE)
 check_type_size("long long"  HAVE_LONG_LONG)
@@ -285,5 +283,4 @@ check_cxx_source_compiles(
 	int main(){return 0;}
 	"
 SIZEOF_WCHAR_T_IS_4)
-
 

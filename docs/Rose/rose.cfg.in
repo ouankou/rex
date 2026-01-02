@@ -829,6 +829,7 @@ WARN_LOGFILE           =
 INPUT                  = @top_srcdir@/docs/Rose/MainPage.dox \
                          @top_srcdir@/docs/Rose/ToolDevelopment \
                          @top_srcdir@/docs/Rose/LibraryGeneralPrinciples.dox \
+                         @top_srcdir@/docs/Rose/astConstruction.dox \
                          @top_srcdir@/docs/Rose/Developers.dox \
                          @top_srcdir@/docs/Rose \
                          @top_pwd@/src/frontend/SageIII \
@@ -845,6 +846,8 @@ INPUT                  = @top_srcdir@/docs/Rose/MainPage.dox \
                          @top_srcdir@/src/frontend/SageIII/includeDirectivesProcessing \
                          @top_srcdir@/src/frontend/SageIII/sage_support \
                          @top_srcdir@/src/frontend/SageIII/sageInterface \
+                         @top_srcdir@/src/frontend/SageIII/sageInterface/sageInterface.C \
+                         @top_srcdir@/src/frontend/SageIII/sageInterface/sageBuilder.C \
                          @top_srcdir@/src/frontend/SageIII/virtualCFG \
                          @top_srcdir@/src/midend/programTransformation/ompLowering \
                          @top_srcdir@/src/midend/midend.docs \
@@ -852,7 +855,6 @@ INPUT                  = @top_srcdir@/docs/Rose/MainPage.dox \
                          @top_srcdir@/src/midend/astDiagnostics \
                          @top_srcdir@/src/midend/astDiagnostics/AstDiagnostics.docs \
                          @top_srcdir@/src/midend/astDump \
-                         @top_srcdir@/src/midend/astDump/MSTL.docs \
                          @top_srcdir@/src/midend/astProcessing \
                          @top_srcdir@/src/midend/astProcessing/AstProcessing.docs \
                          @top_srcdir@/src/midend/astQuery \
@@ -883,7 +885,6 @@ INPUT                  = @top_srcdir@/docs/Rose/MainPage.dox \
                          @top_srcdir@/src/util/StringUtility/stringSupportDocumentation.docs \
                          @top_srcdir@/src/util/StringUtility \
                          @top_srcdir@/src/util/support \
-                         @top_srcdir@/src/Rosebud \
                          @top_srcdir@/src/3rdPartyLibraries/3rdPartyLibraries.docs \
                          @top_srcdir@/src/extra.docs
 
@@ -971,7 +972,8 @@ EXCLUDE_SYMBOLS        =
 # command).
 
 EXAMPLE_PATH           = @top_srcdir@ \
-                         @top_srcdir@/tutorial
+                         @top_srcdir@/tutorial \
+                         @top_builddir@/tutorial
 
 # If the value of the EXAMPLE_PATH tag contains directories, you can use the
 # EXAMPLE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp and
@@ -2452,7 +2454,7 @@ INCLUDED_BY_GRAPH      = YES
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-CALL_GRAPH             = YES
+CALL_GRAPH             = NO
 
 # If the CALLER_GRAPH tag is set to YES then doxygen will generate a caller
 # dependency graph for every global function or class method.
@@ -2464,7 +2466,7 @@ CALL_GRAPH             = YES
 # The default value is: NO.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-CALLER_GRAPH           = YES
+CALLER_GRAPH           = NO
 
 # If the GRAPHICAL_HIERARCHY tag is set to YES then doxygen will graphical
 # hierarchy of all classes instead of a textual one.

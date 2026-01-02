@@ -71,9 +71,8 @@ AstRestructure::immediateReplace(SgStatement* astNode,string s) {
   cout << "IMMEDIATE REPLACE: OLD AST-SOURCE: " << astNode->unparseToString() << endl;
   cout << "IMMEDIATE REPLACE: WITH: " << endl;
   cout << s << endl;
-  //TODO: comment out the MiddleLevelRewrite::insert call since we are removing
-  // astRewriteMechanism source codes.
-  cerr << "comment out the MiddleLevelRewrite::insert call since we are removing astRewriteMechanism source codes" << endl;
+  // TODO: comment out the MiddleLevelRewrite::insert call since the legacy rewrite system is removed.
+  cerr << "MiddleLevelRewrite::insert is unavailable; legacy rewrite system removed." << endl;
   ROSE_ABORT();
   //MiddleLevelRewrite::insert(astNode,s,MidLevelCollectionTypedefs::SurroundingScope,MidLevelCollectionTypedefs::ReplaceCurrentPosition);
   //MiddleLevelRewrite::replace(statement,newSourceString);

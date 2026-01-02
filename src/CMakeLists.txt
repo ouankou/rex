@@ -26,7 +26,7 @@ add_custom_target(
 
 # Header files needed to build ROSETTA
 set(ROSE_JNI_INCLUDES "")
-if(enable-fortran AND enable-fortran-ofp)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   list(APPEND ROSE_JNI_INCLUDES ${JNI_INCLUDE_DIRS})
 endif()
 
@@ -43,6 +43,8 @@ include_directories(
 set(ROSETTA_HEADERS
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/AstQueryMemoryPool.h
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.h
+  ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarDeclarations.h
+  ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarVariants.h
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarTreeTraversalAccessEnums.h
 )
 
@@ -93,6 +95,7 @@ set(rose_LIB_SRCS
   $<TARGET_OBJECTS:util_main>
   $<TARGET_OBJECTS:util_commandlineProcessing>
   $<TARGET_OBJECTS:util_StringUtility>
+  $<TARGET_OBJECTS:roseLogger>
   $<TARGET_OBJECTS:util_support>
   $<TARGET_OBJECTS:util_graphs>
   $<TARGET_OBJECTS:unparser>
@@ -123,12 +126,12 @@ if(NOT enable-internalFrontendDevelopment)
 endif()
 
 # Add Clang frontend objects (always enabled for REX when C is enabled)
-if(enable-c)
+if(ENABLE-C)
   list(APPEND rose_LIB_SRCS
     $<TARGET_OBJECTS:libroseClangFrontend>)
 endif()
 
-if(enable-fortran AND enable-fortran-flang)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   list(APPEND rose_LIB_SRCS
     $<TARGET_OBJECTS:general_language_support>
     $<TARGET_OBJECTS:flang_frontend>
@@ -145,23 +148,58 @@ add_dependencies(ROSE_DLL roseUtil)
 
 set_target_properties(ROSE_DLL PROPERTIES OUTPUT_NAME "rose")
 
+# Create namespaced alias for modern CMake usage (build tree only).
+add_library(Rose::rose ALIAS ROSE_DLL)
+message(STATUS "Created alias target Rose::rose")
+
+# Propagate include directories to consumers (build and install trees).
+target_include_directories(ROSE_DLL PUBLIC
+  $<BUILD_INTERFACE:${ROSE_TOP_SRC_DIR}/src>
+  $<BUILD_INTERFACE:${ROSE_TOP_SRC_DIR}/src/frontend/SageIII>
+  $<BUILD_INTERFACE:${ROSE_TOP_SRC_DIR}/src/Rose>
+  $<BUILD_INTERFACE:${ROSE_TOP_BINARY_DIR}>
+  $<BUILD_INTERFACE:${ROSE_TOP_BINARY_DIR}/src/util>
+  $<BUILD_INTERFACE:${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII>
+  $<INSTALL_INTERFACE:${INCLUDE_INSTALL_DIR}>
+  $<INSTALL_INTERFACE:${INCLUDE_INSTALL_DIR}/Rose>
+)
+
+# ROSE requires C++14 for public headers.
+target_compile_features(ROSE_DLL PUBLIC cxx_std_14)
+
 # Link Clang/LLVM libraries (required for REX)
-if(enable-c)
-  target_link_libraries(ROSE_DLL ${CLANG_LIBS} ${LLVM_LIBS} ${link_with_libraries})
+if(ENABLE-C)
+  target_link_libraries(ROSE_DLL
+    PUBLIC ${link_with_libraries}
+    PRIVATE ${CLANG_LIBS} ${LLVM_LIBS})
 else()
-  target_link_libraries(ROSE_DLL ${link_with_libraries})
+  target_link_libraries(ROSE_DLL PUBLIC ${link_with_libraries})
 endif()
 
-if(enable-fortran AND enable-fortran-flang)
-  target_link_libraries(ROSE_DLL ${FLANG_LIBS})
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
+  target_link_libraries(ROSE_DLL PRIVATE ${FLANG_LIBS})
 endif()
 
 set_target_properties(ROSE_DLL PROPERTIES
-  VERSION 1.0.0
-  SOVERSION 1
-  DEFINE_SYMBOL ROSE_DLL_EXPORTS)
+  VERSION "${PROJECT_VERSION}"
+  SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
+  DEFINE_SYMBOL ROSE_DLL_EXPORTS
+  EXPORT_NAME rose)
 
-install(TARGETS ROSE_DLL DESTINATION ${ROSE_LIB_DIR_NAME})
+# Install the ROSE library with export information for downstream CMake usage.
+install(TARGETS ROSE_DLL
+  EXPORT RoseTargets
+  LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+  ARCHIVE DESTINATION ${LIB_INSTALL_DIR}
+  RUNTIME DESTINATION ${BIN_INSTALL_DIR}
+  INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR}
+)
+
+install(EXPORT RoseTargets
+  FILE RoseTargets.cmake
+  NAMESPACE Rose::
+  DESTINATION ${LIB_INSTALL_DIR}/cmake/Rose
+)
 install(
   FILES
     featureTests.h rose.h roseInternal.h
@@ -170,18 +208,28 @@ install(
 
 ########################################################################################################################
 # Dependencies of the ROSE library. librose depends on additional libraries.
+
+set(rose_library_dir_list "")
+set(lib_dir "")
+macro(add_library_dependency lib)
+  get_filename_component(lib_dir ${lib} DIRECTORY)
+  list(APPEND rose_library_dir_list ${lib_dir})
+endmacro()
+
 ########################################################################################################################
 
 # Z3 has an executable component and a development (library and headers) component that can be installed independently
 # of each other. Therfore Z3_FOUND_EXE says whether the executable component was found, and Z3_FOUND_LIB says whether
 # the development component was found; Z3_FOUND is set if either component is found.
 if(Z3_FOUND_LIB)
-  target_link_libraries(ROSE_DLL ${Z3_LIBRARY})
+  target_link_libraries(ROSE_DLL PRIVATE ${Z3_LIBRARY})
+  add_library_dependency(${Z3_LIBRARY})
 endif()
 
 # Zlib is a compression library used by libharu.
 if(ZLIB_FOUND)
-  target_link_libraries(ROSE_DLL ${ZLIB_LIBRARY})
+  target_link_libraries(ROSE_DLL PRIVATE ${ZLIB_LIBRARY})
+  add_library_dependency(${ZLIB_LIBRARY})
 endif()
 
 set(LINK_FILES
@@ -189,11 +237,11 @@ set(LINK_FILES
   ${CMAKE_DL_LIBS})
 
 # Depending on which language analysis (frontend) features are enabled in ROSE, we may need some additional libraries.
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   list(APPEND LINK_FILES roseFortran)
 endif()
 
-if(enable-fortran AND enable-fortran-ofp)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   list(APPEND LINK_FILES ${JAVA_JVM_LIBRARY})
 endif()
 
@@ -201,16 +249,12 @@ endif()
 # On Ubuntu 20.04, it is installed to /usr/lib
 list(APPEND LINK_FILES antlr4-runtime)
 
-# This was an experiment to generate smaller files from ROSETTA. (I'm not sure of the status [Matzke 2019-02-02].)
-if(enable-smaller-generated-files )
-  set(ROSE_TARGET_LINK libgeneratedIR ${LINK_FILES})
-else()
-  set(ROSE_TARGET_LINK ${LINK_FILES})
-endif()
-target_link_libraries(ROSE_DLL ${ROSE_TARGET_LINK})
+# Smaller-generated-files support removed; link standard targets only.
+set(ROSE_TARGET_LINK ${LINK_FILES})
+target_link_libraries(ROSE_DLL PRIVATE ${ROSE_TARGET_LINK})
 
 # If the C preprocessor is enabled, ROSE has some additional depenendencies
-if(enable-cpp)
+if(ENABLE-CPP)
   add_dependencies(ROSE_DLL ROSE_PREPROCESSOR libhpdf generate_rosePublicConfig)
 endif()
 
@@ -239,16 +283,104 @@ add_executable(rose-compiler rose-compiler.C)
 target_link_libraries(rose-compiler ROSE_DLL ${link_with_libraries})
 install(TARGETS rose-compiler DESTINATION bin)
 
+########################################################################################################################
+# check-core target. Tests a simple program for each language that is enabled
+########################################################################################################################
+add_custom_target(
+  check-core
+  COMMENT "Running check-core")
+add_dependencies(check-core rose-compiler rose-config)
+
+#Check that the other links are correct
+add_custom_command(
+  TARGET check-core
+  POST_BUILD
+  COMMENT "  TEST     whether a trivial ROSE program runs [rose-compiler]"
+  COMMAND /bin/sh -c "if ! ${PROJECT_BINARY_DIR}/bin/rose-compiler --version ; then echo \"error: You cannot run a program linked with ROSE. Please be sure that your\" >&2; echo \"error: LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (Mac OSX) contains the\" >&2; echo \"error: correct libraries (JVM, librose.so, etc.)\" >&2; exit 1; fi;"
+  VERBATIM)
+
+#Check that rose-config works
+add_custom_command(
+  TARGET check-core
+  POST_BUILD
+  COMMENT "  TEST     ROSE configuration tool [rose-config]"
+  COMMAND rose-config --version
+  VERBATIM)
+
+if(ENABLE-C)
+  add_custom_target(check-hello-cxx)
+  add_dependencies(check-hello-cxx rose-compiler)
+
+  #Check that we can compile & run a simple C program
+  add_custom_command(
+    TARGET check-core
+    POST_BUILD
+    COMMAND echo "\#include <stdio.h>"               >  hello-world.c
+    COMMAND echo "int main() {"                      >> hello-world.c
+    COMMAND echo "   puts(\"Hello World from C!\");" >> hello-world.c
+    COMMAND echo "   return 0;"                      >> hello-world.c
+    COMMAND echo "}"                                 >> hello-world.c
+    COMMAND rose-compiler -rose:ast:write hello-world-c.ast hello-world.c -o hello-world-c
+    COMMAND ./hello-world-c
+    COMMAND rose-compiler -rose:ast:read hello-world-c.ast
+    COMMAND rm -f hello-world.c hello-world-c hello-world-c.ast hello-world.o rose_hello-world.c
+      rose_odr_class.log rose_odr_function.log rose_odr_variable.log
+    VERBATIM
+    COMMENT "  TEST     ROSE C compiler")
+
+  #Check that we can compile & run a simple C++ program
+  add_custom_command(
+    TARGET check-core check-hello-cxx
+    POST_BUILD
+    COMMAND echo "\#include <iostream>"                                     >  hello-world.cpp
+    COMMAND echo "int main() {"                                             >> hello-world.cpp
+    COMMAND echo "    std::cout << \"Hello World from C++!\" << std::endl;" >> hello-world.cpp
+    COMMAND echo "    return 0;"                                            >> hello-world.cpp
+    COMMAND echo "}"                                                        >> hello-world.cpp
+    COMMAND rose-compiler -rose:ast:write hello-world-cxx.ast hello-world.cpp -o hello-world-cpp
+    COMMAND ./hello-world-cpp
+    COMMAND rose-compiler -rose:ast:read hello-world-cxx.ast
+    COMMAND rm -f hello-world.cpp hello-world-cpp hello-world-cxx.ast hello-world.o hello-world.ti
+      rose_hello-world.cpp rose_odr_class.log rose_odr_function.log rose_odr_variable.log
+    VERBATIM
+    COMMENT "  TEST     ROSE C++ compiler")
+endif()
+
+if(ENABLE-FORTRAN)
+  #Check that we can compile and run a simple fortran program
+  add_custom_command(
+    TARGET check-core
+    POST_BUILD
+    COMMAND echo "program hello"                            >  hello-world.f90
+    COMMAND echo "  print *, \"Hello World from Fortran!\"" >> hello-world.f90
+    COMMAND echo "end program hello"                        >> hello-world.f90
+    COMMAND rose-compiler -rose:ast:write hello-world-f90.ast hello-world.f90 -o hello-world-f90
+    COMMAND ./hello-world-f90
+#    COMMAND rose-compiler -rose:ast:read hello-world-f90.ast
+    COMMAND rm -f hello-world.f90 hello-world-f90 hello-world-f90.ast hello-world.o rose_hello-world.f90
+    VERBATIM
+    COMMENT "  TEST     ROSE Fortran compiler")
+endif()
+
 
 ########################################################################################################################
 # rose-config.cfg -- text file that contains various settings for user-level makefiles.
 ########################################################################################################################
 
 #Build LDFLAGS for ROSE tools
-set(rose_config_installed_cppflags "-I${CMAKE_INSTALL_PREFIX}/include/rose")
+set(rose_config_installed_cppflags "-I${CMAKE_INSTALL_PREFIX}/include/rose ")
 
-set(rose_library_dir_list "${CMAKE_INSTALL_PREFIX}/${ROSE_LIB_DIR_NAME}")
-set(rose_library_dir_list "${rose_library_dir_list}")
+list(APPEND rose_library_dir_list "${CMAKE_INSTALL_PREFIX}/${ROSE_LIB_DIR_NAME}")
+if(NOT "${QUADMATH_LIBRARY}" STREQUAL "QUADMATH_LIBRARY-NOTFOUND")
+  if(NOT "${QUADMATH_LIBRARY}" STREQUAL "")
+    add_library_dependency(${QUADMATH_LIBRARY})
+  endif()
+endif()
+list(REMOVE_DUPLICATES rose_library_dir_list)
+list(FILTER rose_library_dir_list EXCLUDE REGEX "^/lib.*")
+list(FILTER rose_library_dir_list EXCLUDE REGEX "^/usr/lib.*")
+list(FILTER rose_library_dir_list EXCLUDE REGEX "^/usr/local/lib.*")
+list(FILTER rose_library_dir_list EXCLUDE REGEX "^/var/lib.*")
 foreach(X IN LISTS rose_library_dir_list)
   set(rose_config_installed_ldflags "${rose_config_installed_ldflags} -L${X}")
 endforeach()
@@ -256,8 +388,12 @@ set(rose_config_installed_cppflags "${rose_config_installed_cppflags} -I/usr/inc
 
 
 set(rose_library_list "rose")
-set(rose_library_list "${rose_library_list}")
-set(rose_library_list "${rose_library_list};m;quadmath")
+set(rose_library_list "${rose_library_list};m")
+if(NOT "${QUADMATH_LIBRARY}" STREQUAL "QUADMATH_LIBRARY-NOTFOUND")
+  if(NOT "${QUADMATH_LIBRARY}" STREQUAL "")
+    set(rose_library_list "${rose_library_list};${QUADMATH_LIBRARY}")
+  endif()
+endif()
 
 foreach(X IN LISTS rose_library_list)
   get_filename_component(Y ${X} NAME_WE)
@@ -270,20 +406,71 @@ foreach(X IN LISTS rose_library_list)
   set(rose_config_installed_ldflags "${rose_config_installed_ldflags} -l${Y}")
 endforeach()
 
+# Function for rose-config.
+function(resolve_compiler_names)
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set(cc_name "gcc" PARENT_SCOPE)
+    set(cxx_name "g++" PARENT_SCOPE)
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+    set(cc_name "clang" PARENT_SCOPE)
+    set(cxx_name "clang++" PARENT_SCOPE)
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+    set(cc_name "icc" PARENT_SCOPE)
+    set(cxx_name "icpc" PARENT_SCOPE)
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "XL")
+    set(cc_name "xlc" PARENT_SCOPE)
+    set(cxx_name "xlC" PARENT_SCOPE)
+  endif()
+endfunction()
+
+resolve_compiler_names()
+
+if(cc_name)
+  set(ACTUAL_CC ${cc_name})
+else()
+  set(ACTUAL_CC ${BACKEND_C_COMPILER_NAME_WITHOUT_PATH})
+endif()
+
+if(cxx_name)
+  set(ACTUAL_CXX ${cxx_name})
+else()
+  set(ACTUAL_CXX ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH})
+endif()
+
+set(ROSE_LIBDIRS "")
+set(ROSE_LINK_RPATHS "")
+set(ROSE_RPATHS "")
+
+foreach(X IN LISTS rose_library_dir_list)
+  set(ROSE_LIBDIRS "${ROSE_LIBDIRS} ${X}")
+  set(ROSE_LINK_RPATHS "${ROSE_LINK_RPATHS} -Wl,-rpath ${X}")
+  set(ROSE_RPATHS "${ROSE_RPATHS} -R ${X}")
+endforeach()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  message(STATUS "rose_library_dir_list: ${rose_library_dir_list}")
+  message(STATUS "ROSE_LIBDIRS: ${ROSE_LIBDIRS}")
+  message(STATUS "ROSE_LINK_RPATHS: ${ROSE_LINK_RPATHS}")
+  message(STATUS "ROSE_RPATHS: ${ROSE_RPATHS}")
+endif()
+
 file(REMOVE ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg)
+set(ROSE_CXXFLAGS "${CMAKE_CXX_FLAGS}")
 file(WRITE  ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "# Things that the 'rose-config' tool can report\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CC           = ${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CC           = ${ACTUAL_CC}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CCPATH       = ${CMAKE_C_COMPILER}\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CXX          = ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CXX          = ${ACTUAL_CXX}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CXX_PATH     = ${CMAKE_CXX_COMPILER}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CPPFLAGS     = ${rose_config_installed_cppflags}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CFLAGS       = ${CMAKE_C_FLAGS}\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CXXFLAGS     = ${CMAKE_CXX_FLAGS}\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_CXXFLAGS     = ${ROSE_CXXFLAGS}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_LDFLAGS      = ${rose_config_installed_ldflags}\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_LIBDIRS      = ${CMAKE_INSTALL_PREFIX}/${ROSE_LIB_DIR_NAME}\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_LIBDIRS      = ${ROSE_LIBDIRS}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_PREFIX       = ${CMAKE_INSTALL_PREFIX}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "# Additional items useful to include in Makefiles\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_RPATHS       = ${CMAKE_INSTALL_RPATH}\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_LINK_RPATHS  = unknown\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_RPATHS       = ${ROSE_RPATHS}\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_LINK_RPATHS  = ${ROSE_LINK_RPATHS}\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_VERSION      = ${ROSE_PACKAGE_VERSION}\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_BACKEND_C_COMPILER      = ${BACKEND_C_COMPILER}\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/rose-config.cfg "ROSE_BACKEND_CXX_COMPILER    = ${BACKEND_CXX_COMPILER}\n")
 install(FILES ${CMAKE_BINARY_DIR}/src/rose-config.cfg DESTINATION ${ROSE_LIB_DIR_NAME})

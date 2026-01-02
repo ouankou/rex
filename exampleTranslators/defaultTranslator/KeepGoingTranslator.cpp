@@ -40,8 +40,6 @@ Refactored and documented: Liao, 4/13/2017
 int
 main(int argc, char * argv[])
 {
-  ROSE_INITIALIZE;
-
   // Using home may be a better choice, no scattered log files in every
   // subdirectories.
   Rose::KeepGoing::report_filename__fail = "rose-failed_files.txt";

@@ -10,6 +10,7 @@
 #include <DepCompTransform.h>
 #include <LoopTreeTransform.h>
 #include <LoopInfoInterface.h>
+#include <CommandOptions.h>
 
 struct SliceInfo
 {
@@ -156,13 +157,16 @@ void DependenceHoisting ::
 Analyze( LoopTreeDepComp &comp, LoopTreeTransDepGraphCreate *tg,
          CompSliceNest& result)
 {
+  DebugLog DebugSlice("-debugslice");
   LoopTreeInterface looptreeInterface;
   LoopTreeNode *root = comp.GetLoopTreeRoot();
+  DebugSlice([&comp](){ return "Analyzing LoopTree " + comp.TreeToString(); });
   int rootlevel = root->LoopLevel();
   int size, slicesize;
   GetLoopTreeSize(root, slicesize, size);
   size -= rootlevel;
   size *= slicesize;
+  DebugSlice([&size](){ return "slice size = " + std::to_string(size); });
 
   result.Reset(size);
   TransSlicingAnal* tmpSlices = new TransSlicingAnal[size];
@@ -235,6 +239,7 @@ Analyze( LoopTreeDepComp &comp, LoopTreeTransDepGraphCreate *tg,
 void DependenceHoisting ::
 Analyze( LoopTreeDepComp &comp, CompSliceNest& result)
 {
+  DebugLog DebugSlice("-debugslice");
   typedef PerfectLoopSlicable<DepInfoEdge,LoopTreeDepGraph> LoopSlicable;
   typedef PerfectLoopReversible<DepInfoEdge,LoopTreeDepGraph>
           LoopReversible;
@@ -253,8 +258,10 @@ Analyze( LoopTreeDepComp &comp, CompSliceNest& result)
      if (!n->IncreaseLoopLevel())
         continue;
      index++;
-     if (!LoopSlicable()(dg, index))
+     if (!LoopSlicable()(dg, index)) {
+        DebugSlice([&index](){ return "Loop " + std::to_string(index) + " is not sliceable."; });
         continue;
+     }
      CompSlice *slice = CreateCompSlice( rootlevel );
      bool r = LoopReversible()(dg, index);
      LoopTreeTraverseSelectStmt stmtIter(n);

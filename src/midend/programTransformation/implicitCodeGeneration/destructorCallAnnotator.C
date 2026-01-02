@@ -321,45 +321,34 @@ auxObjectsAllocated(SgStatement *stmt)
      return objs;
    }
      
-class IsFunctionDef
+struct IsFunctionDef
    {
-     public:
-          using argument_type = SgNode*;
-          using result_type = bool;
-          bool operator()(SgNode *n)
-             {
-               //cout << "IsFunctionDef: looking at a " << n->class_name() << endl;
-               bool ret = isSgFunctionDefinition(n);
-               //cout << "returning " << ret << endl;
-               return ret;
-             }
+     using result_type = bool;
+     result_type operator()(SgNode *n) {
+       result_type ret = isSgFunctionDefinition(n);
+       return ret;
+     }
    };
 
 // if a break/continue is issued, does the buck stop here?
-class IsBreakPoint
+struct IsBreakPoint
    {
-     public:
-          using argument_type = SgNode*;
-          using result_type = bool;
-          bool operator()(SgNode *n)
-             {
-               return isSgForStatement(n) ||
-                      isSgWhileStmt(n) ||
-                      isSgDoWhileStmt(n) ||
-                      isSgSwitchStatement(n) ||
-                      isSgFunctionDefinition(n);
-             }
+     using result_type = bool;
+     result_type operator()(SgNode *n) {
+       return isSgForStatement(n) ||
+              isSgWhileStmt(n) ||
+              isSgDoWhileStmt(n) ||
+              isSgSwitchStatement(n) ||
+              isSgFunctionDefinition(n);
+     }
    };
 
-class ParentIsBreakPoint
+struct ParentIsBreakPoint
    {
-     public:
-          using argument_type = SgNode*;
-          using result_type = bool;
-          bool operator()(SgNode *n)
-             {
-               return IsBreakPoint()(n->get_parent());
-             }
+     using result_type = bool;
+     result_type operator()(SgNode *n) {
+       return IsBreakPoint()(n->get_parent());
+     }
    };
 
 class ShowObjectsAllocated : public AstSimpleProcessing
@@ -777,11 +766,8 @@ class Transformer : public AstSimpleProcessing
 
 // BEGIN STOLEN from wholeGraphAST.C
 
-// This functor is derived from the STL functor mechanism
 struct customFilter
 {
-  using argument_type = pair<SgNode*, std::string>&;
-  using result_type = bool;
   // This functor filters SgFileInfo objects and IR nodes from the GNU compatability file
      bool operator() ( AST_Graph::NodeType & x );
    };

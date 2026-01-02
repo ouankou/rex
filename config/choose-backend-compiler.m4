@@ -563,7 +563,7 @@ AC_MSG_NOTICE([testing value of FC = "$FC"])
   AM_CONDITIONAL(ROSE_USING_GCC_VERSION_LATER_9_3, [test "x$gcc_version_later_9_3" = "xyes"])
 
   gcc_version_later_10_1=no
-  if test x$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == x10; then
+  if test "$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER" = "10"; then
      if test "$BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER" -ge "1"; then
         AC_MSG_NOTICE([we have identified version 10.1+ of gcc])
         gcc_version_later_10_1=yes
@@ -574,7 +574,7 @@ AC_MSG_NOTICE([testing value of FC = "$FC"])
   AM_CONDITIONAL(ROSE_USING_GCC_VERSION_LATER_10_1, [test "x$gcc_version_later_10_1" = "xyes"])
 
   gcc_version_later_10_2=no
-  if test x$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == x10; then
+  if test "$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER" = "10"; then
      if test "$BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER" -ge "2"; then
         AC_MSG_NOTICE([we have identified version 10.2+ of gcc])
         gcc_version_later_10_2=yes
@@ -585,7 +585,7 @@ AC_MSG_NOTICE([testing value of FC = "$FC"])
   AM_CONDITIONAL(ROSE_USING_GCC_VERSION_LATER_10_2, [test "x$gcc_version_later_10_2" = "xyes"])
 
   gcc_version_later_10_3=no
-  if test x$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == x10; then
+  if test "$BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER" = "10"; then
      if test "$BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER" -ge "3"; then
         AC_MSG_NOTICE([we have identified version 10.3+ of gcc])
         gcc_version_later_10_3=yes

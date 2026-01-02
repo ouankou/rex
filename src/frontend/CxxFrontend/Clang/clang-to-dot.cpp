@@ -508,6 +508,7 @@ ClangToDotNextPreprocessorToInsert * ClangToDotNextPreprocessorToInsert::next() 
     res->cursor = next.first;
     res->next_to_insert = next.second;
     res->candidat = candidat;
+    return res;
 }
 
 // class
@@ -524,8 +525,7 @@ ClangToDotNextPreprocessorToInsert * ClangToDotPreprocessorInserter::evaluateInh
         // TODO insert on inheritedValue->candidat
         return inheritedValue->next();
     }
-
-    
+    return inheritedValue;
 }
 
 // class SagePreprocessorRecord
@@ -744,10 +744,18 @@ void ClangToDotTranslator::VisitTemplateArgument(const clang::TemplateArgument &
             oss << " declaration";
             node_desc.successors.push_back(std::pair<std::string, std::string>(oss.str(), Traverse(template_argument.getAsDecl())));
             break;
+        case clang::TemplateArgument::NullPtr:
+            oss << " null_ptr";
+            node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), ""));
+            break;
         case clang::TemplateArgument::Integral:
             oss << " integral";
          // assert(DEBUG_TODO == 0); // TODO
             ROSE_ASSERT(FAIL_TODO == 0); // TODO
+            break;
+        case clang::TemplateArgument::StructuralValue:
+            oss << " structural_value";
+            node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), ""));
             break;
         case clang::TemplateArgument::Template:
             oss << " template";
@@ -802,11 +810,13 @@ void ClangToDotTranslator::VisitNestedNameSpecifier(clang::NestedNameSpecifier *
                 std::pair<std::string, std::string>(prefix + " type_specifier", Traverse(nested_name_specifier->getAsType()))
             );
             break;
-        // TypeSpecWithTemplate was removed in LLVM 20
-        // case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+        case clang::NestedNameSpecifier::TypeSpecWithTemplate:
             node_desc.successors.push_back(
                 std::pair<std::string, std::string>(prefix + " type_specifier_with_template", Traverse(nested_name_specifier->getAsType()))
             );
+            break;
+        case clang::NestedNameSpecifier::Super:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>(prefix, "super"));
             break;
         case clang::NestedNameSpecifier::Global:
             node_desc.attributes.push_back(std::pair<std::string, std::string>(prefix, "global (::)"));
@@ -829,13 +839,23 @@ void ClangToDotTranslator::VisitTemplateName(const clang::TemplateName & templat
             ROSE_ASSERT(FAIL_TODO == 0); // TODO
             break;
         }
+        case clang::TemplateName::AssumedTemplate:
+            oss << " assumed_template";
+            {
+                std::string name;
+                if (const clang::AssumedTemplateStorage * assumed = template_name.getAsAssumedTemplateName()) {
+                    name = assumed->getDeclName().getAsString();
+                }
+                node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), name));
+            }
+            break;
         case clang::TemplateName::QualifiedTemplate:
             oss << " qualified_template";
             VisitNestedNameSpecifier(template_name.getAsQualifiedTemplateName()->getQualifier(), node_desc, oss.str() + "nested_name_specifier");
             // In LLVM 20, getDecl() and getTemplateDecl() were removed from QualifiedTemplateName
             // Use getUnderlyingTemplate() instead
             node_desc.successors.push_back(
-                std::pair<std::string, std::string>(oss.str() + "template_declaration", Traverse(template_name.getAsQualifiedTemplateName()->getUnderlyingTemplate().getAsTemplateDecl()))
+                std::pair<std::string, std::string>(oss.str() + "declaration", Traverse(template_name.getAsQualifiedTemplateName()->getUnderlyingTemplate().getAsTemplateDecl()))
             );
             break;
         case clang::TemplateName::DependentTemplate:
@@ -849,6 +869,20 @@ void ClangToDotTranslator::VisitTemplateName(const clang::TemplateName & templat
         case clang::TemplateName::SubstTemplateTemplateParmPack:
          // assert(DEBUG_TODO == 0); // TODO
             ROSE_ASSERT(FAIL_TODO == 0); // TODO
+            break;
+        case clang::TemplateName::UsingTemplate:
+            oss << " using_template";
+            node_desc.successors.push_back(std::pair<std::string, std::string>(
+                oss.str(), Traverse(template_name.getAsUsingShadowDecl())));
+            break;
+        case clang::TemplateName::DeducedTemplate:
+            oss << " deduced_template";
+            if (const clang::DeducedTemplateStorage * deduced = template_name.getAsDeducedTemplateName()) {
+                VisitTemplateName(deduced->getUnderlying(), node_desc, oss.str() + " underlying");
+            }
+            else {
+                node_desc.attributes.push_back(std::pair<std::string, std::string>(oss.str(), ""));
+            }
             break;
     }
 }

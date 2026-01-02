@@ -1,6 +1,14 @@
 #ifndef ROSE_SOURCELOCATION_H
 #define ROSE_SOURCELOCATION_H
 
+#include <featureTests.h>
+
+#ifdef ROSE_HAVE_CEREAL
+#include <cereal/access.hpp>
+#include <cereal/cereal.hpp>
+#include <cereal/types/optional.hpp>
+#endif
+
 #include <optional>
 #include <string>
 #include <tuple>
@@ -41,6 +49,18 @@ public:
   friend bool operator>=(const SourceLocation &lhs, const SourceLocation &rhs) {
     return !(lhs < rhs);
   }
+
+#ifdef ROSE_HAVE_CEREAL
+private:
+  friend class cereal::access;
+
+  template <class Archive>
+  void CEREAL_SERIALIZE_FUNCTION_NAME(Archive &archive) {
+    archive(cereal::make_nvp("file", file_),
+            cereal::make_nvp("line", line_),
+            cereal::make_nvp("column", column_));
+  }
+#endif
 
 private:
   std::tuple<std::string, std::size_t, std::optional<std::size_t>> key() const {

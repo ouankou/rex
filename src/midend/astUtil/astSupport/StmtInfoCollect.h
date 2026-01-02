@@ -11,7 +11,6 @@
 #include <list>
 #include <sstream>
 
-template <class AstNodePtr>
 class StmtInfoCollect : public ProcessAstTreeBase<AstInterface::AstNodePtr>
 { 
  protected:
@@ -32,12 +31,18 @@ class StmtInfoCollect : public ProcessAstTreeBase<AstInterface::AstNodePtr>
   AstNodePtr curstmt;
  protected:
   using ProcessAstTreeBase<AstInterface::AstNodePtr>::Skip;
+  virtual void AppendVariableDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) = 0;
+  virtual void AppendAliasDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) = 0;
   virtual void AppendModLoc( AstInterface& fa, const AstNodePtr& mod, 
                               const AstNodePtr& rhs = AstNodePtr()) = 0;
-  virtual void AppendReadLoc( AstInterface& fa, const AstNodePtr& read) = 0; 
+  virtual void AppendReadLoc( AstInterface& fa, const AstNodePtr& read,
+                              const AstNodePtr& lhs = 0) = 0; 
   virtual void AppendFuncCall( AstInterface& fa, const AstNodePtr& fc) = 0; 
+  virtual void AppendMemoryAllocate( AstInterface& /* fa */, const AstNodePtr& /* s */) {}
+  virtual void AppendMemoryFree( AstInterface& /* fa */, const AstNodePtr& /* s */) {}
 
-  void AppendFuncCallArguments( AstInterface& fa, const AstNodePtr& fc) ; 
+  // Analyzes call arguments to determine what are read. Returns callee if requested.
+  void AppendFuncCallArguments( AstInterface& fa, const AstNodePtr& fc, AstNodePtr* callee) ; 
   void AppendFuncCallWrite( AstInterface& fa, const AstNodePtr& fc) ; 
  
   virtual bool ProcessTree( AstInterface &_fa, const AstInterface::AstNodePtr& s,
@@ -47,48 +52,49 @@ class StmtInfoCollect : public ProcessAstTreeBase<AstInterface::AstNodePtr>
 };
 
 class FunctionSideEffectInterface;
-template <class AstNodePtr>
-class StmtSideEffectCollect
-: public StmtInfoCollect<AstNodePtr>, public SideEffectAnalysisInterface<AstNodePtr>
+class StmtSideEffectCollect : public StmtInfoCollect, public SideEffectAnalysisInterface
 {
+  using SideEffectAnalysisInterface::modcollect;
+  using SideEffectAnalysisInterface::killcollect;
+  using SideEffectAnalysisInterface::readcollect;
+  using SideEffectAnalysisInterface::callcollect;
+  using SideEffectAnalysisInterface::allocate_collect;
+  using SideEffectAnalysisInterface::free_collect;
+  using SideEffectAnalysisInterface::varcollect;
+  using SideEffectAnalysisInterface::alias_collect;
  public:
   StmtSideEffectCollect(AstInterface& fa, FunctionSideEffectInterface* a=0) 
-     : fa_(fa), modunknown(false), readunknown(false),funcanal(a), modcollect(0), 
-       readcollect(0), killcollect(0) {}
+     : fa_(fa), modunknown(false), readunknown(false),funcanal(a) {}
 
-  //typedef SgNode* AstNodePtr;
-  typedef typename SideEffectAnalysisInterface<AstNodePtr>::CollectObject  CollectObject;
+  typedef typename SideEffectAnalysisInterface::CollectObject CollectObject;
 
-  virtual bool get_side_effect(AstInterface& fa, const AstNodePtr& h,
-                    CollectObject* collectmod,
-                    CollectObject* collectread= 0,
-                    CollectObject* collectkill = 0) override 
-    { return operator()( h, collectmod, collectread, collectkill); }
-  bool operator()( const AstNodePtr& h, 
-                    CollectObject* mod,
-                    CollectObject* read= 0,
-                    CollectObject* kill = 0)
-    {
-      modcollect = mod;
-      readcollect = read;
-      killcollect = kill;
+  virtual bool get_side_effect(AstInterface& /*fa*/, const AstNodePtr& h) override {
+      return operator() (h);
+  }
+
+  bool operator() (const AstNodePtr& h) {
       modunknown = readunknown = false;
-      StmtInfoCollect<AstNodePtr>::operator()(fa_, h);
+      StmtInfoCollect::operator()(fa_, h);
       return !modunknown && !readunknown;
     }
+
   protected:
-    using StmtInfoCollect<AstNodePtr>::AppendFuncCallArguments;
-    using StmtInfoCollect<AstNodePtr>::AppendFuncCallWrite;
+    using StmtInfoCollect::AppendFuncCallArguments;
+    using StmtInfoCollect::AppendFuncCallWrite;
+    virtual void AppendVariableDecl(AstInterface& /* fa */, const AstNodePtr& variable, const AstNodePtr& var_init) override;
+    virtual void AppendAliasDecl(AstInterface& /*fa*/, const AstNodePtr& variable, const AstNodePtr& var_init) override;
     virtual void AppendModLoc( AstInterface& fa, const AstNodePtr& mod,
                               const AstNodePtr& rhs = AstNodePtr()) override;
-    virtual void AppendReadLoc( AstInterface& fa, const AstNodePtr& read) override;
+    virtual void AppendReadLoc( AstInterface& fa, const AstNodePtr& read,
+                                const AstNodePtr& lhs = 0) override;
     virtual void AppendFuncCall( AstInterface& fa, const AstNodePtr& fc) override;
+    virtual void AppendMemoryAllocate( AstInterface& /* fa */, const AstNodePtr& s) override;
+    virtual void AppendMemoryFree( AstInterface& /* fa */, const AstNodePtr& s) override;
     AstInterface& fa_;
   private:
-    using StmtInfoCollect<AstNodePtr>::curstmt;
+    using StmtInfoCollect::curstmt;
     bool modunknown, readunknown;
     FunctionSideEffectInterface* funcanal;
-    CollectObject *modcollect, *readcollect, *killcollect;
 };
 
 class Ast2StringMap {
@@ -132,7 +138,7 @@ class InterProcVariableUniqueRepr {
 class FunctionAliasInterface;
 // flow insensitive alias analysis for named variables only
 class StmtVarAliasCollect 
-: public StmtInfoCollect<AstNodePtr>, public AliasAnalysisInterface
+: public StmtInfoCollect, public AliasAnalysisInterface
 {
  public:
    class VarAliasMap {  // name -> disjoint-set ID, we only need to check if two variables belong to the same group
@@ -154,55 +160,58 @@ class StmtVarAliasCollect
   bool hasunknown, hasresult;
 
   UF_elem* get_alias_map( const std::string& varname, const AstNodePtr& scope);
+  virtual void AppendVariableDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) override; 
+  virtual void AppendAliasDecl(AstInterface& fa, const AstNodePtr& variable, const AstNodePtr& var_init) override; 
   virtual void AppendModLoc( AstInterface& fa, const AstNodePtr& mod,
-                              const AstNodePtr& rhs = AstNodePtr());
-  virtual void AppendFuncCall( AstInterface& fa, const AstNodePtr& fc);
-  virtual void AppendReadLoc( AstInterface& fa, const AstNodePtr& read) {}
+                              const AstNodePtr& rhs = AstNodePtr()) override;
+  virtual void AppendFuncCall( AstInterface& fa, const AstNodePtr& fc) override;
+  virtual void AppendReadLoc(AstInterface&, const AstNodePtr&, const AstNodePtr& /*lhs*/ = 0) override {}
  public:
   StmtVarAliasCollect( FunctionAliasInterface* a = 0) 
     : funcanal(a), hasunknown(false), hasresult(false) {}
-  virtual void analyze(AstInterface& fa, const AstNodePtr& funcdefinition);
+  virtual void analyze(AstInterface& fa, const AstNodePtr& funcdefinition) override;
   void operator()( AstInterface& fa, const AstNodePtr& funcdefinition);
-  bool may_alias(AstInterface& fa, const AstNodePtr& r1, 
-                 const AstNodePtr& r2);
+  bool may_alias(AstInterface& fa, const AstNodePtr& r1, const AstNodePtr& r2) override;
 };
 
 /* Support tracking modification of variables, by building a map from each variable name
  * to all the AST nodes where the variable is modified */
 template <class Select>
-class ModifyVariableMap : public StmtSideEffectCollect<AstNodePtr>
+class ModifyVariableMap : public StmtSideEffectCollect
 {
   class VarModSet : public std::set<AstNodePtr> {};
   typedef std::map <std::string, VarModSet, std::less<std::string> > VarModInfo;
   VarModInfo varmodInfo;
   Select sel;
+  std::function<bool(AstNodePtr,AstNodePtr)> collect_modify;
   public:
    AstInterface& get_astInterface() { return fa_; }
    ModifyVariableMap(AstInterface& _fa, Select _sel,
                      FunctionSideEffectInterface* a=0) 
-     : StmtSideEffectCollect(_fa,a), sel(_sel) {}
-   void Collect(const AstNodePtr& root)
-     {
-       std::function<bool(AstNodePtr,AstNodePtr)> collect = 
-               [this] (AstNodePtr mod_first, AstNodePtr mod_second) {
+     : StmtSideEffectCollect(_fa,a), sel(_sel) {
+      collect_modify = [this](AstNodePtr mod_first, AstNodePtr /*mod_second*/) {
          std::string varname;
          if (fa_.IsVarRef(mod_first,0, &varname)) {
              AstNodePtr l = fa_.GetParent(mod_first);
              VarModSet& cur = varmodInfo[varname];
-             for ( ; l != AST_NULL; l = fa_.GetParent(l)) {
+             for ( ; l != 0; l = fa_.GetParent(l)) {
                if (sel(fa_,l))
                   cur.insert(l);
              }
          }
          return true;
       };
-      StmtSideEffectCollect<AstNodePtr>::get_side_effect(fa_, root, &collect);
+      StmtSideEffectCollect::set_modify_collect(collect_modify);
+   }
+   void Collect(const AstNodePtr& root)
+     {
+      StmtSideEffectCollect::get_side_effect(fa_, root);
      }
    bool Modify( const AstNodePtr& l, const std::string& varname) const
       { 
          typename VarModInfo::const_iterator p = varmodInfo.find(varname);
          if (p != varmodInfo.end()) {
-            if (l == AST_NULL)
+            if (l == 0)
                  return true;
             const VarModSet& cur = (*p).second;
             return cur.find(l) != cur.end();
@@ -212,7 +221,4 @@ class ModifyVariableMap : public StmtSideEffectCollect<AstNodePtr>
       }
 };
  
-#define TEMPLATE_ONLY
-#include "StmtInfoCollect.C"
-#undef TEMPLATE_ONLY
 #endif

@@ -3,7 +3,10 @@
 
 #include "SymbolicMultiply.h"
 #include "SymbolicPlus.h"
+#include "BooleanOperators.h"
+#include "UnaryOperators.h"
 #include "SymbolicSelect.h"
+#include "CommandOptions.h"
 
 #include <list>
 #include <sstream>
@@ -24,9 +27,9 @@ SymbolicConst::SymbolicConst(int _val, int _d)
     : val(""), type(_d == 1 ? "int" : "fraction"), intval(_val), dval(_d) {
   char buf[40];
   if (_d == 1)
-    sprintf(buf, "%d", _val);
+    snprintf(buf, sizeof(buf), "%d", _val);
   else
-    sprintf(buf, "%d/%d", _val, _d);
+    snprintf(buf, sizeof(buf), "%d/%d", _val, _d);
   val = buf;
 }
 
@@ -50,6 +53,9 @@ AstNodePtr SymbolicConst ::CodeGen(AstInterface &fa) const {
 std::string SymbolicVar ::toString() const { return varname; }
 
 AstNodePtr SymbolicVar ::CodeGen(AstInterface &fa) const {
+  if (exp_ != 0) {
+     return fa.CopyAstTree(exp_);
+  }
   return fa.CreateVarRef(varname, scope);
 }
 
@@ -83,7 +89,7 @@ std::string SymbolicFunction ::toString() const {
     r = r + (*i).toString() + ",";
   }
   r[r.size() - 1] = ')';
-  return op + r;
+  return op.toString() + r;
 }
 
 bool SymbolicFunction::operator==(const SymbolicFunction &that) const {
@@ -99,7 +105,7 @@ bool SymbolicFunction::operator==(const SymbolicFunction &that) const {
   return true;
 }
 
-AstNodePtr SymbolicFunction ::CodeGen(AstInterface &_fa) const {
+AstNodePtr SymbolicFunction::CodeGen(AstInterface &_fa) const {
   AstNodeList l;
   for (const_iterator i = args.begin(); i != args.end(); ++i) {
     SymbolicVal cur = *i;
@@ -107,7 +113,7 @@ AstNodePtr SymbolicFunction ::CodeGen(AstInterface &_fa) const {
     l.push_back(curast.get_ptr());
   }
   if (t == AstInterface::OP_NONE) {
-    return _fa.CreateFunctionCall(op, l.begin(), l.end());
+    return _fa.CreateFunctionCall(op.CodeGen(_fa), l.begin(), l.end());
   } else if (t == AstInterface::OP_ARRAY_ACCESS) {
     AstNodeList::const_iterator b = l.begin();
     AstNodePtr arr = *b;
@@ -231,6 +237,34 @@ AstNodePtr SymbolicPlus::CodeGenOP(AstInterface &fa, const AstNodePtr &a1,
   return fa.CreateBinaryOP(AstInterface::BOP_PLUS, a1, a2);
 }
 
+AstNodePtr SymbolicAnd::
+CodeGenOP(AstInterface &fa, const AstNodePtr& a1, const AstNodePtr& a2) const
+{
+   return fa.CreateBinaryOP(AstInterface::BOP_AND, a1, a2);
+}
+
+AstNodePtr SymbolicEq::
+CodeGenOP(AstInterface &fa, const AstNodePtr& a1, const AstNodePtr& a2) const
+{
+   return fa.CreateBinaryOP(AstInterface::BOP_EQ, a1, a2);
+}
+
+SymbolicVal SymbolicValGenerator::GetSymbolicVal(const std::string &sig) {
+  DebugLog debugval("-debugsym");
+  if (sig == "_NULL_") {
+    return SymbolicVal();
+  } else if (sig == "_UNKNOWN_") {
+    return SymbolicVal(new SymbolicValImpl());
+  } else if (!sig.empty() && sig[0] == '*') {
+    debugval([&sig]() { return "creating pointer deref:" + sig; });
+    auto r = GetSymbolicVal(sig.substr(1));
+    return new SymbolicFunction(AstInterface::UOP_DEREF, "*", r);
+  } else {
+    debugval([&sig]() { return "creating variable:" + sig; });
+    return SymbolicVal(new SymbolicVar(sig, NULL));
+  }
+}
+
 bool SymbolicValGenerator::IsFortranLoop(AstInterface &fa, const AstNodePtr &s,
                                          SymbolicVar *ivar, SymbolicVal *lb,
                                          SymbolicVal *ub, SymbolicVal *step,
@@ -243,7 +277,7 @@ bool SymbolicValGenerator::IsFortranLoop(AstInterface &fa, const AstNodePtr &s,
     return false;
   }
   if (ivar != 0)
-    *ivar = SymbolicVar(varname, ivarscope);
+    *ivar = SymbolicVar(varname, ivarscope, ivarast);
   if (lb != 0)
     *lb = SymbolicValGenerator::GetSymbolicVal(fa, lbast);
   if (ub != 0)
@@ -265,9 +299,7 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
   AstNodePtr s1, s2;
   AstInterface::AstNodeList l;
   AstInterface::OperatorEnum opr = (AstInterface::OperatorEnum)0;
-  if (fa.IsVarRef(exp, 0, &name, &scope)) {
-    return new SymbolicVar(name, scope);
-  } else if (fa.IsConstInt(exp, &val)) {
+  if (fa.IsConstInt(exp, &val)) {
     return new SymbolicConst(val);
   } else if (fa.IsBinaryOp(exp, &opr, &s1, &s2)) {
     SymbolicVal v1 = GetSymbolicVal(fa, s1), v2 = GetSymbolicVal(fa, s2);
@@ -278,6 +310,8 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
       return v1 + v2;
     case AstInterface::BOP_MINUS:
       return v1 - v2;
+    case AstInterface::BOP_MOD:
+      return new SymbolicFunction(opr, "%", v1, v2);
     case AstInterface::BOP_DOT_ACCESS:
     case AstInterface::BOP_ARROW_ACCESS:
       return new SymbolicAstWrap(exp);
@@ -303,6 +337,10 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
       return new SymbolicFunction(opr, ">>", v1, v2);
     case AstInterface::BOP_BIT_LSHIFT:
       return new SymbolicFunction(opr, "<<", v1, v2);
+    case AstInterface::BOP_BIT_AND:
+      return new SymbolicFunction(opr, "&", v1, v2);
+    case AstInterface::BOP_BIT_OR:
+      return new SymbolicFunction(opr, "|", v1, v2);
     default: {
       cerr << "Error in SymbolicValGenerator::GetSymbolicVal(): unhandled type "
               "of binary operator "
@@ -324,7 +362,7 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
     case AstInterface::UOP_NOT:
       return new SymbolicFunction(opr, "!", v);
     case AstInterface::UOP_CAST:
-      return new SymbolicFunction(opr, "cast", v);
+      return v;
     case AstInterface::UOP_DECR1:
       return new SymbolicFunction(opr, "--", v);
     case AstInterface::UOP_INCR1:
@@ -354,8 +392,10 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
         SymbolicVal cur = GetSymbolicVal(fa, *p);
         args.push_back(cur);
       }
-      return new SymbolicFunction(AstInterface::OP_NONE, name, args);
+      return new SymbolicFunction(AstInterface::OP_NONE, new SymbolicAstWrap(s1), args);
     }
+  } else if (fa.IsVarRef(exp, 0, &name, &scope)) {
+    return new SymbolicVar(name, scope, exp);
   }
   return new SymbolicAstWrap(exp);
 }

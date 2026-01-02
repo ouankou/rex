@@ -33,7 +33,6 @@ Version 2.0.6 (2006.10.16)
 Version 2.0.5 (2006.09.20)
  - Fixed a bug that an image which loaded by HPDF_LoadRawImageFromFile() or 
   HPDF_LoadRawImageFromMem() is not compressed.
- - Added C# interface.
  - Added viewer-preference feature.
  - Fixed a bug that HPDF_SetPassword does not raise error when NULL string set
   to owner-password.

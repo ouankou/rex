@@ -156,6 +156,9 @@ extern std::string mlogLevelToString_CXX(MLOG_LEVEL_t level);
 #define ASSERT_not_null2(expr, ...)        \
     ((expr) != NULL) ? static_cast<void>(0) : mlogAssertFail_C("ASSERTION:NULL pointer:", #expr, WHEREARG, __VA_ARGS__)
 
+// Convenience for member functions that want to assert on "this".
+#define ASSERT_this() ASSERT_not_null(this)
+
 //A more informative approach for assert and abort than the standard assert/abort
 #define ROSE_ASSERT ASSERT_require
 #define ROSE_ABORT() mlogAssertFail_C("ABORT:", "", WHEREARG, "")

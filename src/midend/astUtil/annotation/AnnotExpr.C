@@ -1,5 +1,3 @@
-
-
 #include "AnnotExpr.h"
 #include "CPPAstInterface.h"
 #include "SymbolicMultiply.h"
@@ -48,6 +46,7 @@ void SymbolicValDescriptor ::set_val(const SymbolicVal &v) {
     val = get_bottom();
   else
     val = v;
+  varname_ = v.toString();
 }
 
 void SymbolicValDescriptor::write(ostream &out) const {
@@ -72,14 +71,6 @@ void SymbolicValDescriptor::Dump() const {
 bool SymbolicValDescriptor::is_top() const { return val == get_top(); }
 
 bool SymbolicValDescriptor::is_bottom() const { return val == get_bottom(); }
-
-SymbolicConst SymbolicValDescriptor ::get_top() {
-  return SymbolicConst("", "top");
-}
-
-SymbolicConst SymbolicValDescriptor ::get_bottom() {
-  return SymbolicConst("", "bottom");
-}
 
 void SymbolicValDescriptor::replace_var(const string &varname,
                                         const SymbolicVal &n) {
@@ -142,7 +133,7 @@ AstNodePtr SymbolicDotExp::CodeGen(AstInterface &fa) const {
   assert(NumOfArgs() == 2);
   AstNodePtr obj = first_arg().CodeGen(fa);
   AstNodeType objtype;
-  if (fa.IsExpression(obj, &objtype) == AST_NULL)
+  if (!fa.IsExpression(obj, &objtype))
     ROSE_ABORT();
   string objtypename;
   fa.GetTypeInfo(objtype, 0, &objtypename);
@@ -150,7 +141,7 @@ AstNodePtr SymbolicDotExp::CodeGen(AstInterface &fa) const {
   string val = last_arg().toString(), valtype = last_arg().GetTypeName();
   CPPAstInterface fa2(fa);
   AstNodePtr valast = (valtype == "field")
-                          ? fa2.CreateFieldRef(objtypename, val)
+                          ? fa.CreateFieldRef(objtypename, val)
                           : fa2.CreateMethodRef(objtypename, val, true);
   return fa.CreateBinaryOP(AstInterface::BOP_DOT_ACCESS, obj, valast);
 }
@@ -381,7 +372,7 @@ class ReplaceExtendibleParam : public SymbolicVisitor {
   }
 
   void VisitFunction(const SymbolicFunction &u) {
-    string buf = u.GetOp();
+    string buf = u.GetOp().toString();
     if (buf == "$" && u.first_arg().toString() == basename) {
       assert(u.NumOfArgs() == 2);
       string curext = u.last_arg().toString();
@@ -571,5 +562,6 @@ void DefineVariableDescriptor::Dump() const { write(cerr); }
 template class WriteContainer<list<SymbolicFunctionDeclaration>, ',', '(', ')'>;
 template class WriteContainer<vector<SymbolicFunctionDeclaration>, ',', '(',
                               ')'>;
-template class std::pair<SymbolicValDescriptor, SymbolicValDescriptor>;
+// Template struct used to defeat warning message regarding "struct pair".
+template struct std::pair<SymbolicValDescriptor, SymbolicValDescriptor>;
 #endif

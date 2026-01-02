@@ -43,7 +43,6 @@
 % New commands to represent the location of example files (used in latex documentation)
 \newcommand{\TranslatorExampleDirectory}{@top_srcdir@/exampleTranslators/documentedExamples/simpleTranslatorExamples}
 \newcommand{\TranslatorExampleCompileTreeDirectory}{@top_pwd@/exampleTranslators/documentedExamples/simpleTranslatorExamples}
-\newcommand{\AstRewriteExampleDirectory}{@top_srcdir@/exampleTranslators/documentedExamples/AstRewriteExamples}
 \newcommand{\TutorialExampleDirectory}{@top_srcdir@/tutorial}
 \newcommand{\TutorialExampleBuildDirectory}{@top_builddir@/tutorial}
 
@@ -132,6 +131,5 @@ Fortran. The legacy ROSE demo guide is no longer applicable. See the ROSE
 Tutorial and user manual for current examples.
 
 \end{document}
-
 
 

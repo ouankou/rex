@@ -4,8 +4,8 @@
  * unparse_expr.C, unparse_type.C, and unparse_sym.C.
  */
 
-#ifndef UNPARSER_FORTRAN
-#define UNPARSER_FORTRAN
+#ifndef UNPARSE_FORTRAN_H
+#define UNPARSE_FORTRAN_H
 
 #include "unparser.h"
 
@@ -19,7 +19,7 @@ class FortranCodeGeneration_locatedNode : public UnparseLanguageIndependentConst
           virtual void unparseFortranIncludeLine ( SgStatement* stmt, SgUnparse_Info& info );
 
       //! Support for Fortran numeric labels (can appear on any statement), this is an empty function for C/C++.
-          virtual void unparseStatementNumbers ( SgStatement* stmt, SgUnparse_Info& info );
+          virtual void unparseStatementNumbers(SgStatement* stmt, SgUnparse_Info& info) override;
 
       //! Supporting function for unparseStatementNumbers and for direct use in unparsing statments that have an end_numeric_label field.
           void unparseStatementNumbersSupport ( SgLabelRefExp* numeric_label_exp, SgUnparse_Info& info );
@@ -32,61 +32,62 @@ class FortranCodeGeneration_locatedNode : public UnparseLanguageIndependentConst
                                                      bool outputParameterDeclaration, 
                                                      SgUnparse_Info& info );
 
-          virtual void unparseLanguageSpecificStatement (SgStatement*  stmt, SgUnparse_Info& info);
-          virtual void unparseLanguageSpecificExpression(SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseLanguageSpecificStatement (SgStatement*  stmt, SgUnparse_Info& info) override;
+          virtual void unparseLanguageSpecificExpression(SgExpression* expr, SgUnparse_Info& info) override;
 
-       // DQ (9/6/2010): Mark the derived class to support debugging.
-          virtual std::string languageName() const { return "Fortran Unparser"; }
+          virtual std::string languageName() const override {
+            return "Fortran Unparser";
+          }
 
           virtual void unparseUnaryOperator           (SgExpression* expr, const char* op, SgUnparse_Info& info);
           virtual void unparseBinaryOperator          (SgExpression* expr, const char* op, SgUnparse_Info& info);
           virtual void unparseExprRoot                (SgExpression* expr, SgUnparse_Info& info);
 
-          virtual void unparseExprList                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseExprList                (SgExpression* expr, SgUnparse_Info& info) override;
           virtual void unparseVarRef                  (SgExpression* expr, SgUnparse_Info& info);
           virtual void unparseClassRef                (SgExpression* expr, SgUnparse_Info& info);
           virtual void unparseFuncRef                 (SgExpression* expr, SgUnparse_Info& info);
           virtual void unparseMFuncRef                (SgExpression* expr, SgUnparse_Info& info);
 
-          virtual void unparseStringVal               (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseBoolVal                 (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseFuncCall                (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparsePointStOp               (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseRecRef                  (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseEqOp                    (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseLtOp                    (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseGtOp                    (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseNeOp                    (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseLeOp                    (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseGeOp                    (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseAddOp                   (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseSubtOp                  (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseMultOp                  (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseDivOp                   (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseIntDivOp                (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseModOp                   (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseAndOp                   (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseOrOp                    (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseBitXOrOp                (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseBitAndOp                (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseBitOrOp                 (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseLShiftOp                (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseRShiftOp                (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseUnaryMinusOp            (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseUnaryAddOp              (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseNotOp                   (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseDerefOp                 (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseAddrOp                  (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseBitCompOp               (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseCastOp                  (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseArrayOp                 (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseNewOp                   (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseDeleteOp                (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseAssnOp                  (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparsePointerAssnOp           (SgExpression* expr, SgUnparse_Info& info);  
-          virtual void unparseTypeRef                 (SgExpression* expr, SgUnparse_Info& info);  
+          virtual void unparseStringVal               (SgExpression* expr, SgUnparse_Info& info) override;
+          virtual void unparseBoolVal                 (SgExpression* expr, SgUnparse_Info& info) override;
+          virtual void unparseFuncCall                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparsePointStOp               (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseRecRef                  (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseEqOp                    (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseLtOp                    (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseGtOp                    (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseNeOp                    (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseLeOp                    (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseGeOp                    (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseAddOp                   (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseSubtOp                  (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseMultOp                  (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseDivOp                   (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseIntDivOp                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseModOp                   (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseAndOp                   (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseOrOp                    (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseBitXOrOp                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseBitAndOp                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseBitOrOp                 (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseLShiftOp                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseRShiftOp                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseUnaryMinusOp            (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseUnaryAddOp              (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseNotOp                   (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseDerefOp                 (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseAddrOp                  (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseBitCompOp               (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseCastOp                  (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseArrayOp                 (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseNewOp                   (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseDeleteOp                (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseAssnOp                  (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparsePointerAssnOp           (SgExpression* expr, SgUnparse_Info& info);
+          virtual void unparseTypeRef                 (SgExpression* expr, SgUnparse_Info& info);
           virtual void unparseInitializerList         (SgExpression* expr, SgUnparse_Info& info);
-          virtual void unparseAggrInit                (SgExpression* expr, SgUnparse_Info& info);  
+          virtual void unparseAggrInit                (SgExpression* expr, SgUnparse_Info& info);
           virtual void unparseConInit                 (SgExpression* expr, SgUnparse_Info& info);
           virtual void unparseAssnInit                (SgExpression* expr, SgUnparse_Info& info);
 
@@ -182,10 +183,10 @@ class FortranCodeGeneration_locatedNode : public UnparseLanguageIndependentConst
           virtual void unparseCaseStmt         (SgStatement* stmt, SgUnparse_Info& info);
           virtual void unparseDefaultStmt      (SgStatement* stmt, SgUnparse_Info& info);
           virtual void unparseBreakStmt        (SgStatement* stmt, SgUnparse_Info& info);
-          virtual void unparseContinueStmt     (SgContinueStmt* stmt, SgUnparse_Info& info);
-          virtual void unparseFortranContinueStmt (SgFortranContinueStmt* stmt, SgUnparse_Info& info);
+          virtual void unparseContinueStmt     (SgContinueStmt*,   SgUnparse_Info& info);
+          virtual void unparseFortranContinueStmt (SgFortranContinueStmt*, SgUnparse_Info& info);
           virtual void unparseReturnStmt       (SgStatement* stmt, SgUnparse_Info& info);
-          virtual void unparseGotoStmt         (SgGotoStatement* stmt, SgUnparse_Info& info);
+          virtual void unparseGotoStmt         (SgGotoStatement*,  SgUnparse_Info& info);
 
           virtual void unparseAttributeSpecificationStatement (SgStatement* stmt, SgUnparse_Info& info);
           virtual void unparseNamelistStatement(SgStatement* stmt, SgUnparse_Info& info);
@@ -226,18 +227,18 @@ class FortranCodeGeneration_locatedNode : public UnparseLanguageIndependentConst
           void curprint(const std::string&) const;
 
        // unparsing for OpenMP AST
-          virtual void unparseOmpPrefix          (SgUnparse_Info& info);
+          virtual void unparseOmpPrefix          (SgUnparse_Info& info) override;
           virtual void unparseOmpDoStatement     (SgStatement* stmt, SgUnparse_Info& info);
-          virtual void unparseOmpBeginDirectiveClauses     (SgStatement* stmt,SgUnparse_Info& info);
-          virtual void unparseOmpEndDirectiveClauses       (SgStatement* stmt,     SgUnparse_Info& info);
-          virtual void unparseOmpEndDirectivePrefixAndName (SgStatement* stmt, SgUnparse_Info& info);
+          virtual void unparseOmpBeginDirectiveClauses    (SgStatement* stmt, SgUnparse_Info& info) override;
+          virtual void unparseOmpEndDirectiveClauses      (SgStatement* stmt, SgUnparse_Info& info) override;
+          virtual void unparseOmpEndDirectivePrefixAndName(SgStatement* stmt, SgUnparse_Info& info) override;
 
          /**
           * override to make unary plus/minus expressions have the same precedence as binary plus;
           * everything else remains the same.
           */
-          virtual bool requiresParentheses(SgExpression* expr, SgUnparse_Info& info);
-          virtual PrecedenceSpecifier getPrecedence(SgExpression* exp);
+          virtual bool requiresParentheses(SgExpression* expr, SgUnparse_Info& info) override;
+          virtual PrecedenceSpecifier getPrecedence(SgExpression* exp) override;
 
      private:
           /**
@@ -270,4 +271,4 @@ class FortranCodeGeneration_locatedNode : public UnparseLanguageIndependentConst
           void curprint_keyword(const std::string &keyword, SgUnparse_Info& info);
 };
 
-#endif
+#endif // UNPARSE_FORTRAN_H

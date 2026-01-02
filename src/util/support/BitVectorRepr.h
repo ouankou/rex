@@ -13,8 +13,7 @@ class BitVectorReprImpl {
   unsigned* impl;
   unsigned  num;
   
-  void operator = ( const BitVectorReprImpl& that)
-  {}
+  void operator=(const BitVectorReprImpl&) {}
  public:
   BitVectorReprImpl( unsigned size)
     { 

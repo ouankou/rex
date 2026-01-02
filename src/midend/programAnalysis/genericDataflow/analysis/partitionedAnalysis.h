@@ -221,7 +221,8 @@ class IntraPartitionDataflow : virtual public IntraProceduralDataflow
         // The logic expression that describes the invariant that holds for this partition      
         /*LogicalCond*/printable* partitionCond;
         
-        IntraPartitionDataflow(const IntraPartitionDataflow& that)
+        IntraPartitionDataflow(const IntraPartitionDataflow& that) :
+                Analysis()
         {
                 parent = that.parent;
                 partitionCond = that.partitionCond;
@@ -380,7 +381,7 @@ class IntraPartitionFWDataflow  : public virtual IntraPartitionDataflow
         { }
         
         IntraPartitionFWDataflow(const IntraPartitionFWDataflow& that): 
-                        IntraPartitionDataflow((const IntraPartitionDataflow&)that)
+                        Analysis(), IntraPartitionDataflow((const IntraPartitionDataflow&)that)
         {
                 //this->initState = that.initState;
         }

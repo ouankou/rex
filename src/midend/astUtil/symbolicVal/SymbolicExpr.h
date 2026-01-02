@@ -83,7 +83,7 @@ class SymbolicOperands
 class SymbolicExpr : public SymbolicValImpl, 
                      public CountRefHandle<SymbolicOperands>
 {
-  void operator = (const SymbolicExpr& that) {}
+  void operator=(const SymbolicExpr&) {}
 
  protected:
   SymbolicExpr() {}
@@ -189,8 +189,10 @@ inline SymbolicTerm SymbolicExpr::
 Val2Term(const SymbolicVal& v) const
           { return ValTermVisitor(GetTermOP())(v); }
 
-SymbolicVal ApplyBinOP( OPApplicator& op, 
+SymbolicVal ApplyBinOP( OPApplicator& op,
                         const SymbolicVal &_v1, const SymbolicVal &_v2);
 SymbolicVal GetExprVal( SymbolicExpr *exp); 
    // delete exp if return value if different from exp
+SymbolicVal ApplyUnaryOP( OPApplicator& op, 
+                        const SymbolicVal &_v);
 #endif

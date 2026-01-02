@@ -9,6 +9,8 @@
 #include <vector>
 #include "AnnotDescriptors.h"
 #include "SymbolicVal.h"
+
+bool DebugAnnot();
 //! An interface to a single annotation item
 template <class TargetInfo>
 class  AnnotCollectionBase {
@@ -77,32 +79,58 @@ class TypeCollection
 
   const_iterator begin() const { return typemap.begin(); }
   const_iterator end() const { return typemap.end(); }
-  //Check if a named type 'name' is a type with annotation descriptor records
-  bool known_type( const TypeDescriptor &name, Descriptor* desc = 0)  const;
-  bool known_type( AstInterface& fa, const AstNodePtr& exp, 
-                   Descriptor* desc = 0) const;
-  bool known_type( AstInterface& fa, const AstNodeType& exp, 
-                   Descriptor* desc = 0) const;
+  //Check if a named type 'name' is a type with annotation. Returns null if false.
+  Descriptor* known_type( const TypeDescriptor &name);
+  Descriptor* known_type( AstInterface& fa, const AstNodePtr& exp); 
+  Descriptor* known_type( AstInterface& fa, const AstNodeType& exp); 
+  bool known_type( const TypeDescriptor &name, Descriptor* desc) {
+    Descriptor* d = known_type(name);
+    if (d != 0 && desc != 0) {
+       *desc = *d;
+       return true;
+    }
+    return false; 
+  }
+  bool known_type(AstInterface& fa, const AstNodePtr& exp, Descriptor* desc) {
+    Descriptor* d = known_type(fa, exp);
+    if (d != 0 && desc != 0) {
+       *desc = *d;
+       return true;
+    }
+    return false; 
+  }
+  bool known_type(AstInterface& fa, const AstNodeType& exp, Descriptor* desc) {
+    Descriptor* d = known_type(fa, exp);
+    if (d != 0 && desc != 0) {
+       *desc = *d;
+       return true;
+    }
+    return false; 
+  }
+  void write( std::ostream& out) const; 
   void Dump() const;
+  Descriptor* add_annot( const TypeDescriptor& name, const Descriptor& d)
+      {
+       if (DebugAnnot()) {
+         std::cerr << "Adding annotation:";
+         name.Dump();
+         d.Dump();
+         std::cerr << "Done Adding annotation:";
+       }
+       this->typemap[name] = d;
+       return &this->typemap[name];
+      }
 };
-
 
 template <class Descriptor>
 class TypeAnnotCollection 
 : public AnnotCollectionBase<TypeDescriptor>, //== TypeCollectionBase
   public TypeCollection<Descriptor>
 {  // Derived from TypeCollectionBase
-  virtual void read_descriptor( const TypeDescriptor& targetname, 
-                                const std::string& annot, std::istream& in);
- protected:
-  using TypeCollection<Descriptor>::typemap;
+  virtual void read_descriptor(const TypeDescriptor& targetname, const std::string& annot, std::istream& in);
  public:
-  void add_annot( const TypeDescriptor& name, const Descriptor& d)
-      {
-    // pmp 08JUN05
-    //   was: typemap[name] = d;
-       this->typemap[name] = d;
-      }
+  using TypeCollection<Descriptor>::add_annot;
 };
+
 
 #endif

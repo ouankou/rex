@@ -1,5 +1,6 @@
 #include "sage3basic.h"
 #include <algorithm>
+#include <unordered_map>
 #include "VirtualFunctionAnalysis.h"
 void VirtualFunctionAnalysis::run()
    {
@@ -34,7 +35,7 @@ void VirtualFunctionAnalysis::run()
           printf ("In VirtualFunctionAnalysis::run(): erase \n");
 
         callSites.erase(std::remove(callSites.begin(), callSites.end(), (SgExpression*)NULL), callSites.end());
-        
+
           printf ("DONE: VirtualFunctionAnalysis::run(): erase \n");
 
         unsigned int index;
@@ -44,11 +45,11 @@ void VirtualFunctionAnalysis::run()
 
         for(index = 0; index < callSites.size(); index++) {
             std::vector<SgFunctionDeclaration *> funcs;
-            
+
           printf ("In VirtualFunctionAnalysis::run(): getPropertiesForExpression() \n");
 
             CallTargetSet::getPropertiesForExpression(callSites[index], classHierarchy, funcs);
-            
+
             //Virtual Function
             if(isSgFunctionCallExp(callSites[index]) && funcs.size() > 1 )
                 funcs.clear();
@@ -56,11 +57,11 @@ void VirtualFunctionAnalysis::run()
 
           printf ("In VirtualFunctionAnalysis::run(): loop 2 \n");
         }
-        
+
           printf ("In VirtualFunctionAnalysis::run(): PtrAliasAnalysis::run() \n");
 
         PtrAliasAnalysis::run();
-        
+
           printf ("DONE: VirtualFunctionAnalysis::run(): PtrAliasAnalysis::run() \n");
 
         for(index = 0; index < callSites.size(); index++) {
@@ -89,10 +90,10 @@ void VirtualFunctionAnalysis::resolveFunctionCall(SgExpression *call_exp, std::v
 
 void VirtualFunctionAnalysis::pruneCallGraph(CallGraphBuilder& builder) {
         SgIncidenceDirectedGraph *graph =  builder.getGraph();
-              
+
         ROSE_ASSERT(graph != NULL);
         std::unordered_map<SgFunctionDeclaration*, SgGraphNode*>node_mapping =  builder.getGraphNodesMapping();
-        
+
         typedef std::unordered_map<SgFunctionDeclaration *, SgGraphNode *> map;
         for (map::value_type it: node_mapping) {
             SgFunctionDeclaration *defDecl =
@@ -100,40 +101,40 @@ void VirtualFunctionAnalysis::pruneCallGraph(CallGraphBuilder& builder) {
                     it.first->get_definition() != NULL ?
                     it.first : isSgFunctionDeclaration(it.first->get_definingDeclaration())
                 );
-            
+
             if(defDecl == NULL) continue;
-            
+
             Rose_STL_Container<SgNode*> functionCallExpList = NodeQuery::querySubTree(defDecl, V_SgFunctionCallExp);
             std::vector<SgFunctionDeclaration *> functions;
             for(SgNode* functionCallExp: functionCallExpList) {
-                functions.insert(functions.end(), resolver.at(isSgExpression(functionCallExp)).begin(), 
+                functions.insert(functions.end(), resolver.at(isSgExpression(functionCallExp)).begin(),
                                                 resolver.at(isSgExpression(functionCallExp)).end());
             }
 
             Rose_STL_Container<SgNode*> ctorInitList = NodeQuery::querySubTree(defDecl, V_SgConstructorInitializer);
             for(SgNode* ctorInit: ctorInitList) {
-                functions.insert(functions.end(), resolver.at(isSgExpression(ctorInit)).begin(), 
+                functions.insert(functions.end(), resolver.at(isSgExpression(ctorInit)).begin(),
                                                 resolver.at(isSgExpression(ctorInit)).end());
             }
-            
+
             std::set<SgDirectedGraphEdge *>edges = graph->computeEdgeSetOut(it.second);
 
             for(SgDirectedGraphEdge *edge: edges) {
                 SgGraphNode *toNode = edge->get_to();
                 SgFunctionDeclaration *toDecl = isSgFunctionDeclaration(toNode->get_SgNode());
                 ROSE_ASSERT(toDecl != NULL);
-                
+
                 if(toDecl->get_specialFunctionModifier().isConstructor() || toDecl->get_specialFunctionModifier().isDestructor())
                     continue;
-                
+
                 if(find(functions.begin(), functions.end(), toDecl) == functions.end()) {
                      graph->removeDirectedEdge(edge);
-                     std::cout << "Edge removed from " << defDecl->get_qualified_name().getString() << " to " << 
+                     std::cout << "Edge removed from " << defDecl->get_qualified_name().getString() << " to " <<
                              toDecl->get_qualified_name().getString()<< std::endl;
                 }
-                
+
             }
-          
+
         }
 
 }
@@ -141,5 +142,5 @@ void VirtualFunctionAnalysis::pruneCallGraph(CallGraphBuilder& builder) {
 void VirtualFunctionAnalysis::reset() {
      isExecuted = false;
      resolver.clear();
-             
+
 }

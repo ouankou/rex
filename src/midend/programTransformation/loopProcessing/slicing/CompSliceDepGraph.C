@@ -7,8 +7,9 @@
 #include <DGBaseGraphImpl.h>
 #include <CompSliceDepGraph.h>
 #include <GraphGroup.h>
+#include <CommandOptions.h>
 
-extern bool DebugDep();
+DebugLog DebugSlice("-debugslice");
 
 CompSliceDepGraphCreate ::
 CompSliceDepGraphCreate( LoopTreeDepComp &comp, DependenceHoisting& op,
@@ -17,15 +18,16 @@ CompSliceDepGraphCreate( LoopTreeDepComp &comp, DependenceHoisting& op,
 {
   LoopTreeNode *root = comp.GetLoopTreeRoot();
   PtrMapWrap <LoopTreeNode, CompSliceDepGraphNode> treeMap;
+  DebugSlice([&comp](){ return "Creating CompSliceDepGraph from " + comp.TreeToString(); });
   for (LoopTreeNode *n = root->FirstChild(); n != 0; n = n->NextSibling()) {
     LoopTreeDepCompSubtree scope(comp, n);
     CompSliceDepGraphNode* sliceNode = 0;
     if (tc == 0 || !n->ContainLoop() || n->IsPerfectLoopNest()) {
        sliceNode = CreateNode(scope, op);
+       DebugSlice([&sliceNode](){ return "new slice node:" + sliceNode->toString(); });
     }
     else {
-      if (DebugDep())
-         std::cerr << "construct transitive dep. graph for " << n->TreeToString() << "\n";
+      DebugSlice([&n](){ return "construct transitive dep. graph for " + n->TreeToString(); });
       sliceNode = CreateNode(scope, op, tc);
     }
     LoopTreeTraverseSelectStmt stmts(n);

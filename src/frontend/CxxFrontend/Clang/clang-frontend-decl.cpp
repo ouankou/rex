@@ -209,6 +209,12 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
 #if DEBUG_SYMBOL_TABLE_LOOKUP
     std::cerr << "Find anonymous fieldDecl: " << declName << std::endl;
 #endif
+  } else if (llvm::isa<clang::EnumDecl>(decl) && declName == "") {
+    declName =
+        "__anonymous_" + generate_source_position_string(decl->getBeginLoc());
+#if DEBUG_SYMBOL_TABLE_LOOKUP
+    std::cerr << "Find anonymous EnumDecl: " << declName << std::endl;
+#endif
   }
 
   SgName name(declName);
@@ -668,7 +674,9 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
     break;
   }
   case clang::Decl::Enum: {
-    name = SgName(((clang::EnumDecl *)decl)->getName().str());
+    // An anonymous enum should have its name set with prefix "__anonymous_".
+    // There is no need to retrieve the name from clang::EnumDecl, as it will
+    // be empty.
     it = SageBuilder::ScopeStack.rbegin();
     while (it != SageBuilder::ScopeStack.rend() && sym == NULL) {
       sym = (*it)->lookup_enum_symbol(name);
@@ -2046,7 +2054,7 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
     return false;
   }
 
-  if (!isSgGlobal(*node)) {
+  if (!isSgGlobal(*node) && !isSgTemplateParameter(*node)) {
     clang::SourceRange range = decl->getSourceRange();
     if (!range.isValid()) {
       clang::SourceLocation loc = decl->getLocation();
@@ -3308,8 +3316,14 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
 
   // SgClassDeclaration * sg_def_class_decl = sg_prev_class_decl == NULL ? NULL
   // : isSgClassDeclaration(sg_prev_class_decl->get_definingDeclaration());
-  SgClassSymbol *sg_defining_sym =
-      isSgClassSymbol(GetSymbolFromSymbolTable(record_Definition));
+  SgClassSymbol *sg_defining_sym = NULL;
+  // Pei-Hung (07/25/24) The case that a CXXRecordDecl has its definition inside
+  // a namespace.
+  if (!(llvm::isa<clang::CXXRecordDecl>(record_decl) &&
+        llvm::cast<clang::CXXRecordDecl>(record_decl)->hasDefinition())) {
+    sg_defining_sym =
+        isSgClassSymbol(GetSymbolFromSymbolTable(record_Definition));
+  }
   SgClassDeclaration *sg_def_class_decl = NULL;
   if (sg_defining_sym != NULL && sg_defining_sym->get_declaration() != NULL) {
     // CLANG FRONTEND FIX: Accept both SgClassDeclaration and

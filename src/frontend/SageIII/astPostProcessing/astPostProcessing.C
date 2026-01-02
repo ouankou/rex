@@ -138,7 +138,6 @@ void AstPostProcessing (SgNode* node)
 //          printf ("         behavior (over files) when multiple files are specified on the command line): node = %s \n",node->class_name().c_str());
         }
   // DQ (1/31/2014): This is a problem to enforce this for at least (this test program): 
-  //      tests/nonsmoke/functional/roseTests/astRewriteTests/testIncludeDirectiveInsertion.C
   // ROSE_ASSERT(isSgProject(node) != NULL);
 
   // DQ (3/17/2007): This should be empty

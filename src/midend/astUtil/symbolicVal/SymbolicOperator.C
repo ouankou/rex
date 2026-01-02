@@ -3,6 +3,8 @@
 #include "SymbolicExpr.h"
 #include "SymbolicMultiply.h"
 #include "SymbolicPlus.h"
+#include "BooleanOperators.h"
+#include "UnaryOperators.h"
 #include "SymbolicSelect.h"
 #include <mlog.h>
 
@@ -21,6 +23,22 @@ bool DebugOp() {
       r = -1;
   }
   return r == 1;
+}
+
+SymbolicVal ApplyUnaryOP(SymOpType t, const SymbolicVal &v)
+{
+  SymbolicVal r;
+  switch (t) {
+  case SYMOP_NOT: {
+    NotApplicator op;
+    r = ApplyUnaryOP(op, v);
+    if (DebugOp())
+      std::cerr << " ! " + v.toString() + " = " << r.toString() << std::endl;
+    return r;
+  }
+  default:
+    ROSE_ABORT();
+  }
 }
 
 SymbolicVal ApplyBinOP(SymOpType t, const SymbolicVal &v1,
@@ -70,6 +88,22 @@ SymbolicVal ApplyBinOP(SymOpType t, const SymbolicVal &v1,
     if (DebugOp())
       std::cerr << "Pow( " << v1.toString() << " , " << v2.toString()
                 << ") = " << r.toString() << std::endl;
+    return r;
+  }
+  case SYMOP_AND: {
+    AndApplicator op;
+    r = ApplyBinOP(op, v1, v2);
+    if (DebugOp())
+      std::cerr << v1.toString() << " && " << v2.toString() << " = "
+                << r.toString() << std::endl;
+    return r;
+  }
+  case SYMOP_EQ: {
+    EqualApplicator op;
+    r = ApplyBinOP(op, v1, v2);
+    if (DebugOp())
+      std::cerr << v1.toString() << " && " << v2.toString() << " = "
+                << r.toString() << std::endl;
     return r;
   }
   default:
@@ -168,11 +202,21 @@ SymbolicVal Min(const SymbolicVal &v1, const SymbolicVal &v2,
 class EQOperator : public SymbolicVisitor {
 protected:
   bool result;
-  virtual void VisitConst(const SymbolicConst &v) { result = false; }
-  virtual void VisitVar(const SymbolicVar &v) { result = false; }
-  virtual void VisitFunction(const SymbolicFunction &v) { result = false; }
-  virtual void VisitExpr(const SymbolicExpr &v) { result = false; }
-  virtual void VisitAstWrap(const SymbolicAstWrap &v) { result = false; }
+  virtual void VisitConst(const SymbolicConst&) {
+      result = false;
+  }
+  virtual void VisitVar(const SymbolicVar&) {
+      result = false;
+  }
+  virtual void VisitFunction(const SymbolicFunction&) {
+      result = false;
+  }
+  virtual void VisitExpr(const SymbolicExpr&) {
+      result = false;
+  }
+  virtual void VisitAstWrap(const SymbolicAstWrap&) {
+      result = false;
+  }
 };
 
 class ConstEQ : public EQOperator {
@@ -267,13 +311,21 @@ class CompareOperator : public SymbolicVisitor {
 protected:
   MapObject<SymbolicVal, SymbolicBound> *GetFunc() { return func; }
   CompareRel result;
-  virtual void VisitConst(const SymbolicConst &v) { result = REL_UNKNOWN; }
-  virtual void VisitVar(const SymbolicVar &v) { result = REL_UNKNOWN; }
-  virtual void VisitFunction(const SymbolicFunction &v) {
-    result = REL_UNKNOWN;
+  virtual void VisitConst(const SymbolicConst&) {
+      result = REL_UNKNOWN;
   }
-  virtual void VisitExpr(const SymbolicExpr &v) { result = REL_UNKNOWN; }
-  void VisitAstWrap(const SymbolicAstWrap &v) { result = REL_UNKNOWN; }
+  virtual void VisitVar(const SymbolicVar&) {
+      result = REL_UNKNOWN;
+  }
+  virtual void VisitFunction(const SymbolicFunction&) {
+      result = REL_UNKNOWN;
+  }
+  virtual void VisitExpr(const SymbolicExpr&) {
+      result = REL_UNKNOWN;
+  }
+  void VisitAstWrap(const SymbolicAstWrap&) {
+      result = REL_UNKNOWN;
+  }
 
   void Default1(const SymbolicVal &v1, const SymbolicVal &v2) {
     if (v1.IsSame(v2))
@@ -418,10 +470,18 @@ class SelectCompare : public CompareOperator {
     }
   }
 
-  virtual void VisitConst(const SymbolicConst &v) { Default0(); }
-  virtual void VisitAstWrap(const SymbolicAstWrap &v) { Default0(); }
-  virtual void VisitVar(const SymbolicVar &v) { Default0(); }
-  virtual void VisitFunction(const SymbolicFunction &v) { Default0(); }
+  virtual void VisitConst(const SymbolicConst&) {
+      Default0();
+  }
+  virtual void VisitAstWrap(const SymbolicAstWrap &) {
+      Default0();
+  }
+  virtual void VisitVar(const SymbolicVar&) {
+      Default0();
+  }
+  virtual void VisitFunction(const SymbolicFunction &) {
+      Default0();
+  }
   virtual void VisitExpr(const SymbolicExpr &e2) {
     SymOpType t1 = e1.GetOpType(), t2 = e2.GetOpType();
     unsigned c1 = e1.NumOfOpds(), c2 = e2.NumOfOpds();
@@ -484,9 +544,15 @@ class ValCompare : public CompareOperator {
       CompareOperator::Default0(v1, v2);
     }
   }
-  void VisitConst(const SymbolicConst &v) { Default0(); }
-  void VisitVar(const SymbolicVar &v) { Default0(); }
-  void VisitFunction(const SymbolicFunction &v) { Default0(); }
+  void VisitConst(const SymbolicConst&) {
+      Default0();
+  }
+  void VisitVar(const SymbolicVar&) {
+      Default0();
+  }
+  void VisitFunction(const SymbolicFunction&) {
+      Default0();
+  }
   void VisitExpr(const SymbolicExpr &v) {
     switch (v.GetOpType()) {
     case SYMOP_MULTIPLY:
@@ -588,9 +654,13 @@ class SplitFraction : public SymbolicVisitor {
   bool hasfrac;
 
 public:
+  // defeats warning message regarding hidden virtual function Default
+  using SymbolicVisitor::Default;
+
   virtual void Default(const SymbolicVal &v) {
-    if (inp != 0)
+    if (inp != 0) {
       *inp = v;
+    }
   }
   virtual void VisitConst(const SymbolicConst &v) {
     std::string t = v.GetTypeName();
@@ -606,7 +676,7 @@ public:
   }
   virtual void VisitFunction(const SymbolicFunction &v) {
     bool _hasfrac = hasfrac;
-    std::string op = v.GetOp();
+     std::string op = v.GetOp().toString();
     if (op == "pow" && v.last_arg() < 0) {
       _hasfrac = true;
       if (frp != 0)

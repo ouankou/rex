@@ -354,6 +354,8 @@ ExplicitQualifierInfo getExplicitQualifierInfo(
     }
     if (token.empty()) {
       switch (nns->getKind()) {
+      case clang::NestedNameSpecifier::Global:
+        break;
       case clang::NestedNameSpecifier::Namespace: {
         const clang::NamespaceDecl *ns = nns->getAsNamespace();
         if (ns != nullptr) {
@@ -3244,6 +3246,9 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
   SageBuilder::popScopeStack();
 
   sg_switch_stmt->set_body(body);
+  // Pei-Hung (07/29/2024) In the case of test2001_14.C, body can be the
+  // SgDefaultStmt and the parent needs to be set properly.
+  body->set_parent(sg_switch_stmt);
 
   *node = sg_switch_stmt;
 

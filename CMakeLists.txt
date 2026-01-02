@@ -98,7 +98,39 @@ if(NOT _CXX_COMPILER_DISPLAY)
 endif()
 message(STATUS "Compiler selection: Using ${_C_COMPILER_DISPLAY} and ${_CXX_COMPILER_DISPLAY}")
 
-project(ROSE CXX C)
+#-----------------------------------------------------------------------------------------------------------------------
+# Read ROSE version from ROSE_VERSION file before calling project()
+# This is needed so that the project version can be set correctly, which affects library versioning
+#-----------------------------------------------------------------------------------------------------------------------
+set(ROSE_SCM_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/ROSE_VERSION")
+if(NOT EXISTS "${ROSE_SCM_VERSION_FILE}")
+  message(FATAL_ERROR "ROSE version file not found: ${ROSE_SCM_VERSION_FILE}")
+endif()
+file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_PACKAGE_VERSION LIMIT_COUNT 1)
+
+project(ROSE
+  VERSION ${ROSE_PACKAGE_VERSION}
+  LANGUAGES C CXX
+)
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Adjust CMake's default optimization, debug, and assertion flags for different build types.
+#
+# "RelWithDebInfo" is intended to be optimized with debug info, but CMake adds -DNDEBUG by default which disables
+# assertions. We want assertions enabled by default for this build type. If you don't want assertions then use
+# "-DCMAKE_C_FLAGS=-DNDEBUG" and "-DCMAKE_CXX_FLAGS=-DNDEBUG". The optimization level defaults to "-O2", which
+# is a compromise between full optimization and the ability to use most features of interactive debuggers.
+#
+# "Debug" is intended for developers to debug their libraries and tools, but CMake doesn't turn off optimizations. We
+# add "-O0" so that all features of interactive debugging work properly, although this has a major negative effect on
+# performance. We don't use "-Og" because this doesn't give the best debugging experience (too many local variables
+# get optimized out and therefore one cannot inspect them in the debugger).
+#-----------------------------------------------------------------------------------------------------------------------
+string(REPLACE "-DNDEBUG" "" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+string(REPLACE "-DNDEBUG" "" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 
 # CMP0054 causes CMake to only interpret "if()" arguments as variables or keywords when unquoted. CMake 3.1 and above no
 # longer implicitly dereference variables or interpret keywords in an if() command argument when it is a Quoted Argument
@@ -121,6 +153,12 @@ endif()
 # versions and configurations of the dependencies.
 if(POLICY_CMP0074)
   cmake_policy(SET CMP0074 NEW)
+endif()
+
+# In CMake 3.27+ find_package() also searches upper-case <PACKAGENAME>_ROOT variables in addition to the
+# properly-cased <PackageName>_ROOT variables. Enable this so LLVM_ROOT and CLANG_ROOT are honored.
+if(POLICY CMP0144)
+  cmake_policy(SET CMP0144 NEW)
 endif()
 
 # This controls whether the "cmake" command is verbose. It has nothing to do with the verbosity the resulting Makefiles.
@@ -157,53 +195,65 @@ set(ROSE_TOP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 # ROSE version information
 ########################################################################################################################
 
-# All distributions of ROSE also have a ROSE_VERSION file with a dotted version that's updated during the ROSE release
-# process.
-set(ROSE_SCM_VERSION_FILE "${PROJECT_SOURCE_DIR}/ROSE_VERSION")
-if(NOT EXISTS "${ROSE_SCM_VERSION_FILE}")
-  message(FATAL_ERROR "ROSE version file not found: ${ROSE_SCM_VERSION_FILE}")
-endif()
-
-# All distributions of ROSE also have a config/SCM_DATE file with a numerical version that's updated during the ROSE release
-# process.
+# The ROSE version string was already read from ROSE_VERSION file before the project() command.
+# Now read the numerical version from SCM_DATE file.
 set(ROSE_SCM_DATE_FILE "${PROJECT_SOURCE_DIR}/config/SCM_DATE")
 if(NOT EXISTS "${ROSE_SCM_DATE_FILE}")
   message(FATAL_ERROR "ROSE SCM Date file not found: ${ROSE_SCM_DATE_FILE}")
 endif()
 
-file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_PACKAGE_VERSION LIMIT_COUNT 1)
 file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_SCM_VERSION_ID LIMIT_COUNT 1)
 file(READ ${ROSE_SCM_DATE_FILE} ROSE_VERSION)
+
+# Fix trailing whitespace
+string(STRIP "${ROSE_VERSION}" ROSE_VERSION)
 
 # Results
 message(STATUS "The ROSE version integer is ${ROSE_VERSION}")
 message(STATUS "The ROSE version string is ${ROSE_PACKAGE_VERSION}")
 
+# Parse version into components for package configuration
+# Note: PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, etc. are also set by project() command
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)\\.([0-9]+)" _version_match "${ROSE_PACKAGE_VERSION}")
+set(ROSE_VERSION_MAJOR "${CMAKE_MATCH_1}")
+set(ROSE_VERSION_MINOR "${CMAKE_MATCH_2}")
+set(ROSE_VERSION_PATCH "${CMAKE_MATCH_3}")
+set(ROSE_VERSION_BUILD "${CMAKE_MATCH_4}")
+
 # Paths to install header, executable, and libraries
 set(INCLUDE_INSTALL_DIR "include/rose")
+set(INCLUDE_INSTALL_DIR_FOR_INTRINSICS "include")
 set(BIN_INSTALL_DIR     "bin")
 set(LIB_INSTALL_DIR     "${ROSE_LIB_DIR_NAME}")
 
 # A new definition to tweak code for cmake
 set(USE_CMAKE 1)
 
+# Generate version file for package configuration
+include(CMakePackageConfigHelpers)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/cmake/RoseConfigVersion.cmake
+  VERSION ${ROSE_PACKAGE_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/cmake/RoseConfigVersion.cmake
+  DESTINATION ${LIB_INSTALL_DIR}/cmake/Rose
+)
+
 
 ########################################################################################################################
 # ROSETTA
 ########################################################################################################################
 
-option(enable-smaller-generated-files "Build with smaller generated files for IR nodes")
-if(enable-smaller-generated-files)
-  add_definitions("-DsmallerGeneratedFiles" "-DROSE_USE_SMALLER_GENERATED_FILES")
-endif()
-
-
 ########################################################################################################################
 # Compiler toolchain features
 ########################################################################################################################
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC -O2")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC -O2")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC ")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexceptions -DHAVE_CONFIG_H -fPIC ")
 
   # Ensure C++11 ABI compatibility
   if(CMAKE_COMPILER_IS_GNUCXX)
@@ -239,34 +289,34 @@ endif()
 # Analyzable languages supported by ROSE
 ########################################################################################################################
 # C/C++
-option(enable-c "Enable C/C++ analysis" ON)
-if(enable-c)
+option(ENABLE-C "Enable C/C++ analysis" ON)
+if(ENABLE-C)
   set(ROSE_BUILD_CXX_LANGUAGE_SUPPORT 1)
   set(ROSE_BUILD_C_LANGUAGE_SUPPORT 1)
 endif()
 
 # CUDA
-option(enable-cuda "Enable CUDA analysis" OFF) # OFF because lack of CUDA is not handled properly
-if(enable-cuda)
+option(ENABLE-CUDA "Enable CUDA analysis" OFF) # OFF because lack of CUDA is not handled properly
+if(ENABLE-CUDA)
   find_package(CUDA REQUIRED)
   set(ROSE_BUILD_CUDA_LANGUAGE_SUPPORT 1)
 endif()
 
 # Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
-option(enable-fortran "Enable Fortran analysis." OFF)
+option(ENABLE-FORTRAN "Enable Fortran analysis." OFF)
 
 # JVM-based Open Fortran Parser (OFP) dependency (legacy frontend)
-option(enable-fortran-ofp "Enable JVM-based Open Fortran Parser (OFP) support." ON)
+option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." ON)
 
 # Experimental Flang frontend (f18)
-option(enable-fortran-flang "Enable experimental Flang frontend (f18) support." OFF)
+option(ENABLE-FORTRAN-FLANG "Enable experimental Flang frontend (f18) support." OFF)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
-if(enable-fortran AND NOT (enable-fortran-ofp OR enable-fortran-flang))
-  message(FATAL_ERROR "Fortran analysis requires at least one frontend: OFP or Flang. Set -Denable-fortran-ofp=ON or -Denable-fortran-flang=ON, or disable Fortran.")
+if(ENABLE-FORTRAN AND NOT (ENABLE-FORTRAN-OFP OR ENABLE-FORTRAN-FLANG))
+  message(FATAL_ERROR "Fortran analysis requires at least one frontend: OFP or Flang. Set -DENABLE-FORTRAN-OFP=ON or -DENABLE-FORTRAN-FLANG=ON, or disable Fortran.")
 endif()
 
-if(enable-fortran AND enable-fortran-ofp)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   message(STATUS "Looking for JVM (Fortran OFP dependency) ...")
   # The FindJava script is different than all our others--it doesn't consult JAVA_ROOT. Therefore, the only
   # value of JAVA_ROOT that we can support is the empty string.
@@ -308,7 +358,7 @@ if(enable-fortran AND enable-fortran-ofp)
   endif()
 endif()
 
-if(enable-fortran AND enable-fortran-flang)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   if(NOT LLVM_FOUND)
     find_package(LLVM REQUIRED CONFIG)
   endif()
@@ -346,15 +396,15 @@ if(enable-fortran AND enable-fortran-flang)
     endif()
   endforeach()
   if(_flang_missing)
-    message(FATAL_ERROR "Flang libraries not found: ${_flang_missing}. Set -DFLANG_ROOT=... or disable enable-fortran-flang.")
+    message(FATAL_ERROR "Flang libraries not found: ${_flang_missing}. Set -DFLANG_ROOT=... or disable ENABLE-FORTRAN-FLANG.")
   endif()
 
   add_compile_definitions(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
 endif()
 
 # OpenCL
-option(enable-opencl "Enable OpenCL analysis" ON)
-if(enable-opencl)
+option(ENABLE-OPENCL "Enable OpenCL analysis" ON)
+if(ENABLE-OPENCL)
   find_package(OpenCL)
   set(ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT 1)
   find_path(with-opencl-inc NAMES cl.h DOC "For OpenCL runtime library")
@@ -362,7 +412,7 @@ if(enable-opencl)
 endif()
 
 # Fortran
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   # Detect Fortran compiler using the same helper function
   detect_compiler(Fortran CMAKE_Fortran_COMPILER FC "Fortran" "flang-20" "flang-new;flang")
   set(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT 1)
@@ -379,16 +429,19 @@ if(enable-fortran)
   endif()
   if(_fortran_is_gnu)
     set(USE_GFORTRAN_IN_ROSE 1)
+    set(BACKEND_FORTRAN_IS_GNU_COMPILER 1)
     add_compile_definitions(BACKEND_FORTRAN_IS_GNU_COMPILER=1)
     add_compile_definitions(BACKEND_FORTRAN_IS_LLVM_FLANG=0)
     message(STATUS "Using GNU Fortran backend: ${BACKEND_FORTRAN_COMPILER}")
   elseif(_fortran_is_llvm_flang)
     set(USE_GFORTRAN_IN_ROSE 0)
+    set(BACKEND_FORTRAN_IS_GNU_COMPILER 0)
     add_compile_definitions(BACKEND_FORTRAN_IS_GNU_COMPILER=0)
     add_compile_definitions(BACKEND_FORTRAN_IS_LLVM_FLANG=1)
     message(STATUS "Using LLVM Flang backend: ${BACKEND_FORTRAN_COMPILER}")
   else()
     set(USE_GFORTRAN_IN_ROSE 0)
+    set(BACKEND_FORTRAN_IS_GNU_COMPILER 0)
     add_compile_definitions(BACKEND_FORTRAN_IS_GNU_COMPILER=0)
     add_compile_definitions(BACKEND_FORTRAN_IS_LLVM_FLANG=0)
     message(STATUS "Using non-GNU Fortran backend: ${BACKEND_FORTRAN_COMPILER}")
@@ -396,8 +449,8 @@ if(enable-fortran)
 endif()
 
 # The C preprocessor is enabled automatically if C, C++, or Fortran is enabled
-if(enable-c OR enable-fortran)
-  set(enable-cpp ON)
+if(ENABLE-C OR ENABLE-FORTRAN)
+  set(ENABLE-CPP ON)
   set(ROSE_BUILD_CPP_LANGUAGE_SUPPORT 1)
 endif()
 
@@ -408,10 +461,16 @@ endif()
 
 # REX uses Clang/LLVM frontend exclusively
 # Only required when C/C++ analysis is enabled
-if(enable-c)
+if(ENABLE-C)
 
 # Set ROSE_USE_CLANG_FRONTEND for backward compatibility with existing code
 set(ROSE_USE_CLANG_FRONTEND 1)
+
+# Honor LLVM_HOME if provided for consistent LLVM/Clang discovery.
+if(DEFINED ENV{LLVM_HOME})
+  set(LLVM_ROOT "$ENV{LLVM_HOME}")
+  set(Clang_ROOT "$ENV{LLVM_HOME}")
+endif()
 
 # Find LLVM/Clang (required for C/C++ support)
 find_package(LLVM REQUIRED CONFIG)
@@ -420,6 +479,22 @@ find_package(Clang REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
+
+# Determine clang major version for conditional library selection.
+if(NOT DEFINED CLANG_VERSION_MAJOR OR CLANG_VERSION_MAJOR STREQUAL "0")
+  if(LLVM_PACKAGE_VERSION)
+    string(REPLACE "." ";" LLVM_VERSION_PARTS "${LLVM_PACKAGE_VERSION}")
+    list(GET LLVM_VERSION_PARTS 0 CLANG_VERSION_MAJOR)
+  else()
+    execute_process(
+      COMMAND "${CMAKE_SOURCE_DIR}/config/getClangMajorVersionNumber.sh"
+      OUTPUT_VARIABLE CLANG_VERSION_MAJOR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+  endif()
+endif()
+if(NOT CLANG_VERSION_MAJOR)
+  set(CLANG_VERSION_MAJOR 0)
+endif()
 
 # CRITICAL FIX: Force LLVM 20 headers by overriding compiler's built-in search paths
 # Must be set BEFORE project() or any compiler checks
@@ -468,18 +543,36 @@ endif()
 
 # Clang libraries needed
 set(CLANG_LIBS
+  clangFrontendTool
+  clangStaticAnalyzerFrontend
+  clangStaticAnalyzerCheckers
+  clangStaticAnalyzerCore
+  clangIndex
   clangFrontend
-  clangDriver
+  clangCodeGen
+  clangARCMigrate
+  clangRewrite
   clangSerialization
+  clangDriver
   clangParse
   clangSema
   clangAnalysis
-  clangEdit
   clangAST
-  clangLex
-  clangBasic)
+  clangBasic
+  clangEdit
+  clangLex)
 
-endif() # enable-c
+if(CLANG_VERSION_MAJOR GREATER_EQUAL 15)
+  list(APPEND CLANG_LIBS clangSupport)
+endif()
+if(CLANG_VERSION_MAJOR GREATER_EQUAL 16)
+  list(APPEND CLANG_LIBS clangCrossTU clangASTMatchers)
+endif()
+if(CLANG_VERSION_MAJOR GREATER_EQUAL 18)
+  list(APPEND CLANG_LIBS clangAPINotes clangTooling)
+endif()
+
+endif() # ENABLE-C
 
 ########################################################################################################################
 # System features
@@ -490,38 +583,36 @@ set(CMAKE_REQUIRED_QUIET ${QUIET})
 include(ConfigureChecks)
 set(CMAKE_REQUIRED_QUIET FALSE)
 
-# A collection of macros which extend the built-in cmake commands
-include(MacroLibrary)
-
 find_package(Perl REQUIRED)
 
 ########################################################################################################################
 # Miscellaneous user-selectable features
 ########################################################################################################################
 
-# FIXME: All options should be in the affirmative (i.e., enable-whatever instead of disable-whatever)
-option(disable-example-translators-directory "Disable compilation and testing of exampleTranslators directory" ON)
-option(disable-tests-directory "Disable compilation and testing of the ROSE/tests directory" OFF)
-option(disable-tutorial-directory "Disable compilation and testing of the ROSE/tutorial directory" ON)
+option(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY "Enable compilation and testing of exampleTranslators directory" OFF)
+option(ENABLE-TESTS-DIRECTORY "Enable compilation and testing of the ROSE/tests directory" ON)
+option(ENABLE-TUTORIAL-DIRECTORY "Enable compilation and testing of the ROSE/tutorial directory" OFF)
+option(ENABLE_DOXYGEN "Enable Doxygen support" OFF)
 
-option(enable-advanced-warnings "Support for an advanced uniform warning level for ROSE development" OFF)
-if(enable-advanced-warnings)
+option(ENABLE-ADVANCED-WARNINGS "Support for an advanced uniform warning level for ROSE development" OFF)
+if(ENABLE-ADVANCED-WARNINGS)
   message(WARNING "Using an advanced uniform warning level for ROSE development")
   set(ROSE_USE_UNIFORM_ADVANCED_WARNINGS_SUPPORT 1)
 endif()
 
-option(enable-gnu-extensions "Enable internal support in ROSE for GNU language extensions" OFF)
-if(enable-gnu-extensions)
+option(ENABLE-GNU-EXTENSIONS "Enable internal support in ROSE for GNU language extensions" OFF)
+if(ENABLE-GNU-EXTENSIONS)
   set(ROSE_SUPPORT_GNU_EXTENSIONS TRUE)
 endif()
 
-option(enable-microsoft-extensions "Enable internal support in ROSE for GNU language extensions" OFF)
-if(enable-microsoft-extensions)
+option(ENABLE-MICROSOFT-EXTENSIONS "Enable internal support in ROSE for GNU language extensions" OFF)
+if(ENABLE-MICROSOFT-EXTENSIONS)
   set(ROSE_SUPPORT_MICROSOFT_EXTENSIONS TRUE)
 endif()
 
-if(enable-fortran AND enable-fortran-ofp)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   set(enable-ofp-version "20200819-JDK8" CACHE STRING "version number for OFP")
+  set(ROSE_OFP_VERSION_NUMBER "${enable-ofp-version}")
   set(ENV{CLASSPATH} "${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar:${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/fortran-parser/OpenFortranParser-${enable-ofp-version}.jar")
 endif()
 
@@ -529,9 +620,14 @@ endif()
 include(FindBison)
 find_bison()
 
-# To use doxygen, set DOXYGEN_ROOT to the doxygen installation prefix. To avoid doxygen use DOXYGEN_ROOT=no
-include(FindDoxygen)
-find_doxygen()
+# To use doxygen, set ENABLE_DOXYGEN=ON and DOXYGEN_ROOT=<doxygen/installation/path>
+if(ENABLE_DOXYGEN)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND "${DOXYGEN_ROOT}" STREQUAL "")
+    message(STATUS "Set DOXYGEN_ROOT to the directory doxygen is installed if you want to explicitly control which Doxygen to use")
+  endif()
+  include(FindDoxygen)
+  find_doxygen()
+endif()
 
 # Zlib is required by libharu. To find it in a special place, set ZLIB_ROOT to its installation prefix.
 include(FindZlib)
@@ -563,7 +659,7 @@ if(NOT FLEX_FOUND)
   message(FATAL_ERROR "Could not find flex command")
 endif()
 
-find_library(M_LIB m)
+find_library(M_LIB m REQUIRED)
 find_library(RT_LIB rt)
 
 # This is essential to find the right include path from either build or installation tree for a translator
@@ -585,39 +681,42 @@ set(LIBHARU_BINARY_DIR ${ROSE_TOP_BINARY_DIR}/src/3rdPartyLibraries/libharu-2009
 # Back-end compilers
 ########################################################################################################################
 
-set(with-alternate_backend_Cxx_compiler "" CACHE STRING "Specify an alternative C++ back-end compiler")
-if(with-alternate_backend_Cxx_compiler)
-  if(EXISTS ${with-alternate_backend_Cxx_compiler})
-    set(BACKEND_CXX_COMPILER ${with-alternate_backend_Cxx_compiler})
+set(WITH-ALT-BACKEND-CXX-COMPILER "" CACHE STRING "Specify an alternative C++ back-end compiler")
+if(WITH-ALT-BACKEND-CXX-COMPILER)
+  if(EXISTS ${WITH-ALT-BACKEND-CXX-COMPILER})
+    set(BACKEND_CXX_COMPILER ${WITH-ALT-BACKEND-CXX-COMPILER})
   else()
-    message(WARNING "${with-alternate_backend_Cxx_compiler} does not exist; pecify an absolute path to the compiler")
+    message(WARNING "${WITH-ALT-BACKEND-CXX-COMPILER} does not exist; pecify an absolute path to the compiler")
   endif()
 endif()
 
-set(with-alternate_backend_C_compiler "" CACHE STRING "Specify an alternative C back-end compiler")
-if(with-alternate_backend_C_compiler)
-  if(EXISTS ${with-alternate_backend_C_compiler})
-    set(BACKEND_C_COMPILER ${with-alternate_backend_C_compiler})
+set(WITH-ALT-BACKEND-C-COMPILER "" CACHE STRING "Specify an alternative C back-end compiler")
+if(WITH-ALT-BACKEND-C-COMPILER)
+  if(EXISTS ${WITH-ALT-BACKEND-C-COMPILER})
+    set(BACKEND_C_COMPILER ${WITH-ALT-BACKEND-C-COMPILER})
     message(STATUS "just set backend C compiler to ${BACKEND_C_COMPILER}")
   else()
-    message(WARNING "${with-alternate_backend_C_compiler} does not exist; specify an absolute path to the compiler")
+    message(WARNING "${WITH-ALT-BACKEND-C-COMPILER} does not exist; specify an absolute path to the compiler")
   endif()
 endif()
 
-set(with-alternate_backend_fortran_compiler "" CACHE STRING "Specify an alternative fortran back-end compiler")
-if(with-alternate_backend_fortran_compiler)
-  if(EXISTS ${with-alternate_backend_fortran_compiler})
-    set(BACKEND_FORTRAN_COMPILER ${with-alternate_backend_fortran_compiler})
+set(WITH-ALT-BACKEND-FORTRAN-COMPILER "" CACHE STRING "Specify an alternative fortran back-end compiler")
+if(WITH-ALT-BACKEND-FORTRAN-COMPILER)
+  if(EXISTS ${WITH-ALT-BACKEND-FORTRAN-COMPILER})
+    set(BACKEND_FORTRAN_COMPILER ${WITH-ALT-BACKEND-FORTRAN-COMPILER})
   else()
-    message(WARNING "${with-alternate_backend_fortran_compiler} does not exist; specify an absolute path to the compiler")
+    message(WARNING "${WITH-ALT-BACKEND-FORTRAN-COMPILER} does not exist; specify an absolute path to the compiler")
   endif()
 endif()
 
 # define a global variable to collect all common linked third-party libraries for rose (Linux-only)
 set(link_with_libraries ${M_LIB} ${RT_LIB} ${CMAKE_THREAD_LIBS_INIT})
+if(HAVE_QUADMATH_COMPILE)
+  list(APPEND link_with_libraries quadmath)
+endif()
 
 # Check compilers and version numbers. The module is located in src/cmake/modules.
-if(enable-c)
+if(ENABLE-C)
   include(roseChooseBackendCompiler)
   include(roseGenerateBackendCompilerSpecificHeaders)
   install(DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/ DESTINATION include/clang)
@@ -757,6 +856,7 @@ endif()
 
 set(ROSE_INCLUDES
   ${ROSE_TOP_BINARY_DIR}
+  ${ROSE_TOP_BINARY_DIR}/src/util
   ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/
   ${ROSE_TOP_SRC_DIR}
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII
@@ -797,6 +897,7 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/astUtil/astInterface
   ${ROSE_TOP_SRC_DIR}/src/midend/astUtil/astSupport
   ${ROSE_TOP_SRC_DIR}/src/midend/astUtil/symbolicVal
+  ${ROSE_TOP_SRC_DIR}/src/midend/astUtil/dependenceTracking
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/loopProcessing/computation
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/loopProcessing/depGraph
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/loopProcessing/depInfo
@@ -821,7 +922,6 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/functionCallNormalization
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/constantFolding
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration
-  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/runtimeTransformation
   ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include)
 
 ########################################################################################################################
@@ -838,8 +938,20 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Set up RPATH so that our executables will be able to find their dependent
 # libraries using relative paths.
-set(origin "$ORIGIN")
-set(CMAKE_INSTALL_RPATH "${origin}/../lib;${origin}/")
+if(NOT DEFINED CMAKE_INSTALL_RPATH)
+  message(STATUS "Setting CMAKE_INSTALL_RPATH")
+  set(origin "$ORIGIN")
+  set(CMAKE_INSTALL_RPATH "${origin}/../lib:${origin}")
+  list(APPEND CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib" "${CMAKE_INSTALL_PREFIX}/bin")
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH}")
+  endif()
+endif()
+
+if(NOT DEFINED CMAKE_INSTALL_RPATH_USE_LINK_PATH)
+  message(STATUS "Setting CMAKE_INSTALL_RPATH_USE_LINKPATH")
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+endif()
 
 
 ########################################################################################################################
@@ -866,7 +978,7 @@ file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include-staging/Rose")
 file(COPY ${ROSE_TOP_SRC_DIR}/src/Rose/SourceLocation.h
      DESTINATION ${CMAKE_BINARY_DIR}/include-staging/Rose)
 
-if(enable-cuda)
+if(ENABLE-CUDA)
     execute_process(
       COMMAND mkdir -p "./include-staging/cuda_HEADERS")
     execute_process(
@@ -879,7 +991,7 @@ if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 # Linux-only header discovery (GNU/Clang toolchains)
-if(enable-c)
+if(ENABLE-C)
   set(C_INCLUDE_STRING "{\"${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
 
   set(CXX_INCLUDE_STRING "{\"${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
@@ -931,11 +1043,12 @@ if(enable-c)
     string(REPLACE "\n" ";" C_backend_includes "${C_backend_includes}")
     string(REPLACE "\n" ";" CXX_backend_includes "${CXX_backend_includes}")
 
+    set(C_INCLUDE_STRING "${C_INCLUDE_STRING} ${C_includeString}")
     foreach(C_include_dir ${C_backend_includes})
       string(STRIP "${C_include_dir}" C_include_dir)
       set(C_INCLUDE_STRING "${C_INCLUDE_STRING}, \"${C_include_dir}\"")
     endforeach()
-    set(C_INCLUDE_STRING "${C_INCLUDE_STRING} ${C_includeString}, \"/usr/include\"")
+    set(C_INCLUDE_STRING "${C_INCLUDE_STRING}, \"/usr/include\"")
 
     foreach(CXX_include_dir ${CXX_backend_includes})
       string(STRIP "${CXX_include_dir}" CXX_include_dir)
@@ -992,9 +1105,27 @@ configure_file(${ROSE_TOP_SRC_DIR}/rose_config.h.in.cmake ${ROSE_TOP_BINARY_DIR}
 ########################################################################################################################
 
 add_subdirectory(tools)
-enable_testing()
-add_subdirectory(tests)
-add_subdirectory(tutorial)
+if(ENABLE-TESTS-DIRECTORY)
+  enable_testing()
+  add_subdirectory(tests)
+endif()
+if(ENABLE-TUTORIAL-DIRECTORY)
+  add_subdirectory(tutorial)
+endif()
+
+########################################################################################################################
+# Install RMC configuration file if present
+########################################################################################################################
+# When ROSE dependencies are managed with "rmc", a file named ".spock" is created at the top of the build tree.
+# Install this file as "lib/rmc/rose" if RMC is active.
+if(DEFINED ENV{SPOCK_EMPLOYED})
+  if(EXISTS "${CMAKE_BINARY_DIR}/.spock")
+    install(FILES ${CMAKE_BINARY_DIR}/.spock
+      DESTINATION ${LIB_INSTALL_DIR}/rmc
+      RENAME rose
+    )
+  endif()
+endif()
 
 ########################################################################################################################
 # Miscellaneous final actions

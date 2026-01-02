@@ -101,8 +101,6 @@ set(dominance_STAT_SRCS
 
 # src/frontend/OpenFortranParser_SAGE_Connection/Makefile.am: roseFortran
 
-# src/3rdPartyLibraries/MSTL/Makefile.am: mstl
-
 # src/util/graphs/Makefile.am: graphs
 
 # src/util/commandlineProcessing/Makefile.am: RoseCommandlineUtil

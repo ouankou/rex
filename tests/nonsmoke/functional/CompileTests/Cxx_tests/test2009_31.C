@@ -1,7 +1,7 @@
 /*
  *  Ellipse used with try-catch within a template function
  *  See bug 375
- *  https://outreach.scidac.gov/tracker/index.php?func=detail&aid=375&group_id=24&atid=185
+ *  https://outreach.scidac.gov/tracker/
  *  Liao, 10/29/2009
  *
  *  Distilled from 
@@ -46,4 +46,3 @@ class TestClass
       std::cout<<"1";
     };
 };
-

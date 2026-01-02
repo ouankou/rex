@@ -27,7 +27,7 @@ markSharedDeclarationsForOutputInCodeGeneration( SgNode* node )
 
 
 MarkSharedDeclarationsInheritedAttribute::MarkSharedDeclarationsInheritedAttribute()
-   : currentFile(NULL) 
+   : currentFile(nullptr)
    {
    }
 
@@ -54,12 +54,12 @@ MarkSharedDeclarationsForOutputInCodeGeneration::evaluateInheritedAttribute(SgNo
 
   // DQ (2/25/2019): Record the associated file id's of the source files.
      SgSourceFile* sourceFile = isSgSourceFile(node);
-     if (sourceFile != NULL)
+     if (sourceFile != nullptr)
         {
 #if 0
           printf ("MarkSharedDeclarationsForOutputInCodeGeneration::visit(): sourceFile->get_sourceFileNameWithoutPath() = %s \n",sourceFile->get_sourceFileNameWithoutPath().c_str());
 #endif
-          ROSE_ASSERT(sourceFile->get_file_info() != NULL);
+          ASSERT_not_null(sourceFile->get_file_info());
           int file_id = sourceFile->get_file_info()->get_file_id();
 
           fileNodeSet.insert(file_id);
@@ -80,13 +80,13 @@ MarkSharedDeclarationsForOutputInCodeGeneration::evaluateInheritedAttribute(SgNo
   // Only make statements (skip expressions since compiler generated casts are not output!)
   // We should not be borrowing the compiler generated flag to mark IR statement nodes for output by the unparser!
      SgStatement* statement = isSgStatement(node);
-     if (statement != NULL)
+     if (statement != nullptr)
         {
 #if 0
        // printf ("In MarkSharedDeclarationsForOutputInCodeGeneration::visit(): Attempting to mark %s (%s) for output in code generation \n",node->class_name().c_str(),SageInterface::get_name(statement).c_str());
           printf ("In MarkSharedDeclarationsForOutputInCodeGeneration::visit(): Attempting to mark %s for output in code generation \n",node->class_name().c_str());
 #endif
-          ROSE_ASSERT(statement->get_file_info() != NULL);
+          ASSERT_not_null(statement->get_file_info());
        // statement->get_file_info()->setOutputInCodeGeneration();
           if (statement->get_file_info()->get_fileIDsToUnparse().empty() == false)
              {
@@ -162,6 +162,5 @@ MarkSharedDeclarationsForOutputInCodeGeneration::evaluateInheritedAttribute(SgNo
 
      return return_inheritedAttribute;
    }
-
 
 

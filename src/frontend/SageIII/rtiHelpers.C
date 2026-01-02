@@ -18,35 +18,35 @@ std::ostream& operator<<(std::ostream& os, const SgAsmStmt::AsmRegisterNameList 
       }
      return os;
    }
-std::ostream& operator<<(std::ostream& os, const SgDataStatementObjectPtrList& bv) 
+std::ostream& operator<<(std::ostream& os, const SgDataStatementObjectPtrList&)
    {
       return os;
    }
-std::ostream& operator<<(std::ostream& os, const SgDataStatementValuePtrList& bv) 
+std::ostream& operator<<(std::ostream& os, const SgDataStatementValuePtrList&)
    {
       return os;
    }
-std::ostream& operator<<(std::ostream& os, const SgCommonBlockObjectPtrList& bv) 
+std::ostream& operator<<(std::ostream& os, const SgCommonBlockObjectPtrList&)
    {
       return os;
    }
-std::ostream& operator<<(std::ostream& os, const SgDimensionObjectPtrList& bv) 
+std::ostream& operator<<(std::ostream& os, const SgDimensionObjectPtrList&)
    {
       return os;
    }
-std::ostream& operator<<(std::ostream& os, const SgLabelSymbolPtrList& bv) 
+std::ostream& operator<<(std::ostream& os, const SgLabelSymbolPtrList&)
    {
       return os;
    }
-std::ostream& operator<<(std::ostream& os, const SgFormatItemPtrList& bv) 
+std::ostream& operator<<(std::ostream& os, const SgFormatItemPtrList&)
    {
       return os;
    }
 
-void doRTI(const char* fieldNameBase, void* fieldPtr, size_t fieldSize, void* thisPtr, const char* className, const char* typeString, const char* fieldName, const std::string& fieldContents, RTIMemberData& memberData) {
+void doRTI(const char* /*fieldNameBase*/, void* /*fieldPtr*/, size_t /*fieldSize*/, void* /*thisPtr*/, const char* /*className*/,
+           const char* typeString, const char* fieldName, const std::string& fieldContents, RTIMemberData& memberData) {
 #if ROSE_USE_VALGRIND
   doUninitializedFieldCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr, className);
 #endif
   memberData = RTIMemberData(typeString, fieldName, fieldContents);
 }
-

@@ -60,7 +60,7 @@ set(noinst_programs
   templateQualification
 )
 
-# Fortran-specific executables (only build when enable-fortran=ON)
+# Fortran-specific executables (only build when ENABLE-FORTRAN=ON)
 set(fortran_programs
   buildProcedureHeaderStatement
   buildExternalStatement
@@ -80,7 +80,7 @@ include_directories(
 
 # Build all executables
 set(all_programs ${bin_programs} ${noinst_programs})
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   list(APPEND all_programs ${fortran_programs})
 endif()
 
@@ -290,7 +290,7 @@ add_test(
 )
 
 # Fortran tests (only if Fortran support is enabled)
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   foreach(test ${fortran_programs})
     add_test(
       NAME astInterface_${test}

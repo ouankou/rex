@@ -6,23 +6,62 @@ SgPntrArrRefExp::get_type() const
   // DQ (1/16/2006): In this function we want to return the base type of the array being referenced (lhs->get_type()).
   // DQ (1/14/2006): p_expression_type has been removed, we have to compute the appropriate type (IR specific code)
 
-     if (p_expression_type != NULL)
+     if (p_expression_type != nullptr)
         {
           printf ("In SgPntrArrRefExp::get_type(): p_expression_type = %s \n",p_expression_type->class_name().c_str());
         }
 
-     ROSE_ASSERT(get_lhs_operand() != NULL);
-     ROSE_ASSERT(get_rhs_operand() != NULL);
+     ROSE_ASSERT(get_lhs_operand() != nullptr);
+     ROSE_ASSERT(get_rhs_operand() != nullptr);
 
-     SgType* someType = get_lhs_operand()->get_type();
-     ROSE_ASSERT(someType != NULL);
+  // (10/25/2024): In C and C++, E1[E2] is definitionally equivalent to *(E1+E2).
+  // Therefore, we can borrow the type inference code from SgBinaryOp.C to compute the type of E1+E2 before proceeding with type stripping.
+
+     SgType* lhsType = get_lhs_operand()->get_type();
+     ROSE_ASSERT(lhsType != nullptr);
+
+     SgType* rhsType = get_rhs_operand()->get_type();
+     ROSE_ASSERT(rhsType != nullptr);
+
+     SgType *lhsBase = SageInterface::getElementType(lhsType);
+     SgType *rhsBase = SageInterface::getElementType(rhsType);
+
+     bool isArraySubRange = false;
+     SgExprListExp* indices = isSgExprListExp(get_rhs_operand());
+     if (indices != nullptr)
+        {
+          for (SgExpression* expr : indices->get_expressions())
+             {
+               if (isSgRangeExp(expr) != nullptr)
+                  {
+                    isArraySubRange = true;
+                    break;
+                  }
+             }
+        }
+
+     SgType* someType = nullptr;
+
+     if (isArraySubRange == false && lhsBase != nullptr && rhsBase == nullptr)
+        {
+          someType = SgPointerType::createType(lhsBase);
+        }
+     else if (isArraySubRange == false && lhsBase == nullptr && rhsBase != nullptr)
+        {
+          someType = SgPointerType::createType(rhsBase);
+        }
+     else
+        {
+          someType = lhsType;
+        }
+     ROSE_ASSERT(someType != nullptr);
 
   // This code should be shared between the SgPntrArrRefExp and the SgPointerDerefExp IR nodes
   // A better idea would be to have a function that strips off types based on a set of flags
   // that would control stripping of pointer references, array references, C++ references,
   // modifiers, and typedefs.
 
-     SgType* returnType = NULL;
+     SgType* returnType = nullptr;
      keepStripping:
      ROSE_ASSERT (someType);
 
@@ -41,12 +80,6 @@ SgPntrArrRefExp::get_type() const
              }
           case V_SgArrayType:
              {
-               SgExprListExp* indices = isSgExprListExp(get_rhs_operand());
-               bool isArraySubRange = false;
-               if (indices && !indices->get_expressions().empty()) {
-                 isArraySubRange = isSgRangeExp(indices->get_expressions().front());
-               }
-
                returnType = isArraySubRange ? someType
                                             : isSgArrayType(someType)->get_base_type();
                break;
@@ -97,7 +130,7 @@ SgPntrArrRefExp::get_type() const
              }
         }
 
-     ROSE_ASSERT(returnType != NULL);
+     ROSE_ASSERT(returnType != nullptr);
 
      return returnType;
    }

@@ -31,8 +31,8 @@ main (int argc, char* argv[])
   Outliner::commandLineProcessing(args);  // this is the old way
   SgProject *proj = frontend(args);
 
-  // Binary analyses know to validate their user-defined settings before they do any analysis, but that's not true (yet) for
-  // Outliner, so I've created a function we can call explicitly.
+  // Some analyses validate their user-defined settings before running, but that's not true (yet) for Outliner,
+  // so we call it explicitly.
   Outliner::validateSettings();
 
   if (settings.showOutlinerSettings) {

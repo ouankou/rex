@@ -22,6 +22,7 @@ static const char *description =
 #include <vector>
 
 bool verbose = false;
+std::string smallHeadersDir;
 
 int
 main(int argc, char * argv[])
@@ -39,14 +40,35 @@ main(int argc, char * argv[])
      
   // First build the C++ grammar
      std::string target_directory = ".";
-     if(argc >= 2) target_directory = std::string(argv[1]);
+     for (int i = 1; i < argc; ++i) {
+         std::string arg = argv[i];
+         if (arg == "--small-headers") {
+             if (i + 1 >= argc) {
+                 cerr << argv[0] << ": --small-headers requires a directory argument\n";
+                 exit(1);
+             }
+             smallHeadersDir = argv[++i];
+         } else if (arg == "-v" || arg == "--verbose") {
+             verbose = true;
+         } else if (!arg.empty() && arg[0] == '-') {
+             cerr << argv[0] << ": unknown option '" << arg << "'\n";
+             exit(1);
+         } else {
+             if (target_directory != ".") {
+                 cerr << argv[0] << ": only one output directory is allowed\n";
+                 exit(1);
+             }
+             target_directory = arg;
+         }
+     }
 
-  // For base level grammar use prefix "Sg" to be compatible with SAGE
+  // For base level grammar use prefix "Sg" to be compatable with SAGE
      Grammar sageGrammar ( /* name of grammar */ "Cxx_Grammar", 
                            /* Prefix to names */ "Sg", 
                            /* Parent Grammar  */ "ROSE_BaseGrammar",
                            /* No parent Grammar */ NULL,
-                           target_directory
+                           target_directory,
+                           smallHeadersDir
                          );
 
   // Build the header files and source files representing the
@@ -60,5 +82,6 @@ main(int argc, char * argv[])
          printf ("documentedConstructorPrototypes = %s \n",documentedConstructorPrototypes.c_str());
          printf ("Rosetta finished.\n");
      }
+
      return 0;
 }

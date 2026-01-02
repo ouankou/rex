@@ -22,7 +22,7 @@
 
 
 // API function for new hidden list support.
-void newBuildHiddenTypeAndDeclarationLists( SgNode* node, std::set<SgNode*> & referencedNameSet );
+void newBuildHiddenTypeAndDeclarationLists( SgNode* node, SgUnorderedNodeSet & referencedNameSet );
 
 
 
@@ -61,7 +61,7 @@ class HiddenListTraversal : public AstTopDownBottomUpProcessing<HiddenListInheri
 
        // Data
        // DQ (6/21/2011): since this is used recursively we can't have this be a new set each time.
-          std::set<SgNode*> & referencedNameSet;
+          SgUnorderedNodeSet & referencedNameSet;
 
        // We keep the qualified names as a map of strings with keys defined by the SgNode pointer values.
        // These are referenced to the static data members in SgNode (SgNode::get_globalQualifiedNameMapForNames() 
@@ -70,12 +70,12 @@ class HiddenListTraversal : public AstTopDownBottomUpProcessing<HiddenListInheri
        // to the static data members in SgNode, but this does not permit the proper handling of nexted types in 
        // templates since the unparser uses the SgNode static members directly.  so the switch to make this a 
        // reference fixes this problem.
-          std::map<SgNode*,std::string> & qualifiedNameMapForNames;
-          std::map<SgNode*,std::string> & qualifiedNameMapForTypes;
+          SgUnorderedMapNodeToString & qualifiedNameMapForNames;
+          SgUnorderedMapNodeToString & qualifiedNameMapForTypes;
 
        // DQ (6/3/2011): This is to save the names of types where they can be named differently when referenced 
        // from different locations in the source code.
-          std::map<SgNode*,std::string> & typeNameMap;
+          SgUnorderedMapNodeToString & typeNameMap;
 
        // Member functions: 
           std::list<SgNode*> gatherNamesInClass( SgClassDefinition* classDefinition );
@@ -83,7 +83,10 @@ class HiddenListTraversal : public AstTopDownBottomUpProcessing<HiddenListInheri
      public:
        // HiddenListTraversal();
        // HiddenListTraversal(SgNode* root);
-          HiddenListTraversal(std::map<SgNode*,std::string> & input_qualifiedNameMapForNames, std::map<SgNode*,std::string> & input_qualifiedNameMapForTypes, std::map<SgNode*,std::string> & input_typeNameMap, std::set<SgNode*> & input_referencedNameSet);
+          HiddenListTraversal(SgUnorderedMapNodeToString & input_qualifiedNameMapForNames,
+                              SgUnorderedMapNodeToString & input_qualifiedNameMapForTypes,
+                              SgUnorderedMapNodeToString & input_typeNameMap,
+                              SgUnorderedNodeSet & input_referencedNameSet);
 
        // Evaluates how much name qualification is required (typically 0 (no qualification), but sometimes 
        // the depth of the nesting of scopes plus 1 (full qualification with global scoping operator)).
@@ -157,8 +160,8 @@ class HiddenListTraversal : public AstTopDownBottomUpProcessing<HiddenListInheri
           void evaluateNameQualificationForTemplateArgumentList ( SgTemplateArgumentPtrList & templateArgumentList, SgScopeStatement* currentScope, SgStatement* positionStatement );
 
        // DQ (5/28/2011): Added support to set the global qualified name map.
-          const std::map<SgNode*,std::string> & get_qualifiedNameMapForNames() const;
-          const std::map<SgNode*,std::string> & get_qualifiedNameMapForTypes() const;
+          const SgUnorderedMapNodeToString & get_qualifiedNameMapForNames() const;
+          const SgUnorderedMapNodeToString & get_qualifiedNameMapForTypes() const;
 
        // DQ (6/3/2011): Evaluate types to permit the strings representing unparsing the types 
        // are saved in a separate map associated with the IR node referencing the type.  This 

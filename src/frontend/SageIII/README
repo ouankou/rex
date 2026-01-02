@@ -119,14 +119,6 @@ Here we summarize the separate sub-directoies of this directory:
       This is the support for weaving of the preprocessed token stream (the post processed
       token stream is the one generated from cpp preprocessing).
 
-   astVisualization
-      This is the support for visualization of either the AST or the whole graph
-      representing the AST with all symbols, types, etc.  The strict AST does not
-      include such IR nodes as they are considered attributes to an AST.  The graphs of
-      the whole graph associated with the AST are useful for internal debugging or
-      for understanding complex relations between IR nodes (not represented in the
-      simpler graph of just the AST).
-
    docs
       This is the location of doxygen documentation (the input files for doxygen).
       These are copied form the ROSE/docs/testDoxygen directory where the originals
@@ -191,4 +183,3 @@ SgTemplateParameter::build_node_from_nonlist_children(
 
    2) There is nothing to say what the elements are of an IR node that has a container.
       So this has to be handled via some specific function that will be case oriented.
-

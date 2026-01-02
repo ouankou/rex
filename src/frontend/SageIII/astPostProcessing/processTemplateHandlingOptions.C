@@ -56,7 +56,7 @@ void processTemplateHandlingOptions( SgNode* node )
    }
 
 ProcessTemplateHandlingOptions::
-ProcessTemplateHandlingOptions ( SgFile* file, bool buildImplicitTemplates, bool buildImplicitInlineTemplates )
+ProcessTemplateHandlingOptions(SgFile* /*file*/, bool buildImplicitTemplates, bool buildImplicitInlineTemplates )
    :
 #if 0 // [Robb Matzke 2021-03-17]: unused
     file(file),

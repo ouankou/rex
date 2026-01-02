@@ -645,11 +645,6 @@ mangleFunctionNameToString (const string& s, const string& ret_type_name )
    {
   // DQ (7/24/2012): This causes a problem for the isspace(s[n_opstr]) test below (likely not the cause of the problem).
      string s_mangled (trimSpaces (s));
-  // string s_mangled(s);
-
-#if 0
-     printf ("In mangleFunctionNameToString(s = %s ret_type_name = %s) \n",s.c_str(),ret_type_name.c_str());
-#endif
 
     // Special case: destructor names
     if (s[0] == '~')
@@ -668,9 +663,6 @@ mangleFunctionNameToString (const string& s, const string& ret_type_name )
 
     if (s.substr (0, n_opstr) == opstr) // begins with "operator"
       {
-#if 0
-        printf ("In mangleFunctionNameToString(): Found operator syntax isspace(s[n_opstr]) = %s \n",isspace(s[n_opstr]) ? "true" : "false");
-#endif
         if (isspace(s[n_opstr]))
           {
             if (s.substr (n_opstr+1) == newstr) // is "operator new"
@@ -688,9 +680,6 @@ mangleFunctionNameToString (const string& s, const string& ret_type_name )
         else // real operator (suffix after the substring "operator ")
           {
             string s_op = s.substr (n_opstr);
-#if 0
-            printf ("In mangleFunctionNameToString(): s_op = %s \n",s_op.c_str());
-#endif
          // DQ (2/7/2006): Bug fix for case of function: operator_takes_lvalue_operand()
          // (this test appears in test2005_198.C).
             string s_op_mangled = s_op;
@@ -739,31 +728,13 @@ mangleFunctionNameToString (const string& s, const string& ret_type_name )
              // the mangle form is just the unmodified function name.
              // rtmp = fname;
               }
-#if 0
-            printf ("In mangleFunctionNameToString(): Before s_mangled.replace(): s_mangled = %s \n",s_mangled.c_str());
-#endif
          // DQ (2/7/2006): Bug fix for case of function such as operator_takes_lvalue_operand()
          // In the case of operator_takes_lvalue_operand() this should replace
          // "_takes_lvalue_operand" with "_takes_lvalue_operand" (trivial case).
             s_mangled.replace (n_opstr, s_op.size (), s_op_mangled);
-#if 0
-            printf ("In mangleFunctionNameToString(): After s_mangled.replace(): s_mangled = %s \n",s_mangled.c_str());
-#endif
           }
       }
     // else, leave name as is.
-     else
-      {
-#if 0
-        printf ("In mangleFunctionNameToString(): No operator syntax found \n");
-#endif
-      }
-
-#if 0
-  // DQ (7/24/2012): Added test (failing for test2004_141.C); fails later in AST consistency tests.
-     ROSE_ASSERT(s_mangled.find('&') == string::npos);
-     ROSE_ASSERT(s_mangled.find('*') == string::npos);
-#endif
 
      return s_mangled;
    }
@@ -784,8 +755,6 @@ mangleTemplateArgsToString (const SgTemplateArgumentPtrList::const_iterator b, c
      ostringstream mangled_name;
      bool is_first = true;
 
-     size_t arg_counter = 0;
-
      for (SgTemplateArgumentPtrList::const_iterator i = b; i != e; ++i)
         {
           if (is_first == true)
@@ -794,24 +763,13 @@ mangleTemplateArgsToString (const SgTemplateArgumentPtrList::const_iterator b, c
              }
             else
              {
-            // !is_first, so insert a seperator string.
+            // !is_first, so insert a separator string.
                mangled_name << "__sep__";
              }
 
           const SgTemplateArgument* arg = *i;
           ROSE_ASSERT (arg != NULL);
-#if 0
-          printf ("In mangleTemplateArgsToString(): calling template arg->get_mangled_name(): arg_counter = %zu arg = %p = %s \n",arg_counter,arg,arg->unparseToString().c_str());
-#endif
-#if 0
-          printf ("In mangleTemplateArgsToString(): arg->get_mangled_name() = %s \n", arg->get_mangled_name().str());
-#endif
           mangled_name << arg->get_mangled_name().str();
-#if 0
-          string tmp_s = mangled_name.str();
-          printf ("DONE: In mangleTemplateArgsToString(): calling template arg->get_mangled_name(): arg_counter = %zu arg = %p mangled_name = %s \n",arg_counter,arg,tmp_s.c_str());
-#endif
-          arg_counter++;
         }
 
      return mangled_name.str();
@@ -824,8 +782,6 @@ mangleTemplateParamsToString (const SgTemplateParameterPtrList::const_iterator b
      ostringstream mangled_name;
      bool is_first = true;
 
-     size_t param_counter = 0;
-
      for (SgTemplateParameterPtrList::const_iterator i = b; i != e; ++i)
         {
           if (is_first == true)
@@ -834,24 +790,13 @@ mangleTemplateParamsToString (const SgTemplateParameterPtrList::const_iterator b
              }
             else
              {
-            // !is_first, so insert a seperator string.
+            // !is_first, so insert a separator string.
                mangled_name << "__sep__";
              }
 
           const SgTemplateParameter* param = *i;
           ROSE_ASSERT (param != NULL);
-#if 0
-          printf ("In mangleTemplateParamsToString(): calling template param->get_mangled_name(): param_counter = %zu param = %p = %s \n",param_counter,param,param->unparseToString().c_str());
-#endif
-#if 0
-          printf ("In mangleTemplateParamsToString(): param->get_mangled_name() = %s \n", param->get_mangled_name().str());
-#endif
           mangled_name << param->get_mangled_name().str();
-#if 0
-          string tmp_s = mangled_name.str();
-          printf ("DONE: In mangleTemplateParamsToString(): calling template param->get_mangled_name(): param_counter = %zu param = %p mangled_name = %s \n",param_counter,param,tmp_s.c_str());
-#endif
-          param_counter++;
         }
 
      return mangled_name.str();
@@ -1060,8 +1005,7 @@ mangleTemplateFunction (const string& templ_name,
                         const SgFunctionType* func_type,
                         const SgScopeStatement* scope)
   {
-    string mangled = mangleTemplateFunctionToString (templ_name, templ_args, func_type, scope);
-    return SgName (mangled.c_str());
+    return mangleTemplateFunctionToString (templ_name, templ_args, func_type, scope);
   }
 
 /*! Mangles a value expression.
@@ -1130,6 +1074,9 @@ mangleValueExp (const SgValueExp* expr)
         break;
       case V_SgUnsignedCharVal:
         mangled_name = mangleSgValueExp<SgUnsignedCharVal> (isSgUnsignedCharVal (expr));
+        break;
+      case V_SgSignedCharVal:
+        mangled_name = mangleSgValueExp<SgSignedCharVal> (isSgSignedCharVal (expr));
         break;
       case V_SgUnsignedIntVal:
         mangled_name = mangleSgValueExp<SgUnsignedIntVal> (isSgUnsignedIntVal (expr));
@@ -1365,7 +1312,10 @@ mangleExpression (const SgExpression* expr)
         }
         case V_SgFunctionCallExp: {
           const SgFunctionCallExp* e = isSgFunctionCallExp (expr);
-          mangled_name << "_bFunctionCallExp_" << mangleExpression (e->get_function()) << "__" << mangleExpression (e->get_args()) << "_eFunctionCallExp_";
+          std::string mangledFn = mangleExpression (e->get_function());
+          std::string mangledArgs = mangleExpression (e->get_args());
+
+          mangled_name << "_bFunctionCallExp_" << mangledFn << "__" << mangledArgs << "_eFunctionCallExp_";
           break;
         }
         case V_SgConstructorInitializer: {
@@ -1463,6 +1413,14 @@ mangleExpression (const SgExpression* expr)
         case V_SgNullExpression: {
           // Handle null expressions (placeholders for unsupported C++ constructs)
           mangled_name << "_bNullExpr_";
+          break;
+        }
+        case V_SgFoldExpression: {
+          const SgFoldExpression *fold = isSgFoldExpression(expr);
+          mangled_name << "_bfold_" << mangleExpression(fold->get_operands())
+                       << "_op_" << fold->get_operator_token() << "_assoc_"
+                       << (fold->get_is_left_associative() ? "left" : "right")
+                       << "_efold_";
           break;
         }
         default: {

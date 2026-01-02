@@ -1,4 +1,4 @@
-if(NOT disable-tests-directory)
+if(ENABLE-TESTS-DIRECTORY)
   add_subdirectory(smoke)
   add_subdirectory(nonsmoke)
 endif()

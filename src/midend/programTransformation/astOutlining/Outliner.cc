@@ -168,7 +168,7 @@ Outliner::outline (SgStatement* s, const std::string& func_name)
     cout << "==> Running the outliner's preprocessing phase only." << endl;
     preproc_only_ = true;
   // Avoid passing the option to the backend compiler 
-    file->set_originalCommandLineArgumentList(argvList);
+    file->get_originalCommandLineArgumentList() = argvList;
   }  
 #endif
   if (preproc_only_)

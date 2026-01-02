@@ -141,8 +141,8 @@ top:
                     // but it is being parsed as
                     //    ((isSgIfStmt(..) && cn.getIndex()==1) || cn.getIndex==2)
                     // [Robb Matzke 2019-07-10]
-                       (isSgIfStmt(cn.getNode()) &&
-                        cn.getIndex()==1 || cn.getIndex()==2);
+                    (isSgIfStmt(cn.getNode()) &&
+                     (cn.getIndex()==1 || cn.getIndex()==2));
         }
         
 }

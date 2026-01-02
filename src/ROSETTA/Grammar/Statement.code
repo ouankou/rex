@@ -39,9 +39,9 @@ HEADER_START
                 (often just the specification of the new code as a transformation).
              -# ...\n
 
-          Higher level mechanism for the manipulation of the AST are available in the
-          \ref ASTRewriteMechanism. These higher-level interfaces simplify the
-          manipulation of the AST.
+          Higher level mechanisms for the manipulation of the AST are available in
+          other interfaces. These higher-level interfaces simplify the manipulation
+          of the AST.
 
           \internal Need to document this section more fully.
        */
@@ -624,8 +624,6 @@ namespace SageInterface
 
 namespace ASTtools
    {
-  // struct VarSymSet_t;
-  // typename VarSymSet_t;
      typedef std::set<const SgVariableSymbol *> VarSymSet_t;
      void moveStatements (SgBasicBlock* src, SgBasicBlock* dest);
      void collectLocalVisibleVarSyms (const SgStatement* root,const SgStatement* target,VarSymSet_t& syms);
@@ -668,7 +666,6 @@ StatementReplace (SgStatement *parent, Elemtype *& cur, SgStatement *target, SgS
 #endif
        // DQ (4/16/2015): Supress marking parent as isModified (we might want to mark this as containing a transformation).
        // parent->set_isModified(true);
-
           return true;
         }
      return false;
@@ -703,36 +700,12 @@ StatementReplace (SgStatement *parent, SgStatement *& cur, SgStatement *target, 
 
 #endif
 
-#if 0
-// DQ (12/30/2009): This has been moved to the header file since it was a used in
-// several places and could not be supported in the source file now that we
-// support the generation of smaller and more numerous files by ROSETTA.
-inline Sg_File_Info* New_File_Info( SgLocatedNode *p)
-   {
-  // DQ (11/20/2004): Modified to provide more accurate information, use the
-  // copy constructor instead of the constructor that takes a file name.
-  // return new Sg_File_Info( p->get_file_info()->get_filename());
-
-  // DQ (11/6/2006): startOfConstruct is the one Sg_File_Info that will always exist and must exist.
-  // ROSE_ASSERT(p->get_file_info() != NULL);
-  // Sg_File_Info* returnFileInfo = new Sg_File_Info( *( p->get_file_info() ) );
-  // ROSE_ASSERT(returnFileInfo != NULL);
-     ROSE_ASSERT(p->get_startOfConstruct() != NULL);
-     Sg_File_Info* returnFileInfo = new Sg_File_Info( *( p->get_startOfConstruct() ) );
-     ROSE_ASSERT(returnFileInfo != NULL);
-
-  // printf ("In New_File_Info: returnFileInfo = %p \n",returnFileInfo);
-
-     return returnFileInfo;
-   }
-#else
 // Temporary while we move code to use generateMatchingFileInfo directly.
 inline Sg_File_Info* New_File_Info( SgLocatedNode *p)
    {
      ROSE_ASSERT(p != NULL);
      return p->generateMatchingFileInfo();
    }
-#endif
 
 HEADER_STATEMENT_POSTDECLARATION_END
 
@@ -980,7 +953,7 @@ HEADER_GLOBAL_START
 
        // DQ (10/6/2006): Support for mangle name caching (for better performance)
        // std::map<SgNode*,std::string> & get_mangledNameCache();
-       // std::map<std::string, int> & get_shortMangledNameCache();
+       // std::map<std::string, uint64_t> & get_shortMangledNameCache();
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
           virtual std::vector<VirtualCFG::CFGEdge> cfgOutEdges(unsigned int index) override;
@@ -1541,7 +1514,8 @@ HEADER_DECLARATION_SCOPE_END
 
 HEADER_FUNCTION_DECLARATION_STATEMENT_START
 
-      //! Support for C++ covariant return types (used in virtual function overloading).
+      //! Convenience function to access the return type as written in source; may be different
+      //!   from type()->get_return_type()
           SgType* get_orig_return_type() const;
 
        // Empty declaration substitution
@@ -1754,7 +1728,6 @@ HEADER_MEMBER_FUNCTION_DECLARATION_STATEMENT_START
 HEADER_LIST_DECLARATIONS
 
           virtual SgName get_qualified_name() const override;
-          void set_orig_return_type( SgType *);
 
          SgInitializedNamePtrList & get_ctors();
          const SgInitializedNamePtrList & get_ctors() const;
@@ -3055,6 +3028,9 @@ HEADER_TEMPLATE_INSTANTIATION_TYPEDEF_DECLARATION_STATEMENT_START
        // DQ (2/28/2018): Added function
           virtual SgSymbol* get_symbol_from_symbol_table() const override;
 
+       // PP (7/29/2025): Added function
+          SgName get_mangled_name() const override;
+
 HEADER_TEMPLATE_INSTANTIATION_TYPEDEF_DECLARATION_STATEMENT_END
 
 
@@ -4139,7 +4115,7 @@ SgStatement::replace_expression(SgExpression * original_expression, SgExpression
 SgScopeStatement*
 SgStatement::get_scope(void) const
    {
-     ROSE_ASSERT(this != NULL);
+     ASSERT_this();
 
   // This is a function called after the parents have been set.  It is not called by the
   // legacy frontend/SAGE interface and is only called after the SAGE AST has been built and the parent
@@ -4153,7 +4129,7 @@ SgStatement::get_scope(void) const
   // explicitly.
 
      SgStatement *stmt = const_cast<SgStatement*>(this);
-     ROSE_ASSERT (stmt != NULL);
+     ASSERT_not_null(stmt);
 
   // Make sure that parents have been set already (assume this means that all parents have been set)
 #define WARN_NULL_PARENT_IN_GET_SCOPE 0
@@ -5045,31 +5021,53 @@ int SgScopeStatement::lookup_symbol(const SgName& n, SgSymbol *s) const
      return false;
    }
 
+// DQ (7/14/2025): Adding timers to support Matt's tool.
+#define USING_PERFORMANCE_TRACING 0
+
 SgSymbol*
 SgScopeStatement::lookup_symbol(const SgName& n, SgTemplateParameterPtrList* templateParameterList, SgTemplateArgumentPtrList* templateArgumentList) const
    {
      ROSE_ASSERT (this != NULL);
      ROSE_ASSERT (p_symbol_table != NULL);
 
+  // DQ (7/14/2025): Adding timers to support Matt's tool.
+#if USING_PERFORMANCE_TRACING
+     TimingPerformance timer1 ("SgScopeStatement::lookup_symbol: whole function:");
+#endif
+
      SgSymbol * symbol = p_symbol_table->find_any(n,templateParameterList,templateArgumentList);
 
      const SgNamespaceDefinitionStatement* namespaceDefinitionStatement = isSgNamespaceDefinitionStatement(this);
      if (symbol == NULL && namespaceDefinitionStatement != NULL)
         {
+#if USING_PERFORMANCE_TRACING
+       // DQ (7/14/2025): Adding timers to support Matt's tool.
+          TimingPerformance timer1 ("SgScopeStatement::lookup_symbol: looking in global namespace definition:");
+#endif
           ROSE_ASSERT(namespaceDefinitionStatement->get_global_definition() != NULL);
           const SgNamespaceDefinitionStatement* globalNamespaceDefinitionStatement = namespaceDefinitionStatement->get_global_definition();
           symbol = globalNamespaceDefinitionStatement->get_symbol_table()->find_any(n,templateParameterList,templateArgumentList);
         }
 
      const SgGlobal * global_scope = isSgGlobal(this);
-     if (symbol == NULL && global_scope != NULL) {
-       SgProject * project = SageInterface::getProject(global_scope);
-       if (project != NULL) {
-         SgGlobal * globalScopeAcrossFiles = project->get_globalScopeAcrossFiles();
-         assert(globalScopeAcrossFiles != NULL);
-         symbol = globalScopeAcrossFiles->get_symbol_table()->find_any(n,templateParameterList,templateArgumentList);
-       }
-     }
+     if (symbol == NULL && global_scope != NULL)
+        {
+#if USING_PERFORMANCE_TRACING
+       // DQ (7/14/2025): Adding timers to support Matt's tool.
+          TimingPerformance timer1 ("SgScopeStatement::lookup_symbol: symbol not found::");
+#endif
+          SgProject * project = SageInterface::getProject(global_scope);
+          if (project != NULL)
+             {
+#if USING_PERFORMANCE_TRACING
+            // DQ (7/14/2025): Adding timers to support Matt's tool.
+               TimingPerformance timer1 ("SgScopeStatement::lookup_symbol: symbol not found: looking in other global scopes:");
+#endif
+               SgGlobal * globalScopeAcrossFiles = project->get_globalScopeAcrossFiles();
+               assert(globalScopeAcrossFiles != NULL);
+               symbol = globalScopeAcrossFiles->get_symbol_table()->find_any(n,templateParameterList,templateArgumentList);
+             }
+        }
 
      return symbol;
    }
@@ -7474,22 +7472,6 @@ SgGlobal::prepend_declaration(SgDeclarationStatement * what)
      ROSE_ASSERT(what->get_parent() != NULL);
    }
 
-#if 0
-void
-SgGlobal::insert_declaration ( const SgDeclarationStatementPtrList::iterator& where, SgDeclarationStatement* what)
-   {
-#ifndef REMOVE_SET_PARENT_FUNCTION
-#error "DEAD CODE"
-     what->set_parent(this);
-#endif
-     what->set_parent(this);
-
-     get_declarations().insert(where,what);
-
-  // DQ (6/24/2006): This should be set by the lower level insert_statement member function, verify this!
-     ROSE_ASSERT(what->get_parent() != NULL);
-   }
-#endif
 #endif
 
 bool
@@ -7511,7 +7493,7 @@ SgGlobal:: get_mangledNameCache()
      return p_mangledNameCache;
    }
 
-std::map<std::string, int> &
+std::map<std::string, uint64_t> &
 SgGlobal:: get_shortMangledNameCache()
    {
      return p_shortMangledNameCache;
@@ -7662,7 +7644,7 @@ SgDeclarationStatement::get_qualified_name_prefix() const
   // different and so it depends upon where the type is referenced.  Thus the qualified name is
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgDeclarationStatement*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForNames().find(const_cast<SgDeclarationStatement*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
      if (i != SgNode::get_globalQualifiedNameMapForNames().end())
@@ -7772,8 +7754,17 @@ SgDeclarationStatement::testForBadGenerateTemplateName( const std::string & name
                   }
                  else
                   {
-                    printf ("This is a rule violation and also not an operator, so this is an error in ROSE \n");
-                    ROSE_ASSERT (false);
+                    // PP (4/10/2025): refined message and commented out ROSE_ASSERT(false)
+                    // example code where this warning is issued:
+                    //   \code
+                    //   template <class...> struct make_void {};
+                    //   struct require_left_shift : make_void<decltype(1 << 1)> {};
+                    //   \endcode
+                    printf ("WARNING: \"<<\" or \">>\" found in generated name, this could lead to an error in compiling the generated code later\n");
+                    printf ("..... name generated in processing a %s IR node \n",class_name().c_str());
+                    printf ("..... generated name = %s \n",name.c_str());
+                    printf ("** This may be a rule violation, so this is a warning in ROSE **\n");
+                    // ROSE_ASSERT (false);
                   }
             // ROSE_ASSERT (returnName.find("<<") == string::npos);
             // ROSE_ASSERT (returnName.find(">>") == string::npos);
@@ -9292,7 +9283,7 @@ SgDeclarationStatement::get_template_name() const
   // DQ (12/22/2011): This is an ugly aspect of supporting template declarations as derived from that which they are associated.
   // (e.g. SgTemplateClassDeclaration derived from a SgClassDeclaration).
 
-  // But at least it is now islolated to a single function.
+  // But at least it is now isolated to a single function.
 
      SgName templateDeclarationName;
   // switch (templateDeclaration->variantT())
@@ -10443,12 +10434,17 @@ SgDeclarationScope::get_mangled_name(void) const
 SgName
 SgDeclarationScope::get_qualified_name() const
    {
-     std::string globalScopeDelimiter;
-
-  // globalScopeDelimiter = "/* declaration scope */";
-     globalScopeDelimiter = "";
-
-     return SgName (globalScopeDelimiter);
+     SgNode *p = get_parent();
+     if (isSgTemplateFunctionDeclaration(p)) {
+       return ((SgTemplateFunctionDeclaration *)p)->get_qualified_name();
+     } else if (isSgTemplateClassDeclaration(p)) {
+       return ((SgTemplateClassDeclaration *)p)->get_qualified_name();
+     } else if (isSgTemplateTypedefDeclaration(p)) {
+       return ((SgTemplateTypedefDeclaration *)p)->get_qualified_name();
+     } else {
+       std::string globalScopeDelimiter = "";
+       return SgName (globalScopeDelimiter);
+     }
    }
 
 SOURCE_DECLARATION_SCOPE_END
@@ -10526,7 +10522,15 @@ SgFunctionDeclaration::post_construction_initialization()
 SgType*
 SgFunctionDeclaration::get_orig_return_type() const
    {
-     return get_type()->get_orig_return_type();
+// PP (9/16/25): store the original return type with type_syntax.
+//               if nullptr, take it from type.
+     SgFunctionType* fntype = this->get_type_syntax();
+
+     if (fntype == nullptr)
+       fntype = this->get_type();
+
+     ASSERT_not_null(fntype);
+     return fntype->get_return_type();
    }
 
 void
@@ -10782,10 +10786,12 @@ SgFunctionDeclaration::get_mangled_name() const
           SgFunctionType const * func_type = get_type();
           if (func_type != NULL)
              {
-               type_name = func_type->get_mangled();
-               const SgType* ret_type = func_type->get_return_type();
-               if (ret_type)
-                    ret_type_name = ret_type->get_mangled();
+               // PP (09/16/2025): use return type from specified by type_syntax if available
+               //                  and the return type specified by type otherwise.
+               SgType* ret_type = this->get_orig_return_type();
+               ASSERT_not_null(ret_type);
+               ret_type_name = ret_type->get_mangled();
+               type_name = SgFunctionType::get_mangled(ret_type, func_type->get_argument_list());
              }
             else
              {
@@ -10834,7 +10840,7 @@ SgFunctionDeclaration::get_mangled_name() const
           mangledName = SageInterface::addMangledNameToCache(const_cast<SgFunctionDeclaration*>(this),mangledName);
        // printf ("TEMP RETURN: Inside of SgFunctionDeclaration::get_mangled_name(): mangledName = %s \n",mangledName.str());
 
-#if 0
+#if DISABLED_1
        // DQ (6/21/2022): This redundantly appends the mangled name for the parameter to the end and
        // results in a compressed version of the string that is not translation unit independent.
 
@@ -10844,7 +10850,6 @@ SgFunctionDeclaration::get_mangled_name() const
           SgName mangledParameterList = parameterList->get_mangled_name();
           mangledName += "__" + mangledParameterList;
        // printf ("Inside of SgFunctionDeclaration::get_mangled_name(): after adding parameter list mangledName = %s \n",mangledName.str());
-// #endif
 
 #if 0
           printf ("Inside of SgFunctionDeclaration::get_mangled_name(): mangledParameterList = %s \n",mangledParameterList.str());
@@ -10852,19 +10857,18 @@ SgFunctionDeclaration::get_mangled_name() const
        // Reset the mangled name in the map.
        // p_globalMangledNameMap[function] = mangledName;
           SgNode::get_globalMangledNameMap()[const_cast<SgFunctionDeclaration*>(this)] = mangledName;
-#endif
+#endif /* DISABLED_1 */
 
 #if DEBUG_FUNCDECL_MANGLED_NAMES
           printf ("Inside of SgFunctionDeclaration::get_mangled_name(): after resetting mangledName = %s \n",mangledName.str());
 #endif
        // DQ (7/24/2012): Added test for template brackets that are caught later in AstConsistencyTests.
        // Make sure that there is no template specific syntax included in the mangled name
-          string mangled_name = mangledName;
-          if ( mangled_name.find('<') != string::npos )
-             {
-               printf ("In get_mangled_name(): this = %p = %s check mangled class name = %s \n",this,this->class_name().c_str(),mangled_name.c_str());
-             }
-          ROSE_ASSERT(mangled_name.find('<') == string::npos);
+          //if ( mangledName.getString().find('<') != string::npos )
+          //   {
+          //     printf ("In get_mangled_name(): this = %p = %s check mangled class name = %s \n",this,this->class_name().c_str(),mangledName.getString().c_str());
+          //   }
+          ROSE_ASSERT(mangledName.getString().find('<') == string::npos);
 
 #if DEBUG_FUNCDECL_MANGLED_NAMES
        // DQ (7/24/2012): Output the mangled name being generated for debugging.
@@ -10992,7 +10996,7 @@ SgFunctionDeclaration::get_qualified_name_prefix_for_return_type() const
   // different and so it depends upon where the type is referenced.  Thus the qualified name is
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgFunctionDeclaration*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgFunctionDeclaration*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
      if (i != SgNode::get_globalQualifiedNameMapForTypes().end())
@@ -11012,7 +11016,7 @@ SgFunctionDeclaration::get_template_header() const
   // DQ (9/7/2014): Added to support template headers in template declarations (member and non-member function declarations).
 
      SgName template_header;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTemplateHeaders().find(const_cast<SgFunctionDeclaration*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTemplateHeaders().find(const_cast<SgFunctionDeclaration*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
      if (i != SgNode::get_globalQualifiedNameMapForTemplateHeaders().end())
@@ -11836,18 +11840,6 @@ SgMemberFunctionDeclaration::get_qualified_name() const
      return returnName;
    }
 
-void
-SgMemberFunctionDeclaration::set_orig_return_type(SgType *t)
-   {
-   // QY: removed p_orig_return_type. reset p_type by making another member function type (the original p_type might be shared?)
-  // DQ (10/6/2004): Not sure why this works this way!
-     ROSE_ASSERT(t != NULL);
-
-     SgMemberFunctionType *ntype = isSgMemberFunctionType(get_type())->mkAnotherType(t);
-     ROSE_ASSERT (ntype != NULL);
-     set_type(ntype); // reset function type if necessary
-   }
-
 bool
 SgMemberFunctionDeclaration::replace_child(SgStatement *target,SgStatement *newstmt,
                               bool extractBasicBlock)
@@ -12169,7 +12161,7 @@ SgVariableDeclaration::initializeData(Sg_File_Info *info, const SgName& var_name
   // DQ (6/1/2004): Changed list to contain pointers to SgInitializedName elements
   // SgInitializedName c_item(var_name, type, 0, this);
   // SgInitializedName* c_item = new SgInitializedName(var_name, type, NULL, this);
-     SgInitializedName* c_item = new SgInitializedName(var_name, type, initializer, this);
+     SgInitializedName* c_item = SageBuilder::buildInitializedName_nfi(var_name, type, initializer, this);
      ROSE_ASSERT (c_item != NULL);
 
      initializeData (info, c_item);
@@ -14075,46 +14067,13 @@ SOURCE_TEMPLATE_INSTANTIATION_DECLARATION_STATEMENT_END
 SOURCE_TEMPLATE_INSTANTIATION_FUNCTION_DECLARATION_STATEMENT_START
 void
 SgTemplateInstantiationFunctionDecl::post_construction_initialization()
-   {
-  // DQ (4/19/2005): Removed since it is redundant with the define of the template support in ROSE
-  // set_from_template(true);
-
-  // DQ (2/17/2007): Set the parents of all template arguments to the template instantiation
-  // JJW (8/6/2008): This is not a pointer anymore
-#if 0
-     if (p_templateArguments != NULL)
-        {
-#endif
-          SgTemplateArgumentPtrList::iterator i = p_templateArguments.begin();
-          while (i != p_templateArguments.end())
-             {
-               (*i)->set_parent(this);
-               i++;
-             }
-#if 0
-        }
-       else
-        {
-          printf ("Warning (post_construction_initialization): p_templateArguments == NULL in SgTemplateInstantiationFunctionDecl = %p \n",this);
-        }
-#endif
-
-#if 0
-  // DQ (3/4/2018): relax this requirement for SgTemplateInstantiationClassDeclaration.
-  // DQ (2/27/2018): Enforce that this is not already set (should be set after the constructor to
-  // simplify how derived classes (e.g. SgTemplateInstantiationClassDeclaration statements) work.
-     if (p_type != NULL)
-        {
-          printf ("Note: SgTemplateInstantiationMemberFunctionDecl::post_construction_initialization(): p_type != NULL: name = %s \n",p_name.str());
-        }
-  // ROSE_ASSERT(p_type == NULL);
-#endif
-
-#if 0
-  // DQ (1/12/13): This is code that can be helpful in debubbing subtle problems in astCopy and astDelete.
-     printf ("In SgTemplateInstantiationFunctionDecl::post_construction_initialization(): this = %p = %s \n",this,this->class_name().c_str());
-#endif
-   }
+  {
+     SgTemplateArgumentPtrList::iterator i = p_templateArguments.begin();
+     while (i != p_templateArguments.end()) {
+        (*i)->set_parent(this);
+        i++;
+     }
+  }
 
 void
 SgTemplateInstantiationFunctionDecl::resetTemplateName ()
@@ -14194,17 +14153,12 @@ SgTemplateInstantiationFunctionDecl::SgTemplateInstantiationFunctionDecl ( SgNam
 #endif
    {
   // Custom constructor to support same interface and allow for a templated function to to build SgFunctionDeclaration,
-  // SgTemplateInstantiationFunctionDecl, SgMemberFunctionDeclaration, and SgTemplateInstantiationMemberFunctionDecl.
 
-  // Only two lines of additional code to allow use of same code as in generated constructor (below).
-  // SgTemplateDeclaration* templateDeclaration = NULL;
      SgTemplateArgumentPtrList templateArguments;
 
   // Same code as in generated constructor.
      p_templateName = "";
-
-  // p_templateDeclaration = templateDeclaration;
-     p_templateDeclaration = NULL;
+     p_templateDeclaration = nullptr;
 
      p_templateArguments = templateArguments;
      p_nameResetFromMangledForm = false;
@@ -14214,7 +14168,7 @@ SgTemplateInstantiationFunctionDecl::SgTemplateInstantiationFunctionDecl ( SgNam
      post_construction_initialization();
 
   // Test the isSgTemplateInstantiationFunctionDecl() function since it has been problematic
-     assert(isSgTemplateInstantiationFunctionDecl(this) != NULL);
+     ASSERT_not_null(isSgTemplateInstantiationFunctionDecl(this));
    }
 
 SOURCE_TEMPLATE_INSTANTIATION_FUNCTION_DECLARATION_STATEMENT_END
@@ -14222,46 +14176,13 @@ SOURCE_TEMPLATE_INSTANTIATION_FUNCTION_DECLARATION_STATEMENT_END
 SOURCE_TEMPLATE_INSTANTIATION_MEMBER_FUNCTION_DECLARATION_STATEMENT_START
 void
 SgTemplateInstantiationMemberFunctionDecl::post_construction_initialization()
-   {
-  // DQ (4/19/2005): Removed since it is redundant with the define of the template support in ROSE
-  // set_from_template(true);
-
-  // DQ (2/17/2007): Set the parents of all template arguments to the template instantiation
-  // JJW (8/6/2008): This is not a pointer anymore
-#if 0
-     if (p_templateArguments != NULL)
-        {
-#endif
-          SgTemplateArgumentPtrList::iterator i = p_templateArguments.begin();
-          while (i != p_templateArguments.end())
-             {
-               (*i)->set_parent(this);
-               i++;
-             }
-#if 0
-        }
-       else
-        {
-          printf ("Warning (post_construction_initialization): p_templateArguments == NULL in SgTemplateInstantiationMemberFunctionDecl = %p \n",this);
-        }
-#endif
-
-#if 0
-  // DQ (3/4/2018): relax this requirement for SgTemplateInstantiationClassDeclaration.
-  // DQ (2/27/2018): Enforce that this is not already set (should be set after the constructor to
-  // simplify how derived classes (e.g. SgTemplateInstantiationClassDeclaration statements) work.
-     if (p_type != NULL)
-        {
-          printf ("Note: SgTemplateInstantiationMemberFunctionDecl::post_construction_initialization(): p_type != NULL: name = %s \n",p_name.str());
-        }
-  // ROSE_ASSERT(p_type == NULL);
-#endif
-
-#if 0
-  // DQ (1/12/13): This is code that can be helpful in debubbing subtle problems in astCopy and astDelete.
-     printf ("In SgTemplateInstantiationMemberFunctionDecl::post_construction_initialization(): this = %p = %s \n",this,this->class_name().c_str());
-#endif
-   }
+  {
+     SgTemplateArgumentPtrList::iterator i = p_templateArguments.begin();
+     while (i != p_templateArguments.end()) {
+        (*i)->set_parent(this);
+        i++;
+     }
+  }
 
 void
 SgTemplateInstantiationMemberFunctionDecl::resetTemplateName ()
@@ -14337,15 +14258,12 @@ SgTemplateInstantiationMemberFunctionDecl::SgTemplateInstantiationMemberFunction
 #endif
    {
   // Custom constructor to support same interface and allow for a templated function to to build SgMemberFunctionDeclaration,
-  // SgTemplateInstantiationMemberFunctionDecl, SgFunctionDeclaration, and SgTemplateInstantiationFunctionDecl.
 
   // Only two lines of additional code to allow use of same code as in generated constructor (below).
-  // SgTemplateDeclaration* templateDeclaration = NULL;
      SgTemplateArgumentPtrList templateArguments;
 
   // Same code as in generated constructor.
      p_templateName = "";
-  // p_templateDeclaration = templateDeclaration;
      p_templateDeclaration = NULL;
      p_templateArguments = templateArguments;
      p_nameResetFromMangledForm = false;
@@ -15960,7 +15878,7 @@ SgTypedefDeclaration::get_qualified_name_prefix_for_base_type() const
   // different and so it depends upon where the type is referenced.  Thus the qualified name is
   // stored in a map to the IR node that references the type.
      SgName nameQualifier;
-     std::map<SgNode*,std::string>::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTypedefDeclaration*>(this));
+     SgUnorderedMapNodeToString::iterator i = SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTypedefDeclaration*>(this));
   // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
 
 #if 0
@@ -16823,6 +16741,21 @@ SgTemplateInstantiationTypedefDeclaration::post_construction_initialization()
   // DQ (11/4/2014): I don't think we need to do anything here.
    }
 #endif
+
+SgName
+SgTemplateInstantiationTypedefDeclaration::get_mangled_name() const
+   {
+     SgTemplateInstantiationTypedefDeclaration* thisNonConst = const_cast<SgTemplateInstantiationTypedefDeclaration*>(this);
+     std::string mangledName = SageInterface::getMangledNameFromCache(thisNonConst);
+
+     if (mangledName.empty())
+        {
+          mangledName = mangleTemplate(get_templateName(), get_templateArguments(), get_scope());
+          mangledName = SageInterface::addMangledNameToCache(thisNonConst,mangledName);
+        }
+
+     return mangledName;
+   }
 
 void
 SgTemplateInstantiationTypedefDeclaration::post_construction_initialization()
@@ -18526,18 +18459,6 @@ SgAttributeSpecificationStatement::get_dimension_object_list()
 SgSymbol*
 SgAttributeSpecificationStatement::search_for_symbol_from_symbol_table() const
    {
-#if 0
-     SgDeclarationStatement* declaration = get_declaration_associated_with_symbol();
-     if (declaration == NULL)
-        {
-          printf ("Error: in SgDeclarationStatement::search_for_symbol_from_symbol_table(): declaration == NULL \n");
-          printf ("     this = %p = %s = %s \n",this,this->class_name().c_str(),SageInterface::get_name(this).c_str());
-        }
-     ROSE_ASSERT(declaration != NULL);
-     SgSymbol* symbol = declaration->get_symbol_from_symbol_table();
-     ROSE_ASSERT(symbol != NULL);
-     return symbol;
-#else
   // If we are searching for a symbol associated with this declaration, then it could only be a numeric label
   // in which case we have to search for it in the function scope (SgFunctionDefinition).
 
@@ -18559,7 +18480,6 @@ SgAttributeSpecificationStatement::search_for_symbol_from_symbol_table() const
 
   // printf ("In SgAttributeSpecificationStatement::search_for_symbol_from_symbol_table(): returning NULL \n");
   // return NULL;
-#endif
    }
 
 SOURCE_ATTRIBUTE_SPECIFICATION_STATEMENT_END

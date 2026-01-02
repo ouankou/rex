@@ -815,6 +815,10 @@ bool ClangToDotTranslator::VisitBuiltinType(clang::BuiltinType * builtin_type, N
         case clang::BuiltinType::UnknownAny:
             node_desc.attributes.push_back(std::pair<std::string, std::string>("type", "UnknownAny"));
             break; 
+        default:
+            node_desc.attributes.push_back(std::pair<std::string, std::string>(
+                "type", builtin_type->getName(p_compiler_instance->getLangOpts()).str()));
+            break;
     }
 
 
@@ -1571,8 +1575,11 @@ bool ClangToDotTranslator::VisitSubstTemplateTypeParmType(clang::SubstTemplateTy
 
     ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
-     // In LLVM 20, getReplacedParameter() returns const pointer, need const_cast for Traverse
-     node_desc.successors.push_back(std::pair<std::string, std::string>("replaced_parameter", Traverse(const_cast<clang::TemplateTypeParmDecl*>(subst_template_type_parm_type->getReplacedParameter()))));
+    node_desc.successors.push_back(
+        std::pair<std::string, std::string>("replacement_decl", Traverse(subst_template_type_parm_type->getAssociatedDecl())));
+
+    clang::TemplateTypeParmDecl* parmDecl = const_cast<clang::TemplateTypeParmDecl*>(subst_template_type_parm_type->getReplacedParameter());
+    node_desc.successors.push_back(std::pair<std::string, std::string>("replaced_parameter", Traverse(parmDecl)));
 
      node_desc.successors.push_back(
         std::pair<std::string, std::string>("replacement_type", Traverse(subst_template_type_parm_type->getReplacementType().getTypePtr())) );

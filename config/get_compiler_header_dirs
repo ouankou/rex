@@ -10,7 +10,7 @@ fi
 
 compilerName="`basename $1`"
 language=$2
-compilerVendorName=$3
+compilerVendorName=$(echo "$3" | tr '[:upper:]' '[:lower:]')
 
 if [ -n "$VERBOSE" ]; then
     echo "In get_compiler_header_dirs: compiler name with path = $1" >&2
@@ -30,7 +30,7 @@ case "$compilerVendorName" in
          ;;
 
   # Support for compiling ROSE with ROSE (must use translator named: "roseTranslator"
-  # roseTranslator*|testTranslator*|roseCodeGeneration*|testCodeGeneration*|roseAnalysis*|testAnalysis*|roseAstFileIO*|testAstFileIO*)
+  # roseTranslator*|testTranslator*|roseCodeGeneration*|testCodeGeneration*|roseAnalysis*|testAnalysis*)
     rose)
          tmpFile="/tmp/tmp`uname -n`$$.C"
          echo "int main(int argc, char **argv){return 0;}" > "$tmpFile"
@@ -47,4 +47,3 @@ case "$compilerVendorName" in
        exit 1
        ;;
 esac
-

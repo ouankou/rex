@@ -385,7 +385,7 @@ POETCode* FuseLoopInfo::toPOET(HandleMap& handleMap, const FuseLoopInfo& info)
   ROSE_ABORT();
 }
 
-BlockSpec::BlockSpec(HandleMap& _handleMap,
+BlockSpec::BlockSpec(HandleMap& /*_handleMap*/,
             LocalVar* outerHandle, LoopTreeNode* _innerLoop,
             LoopBlocking* config,
             const std::vector<FuseLoopInfo>* _nonperfect)

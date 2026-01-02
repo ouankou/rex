@@ -1,7 +1,6 @@
 #include <ArrayInterface.h>
 #include <CPPAstInterface.h>
 
-extern bool DebugAliasAnal();
 extern bool DebugArrayAnnot();
 
 void ArrayInterface::
@@ -57,22 +56,16 @@ may_alias(AstInterface& _fa, const AstNodePtr& r1, const AstNodePtr& r2)
   } 
   else if ( (elem1 && elem2)  || (len1 && len2)) {
      if (may_alias(fa, array1, array2)) {
-        if (DebugAliasAnal())
-            std::cerr << "has alias between " << AstInterface::AstToString(r1) << " and " << AstInterface::AstToString(r2) << std::endl;
         return true;
      }
   }
   else if (elem1 || len1) {
      if (may_alias(fa, array1, r2)) {
-        if (DebugAliasAnal())
-            std::cerr << "has alias between " << AstInterface::AstToString(r1) << " and " << AstInterface::AstToString(r2) << std::endl;
         return true;
      }
   }
   else if (elem2 || len2) {
      if (may_alias(fa, r1, array2)) {
-        if (DebugAliasAnal())
-            std::cerr << "has alias between " << AstInterface::AstToString(r1) << " and " << AstInterface::AstToString(r2) << std::endl;
         return true;
      }
   }
@@ -83,10 +76,8 @@ may_alias(AstInterface& _fa, const AstNodePtr& r1, const AstNodePtr& r2)
              p != args.end(); ++p) {
           AstNodePtr cur = *p;
           if (may_alias( fa, cur, r2)) {
-            if (DebugAliasAnal())
-               std::cerr << "has alias between " << AstInterface::AstToString(r1) << " and " << AstInterface::AstToString(r2) << std::endl;
-             return true;
-          }
+              return true;
+           }
         }
         return false;    
      }
@@ -95,10 +86,8 @@ may_alias(AstInterface& _fa, const AstNodePtr& r1, const AstNodePtr& r2)
              p != args.end(); ++p) {
           AstNodePtr cur = *p;
           if (may_alias( fa, cur, r1)) {
-            if (DebugAliasAnal())
-               std::cerr << "has alias between " << AstInterface::AstToString(r1) << " and " << AstInterface::AstToString(r2) << std::endl;
-             return true;
-          }
+              return true;
+           }
         }
         return false;
      }
@@ -213,7 +202,7 @@ is_array_exp( CPPAstInterface& fa, const AstNodePtr& array,
     SymbolicFunctionDeclarationGroup len;
     char buf[20];
     for (int i = 0; i < dim; ++i) {
-      sprintf(buf, "length_%d", i);
+      snprintf(buf, sizeof(buf), "length_%d", i);
       SymbolicValDescriptor parval(i);
       ExtendibleParamDescriptor par_i(parval);
       SymbolicValDescriptor tmp;

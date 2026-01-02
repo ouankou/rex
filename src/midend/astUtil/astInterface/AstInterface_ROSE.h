@@ -15,24 +15,17 @@ class SgVarRefExp;
 class SgExpression;
 class SgDotExp;
 
-class AstNodePtrImpl : public AstNodePtr {
- public:
-  AstNodePtrImpl( SgNode* n = 0) : AstNodePtr(n) {}
-  AstNodePtrImpl( const AstNodePtr& that) : AstNodePtr(that) {}
-  SgNode* get_ptr() const { return static_cast<SgNode*>(repr); }
-  SgNode* operator -> () const { return static_cast<SgNode*>(repr); }
-};
-
+typedef AstNodePtr AstNodePtrImpl;
 
 class AstNodeTypeImpl : public AstNodeType {
  public:
-  AstNodeTypeImpl( SgType* n = 0) { AstNodeType::repr = n; }
+  AstNodeTypeImpl( SgType* n = 0) : AstNodeType(n) {}
   AstNodeTypeImpl( const AstNodeType& that) : AstNodeType(that) {}
   AstNodeType& operator = (const AstNodeType &that) 
       { AstNodeType::operator = (that); return *this; }
   ~AstNodeTypeImpl() {}
-  SgType* get_ptr() const { return static_cast<SgType*>(repr); }
-  SgType* operator -> () const { return static_cast<SgType*>(repr); }
+  SgType* get_ptr() const { return static_cast<SgType*>(AstNodeType::get_ptr()); }
+  SgType* operator -> () const { return static_cast<SgType*>(AstNodeType::get_ptr()); }
 };
 
 #define AstNodePtr2Sage(a)  AstNodePtrImpl(a).get_ptr()
@@ -64,20 +57,21 @@ class AstInterfaceImpl : public ObserveObject< AstObserver>
   typedef AstInterface::AstNodeList AstNodeList;
   typedef AstInterface::AstTypeList AstTypeList;
 
-  SgNode* get_top() const { return top; }  
+  SgScopeStatement* get_scope(SgNode* l) { 
+     if (scope == 0) 
+        set_top(l);
+     return scope; }  
   void set_top( SgNode* _top);
 
   static void GetTypeInfo( SgType* t, std:: string* name = 0, 
-                           std:: string* stripname = 0, int* size = 0);
+                           std:: string* stripname = 0, int* size = 0, bool use_global_unique_name=false);
   static SgType* GetTypeInt();
 
-  SgClassSymbol* LookupClass(const char* start);
-  SgClassSymbol* GetClass( const std:: string& name, const char** start = 0);
-  SgVarRefExp* CreateFieldRef(std::string classname, std::string fieldname);
+  SgVarRefExp* CreateFieldRef(SgNode* decl, std::string fieldname);
   SgMemberFunctionRefExp* CreateMethodRef(std::string classname, 
                            std::string fieldname, bool createIfNotFound);
 
-  SgFunctionSymbol* LookupFunction(const char* start) const;
+  SgFunctionSymbol* LookupFunction(const char* start, SgScopeStatement* loc);
   SgSymbol* CreateDeclarationStmts( const std:: string& _decl);
   SgClassSymbol* NewClass( const std:: string& name);
   SgClassSymbol* AddClass( SgClassDeclaration* d) ;
@@ -89,7 +83,7 @@ class AstInterfaceImpl : public ObserveObject< AstObserver>
 
   SgNode* CreateFunction( std::string name, int numOfPars);
   SgNode* CreateFunctionCall( SgNode* func, AstNodeList::const_iterator, AstNodeList::const_iterator e);
-  bool IsFunctionCall( SgNode* s, SgNode** func, AstNodeList* args);
+  static bool IsFunctionCall(SgNode* s, SgNode** func, AstNodeList* args);
 
   /*QY: if yes, set ivar,lb,ub,step, and body accordingly */
   static bool IsFortranLoop( const SgNode* s, SgNode** ivar = 0,
@@ -97,21 +91,22 @@ class AstInterfaceImpl : public ObserveObject< AstObserver>
                        SgNode** step =0, SgNode** body=0);
 
   /*QY: if yes, set lhs, rhs and readlhs accordingly */
-  static bool IsAssignment( const SgNode* s, SgNode** lhs = 0, 
-                               SgNode** rhs = 0, bool* readlhs = 0); 
+  static bool IsAssignment(const SgNode* s, SgNode** lhs = 0,
+                           SgNode** rhs = 0, bool* readlhs = 0);
 
   /*QY: if yes, set vartype, varname,scope, and isglobal accordingly*/
   static bool IsVarRef( SgNode* exp, SgType** vartype = 0,
                    std::string* varname = 0, SgNode** scope = 0, 
-                    bool *isglobal = 0) ;
+                   bool *isglobal = 0, bool use_global_unique_name = false,
+                   bool *has_ptr_deref = 0) ;
 
   SgMemberFunctionSymbol* 
-  NewMemberFunc( SgClassSymbol *decl, const std:: string& name,
+  NewMemberFunc( SgClassDeclaration *decl, const std:: string& name,
                 SgType* rtype, const std:: list<SgInitializedName*>& args );
   SgMemberFunctionSymbol* AddMemberFunc( SgClassDefinition *def, 
                                       SgMemberFunctionDeclaration *d);
   /* Create a new member function if not found */
-  SgMemberFunctionSymbol* GetMemberFunc( SgClassSymbol* c, 
+  SgMemberFunctionSymbol* GetMemberFunc( SgClassDeclaration* c, 
                    const std::string& funcname, std::vector<SgExpression*>* args = 0);
 
   /*QY: if declDecl=true,variable declarations are saved for insertion later*/
@@ -126,21 +121,21 @@ class AstInterfaceImpl : public ObserveObject< AstObserver>
   /* save d for future insertion */
   void SaveVarDecl( SgVariableDeclaration *d, SgScopeStatement* curscope);
 
+  static SgNode* LookupNestedDeclaration(const std::string& name, SgNode* loc); 
+  static SgVariableSymbol* LookupVar(const std:: string& name, SgNode* loc);
+  SgVariableSymbol* LookupVar(const std:: string& name);
   SgVariableSymbol* InsertVar(SgInitializedName *d, SgScopeStatement* curscope=0);
-  SgVariableSymbol* LookupVar(const std:: string& name, 
-                            SgScopeStatement* loc = 0);
-  SgVariableDeclaration* LookupVarDecl(const std:: string& varname, SgScopeStatement* loc = 0);
 
-  SgVarRefExp* CreateVarRef(std::string varname, SgNode* loc=0);
+  SgExpression* CreateVarRef(std::string varname, SgNode* loc=0);
 
 
   SgDotExp* CreateVarMemberRef(std::string varname, std::string field, 
                                   SgNode* loc=0);
 
   bool ReplaceAst( SgNode* orig, SgNode* n);
+  static SgStatement* GetScope( SgNode* loc);
 
  private:
-  SgNode *top;
   SgGlobal* global;
   SgScopeStatement* scope;
   int newVarIndex;

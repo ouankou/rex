@@ -182,6 +182,13 @@ ROSE_DLL_API SgTypeLongLong * buildLongLongType();
 ROSE_DLL_API SgTypeShort*    buildShortType();
 ROSE_DLL_API SgTypeFloat80*  buildFloat80Type();
 ROSE_DLL_API SgTypeFloat128* buildFloat128Type();
+ROSE_DLL_API SgTypeFloat16* buildFloat16Type();
+ROSE_DLL_API SgTypeFp16* buildFp16Type();
+ROSE_DLL_API SgTypeBFloat16* buildBFloat16Type();
+ROSE_DLL_API SgTypeFloat32x* buildFloat32xType();
+ROSE_DLL_API SgTypeFloat64x* buildFloat64xType();
+ROSE_DLL_API SgTypeFloat32* buildFloat32Type();
+ROSE_DLL_API SgTypeFloat64* buildFloat64Type();
 
 //! DQ (8/21/2010): We want to move to the new buildStringType( SgExpression*,size_t) function over the older buildStringType() function.
 ROSE_DLL_API SgTypeString* buildStringType();
@@ -228,10 +235,10 @@ ROSE_DLL_API SgTypeUnsignedInt* buildUnsignedIntType(SgExpression* kind_expr);
 ROSE_DLL_API SgType* buildFortranImplicitType(SgName name);
 
 //! Build a pointer type
-ROSE_DLL_API SgPointerType* buildPointerType(SgType *base_type = NULL);
+ROSE_DLL_API SgPointerType* buildPointerType(SgType *base_type = nullptr);
 
 //! Build a reference type
-ROSE_DLL_API SgReferenceType* buildReferenceType(SgType *base_type = NULL);
+ROSE_DLL_API SgReferenceType* buildReferenceType(SgType *base_type = nullptr);
 
 //! Build a rvalue reference type
 ROSE_DLL_API SgRvalueReferenceType* buildRvalueReferenceType(SgType *base_type);
@@ -242,27 +249,23 @@ ROSE_DLL_API SgDeclType* buildDeclType(SgExpression *base_expression, SgType* ba
 //! Build a GNU typeof operator
 ROSE_DLL_API SgTypeOfType* buildTypeOfType(SgExpression *base_expression, SgType* base_type);
 
-// Liao, entirely phase out this function ! Build a modifier type with no modifiers set
-//SgModifierType* buildModifierType(SgType *base_type = NULL);
-
-// DQ (7/29/2010): Changed return type from SgType to SgModifierType for a number of the functions below.
 //! Build a modifier type.
-ROSE_DLL_API SgModifierType* buildModifierType(SgType* base_type = NULL);
+ROSE_DLL_API SgModifierType* buildModifierType(SgType* base_type = nullptr);
 
 //! Build a const type.
-ROSE_DLL_API SgModifierType* buildConstType(SgType* base_type = NULL);
+ROSE_DLL_API SgModifierType* buildConstType(SgType* base_type = nullptr);
 
 //! Build a volatile type.
-ROSE_DLL_API SgModifierType* buildVolatileType(SgType* base_type = NULL);
+ROSE_DLL_API SgModifierType* buildVolatileType(SgType* base_type = nullptr);
 
 //! Build a const volatile type.
-ROSE_DLL_API SgModifierType* buildConstVolatileType(SgType* base_type = NULL);
+ROSE_DLL_API SgModifierType* buildConstVolatileType(SgType* base_type = nullptr);
 
 //! Build a restrict type.
 ROSE_DLL_API SgModifierType* buildRestrictType(SgType* base_type);
 
 //! Build ArrayType
-ROSE_DLL_API SgArrayType* buildArrayType(SgType* base_type=NULL, SgExpression* index=NULL);
+ROSE_DLL_API SgArrayType* buildArrayType(SgType* base_type=nullptr, SgExpression* index=nullptr);
 
 // RASMUSSEN (1/25/2018)
 //! Build an ArrayType based on dimension information.
@@ -279,19 +282,13 @@ ROSE_DLL_API SgArrayType* buildArrayType(SgType* base_type, SgExprListExp* dim_i
 ROSE_DLL_API SgModifierType* buildFortranKindType(SgType* base_type, SgExpression* kindExpression );
 
 //! Build function type from return type and parameter type list
-ROSE_DLL_API SgFunctionType* buildFunctionType(SgType* return_type, SgFunctionParameterTypeList * typeList=NULL);
+ROSE_DLL_API SgFunctionType* buildFunctionType(SgType* return_type, SgFunctionParameterTypeList * typeList=nullptr);
 
 //! Build function type from return type and parameter list
-ROSE_DLL_API SgFunctionType* buildFunctionType(SgType* return_type, SgFunctionParameterList * argList=NULL);
+ROSE_DLL_API SgFunctionType* buildFunctionType(SgType* return_type, SgFunctionParameterList * argList=nullptr);
 
 // DQ (1/10/2020): removed the default argument since we need to make sure it is used.
-//! DQ (1/16/2009): Added to support member function in C++ (for new interface)
-// ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList * typeList, SgScopeStatement *struct_name, unsigned int mfunc_specifier, unsigned int ref_qualifiers = 0);
 ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList * typeList, SgScopeStatement *struct_name, unsigned int mfunc_specifier);
-
-// DQ (3/20/2017): This function is not used (so let's see if we can remove it).
-//! DQ (12/2/2011): Added for symetry with other functios to generate SgFunctionType
-// ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterList* argList = NULL, SgClassDefinition *struct_name = NULL, unsigned int mfunc_specifier = 0);
 
 //! DQ (8/19/2012): Refactored some of the code supporting construction of the SgMemberFunctionType.
 ROSE_DLL_API SgMemberFunctionType* buildMemberFunctionType(SgType* return_type, SgFunctionParameterTypeList* typeList, SgType *classType, unsigned int mfunc_specifier);
@@ -332,10 +329,10 @@ buildTemplateClassType(SgTemplateClassDeclaration* template_decl, Rose_STL_Conta
 ROSE_DLL_API SgType* buildOpaqueType(std::string const type_name, SgScopeStatement * scope);
 
 //! Build a complex type
-ROSE_DLL_API SgTypeComplex* buildComplexType(SgType *base_type = NULL);
+ROSE_DLL_API SgTypeComplex* buildComplexType(SgType *base_type = nullptr);
 
 //! Build an imaginary type
-ROSE_DLL_API SgTypeImaginary* buildImaginaryType(SgType *base_type = NULL);
+ROSE_DLL_API SgTypeImaginary* buildImaginaryType(SgType *base_type = nullptr);
 
 //! Build a const/volatile type qualifier
 ROSE_DLL_API SgConstVolatileModifier * buildConstVolatileModifier (SgConstVolatileModifier::cv_modifier_enum mtype=SgConstVolatileModifier::e_unknown);
@@ -369,10 +366,15 @@ Expressions are usually built using bottomup approach, i.e. buiding operands fir
 
 ROSE_DLL_API SgVariantExpression * buildVariantExpression();
 
-//! Build a null expression, set file info as the default one
+//! Build a null expression, set file info as the default one.
 ROSE_DLL_API SgNullExpression* buildNullExpression();
 //! No file info version of buildNullExpression(). File info is to be set later on.
 ROSE_DLL_API SgNullExpression* buildNullExpression_nfi();
+
+//! Build a Fortran colon-shape expression, set file info as the default one.
+ROSE_DLL_API SgColonShapeExp* buildColonShapeExp();
+//! No file info version of buildColonShapeExp(). File info is to be set later on.
+ROSE_DLL_API SgColonShapeExp* buildColonShapeExp_nfi();
 
 //! Build a bool value expression, the name convention of SgBoolValExp is little different from others for some unknown reason
 ROSE_DLL_API SgBoolValExp* buildBoolValExp(int value = 0);
@@ -449,6 +451,22 @@ ROSE_DLL_API SgFloat80Val* buildFloat80Val_nfi(long double value, const std::str
 ROSE_DLL_API SgFloat128Val* buildFloat128Val(long double value = 0.0);
 ROSE_DLL_API SgFloat128Val* buildFloat128Val_nfi(long double value, const std::string& str);
 
+//! Build a bfloat16
+ROSE_DLL_API SgBFloat16Val* buildBFloat16Val(float v = 0);
+ROSE_DLL_API SgBFloat16Val* buildBFloat16Val_nfi(float v, const std::string& str);
+
+//! Build a float16
+ROSE_DLL_API SgFloat16Val* buildFloat16Val(float v = 0);
+ROSE_DLL_API SgFloat16Val* buildFloat16Val_nfi(float v, const std::string& str);
+
+//! Build a float32
+ROSE_DLL_API SgFloat32Val* buildFloat32Val(float v = 0);
+ROSE_DLL_API SgFloat32Val* buildFloat32Val_nfi(float v, const std::string& str);
+
+//! Build a float64
+ROSE_DLL_API SgFloat64Val* buildFloat64Val(double v = 0);
+ROSE_DLL_API SgFloat64Val* buildFloat64Val_nfi(double v, const std::string& str);
+
 ROSE_DLL_API SgShortVal* buildShortVal(short value = 0);
 ROSE_DLL_API SgShortVal* buildShortValHex(short value = 0);
 ROSE_DLL_API SgShortVal* buildShortVal_nfi(short value, const std::string& str);
@@ -460,6 +478,11 @@ ROSE_DLL_API SgStringVal* buildStringVal_nfi(std::string value);
 ROSE_DLL_API SgUnsignedCharVal* buildUnsignedCharVal(unsigned char v = 0);
 ROSE_DLL_API SgUnsignedCharVal* buildUnsignedCharValHex(unsigned char v = 0);
 ROSE_DLL_API SgUnsignedCharVal* buildUnsignedCharVal_nfi(unsigned char v, const std::string& str);
+
+//! Build a signed char
+ROSE_DLL_API SgSignedCharVal* buildSignedCharVal(signed char v = 0);
+ROSE_DLL_API SgSignedCharVal* buildSignedCharValHex(signed char v = 0);
+ROSE_DLL_API SgSignedCharVal* buildSignedCharVal_nfi(signed char v, const std::string& str);
 
 //! Build an unsigned short integer
 ROSE_DLL_API SgUnsignedShortVal* buildUnsignedShortVal(unsigned short v = 0);
@@ -876,7 +899,7 @@ ROSE_DLL_API SgRangeExp* buildRangeExp(SgExpression *start, SgExpression *end, S
 ROSE_DLL_API SgInitializedName* buildInitializedName(const SgName & name, SgType* type, SgInitializer* init = NULL);
 ROSE_DLL_API SgInitializedName* buildInitializedName(const std::string &name, SgType* type);
 ROSE_DLL_API SgInitializedName* buildInitializedName(const char* name, SgType* type);
-ROSE_DLL_API SgInitializedName* buildInitializedName_nfi(const SgName & name, SgType* type, SgInitializer* init);
+ROSE_DLL_API SgInitializedName* buildInitializedName_nfi(const SgName & name, SgType* type, SgInitializer* init, SgVariableDeclaration* declptr = NULL);
 
 //! Build SgFunctionParameterTypeList from SgFunctionParameterList
 ROSE_DLL_API SgFunctionParameterTypeList *
@@ -1056,23 +1079,6 @@ buildDefiningMemberFunctionDeclaration(
     SgMemberFunctionDeclaration *first_nondefinng_declaration,
     SgTemplateArgumentPtrList *templateArgumentsList);
 
-#if 0
-// DQ (3/20/2017): This function is not used (so let's see if we can remove it).
-// DQ (8/29/2012): This is re-enabled because the backstroke project is using it (also added back the default parameters; which I don't think I like in the API).
-// DQ (7/26/2012): I would like to remove this from the API (at least for now while debugging the newer API required for template argument handling).
-//! Build a defining ( non-prototype) member function declaration from a SgMemberFunctionType
-ROSE_DLL_API SgMemberFunctionDeclaration*
-buildDefiningMemberFunctionDeclaration (const SgName & name, SgMemberFunctionType* func_type, SgScopeStatement* scope, SgMemberFunctionDeclaration* first_nondefinng_declaration = NULL);
-#endif
-
-#if 0
-// DQ (3/20/2017): This function is not used (so let's see if we can remove it).
-//! Build a prototype for an existing member function declaration (defining or nondefining is fine)
-// SgMemberFunctionDeclaration*
-ROSE_DLL_API SgMemberFunctionDeclaration*
-buildNondefiningMemberFunctionDeclaration (const SgMemberFunctionDeclaration* funcdecl, SgScopeStatement* scope=NULL, unsigned int functionConstVolatileFlags = 0);
-#endif
-
 // DQ (8/28/2012): This preserves the original API with a simpler function (however for C++ at least, it is frequently not sufficent).
 // We need to decide if the SageBuilder API should include these sorts of functions.
 ROSE_DLL_API SgMemberFunctionDeclaration* buildNondefiningMemberFunctionDeclaration(const SgName& name, SgType* return_type, SgFunctionParameterList* parameter_list, SgScopeStatement* scope = NULL);
@@ -1104,7 +1110,7 @@ ROSE_DLL_API SgProcedureHeaderStatement* buildProcedureHeaderStatement(const SgN
 ROSE_DLL_API SgProcedureHeaderStatement*
 buildProcedureHeaderStatement(const char* name, SgType* return_type, SgFunctionParameterList * parlist, SgProcedureHeaderStatement::subprogram_kind_enum, SgScopeStatement* scope, SgProcedureHeaderStatement* first_nondefining_declaration );
 
-// CR (9/24/2020)
+// Rasmussen (9/24/2020)
 //! Build a nondefining SgProcedureHeaderStatement, handle function type, symbol etc transparently
 ROSE_DLL_API SgProcedureHeaderStatement*
 buildNondefiningProcedureHeaderStatement(const SgName & name, SgType* return_type, SgFunctionParameterList* param_list,
@@ -1625,7 +1631,7 @@ std::string strTemplateArgument(SgExpression *e);
 template <typename... Args>
 struct TemplateArgumentList {
   static std::string str() { return ""; }
-  static void fill(std::vector<SgTemplateArgument *> &tpl_args) {}
+  static void fill(std::vector<SgTemplateArgument *> & /*tpl_args*/) {}
 };
 
 template <typename T>

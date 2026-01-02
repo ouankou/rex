@@ -406,7 +406,7 @@ Git cheat sheet: \htmladdnormallink{http://cheat.errtheblog.com/s/git}{http://ch
 
          Here are the steps to have an account with write access to ROSE's branches:
          Please follow the link on
-         \htmladdnormallink{https://outreach.scidac.gov/account/register.php}{https://outreach.scidac.gov/account/register.php}
+         \htmladdnormallink{https://outreach.scidac.gov/account/}{https://outreach.scidac.gov/account/}
   to fill out a registration form (Project name: ROSE, PI: Daniel Quinlan)
     and fax a signed use policies form as instructed on the registration page.
     After getting your account, you need to log into the website and go to page
@@ -630,7 +630,7 @@ We wish to outline this process:
       that was externally released on the web (thus we know that it has passed all of our tests to 
       be released).  This will also define a mapping between internal and 
       external SVN revision numbers, which is also in the commit log message on the web site.
-      For example, it shows the lat log entry of the main trunk on the page of (\htmladdnormallink{https://outreach.scidac.gov/plugins/scmsvn/viewcvs.php/?root=rose}{https://outreach.scidac.gov/plugins/scmsvn/viewcvs.php/?root=rose}):
+      For example, it shows the lat log entry of the main trunk on the page of (\htmladdnormallink{https://outreach.scidac.gov/plugins/scmsvn/}{https://outreach.scidac.gov/plugins/scmsvn/}):
 \begin{verbatim}
       File      Rev.    Age       Author   Last log entry 
       trunk/    243   6 hours     liaoch   Load rose-0.9.4a-4275 into trunk.
@@ -1506,7 +1506,7 @@ Overview of the options:
  \item {\tt DESCRIPTION} - Short text to describe the test
  \item {\tt PREREQS} - Define what software this run needs. The prereqs available
                        can be seen by navigating to: \\
-                       \url{http://nmi-s005.cs.wisc.edu/nmi/index.php?page=pool/platform} \\
+                       \url{http://nmi-s005.cs.wisc.edu/nmi/} \\
                        and clicking on the platforms you want to use.
  \item {\tt CONFIGURE\_OPTIONS} - Define which options you want to pass to {\tt
                          configure}.  You will very likely need, at a minimum,
@@ -1582,7 +1582,7 @@ although this is not required.
 
 Once you have submitted a test, you should be given a {\tt RunID}, and your test
 should appear on the search results page at
-\url{http://nmi-web.cs.wisc.edu/nmi/index.php?page=results\%2Foverview&opt\_project=rose+compiler}.
+\url{http://nmi-web.cs.wisc.edu/nmi/}.
 
 
 \subsection{Cron automated tests}%{{{
@@ -1608,7 +1608,7 @@ Example entry:
 \label{sec:nmi-summary}
 
 One way to see the results of recent tests is to navigate to
-\url{http://nmi-web.cs.wisc.edu/nmi/index.php?page=results\%2Foverview&opt\_project=rose+compiler}.
+\url{http://nmi-web.cs.wisc.edu/nmi/}.
 A command-line friendlier tool exists, namely {\tt nmi-summary}, which will
 summarize tasks and give results for the individual tasks {\tt configure}, {\tt
 make}, {\tt check}.
@@ -3683,7 +3683,6 @@ presented together:
        static std::string writeASTToString ();
        static SgProject* readASTFromStream ( std::istream& in );
        static SgProject* readASTFromFile (std::string fileName );
-       static SgProject* readASTFromString ( const std::string& s );
        static void printFileMaps () ;
        static void printListOfPoolSizes () ;
        static void printListOfPoolSizesOfAst (int index) ;
@@ -4051,23 +4050,6 @@ Other useful utility functions in ROSE
 
 
 \end{lstlisting}
-
-   \item Abstract Handles (L)\\
-     Abstract handles (namespace \lstinline{AbstractHandle}) are used to specify arbitrary language constructs within an application.
-     \begin{lstlisting}
-     //! Get SgNode from an abstract handle string
-     SgNode* getSgNodeFromAbstracthandle(const std::string& s);  
-
-     //! Create an abstract node from a SgNode
-     abstract_node * buildAbstractNode(SgNode*);
-
-     //! Create and abstract handle from an abstract node
-     abstract_handle* buildAbstractHandle (abstract_node *);
-
-     //! Create an abstract handle from a handle string
-     abstract_handle* buildAbstractHandle(std::string handle_string);
-
-     \end{lstlisting}
 
    \item Macro Rewrapper (A) \\
          This is a feature not yet ready to be a part of the user API in ROSE.

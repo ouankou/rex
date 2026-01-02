@@ -392,7 +392,6 @@ bool FixupTemplateArguments::contains_private_type ( SgTemplateArgumentPtrList &
           return false;
         }
 
-     int counter = 0;
      SgTemplateArgumentPtrList::const_iterator i = templateArgList.begin();
      while (returnValue == false && i != templateArgList.end())
         {
@@ -415,7 +414,6 @@ bool FixupTemplateArguments::contains_private_type ( SgTemplateArgumentPtrList &
 #endif
 #endif
           i++;
-          counter++;
         }
 
 #if DEBUG_PRIVATE_TYPE || 0
@@ -655,7 +653,6 @@ FixupTemplateArguments::contains_private_type (SgTemplateArgument* templateArgum
                     bool foundNonPrivateTypeAlias = false;
                     SgType* suitableTypeAlias = NULL;
 
-                    int counter = 0;
                     SgTypePtrList::iterator i = typedefList.begin();
                     while (foundNonPrivateTypeAlias == false && i != typedefList.end())
                       {
@@ -680,11 +677,7 @@ FixupTemplateArguments::contains_private_type (SgTemplateArgument* templateArgum
                      // foundNonPrivateTypeAlias = !isPrivateType;
 
                         i++;
-                        counter++;
                       }
-#if 0
-                    printf ("foundNonPrivateTypeAlias = %s \n",foundNonPrivateTypeAlias ? "true" : "false");
-#endif
                     if (foundNonPrivateTypeAlias == true)
                        {
                          ROSE_ASSERT(suitableTypeAlias != NULL);
@@ -698,17 +691,6 @@ FixupTemplateArguments::contains_private_type (SgTemplateArgument* templateArgum
                          printf ("Found private type to be replaced: typedefType       = %p = %s = %s \n",typedefType,typedefType->class_name().c_str(),typedefType->unparseToString().c_str());
                          printf ("Found suitable type alias:         suitableTypeAlias = %p = %s = %s \n",suitableTypeAlias,suitableTypeAlias->class_name().c_str(),suitableTypeAlias->unparseToString().c_str());
 #endif
-#endif
-#if 0
-                         printf ("SageInterface::whereAmI(targetScope): \n");
-                         SageInterface::whereAmI(targetScope);
-                         printf ("SageInterface::whereAmI(typedefDeclaration): \n");
-                         SageInterface::whereAmI(typedefDeclaration);
-#endif
-#if 0
-                         printf ("Selecting alternative type to use for unparsing: \n");
-                         printf ("--- were going to use: %s \n",templateArgument->unparseToString().c_str());
-                         printf ("--- selecing instead : %s \n",suitableTypeAlias->unparseToString().c_str());
 #endif
 
                          // TV (10/05/2018): (ROSE-1431) Traverse the chain of

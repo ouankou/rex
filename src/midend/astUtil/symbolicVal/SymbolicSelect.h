@@ -32,8 +32,7 @@ public:
       return 0;
   }
 
-  AstNodePtr CodeGenOP(AstInterface &fa, const AstNodePtr &a1,
-                       const AstNodePtr &a2) const {
+  AstNodePtr CodeGenOP(AstInterface &, const AstNodePtr &, const AstNodePtr &) const {
     ROSE_ABORT();
   }
   AstNodePtr CodeGen(AstInterface &fa) const;

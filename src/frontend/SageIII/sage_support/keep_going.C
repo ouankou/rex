@@ -807,6 +807,6 @@ std::vector<std::string>
 Rose::KeepGoing::GetSourceFilenamesFromCommandline(const std::vector<std::string>& argv)
 {
   std::vector<std::string> filenames =
-      CommandlineProcessing::generateSourceFilenames(argv);
+      CommandlineProcessing::generateSourceFilenames(argv, false);
   return filenames;
 }

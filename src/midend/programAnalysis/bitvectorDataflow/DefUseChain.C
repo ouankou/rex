@@ -49,7 +49,7 @@ build( AstInterface& fa, ReachingDefinitionAnalysis& r,
 {
   std::vector <Node*> defvec;
   const ReachingDefinitionGenerator* g = r.get_generator();
-  StmtSideEffectCollect<AstNodePtr> collect(fa, f);
+  StmtSideEffectCollect collect(fa, f);
 
   std::map<AstNodePtr, Node*> defmap;
   const ReachingDefinitionBase& base = g->get_base();
@@ -169,13 +169,16 @@ build( AstInterface& fa, ReachingDefinitionAnalysis& r,
            }
            return true;
       };
+      collect.set_modify_collect(opgen);
+      collect.set_read_collect(opread);
+      collect.set_kill_collect(opkill);
       std::list <AstNodePtr>& stmts = cur->GetStmts();
       for (std::list<AstNodePtr>::iterator p = stmts.begin(); p != stmts.end();
            ++p) {
         AstNodePtr cur = *p;
         if (DebugDefUseChain())
             std::cerr << "processing stmt : " << AstInterface::AstToString(cur) << std::endl;
-        collect(cur, &opgen, &opread, &opkill);
+        collect(cur);
       }
   }
 

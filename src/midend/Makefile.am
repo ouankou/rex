@@ -83,7 +83,6 @@ libmidend_la_SOURCES=\
 	$(mAstDiagnostics_la_sources) \
 	$(mAstProcessing_la_sources) \
 	$(mAstQuery_la_sources) \
-	$(mAstSnippet_la_sources) \
 	$(mAstUtil_la_sources) \
 	$(mProgramTransformation_la_sources)
 
@@ -98,7 +97,6 @@ pkginclude_HEADERS = \
 	$(mAstDiagnostics_includeHeaders) \
 	$(mAstProcessing_includeHeaders) \
 	$(mAstQuery_includeHeaders) \
-	$(mAstSnippet_includeHeaders) \
 	$(mAstUtil_includeHeaders) \
 	$(mProgramTransformation_includeHeaders)
 

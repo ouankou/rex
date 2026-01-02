@@ -123,7 +123,6 @@ ResetEmptyNames::visit(SgNode* node)
        // in typedefs be renames (no special exemption just for being in a typedef).
        // DQ (3/10/2007): Ignore this problem for un-named declarations defined in a SgTypedefDeclaration
        // if (definingDeclaration != NULL && (definingDeclaration->get_name().is_null() == true) )
-          if (definingDeclaration != NULL)
        // if ( (definingDeclaration != NULL) && (isSgTypedefDeclaration(definingDeclaration->get_parent()) == NULL) )
           if (definingDeclaration != NULL)
              {
@@ -643,4 +642,3 @@ ResetInconsistantNames::visit(SgNode* node)
              }
         }
    }
-

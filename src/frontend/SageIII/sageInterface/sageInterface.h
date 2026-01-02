@@ -8,6 +8,10 @@
 #include "nodeQuery.h"        //for querySubTree
 #include "rosePublicConfig.h"
 
+#include <string>
+#include <iostream>
+#include <sstream>
+
 #if 0   // FMZ(07/07/2010): the argument "nextErrorCode" should be call-by-reference
 SgFile* determineFileType ( std::vector<std::string> argv, int nextErrorCode, SgProject* project );
 #else
@@ -24,7 +28,6 @@ SgFile* determineFileType ( std::vector<std::string> argv, int& nextErrorCode, S
 #endif
 
 #include "ompSupport.h"
-// DQ (8/19/2004): Moved from ROSE/src/midend/astRewriteMechanism/rewrite.h
 //! A global function for getting the string associated with an enum (which is defined in global scope)
 ROSE_DLL_API std::string getVariantName (VariantT v);
 
@@ -409,6 +412,9 @@ ROSE_DLL_API std::string getTemplateParameterKeyword(SgTemplateParameter* param)
 
    //! Pretty print AST horizontally, output to std output.
    void printAST (SgNode* node);
+
+   //! Pretty print AST horizontally, output to a specified file, a simpiler interface than printAST2TextFile()
+   void printAST (SgNode* node, const char* filename);
 
    //! Pretty print AST horizontally, output to a specified text file. If printType is set to false, don't print out type info.
    void printAST2TextFile (SgNode* node, const char* filename, bool printType=true);
@@ -801,6 +807,39 @@ PreprocessingInfo* attachComment(
  */
 void guardNode(SgLocatedNode * target, std::string guard);
 
+/* \brief move inner danglling #endif .. #if | #ifdef| #ifndef to be after lnode
+    This is needed when we remove a target statement with internal statements.
+    Some of the internal statements may have a dangling #endif  #if, #ifdef #ifndef.
+    We need to move them to be attached to after position of lnode.
+    Then we can safely remove or replace lnode (often a statement)
+*/
+ROSE_DLL_API int moveUpInnerDanglingIfEndifDirective(SgLocatedNode* lnode);
+
+/* \brief scanning subtree from lnode, find and erase any NULL PreprocessingInfo pointers
+   The unparser expects PreprocessingInfo pointers are not NULL.
+   We may introduce NULL pointers after moving some preprocessing info. from one place to another.
+*/
+
+ROSE_DLL_API int eraseNullPreprocessingInfo (SgLocatedNode* lnode);
+
+/*  \brief For each comment, we store its container, idx within the container, 
+         and depth level of the located node within AST from a selected root
+*/
+struct PreprocessingInfoData {
+    AttachedPreprocessingInfoType* container; // the associated container
+    int index; // idx of the comment within the container
+    int depth; // starting from 0 : the root node of the selected root of the sub-tree
+};
+
+/* \brief Recursively walk a subtree rooted at current node, extract PreprocessingInfo pointers to a list
+    The list preserves the orginal order in which each preprocessing info shows up in the source code.
+    This function is needed since naive walking of a subtree may generate out-of-order list of preprocessing info.
+    We have to consider collecting the before, inside locations first, and the after location last using a recursion function.
+*/
+
+ROSE_DLL_API void preOrderCollectPreprocessingInfo(SgNode* current, std::vector<PreprocessingInfo*>& infoList, int depth);
+
+
 //@}
 
 
@@ -1129,6 +1168,31 @@ ROSE_DLL_API bool normalizeForLoopInitDeclaration(SgForStatement* loop);
 //! Undo the normalization of for loop's C99 init declaration. Previous record of normalization is used to ease the reverse transformation.
 ROSE_DLL_API bool unnormalizeForLoopInitDeclaration(SgForStatement* loop);
 
+/**
+ * @brief Normalize the structure of `case` and `default` blocks within a switch statement.
+ *
+ * This function examines the body of a given `SgSwitchStatement` and restructures its `case` and
+ * `default` sections to ensure that the associated statements are properly wrapped in basic blocks
+ * (`SgBasicBlock`). This normalization is helpful for consistent transformation and analysis of
+ * switch statements, especially in situations where multiple statements follow a label or where
+ * no explicit block is present.
+ *
+ * The function performs the following actions:
+ * - Iterates over all statements in the switch body.
+ * - Identifies `SgCaseOptionStmt` and `SgDefaultOptionStmt`.
+ * - If the labeled statement has no body and is immediately followed by a single `SgBasicBlock`,
+ *   no changes are made.
+ * - Otherwise, all subsequent statements up to the next label are wrapped into a new `SgBasicBlock`
+ *   that is inserted immediately after the label.
+ *
+ * @param switchStmt Pointer to the switch statement (`SgSwitchStatement*`) to be normalized.
+ *                   Must not be null. If the switch body is not a `SgBasicBlock`, the function
+ *                   will return early.
+ * @return true if normalization happens and AST has been changed.
+ *         false if normalization does not happen and AST is intact.
+ */
+ROSE_DLL_API bool normalizeCaseAndDefaultBlocks (SgSwitchStatement* switchStmt);
+
 //! Normalize a for loop, return true if successful. Generated constants will be fold by default.
 //!
 //! Translations are :
@@ -1248,6 +1312,46 @@ static std::vector<NodeType*> getSgNodeListFromMemoryPool()
   MyTraversal my_traversal;
   NodeType::traverseMemoryPoolNodes(my_traversal);
   return my_traversal.resultlist;
+}
+
+//! we have two serialize() functions, one for a single node, the other for a list of pointers
+void serialize(SgNode* node, std::string& prefix, bool hasRemaining, std::ostringstream& out, std::string& edgeLabel);
+
+// A special node in the AST text dump
+template<typename T>
+void serialize_list(T& plist, std::string T_name, std::string& prefix, bool hasRemaining, std::ostringstream& out, std::string& edgeLabel)
+{
+  out<<prefix;
+  out<< (hasRemaining?"|---": "|___");
+
+//  out<<"+"<<edgeLabel<<"+>";
+  out<<" "<<edgeLabel<<" ->";
+  // print address and type name
+  //out<<"@"<<&plist<<" "<< typeid(T).name()<<" "; // mangled names are hard to read
+  out<<"@"<<&plist<<" "<< T_name<<" ";
+
+  out<<std::endl;
+
+  int last_non_null_child_idx =-1;
+  for (int i = (int) (plist.size())-1; i>=0; i--)
+  {
+    if (plist[i])
+    {
+      last_non_null_child_idx = i;
+      break;
+    }
+  }
+
+  for (size_t i=0; i< plist.size(); i++ )
+  {
+    bool n_hasRemaining=false;
+    if ((int)i< last_non_null_child_idx) n_hasRemaining = true;
+    std::string suffix= hasRemaining? "|   " : "    ";
+    std::string n_prefix = prefix+suffix;
+    std::string n_edge_label="";
+    if (plist[i])
+      serialize (plist[i], n_prefix, n_hasRemaining, out,n_edge_label);
+  }
 }
 
 
@@ -2125,7 +2229,7 @@ ROSE_DLL_API void moveToSubdirectory ( std::string directoryName, SgFile* file )
 ROSE_DLL_API SgStatement* findSurroundingStatementFromSameFile(SgStatement* targetStmt, bool & surroundingStatementPreceedsTargetStatement);
 
 //! Relocate comments and CPP directives from one statement to another.
-ROSE_DLL_API void moveCommentsToNewStatement(SgStatement* sourceStatement, const std::vector<int> & indexList, SgStatement* targetStatement, bool surroundingStatementPreceedsTargetStatement);
+ROSE_DLL_API void moveCommentsToNewStatement(SgStatement* sourceStatement, const std::vector<int> & indexList, SgStatement* destinationStatement, bool destinationStatementPreceedsSourceStatement);
 
 // DQ (7/19/2015): This is required to support general unparsing of template instantations for the GNU g++
 // compiler which does not permit name qualification to be used to support the expression of the namespace

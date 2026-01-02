@@ -825,7 +825,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                               additionalSuffix += string("_empty_template_string_") + StringUtility::numberToString(declaration);
 
                             }
-                      // DQ (7/11/2010): Commenting out this assertion (triggered by astFileIO test test-read-large).
+                      // DQ (7/11/2010): Commenting out this assertion (triggered by AST file I/O test on large input).
                       // ROSE_ASSERT(declaration->get_string().is_null() == false);
 
                          additionalSuffix += string("_template_string_") + declaration->get_string();
@@ -1702,7 +1702,7 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
                               break;
                             }
 
-                      // DQ (7/11/2010): In astFileIO test test-read-large we demonstrate an example of this case.
+                      // DQ (7/11/2010): In AST file I/O tests we demonstrate an example of this case.
                          case SgTemplateArgument::template_template_argument:
                          case SgTemplateArgument::start_of_pack_expansion_argument:
                             {
@@ -1851,4 +1851,3 @@ SageInterface::generateUniqueName ( const SgNode* node, bool ignoreDifferenceBet
 
      return key;
    }
-

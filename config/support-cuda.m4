@@ -68,7 +68,7 @@ if test $USE_CUDA = 1; then
 #
 #   if test "x$ghc_major_version_number" = "x6"; then
 #      echo "Recognized an accepted major version number."
-#      if test "x$ghc_minor_version_number" = "x10"; then
+#      if test "$ghc_minor_version_number" = "10"; then
 #         echo "Recognized an accepted minor version number."
 #      else
 #         echo "ERROR: Could not identify an acceptable Haskell gch minor version number (ROSE requires 6.10.x)."
