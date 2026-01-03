@@ -7,14 +7,14 @@
 
 #include "rose.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <stdio.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <time.h>
-#include <stdio.h>
+#include <limits.h>
 #include <set>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
 #include <libgen.h>             /* basename(), dirame()               */
 

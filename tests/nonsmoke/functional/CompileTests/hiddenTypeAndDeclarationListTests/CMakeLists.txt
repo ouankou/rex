@@ -27,6 +27,22 @@ foreach(file_to_test ${TESTCODES})
   set_tests_properties(HIDDENTYPETEST_${file_to_test} PROPERTIES LABELS HIDDENTYPETEST)
 endforeach()
 
+set(_disabled_hidden_type_tests
+  test15.C
+  test22.C
+  test57.C
+  test59.C
+)
+
+foreach(file_to_test ${_disabled_hidden_type_tests})
+  add_test(
+    NAME HIDDENTYPETEST_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(HIDDENTYPETEST_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS HIDDENTYPETEST)
+endforeach()
+
 add_test(
   NAME HIDDENTYPETEST_test2005_56.C
   COMMAND testTranslator ${ROSE_FLAGS}

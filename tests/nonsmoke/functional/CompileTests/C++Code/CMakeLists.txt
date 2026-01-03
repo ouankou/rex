@@ -1,53 +1,63 @@
 set(ROSE_FLAGS  -w)
 set(C_ONLY -rose:C_only)
-
+set(_cxxcode_translator testTranslator)
 if(valgrind)
-  # Test for Old-Style C function definitions
-  add_test(
-    NAME test2004_19
-    COMMAND ${valgrind} testTranslator ${ROSE_FLAGS} -rose:C_only
-            -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_19.C
-  )
-
-  # Test for Old-Style C function definitions
-  add_test(
-    NAME test2004_21
-    COMMAND ${valgrind} testTranslator ${ROSE_FLAGS} ${C_ONLY}
-            -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_21.c
-  )
-
-  add_test(
-    NAME test2005_56
-    COMMAND ${valgrind} testTranslator ${ROSE_FLAGS}
-            -DTEST_STRING_MACRO=""Thu Apr 14 08:18:33 PDT 2005""
-            ${CMAKE_CURRENT_SOURCE_DIR}/test2005_56.C -o test2005_56
-  )
-
-  add_test(
-    NAME test2005_168
-    COMMAND ${valgrind} testTranslator ${ROSE_FLAGS} -rose:C_only
-            -rose:verbose 0 -c
-            -I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing
-            ${CMAKE_CURRENT_SOURCE_DIR}/test2005_168.c
-  )
-
-  # Test for Old-Style C function definitions
-  #test2005_172.o: ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c
-  #	rm -f test2005_172
-  #	${valgrind} testTranslator ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c -o test2005_172
-  #	rm -f test2005_172.o
-  #	${valgrind} testTranslator ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c
-  #	rm -f test2005_172
-  #	${valgrind} testTranslator ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} test2005_172.o -o test2005_172
-
-
-  add_test(
-    NAME test2005_64
-    COMMAND ${valgrind} testTranslator ${ROSE_FLAGS} -fno-implicit-templates
-            -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_64.C
-  )
-
+  set(_cxxcode_translator ${valgrind} ${_cxxcode_translator})
 endif()
+string(JOIN " " _cxxcode_translator_cmd ${_cxxcode_translator})
+
+# Test for Old-Style C function definitions
+add_test(
+  NAME test2004_19
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} -rose:C_only
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_19.C
+)
+
+# Test for Old-Style C function definitions
+add_test(
+  NAME test2004_21
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} ${C_ONLY}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_21.c
+)
+
+add_test(
+  NAME test2005_56
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS}
+          -DTEST_STRING_MACRO=""Thu Apr 14 08:18:33 PDT 2005""
+          ${CMAKE_CURRENT_SOURCE_DIR}/test2005_56.C -o test2005_56
+)
+
+add_test(
+  NAME test2005_168
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} -rose:C_only
+          -rose:verbose 0 -c
+          -I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing
+          ${CMAKE_CURRENT_SOURCE_DIR}/test2005_168.c
+)
+
+# Test for Old-Style C function definitions
+find_program(BASH_EXECUTABLE bash)
+if(NOT BASH_EXECUTABLE)
+  message(FATAL_ERROR "bash not found; C++Code test2005_172 requires bash")
+endif()
+
+add_test(
+  NAME test2005_172
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -f test2005_172 test2005_172.o && \
+     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c -o test2005_172 && \
+     rm -f test2005_172.o && \
+     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c && \
+     rm -f test2005_172 && \
+     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} test2005_172.o -o test2005_172"
+)
+
+add_test(
+  NAME test2005_64
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} -fno-implicit-templates
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_64.C
+)
 
 add_test(
   NAME gconv_info_Cpp
@@ -154,7 +164,7 @@ set(files_to_test
   test2005_06.C test2005_07.C test2005_08.C test2005_09.C test2005_10.C
   test2005_11.C test2005_12.C test2005_13.C test2005_14.C test2005_15.C
   test2005_16.C test2005_17.C test2005_19.C test2005_20.C test2005_21.C
-  test2005_22.C test2005_23.C test2005_24.C test2005_25.C test2005_26.C
+  test2005_22.C test2005_23.C test2005_25.C test2005_26.C
   test2005_27.C test2005_28.C test2005_29.C test2005_30.C test2005_31.C
   test2005_32.C test2005_33.C test2005_34.C test2005_35.C test2005_36.C
   test2005_37.C test2005_38.C test2005_39.C test2005_40.C test2005_41.C
@@ -202,5 +212,34 @@ list(APPEND ROSE_FLAGS
 )
 
 foreach(file_to_test ${files_to_test})
-  compile_test(${file_to_test})
+  compile_test(${file_to_test} CXXCODE)
+endforeach()
+
+set(_cxxcode_disabled_tests
+  test2001_03.C
+  test2001_09.C
+  test2001_14.C
+  test2001_15.C
+  test_treeTrav_MK_01.C
+  test_treeTrav_MK_02.C
+  test2004_20.C
+  test2004_21.C
+  test2004_22.C
+  test2004_62.C
+  test2004_63.C
+  test2005_24.C
+  test2005_69.C
+  test2005_81.C
+  test2005_85.C
+  test2005_93.C
+  test2005_98.C
+  test2005_115.C
+  test2005_151.C
+)
+
+foreach(file_to_test ${_cxxcode_disabled_tests})
+  compile_test(${file_to_test} CXXCODE)
+  string(REPLACE "/" "_" _test_key "${file_to_test}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  set_tests_properties(CXXCODE_${_test_key} PROPERTIES DISABLED TRUE LABELS CXXCODE)
 endforeach()

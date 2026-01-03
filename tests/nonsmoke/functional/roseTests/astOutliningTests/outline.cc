@@ -116,8 +116,8 @@ makePDF (const SgProject* proj, const string& fn_prefix)
 {
   ROSE_ASSERT (proj);
   const SgFilePtrList& files = const_cast<SgProject *> (proj)->get_fileList();
-  for_each (files.begin (), files.end (),
-      bind2nd (ptr_fun (makePDF_SgFile), fn_prefix));
+  for_each(files.begin(), files.end(),
+           [&](SgFile *file) { makePDF_SgFile(file, fn_prefix); });
 }
 
 // eof

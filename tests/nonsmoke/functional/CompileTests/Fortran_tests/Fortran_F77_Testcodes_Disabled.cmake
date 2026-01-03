@@ -1,0 +1,20 @@
+# Generated from Makefile.am test lists.
+set(F77_DISABLED_TESTCODES
+  test2007_85.f
+  test2007_146.f
+  test2007_167.f
+  test2007_210.f
+  test2007_233.f
+  test2010_55.f
+  test2010_56.f
+  test2010_57.f
+  gfortranTestSuite/gfortran.dg/continuation_6.f
+  test2007_189.f
+  test2007_227.f
+  test2010_29.f
+  test2010_30.f
+  test2007_150.f
+  test2007_209.f
+  test2007_232.f
+  test2008_02.f
+)

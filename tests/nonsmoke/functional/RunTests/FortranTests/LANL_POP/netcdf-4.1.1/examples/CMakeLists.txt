@@ -1,0 +1,6 @@
+add_subdirectory(C)
+add_subdirectory(CDL)
+add_subdirectory(CXX)
+add_subdirectory(CXX4)
+add_subdirectory(F77)
+add_subdirectory(F90)

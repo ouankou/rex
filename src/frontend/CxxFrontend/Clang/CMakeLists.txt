@@ -54,8 +54,11 @@ if(NOT LLVM_INCLUDE_DIRS)
 endif()
 message(STATUS "Clang frontend using LLVM includes: ${LLVM_INCLUDE_DIRS}")
 
-# LLVM 20 include path is set globally in top-level CMakeLists.txt
-# No additional configuration needed here
+# Ensure LLVM/Clang headers are preferred for this target only.
+target_include_directories(libroseClangFrontend SYSTEM PRIVATE
+  ${LLVM_INCLUDE_DIRS}
+  ${CLANG_INCLUDE_DIRS}
+)
 
 # Add LLVM definitions
 target_compile_definitions(libroseClangFrontend PRIVATE

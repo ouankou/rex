@@ -1,6 +1,9 @@
 add_executable(unparseToString unparseToString.C )
 target_link_libraries(unparseToString ROSE_DLL ${link_with_libraries} )
 
+add_executable(unparseProject unparseProject.C)
+target_link_libraries(unparseProject ROSE_DLL ${link_with_libraries})
+
 set(ROSE_FLAGS  -w )
 
 set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
@@ -11,8 +14,6 @@ set(rex_test2025_issue148_system_header_dir
   ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
 
 # This populates the list EXAMPLE_TESTCODES_REQUIRED_TO_PASS
-include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
 
 set(CXX_TESTCODES_TO_UNPARSE ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM CXX_TESTCODES_TO_UNPARSE ${TESTCODE_CURRENTLY_FAILING})
@@ -69,3 +70,13 @@ foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
     PROPERTIES DEPENDS ut_${file_to_test} 
     LABELS UNPARSETOSTRING)
 endforeach()
+
+add_test(
+  NAME unparseProject_test2014_26
+  COMMAND unparseProject ${CMAKE_CURRENT_SOURCE_DIR}/test2014_26.C
+)
+
+add_test(
+  NAME unparseProject_test2017_01
+  COMMAND unparseProject ${CMAKE_CURRENT_SOURCE_DIR}/test2017_01.C
+)

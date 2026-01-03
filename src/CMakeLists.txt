@@ -242,7 +242,7 @@ if(ENABLE-FORTRAN)
 endif()
 
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
-  list(APPEND LINK_FILES ${JAVA_JVM_LIBRARY})
+  set(ROSE_JVM_LIBRARY ${JAVA_JVM_LIBRARY})
 endif()
 
 # link ANTLR 4 C++ runtime
@@ -252,6 +252,13 @@ list(APPEND LINK_FILES antlr4-runtime)
 # Smaller-generated-files support removed; link standard targets only.
 set(ROSE_TARGET_LINK ${LINK_FILES})
 target_link_libraries(ROSE_DLL PRIVATE ${ROSE_TARGET_LINK})
+if(ROSE_JVM_LIBRARY)
+  target_link_libraries(ROSE_DLL PUBLIC ${ROSE_JVM_LIBRARY})
+  get_filename_component(ROSE_JVM_LIBRARY_DIR "${ROSE_JVM_LIBRARY}" DIRECTORY)
+  if(ROSE_JVM_LIBRARY_DIR)
+    set_property(TARGET ROSE_DLL APPEND PROPERTY INSTALL_RPATH "${ROSE_JVM_LIBRARY_DIR}")
+  endif()
+endif()
 
 # If the C preprocessor is enabled, ROSE has some additional depenendencies
 if(ENABLE-CPP)

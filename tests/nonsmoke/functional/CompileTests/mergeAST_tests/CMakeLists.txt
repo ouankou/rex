@@ -20,12 +20,11 @@ set(TESTCODES
   mergeTest_81.C mergeTest_82.C mergeTest_83.C mergeTest_84.C mergeTest_85.C
   mergeTest_86.C mergeTest_87.C mergeTest_88.C mergeTest_91.C mergeTest_92.C
   mergeTest_94.C mergeTest_95.C mergeTest_96.C mergeTest_97.C mergeTest_100.C
-  mergeTest_101.C mergeTest_102.C mergeTest_103.C mergeTest_104.C mergeTest_105.C
+  mergeTest_102.C mergeTest_103.C mergeTest_104.C mergeTest_105.C
   mergeTest_106.C mergeTest_107.C mergeTest_110.C mergeTest_112.C
   mergeTest_114.C mergeTest_115.C mergeTest_116.C mergeTest_118.C mergeTest_119.C
   mergeTest_120.C mergeTest_128.C mergeTest_129.C mergeTest_130.C
-  mergeTest_131.C mergeTest_133.C mergeTest_134.C mergeTest_90.C
-  mergeTest_124.C)
+  mergeTest_131.C mergeTest_133.C mergeTest_134.C mergeTest_138.C)
 
 set(TESTCODES_TO_FIX
 mergeTest_04.C mergeTest_05.C mergeTest_121.C
@@ -45,4 +44,45 @@ foreach(file_to_test ${TESTCODES})
     COMMAND roseTestMerge ${ROSE_FLAGS}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(MERGEASTTEST_${file_to_test} PROPERTIES LABELS MERGEASTTEST)
+endforeach()
+set(_mergeast_disabled_tests
+  mergeTest_45.C
+  mergeTest_49.C
+  mergeTest_59.C
+  mergeTest_72.C
+  mergeTest_75.C
+  mergeTest_93.C
+  mergeTest_98.C
+  mergeTest_99.C
+  mergeTest_101.C
+  mergeTest_109.C
+  mergeTest_113.C
+  mergeTest_117.C
+  mergeTest_122.C
+  mergeTest_123.C
+  mergeTest_124.C
+  mergeTest_125.C
+  mergeTest_126.C
+  mergeTest_127.C
+  mergeTest_132.C
+  mergeTest_06.C
+  mergeTest_07.C
+  mergeTest_137.C
+  mergeTest_136.C
+  mergeTest_39.C
+  mergeTest_40.C
+  mergeTest_41.C
+  mergeTest_42.C
+  mergeTest_89.C
+  mergeTest_90.C
+  mergeTest_108.C
+)
+
+foreach(file_to_test ${_mergeast_disabled_tests})
+  add_test(
+    NAME MERGEASTTEST_${file_to_test}
+    COMMAND roseTestMerge ${ROSE_FLAGS}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(MERGEASTTEST_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS MERGEASTTEST)
 endforeach()

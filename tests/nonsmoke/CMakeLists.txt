@@ -1,4 +1,5 @@
 add_subdirectory(ExamplesForTestWriters)
+add_subdirectory(specimens)
 add_subdirectory(unit)
 add_subdirectory(functional)
 add_subdirectory(acceptance)

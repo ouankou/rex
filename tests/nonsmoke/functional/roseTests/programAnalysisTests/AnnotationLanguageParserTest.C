@@ -1,9 +1,6 @@
 #include <rose.h>
 #include <iostream>
 
-#include "config.h"
-
-
 #include "broadway.h"
 
 int main(int argc, char **argv)

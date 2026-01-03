@@ -3,6 +3,11 @@ add_dependencies(defaultTranslator ROSE_DLL)
 target_link_libraries(defaultTranslator ROSE_DLL)
 install(TARGETS defaultTranslator DESTINATION bin)
 
+add_executable(KeepGoingTranslator KeepGoingTranslator.cpp)
+add_dependencies(KeepGoingTranslator ROSE_DLL)
+target_link_libraries(KeepGoingTranslator ROSE_DLL)
+install(TARGETS KeepGoingTranslator DESTINATION bin)
+
 add_executable(preprocessingInfoDumper preprocessingInfoDumper.C)
 add_dependencies(preprocessingInfoDumper ROSE_DLL)
 target_link_libraries(preprocessingInfoDumper ROSE_DLL)

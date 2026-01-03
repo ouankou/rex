@@ -15,7 +15,7 @@ if(ENABLE-FORTRAN)
   target_include_directories(
     tools_checkFortranInterfaces_exe
     PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}
-            ${CMAKE_INSTALL_PREFIX}/include/rose ${ROSE_INCLUDES})
+            ${ROSE_INCLUDES})
   set_target_properties(tools_checkFortranInterfaces_exe
                         PROPERTIES OUTPUT_NAME "checkFortranInterfaces")
 

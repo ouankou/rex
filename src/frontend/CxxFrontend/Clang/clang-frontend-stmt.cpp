@@ -17,6 +17,24 @@ using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
 
+class RexNonrealFlagAttribute : public AstAttribute {
+public:
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
+
+  std::string attribute_class_name() const override {
+    return "RexNonrealFlagAttribute";
+  }
+
+  std::string toString() override { return ""; }
+};
+
+const char kRexNonrealNoTypenameAttr[] = "rex_nonreal_no_typename";
+const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
+
 static bool canLexTrailingToken(clang::SourceLocation loc,
                                 clang::SourceManager &sm) {
   if (!loc.isValid() || loc.isMacroID()) {
@@ -477,6 +495,27 @@ void setExplicitQualifierOnExpr(SgExpression *expr,
   }
 }
 
+void attachExplicitQualifierFromNestedName(
+    SgExpression *expr, const clang::NestedNameSpecifier *qualifier,
+    const clang::NestedNameSpecifierLoc *qualifier_loc,
+    clang::CompilerInstance *compiler_instance) {
+  if (expr == nullptr || qualifier == nullptr || compiler_instance == nullptr) {
+    return;
+  }
+
+  const clang::NestedNameSpecifierLoc *qualifier_loc_ptr = nullptr;
+  if (qualifier_loc != nullptr &&
+      qualifier_loc->getNestedNameSpecifier() != nullptr) {
+    qualifier_loc_ptr = qualifier_loc;
+  }
+
+  const ExplicitQualifierInfo info = getExplicitQualifierInfo(
+      qualifier, compiler_instance->getASTContext(), qualifier_loc_ptr,
+      &compiler_instance->getSourceManager(),
+      &compiler_instance->getLangOpts());
+  setExplicitQualifierOnExpr(expr, info);
+}
+
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
   if (scope == NULL) {
     return NULL;
@@ -593,25 +632,6 @@ std::string extractOpenMPDirective(const std::string &pragma_text) {
   return std::string(spaces_after_hash, ' ') + pragma_text.substr(after_pragma);
 }
 
-} // namespace
-
-namespace {
-class RexNonrealFlagAttribute : public AstAttribute {
-public:
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
-
-  std::string attribute_class_name() const override {
-    return "RexNonrealFlagAttribute";
-  }
-
-  std::string toString() override { return ""; }
-};
-
-const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
 } // namespace
 
 void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
@@ -3743,7 +3763,139 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     param_list->append_expression(expr);
   }
 
-  *node = SageBuilder::buildFunctionCallExp_nfi(expr, param_list);
+  SgType *call_type = buildTypeFromQualifiedType(call_expr->getType());
+  if (clang::CXXMemberCallExpr *member_call =
+          llvm::dyn_cast<clang::CXXMemberCallExpr>(call_expr)) {
+    clang::CXXMethodDecl *method_decl = member_call->getMethodDecl();
+    if (method_decl != nullptr) {
+      const clang::CXXRecordDecl *record_decl = method_decl->getParent();
+      const clang::ClassTemplateSpecializationDecl *spec_decl =
+          llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(
+              record_decl);
+      if (spec_decl == nullptr) {
+        clang::QualType object_type = member_call->getObjectType();
+        if (!object_type.isNull()) {
+          object_type = object_type.getNonReferenceType();
+          if (const clang::CXXRecordDecl *object_decl =
+                  object_type->getAsCXXRecordDecl()) {
+            record_decl = object_decl;
+            spec_decl = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(
+                object_decl);
+          }
+        }
+      }
+      if (spec_decl != nullptr && record_decl != nullptr) {
+        const clang::TypedefType *return_typedef =
+            method_decl->getReturnType()->getAs<clang::TypedefType>();
+        if (return_typedef != nullptr) {
+          const clang::TypedefNameDecl *return_decl = return_typedef->getDecl();
+          const clang::DeclContext *return_context =
+              return_decl != nullptr ? return_decl->getDeclContext() : nullptr;
+          const clang::CXXRecordDecl *return_record =
+              llvm::dyn_cast_or_null<clang::CXXRecordDecl>(return_context);
+          bool is_member_typedef = false;
+          if (return_record != nullptr) {
+            const clang::CXXRecordDecl *pattern =
+                spec_decl->getTemplateInstantiationPattern();
+            if (return_record == record_decl || return_record == spec_decl ||
+                (pattern != nullptr && return_record == pattern)) {
+              is_member_typedef = true;
+            }
+          }
+          if (is_member_typedef) {
+            SgScopeStatement *scope = SageBuilder::topScopeStack();
+            if (scope == nullptr) {
+              scope = getGlobalScope();
+            }
+            std::vector<const clang::DeclContext *> contexts;
+            for (const clang::DeclContext *dc =
+                     record_decl != nullptr ? record_decl->getDeclContext()
+                                            : nullptr;
+                 dc != nullptr && !dc->isTranslationUnit();
+                 dc = dc->getParent()) {
+              contexts.push_back(dc);
+            }
+            for (auto it = contexts.rbegin(); it != contexts.rend(); ++it) {
+              if (const clang::NamespaceDecl *ns =
+                      llvm::dyn_cast<clang::NamespaceDecl>(*it)) {
+                std::string ns_name = ns->getNameAsString();
+                if (!ns_name.empty()) {
+                  SgNonrealType *ns_type = SageBuilder::buildNonrealType(
+                      SgName(ns_name), scope, nullptr);
+                  if (SgNonrealDecl *ns_decl = isSgNonrealDecl(
+                          ns_type ? ns_type->get_declaration() : nullptr)) {
+                    scope = ns_decl->get_nonreal_decl_scope();
+                  }
+                }
+              } else if (const clang::CXXRecordDecl *ctx_record =
+                             llvm::dyn_cast<clang::CXXRecordDecl>(*it)) {
+                std::string record_name = ctx_record->getNameAsString();
+                if (!record_name.empty()) {
+                  SgNonrealType *record_type = SageBuilder::buildNonrealType(
+                      SgName(record_name), scope, nullptr);
+                  if (SgNonrealDecl *record_decl = isSgNonrealDecl(
+                          record_type ? record_type->get_declaration()
+                                      : nullptr)) {
+                    scope = record_decl->get_nonreal_decl_scope();
+                  }
+                }
+              }
+            }
+
+            SgTemplateArgumentPtrList tpl_args;
+            for (const clang::TemplateArgument &arg :
+                 spec_decl->getTemplateArgs().asArray()) {
+              appendTemplateArguments(tpl_args, arg, false);
+            }
+
+            std::string spec_name = spec_decl->getNameAsString();
+            if (!spec_name.empty()) {
+              SgNonrealType *spec_type = SageBuilder::buildNonrealType(
+                  SgName(spec_name), scope,
+                  tpl_args.empty() ? nullptr : &tpl_args);
+              if (SgNonrealDecl *spec_nrdecl = isSgNonrealDecl(
+                      spec_type ? spec_type->get_declaration() : nullptr)) {
+                scope = spec_nrdecl->get_nonreal_decl_scope();
+              }
+            }
+
+            std::string typedef_name = return_decl->getNameAsString();
+            if (!typedef_name.empty()) {
+              SgNonrealType *member_type = SageBuilder::buildNonrealType(
+                  SgName(typedef_name), scope, nullptr);
+              if (SgNonrealDecl *member_decl = isSgNonrealDecl(
+                      member_type ? member_type->get_declaration() : nullptr)) {
+                if (member_decl->getAttribute(kRexNonrealNoTypenameAttr) ==
+                    NULL) {
+                  member_decl->setAttribute(kRexNonrealNoTypenameAttr,
+                                            new RexNonrealFlagAttribute());
+                }
+              }
+              if (member_type != nullptr) {
+                call_type = member_type;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (call_type == NULL && expr != NULL) {
+    call_type = expr->get_type();
+  }
+
+  SgFunctionCallExp *call_exp =
+      new SgFunctionCallExp(expr, param_list, call_type);
+  if (call_exp != NULL) {
+    if (expr != NULL) {
+      expr->set_parent(call_exp);
+    }
+    if (param_list != NULL) {
+      param_list->set_parent(call_exp);
+    }
+    SageInterface::setOneSourcePositionNull(call_exp);
+  }
+  *node = call_exp;
 
   return VisitExpr(call_expr, node) && res;
 }
@@ -3779,6 +3931,28 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
   std::cerr << "ClangToSageTranslator::VisitCXXOperatorCallExpr" << std::endl;
 #endif
   bool res = true;
+
+  if (cxx_operator_call_expr->getOperator() == clang::OO_Equal &&
+      cxx_operator_call_expr->getNumArgs() >= 2) {
+    SgNode *tmp_lhs = Traverse(cxx_operator_call_expr->getArg(0));
+    SgExpression *lhs = isSgExpression(tmp_lhs);
+    if (tmp_lhs != NULL && lhs == NULL) {
+      std::cerr << "Runtime error: tmp_lhs != NULL && lhs == NULL" << std::endl;
+      res = false;
+    }
+
+    SgNode *tmp_rhs = Traverse(cxx_operator_call_expr->getArg(1));
+    SgExpression *rhs = isSgExpression(tmp_rhs);
+    if (tmp_rhs != NULL && rhs == NULL) {
+      std::cerr << "Runtime error: tmp_rhs != NULL && rhs == NULL" << std::endl;
+      res = false;
+    }
+
+    if (lhs != NULL && rhs != NULL) {
+      *node = SageBuilder::buildAssignOp(lhs, rhs);
+      return VisitExpr(cxx_operator_call_expr, node) && res;
+    }
+  }
 
   // C++ overloaded operators (operator+, operator[], etc.) are represented as
   // function calls. For member operators, Clang models the implicit object as
@@ -4676,6 +4850,14 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
       SgName(member_name),
       cxx_dependent_scope_member_expr->hasTemplateKeyword(), template_args_ptr);
   ROSE_ASSERT(member_ref != NULL);
+  clang::NestedNameSpecifierLoc qualifier_loc =
+      cxx_dependent_scope_member_expr->getQualifierLoc();
+  const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+      qualifier_loc.getNestedNameSpecifier() != nullptr ? &qualifier_loc
+                                                        : nullptr;
+  attachExplicitQualifierFromNestedName(
+      member_ref, cxx_dependent_scope_member_expr->getQualifier(),
+      qualifier_loc_ptr, p_compiler_instance);
 
   if (base_expr != NULL) {
     if (cxx_dependent_scope_member_expr->isArrow()) {
@@ -6317,6 +6499,14 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
   // Set source position
   SgExpression *expr = isSgExpression(*node);
   if (expr != NULL) {
+    clang::NestedNameSpecifierLoc qualifier_loc =
+        dependent_scope_decl_ref_expr->getQualifierLoc();
+    const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+        qualifier_loc.getNestedNameSpecifier() != nullptr ? &qualifier_loc
+                                                          : nullptr;
+    attachExplicitQualifierFromNestedName(
+        expr, dependent_scope_decl_ref_expr->getQualifier(), qualifier_loc_ptr,
+        p_compiler_instance);
     applySourceRange(expr, dependent_scope_decl_ref_expr->getSourceRange());
   }
 
@@ -7464,6 +7654,174 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     }
   }
 
+  if (sym != NULL && func_sym == NULL) {
+    func_sym = isSgMemberFunctionSymbol(sym);
+  }
+
+  if (member_expr->hasExplicitTemplateArgs()) {
+    clang::FunctionDecl *clang_func =
+        llvm::dyn_cast<clang::FunctionDecl>(member_expr->getMemberDecl());
+    clang::TemplateArgumentListInfo arg_info;
+    member_expr->copyTemplateArgumentsInto(arg_info);
+    const size_t explicit_arg_count = countExpandedTemplateArguments(arg_info);
+    SgTemplateArgumentPtrList template_args =
+        buildTemplateArguments(arg_info, true);
+
+    auto update_inst_decl =
+        [&](SgTemplateInstantiationMemberFunctionDecl *inst_decl,
+            const SgName &template_base_name) {
+          if (inst_decl == NULL) {
+            return;
+          }
+          inst_decl->set_template_argument_list_is_explicit(true);
+          SageBuilder::setTemplateArgumentsInDeclaration(inst_decl,
+                                                         &template_args);
+          if (inst_decl->get_templateName().is_null() == false) {
+            return;
+          }
+          if (template_base_name.is_null() == false) {
+            inst_decl->set_templateName(template_base_name);
+          }
+        };
+
+    auto ensure_template_instantiation_symbol =
+        [&](SgMemberFunctionSymbol *member_symbol) -> SgMemberFunctionSymbol * {
+      if (member_symbol == NULL) {
+        return NULL;
+      }
+
+      SgMemberFunctionDeclaration *member_decl =
+          isSgMemberFunctionDeclaration(member_symbol->get_declaration());
+      if (member_decl == NULL) {
+        return member_symbol;
+      }
+
+      SgTemplateInstantiationMemberFunctionDecl *inst_decl =
+          isSgTemplateInstantiationMemberFunctionDecl(member_decl);
+      if (inst_decl == NULL) {
+        if (SgMemberFunctionDeclaration *first_nondef =
+                isSgMemberFunctionDeclaration(
+                    member_decl->get_firstNondefiningDeclaration())) {
+          inst_decl = isSgTemplateInstantiationMemberFunctionDecl(first_nondef);
+        }
+      }
+
+      SgName template_base_name = member_decl->get_name();
+      if (SgTemplateInstantiationMemberFunctionDecl *existing_inst =
+              isSgTemplateInstantiationMemberFunctionDecl(member_decl)) {
+        if (existing_inst->get_templateName().is_null() == false) {
+          template_base_name = existing_inst->get_templateName();
+        }
+      } else if (SgTemplateInstantiationMemberFunctionDecl *existing_inst =
+                     isSgTemplateInstantiationMemberFunctionDecl(
+                         member_decl->get_firstNondefiningDeclaration())) {
+        if (existing_inst->get_templateName().is_null() == false) {
+          template_base_name = existing_inst->get_templateName();
+        }
+      }
+
+      if (inst_decl != NULL) {
+        update_inst_decl(inst_decl, template_base_name);
+        return member_symbol;
+      }
+
+      SgScopeStatement *func_scope = member_decl->get_scope();
+      if (func_scope == NULL) {
+        func_scope = SageBuilder::topScopeStack();
+      }
+
+      SgType *sym_type = member_decl->get_type();
+      if (clang_func != NULL) {
+        if (SgType *clang_type =
+                buildTypeFromQualifiedType(clang_func->getType())) {
+          if (isSgMemberFunctionType(clang_type) != NULL || sym_type == NULL) {
+            sym_type = clang_type;
+          }
+        }
+      }
+
+      SgMemberFunctionType *member_type = isSgMemberFunctionType(sym_type);
+      SgType *ret_type = member_type != NULL ? member_type->get_return_type()
+                                             : SageBuilder::buildUnknownType();
+      SgFunctionParameterList *param_list =
+          (member_type != NULL && member_type->get_argument_list() != NULL)
+              ? SageBuilder::buildFunctionParameterList_nfi(
+                    member_type->get_argument_list())
+              : SageBuilder::buildFunctionParameterList_nfi();
+      unsigned int functionConstVolatileFlags =
+          member_type != NULL ? member_type->get_mfunc_specifier() : 0;
+
+      SgTemplateArgumentPtrList *builder_args =
+          new SgTemplateArgumentPtrList(template_args);
+      SgTemplateInstantiationMemberFunctionDecl *new_inst_decl =
+          isSgTemplateInstantiationMemberFunctionDecl(
+              SageBuilder::buildNondefiningMemberFunctionDeclaration(
+                  template_base_name, ret_type, param_list, func_scope,
+                  functionConstVolatileFlags,
+                  /*buildTemplateInstantiation=*/true, builder_args));
+
+      if (new_inst_decl == NULL) {
+        return member_symbol;
+      }
+
+      update_inst_decl(new_inst_decl, template_base_name);
+
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              isSgTemplateMemberFunctionDeclaration(member_decl)) {
+        new_inst_decl->set_templateDeclaration(tmpl_decl);
+        new_inst_decl->set_templateName(tmpl_decl->get_name());
+      } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                     isSgTemplateMemberFunctionDeclaration(
+                         member_decl->get_firstNondefiningDeclaration())) {
+        new_inst_decl->set_templateDeclaration(tmpl_decl);
+        new_inst_decl->set_templateName(tmpl_decl->get_name());
+      } else if (clang_func != NULL) {
+        clang::FunctionTemplateDecl *primary_template =
+            clang_func->getPrimaryTemplate();
+        if (primary_template == NULL) {
+          primary_template = clang_func->getDescribedFunctionTemplate();
+        }
+        if (primary_template != NULL) {
+          if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                  isSgTemplateMemberFunctionDeclaration(
+                      Traverse(primary_template))) {
+            new_inst_decl->set_templateDeclaration(tmpl_decl);
+            new_inst_decl->set_templateName(tmpl_decl->get_name());
+          }
+        }
+      }
+
+      SgMemberFunctionSymbol *inst_sym = isSgMemberFunctionSymbol(
+          new_inst_decl->get_symbol_from_symbol_table());
+      if (inst_sym == NULL && func_scope != NULL) {
+        inst_sym = new SgMemberFunctionSymbol(new_inst_decl);
+        inst_sym->set_parent(new_inst_decl);
+        func_scope->insert_symbol(template_base_name, inst_sym);
+      }
+      return inst_sym != NULL ? inst_sym : member_symbol;
+    };
+
+    if (func_sym != NULL) {
+      SgMemberFunctionSymbol *inst_sym =
+          ensure_template_instantiation_symbol(func_sym);
+      if (inst_sym != NULL && inst_sym != func_sym) {
+        sg_member_expr =
+            SageBuilder::buildMemberFunctionRefExp_nfi(inst_sym, false, false);
+        func_sym = inst_sym;
+      }
+    }
+
+    if (clang_func != NULL && explicit_arg_count == 0 && func_sym != NULL) {
+      if (SgMemberFunctionDeclaration *member_decl =
+              isSgMemberFunctionDeclaration(func_sym->get_declaration())) {
+        if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
+                isSgTemplateInstantiationMemberFunctionDecl(member_decl)) {
+          update_inst_decl(inst_decl, inst_decl->get_templateName());
+        }
+      }
+    }
+  }
+
   ROSE_ASSERT(sg_member_expr != NULL);
 
   // TODO (C++) member_expr->getQualifier() : for 'a->Base::foo'
@@ -7667,6 +8025,14 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   // Set source position
   SgExpression *expr = isSgExpression(*node);
   if (expr != NULL) {
+    clang::NestedNameSpecifierLoc qualifier_loc =
+        unresolved_lookup_expr->getQualifierLoc();
+    const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+        qualifier_loc.getNestedNameSpecifier() != nullptr ? &qualifier_loc
+                                                          : nullptr;
+    attachExplicitQualifierFromNestedName(
+        expr, unresolved_lookup_expr->getQualifier(), qualifier_loc_ptr,
+        p_compiler_instance);
     applySourceRange(expr, unresolved_lookup_expr->getSourceRange());
   }
 
@@ -7717,6 +8083,14 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
       SgName(member_name), unresolved_member_expr->hasTemplateKeyword(),
       template_args_ptr);
   ROSE_ASSERT(member_ref != NULL);
+  clang::NestedNameSpecifierLoc qualifier_loc =
+      unresolved_member_expr->getQualifierLoc();
+  const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+      qualifier_loc.getNestedNameSpecifier() != nullptr ? &qualifier_loc
+                                                        : nullptr;
+  attachExplicitQualifierFromNestedName(member_ref,
+                                        unresolved_member_expr->getQualifier(),
+                                        qualifier_loc_ptr, p_compiler_instance);
 
   if (base_expr != NULL) {
     if (unresolved_member_expr->isArrow()) {

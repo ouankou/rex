@@ -400,7 +400,11 @@ void IntraProcAliasAnalysis:: run() {
  // printf ("Calling unparseToCompleteString() for head = %p = %s = %s \n",head,head->class_name().c_str(),SageInterface::get_name(head).c_str());
  // head->get_file_info()->display("Calling unparseToCompleteString(): debug");
 
-    std::cout<< head->unparseToCompleteString() << std::endl;
+    if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(head)) {
+      std::cout << decl->get_qualified_name().getString() << std::endl;
+    } else {
+      std::cout << head->class_name() << std::endl;
+    }
 
  // printf ("DONE: Calling unparseToCompleteString() for head = %p = %s \n",head,head->class_name().c_str());
 

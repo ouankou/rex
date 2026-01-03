@@ -138,7 +138,7 @@ void dbgBuf::init(std::streambuf* baseBuf)
         ownerAccess = true;
         numOpenAngles = 0;
         //numDivs = 0;
-        parentDivs.empty();
+        parentDivs.clear();
         parentDivs.push_back(0);
         //cout << "Initially parentDivs (len="<<parentDivs.size()<<")\n";
 }

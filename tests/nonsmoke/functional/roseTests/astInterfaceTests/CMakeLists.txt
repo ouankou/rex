@@ -1,5 +1,4 @@
 # CMakeLists.txt for astInterfaceTests
-# Based on Makefile.am - provides CMake equivalents for autotools tests
 
 # Test executables that will be installed
 set(bin_programs
@@ -144,6 +143,15 @@ set_tests_properties(astInterface_interfaceFunctionCoverage PROPERTIES
   "In addToNameMap\\(\\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope"
 )
 
+set(_disable_interface_coverage FALSE)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.5")
+  set(_disable_interface_coverage TRUE)
+endif()
+if(_disable_interface_coverage)
+  set_tests_properties(astInterface_interfaceFunctionCoverage PROPERTIES DISABLED TRUE)
+endif()
+
 # buildFunctionDeclaration test (uses inputBlank1.C)
 add_test(
   NAME astInterface_buildFunctionDeclaration
@@ -200,6 +208,14 @@ add_test(
   NAME astInterface_deepDelete
   COMMAND deepDelete ${TEST_CXXFLAGS} -rose:detect_dangling_pointers 1 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputdeepDelete.C
 )
+set(_disable_deep_delete FALSE)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+   AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.9")
+  set(_disable_deep_delete TRUE)
+endif()
+if(_disable_deep_delete)
+  set_tests_properties(astInterface_deepDelete PROPERTIES DISABLED TRUE)
+endif()
 
 # loopUnrolling tests (multiple tests with different parameters)
 add_test(

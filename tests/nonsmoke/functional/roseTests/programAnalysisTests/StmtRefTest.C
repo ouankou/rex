@@ -27,7 +27,7 @@ class TestVarRefCollect
 class TestStmtModRef : public ProcessAstTree<AstNodePtr>
 {
   TestVarRefCollect mod, use, kill;
-  StmtSideEffectCollect<AstNodePtr> op;
+  StmtSideEffectCollect op;
   void Clear() { mod.Clear(); use.Clear(); kill.Clear(); }
  public:
   TestStmtModRef(AstInterface& fa) : op(fa) {}
@@ -38,7 +38,10 @@ class TestStmtModRef : public ProcessAstTree<AstNodePtr>
          std::function<bool(AstNodePtr,AstNodePtr)> mod_f(mod), use_f(use), kill_f(kill);
          std::cout << AstNodePtrImpl(s)->unparseToString();
          std::cout << "\n";
-         bool r = op ( s, &mod_f, &use_f, &kill_f);
+         op.set_modify_collect(mod_f);
+         op.set_read_collect(use_f);
+         op.set_kill_collect(kill_f);
+         bool r = op.get_side_effect(fa, s);
          std::cout << "modref: ";
          mod.DumpOut(std::cout);
          std::cout << " ;  readref: ";
@@ -88,4 +91,3 @@ main ( int argc,  char * argv[] )
 
   return 0;
 }
-

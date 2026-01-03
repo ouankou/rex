@@ -23,8 +23,6 @@ function(rex_lock_test_for_input test_name input_file)
 endfunction()
 
 # This populates the list ROSE__CXX_TESTS
-include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Testcodes.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/Cxx_Failing_Tests.cmake)
 
 set(CXX_TESTCODES_FOR_CFG ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM CXX_TESTCODES_FOR_CFG ${TESTCODE_CURRENTLY_FAILING})
@@ -232,6 +230,38 @@ if(ENABLE-FORTRAN)
 
   endforeach()
 
+  set(_f90_disabled_tests
+    test2007_16.f90
+    test2007_19.f90
+    test2007_61.f90
+    test2007_94.f90
+    test2007_99.f90
+    test2007_101.f90
+    test2007_109.f90
+    test2007_111.f90
+    test2007_127.f90
+    test2007_168.f90
+    test2007_219.f90
+    test2007_263.f90
+    lastTest.f90
+  )
+
+  foreach(file_to_test ${_f90_disabled_tests})
+    add_test(
+      NAME testStaticCFG_f90_${file_to_test}
+      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:f90
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    set_tests_properties(testStaticCFG_f90_${file_to_test}
+      PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)
+
+    add_test(
+      NAME testInterproceduralCFG_f90_${file_to_test}
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:f90
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    set_tests_properties(testInterproceduralCFG_f90_${file_to_test}
+      PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)
+  endforeach()
+
   set(F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS
     test2007_129.f test2007_132.f test2007_148.f test2007_150.f
     test2007_151.f test2007_153.f test2007_154.f test2007_155.f
@@ -267,6 +297,49 @@ if(ENABLE-FORTRAN)
 
   endforeach()
 
+  set(_f77_disabled_tests
+    test2007_124.f
+    test2007_125.f
+    test2007_128.f
+    test2007_145.f
+    test2007_157.f
+    test2007_183.f
+    test2007_184.f
+    test2007_185.f
+    test2007_186.f
+    test2007_187.f
+    test2007_188.f
+    test2007_189.f
+    test2007_191.f
+    test2007_192.f
+    test2007_193.f
+    test2007_194.f
+    test2007_195.f
+    test2007_196.f
+    test2007_197.f
+    test2007_209.f
+    test2007_227.f
+    test2007_256.f
+    test2007_258.f
+    lastCode.f
+  )
+
+  foreach(file_to_test ${_f77_disabled_tests})
+    add_test(
+      NAME testStaticCFG_f77_${file_to_test}
+      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:f77
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    set_tests_properties(testStaticCFG_f77_${file_to_test}
+      PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)
+
+    add_test(
+      NAME testInterproceduralCFG_f77_${file_to_test}
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:f77
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    set_tests_properties(testInterproceduralCFG_f77_${file_to_test}
+      PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)
+  endforeach()
+
   set(F03_TESTCODES_REQUIRED_TO_PASS
     test2007_31.f03 test2007_37.f03 test2007_41.f03 test2007_42.f03
     test2007_44.f03 test2007_47.f03 test2007_98.f03 test2007_112.f03
@@ -293,4 +366,53 @@ if(ENABLE-FORTRAN)
 
 
   endforeach()
+
+  set(_f03_disabled_tests
+    test2007_30.f03
+    test2007_35.f03
+    test2007_43.f03
+    test2007_45.f03
+    test2007_115.f03
+    test2007_116.f03
+    test2007_130.f03
+    test2007_133.f03
+    test2007_176.f03
+    lastTest.f03
+  )
+
+  foreach(file_to_test ${_f03_disabled_tests})
+    add_test(
+      NAME testStaticCFG_f03_${file_to_test}
+      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:skip_syntax_check
+        -rose:skipfinalCompileStep -rose:f2003
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    set_tests_properties(testStaticCFG_f03_${file_to_test}
+      PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)
+
+    add_test(
+      NAME testInterproceduralCFG_f03_${file_to_test}
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:skip_syntax_check
+        -rose:skipfinalCompileStep -rose:f2003
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    set_tests_properties(testInterproceduralCFG_f03_${file_to_test}
+      PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)
+  endforeach()
 endif()
+
+add_test(
+  NAME testStaticCFG_Cxx_test2005_42
+  COMMAND testStaticCFG ${ROSE_FLAGS}
+    -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
+    -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/test2005_42.C)
+set_tests_properties(testStaticCFG_Cxx_test2005_42
+  PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)
+
+add_test(
+  NAME testInterproceduralCFG_Cxx_test2005_42
+  COMMAND testInterproceduralCFG ${ROSE_FLAGS}
+    -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
+    -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/test2005_42.C)
+set_tests_properties(testInterproceduralCFG_Cxx_test2005_42
+  PROPERTIES DISABLED TRUE LABELS STATICCFGTEST)

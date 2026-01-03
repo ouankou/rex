@@ -1,10 +1,11 @@
 #include "sage3basic.h"
 
-#include <string>
-#include <iostream>
-#include <CommandOptions.h>
-#include <CallGraph.h>
+#include "AstDOTGeneration.h"
 #include "VirtualFunctionAnalysis.h"
+#include <CallGraph.h>
+#include <CommandOptions.h>
+#include <iostream>
+#include <string>
 
 using namespace std;
 
@@ -79,5 +80,3 @@ main(int argc, char * argv[]) {
     
     return 0;
 }
-
-

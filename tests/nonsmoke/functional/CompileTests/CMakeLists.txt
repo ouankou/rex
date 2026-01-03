@@ -11,67 +11,80 @@ option(REX_ENABLE_FAILING_TESTS "Enable tests known to fail" OFF)
 
 # define compile_test CMake function
 function(compile_test input_file label)
-  get_filename_component(test_name ${input_file} NAME_WE)
+  set(_test_key ${input_file})
+  string(REPLACE "/" "_" _test_key "${_test_key}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  set(test_id ${label}_${_test_key})
 
   # optional argument to omit include directories
   if(ARGV2)
     add_test(
-      NAME ${label}_${test_name}
+      NAME ${test_id}
       COMMAND ${translator}
         ${ROSE_FLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
     )
   else()
     add_test(
-      NAME ${label}_${test_name}
+      NAME ${test_id}
       COMMAND ${translator}
         ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
         ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
     )
   endif()
-  set_tests_properties(${label}_${test_name} PROPERTIES LABELS ${label})
+  set_tests_properties(${test_id} PROPERTIES LABELS ${label})
+
+  if(DEFINED ROSE_DISABLED_TESTCODES AND input_file IN_LIST ROSE_DISABLED_TESTCODES)
+    set_tests_properties(${test_id} PROPERTIES DISABLED TRUE)
+  endif()
 endfunction()
 
 # determine what subdirectories to enter based on our configuration settings.
 
-if(ENABLE-CUDA)
-  add_subdirectory(CudaTests)
-endif()
+add_subdirectory(CudaTests)
 
 # REX: Fortran tests are independent of which C/C++ compiler is used to build REX itself
 # Move Fortran test registration outside the Clang-specific if/else block
 if(ENABLE-FORTRAN)
   add_subdirectory(Fortran_tests)
-  # DQ (7/14/2013): Temporarily commented out this test to evaluate
-  # progress on tests/nonsmoke/functional/CompileTests directory.
-  #add_subdirectory(CAF2_tests)
+  add_subdirectory(experimental_fortran_tests)
 endif()
 
 # REX: Enable all tests regardless of compiler (Clang frontend is now standard)
 if(ENABLE-C)
   add_subdirectory(C_tests)
   add_subdirectory(C89_std_c89_tests)
+  add_subdirectory(C11_tests)
   add_subdirectory(C_subset_of_Cxx_tests)
   add_subdirectory(OpenClTests)
   add_subdirectory(Cxx_tests)
+  add_subdirectory(Cxx03_tests)
+  add_subdirectory(Cxx11_tests)
+  add_subdirectory(Cxx14_tests)
+  add_subdirectory(Cxx17_tests)
+  add_subdirectory(Cxx20_tests)
   add_subdirectory(C99_tests)
   add_subdirectory(OpenMP_tests)
+  add_subdirectory(OpenACC_tests)
 
+  add_subdirectory(C++Code)
   add_subdirectory(copyAST_tests)
   # ROSE-1738
-  # add_subdirectory(RoseExample_tests)
+  add_subdirectory(RoseExample_tests)
   add_subdirectory(unparseToString_tests)
   add_subdirectory(sourcePosition_tests)
   # requires Valgrind
-  #add_subdirectory(uninitializedField_tests)
+  add_subdirectory(uninitializedField_tests)
   add_subdirectory(OvertureCode)
   # P++Tests and A++Code were disabled/obsolete in Automake or CMake
-  # add_subdirectory(P++Tests)
-  # add_subdirectory(A++Code)
+  add_subdirectory(P++Tests)
+  add_subdirectory(A++Code)
   add_subdirectory(ExpressionTemplateExample_tests)
 	  add_subdirectory(hiddenTypeAndDeclarationListTests)
 	  add_subdirectory(sizeofOperation_tests)
 
 	  add_subdirectory(nameQualificationAndTypeElaboration_tests)
+	  add_subdirectory(unparse_template_from_ast)
+	  add_subdirectory(STL_tests)
   
   # Legacy frontend interface tests are obsolete
   # if(enable-legacy-frontend-interface)
@@ -80,12 +93,15 @@ if(ENABLE-C)
 
   add_subdirectory(UnparseHeadersTests)
   add_subdirectory(UnparseHeadersUsingTokenStream_tests)
+  add_subdirectory(frontend_integration)
 
   if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Xtensa")
     add_subdirectory(mergeAST_tests)
     add_subdirectory(ElsaTestCases)
     add_subdirectory(virtualCFG_tests)
     add_subdirectory(A++Tests)
+    add_subdirectory(mixLanguage_tests)
+    add_subdirectory(systemc_tests)
     add_subdirectory(staticCFG_tests)
   endif()
 endif()

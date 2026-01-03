@@ -2461,17 +2461,14 @@ SageBuilder::buildTypedefDeclaration_nfi(const std::string& name, SgType* base_t
      printf ("In buildTypedefDeclaration_nfi(): base_decl = %p \n",base_decl);
 #endif
 
-  // DQ (3/20/2012): I don't remember why we need to provide the symbol for the scope of the
-  // parent rather then the scope. But as I recall there was a special corner of C++ that
-  // required this sort of support.
-     SgSymbol* parent_scope = NULL;
-#ifndef ROSE_USE_CLANG_FRONTEND
-     if (scope != NULL)
-        {
+        // DQ (3/20/2012): I don't remember why we need to provide the symbol
+        // for the scope of the parent rather then the scope. But as I recall
+        // there was a special corner of C++ that required this sort of support.
+        SgSymbol *parent_scope = NULL;
+        if (scope != NULL) {
 #if 0
           printf ("In buildTypedefDeclaration_nfi(): scope = %p = %s calling get_symbol_from_symbol_table() \n",scope,scope->class_name().c_str());
 #endif
-          ROSE_ASSERT(scope->get_parent() != NULL);
           SgDeclarationStatement* declaration = isSgDeclarationStatement(scope->get_parent());
 #if 0
           printf ("declaration = %p \n",declaration);
@@ -2482,19 +2479,13 @@ SageBuilder::buildTypedefDeclaration_nfi(const std::string& name, SgType* base_t
           //   declaration.
           if (declaration)
              {
-#if 1
+#if 0
         	   MLOG_INFO_C("sageInterface","Found a valid declaration = %p = %s \n",declaration,declaration->class_name().c_str());
 #endif
 
-               ROSE_ASSERT(declaration->get_firstNondefiningDeclaration() != NULL);
-
-            // parent_scope = declaration->get_firstNondefiningDeclaration()->get_symbol_from_symbol_table();
-               parent_scope = declaration->search_for_symbol_from_symbol_table();
-
-               ROSE_ASSERT(parent_scope != NULL);
+            parent_scope = declaration->search_for_symbol_from_symbol_table();
              }
         }
-#endif
 
 #if 0
      printf ("In buildTypedefDeclaration_nfi(): parent_scope = %p \n",parent_scope);

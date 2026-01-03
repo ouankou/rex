@@ -393,8 +393,8 @@ preprocessRandom (SgProject* proj, size_t max_outline, bool emit_stages,
   if (SgProject::get_verbose() > 0)
        dump (targets.begin (), targets.end ());
 
-  for_each (targets.begin (), targets.end (),
-            bind2nd (ptr_fun (preprocess), emit_stages));
+  for_each(targets.begin(), targets.end(),
+           [&](SgStatement *stmt) { preprocess(stmt, emit_stages); });
 
   return targets.size ();
 }
@@ -428,8 +428,8 @@ outlineRandom (SgProject* proj, size_t max_outline, bool emit_stages,
   if (SgProject::get_verbose() > 0)
        dump (targets.begin (), targets.end ());
 
-  for_each (targets.begin (), targets.end (),
-            bind2nd (ptr_fun (outline), emit_stages));
+  for_each(targets.begin(), targets.end(),
+           [&](SgStatement *stmt) { outline(stmt, emit_stages); });
 
   return targets.size ();
 }
@@ -453,8 +453,8 @@ makePDF (const SgProject* proj, const string& fn_prefix)
 {
   ROSE_ASSERT (proj);
   const SgFilePtrList& files = const_cast<SgProject *> (proj)->get_fileList();
-  for_each (files.begin (), files.end (),
-            bind2nd (ptr_fun (makePDF_SgFile), fn_prefix));
+  for_each(files.begin(), files.end(),
+           [&](SgFile *file) { makePDF_SgFile(file, fn_prefix); });
 }
 
 // eof

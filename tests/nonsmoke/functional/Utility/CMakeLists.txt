@@ -37,7 +37,6 @@ add_test(
   COMMAND ${_rth}
     TITLE="file name classification [testFileNameClassifier.passed]"
     USE_SUBDIR=yes
-    DISABLED="assumes certain files exist"
     CMD="$<TARGET_FILE:testFileNameClassifier>"
     ${_exit_status}
     testFileNameClassifier.passed)

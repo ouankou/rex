@@ -98,6 +98,48 @@ foreach(file_to_test ${files_to_test})
   compile_test_in_binary_dir(${file_to_test} CSUBSETOFCXXTEST)
 endforeach()
 
+set(_disabled_subset_tests
+  test2003_12.C
+  test2003_17.C
+  test2004_07.C
+  test2004_06.C
+  test2004_151.C
+  test2004_155.C
+  test2005_158.C
+  test2005_166.C
+  test2005_175.C
+  test2005_177.C
+  test2005_192.C
+  test2005_200.C
+  test2005_201.C
+  test2006_15.C
+  test2006_33.C
+  test2006_49.C
+  test2006_59.C
+  test2006_71.C
+  test2006_80.C
+  test2006_98.C
+  test2006_101.C
+  test2006_102.C
+  test2006_139.C
+  test2006_155.C
+  test2006_156.C
+  test2006_157.C
+  test2006_158.C
+  test2006_159.C
+  test2006_160.C
+  test2006_165.C
+  test2006_44.C
+  test_CplusplusMacro_Cpp.C
+)
+
+foreach(file_to_test ${_disabled_subset_tests})
+  compile_test_in_binary_dir(${file_to_test} CSUBSETOFCXXTEST)
+  get_filename_component(_test_name ${file_to_test} NAME_WE)
+  set_tests_properties(CSUBSETOFCXXTEST_${_test_name}
+    PROPERTIES DISABLED TRUE LABELS CSUBSETOFCXXTEST)
+endforeach()
+
 # This requires a special rule
 # Note that this will not link since gcc (typically) is used as the
 # backend compiler and the source file lacks a "*.c" suffix.

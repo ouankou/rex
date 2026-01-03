@@ -56,6 +56,9 @@ add_library(midend_pt OBJECT
   implicitCodeGeneration/destructorCallAnnotator.C
   implicitCodeGeneration/analysisUtils.C
   implicitCodeGeneration/shortCircuitingTransformation.C
+  extractFunctionArgumentsNormalization/ExtractFunctionArguments.C
+  extractFunctionArgumentsNormalization/functionEvaluationOrderTraversal.C
+  singleStatementToBlockNormalization/SingleStatementToBlockNormalization.C
   partialRedundancyElimination/expressionTreeEqual.C
   partialRedundancyElimination/preControlFlowGraph.C
   partialRedundancyElimination/pre.C
@@ -64,3 +67,6 @@ add_library(midend_pt OBJECT
   finiteDifferencing/finiteDifferencing.C
   finiteDifferencing/patternRewrite.C)
 add_dependencies(midend_pt rosetta_generated)
+target_include_directories(midend_pt PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/extractFunctionArgumentsNormalization
+  ${CMAKE_CURRENT_SOURCE_DIR}/singleStatementToBlockNormalization)

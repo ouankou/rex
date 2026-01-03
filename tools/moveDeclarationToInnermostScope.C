@@ -607,9 +607,7 @@ GetSourceFilenamesFromCommandline(const std::vector<std::string>& argv)
   return filenames;
 }
 
-int main(int argc, char * argv[])
-{
-
+int main(int argc, char *argv[]) {
   //! Command line process begin --------------------------
 
   vector <string> argvList (argv, argv + argc);
@@ -808,7 +806,6 @@ int main(int argc, char * argv[])
 
   return backend(project);
 }
-
 
 //==================================================================================
 

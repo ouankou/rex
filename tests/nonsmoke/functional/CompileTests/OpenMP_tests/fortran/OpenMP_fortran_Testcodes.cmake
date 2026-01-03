@@ -1,0 +1,35 @@
+# Generated from Makefile.am test lists.
+set(OPENMP_FORTRAN_TESTCODES
+  allocate_predefined_modifiers.f
+  allocate_user_defined_modifiers.f
+  default.f
+  exampleA251f.f
+  flush.f
+  helloworld.f
+  helloworld0.f
+  helloworld2.f
+  master.f
+  ompdo-decremental.f
+  ompdo-default.f
+  ompdo-orphaned.f
+  ompdo-static.f
+  parallel-1.f
+  parallel-2.f
+  parallel.f
+  private.f
+  reduction.f
+  schedule.f
+  section1.f
+  shared.f
+  single.f
+  task_largenumber.f
+  task_largenumber2.f
+  task_scalar.f
+  task_simplest.f
+  testNewOFP.f
+  paralleldo.f90
+  paralleldo-1.f90
+  critical.f90
+  continuation.f90
+  single-copyprivate.f90
+)

@@ -2,3 +2,4 @@
 include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
 
 add_subdirectory(LANL_POP)
+add_subdirectory(LANL_POP_OLD)

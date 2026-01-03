@@ -36,6 +36,7 @@ set(files_to_install
   AstCombinedSimpleProcessing.h StackFrameVector.h
   AstSharedMemoryParallelProcessing.h AstSharedMemoryParallelProcessingImpl.h
   AstSharedMemoryParallelSimpleProcessing.h
+  SgGraphTemplate.h graphProcessing.h
   plugin.h
   TreeTraversal.h)
 

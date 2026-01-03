@@ -1,6 +1,11 @@
 add_executable(parseOmp parseOmp.C)
 target_link_libraries(parseOmp ROSE_DLL ${link_with_libraries})
 
+find_program(BASH_EXECUTABLE bash)
+if(NOT BASH_EXECUTABLE)
+  message(FATAL_ERROR "bash not found; OpenMP_tests require bash")
+endif()
+
 if(ENABLE-C)
   add_subdirectory(cvalidation)
 endif()
@@ -61,7 +66,8 @@ set(C_TESTCODES
 	threadprivate.c threadprivate2.c threadprivate3.c teams.c teamsdistribute.c
 	teamsdistributesimd.c teamsdistributeparallelfor.c
 	teamsdistributeparallelforsimd.c teamsloop.c twoRegions.c threadProcessor.c
-	upperCase.c variables.c)
+	upperCase.c variables.c requires1.c simd.c ompfor7.c macroCalls.c
+	define-directive.c while-task.c task_dep2.c task_dep.load.compute.c)
 
 # C++ test codes - synced with Autotools REX_CXX_TESTCODES_REQUIRED_TO_PASS
 # Plus additional tests to track and fix with CFE
@@ -70,7 +76,7 @@ set(CXX_TESTCODES
 	memberFunction2.cpp objectPrivate.cpp objectFirstPrivate.cpp
 	objectLastprivate.cpp referenceType.cpp
 	orphanedAtomic.cpp preprocessingInfo2.cpp task_link.cpp task_link2.cpp
-	task_tree.cpp)
+	task_tree.cpp jacobi-ompacc2.cpp data-member-access.cpp define-directive2.cpp)
 
 set(TESTCODES ${C_TESTCODES} ${CXX_TESTCODES})
 
@@ -79,7 +85,35 @@ set(OMP_ACC_TESTCODES
   axpy_ompacc.c axpy_ompacc2.c axpy_ompacc3.c
   matrixmultiply-ompacc.c matrixmultiply-ompacc2.c
   jacobi-ompacc.c jacobi-ompacc-v2.c jacobi-ompacc-opt1.c jacobi-ompacc-opt2.c
-  jacobi-ompacc-multiGPU.c)
+  jacobi-ompacc-multiGPU.c axpy_ompacc_mpi.c axpy_ompacc4.c
+  axpy_ompacc_parseonly.c)
+
+set(OMP_DISABLED_TESTCODES
+  collapse.c
+  requires1.c
+  simd.c
+  single.c
+  single2.c
+  single_copyprivate.c
+  task_dep2.c
+  task_dep.load.compute.c
+  task_untied4.c
+  while-task.c
+  ompfor7.c
+  macroCalls.c
+  define-directive.c
+  data-member-access.cpp
+  define-directive2.cpp
+  jacobi-ompacc2.cpp
+  orphanedAtomic.cpp
+  preprocessingInfo2.cpp
+  task_link.cpp
+  task_link2.cpp
+  task_tree.cpp
+  axpy_ompacc_mpi.c
+  axpy_ompacc4.c
+  axpy_ompacc_parseonly.c
+)
 
 # ROSE flags for OpenMP parsing (CFE frontend only)
 set(ROSE_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
@@ -93,6 +127,9 @@ foreach(file_to_test ${TESTCODES})
     COMMAND parseOmp ${ROSE_FLAGS} ${TESTCODE_INCLUDES} -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(OMPTEST_${file_to_test} PROPERTIES LABELS OMPTEST)
+  if(file_to_test IN_LIST OMP_DISABLED_TESTCODES)
+    set_tests_properties(OMPTEST_${file_to_test} PROPERTIES DISABLED TRUE)
+  endif()
 endforeach()
 
 foreach(file_to_test ${OMP_ACC_TESTCODES})
@@ -102,6 +139,9 @@ foreach(file_to_test ${OMP_ACC_TESTCODES})
                      -w -rose:verbose 0
                      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(OMPACCTEST_${file_to_test} PROPERTIES LABELS OMPACCTEST)
+  if(file_to_test IN_LIST OMP_DISABLED_TESTCODES)
+    set_tests_properties(OMPACCTEST_${file_to_test} PROPERTIES DISABLED TRUE)
+  endif()
 endforeach()
 
 
@@ -120,3 +160,49 @@ add_test(
           -rose:collectAllCommentsAndDirectives
           ${CMAKE_CURRENT_SOURCE_DIR}/macroIds.c)
 set_tests_properties(OMPTEST_macroIds PROPERTIES LABELS OMPTEST)
+
+set(_omp_reference_dir ${CMAKE_CURRENT_SOURCE_DIR}/referenceResults)
+
+function(add_omp_output_diff_tests input_file dependency label)
+  string(REPLACE "." "_" _name "${input_file}")
+  string(REPLACE "-" "_" _name "${_name}")
+  set(_rose_file rose_${input_file})
+  set(_output_file ${_rose_file}.output)
+  set(_diff_file ${_output_file}.diff)
+
+  add_test(
+    NAME OMPTEST_output_${_name}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "grep \"pragma omp\" ${_rose_file} > ${_output_file} || exit 0"
+  )
+  set_tests_properties(OMPTEST_output_${_name}
+    PROPERTIES DEPENDS ${dependency} LABELS ${label})
+
+  add_test(
+    NAME OMPTEST_output_diff_${_name}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "if diff ${_output_file} ${_omp_reference_dir}/${_output_file} > ${_diff_file}; then rm -f ${_diff_file}; exit 0; else cat ${_diff_file}; rm -f ${_diff_file}; exit 1; fi"
+  )
+  set_tests_properties(OMPTEST_output_diff_${_name}
+    PROPERTIES DEPENDS OMPTEST_output_${_name} LABELS ${label})
+  if(input_file IN_LIST OMP_DISABLED_TESTCODES)
+    set_tests_properties(OMPTEST_output_${_name} PROPERTIES DISABLED TRUE)
+    set_tests_properties(OMPTEST_output_diff_${_name} PROPERTIES DISABLED TRUE)
+  endif()
+endfunction()
+
+foreach(file_to_test IN LISTS C_TESTCODES CXX_TESTCODES)
+  add_omp_output_diff_tests(${file_to_test} OMPTEST_${file_to_test} OMPTEST)
+endforeach()
+
+foreach(file_to_test IN LISTS OMP_ACC_TESTCODES)
+  add_omp_output_diff_tests(${file_to_test} OMPACCTEST_${file_to_test} OMPACCTEST)
+endforeach()
+
+add_omp_output_diff_tests(bonds-2.c OMPTEST_bonds-2 OMPTEST)
+
+add_omp_output_diff_tests(macroIds.c OMPTEST_macroIds OMPTEST)
+set_tests_properties(OMPTEST_output_macroIds_c OMPTEST_output_diff_macroIds_c
+  PROPERTIES DISABLED TRUE)

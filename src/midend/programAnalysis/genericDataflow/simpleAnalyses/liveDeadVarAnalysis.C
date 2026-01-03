@@ -1199,9 +1199,9 @@ string VarsExprsProductLattice::str(string indent)
  *****************************************/
 
 // Initial blank FiniteVarsExprsProductLattice
-FiniteVarsExprsProductLattice::FiniteVarsExprsProductLattice(const DataflowNode& n, const NodeState& state) :
-                VarsExprsProductLattice(n, state,filter)
-{}
+FiniteVarsExprsProductLattice::FiniteVarsExprsProductLattice(
+    const DataflowNode &n, const NodeState &state)
+    : VarsExprsProductLattice(n, state, defaultFilter) {}
 
 // Retrns a blank instance of a VarsExprsProductLattice that only has the fields n and state set
 VarsExprsProductLattice* FiniteVarsExprsProductLattice::blankVEPL(const DataflowNode& n, const NodeState& state)
@@ -1253,9 +1253,9 @@ Lattice* FiniteVarsExprsProductLattice::copy() const
 
 // Minimal constructor that initializes just the portions of the object required to make an 
 // initial blank VarsExprsProductLattice
-InfiniteVarsExprsProductLattice::InfiniteVarsExprsProductLattice(const DataflowNode& n, const NodeState& state) : 
-                VarsExprsProductLattice(n, state,filter)
-{}
+InfiniteVarsExprsProductLattice::InfiniteVarsExprsProductLattice(
+    const DataflowNode &n, const NodeState &state)
+    : VarsExprsProductLattice(n, state, defaultFilter) {}
 
 // Retrns a blank instance of a VarsExprsProductLattice that only has the fields n and state set
 VarsExprsProductLattice* InfiniteVarsExprsProductLattice::blankVEPL(const DataflowNode& n, const NodeState& state)

@@ -18,4 +18,3 @@ foreach(file_to_test ${TESTCODES})
     COMMAND SizeofTest_Intel -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(SIZEOFOPTEST_${file_to_test}_Intel PROPERTIES LABELS SIZEOFOPTEST)
 endforeach()
-

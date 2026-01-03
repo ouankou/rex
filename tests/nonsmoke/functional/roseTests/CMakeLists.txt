@@ -10,8 +10,10 @@ if(ENABLE-C)
   add_subdirectory (astTokenStreamTests)
   add_subdirectory (programTransformationTests)
   #add_subdirectory (graph_tests)
-  #add_subdirectory (mergeTraversal_tests)
-  #add_subdirectory (astLValueTests)
+  add_subdirectory (mergeTraversal_tests)
+  add_subdirectory (astLValueTests)
+  add_subdirectory (varDeclNorm)
+  add_subdirectory (ROSETTA)
 
   # TOO (2/16/2011): Errors with Thrifty (GCC 3.4.4) backend compiler. We can
   # gradually enable these tests at a later stage if necessary.
@@ -25,12 +27,12 @@ if(ENABLE-C)
     if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Xtensa")
       if (NOT with-insure)
         add_subdirectory (astInterfaceTests)
-        #add_subdirectory (astInliningTests)
-        #add_subdirectory (ompLoweringTests)
-        #add_subdirectory (programAnalysisTests)
-        #add_subdirectory (astOutliningTests)
+        add_subdirectory (astInliningTests)
+        add_subdirectory (ompLoweringTests)
+        add_subdirectory (programAnalysisTests)
+        add_subdirectory (astOutliningTests)
         #add_subdirectory (loopProcessingTests)
-        #add_subdirectory (fileLocation_tests)
+        add_subdirectory (fileLocation_tests)
       endif() #insure
     endif() #xtensa
   endif() # gcc 3.4.4

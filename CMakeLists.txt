@@ -141,6 +141,32 @@ if(POLICY CMP0054)
   cmake_policy(SET CMP0054 NEW)
 endif()
 
+# Clang installs libc++abi headers in its prefix; when linking against libstdc++
+# prefer libstdc++ headers to avoid mixed-ABI conflicts (e.g., cxxabi.h).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  list(FIND CMAKE_CXX_IMPLICIT_LINK_LIBRARIES "stdc++" _rose_implicit_stdcxx_index)
+  if(NOT _rose_implicit_stdcxx_index EQUAL -1)
+    set(_rose_libstdcxx_include_dirs "")
+    foreach(_rose_dir IN LISTS CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
+      if(_rose_dir MATCHES "/c\\+\\+/")
+        list(APPEND _rose_libstdcxx_include_dirs "${_rose_dir}")
+      endif()
+    endforeach()
+    list(REMOVE_DUPLICATES _rose_libstdcxx_include_dirs)
+    if(_rose_libstdcxx_include_dirs)
+      set(_rose_libstdcxx_isystem_opts "")
+      foreach(_rose_dir IN LISTS _rose_libstdcxx_include_dirs)
+        list(APPEND _rose_libstdcxx_isystem_opts "-isystem${_rose_dir}")
+      endforeach()
+      add_compile_options(${_rose_libstdcxx_isystem_opts})
+      unset(_rose_libstdcxx_isystem_opts)
+    endif()
+    unset(_rose_libstdcxx_include_dirs)
+  endif()
+  unset(_rose_implicit_stdcxx_index)
+  unset(_rose_dir)
+endif()
+
 # In CMake 3.12 and above the find_package(<PackageName>) command now searches prefixes specified by the
 # <PackageName>_ROOT CMake variable and the <PackageName>_ROOT environment variable. Package roots are maintained as a
 # stack so nested calls to all find_* commands inside find modules also search the roots as prefixes. This policy
@@ -328,31 +354,57 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   endif()
 
   find_package(Java REQUIRED)
+  set(_rose_java_home "")
+  if(Java_JAVA_EXECUTABLE)
+    get_filename_component(_rose_java_bin "${Java_JAVA_EXECUTABLE}" DIRECTORY)
+    get_filename_component(_rose_java_home "${_rose_java_bin}" DIRECTORY)
+  endif()
+  if(_rose_java_home STREQUAL "" AND NOT "$ENV{JAVA_HOME}" STREQUAL "")
+    set(_rose_java_home "$ENV{JAVA_HOME}")
+  elseif(_rose_java_home STREQUAL "" AND EXISTS "/usr/lib/jvm/default-java")
+    set(_rose_java_home "/usr/lib/jvm/default-java")
+  endif()
+  if(_rose_java_home)
+    set(ENV{JAVA_HOME} "${_rose_java_home}")
+  endif()
+
   find_package(JNI REQUIRED)
+  if(_rose_java_home)
+    set(_rose_jvm_candidate "")
+    set(_rose_jvm_name "libjvm${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    foreach(_rose_jvm_dir
+      "${_rose_java_home}/lib/server"
+      "${_rose_java_home}/lib/amd64/server"
+      "${_rose_java_home}/jre/lib/amd64/server"
+      "${_rose_java_home}/jre/lib/server")
+      if(EXISTS "${_rose_jvm_dir}/${_rose_jvm_name}")
+        set(_rose_jvm_candidate "${_rose_jvm_dir}/${_rose_jvm_name}")
+        break()
+      endif()
+    endforeach()
+    if(_rose_jvm_candidate)
+      set(JAVA_JVM_LIBRARY "${_rose_jvm_candidate}" CACHE FILEPATH "Path to Java JVM library" FORCE)
+    endif()
+  endif()
+  if(NOT JAVA_JVM_LIBRARY OR NOT EXISTS "${JAVA_JVM_LIBRARY}")
+    message(FATAL_ERROR "Fortran OFP requires libjvm; set JAVA_HOME to a JDK with libjvm.so.")
+  endif()
+
   set(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT 1)
   set(OFP_JAVA_RUNTIME "${Java_JAVA_EXECUTABLE}")
 
   # Ensure CTest inherits a usable JAVA_HOME and libjvm path even when shell
-  # init scripts are not sourced (e.g., Codex sandboxes). Prefer the existing
-  # JAVA_HOME environment variable, otherwise derive it from the detected Java
-  # runtime or fall back to the system default symlink if available.
-  set(_rose_ofp_java_home "$ENV{JAVA_HOME}")
-  if(_rose_ofp_java_home STREQUAL "" AND Java_JAVA_EXECUTABLE)
-    get_filename_component(_rose_ofp_java_bin "${Java_JAVA_EXECUTABLE}" DIRECTORY)
-    get_filename_component(_rose_ofp_java_home "${_rose_ofp_java_bin}" DIRECTORY)
-  elseif(_rose_ofp_java_home STREQUAL "" AND EXISTS "/usr/lib/jvm/default-java")
-    set(_rose_ofp_java_home "/usr/lib/jvm/default-java")
-  endif()
-  if(_rose_ofp_java_home AND EXISTS "${_rose_ofp_java_home}/lib/server")
+  # init scripts are not sourced (e.g., Codex sandboxes).
+  if(_rose_java_home AND EXISTS "${_rose_java_home}/lib/server")
     set(_rose_ctest_env "${CMAKE_BINARY_DIR}/CTestFortranOFPEnv.cmake")
     file(WRITE "${_rose_ctest_env}"
       "if(\"\$ENV{JAVA_HOME}\" STREQUAL \"\")\n"
-      "  set(ENV{JAVA_HOME} \"${_rose_ofp_java_home}\")\n"
+      "  set(ENV{JAVA_HOME} \"${_rose_java_home}\")\n"
       "endif()\n"
       "if(\"\$ENV{LD_LIBRARY_PATH}\" STREQUAL \"\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_ofp_java_home}/lib/server\")\n"
-      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_ofp_java_home}/lib/server(:|$)\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_ofp_java_home}/lib/server:\$ENV{LD_LIBRARY_PATH}\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server\")\n"
+      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_java_home}/lib/server(:|$)\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server:\$ENV{LD_LIBRARY_PATH}\")\n"
       "endif()\n")
     set_property(DIRECTORY PROPERTY TEST_INCLUDE_FILE "${_rose_ctest_env}")
   endif()
@@ -496,17 +548,9 @@ if(NOT CLANG_VERSION_MAJOR)
   set(CLANG_VERSION_MAJOR 0)
 endif()
 
-# CRITICAL FIX: Force LLVM 20 headers by overriding compiler's built-in search paths
-# Must be set BEFORE project() or any compiler checks
-# Iterate over LLVM_INCLUDE_DIRS list to properly add each directory with -isystem
-# (LLVM_INCLUDE_DIRS is a semicolon-separated list and must be expanded correctly)
-foreach(llvm_include_dir ${LLVM_INCLUDE_DIRS})
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem ${llvm_include_dir}")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${llvm_include_dir}")
-endforeach()
-# Also add to CMake's include directories with BEFORE to ensure priority
-include_directories(BEFORE SYSTEM ${LLVM_INCLUDE_DIRS})
-
+# LLVM/Clang headers are added to the specific targets that need them.
+# Avoid forcing LLVM include paths globally to prevent conflicts with
+# the system C++ ABI headers when building third-party code (e.g., gtest).
 # Prefer linking against shared LLVM library when available to avoid duplicate globals
 # Try two methods to detect if shared LLVM library exists:
 # Method 1: Check if "LLVM" target is in LLVM_AVAILABLE_LIBS (works on many systems)
@@ -710,7 +754,8 @@ if(WITH-ALT-BACKEND-FORTRAN-COMPILER)
 endif()
 
 # define a global variable to collect all common linked third-party libraries for rose (Linux-only)
-set(link_with_libraries ${M_LIB} ${RT_LIB} ${CMAKE_THREAD_LIBS_INIT})
+find_package(Threads REQUIRED)
+set(link_with_libraries ${M_LIB} ${RT_LIB} Threads::Threads)
 if(HAVE_QUADMATH_COMPILE)
   list(APPEND link_with_libraries quadmath)
 endif()
@@ -906,12 +951,14 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/loopProcessing/prepostTransformation
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/loopProcessing/slicing
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/ompLowering
+  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/transformationTracking
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/CFG
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/CallGraphAnalysis
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/OAWrap
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/bitvectorDataflow
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/VirtualFunctionAnalysis
+  ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/variableRenaming
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/defUseAnalysis
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/dominanceAnalysis
   ${ROSE_TOP_SRC_DIR}/src/midend/programAnalysis/pointerAnal
@@ -941,11 +988,18 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if(NOT DEFINED CMAKE_INSTALL_RPATH)
   message(STATUS "Setting CMAKE_INSTALL_RPATH")
   set(origin "$ORIGIN")
-  set(CMAKE_INSTALL_RPATH "${origin}/../lib:${origin}")
-  list(APPEND CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib" "${CMAKE_INSTALL_PREFIX}/bin")
+  set(CMAKE_INSTALL_RPATH
+    "${origin}/../lib"
+    "${origin}"
+  )
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH}")
   endif()
+endif()
+
+if(NOT DEFINED CMAKE_BUILD_WITH_INSTALL_RPATH)
+  message(STATUS "Setting CMAKE_BUILD_WITH_INSTALL_RPATH")
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 endif()
 
 if(NOT DEFINED CMAKE_INSTALL_RPATH_USE_LINK_PATH)

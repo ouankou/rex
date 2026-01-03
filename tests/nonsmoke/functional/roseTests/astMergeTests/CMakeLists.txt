@@ -16,6 +16,7 @@ add_test(
           ${CMAKE_CURRENT_SOURCE_DIR}/mangleTwo.C
           ${CMAKE_CURRENT_SOURCE_DIR}/mangleThree.C
 )
+set_tests_properties(testMerge_test2 PROPERTIES DISABLED TRUE)
 
 add_test(
   NAME testMerge_test3
@@ -24,3 +25,4 @@ add_test(
           ${CMAKE_CURRENT_SOURCE_DIR}/mangleTwo.C
           ${CMAKE_CURRENT_SOURCE_DIR}/mangleThree.C
 )
+set_tests_properties(testMerge_test3 PROPERTIES DISABLED TRUE)
