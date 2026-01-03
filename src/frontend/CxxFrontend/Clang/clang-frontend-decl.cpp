@@ -174,47 +174,32 @@ static bool getExplicitInstantiationClassKind(
           clang::CharSourceRange::getTokenRange(begin, end);
       llvm::StringRef text = clang::Lexer::getSourceText(char_range, sm, lang);
       if (!text.empty()) {
+        clang::Lexer lexer(begin, lang, text.begin(), text.begin(), text.end());
+        lexer.SetCommentRetentionState(false);
+
         bool saw_template = false;
-        std::string token;
-        auto is_ident_char = [](char c) -> bool {
-          unsigned char uc = static_cast<unsigned char>(c);
-          return std::isalnum(uc) || c == '_';
-        };
-        auto flush_token = [&]() -> bool {
-          if (token.empty()) {
-            return false;
+        for (;;) {
+          clang::Token tok;
+          if (lexer.LexFromRawLexer(tok)) {
+            break;
           }
-          if (token == "template") {
+
+          if (tok.is(clang::tok::kw_template)) {
             saw_template = true;
           } else if (saw_template) {
-            if (token == "class") {
+            if (tok.is(clang::tok::kw_class)) {
               *kind = SgClassDeclaration::e_class;
               return true;
             }
-            if (token == "struct") {
+            if (tok.is(clang::tok::kw_struct)) {
               *kind = SgClassDeclaration::e_struct;
               return true;
             }
-            if (token == "union") {
+            if (tok.is(clang::tok::kw_union)) {
               *kind = SgClassDeclaration::e_union;
               return true;
             }
           }
-          token.clear();
-          return false;
-        };
-
-        for (char c : text) {
-          if (is_ident_char(c)) {
-            token.push_back(c);
-          } else {
-            if (flush_token()) {
-              return true;
-            }
-          }
-        }
-        if (flush_token()) {
-          return true;
         }
       }
     }
