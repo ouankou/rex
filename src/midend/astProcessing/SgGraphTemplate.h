@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <set>
 #include <tuple>
 #include <utility>
@@ -136,14 +137,14 @@ using EdgeID = myGraph::edge_descriptor;
 std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
 getAllNodesAndEdges(SgIncidenceDirectedGraph *g, SgGraphNode *start);
 
-inline myGraph *instantiateGraph(SgIncidenceDirectedGraph *&g,
-                                 StaticCFG::InterproceduralCFG &cfg,
-                                 SgNode * /*pstart*/) {
+inline std::unique_ptr<myGraph>
+instantiateGraph(SgIncidenceDirectedGraph *&g,
+                 StaticCFG::InterproceduralCFG &cfg, SgNode * /*pstart*/) {
   CFGNode startN = cfg.getEntry();
   SgGraphNode *start = cfg.toGraphNode(startN);
   ROSE_ASSERT(startN != nullptr);
   ROSE_ASSERT(start != nullptr);
-  myGraph *graph = new myGraph;
+  auto graph = std::make_unique<myGraph>();
   std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
       alledsnds = getAllNodesAndEdges(g, start);
   std::vector<SgGraphNode *> nods = alledsnds.first;
@@ -186,10 +187,10 @@ inline myGraph *instantiateGraph(SgIncidenceDirectedGraph *&g,
   return graph;
 }
 
-inline myGraph *instantiateGraph(SgIncidenceDirectedGraph *&g,
-                                 StaticCFG::CFG &cfg) {
+inline std::unique_ptr<myGraph> instantiateGraph(SgIncidenceDirectedGraph *&g,
+                                                 StaticCFG::CFG &cfg) {
   SgGraphNode *start = cfg.getEntry();
-  myGraph *graph = new myGraph;
+  auto graph = std::make_unique<myGraph>();
   std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
       alledsnds = getAllNodesAndEdges(g, start);
   std::vector<SgGraphNode *> nods = alledsnds.first;

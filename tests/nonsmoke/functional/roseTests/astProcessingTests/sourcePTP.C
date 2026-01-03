@@ -85,27 +85,24 @@ int main(int argc, char *argv[]) {
           forsA.push_back(*i);
   }
   visitorTraversal* visif = new visitorTraversal();
-  SgIncidenceDirectedGraph* g = cfg.getGraph();
-  myGraph* mg = new myGraph();
+  SgIncidenceDirectedGraph *g = cfg.getGraph();
   //std::set<SgNode*> completedIfs;
-  mg = instantiateGraph(g, cfg);
-  orig = mg;
-  //vis->orig = mg;
+  auto mg = instantiateGraph(g, cfg);
+  orig = mg.get();
+  // vis->orig = mg.get();
   for (unsigned int i=0; i < forsA.size(); i++) {
      if (find(fors.begin(), fors.end(), forsA[i]) == fors.end()) {
      // if (completedIfs.find(ifs[i]) == completedIfs.end()) {
       std::cout << i << std::endl;
       fors.push_back(forsA[i]);
-      //visitorTraversal* visif = new visitorTraversal();
-      //SgIncidenceDirectedGraph* g = cfg.getGraph();
-      //myGraph* mg = new myGraph();
-      //mg = instantiateGraph(g, cfg);
+      // visitorTraversal* visif = new visitorTraversal();
+      // SgIncidenceDirectedGraph* g = cfg.getGraph();
       visif->tltnodes = 0;
       visif->paths = 0;
       visif->constructPathAnalyzer(
-          mg, false, mg->getVSlink()[cfg.cfgForBeginning(fors[i])],
+          mg.get(), false, mg->getVSlink()[cfg.cfgForBeginning(fors[i])],
           mg->getVSlink()[cfg.cfgForEnd(fors[i])]);
-      // visif->constructPathAnalyzer(mg,
+      // visif->constructPathAnalyzer(mg.get(),
       // mg->getVSlink()[cfg.cfgForEnd(fors[i-1])],
       // mg->getVSlink()[cfg.cfgForBeginning(fors[i])]);
       std::cout << "between: " << i << " and " << i+1 << " there are " << visif->paths << " paths." << std::endl;
@@ -127,14 +124,12 @@ int main(int argc, char *argv[]) {
 
     cfgToDot(mainDef,dotFileName1);
     //cfg->buildFullCFG();
-    SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
-    g = cfg.getGraph();
-    myGraph* mg = new myGraph();
-    mg = instantiateGraph(g, cfg);
+    SgIncidenceDirectedGraph* g = cfg.getGraph();
+    auto mg = instantiateGraph(g, cfg);
     vis->tltnodes = 0;
     vis->paths = 0;
     //vis->firstPrepGraph(constcfg);
-    vis->constructPathAnalyzer(mg);
+    vis->constructPathAnalyzer(mg.get());
     //cfg.clearNodesAndEdges();
     std::cout << "finished" << std::endl;
     std::cout << "tltnodes: " << vis->tltnodes << " paths: " << vis->paths <<

@@ -159,9 +159,9 @@ ss << fileName << "." << counter << ".dot";
       cfgToDot(fnc,dotFileName1);
     //vis->firstPrepGraph(constcfg);
     //t1 = getCPUTime();
-      vis.constructPathAnalyzer(&*mg, true, 0, 0, true);
-    
-    //t2 = getCPUTim
+      vis.constructPathAnalyzer(mg.get(), true, 0, 0, true);
+
+      // t2 = getCPUTim
       std::cout << "function: " << fileName << std::endl;
       std::cout << "paths: " << vis.paths << std::endl;
     //std::cout << "took: " << timeDifference(t2, t1) << std::endl;
@@ -185,9 +185,9 @@ ss << fileName << "." << counter << ".dot";
      vis.tltnodes = 0;
      vis.paths = 0;
     //vis->firstPrepGraph(constcfg);
-     vis.constructPathAnalyzer(&*mg, true, 0, 0, true);
-    //std::cout << "took: " << timeDifference(t2, t1) << std::endl;
-    //cfg.clearNodesAndEdges();
+     vis.constructPathAnalyzer(mg.get(), true, 0, 0, true);
+     // std::cout << "took: " << timeDifference(t2, t1) << std::endl;
+     // cfg.clearNodesAndEdges();
      std::cout << "finished" << std::endl;
      std::cout << "tltnodes: " << vis.tltnodes << " paths: " << vis.paths << std::endl;
     //std::cout << "ipaths: " << ipaths << std::endl;

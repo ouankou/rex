@@ -1,20 +1,13 @@
-/*
-
-FINISH TEMPFLATPATH CODE
-
-*/
-
 #define LP 1
 #define PERFDEBUG 0
-// #define FULLDEBUG 1
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 #include <algorithm>
 #include <cassert>
 #include <fstream>
-#include <iostream>
 #include <map>
+#include <mlog.h>
 #include <set>
 #include <sstream>
 #include <string>
@@ -121,15 +114,8 @@ private:
   bool needssafety;
   int recursed;
   int checkedfound;
-  //   typedef typename CFG::vertex_descriptor Vertex;
-  //   typedef typename CFG::edge_descriptor Edge;
-  // std::vector<int> getInEdges(int& node, CFG*& g);
-  // std::vector<int> getOutEdges(int& node, CFG*& g);
   void prepareGraph(CFG *&g);
   void findClosuresAndMarkersAndEnumerate(CFG *&g);
-  //  void constructPathAnalyzer(CFG* g, bool unbounded=false, Vertex end=0,
-  //  Vertex begin=0, bool ns = true); virtual void
-  //  analyzePath(std::vector<Vertex>& pth) = 0; void firstPrepGraph(CFG*& g);
   int stoppedpaths;
   std::set<std::vector<int>> traversePath(int begin, int end, CFG *&g,
                                           bool loop = false);
@@ -150,8 +136,6 @@ private:
   void computeOrder(CFG *&g, const int &begin);
   void computeSubGraphs(const int &begin, const int &end, CFG *&g,
                         int depthDifferential);
-  // int getTarget(int& n, CFG*& g);
-  // int getSource(int& n, CFG*& g);
   std::vector<int> sources;
   std::vector<int> sinks;
   std::vector<int> recursiveLoops;
@@ -160,7 +144,6 @@ private:
   bool borrowed;
   std::set<int> badloop;
   std::map<int, std::vector<std::vector<int>>> totalLoops;
-  //    int pathnum;
   std::map<int, std::string> nodeStrings;
   int sourcenum;
   unsigned long long evaledpaths;
@@ -173,10 +156,6 @@ private:
   std::map<std::vector<int>, int> subpathglobalinv;
   int nextsubpath;
   std::vector<int> orderOfNodes;
-  //    std::map<Vertex, int> vertintmap;
-  //    std::map<Edge, int> edgeintmap;
-  //    std::map<int, Vertex> intvertmap;
-  //    std::map<int, Edge> intedgemap;
   std::vector<std::map<Vertex, Vertex>> SubGraphGraphMap;
   std::vector<std::map<Vertex, Vertex>> GraphSubGraphMap;
   std::vector<CFG *> subGraphVector;
@@ -194,10 +173,6 @@ private:
   using in_edge_iterator = typename CFG::in_edge_iterator;
   using edge_iterator = typename CFG::edge_iterator;
   bool bound;
-  //    SgGraphTraversal();
-  //    virtual ~SgGraphTraversal();
-  //   SgGraphTraversal( SgGraphTraversal &);
-  //    SgGraphTraversal &operator=( SgGraphTraversal &);
 };
 
 template <class CFG> SgGraphTraversal<CFG>::SgGraphTraversal() {}
@@ -401,20 +376,6 @@ std::vector<int> SgGraphTraversal<CFG>::unzipPath(std::vector<int> &pzipped,
   return unzipped;
 }
 
-/*
-Example Time
-
-    Example:
-             timeval tim;
-             gettimeofday(&tim, NULL);
-             double t1=tim.tv_sec+(tim.tv_usec/1000000.0);
-             do_something_long();
-             gettimeofday(&tim, NULL);
-             double t2=tim.tv_sec+(tim.tv_usec/1000000.0);
-             printf("%.6lf seconds elapsed\n", t2-t1);
-
-*/
-
 /**
 The function responsible for collecting all paths without loops, and all paths
 within lops that do not include other loops then sending those to uTraverse to
@@ -429,19 +390,11 @@ contained within a loop
 template <class CFG>
 std::vector<std::vector<int>>
 SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
-  // perfdebug allows for examining the speed of traversal
-#ifdef PERFDEBUG
-// timeval tim;
-// gettimeofday(&tim, NULL);
-// double tim1 = tim.tv_sec+(tim.tv_usec/1000000.0);
-#endif
   bool recursedloop = loop;
   std::map<int, std::vector<std::vector<int>>> PtP;
   std::set<int> nodes;
   std::vector<std::vector<int>> pathContainer;
-  // std::vector<std::vector<int> > oldPaths;
   std::vector<int> completedLoops;
-  std::vector<std::vector<int>> npc;
   std::vector<int> bgpath;
   bgpath.push_back(begin);
   pathContainer.push_back(bgpath);
@@ -449,36 +402,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
   std::vector<std::vector<int>> paths;
   std::vector<int> localLoops;
   std::map<int, std::vector<std::vector<int>>> globalLoopPaths;
-  // std::cout << "at the while" << std::endl;
-  // To keep
-  while (pathContainer.size() != 0 /*|| oldPaths.size() != 0*/) {
-    /*
-           unsigned int mpc = 50000;
-           if (pathContainer.size() == 0) {
-               unsigned int mxl = 0;
-               if (oldPaths.size() > mpc) {
-                   mxl = mpc/2;
-               }
-               else {
-                   mxl = oldPaths.size();
-               }
-               for (unsigned int k = 0; k < mxl; k++) {
-                   pathContainer.push_back(oldPaths.back());
-                   oldPaths.pop_back();
-               }
-           }
-           if (pathContainer.size() > mpc) {
-               unsigned int j = 0;
-               while (j < mpc) {
-                    npc.push_back(pathContainer.back());
-                    pathContainer.pop_back();
-                    j++;
-               }
-               oldPaths.insert(oldPaths.end(), pathContainer.begin(),
-       pathContainer.end()); pathContainer = npc; npc.clear();
-           }
-    */
-
+  while (!pathContainer.empty()) {
     // iterating through the currently discovered subpaths to build them up
     for (unsigned int i = 0; i < pathContainer.size(); i++) {
       std::vector<int> npth = pathContainer[i];
@@ -494,7 +418,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
           (recursedloop && npth.back() == end && npth.size() != 1)) {
         std::vector<int> newpth;
         newpth = (pathContainer[i]);
-        std::vector<int> movepath = newpth; // zipPath(newpth, g);
+        std::vector<int> movepath = newpth;
         if (recursedloop && newpth.back() == end && newpth.size() != 1) {
           paths.push_back(movepath);
         } else if (!recursedloop) {
@@ -524,11 +448,9 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
               std::vector<int> nv;
               nv.push_back(tg);
               newPathContainer.push_back(nv);
-              PtP[tg].push_back(/*zipPath(*(*/ newpath); //, g, newpath.front(),
-                                                         // newpath.back()));
+              PtP[tg].push_back(newpath);
             } else {
-              PtP[tg].push_back(/*zipPath(*/ newpath); //, g, newpath.front(),
-                                                       // newpath.back()));
+              PtP[tg].push_back(newpath);
             }
           } else if (find(newpath.begin(), newpath.end(),
                           getTarget(oeds[j], g)) == newpath.end() ||
@@ -536,87 +458,56 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
             newpath.push_back(tg);
             std::vector<int> ieds = getInEdges(tg, g);
             if (ieds.size() > 1) { // find(closures.begin(), closures.end(), tg)
-                                   // != closures.end()) {
               nodes.insert(tg);
             }
             newPathContainer.push_back(newpath);
           } else if (tg == end && recursedloop) {
             newpath.push_back(tg);
             newPathContainer.push_back(newpath);
-          } else { // if (find(newpath.begin(), newpath.end(), tg) !=
-                   // newpath.end() && tg != end) {
+          } else {
             std::vector<int> ieds = getInEdges(tg, g);
-            if (ieds.size() > 1 /*find(closures.begin(), closures.end(), tg) !=
-                                   closures.end()*/
-                && find(completedLoops.begin(), completedLoops.end(), tg) ==
-                       completedLoops
-                           .end() /*&& find(localLoops.begin(),
-                                     localLoops.end(), tg) == localLoops.end()*/
-                &&
+            if (ieds.size() > 1 &&
+                find(completedLoops.begin(), completedLoops.end(), tg) ==
+                    completedLoops.end() &&
                 find(recurses.begin(), recurses.end(), tg) == recurses.end()) {
               localLoops.push_back(tg);
               nodes.insert(tg);
             }
-            // else if (find(recurses.begin(), recurses.end(), tg) !=
-            // recurses.end()) {
-            // }
           }
-          // else {
-          //     std::cout << "problem" << std::endl;
-          //     ROSE_ASSERT(false);
-          // }
         }
       }
     }
     pathContainer = newPathContainer;
     newPathContainer.clear();
   }
-  // std::cout << "done while" << std::endl;
   pathContainer.clear();
   std::vector<std::vector<int>> finnpts;
   std::vector<std::vector<int>> npts;
   while (true) {
     if (paths.size() > 1000000) {
-      std::cout << "too many paths, consider a subgraph" << std::endl;
+      MLOG_ERROR_C("graphProcessing", "Too many paths; consider a subgraph.\n");
       ROSE_ABORT();
     }
-    // #pragma omp parallel for schedule(guided)
     for (unsigned int qq = 0; qq < paths.size(); qq++) {
       std::vector<int> pq = paths[qq];
       std::vector<int> qp;
       int ppf = paths[qq].front();
       if (PtP.find(ppf) != PtP.end()) {
         for (unsigned int kk = 0; kk < PtP[ppf].size(); kk++) {
-          std::vector<int> newpath =
-              /*unzipPath(*/ PtP[ppf]
-                                [kk]; //, g, PtP[ppf][kk][0], PtP[ppf][kk][1]);
+          std::vector<int> newpath = PtP[ppf][kk];
           bool good = true;
           if (newpath.back() == newpath.front() && newpath.front() != begin &&
               newpath.size() > 1) {
             good = false;
           } else {
 
-            //   if (find(pq.begin(), pq.end(), newpath.front()) != pq.end() &&
-            //   newpath.front() != begin) {
-            //         good = false;
-            //   }
-
-            // else {
             for (unsigned int kk1 = 0; kk1 < newpath.size(); kk1++) {
-
-              /*
-               if (newpath.front() == newpath.back()) {
-                   good = false;
-                   break;
-               }
-               else */
               if (find(pq.begin(), pq.end(), newpath[kk1]) != pq.end() &&
                   newpath[kk1] != begin) {
                 good = false;
                 break;
               }
             }
-            //}
           }
           if (good) {
             newpath.insert(newpath.end(), pq.begin(), pq.end());
@@ -627,7 +518,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
           }
         }
       } else {
-        std::vector<int> ppq = pq; // zipPath(pq, g, pq.front(), pq.back());
+        std::vector<int> ppq = pq;
 #pragma omp critical
         {
           finnpts.push_back(ppq);
@@ -666,29 +557,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
   }
   borrowed = true;
   std::vector<std::vector<int>> lps2;
-  // unsigned int maxpaths = 1000;
-  // unsigned int pathdivisor = 1;//paths.size()/maxpaths;///paths.size();
 
-  // if (pathdivisor < 1) {
-  // pathdivisor = 1;
-  // maxpaths = paths.size();
-  // }
-  /*
-      for (unsigned int j = 0; j < pathdivisor+1; j++) {
-          std::vector<std::vector<int> > npaths;
-          std::vector<int> dummyvec;
-          unsigned int mxpths;
-          if (j < pathdivisor) {
-              mxpths = maxpaths;
-          }
-          else {
-              mxpths = paths.size() % pathdivisor;
-          }
-          for (unsigned int k = 0; k < mxpths; k++) {
-                npaths.push_back(paths.back());//unzipPath(paths.back(), g,
-     begin, end)); paths.pop_back();
-          }
-  */
   pathStore = paths;
   paths.clear();
   if (!recursedloop) {
@@ -706,15 +575,6 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
       lps2.push_back(*ij);
     }
   }
-//}
-#ifdef PERFDEBUG
-  //   timeval tim;
-  // std::cout << "begin: " << begin << " end: " << end << std::endl;
-  // gettimeofday(&tim, NULL);
-  // double tim2 = tim.tv_sec+(tim.tv_usec/1000000);
-  // double timeRet = tim2 - tim1;
-  // std::cout << "bfs time elapsed: " << timeRet << std::endl;
-#endif
   return lps2;
 }
 
@@ -733,19 +593,7 @@ template <class CFG>
 std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
     int begin, int end, CFG *&g, bool loop,
     std::map<int, std::vector<std::vector<int>>> &globalLoopPaths) {
-  // std::cout << "uTraverse" << std::endl;
-  // int doubledpaths = 0;
   int newmil = 1;
-// #ifdef LP
-// if (loop && loopStore.find(begin) != loopStore.end()) {
-//     return loopStore[begin];
-// }
-// #endif
-#ifdef PERFDEBUG
-// timeval tim;
-// gettimeofday(&tim, NULL);
-// double t1 = tim.tv_sec+(tim.tv_usec/1000000);
-#endif
   std::set<std::vector<int>> newpaths;
   std::set<std::vector<int>> npaths;
   pathnum = 0;
@@ -755,20 +603,14 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
   std::vector<std::vector<int>> checkpaths;
   std::vector<std::vector<int>> npathchecker;
   std::map<int, int> currents;
-  // int nnumpaths = 0;
   std::set<std::vector<int>> loopPaths;
-  // bool threadsafe = true;
   bool done = false;
   std::set<std::vector<int>> fts;
-  // double ttfors = 0;
-  // double tperms = 0;
   while (true) {
-    // std::cout << "paths.size() " << paths.size() << std::endl;
     if (paths.size() > 1000000) {
-      std::cout << "nearly 1 million paths with no loops, stopping"
-                << std::endl;
+      MLOG_WARN_C("graphProcessing",
+                  "Nearly 1 million paths with no loops; stopping early.\n");
       return loopPaths;
-      std::cout << "ended early" << std::endl;
     }
     if (done || borrowed) {
 
@@ -776,20 +618,13 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         paths = pathStore;
         pathStore.clear();
       }
-      // std::cout << "paths.size(): " << paths.size() << std::endl;
       if (paths.size() != 0) {
       } else {
         return loopPaths;
       }
 
-      // #pragma omp parallel
-      // {
 #pragma omp parallel for schedule(guided)
       for (unsigned int qqq = 0; qqq < paths.size(); qqq++) {
-        //             std::cout << "pathcheck" << std::endl;
-        // int pathevals = 0;
-        // std::vector<int> zpt = zipPath2(paths[qqq], g);
-        // std::set<std::vector<int> > boxpaths;
         std::set<std::vector<int>> movepaths;
         std::vector<int> path; // = paths[qqq];
         path = paths[qqq];     // unzipPath(paths[qqq], g, begin, end);
@@ -800,18 +635,10 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         std::map<int, std::vector<std::vector<int>>> localLoops;
         std::vector<int> takenLoops;
         takenLoops.push_back(path[0]);
-        // timeval timfor;
         int lost = 0;
-        // gettimeofday(&timfor, NULL);
-        // double t1for = timfor.tv_sec + (timfor.tv_usec/1000000);
         for (unsigned int q = 1; q < path.size() - 1; q++) {
-          // if (find(closures.begin(), closures.end(), path[q]) !=
-          // closures.end()) {
-          if (globalLoopPaths.find(path[q]) !=
-                  globalLoopPaths.end() /*&& find(lloops.begin(), lloops.end(),
-                                           path[q]) != lloops.end()*/
-              && globalLoopPaths[path[q]].size() !=
-                     0 /*&& path[q] != begin && path[q] != end*/) {
+          if (globalLoopPaths.find(path[q]) != globalLoopPaths.end() &&
+              !globalLoopPaths[path[q]].empty()) {
             std::unordered_set<int> taken_lookup(takenLoops.begin(),
                                                  takenLoops.end());
             for (unsigned int qp1 = 0; qp1 < globalLoopPaths[path[q]].size();
@@ -820,8 +647,6 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
               const std::vector<int> &gp = globalLoopPaths
                   [path[q]]
                   [qp1]; // unzipPath(globalLoopPaths[path[q]][qp1],g,path[q],path[q]);
-              // std::vector<int> zgp = zipPath2(globalLoopPaths[zpt[q]][qp1],
-              // g);
               bool taken = false;
               for (int node : gp) {
                 if (taken_lookup.count(node) != 0U) {
@@ -846,34 +671,11 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
           }
         }
 
-        //}
-        // if (loop) {
-        // std::cout << "lostloop: " << lost << std::endl;
-        //}
-        // else {
-        // std::cout << "lostpath: " << lost << std::endl;
-        //}
-        // std::cout << "endpathcheck" << std::endl;
-        // std::cout << "rest" << std::endl;
-        // std::cout << "permnums: " << permnums << std::endl;
-        // gettimeofday(&timfor, NULL);
-        // double t2for = timfor.tv_sec + (timfor.tv_usec/1000000);
-        // double ttfor = t2for - t1for;
-        // #pragma omp atomic
-        // ttfors += ttfor;
-
-        // std::set<std::vector<int> > movepaths2;
         std::set<std::vector<int>> movepathscheck;
-        // timeval timperms;
-        // gettimeofday(&timperms, NULL);
-        // double t1perm = timperms.tv_sec + (timperms.tv_usec/1000000);
         std::vector<int> nvec;
         std::vector<std::vector<int>> boxpaths(permnums, nvec);
-        // #pragma omp parallel for schedule(guided)
         for (int i = 1; i <= permnums; i++) {
-          // bool goodthread = false;
           std::vector<int> loopsTaken;
-          // bool stop = false;
           unsigned int j = 0;
           std::vector<int> npath;
           while (true) {
@@ -906,11 +708,9 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
                 if (pL[q2] == -1) {
                   npath.push_back(path[q1]);
                 } else {
-                  //   if (!stop) {
                   npath.insert(npath.end(),
                                localLoops[path[q1]][pL[q2]].begin(),
                                localLoops[path[q1]][pL[q2]].end());
-                  //  }
                 }
                 q2++;
               } else {
@@ -920,73 +720,13 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
               npath.push_back(path[q1]);
             }
           }
-#ifdef FULLDEBUG
-          std::cout << "path: " << std::endl;
-          for (int qe = 0; qe < npath.size(); qe++) {
-            std::cout << ", " << npath[qe];
-          }
-          std::cout << std::endl;
-          std::cout << "permnum: " << i << std::endl;
-#endif
-          //  bool addit = false;
-          // if (!stop) {
-          //  if (loop && npath.front() == npath.back()) {
-          //      addit = true;
-          //  }
-          //  else if (!loop && bound && npath.front() == begin && npath.back()
-          //  == end && npath.size() != 1) {
-          //      addit = true;
-          //  }
-          //  else if (!loop && !bound) {
-          //      addit = true;
-          //  }
-          // if (!addit) {
-          //     std::cout << "bad path" << std::endl;
-          // }
-          // bool extra = false;
-          // if (addit && !loop) {
-          // if (movepathscheck.find(npath) == movepathscheck.end()) {
-          // int mpc = movepathscheck.size();
-          // std::set<std::vector<int> > movepathspre = movepathscheck;
-          //        movepaths2.insert(npath);
-          // movepathscheck.insert(npath);
-          // ROSE_ASSERT(movepathscheck.size() == mpc ||
-          // movepathspre.find(npath) == movepathspre.end()); if
-          // (movepathscheck.size() == mpc) {
-          //    extra = true;
-          // }
-
-          //}
-          // else {
-          // #pragma omp atomic
-          // doubledpaths++;
-          // }
-          //}
-
-          // if (!workingthread || threadsafe) {
-          // if ((newpaths.size() > 1 || i == permnums || threadsafe)) {
-          // }
-          // }
-
-          // }
-          // if (!extra)
-          // {
-          // if (movepaths2.size() > 0) //|| i == permnums || threadsafe)
-          // #pragma omp critical
-          // {
           boxpaths[i - 1] = npath;
-          // }
-          // }
-          // std::cout << "endrest" << std::endl;
         }
 
         evaledpaths += boxpaths.size();
         if (evaledpaths > newmil * 100000ull) {
-          // std::cout << "evaledpaths: " << evaledpaths << std::endl;
           newmil++;
         }
-        // #pragma omp critical
-        // {
         if (!loop) {
           for (std::vector<std::vector<int>>::iterator box = boxpaths.begin();
                box != boxpaths.end(); box++) {
@@ -1006,78 +746,8 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         }
       }
     }
-    //}
-
-    /*
-                          #pragma omp atomic
-                          evaledpaths++;
-                          //pathevals++;
-                          if (evaledpaths % 10000 == 0 && evaledpaths != 0) {
-                              std::cout << "evaled paths: " << evaledpaths <<
-       std::endl;
-                          }
-                          if (!loop) {
-                              std::vector<Vertex> verts;
-                              getVertexPath(npath, g, verts);
-                                  #pragma omp critical
-                                  {
-                                  #ifdef FULLDEBUG
-                                  for (unsigned int aa = 0; aa < npath.size();
-       aa++) { if (ptsNum.find(npath[aa]) != ptsNum.end()) { ptsNum[npath[aa]]
-       += 1;
-                                      }
-                                      else {
-                                      ptsNum[npath[aa]] = 1;
-                                      }
-                                  }
-                                  #endif
-                                  analyzePath(verts);
-                                  }
-                          }
-                          else if (loop)
-                          {
-                              //std::vector<int> zpth = zipPath(npath, g,
-       npath.front(), npath.back()); #pragma omp critical
-                              {
-                              loopPaths.insert(npath);//zipPath(npath, g,
-       npath.front(), npath.back()));
-                              }
-                          }
-                          else {
-                          }
-
-                       }
-    */
-
-    // movepaths2.clear();
-
-    // std::cout << "permnums: " << permnums << std::endl;
-    //  std::cout << "evaledpaths final: " << pathevals << std::endl;
-    // gettimeofday(&timperms, NULL);
-    // double t2perm = timperms.tv_sec+(timperms.tv_usec/1000000);
-    // #pragma omp atomic
-    // tperms += t2perm - t1perm;
-    // }
-    //}
-    //}
-    //}
-
-#ifdef PERFDEBUG
-    // gettimeofday(&tim, NULL);
-    // double t2 = tim.tv_sec+(tim.tv_usec/1000000.0);
-    // double tperm = t2 - t1perm
-    // double tX = t2 - t1;
-    // std::cout << "begin: " << begin << " end: " << end << std::endl;
-    // std::cout << "uTraverse time: " << tX << std::endl;
-    // std::cout << "tperms: " << tperms << std::endl;
-    // std::cout << "ttfors: " << ttfors << std::endl;
-    // std::cout << "doubledpaths: " << doubledpaths << std::endl;
-#endif
 #ifdef LP
     if (loop) {
-#ifdef PERFDEBUG
-//  std::cout << "loopPaths: " << loopPaths.size() << std::endl;
-#endif
       loopStore[begin] = loopPaths;
     }
 #endif
@@ -1118,11 +788,6 @@ void SgGraphTraversal<CFG>::constructPathAnalyzer(CFG *g, bool unbounded,
   prepareGraph(g);
   workingthread = false;
   workingthreadnum = -1;
-  // std::cout << "markers: " << markers.size() << std::endl;
-  // std::cout << "closures: " << closures.size() << std::endl;
-  // std::cout << "sources: " << sources.size() << std::endl;
-  // std::cout << "sinks" << sinks.size() << std::endl;
-  //    printHotness(g);
   bool subgraph = false;
   if (!subgraph) {
     if (!unbounded) {
@@ -1131,7 +796,6 @@ void SgGraphTraversal<CFG>::constructPathAnalyzer(CFG *g, bool unbounded,
       recurses.clear();
       std::vector<std::vector<int>> spaths =
           bfsTraversePath(vertintmap[begin], vertintmap[end], g);
-      //          std::cout << "spaths: " << spaths.size() << std::endl;
     } else {
       std::set<int> usedsources;
       bound = false;
@@ -1145,7 +809,6 @@ void SgGraphTraversal<CFG>::constructPathAnalyzer(CFG *g, bool unbounded,
       }
     }
   }
-  // std::cout << "checkedfound: " << checkedfound << std::endl;
   printHotness(g);
 }
 

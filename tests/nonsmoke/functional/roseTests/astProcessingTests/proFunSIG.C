@@ -5,6 +5,7 @@
 #include "graphProcessing.h"
 #include "staticCFG.h"
 #include <err.h>
+#include <memory>
 #include <string>
 /* Testing the graph traversal mechanism now implementing in AstProcessing.h
  * (inside src/midend/astProcessing/)*/
@@ -99,42 +100,38 @@ int main(int argc, char *argv[]) {
 
     cfgToDot(mainDef,dotFileName1); 
     //cfg->buildFullCFG();
-    SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
-    g = cfg.getGraph();
-    myGraph* mg = new myGraph();
-    
-    mg = instantiateGraph(g, cfg);
-    vis->orig = mg;
+    SgIncidenceDirectedGraph *g = cfg.getGraph();
+    auto mg = instantiateGraph(g, cfg);
+    vis->orig = mg.get();
     vis->tltnodes = 0;
     vis->paths = 0;
     //vis->firstPrepGraph(constcfg);
     t1 = getCPUTime();
-    vis->constructPathAnalyzer(mg, true, 0, 0, true);
+    vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
     t2 = getCPUTime();
     std::cout << "took: " << timeDifference(t2, t1) << std::endl;
     //cfg.clearNodesAndEdges();
     std::cout << "finished" << std::endl;
     std::cout << "tltnodes: " << vis->tltnodes << " paths: " << vis->paths << std::endl;
-    StaticCFG::CFG* cfgs[vis->defs.size()];
-    SgIncidenceDirectedGraph* sgs[vis->defs.size()];
-    myGraph* mgs[vis->defs.size()];
-    visitorTraversal* visps[vis->defs.size()];
+    std::vector<std::unique_ptr<StaticCFG::CFG>> cfgs(vis->defs.size());
+    std::vector<SgIncidenceDirectedGraph *> sgs(vis->defs.size());
+    std::vector<std::unique_ptr<myGraph>> mgs(vis->defs.size());
+    std::vector<std::unique_ptr<visitorTraversal>> visps(vis->defs.size());
     for (size_t i = 0; i < vis->defs.size(); i++) {
         ROSE_ASSERT(isSgFunctionDefinition(vis->defs[i]));
-        cfgs[i] = new StaticCFG::CFG(isSgFunctionDefinition(vis->defs[i]));
-        //ROSE_ASSERT(gpart != NULL);
-        sgs[i] = new SgIncidenceDirectedGraph();
+        cfgs[i] = std::make_unique<StaticCFG::CFG>(
+            isSgFunctionDefinition(vis->defs[i]));
+        // ROSE_ASSERT(gpart != NULL);
         sgs[i] = cfgs[i]->getGraph();
         ROSE_ASSERT(sgs[i] != NULL);
-        mgs[i] = new myGraph();
         mgs[i] = instantiateGraph(sgs[i], *cfgs[i]);
         ROSE_ASSERT(mgs[i] != NULL);
-        visps[i] = new visitorTraversal();
-        visps[i]->orig = mgs[i];
+        visps[i] = std::make_unique<visitorTraversal>();
+        visps[i]->orig = mgs[i].get();
         visps[i]->tltnodes = 0;
         visps[i]->paths = 0;
         std::cout << "fun: " << vis->defstr[i] << std::endl;
-        visps[i]->constructPathAnalyzer(mgs[i], true, 0, 0, true);
+        visps[i]->constructPathAnalyzer(mgs[i].get(), true, 0, 0, true);
         std::cout << "paths: " << visps[i]->paths << std::endl;
     string dotFileName1=vis->defs[i]->get_declaration()->get_name() +".dot";
 
