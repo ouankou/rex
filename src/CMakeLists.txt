@@ -1,6 +1,10 @@
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Ddisc_union=union")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ddisc_union=union")
 
+if(TARGET rose_clang_libstdcxx_headers)
+  link_libraries(rose_clang_libstdcxx_headers)
+endif()
+
 ########################################################################################################################
 # Configuration header files
 ########################################################################################################################
