@@ -2399,9 +2399,8 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
               type_of_class = SgClassDeclaration::e_union;
               break;
             default:
-              std::cerr << "Runtime error: RecordDecl can only be a "
-                           "struct/class/union."
-                        << std::endl;
+              MLOG_ERROR_C(MLOG_FRONTEND, "Runtime error: RecordDecl can only "
+                                          "be a struct/class/union.\n");
               res = false;
             }
 
@@ -2429,7 +2428,8 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   }
 
   if (sg_decl == NULL) {
-    std::cerr << "Runtime error: unable to translate FriendDecl" << std::endl;
+    MLOG_ERROR_C(MLOG_FRONTEND,
+                 "Runtime error: unable to translate FriendDecl.\n");
     *node = NULL;
     return false;
   }
@@ -2493,8 +2493,8 @@ bool ClangToSageTranslator::VisitFriendTemplateDecl(
   }
 
   if (sg_decl == NULL) {
-    std::cerr << "Runtime error: unable to translate FriendTemplateDecl"
-              << std::endl;
+    MLOG_ERROR_C(MLOG_FRONTEND,
+                 "Runtime error: unable to translate FriendTemplateDecl.\n");
     *node = NULL;
     return false;
   }
@@ -5404,8 +5404,8 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
 
   // Ensure at least one parameter is non-NULL for unparser.
   if (sg_target_decl == NULL && sg_init_name == NULL) {
-    std::cerr << "Runtime error: unable to resolve UsingDecl target"
-              << std::endl;
+    MLOG_ERROR_C(MLOG_FRONTEND,
+                 "Runtime error: unable to resolve UsingDecl target.\n");
     *node = NULL;
     return false;
   }

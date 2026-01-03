@@ -374,8 +374,6 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
     set(_rose_jvm_name "libjvm${CMAKE_SHARED_LIBRARY_SUFFIX}")
     foreach(_rose_jvm_dir
       "${_rose_java_home}/lib/server"
-      "${_rose_java_home}/lib/amd64/server"
-      "${_rose_java_home}/jre/lib/amd64/server"
       "${_rose_java_home}/jre/lib/server")
       if(EXISTS "${_rose_jvm_dir}/${_rose_jvm_name}")
         set(_rose_jvm_candidate "${_rose_jvm_dir}/${_rose_jvm_name}")

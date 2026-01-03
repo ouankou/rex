@@ -19,6 +19,7 @@ FINISH TEMPFLATPATH CODE
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -799,7 +800,6 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         std::map<int, std::vector<std::vector<int>>> localLoops;
         std::vector<int> takenLoops;
         takenLoops.push_back(path[0]);
-        bool taken = false;
         // timeval timfor;
         int lost = 0;
         // gettimeofday(&timfor, NULL);
@@ -812,17 +812,21 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
                                            path[q]) != lloops.end()*/
               && globalLoopPaths[path[q]].size() !=
                      0 /*&& path[q] != begin && path[q] != end*/) {
+            std::unordered_set<int> taken_lookup(takenLoops.begin(),
+                                                 takenLoops.end());
             for (unsigned int qp1 = 0; qp1 < globalLoopPaths[path[q]].size();
                  qp1++) {
 
-              std::vector<int> gp = globalLoopPaths
+              const std::vector<int> &gp = globalLoopPaths
                   [path[q]]
                   [qp1]; // unzipPath(globalLoopPaths[path[q]][qp1],g,path[q],path[q]);
               // std::vector<int> zgp = zipPath2(globalLoopPaths[zpt[q]][qp1],
               // g);
-              for (unsigned int qp2 = 0; qp2 < takenLoops.size(); qp2++) {
-                if (find(gp.begin(), gp.end(), takenLoops[qp2]) != gp.end()) {
+              bool taken = false;
+              for (int node : gp) {
+                if (taken_lookup.count(node) != 0U) {
                   taken = true;
+                  break;
                 }
               }
 

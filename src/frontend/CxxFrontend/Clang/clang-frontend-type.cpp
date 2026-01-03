@@ -1941,8 +1941,9 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
                                  /*templateDeclaration=*/sg_decl,
                                  /*explicitlySpecified=*/explicitlySpecified);
     } else {
-      std::cerr << "Warning: Failed to translate template declaration "
-                   "for template argument\n";
+      MLOG_WARN_C(MLOG_FRONTEND,
+                  "Warning: Failed to translate template declaration for "
+                  "template argument.\n");
     }
     break;
   }
