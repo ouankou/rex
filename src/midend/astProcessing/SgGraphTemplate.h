@@ -7,6 +7,7 @@
 #include <memory>
 #include <set>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -235,55 +236,37 @@ inline std::unique_ptr<myGraph> instantiateGraph(SgIncidenceDirectedGraph *&g,
 
 inline std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
 getAllNodesAndEdges(SgIncidenceDirectedGraph *g, SgGraphNode *start) {
-  SgGraphNode *n = start;
-  std::vector<SgGraphNode *> nods;
-  std::vector<SgGraphNode *> newnods;
-  std::set<SgDirectedGraphEdge *> edsnew;
-  std::vector<SgDirectedGraphEdge *> eds;
-  std::vector<SgDirectedGraphEdge *> feds;
   std::vector<SgGraphNode *> fnods;
-  std::set<std::pair<EdgeID, EdgeID>> prs;
-  std::set<SgDirectedGraphEdge *> oeds = g->computeEdgeSetOut(start);
-  fnods.push_back(start);
-  newnods.push_back(n);
-  (void)nods;
-  (void)eds;
-  (void)prs;
-
-  while (!oeds.empty()) {
-    for (std::set<SgDirectedGraphEdge *>::iterator j = oeds.begin();
-         j != oeds.end(); ++j) {
-      if (std::find(feds.begin(), feds.end(), *j) == feds.end()) {
-        feds.push_back(*j);
-        edsnew.insert(*j);
-      }
-      if (std::find(fnods.begin(), fnods.end(), (*j)->get_to()) ==
-          fnods.end()) {
-        fnods.push_back((*j)->get_to());
-      }
-      newnods.push_back((*j)->get_to());
-    }
-
-    for (std::size_t i = 0; i < newnods.size(); ++i) {
-      std::set<SgDirectedGraphEdge *> oedsp = g->computeEdgeSetOut(newnods[i]);
-      for (std::set<SgDirectedGraphEdge *>::iterator j = oedsp.begin();
-           j != oedsp.end(); ++j) {
-        if (std::find(feds.begin(), feds.end(), *j) == feds.end()) {
-          edsnew.insert(*j);
-        }
-      }
-    }
-    nods = newnods;
-    oeds = edsnew;
-    edsnew.clear();
-    newnods.clear();
+  std::vector<SgDirectedGraphEdge *> feds;
+  if (g == nullptr || start == nullptr) {
+    return std::make_pair(fnods, feds);
   }
 
-  std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
-      retpr;
-  retpr.first = fnods;
-  retpr.second = feds;
-  return retpr;
+  std::unordered_set<SgGraphNode *> visited_nodes;
+  std::unordered_set<SgDirectedGraphEdge *> visited_edges;
+  std::vector<SgGraphNode *> queue;
+  std::size_t head = 0;
+
+  visited_nodes.insert(start);
+  fnods.push_back(start);
+  queue.push_back(start);
+
+  while (head < queue.size()) {
+    SgGraphNode *node = queue[head++];
+    std::set<SgDirectedGraphEdge *> oeds = g->computeEdgeSetOut(node);
+    for (SgDirectedGraphEdge *edge : oeds) {
+      if (visited_edges.insert(edge).second) {
+        feds.push_back(edge);
+      }
+      SgGraphNode *next = edge != nullptr ? edge->get_to() : nullptr;
+      if (next != nullptr && visited_nodes.insert(next).second) {
+        fnods.push_back(next);
+        queue.push_back(next);
+      }
+    }
+  }
+
+  return std::make_pair(fnods, feds);
 }
 
 #endif

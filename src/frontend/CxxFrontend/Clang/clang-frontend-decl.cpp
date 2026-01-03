@@ -250,6 +250,138 @@ buildTemplateInstantiationName(const std::string &base_name,
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope);
 } // namespace
 
+SgType *ClangToSageTranslator::buildSpecializedMemberTypedefReturnType(
+    const clang::FunctionDecl *decl,
+    const clang::ClassTemplateSpecializationDecl *spec_decl_override,
+    const clang::CXXRecordDecl *record_decl_override) {
+  const auto *method_decl = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(decl);
+  if (method_decl == nullptr) {
+    return nullptr;
+  }
+
+  const clang::CXXRecordDecl *record_decl = record_decl_override;
+  if (record_decl == nullptr) {
+    if (spec_decl_override != nullptr) {
+      record_decl = spec_decl_override;
+    } else {
+      record_decl = method_decl->getParent();
+    }
+  }
+
+  const clang::ClassTemplateSpecializationDecl *spec_decl = spec_decl_override;
+  if (spec_decl == nullptr) {
+    spec_decl = llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(
+        record_decl);
+  }
+  if (record_decl == nullptr || spec_decl == nullptr) {
+    return nullptr;
+  }
+
+  const clang::TypedefType *return_typedef =
+      method_decl->getReturnType()->getAs<clang::TypedefType>();
+  if (return_typedef == nullptr) {
+    return nullptr;
+  }
+
+  const clang::TypedefNameDecl *return_decl = return_typedef->getDecl();
+  const clang::DeclContext *return_context =
+      return_decl != nullptr ? return_decl->getDeclContext() : nullptr;
+  const clang::CXXRecordDecl *return_record =
+      llvm::dyn_cast_or_null<clang::CXXRecordDecl>(return_context);
+  bool is_member_typedef = false;
+  if (return_record != nullptr) {
+    const clang::CXXRecordDecl *pattern =
+        spec_decl->getTemplateInstantiationPattern();
+    if (return_record == record_decl || return_record == spec_decl ||
+        (pattern != nullptr && return_record == pattern)) {
+      is_member_typedef = true;
+    }
+  }
+  if (!is_member_typedef) {
+    return nullptr;
+  }
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  if (scope == nullptr) {
+    scope = getGlobalScope();
+  }
+  if (scope == nullptr) {
+    return nullptr;
+  }
+
+  std::vector<const clang::DeclContext *> contexts;
+  for (const clang::DeclContext *dc = record_decl->getDeclContext();
+       dc != nullptr && !dc->isTranslationUnit(); dc = dc->getParent()) {
+    contexts.push_back(dc);
+  }
+  for (auto it = contexts.rbegin(); it != contexts.rend(); ++it) {
+    if (const clang::NamespaceDecl *ns =
+            llvm::dyn_cast<clang::NamespaceDecl>(*it)) {
+      std::string ns_name = ns->getNameAsString();
+      if (!ns_name.empty()) {
+        SgNonrealType *ns_type =
+            SageBuilder::buildNonrealType(SgName(ns_name), scope, nullptr);
+        if (SgNonrealDecl *ns_decl = isSgNonrealDecl(
+                ns_type ? ns_type->get_declaration() : nullptr)) {
+          scope = ns_decl->get_nonreal_decl_scope();
+        }
+      }
+    } else if (const clang::CXXRecordDecl *ctx_record =
+                   llvm::dyn_cast<clang::CXXRecordDecl>(*it)) {
+      std::string record_name = ctx_record->getNameAsString();
+      if (!record_name.empty()) {
+        const clang::ClassTemplateSpecializationDecl *ctx_spec =
+            llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(ctx_record);
+        SgTemplateArgumentPtrList ctx_args;
+        const SgTemplateArgumentPtrList *ctx_args_ptr = nullptr;
+        if (ctx_spec != nullptr) {
+          ctx_args = buildTemplateArguments(ctx_spec->getTemplateArgs(), 0);
+          if (!ctx_args.empty()) {
+            ctx_args_ptr = &ctx_args;
+          }
+        }
+        SgNonrealType *record_type = SageBuilder::buildNonrealType(
+            SgName(record_name), scope, ctx_args_ptr);
+        if (SgNonrealDecl *record_decl_node = isSgNonrealDecl(
+                record_type ? record_type->get_declaration() : nullptr)) {
+          scope = record_decl_node->get_nonreal_decl_scope();
+        }
+      }
+    }
+  }
+
+  SgTemplateArgumentPtrList tpl_args =
+      buildTemplateArguments(spec_decl->getTemplateArgs(), 0);
+  std::string spec_name = spec_decl->getNameAsString();
+  if (!spec_name.empty()) {
+    SgNonrealType *spec_type = SageBuilder::buildNonrealType(
+        SgName(spec_name), scope, tpl_args.empty() ? nullptr : &tpl_args);
+    if (SgNonrealDecl *spec_decl_node = isSgNonrealDecl(
+            spec_type ? spec_type->get_declaration() : nullptr)) {
+      scope = spec_decl_node->get_nonreal_decl_scope();
+    }
+  }
+
+  std::string typedef_name =
+      return_decl != nullptr ? return_decl->getNameAsString() : "";
+  if (typedef_name.empty()) {
+    return nullptr;
+  }
+
+  SgNonrealType *member_type =
+      SageBuilder::buildNonrealType(SgName(typedef_name), scope, nullptr);
+  if (SgNonrealDecl *member_decl = isSgNonrealDecl(
+          member_type ? member_type->get_declaration() : nullptr)) {
+    if (!spec_decl->isDependentType()) {
+      if (member_decl->getAttribute(kRexNonrealNoTypenameAttr) == NULL) {
+        member_decl->setAttribute(kRexNonrealNoTypenameAttr,
+                                  new RexNonrealFlagAttribute());
+      }
+    }
+  }
+  return member_type;
+}
+
 SgSymbol *
 ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
   if (decl == NULL)
@@ -5949,128 +6081,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   // type, so we use void for constructors and mark them with the constructor
   // modifier flag later
   SgType *ret_type = buildTypeFromQualifiedType(function_decl->getReturnType());
-  auto build_specialized_member_return_type =
-      [&](clang::FunctionDecl *decl) -> SgType * {
-    clang::CXXMethodDecl *method_decl =
-        llvm::dyn_cast_or_null<clang::CXXMethodDecl>(decl);
-    if (method_decl == nullptr) {
-      return nullptr;
-    }
-
-    const clang::CXXRecordDecl *record_decl = method_decl->getParent();
-    const clang::ClassTemplateSpecializationDecl *spec_decl =
-        llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(
-            record_decl);
-    if (spec_decl == nullptr || record_decl == nullptr) {
-      return nullptr;
-    }
-
-    const clang::TypedefType *return_typedef =
-        method_decl->getReturnType()->getAs<clang::TypedefType>();
-    if (return_typedef == nullptr) {
-      return nullptr;
-    }
-
-    const clang::TypedefNameDecl *return_decl = return_typedef->getDecl();
-    const clang::DeclContext *return_context =
-        return_decl != nullptr ? return_decl->getDeclContext() : nullptr;
-    const clang::CXXRecordDecl *return_record =
-        llvm::dyn_cast_or_null<clang::CXXRecordDecl>(return_context);
-    bool is_member_typedef = false;
-    if (return_record != nullptr) {
-      const clang::CXXRecordDecl *pattern =
-          spec_decl->getTemplateInstantiationPattern();
-      if (return_record == record_decl || return_record == spec_decl ||
-          (pattern != nullptr && return_record == pattern)) {
-        is_member_typedef = true;
-      }
-    }
-    if (!is_member_typedef) {
-      return nullptr;
-    }
-
-    SgScopeStatement *scope = SageBuilder::topScopeStack();
-    if (scope == nullptr) {
-      scope = getGlobalScope();
-    }
-    if (scope == nullptr) {
-      return nullptr;
-    }
-
-    std::vector<const clang::DeclContext *> contexts;
-    for (const clang::DeclContext *dc = record_decl->getDeclContext();
-         dc != nullptr && !dc->isTranslationUnit(); dc = dc->getParent()) {
-      contexts.push_back(dc);
-    }
-    for (auto it = contexts.rbegin(); it != contexts.rend(); ++it) {
-      if (const clang::NamespaceDecl *ns =
-              llvm::dyn_cast<clang::NamespaceDecl>(*it)) {
-        std::string ns_name = ns->getNameAsString();
-        if (!ns_name.empty()) {
-          SgNonrealType *ns_type =
-              SageBuilder::buildNonrealType(SgName(ns_name), scope, nullptr);
-          if (SgNonrealDecl *ns_decl = isSgNonrealDecl(
-                  ns_type ? ns_type->get_declaration() : nullptr)) {
-            scope = ns_decl->get_nonreal_decl_scope();
-          }
-        }
-      } else if (const clang::CXXRecordDecl *ctx_record =
-                     llvm::dyn_cast<clang::CXXRecordDecl>(*it)) {
-        std::string record_name = ctx_record->getNameAsString();
-        if (!record_name.empty()) {
-          const clang::ClassTemplateSpecializationDecl *ctx_spec =
-              llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(
-                  ctx_record);
-          SgTemplateArgumentPtrList ctx_args;
-          const SgTemplateArgumentPtrList *ctx_args_ptr = nullptr;
-          if (ctx_spec != nullptr) {
-            ctx_args = buildTemplateArguments(ctx_spec->getTemplateArgs(), 0);
-            if (!ctx_args.empty()) {
-              ctx_args_ptr = &ctx_args;
-            }
-          }
-          SgNonrealType *record_type = SageBuilder::buildNonrealType(
-              SgName(record_name), scope, ctx_args_ptr);
-          if (SgNonrealDecl *record_decl = isSgNonrealDecl(
-                  record_type ? record_type->get_declaration() : nullptr)) {
-            scope = record_decl->get_nonreal_decl_scope();
-          }
-        }
-      }
-    }
-
-    SgTemplateArgumentPtrList tpl_args =
-        buildTemplateArguments(spec_decl->getTemplateArgs(), 0);
-    std::string spec_name = spec_decl->getNameAsString();
-    if (!spec_name.empty()) {
-      SgNonrealType *spec_type = SageBuilder::buildNonrealType(
-          SgName(spec_name), scope, tpl_args.empty() ? nullptr : &tpl_args);
-      if (SgNonrealDecl *spec_decl_node = isSgNonrealDecl(
-              spec_type ? spec_type->get_declaration() : nullptr)) {
-        scope = spec_decl_node->get_nonreal_decl_scope();
-      }
-    }
-
-    std::string typedef_name =
-        return_decl != nullptr ? return_decl->getNameAsString() : "";
-    if (typedef_name.empty()) {
-      return nullptr;
-    }
-    SgNonrealType *member_type =
-        SageBuilder::buildNonrealType(SgName(typedef_name), scope, nullptr);
-    if (SgNonrealDecl *member_decl = isSgNonrealDecl(
-            member_type ? member_type->get_declaration() : nullptr)) {
-      if (!spec_decl->isDependentType()) {
-        if (member_decl->getAttribute(kRexNonrealNoTypenameAttr) == NULL) {
-          member_decl->setAttribute(kRexNonrealNoTypenameAttr,
-                                    new RexNonrealFlagAttribute());
-        }
-      }
-    }
-    return member_type;
-  };
   if (SgType *specialized_ret =
-          build_specialized_member_return_type(function_decl)) {
+          buildSpecializedMemberTypedefReturnType(function_decl)) {
     ret_type = specialized_ret;
   }
 

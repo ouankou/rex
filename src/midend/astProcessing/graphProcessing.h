@@ -402,6 +402,8 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
   std::vector<std::vector<int>> paths;
   std::vector<int> localLoops;
   std::map<int, std::vector<std::vector<int>>> globalLoopPaths;
+  std::unordered_set<int> completed_loops_set;
+  std::unordered_set<int> recurses_lookup(recurses.begin(), recurses.end());
   while (!pathContainer.empty()) {
     // iterating through the currently discovered subpaths to build them up
     for (unsigned int i = 0; i < pathContainer.size(); i++) {
@@ -411,6 +413,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
 
       npth = pathContainer[i];
       oeds = getOutEdges(npth.back(), g);
+      std::unordered_set<int> path_nodes(npth.begin(), npth.end());
 
       if ((!recursedloop &&
            ((bound && npth.back() == end && npth.size() != 1) ||
@@ -442,8 +445,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
           // so we attach all paths that go to that path to that particular node
           // via PtP
           if (nodes.find(tg) != nodes.end() &&
-              find(newpath.begin(), newpath.end(), tg) == newpath.end() &&
-              tg != end) {
+              path_nodes.find(tg) == path_nodes.end() && tg != end) {
             if (PtP.find(tg) == PtP.end()) {
               std::vector<int> nv;
               nv.push_back(tg);
@@ -452,8 +454,8 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
             } else {
               PtP[tg].push_back(newpath);
             }
-          } else if (find(newpath.begin(), newpath.end(),
-                          getTarget(oeds[j], g)) == newpath.end() ||
+          } else if (path_nodes.find(getTarget(oeds[j], g)) ==
+                         path_nodes.end() ||
                      getTarget(oeds[j], g) == end) {
             newpath.push_back(tg);
             std::vector<int> ieds = getInEdges(tg, g);
@@ -467,9 +469,8 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
           } else {
             std::vector<int> ieds = getInEdges(tg, g);
             if (ieds.size() > 1 &&
-                find(completedLoops.begin(), completedLoops.end(), tg) ==
-                    completedLoops.end() &&
-                find(recurses.begin(), recurses.end(), tg) == recurses.end()) {
+                completed_loops_set.find(tg) == completed_loops_set.end() &&
+                recurses_lookup.find(tg) == recurses_lookup.end()) {
               localLoops.push_back(tg);
               nodes.insert(tg);
             }
@@ -490,6 +491,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
     }
     for (unsigned int qq = 0; qq < paths.size(); qq++) {
       std::vector<int> pq = paths[qq];
+      std::unordered_set<int> pq_lookup(pq.begin(), pq.end());
       std::vector<int> qp;
       int ppf = paths[qq].front();
       if (PtP.find(ppf) != PtP.end()) {
@@ -502,7 +504,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
           } else {
 
             for (unsigned int kk1 = 0; kk1 < newpath.size(); kk1++) {
-              if (find(pq.begin(), pq.end(), newpath[kk1]) != pq.end() &&
+              if (pq_lookup.find(newpath[kk1]) != pq_lookup.end() &&
                   newpath[kk1] != begin) {
                 good = false;
                 break;
@@ -543,6 +545,7 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
     } else {
       std::map<int, std::vector<std::vector<int>>> localLoopPaths;
       completedLoops.push_back(lk);
+      completed_loops_set.insert(lk);
       recurses.push_back(lk);
       loopp = bfsTraversePath(lk, lk, g, true);
       recurses.pop_back();

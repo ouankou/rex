@@ -432,6 +432,14 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
 
+        // Helper: Build nonreal return type for member typedefs of template
+        // specializations (e.g., Spec::value_type) when needed for unparsing.
+        SgType *buildSpecializedMemberTypedefReturnType(
+            const clang::FunctionDecl *decl,
+            const clang::ClassTemplateSpecializationDecl *spec_decl_override =
+                nullptr,
+            const clang::CXXRecordDecl *record_decl_override = nullptr);
+
         // Template helper methods
         // Helper: Get or create template class declaration
         SgTemplateClassDeclaration* getOrCreateTemplateDeclaration(
