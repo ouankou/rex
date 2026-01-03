@@ -16,25 +16,6 @@
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
-
-class RexNonrealFlagAttribute : public AstAttribute {
-public:
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
-
-  std::string attribute_class_name() const override {
-    return "RexNonrealFlagAttribute";
-  }
-
-  std::string toString() override { return ""; }
-};
-
-const char kRexNonrealNoTypenameAttr[] = "rex_nonreal_no_typename";
-const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
-
 static bool canLexTrailingToken(clang::SourceLocation loc,
                                 clang::SourceManager &sm) {
   if (!loc.isValid() || loc.isMacroID()) {

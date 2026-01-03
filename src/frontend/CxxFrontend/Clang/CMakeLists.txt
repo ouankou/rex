@@ -7,6 +7,7 @@ message(STATUS "Configuring Clang frontend...")
 set(CLANG_FRONTEND_SOURCES
   clang-frontend.cpp
   clang-frontend-decl.cpp
+  clang-frontend-nonreal-attrs.cpp
   clang-frontend-stmt.cpp
   clang-frontend-type.cpp
   clang-to-rose-support.cpp

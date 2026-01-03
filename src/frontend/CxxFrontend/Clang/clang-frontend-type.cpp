@@ -8,25 +8,6 @@
 #include <functional>
 
 namespace {
-class RexNonrealFlagAttribute : public AstAttribute {
-public:
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
-
-  std::string attribute_class_name() const override {
-    return "RexNonrealFlagAttribute";
-  }
-
-  std::string toString() override { return ""; }
-};
-
-const char kRexNonrealTemplateKeywordAttr[] = "rex_nonreal_template_keyword";
-const char kRexNonrealGlobalQualifierAttr[] = "rex_nonreal_global_qualifier";
-const char kRexNonrealNoTypenameAttr[] = "rex_nonreal_no_typename";
-
 std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
   const char *spelling = clang::getOperatorSpelling(op);
   ROSE_ASSERT(spelling != nullptr);

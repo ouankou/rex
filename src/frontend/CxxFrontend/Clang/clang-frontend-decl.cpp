@@ -9,23 +9,6 @@
 #include <set>
 
 namespace {
-class RexNonrealFlagAttribute : public AstAttribute {
-public:
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
-
-  std::string attribute_class_name() const override {
-    return "RexNonrealFlagAttribute";
-  }
-
-  std::string toString() override { return ""; }
-};
-
-const char kRexNonrealNoTypenameAttr[] = "rex_nonreal_no_typename";
-
 static std::string trimWhitespace(std::string s) {
   size_t first = 0;
   while (first < s.size() &&
