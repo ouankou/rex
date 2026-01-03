@@ -3918,14 +3918,16 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     SgNode *tmp_lhs = Traverse(cxx_operator_call_expr->getArg(0));
     SgExpression *lhs = isSgExpression(tmp_lhs);
     if (tmp_lhs != NULL && lhs == NULL) {
-      std::cerr << "Runtime error: tmp_lhs != NULL && lhs == NULL" << std::endl;
+      MLOG_ERROR_C(MLOG_FRONTEND,
+                   "Runtime error: tmp_lhs != NULL && lhs == NULL\n");
       res = false;
     }
 
     SgNode *tmp_rhs = Traverse(cxx_operator_call_expr->getArg(1));
     SgExpression *rhs = isSgExpression(tmp_rhs);
     if (tmp_rhs != NULL && rhs == NULL) {
-      std::cerr << "Runtime error: tmp_rhs != NULL && rhs == NULL" << std::endl;
+      MLOG_ERROR_C(MLOG_FRONTEND,
+                   "Runtime error: tmp_rhs != NULL && rhs == NULL\n");
       res = false;
     }
 
