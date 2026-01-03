@@ -602,7 +602,6 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
   pathnum = 0;
   std::vector<int> path;
   std::vector<std::vector<int>> paths;
-  int truepaths = 0;
   std::vector<std::vector<int>> checkpaths;
   std::vector<std::vector<int>> npathchecker;
   std::map<int, int> currents;
@@ -631,7 +630,6 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         std::set<std::vector<int>> movepaths;
         std::vector<int> path; // = paths[qqq];
         path = paths[qqq];     // unzipPath(paths[qqq], g, begin, end);
-        truepaths++;
         int permnums = 1;
         std::vector<int> perms;
         std::vector<unsigned int> qs;
@@ -726,9 +724,15 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
           boxpaths[i - 1] = npath;
         }
 
-        evaledpaths += boxpaths.size();
-        if (evaledpaths > newmil * 100000ull) {
-          newmil++;
+        unsigned long long eval_increment =
+            static_cast<unsigned long long>(boxpaths.size());
+#pragma omp atomic
+        evaledpaths += eval_increment;
+#pragma omp critical
+        {
+          if (evaledpaths > newmil * 100000ull) {
+            newmil++;
+          }
         }
         if (!loop) {
           for (std::vector<std::vector<int>>::iterator box = boxpaths.begin();
