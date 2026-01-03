@@ -2469,6 +2469,7 @@ SageBuilder::buildTypedefDeclaration_nfi(const std::string& name, SgType* base_t
 #if 0
           printf ("In buildTypedefDeclaration_nfi(): scope = %p = %s calling get_symbol_from_symbol_table() \n",scope,scope->class_name().c_str());
 #endif
+          ROSE_ASSERT(scope->get_parent() != NULL);
           SgDeclarationStatement* declaration = isSgDeclarationStatement(scope->get_parent());
 #if 0
           printf ("declaration = %p \n",declaration);
@@ -2483,7 +2484,9 @@ SageBuilder::buildTypedefDeclaration_nfi(const std::string& name, SgType* base_t
         	   MLOG_INFO_C("sageInterface","Found a valid declaration = %p = %s \n",declaration,declaration->class_name().c_str());
 #endif
 
+            ROSE_ASSERT(declaration->get_firstNondefiningDeclaration() != NULL);
             parent_scope = declaration->search_for_symbol_from_symbol_table();
+            ROSE_ASSERT(parent_scope != NULL);
              }
         }
 
