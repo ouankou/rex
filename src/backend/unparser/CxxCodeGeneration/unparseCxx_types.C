@@ -4776,6 +4776,7 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 #if DEBUG_UNPARSE_NONREAL_TYPE
        printf(" --- nrparent_nrscope = %p (%s)\n", nrparent_nrscope, nrparent_nrscope != NULL ? nrparent_nrscope->class_name().c_str() : NULL);
 #endif
+       has_nonreal_parent = (nrparent_nrscope != NULL);
        if (nrparent_nrscope != NULL) {
          if (is_first_in_nonreal_chain) {
            if (!suppress_typename) {
@@ -4797,6 +4798,7 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
        printf(" --- nameQualifier = %s\n", nameQualifier.str());
 #endif
        curprint(nameQualifier.str());
+       has_nonreal_parent = true;
      }
 
      SgTemplateArgumentPtrList & tpl_args = nrdecl->get_tpl_args();

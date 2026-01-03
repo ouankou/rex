@@ -395,17 +395,23 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
 
   # Ensure CTest inherits a usable JAVA_HOME and libjvm path even when shell
   # init scripts are not sourced (e.g., Codex sandboxes).
-  if(_rose_java_home AND EXISTS "${_rose_java_home}/lib/server")
+  if(JAVA_JVM_LIBRARY)
+    get_filename_component(_rose_jvm_dir "${JAVA_JVM_LIBRARY}" DIRECTORY)
     set(_rose_ctest_env "${CMAKE_BINARY_DIR}/CTestFortranOFPEnv.cmake")
-    file(WRITE "${_rose_ctest_env}"
-      "if(\"\$ENV{JAVA_HOME}\" STREQUAL \"\")\n"
-      "  set(ENV{JAVA_HOME} \"${_rose_java_home}\")\n"
-      "endif()\n"
+    set(_rose_ctest_env_content "")
+    if(_rose_java_home)
+      string(APPEND _rose_ctest_env_content
+        "if(\"\$ENV{JAVA_HOME}\" STREQUAL \"\")\n"
+        "  set(ENV{JAVA_HOME} \"${_rose_java_home}\")\n"
+        "endif()\n")
+    endif()
+    string(APPEND _rose_ctest_env_content
       "if(\"\$ENV{LD_LIBRARY_PATH}\" STREQUAL \"\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server\")\n"
-      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_java_home}/lib/server(:|$)\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_java_home}/lib/server:\$ENV{LD_LIBRARY_PATH}\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_jvm_dir}\")\n"
+      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_jvm_dir}(:|$)\")\n"
+      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_jvm_dir}:\$ENV{LD_LIBRARY_PATH}\")\n"
       "endif()\n")
+    file(WRITE "${_rose_ctest_env}" "${_rose_ctest_env_content}")
     set_property(DIRECTORY PROPERTY TEST_INCLUDE_FILE "${_rose_ctest_env}")
   endif()
 endif()
@@ -991,6 +997,10 @@ if(NOT DEFINED CMAKE_INSTALL_RPATH)
   set(CMAKE_INSTALL_RPATH
     "${origin}/../lib"
     "${origin}"
+  )
+  list(APPEND CMAKE_INSTALL_RPATH
+    "${CMAKE_INSTALL_PREFIX}/lib"
+    "${CMAKE_INSTALL_PREFIX}/bin"
   )
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH}")
