@@ -161,6 +161,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
       add_library(rose_clang_libstdcxx_headers INTERFACE)
       target_compile_options(rose_clang_libstdcxx_headers INTERFACE
         ${_rose_libstdcxx_isystem_opts})
+      install(TARGETS rose_clang_libstdcxx_headers EXPORT RoseTargets)
       unset(_rose_libstdcxx_isystem_opts)
     endif()
     unset(_rose_libstdcxx_include_dirs)
