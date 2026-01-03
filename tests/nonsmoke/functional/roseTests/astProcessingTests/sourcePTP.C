@@ -102,8 +102,11 @@ int main(int argc, char *argv[]) {
       //mg = instantiateGraph(g, cfg);
       visif->tltnodes = 0;
       visif->paths = 0;
-      visif->constructPathAnalyzer(mg, false,VSlink[cfg.cfgForBeginning(fors[i])],VSlink[cfg.cfgForEnd(fors[i])]);
-     // visif->constructPathAnalyzer(mg, VSlink[cfg.cfgForEnd(fors[i-1])], VSlink[cfg.cfgForBeginning(fors[i])]);
+      visif->constructPathAnalyzer(mg, false,
+                                   VSlink()[cfg.cfgForBeginning(fors[i])],
+                                   VSlink()[cfg.cfgForEnd(fors[i])]);
+      // visif->constructPathAnalyzer(mg, VSlink()[cfg.cfgForEnd(fors[i-1])],
+      // VSlink()[cfg.cfgForBeginning(fors[i])]);
       std::cout << "between: " << i << " and " << i+1 << " there are " << visif->paths << " paths." << std::endl;
      // completedIfs.insert(ifs[i]);
      // }

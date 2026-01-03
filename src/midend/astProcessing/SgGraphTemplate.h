@@ -120,8 +120,15 @@ using EdgeID = myGraph::edge_descriptor;
 std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
 getAllNodesAndEdges(SgIncidenceDirectedGraph *g, SgGraphNode *start);
 
-inline std::map<VertexID, SgGraphNode *> getGraphNode;
-inline std::map<SgGraphNode *, VertexID> VSlink;
+inline std::map<VertexID, SgGraphNode *> &getGraphNode() {
+  static std::map<VertexID, SgGraphNode *> graph_node;
+  return graph_node;
+}
+
+inline std::map<SgGraphNode *, VertexID> &VSlink() {
+  static std::map<SgGraphNode *, VertexID> vertex_link;
+  return vertex_link;
+}
 
 inline myGraph *instantiateGraph(SgIncidenceDirectedGraph *&g,
                                  StaticCFG::InterproceduralCFG &cfg,
@@ -144,22 +151,22 @@ inline myGraph *instantiateGraph(SgIncidenceDirectedGraph *&g,
     SgGraphNode *u2 = u->get_to();
     VertexID v1;
     VertexID v2;
-    if (VSlink.find(u1) == VSlink.end()) {
+    if (VSlink().find(u1) == VSlink().end()) {
       v1 = graph->add_vertex();
-      getGraphNode[v1] = u1;
-      VSlink[u1] = v1;
+      getGraphNode()[v1] = u1;
+      VSlink()[u1] = v1;
       (*graph)[v1].sg = u1;
       (*graph)[v1].cfgnd = cfg.toCFGNode(u1);
     } else {
-      v1 = VSlink[u1];
+      v1 = VSlink()[u1];
     }
-    if (VSlink.find(u2) != VSlink.end()) {
-      v2 = VSlink[u2];
+    if (VSlink().find(u2) != VSlink().end()) {
+      v2 = VSlink()[u2];
     } else {
       v2 = graph->add_vertex();
-      VSlink[u2] = v2;
+      VSlink()[u2] = v2;
       (*graph)[v2].sg = u2;
-      getGraphNode[v2] = u2;
+      getGraphNode()[v2] = u2;
       (*graph)[v2].cfgnd = cfg.toCFGNode(u2);
     }
     std::pair<VertexID, VertexID> pr(v1, v2);
@@ -188,22 +195,22 @@ inline myGraph *instantiateGraph(SgIncidenceDirectedGraph *&g,
     SgGraphNode *u2 = u->get_to();
     VertexID v1;
     VertexID v2;
-    if (VSlink.find(u1) == VSlink.end()) {
+    if (VSlink().find(u1) == VSlink().end()) {
       v1 = graph->add_vertex();
-      getGraphNode[v1] = u1;
-      VSlink[u1] = v1;
+      getGraphNode()[v1] = u1;
+      VSlink()[u1] = v1;
       (*graph)[v1].sg = u1;
       (*graph)[v1].cfgnd = cfg.toCFGNode(u1);
     } else {
-      v1 = VSlink[u1];
+      v1 = VSlink()[u1];
     }
-    if (VSlink.find(u2) != VSlink.end()) {
-      v2 = VSlink[u2];
+    if (VSlink().find(u2) != VSlink().end()) {
+      v2 = VSlink()[u2];
     } else {
       v2 = graph->add_vertex();
-      VSlink[u2] = v2;
+      VSlink()[u2] = v2;
       (*graph)[v2].sg = u2;
-      getGraphNode[v2] = u2;
+      getGraphNode()[v2] = u2;
       (*graph)[v2].cfgnd = cfg.toCFGNode(u2);
     }
     std::pair<VertexID, VertexID> pr(v1, v2);

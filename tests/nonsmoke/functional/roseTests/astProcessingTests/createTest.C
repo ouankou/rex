@@ -37,7 +37,7 @@ void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {
     std::vector<string> path;
     //ss << "vector<string> sss;\n";
     for (unsigned int j = 0; j < pathR.size(); j++) {
-       SgGraphNode* R = getGraphNode[pathR[j]];
+      SgGraphNode *R = getGraphNode()[pathR[j]];
       CFGNode cf = cfg->toCFGNode(R);
    //    path.push_back(R->get_name());
       string str = cf.toString();
@@ -109,7 +109,7 @@ ss << "   };\n";
 ss << "void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {\n";
 ss << "    std::vector<string> path;\n";
 ss << "   for (unsigned int j = 0; j < pathR.size(); j++) {\n";
-ss << "       SgGraphNode* R = getGraphNode[pathR[j]];\n";
+ss << "       SgGraphNode* R = getGraphNode()[pathR[j]];\n";
 ss << "      CFGNode cf = cfg->toCFGNode(R);\n";
 ss << "       string str = cf.toString();";
 ss << "str.erase(std::remove(str.begin(), str.end(), '\\n'), str.end());\n";

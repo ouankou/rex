@@ -18,10 +18,11 @@ class visitorTraversal : public SgGraphTraversal<CFGforT>
 void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {
     std::vector<string> path;
    for (unsigned int j = 0; j < pathR.size(); j++) {
-       SgGraphNode* R = getGraphNode[pathR[j]];
-      CFGNode cf = cfg->toCFGNode(R);
-       string str = cf.toString();str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
-       path.push_back(str);
+     SgGraphNode *R = getGraphNode()[pathR[j]];
+     CFGNode cf = cfg->toCFGNode(R);
+     string str = cf.toString();
+     str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+     path.push_back(str);
     }
     paths.push_back(path);
    // ROSE_ASSERT(sssv.find(path) != sssv.end());

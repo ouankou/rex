@@ -44,20 +44,19 @@ void visitorTraversal::analyzePath(vector<VertexID>& pathR) {
        // #pragma omp atomic
        // paths++;
 
-    //std::vector<SgGraphNode*> exprPath;
-    //ss << "vector<string> sss;\n";
-    //std::cout << "path" << std::endl;
-    //for (unsigned int j = 0; j < pathR.size(); j++) {
-    //   SgGraphNode* R = getGraphNode[pathR[j]];
-    //  CFGNode cf = gcfg->toCFGNode(R);
-   //    path.push_back(R->get_name());
-    //  string str = cf.toString();
-     // std::cout << str << ", ";
-    // }
-    // std::cout << std::endl;
-        paths++;
-        //std::cout << "paths: " << paths << std::endl;
-
+       // std::vector<SgGraphNode*> exprPath;
+       // ss << "vector<string> sss;\n";
+       // std::cout << "path" << std::endl;
+       // for (unsigned int j = 0; j < pathR.size(); j++) {
+       //    SgGraphNode* R = getGraphNode()[pathR[j]];
+       //   CFGNode cf = gcfg->toCFGNode(R);
+       //    path.push_back(R->get_name());
+       //  string str = cf.toString();
+       // std::cout << str << ", ";
+       // }
+       // std::cout << std::endl;
+       paths++;
+       // std::cout << "paths: " << paths << std::endl;
 }
 /*
 
