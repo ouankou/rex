@@ -48,7 +48,7 @@ void visitorTraversal::analyzePath(vector<VertexID>& pathR) {
        // ss << "vector<string> sss;\n";
        // std::cout << "path" << std::endl;
        // for (unsigned int j = 0; j < pathR.size(); j++) {
-       //    SgGraphNode* R = getGraphNode()[pathR[j]];
+       //    SgGraphNode* R = orig->getGraphNode()[pathR[j]];
        //   CFGNode cf = gcfg->toCFGNode(R);
        //    path.push_back(R->get_name());
        //  string str = cf.toString();

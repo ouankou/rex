@@ -18,7 +18,7 @@ class visitorTraversal : public SgGraphTraversal<CFGforT>
 void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {
     std::vector<string> path;
    for (unsigned int j = 0; j < pathR.size(); j++) {
-     SgGraphNode *R = getGraphNode()[pathR[j]];
+     SgGraphNode *R = orig->getGraphNode()[pathR[j]];
      CFGNode cf = cfg->toCFGNode(R);
      string str = cf.toString();
      str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
@@ -42,6 +42,8 @@ SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
 g = cfg.getGraph();
 myGraph* mg = new myGraph();
 mg = instantiateGraph(g, cfg);
+vis->orig = mg;
+vis->cfg = &cfg;
 std::set<std::vector<string> > sssv;
 std::vector<string> sss;
 sss.push_back("Start(::main)<SgFunctionDefinition> @1 :0");

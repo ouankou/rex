@@ -37,7 +37,7 @@ void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {
     std::vector<string> path;
     //ss << "vector<string> sss;\n";
     for (unsigned int j = 0; j < pathR.size(); j++) {
-      SgGraphNode *R = getGraphNode()[pathR[j]];
+      SgGraphNode *R = orig->getGraphNode()[pathR[j]];
       CFGNode cf = cfg->toCFGNode(R);
    //    path.push_back(R->get_name());
       string str = cf.toString();
@@ -83,6 +83,8 @@ int main(int argc, char *argv[]) {
     g = cfg.getGraph();
     myGraph* mg = new myGraph();
     mg = instantiateGraph(g, cfg);
+    vis->orig = mg;
+    vis->cfg = &cfg;
     //vis->constructPathAnalyzer(mg, true, 0, 0, true);
 
    // std::cout << "took: " << timeDifference(t2, t1) << std::endl;
@@ -109,7 +111,7 @@ ss << "   };\n";
 ss << "void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {\n";
 ss << "    std::vector<string> path;\n";
 ss << "   for (unsigned int j = 0; j < pathR.size(); j++) {\n";
-ss << "       SgGraphNode* R = getGraphNode()[pathR[j]];\n";
+ss << "       SgGraphNode* R = orig->getGraphNode()[pathR[j]];\n";
 ss << "      CFGNode cf = cfg->toCFGNode(R);\n";
 ss << "       string str = cf.toString();";
 ss << "str.erase(std::remove(str.begin(), str.end(), '\\n'), str.end());\n";
@@ -138,6 +140,8 @@ ss << "SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();\n";
 ss << "g = cfg.getGraph();\n";
 ss << "myGraph* mg = new myGraph();\n";
 ss << "mg = instantiateGraph(g, cfg);\n";
+ss << "vis->orig = mg;\n";
+ss << "vis->cfg = &cfg;\n";
 //ss << "vis->tltnodes = 0;\n";
 //ss << "vis->paths = 0;\n";
 ss << "std::set<std::vector<string> > sssv;\n";
