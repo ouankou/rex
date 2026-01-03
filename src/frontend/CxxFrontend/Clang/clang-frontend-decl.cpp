@@ -127,7 +127,7 @@ static bool getExplicitInstantiationClassKind(
 
   const clang::LangOptions &lang = compiler->getLangOpts();
   bool saw_template = false;
-  for (int i = 0; i < 64; ++i) {
+  for (;;) {
     clang::Token tok;
     if (clang::Lexer::getRawToken(loc, tok, sm, lang,
                                   /*IgnoreWhiteSpace=*/true)) {
