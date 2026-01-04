@@ -3844,14 +3844,13 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     }
 
     if (lhs != NULL && rhs != NULL) {
-      SgAssignOp *assign_op = SageBuilder::buildAssignOp(lhs, rhs);
+      SgType *lhs_type = lhs->get_type();
       SgType *op_type =
           buildTypeFromQualifiedType(cxx_operator_call_expr->getType());
-      if (op_type != NULL) {
-        assign_op->set_type(op_type);
+      if (lhs_type != NULL && op_type != NULL && lhs_type == op_type) {
+        *node = SageBuilder::buildAssignOp(lhs, rhs);
+        return VisitExpr(cxx_operator_call_expr, node) && res;
       }
-      *node = assign_op;
-      return VisitExpr(cxx_operator_call_expr, node) && res;
     }
   }
 
