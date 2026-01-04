@@ -1,7 +1,4 @@
 if(ENABLE-TESTS-DIRECTORY)
-  if(TARGET rose_clang_libstdcxx_headers)
-    link_libraries(rose_clang_libstdcxx_headers)
-  endif()
   add_subdirectory(smoke)
   add_subdirectory(nonsmoke)
 endif()

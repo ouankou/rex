@@ -1,7 +1,3 @@
-if(TARGET rose_clang_libstdcxx_headers)
-  link_libraries(rose_clang_libstdcxx_headers)
-endif()
-
 add_custom_target(tools)
 
 add_subdirectory(checkFortranInterfaces)

@@ -124,6 +124,31 @@ private:
                 std::map<int, std::vector<std::vector<int>>> &localLoops);
   std::vector<std::vector<int>> bfsTraversePath(int begin, int end, CFG *&g,
                                                 bool loop = false);
+  void expandBfsFrontier(int begin, int end, CFG *&g, bool recursedloop,
+                         std::vector<std::vector<int>> &paths,
+                         std::vector<int> &localLoops,
+                         std::map<int, std::vector<std::vector<int>>> &ptp,
+                         const std::unordered_set<int> &completed_loops_set,
+                         const std::unordered_set<int> &recurses_lookup);
+  std::vector<std::vector<int>>
+  mergePathSegments(const std::vector<std::vector<int>> &paths,
+                    const std::map<int, std::vector<std::vector<int>>> &ptp,
+                    int begin);
+  void collectGlobalLoopPaths(
+      const std::vector<int> &localLoops, CFG *&g,
+      std::map<int, std::vector<std::vector<int>>> &globalLoopPaths,
+      std::vector<int> &completedLoops,
+      std::unordered_set<int> &completed_loops_set);
+  void collectLocalLoopsForPath(
+      const std::vector<int> &path,
+      const std::map<int, std::vector<std::vector<int>>> &globalLoopPaths,
+      std::map<int, std::vector<std::vector<int>>> &localLoops,
+      std::vector<int> &perms, std::vector<unsigned int> &qs, int &permnums);
+  std::vector<std::vector<int>> buildLoopPermutations(
+      const std::vector<int> &path,
+      std::map<int, std::vector<std::vector<int>>> &localLoops,
+      const std::vector<unsigned int> &qs, const std::vector<int> &perms,
+      int permnums);
   std::vector<int> unzipPath(std::vector<int> &path, CFG *&g, int start,
                              int end);
   std::vector<int> zipPath(std::vector<int> &path, CFG *&g, int start, int end);
@@ -376,34 +401,19 @@ std::vector<int> SgGraphTraversal<CFG>::unzipPath(std::vector<int> &pzipped,
   return unzipped;
 }
 
-/**
-The function responsible for collecting all paths without loops, and all paths
-within lops that do not include other loops then sending those to uTraverse to
-assemble them into all paths with any combination of loops Input:
-@param[begin] integer representation of the first node
-@param[end] integer representation of the last node (or -1 if its not bounded)
-@param[g] CFG*, the ambient CFG
-@param[loop] boolean expressing whether or not we are calculating paths
-contained within a loop
-*/
-
 template <class CFG>
-std::vector<std::vector<int>>
-SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
-  bool recursedloop = loop;
-  std::map<int, std::vector<std::vector<int>>> PtP;
+void SgGraphTraversal<CFG>::expandBfsFrontier(
+    int begin, int end, CFG *&g, bool recursedloop,
+    std::vector<std::vector<int>> &paths, std::vector<int> &localLoops,
+    std::map<int, std::vector<std::vector<int>>> &ptp,
+    const std::unordered_set<int> &completed_loops_set,
+    const std::unordered_set<int> &recurses_lookup) {
   std::set<int> nodes;
   std::vector<std::vector<int>> pathContainer;
-  std::vector<int> completedLoops;
   std::vector<int> bgpath;
   bgpath.push_back(begin);
   pathContainer.push_back(bgpath);
   std::vector<std::vector<int>> newPathContainer;
-  std::vector<std::vector<int>> paths;
-  std::vector<int> localLoops;
-  std::map<int, std::vector<std::vector<int>>> globalLoopPaths;
-  std::unordered_set<int> completed_loops_set;
-  std::unordered_set<int> recurses_lookup(recurses.begin(), recurses.end());
   while (!pathContainer.empty()) {
     // iterating through the currently discovered subpaths to build them up
     for (unsigned int i = 0; i < pathContainer.size(); i++) {
@@ -443,16 +453,16 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
           // we split up paths into pieces so that they don't take up a lot of
           // memory, basically this is when we run into a path more than once,
           // so we attach all paths that go to that path to that particular node
-          // via PtP
+          // via ptp
           if (nodes.find(tg) != nodes.end() &&
               path_nodes.find(tg) == path_nodes.end() && tg != end) {
-            if (PtP.find(tg) == PtP.end()) {
+            if (ptp.find(tg) == ptp.end()) {
               std::vector<int> nv;
               nv.push_back(tg);
               newPathContainer.push_back(nv);
-              PtP[tg].push_back(newpath);
+              ptp[tg].push_back(newpath);
             } else {
-              PtP[tg].push_back(newpath);
+              ptp[tg].push_back(newpath);
             }
           } else if (path_nodes.find(getTarget(oeds[j], g)) ==
                          path_nodes.end() ||
@@ -481,22 +491,28 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
     pathContainer = newPathContainer;
     newPathContainer.clear();
   }
-  pathContainer.clear();
+}
+
+template <class CFG>
+std::vector<std::vector<int>> SgGraphTraversal<CFG>::mergePathSegments(
+    const std::vector<std::vector<int>> &paths,
+    const std::map<int, std::vector<std::vector<int>>> &ptp, int begin) {
+  std::vector<std::vector<int>> working_paths = paths;
   std::vector<std::vector<int>> finnpts;
   std::vector<std::vector<int>> npts;
   while (true) {
-    if (paths.size() > 1000000) {
+    if (working_paths.size() > 1000000) {
       MLOG_ERROR_C("graphProcessing", "Too many paths; consider a subgraph.\n");
       ROSE_ABORT();
     }
-    for (unsigned int qq = 0; qq < paths.size(); qq++) {
-      std::vector<int> pq = paths[qq];
+    for (unsigned int qq = 0; qq < working_paths.size(); qq++) {
+      std::vector<int> pq = working_paths[qq];
       std::unordered_set<int> pq_lookup(pq.begin(), pq.end());
       std::vector<int> qp;
-      int ppf = paths[qq].front();
-      if (PtP.find(ppf) != PtP.end()) {
-        for (unsigned int kk = 0; kk < PtP[ppf].size(); kk++) {
-          std::vector<int> newpath = PtP[ppf][kk];
+      int ppf = working_paths[qq].front();
+      if (ptp.find(ppf) != ptp.end()) {
+        for (unsigned int kk = 0; kk < ptp.find(ppf)->second.size(); kk++) {
+          std::vector<int> newpath = ptp.find(ppf)->second[kk];
           bool good = true;
           if (newpath.back() == newpath.front() && newpath.front() != begin &&
               newpath.size() > 1) {
@@ -530,12 +546,19 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
     if (npts.size() == 0) {
       break;
     } else {
-      paths = npts;
+      working_paths = npts;
       npts.clear();
     }
   }
-  paths = finnpts;
-  finnpts.clear();
+  return finnpts;
+}
+
+template <class CFG>
+void SgGraphTraversal<CFG>::collectGlobalLoopPaths(
+    const std::vector<int> &localLoops, CFG *&g,
+    std::map<int, std::vector<std::vector<int>>> &globalLoopPaths,
+    std::vector<int> &completedLoops,
+    std::unordered_set<int> &completed_loops_set) {
   for (unsigned int k = 0; k < localLoops.size(); k++) {
     int lk = localLoops[k];
     std::vector<std::vector<int>> loopp;
@@ -558,6 +581,35 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
       }
     }
   }
+}
+
+/**
+The function responsible for collecting all paths without loops, and all paths
+within lops that do not include other loops then sending those to uTraverse to
+assemble them into all paths with any combination of loops Input:
+@param[begin] integer representation of the first node
+@param[end] integer representation of the last node (or -1 if its not bounded)
+@param[g] CFG*, the ambient CFG
+@param[loop] boolean expressing whether or not we are calculating paths
+contained within a loop
+*/
+
+template <class CFG>
+std::vector<std::vector<int>>
+SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
+  bool recursedloop = loop;
+  std::map<int, std::vector<std::vector<int>>> PtP;
+  std::vector<std::vector<int>> paths;
+  std::vector<int> localLoops;
+  std::map<int, std::vector<std::vector<int>>> globalLoopPaths;
+  std::vector<int> completedLoops;
+  std::unordered_set<int> completed_loops_set;
+  std::unordered_set<int> recurses_lookup(recurses.begin(), recurses.end());
+  expandBfsFrontier(begin, end, g, recursedloop, paths, localLoops, PtP,
+                    completed_loops_set, recurses_lookup);
+  paths = mergePathSegments(paths, PtP, begin);
+  collectGlobalLoopPaths(localLoops, g, globalLoopPaths, completedLoops,
+                         completed_loops_set);
   borrowed = true;
   std::vector<std::vector<int>> lps2;
 
@@ -579,6 +631,106 @@ SgGraphTraversal<CFG>::bfsTraversePath(int begin, int end, CFG *&g, bool loop) {
     }
   }
   return lps2;
+}
+
+template <class CFG>
+void SgGraphTraversal<CFG>::collectLocalLoopsForPath(
+    const std::vector<int> &path,
+    const std::map<int, std::vector<std::vector<int>>> &globalLoopPaths,
+    std::map<int, std::vector<std::vector<int>>> &localLoops,
+    std::vector<int> &perms, std::vector<unsigned int> &qs, int &permnums) {
+  std::vector<int> takenLoops;
+  takenLoops.push_back(path[0]);
+  int lost = 0;
+  for (unsigned int q = 1; q < path.size() - 1; q++) {
+    auto it = globalLoopPaths.find(path[q]);
+    if (it != globalLoopPaths.end() && !it->second.empty()) {
+      std::unordered_set<int> taken_lookup(takenLoops.begin(),
+                                           takenLoops.end());
+      for (unsigned int qp1 = 0; qp1 < it->second.size(); qp1++) {
+        const std::vector<int> &gp = it->second[qp1];
+        bool taken = false;
+        for (int node : gp) {
+          if (taken_lookup.count(node) != 0U) {
+            taken = true;
+            break;
+          }
+        }
+
+        if (!taken) {
+          localLoops[path[q]].push_back(gp);
+        } else {
+          lost++;
+          taken = false;
+        }
+      }
+      if (localLoops[path[q]].size() != 0) {
+        takenLoops.push_back(path[q]);
+        permnums *= (localLoops[path[q]].size() + 1);
+        perms.push_back(permnums);
+        qs.push_back(path[q]);
+      }
+    }
+  }
+}
+
+template <class CFG>
+std::vector<std::vector<int>> SgGraphTraversal<CFG>::buildLoopPermutations(
+    const std::vector<int> &path,
+    std::map<int, std::vector<std::vector<int>>> &localLoops,
+    const std::vector<unsigned int> &qs, const std::vector<int> &perms,
+    int permnums) {
+  std::set<std::vector<int>> movepathscheck;
+  std::vector<int> nvec;
+  std::vector<std::vector<int>> boxpaths(permnums, nvec);
+  for (int i = 1; i <= permnums; i++) {
+    std::vector<int> loopsTaken;
+    unsigned int j = 0;
+    std::vector<int> npath;
+    while (true) {
+      if (j == perms.size() || perms[j] > i) {
+        break;
+      } else {
+        j++;
+      }
+    }
+    int pn = i;
+    std::vector<int> pL;
+    for (unsigned int j1 = 0; j1 <= j; j1++) {
+      pL.push_back(-1);
+    }
+    for (unsigned int k = j; k > 0; k--) {
+      int l = 1;
+      while (perms[k - 1] * l < pn) {
+        l++;
+      }
+      pL[k] = l - 2;
+      pn -= (perms[k - 1] * (l - 1));
+    }
+    pL[0] = pn - 2;
+
+    unsigned int q2 = 0;
+    for (unsigned int q1 = 0; q1 < path.size(); q1++) {
+      if (q2 < qs.size()) {
+        if (qs.size() != 0 && (unsigned)path[q1] == qs[q2] &&
+            (size_t)q2 != pL.size()) {
+          if (pL[q2] == -1) {
+            npath.push_back(path[q1]);
+          } else {
+            npath.insert(npath.end(), localLoops[path[q1]][pL[q2]].begin(),
+                         localLoops[path[q1]][pL[q2]].end());
+          }
+          q2++;
+        } else {
+          npath.push_back(path[q1]);
+        }
+      } else {
+        npath.push_back(path[q1]);
+      }
+    }
+    boxpaths[i - 1] = npath;
+  }
+  return boxpaths;
 }
 
 /**
@@ -634,95 +786,10 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         std::vector<int> perms;
         std::vector<unsigned int> qs;
         std::map<int, std::vector<std::vector<int>>> localLoops;
-        std::vector<int> takenLoops;
-        takenLoops.push_back(path[0]);
-        int lost = 0;
-        for (unsigned int q = 1; q < path.size() - 1; q++) {
-          if (globalLoopPaths.find(path[q]) != globalLoopPaths.end() &&
-              !globalLoopPaths[path[q]].empty()) {
-            std::unordered_set<int> taken_lookup(takenLoops.begin(),
-                                                 takenLoops.end());
-            for (unsigned int qp1 = 0; qp1 < globalLoopPaths[path[q]].size();
-                 qp1++) {
-
-              const std::vector<int> &gp = globalLoopPaths
-                  [path[q]]
-                  [qp1]; // unzipPath(globalLoopPaths[path[q]][qp1],g,path[q],path[q]);
-              bool taken = false;
-              for (int node : gp) {
-                if (taken_lookup.count(node) != 0U) {
-                  taken = true;
-                  break;
-                }
-              }
-
-              if (!taken) {
-                localLoops[path[q]].push_back(gp);
-              } else {
-                lost++;
-                taken = false;
-              }
-            }
-            if (localLoops[path[q]].size() != 0) {
-              takenLoops.push_back(path[q]);
-              permnums *= (localLoops[path[q]].size() + 1);
-              perms.push_back(permnums);
-              qs.push_back(path[q]);
-            }
-          }
-        }
-
-        std::set<std::vector<int>> movepathscheck;
-        std::vector<int> nvec;
-        std::vector<std::vector<int>> boxpaths(permnums, nvec);
-        for (int i = 1; i <= permnums; i++) {
-          std::vector<int> loopsTaken;
-          unsigned int j = 0;
-          std::vector<int> npath;
-          while (true) {
-            if (j == perms.size() || perms[j] > i) {
-              break;
-            } else {
-              j++;
-            }
-          }
-          int pn = i;
-          std::vector<int> pL;
-          for (unsigned int j1 = 0; j1 <= j; j1++) {
-            pL.push_back(-1);
-          }
-          for (unsigned int k = j; k > 0; k--) {
-            int l = 1;
-            while (perms[k - 1] * l < pn) {
-              l++;
-            }
-            pL[k] = l - 2;
-            pn -= (perms[k - 1] * (l - 1));
-          }
-          pL[0] = pn - 2;
-
-          unsigned int q2 = 0;
-          for (unsigned int q1 = 0; q1 < path.size(); q1++) {
-            if (q2 < qs.size()) {
-              if (qs.size() != 0 && (unsigned)path[q1] == qs[q2] &&
-                  (size_t)q2 != pL.size()) {
-                if (pL[q2] == -1) {
-                  npath.push_back(path[q1]);
-                } else {
-                  npath.insert(npath.end(),
-                               localLoops[path[q1]][pL[q2]].begin(),
-                               localLoops[path[q1]][pL[q2]].end());
-                }
-                q2++;
-              } else {
-                npath.push_back(path[q1]);
-              }
-            } else {
-              npath.push_back(path[q1]);
-            }
-          }
-          boxpaths[i - 1] = npath;
-        }
+        collectLocalLoopsForPath(path, globalLoopPaths, localLoops, perms, qs,
+                                 permnums);
+        std::vector<std::vector<int>> boxpaths =
+            buildLoopPermutations(path, localLoops, qs, perms, permnums);
 
         unsigned long long eval_increment =
             static_cast<unsigned long long>(boxpaths.size());
