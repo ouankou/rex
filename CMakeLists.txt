@@ -765,7 +765,13 @@ endif()
 
 # define a global variable to collect all common linked third-party libraries for rose (Linux-only)
 find_package(Threads REQUIRED)
-set(link_with_libraries ${M_LIB} ${RT_LIB} Threads::Threads)
+set(link_with_libraries Threads::Threads)
+if(M_LIB)
+  list(APPEND link_with_libraries m)
+endif()
+if(RT_LIB)
+  list(APPEND link_with_libraries rt)
+endif()
 if(HAVE_QUADMATH_COMPILE)
   list(APPEND link_with_libraries quadmath)
 endif()
@@ -1002,6 +1008,11 @@ if(NOT DEFINED CMAKE_INSTALL_RPATH)
     "${origin}/../lib"
     "${origin}"
   )
+  if(ROSE_JVM_LIBRARY_DIR)
+    list(APPEND CMAKE_INSTALL_RPATH
+      "${ROSE_JVM_LIBRARY_DIR}"
+    )
+  endif()
   list(APPEND CMAKE_INSTALL_RPATH
     "${CMAKE_INSTALL_PREFIX}/lib"
     "${CMAKE_INSTALL_PREFIX}/bin"
@@ -1013,7 +1024,7 @@ endif()
 
 if(NOT DEFINED CMAKE_BUILD_WITH_INSTALL_RPATH)
   message(STATUS "Setting CMAKE_BUILD_WITH_INSTALL_RPATH")
-  set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 endif()
 
 if(NOT DEFINED CMAKE_BUILD_RPATH)
