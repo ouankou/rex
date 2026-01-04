@@ -7651,14 +7651,13 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       unsigned int functionConstVolatileFlags =
           member_type != NULL ? member_type->get_mfunc_specifier() : 0;
 
-      SgTemplateArgumentPtrList *builder_args =
-          new SgTemplateArgumentPtrList(template_args);
+      SgTemplateArgumentPtrList builder_args(template_args);
       SgTemplateInstantiationMemberFunctionDecl *new_inst_decl =
           isSgTemplateInstantiationMemberFunctionDecl(
               SageBuilder::buildNondefiningMemberFunctionDeclaration(
                   template_base_name, ret_type, param_list, func_scope,
                   functionConstVolatileFlags,
-                  /*buildTemplateInstantiation=*/true, builder_args));
+                  /*buildTemplateInstantiation=*/true, &builder_args));
 
       if (new_inst_decl == NULL) {
         return member_symbol;
