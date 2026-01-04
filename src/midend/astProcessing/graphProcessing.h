@@ -777,45 +777,57 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         return loopPaths;
       }
 
-#pragma omp parallel for schedule(guided)
-      for (unsigned int qqq = 0; qqq < paths.size(); qqq++) {
-        std::set<std::vector<int>> movepaths;
-        std::vector<int> path; // = paths[qqq];
-        path = paths[qqq];     // unzipPath(paths[qqq], g, begin, end);
-        int permnums = 1;
-        std::vector<int> perms;
-        std::vector<unsigned int> qs;
-        std::map<int, std::vector<std::vector<int>>> localLoops;
-        collectLocalLoopsForPath(path, globalLoopPaths, localLoops, perms, qs,
-                                 permnums);
-        std::vector<std::vector<int>> boxpaths =
-            buildLoopPermutations(path, localLoops, qs, perms, permnums);
+#pragma omp parallel
+      {
+        std::set<std::vector<int>> local_loop_paths;
+#pragma omp for schedule(guided)
+        for (unsigned int qqq = 0; qqq < paths.size(); qqq++) {
+          std::set<std::vector<int>> movepaths;
+          std::vector<int> path; // = paths[qqq];
+          path = paths[qqq];     // unzipPath(paths[qqq], g, begin, end);
+          int permnums = 1;
+          std::vector<int> perms;
+          std::vector<unsigned int> qs;
+          std::map<int, std::vector<std::vector<int>>> localLoops;
+          collectLocalLoopsForPath(path, globalLoopPaths, localLoops, perms, qs,
+                                   permnums);
+          std::vector<std::vector<int>> boxpaths =
+              buildLoopPermutations(path, localLoops, qs, perms, permnums);
 
-        unsigned long long eval_increment =
-            static_cast<unsigned long long>(boxpaths.size());
+          unsigned long long eval_increment =
+              static_cast<unsigned long long>(boxpaths.size());
 #pragma omp atomic
-        evaledpaths += eval_increment;
-#pragma omp critical
-        {
-          if (evaledpaths > newmil * 100000ull) {
-            newmil++;
-          }
-        }
-        if (!loop) {
-          for (std::vector<std::vector<int>>::iterator box = boxpaths.begin();
-               box != boxpaths.end(); box++) {
-            std::vector<Vertex> verts;
-            getVertexPath((*box), g, verts);
-#pragma omp critical
-            {
-              analyzePath(verts);
-            }
-          }
-        } else {
+          evaledpaths += eval_increment;
 #pragma omp critical
           {
-            loopPaths.insert(boxpaths.begin(), boxpaths.end());
-            ;
+            if (evaledpaths > newmil * 100000ull) {
+              newmil++;
+            }
+          }
+          if (!loop) {
+            for (std::vector<std::vector<int>>::iterator box = boxpaths.begin();
+                 box != boxpaths.end(); box++) {
+              std::vector<Vertex> verts;
+              getVertexPath((*box), g, verts);
+              if (needssafety) {
+                // Some analyzePath implementations are not thread-safe;
+                // serialize in this mode to avoid data races.
+#pragma omp critical
+                {
+                  analyzePath(verts);
+                }
+              } else {
+                analyzePath(verts);
+              }
+            }
+          } else {
+            local_loop_paths.insert(boxpaths.begin(), boxpaths.end());
+          }
+        }
+        if (loop && !local_loop_paths.empty()) {
+#pragma omp critical
+          {
+            loopPaths.insert(local_loop_paths.begin(), local_loop_paths.end());
           }
         }
       }
