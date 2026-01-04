@@ -1,7 +1,4 @@
 if(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY)
-  if(TARGET rose_clang_libstdcxx_headers)
-    link_libraries(rose_clang_libstdcxx_headers)
-  endif()
   include_directories(${ROSE_INCLUDES})
   add_subdirectory(DOTGenerator)
   add_subdirectory(AstCopyReplTester)

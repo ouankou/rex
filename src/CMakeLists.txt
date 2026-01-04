@@ -1,10 +1,6 @@
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Ddisc_union=union")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ddisc_union=union")
 
-if(TARGET rose_clang_libstdcxx_headers)
-  link_libraries(rose_clang_libstdcxx_headers)
-endif()
-
 ########################################################################################################################
 # Configuration header files
 ########################################################################################################################
@@ -256,6 +252,9 @@ list(APPEND LINK_FILES antlr4-runtime)
 # Smaller-generated-files support removed; link standard targets only.
 set(ROSE_TARGET_LINK ${LINK_FILES})
 target_link_libraries(ROSE_DLL PRIVATE ${ROSE_TARGET_LINK})
+if(TARGET rose_clang_libstdcxx_headers)
+  target_link_libraries(ROSE_DLL PRIVATE rose_clang_libstdcxx_headers)
+endif()
 if(ROSE_JVM_LIBRARY)
   target_link_libraries(ROSE_DLL PUBLIC ${ROSE_JVM_LIBRARY})
   get_filename_component(ROSE_JVM_LIBRARY_DIR "${ROSE_JVM_LIBRARY}" DIRECTORY)
