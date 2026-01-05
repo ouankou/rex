@@ -1,0 +1,38 @@
+name: Codex review (on PR updates)
+
+# This workflow posts @codex review comment on PR updates.
+# It runs on new commits pushed to PRs (synchronize) and when PRs are opened/reopened.
+#
+# REQUIRES: Repository secret 'CODEX_COMMENT_TOKEN' - Personal Access Token with:
+#   - Permissions: pull_requests: write (to post comments as user)
+#   - Scopes: repo (for private repos) or public_repo (for public repos)
+# If absent, skip posting (github-actions[bot] comments do not trigger agent
+# review and are ignored).
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    env:
+      CODEX_COMMENT_TOKEN: ${{ secrets.CODEX_COMMENT_TOKEN }}
+    steps:
+      - name: Post @codex review comment
+        if: ${{ env.CODEX_COMMENT_TOKEN != '' }}
+        env:
+          # Use PAT to post as user instead of github-actions bot
+          # This allows Copilot to respond to the @codex mention
+          GH_TOKEN: ${{ env.CODEX_COMMENT_TOKEN }}
+        run: |
+          echo "Posting @codex review comment to PR #${{ github.event.pull_request.number }}"
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body "@codex review"
+          echo "✓ Posted @codex review comment"
