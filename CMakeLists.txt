@@ -1027,6 +1027,7 @@ if(NOT DEFINED CMAKE_INSTALL_RPATH)
   set(origin "$ORIGIN")
   set(CMAKE_INSTALL_RPATH
     "${origin}/../lib"
+    "${origin}"
   )
   if(ROSE_JVM_LIBRARY_DIR)
     list(APPEND CMAKE_INSTALL_RPATH
