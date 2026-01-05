@@ -4760,6 +4760,16 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
      bool suppress_typename =
          is_first_in_nonreal_chain &&
          nrdecl->getAttribute(kRexNonrealNoTypenameAttr) != NULL;
+     if (is_first_in_nonreal_chain) {
+       if (const SgTemplateArgument *template_arg = isSgTemplateArgument(
+               info.get_reference_node_for_qualification())) {
+         if (template_arg->get_argumentType() ==
+             SgTemplateArgument::template_template_argument) {
+           // Template-template arguments require a template-name, not typename.
+           suppress_typename = true;
+         }
+       }
+     }
 
      bool has_nonreal_parent = false;
      if (nrdecl->get_templateDeclaration() == NULL) {
