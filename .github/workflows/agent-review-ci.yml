@@ -6,7 +6,8 @@ name: Codex review (on PR updates)
 # REQUIRES: Repository secret 'CODEX_COMMENT_TOKEN' - Personal Access Token with:
 #   - Permissions: pull_requests: write (to post comments as user)
 #   - Scopes: repo (for private repos) or public_repo (for public repos)
-# Without PAT, comments will be posted as github-actions[bot] and Copilot won't respond
+# If absent, skip posting (github-actions[bot] comments do not trigger agent
+# review and are ignored).
 
 on:
   pull_request:
