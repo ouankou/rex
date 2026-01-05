@@ -20,13 +20,15 @@ permissions:
 jobs:
   comment:
     runs-on: ubuntu-latest
+    env:
+      CODEX_COMMENT_TOKEN: ${{ secrets.CODEX_COMMENT_TOKEN }}
     steps:
       - name: Post @codex review comment
-        if: ${{ secrets.CODEX_COMMENT_TOKEN != '' }}
+        if: ${{ env.CODEX_COMMENT_TOKEN != '' }}
         env:
           # Use PAT to post as user instead of github-actions bot
           # This allows Copilot to respond to the @codex mention
-          GH_TOKEN: ${{ secrets.CODEX_COMMENT_TOKEN }}
+          GH_TOKEN: ${{ env.CODEX_COMMENT_TOKEN }}
         run: |
           echo "Posting @codex review comment to PR #${{ github.event.pull_request.number }}"
           gh pr comment ${{ github.event.pull_request.number }} \
