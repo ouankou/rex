@@ -254,7 +254,9 @@ set(INCLUDE_INSTALL_DIR "include/rose")
 set(INCLUDE_INSTALL_DIR_FOR_INTRINSICS "include")
 set(BIN_INSTALL_DIR     "bin")
 set(LIB_INSTALL_DIR     "${ROSE_LIB_DIR_NAME}")
+set(CLANG_BUILTIN_HEADERS_INSTALL_DIR "${INCLUDE_INSTALL_DIR_FOR_INTRINSICS}/clang")
 add_compile_definitions(ROSE_INSTALL_INCLUDE_DIR=\"${INCLUDE_INSTALL_DIR}\")
+add_compile_definitions(ROSE_INSTALL_CLANG_INCLUDE_DIR=\"${CLANG_BUILTIN_HEADERS_INSTALL_DIR}\")
 
 # A new definition to tweak code for cmake
 set(USE_CMAKE 1)
@@ -799,7 +801,7 @@ endif()
 if(ENABLE-C)
   include(roseChooseBackendCompiler)
   include(roseGenerateBackendCompilerSpecificHeaders)
-  install(DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/ DESTINATION include/clang)
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/ DESTINATION ${CLANG_BUILTIN_HEADERS_INSTALL_DIR})
 else()
   # These are required to be defined even when C/C++ analysis is not enabled, but their values don't matter
   set(BACKEND_C_COMPILER_NAME_WITHOUT_PATH "no_compiler")

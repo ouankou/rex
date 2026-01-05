@@ -154,13 +154,19 @@ int clang_to_dot_main(int argc, char ** argv)
                                                        c_config_include_dirs_array + sizeof(c_config_include_dirs_array) / sizeof(const char*)
                                                      );
 
+    std::string install_prefix;
     std::string rose_include_path;
-    bool in_install_tree = roseInstallPrefix(rose_include_path);
+    std::string builtin_include_path;
+    bool in_install_tree = roseInstallPrefix(install_prefix);
     if (in_install_tree) {
-      rose_include_path += "/" + std::string(ROSE_INSTALL_INCLUDE_DIR) + "/";
-    }
-    else {
-        rose_include_path = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
+      rose_include_path =
+          install_prefix + "/" + std::string(ROSE_INSTALL_INCLUDE_DIR) + "/";
+      builtin_include_path = install_prefix + "/" +
+                             std::string(ROSE_INSTALL_CLANG_INCLUDE_DIR) + "/";
+    } else {
+      rose_include_path =
+          std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
+      builtin_include_path = rose_include_path + "clang/";
     }
 
     std::vector<std::string>::iterator it;
@@ -171,8 +177,7 @@ int clang_to_dot_main(int argc, char ** argv)
         if (it->length() > 0 && (*it)[0] != '/')
             *it = rose_include_path + *it;
 
-    inc_dirs_list.push_back(rose_include_path + "clang/");
-
+    inc_dirs_list.push_back(builtin_include_path);
 
     // FIXME add ROSE path to gcc headers...
     switch (language) {
