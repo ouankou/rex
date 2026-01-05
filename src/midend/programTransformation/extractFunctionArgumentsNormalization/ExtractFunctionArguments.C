@@ -188,10 +188,7 @@ bool ExtractFunctionArguments::IsNormalizable(SgNode* tree){
 void ExtractFunctionArguments::RewriteFunctionCallArguments(const FunctionCallInfo& functionCallInfo)
 {
     SgFunctionCallExp* functionCall = functionCallInfo.functionCall;
-    
-    // Force the function call to NOT use operator syntax
-    functionCall->set_uses_operator_syntax(false);
-    
+
     SgExprListExp* functionArgs = functionCall->get_args();
     ROSE_ASSERT(functionArgs != NULL);
     

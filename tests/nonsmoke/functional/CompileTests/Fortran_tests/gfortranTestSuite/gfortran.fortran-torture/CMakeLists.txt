@@ -32,3 +32,36 @@ foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES})
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE)
 endforeach()
+
+set(_gfortran_torture_disabled_f90
+  data_1.f90
+  do_1.f90
+  enum_1.f90
+  forall-1.f90
+  parameter_2.f90
+  pr40421.f90
+)
+
+foreach(file_to_test ${_gfortran_torture_disabled_f90})
+  add_test(
+    NAME GFORTRANSUITE_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:f90 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(GFORTRANSUITE_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+endforeach()
+
+set(_gfortran_torture_disabled_f77
+  pr32663.f
+  pr39937.f
+  pr40421.f
+)
+
+foreach(file_to_test ${_gfortran_torture_disabled_f77})
+  add_test(
+    NAME GFORTRANSUITE_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:f77 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(GFORTRANSUITE_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+endforeach()

@@ -4749,6 +4749,29 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
      SgNonrealDecl * nrdecl = isSgNonrealDecl(nrtype->get_declaration());
      ASSERT_not_null(nrdecl);
 
+     static const char kRexNonrealTemplateKeywordAttr[] =
+         "rex_nonreal_template_keyword";
+     static const char kRexNonrealGlobalQualifierAttr[] =
+         "rex_nonreal_global_qualifier";
+     static const char kRexNonrealNoTypenameAttr[] = "rex_nonreal_no_typename";
+     bool has_global_qualifier =
+         is_first_in_nonreal_chain &&
+         nrdecl->getAttribute(kRexNonrealGlobalQualifierAttr) != NULL;
+     bool suppress_typename =
+         is_first_in_nonreal_chain &&
+         nrdecl->getAttribute(kRexNonrealNoTypenameAttr) != NULL;
+     if (is_first_in_nonreal_chain) {
+       if (const SgTemplateArgument *template_arg = isSgTemplateArgument(
+               info.get_reference_node_for_qualification())) {
+         if (template_arg->get_argumentType() ==
+             SgTemplateArgument::template_template_argument) {
+           // Template-template arguments require a template-name, not typename.
+           suppress_typename = true;
+         }
+       }
+     }
+
+     bool has_nonreal_parent = false;
      if (nrdecl->get_templateDeclaration() == NULL) {
        SgNode * parent = nrdecl->get_parent();
        ASSERT_not_null(parent);
@@ -4763,10 +4786,20 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 #if DEBUG_UNPARSE_NONREAL_TYPE
        printf(" --- nrparent_nrscope = %p (%s)\n", nrparent_nrscope, nrparent_nrscope != NULL ? nrparent_nrscope->class_name().c_str() : NULL);
 #endif
+       has_nonreal_parent = (nrparent_nrscope != NULL);
        if (nrparent_nrscope != NULL) {
-         if (is_first_in_nonreal_chain) curprint("typename ");
+         if (is_first_in_nonreal_chain) {
+           if (!suppress_typename) {
+             curprint("typename ");
+           }
+           if (has_global_qualifier)
+             curprint("::");
+         }
          unparseNonrealType(nrparent_nrscope->get_type(), info, false);
          curprint("::");
+       } else {
+         if (has_global_qualifier)
+           curprint("::");
        }
 
      } else if (info.get_reference_node_for_qualification()) {
@@ -4775,12 +4808,14 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
        printf(" --- nameQualifier = %s\n", nameQualifier.str());
 #endif
        curprint(nameQualifier.str());
+       has_nonreal_parent = true;
      }
 
      SgTemplateArgumentPtrList & tpl_args = nrdecl->get_tpl_args();
 
-     // if template argument are provided then the "template" keyword has to be added
-  // if (tpl_args.size() > 0) curprint("template ");
+     if (has_nonreal_parent &&
+         nrdecl->getAttribute(kRexNonrealTemplateKeywordAttr) != NULL)
+       curprint("template ");
 
      // output the name of the non-real type
      curprint(nrtype->get_name());

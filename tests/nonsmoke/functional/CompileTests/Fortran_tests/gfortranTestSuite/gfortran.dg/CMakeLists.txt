@@ -394,6 +394,97 @@ foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE)
 endforeach()
 
+set(_gfortran_f90_disabled_tests
+  enum_1.f90
+  implicit_2.f90
+  implicit_derived_type_1.f90
+  iso_fortran_env_1.f90
+  iso_fortran_env_2.f90
+  reshape_2.f90
+  transfer_array_intrinsic_2.f90
+)
+
+foreach(file_to_test ${_gfortran_f90_disabled_tests})
+  add_test(
+    NAME GFORTRANSUITE_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:f90 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(GFORTRANSUITE_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+endforeach()
+
+set(_gfortran_f77_disabled_tests
+  literal_character_constant_1_x.F
+  literal_character_constant_1_y.F
+  literal_character_constant_1_z.F
+)
+
+foreach(file_to_test ${_gfortran_f77_disabled_tests})
+  add_test(
+    NAME GFORTRANSUITE_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:f77 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(GFORTRANSUITE_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+endforeach()
+
+set(_gfortran_untested_tests
+  bind_c_coms_driver.c
+  bind_c_dts_2_driver.c
+  bind_c_dts_driver.c
+  bind_c_usage_10_c.c
+  bind_c_usage_16_c.c
+  bind_c_usage_17_c.c
+  bind_c_vars_driver.c
+  c_by_val.c
+  c_char_driver.c
+  c_f_pointer_complex_driver.c
+  c_f_pointer_logical_driver.c
+  c_f_pointer_shape_tests_2_driver.c
+  c_f_pointer_shape_tests_4_driver.c
+  c_f_tests_driver.c
+  c_funloc_tests_3_funcs.c
+  c_funloc_tests_4_driver.c
+  c_kinds.c
+  c_loc_driver.c
+  c_loc_tests_2_funcs.c
+  c_ptr_tests_7_driver.c
+  c_ptr_tests_8_funcs.c
+  c_ptr_tests_driver.c
+  c_size_t_driver.c
+  enum_10.c
+  f2c_4.c
+  f2c_5.c
+  g77/cpp5.h
+  g77/cpp5inc.h
+  global_vars_c_init_driver.c
+  global_vars_f90_init_driver.c
+  iso_c_binding_rename_1_driver.c
+  iso_c_binding_rename_2_driver.c
+  lrshift_1.c
+  lto/20091028-1_1.c
+  lto/20091028-2_1.c
+  lto/20100222-1_1.c
+  lto/pr40725_1.c
+  mixed_io_1.c
+  only_clause_main.c
+  pr32627_driver.c
+  proc_ptr_7.c
+  proc_ptr_8.c
+  static_linking_1.c
+  test_c_assoc.c
+  value_4.c
+)
+
+foreach(file_to_test ${_gfortran_untested_tests})
+  add_test(
+    NAME GFORTRANSUITE_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(GFORTRANSUITE_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+endforeach()
+
 # Note: If using gfortran version greater then 4.1, we can't call it with Fortran 2003 code since it is so buggy.
 #       So we use -rose:skip_syntax_check to avoid the frontend syntax checking and -rose:skipfinalCompileStep
 #       to avoid processing the generated code (which would have the same problem).  It is easier to just use
@@ -408,3 +499,19 @@ foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE)
 endforeach()
 
+set(_gfortran_f03_disabled_tests
+  array_constructor_type_7.f03
+  array_constructor_type_10.f03
+  array_constructor_type_19.f03
+  array_constructor_type_21.f03
+)
+
+foreach(file_to_test ${_gfortran_f03_disabled_tests})
+  add_test(
+    NAME GFORTRANSUITE_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
+            -rose:skipfinalCompileStep -rose:f2003 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(GFORTRANSUITE_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+endforeach()

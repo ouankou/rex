@@ -400,9 +400,10 @@ frontend (const std::vector<std::string>& argv, bool frontendConstantFolding )
      project->set_frontendConstantFolding(frontendConstantFolding);
 
      // Create the AST by setting command-line options and then parsing all files from the command line
-     project->parse(argv);
+     project->parse(argv2);
 
-  // DQ (1/27/2017): Comment this out so that we can generate the dot graph to debug symbol with null basis.
+     // DQ (1/27/2017): Comment this out so that we can generate the dot graph
+     // to debug symbol with null basis.
      unsetNodesMarkedAsModified(project);
 
   // Set the mode to be transformation, mostly for Fortran. Liao 8/1/2013

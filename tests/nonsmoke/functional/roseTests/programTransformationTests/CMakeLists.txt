@@ -1,5 +1,5 @@
-#add_subdirectory(extractFunctionArgumentsTest)
-#add_subdirectory(singleStatementToBlockNormalization)
+add_subdirectory(extractFunctionArgumentsTest)
+add_subdirectory(singleStatementToBlockNormalization)
 
 #-------------------------------------------------------------------------------
 # preTest
@@ -67,6 +67,39 @@ foreach(file_to_test ${files_to_test})
 endforeach()
 
 #-------------------------------------------------------------------------------
+# finiteDifferencingDemo
+
+add_executable(finiteDifferencingDemo finiteDifferencingDemo.C)
+target_link_libraries(finiteDifferencingDemo
+  ROSE_DLL ${link_with_libraries})
+
+add_test(
+  NAME finiteDifferencingDemo_finitediff_test1.C
+  COMMAND finiteDifferencingDemo
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/finitediff_test1.C
+)
+set_tests_properties(finiteDifferencingDemo_finitediff_test1.C PROPERTIES DISABLED TRUE)
+
+#-------------------------------------------------------------------------------
+# testFunctionNormalization
+
+add_executable(testFunctionNormalization testFunctionNormalization.C)
+target_link_libraries(testFunctionNormalization
+  ROSE_DLL ${link_with_libraries})
+
+set(function_normalization_tests
+  functionNormalizationTest1.C
+  functionNormalizationTest2.C)
+foreach(file_to_test ${function_normalization_tests})
+  add_test(
+    NAME functionNormalization_${file_to_test}
+    COMMAND testFunctionNormalization -rose:verbose 0
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
+  )
+  set_tests_properties(functionNormalization_${file_to_test} PROPERTIES DISABLED TRUE)
+endforeach()
+
+#-------------------------------------------------------------------------------
 # constantFoldingTest
 
 add_executable(constantFoldingTest constantFoldingTest.C)
@@ -88,12 +121,11 @@ add_test(
 	  -rose:output rose_inputCode_constantFoldingTransformation_1.C
 )
 
-#FIXME: Test is failing
-#add_test(
-#  NAME constantFoldingTest_3
-#  COMMAND constantFoldingTest2
-#    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation.C
-#)
+add_test(
+  NAME constantFoldingTest_3
+  COMMAND constantFoldingTest2
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation2.C
+)
 
 #-------------------------------------------------------------------------------
 # implicitCodeGenerationTest

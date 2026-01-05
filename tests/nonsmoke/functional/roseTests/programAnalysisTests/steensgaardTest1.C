@@ -4,9 +4,8 @@
 struct lessVariable
 {
    //typedef long Variable;
-   bool operator () (const Variable v1, const Variable v2)
-   {
-      return v1 < v2;
+   bool operator()(const std::string &v1, const std::string &v2) {
+     return v1 < v2;
    }
 };
 
@@ -69,4 +68,3 @@ int main(int argc, char* argv[]) {
   
   return 0;
 }
-

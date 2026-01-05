@@ -50,6 +50,12 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
 
   add_library(roseFortran ${libroseFortran_SOURCES})
   target_link_libraries(roseFortran ${JAVA_JVM_LIBRARY})
+  if(JAVA_JVM_LIBRARY)
+    get_filename_component(ROSE_JVM_LIBRARY_DIR "${JAVA_JVM_LIBRARY}" DIRECTORY)
+    if(ROSE_JVM_LIBRARY_DIR)
+      set_property(TARGET roseFortran APPEND PROPERTY INSTALL_RPATH "${ROSE_JVM_LIBRARY_DIR}")
+    endif()
+  endif()
   add_dependencies(roseFortran rosetta_generated)
   ########### next target ###############
 

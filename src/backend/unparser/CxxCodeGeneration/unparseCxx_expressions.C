@@ -1026,7 +1026,11 @@ Unparse_ExprStmt::unparseTemplateArgumentList(const SgTemplateArgumentPtrList & 
        // DQ (5/26/2014): In the case of a template instantiation with empty template argument list, output
        // a " " to be consistent with the behavior when there is a non-empty template argument list.
        // This is a better fix for the template issue that Robb pointed out and that was fixed last week.
-          unp->u_exprStmt->curprint(" ");
+       if (isEmptyTemplateArgumentList == true) {
+         unp->u_exprStmt->curprint("< > ");
+       } else {
+         unp->u_exprStmt->curprint(" ");
+       }
         }
 
   // DQ (2/11/2019): Need to control use of empty <> in template argument list handling.
@@ -1160,6 +1164,10 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
 
                     SgType* type = templateParameter->get_initializedName()->get_type();
                     ASSERT_not_null(type);
+                    bool is_pack = templateParameter->get_is_parameter_pack();
+                    if (SgTemplateType *ttype = isSgTemplateType(type)) {
+                      is_pack = is_pack || ttype->get_packed();
+                    }
 #if 0
                     printf ("unparseTemplateParameter(): case SgTemplateParameter::nontype_parameter: templateParameter->get_initializedName()->get_type() = %p = %s \n",type,type->class_name().c_str());
 #endif
@@ -1169,6 +1177,9 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                     if (is_template_header) {
                       SgUnparse_Info ninfo(info);
                       unp->u_type->unparseType(type,ninfo);
+                      if (is_pack) {
+                        curprint("... ");
+                      }
                     }
                     curprint(templateParameter->get_initializedName()->get_name());
                   }
@@ -1189,7 +1200,17 @@ Unparse_ExprStmt::unparseTemplateParameter(SgTemplateParameter* templateParamete
                SgTemplateParameterPtrList & templateParameterList = nrdecl->get_tpl_params();
                Unparse_ExprStmt::unparseTemplateParameterList (templateParameterList, info, true);
 
-               curprint(" typename ");
+               std::string kw = SageInterface::getTemplateParameterKeyword(
+                   templateParameter);
+               if (kw.empty()) {
+                 kw = "typename";
+               }
+               curprint(" ");
+               curprint(kw);
+               curprint(" ");
+               if (templateParameter->get_is_parameter_pack()) {
+                 curprint("... ");
+               }
 
                curprint(nrdecl->get_name());
 #if 0
@@ -4044,6 +4065,18 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
              {
                newinfo.set_nested_expression();
 
+               if (unp->u_sage->isBinaryBracketOperator(
+                       func_call->get_function()) == true) {
+                 unparseExpression((*arg), newinfo);
+                 curprint("[");
+                 arg++;
+                 ROSE_ASSERT(arg != list.end());
+                 unparseExpression((*arg), newinfo);
+                 curprint("]");
+                 newinfo.unset_nested_expression();
+                 return;
+               }
+
             // printf ("output function argument (left) \n");
 
             // unparse the lhs operand
@@ -6103,6 +6136,12 @@ Unparse_ExprStmt::unparsePseudoDtorRef(SgExpression* expr, SgUnparse_Info & info
 
      SgType *objt = pdre->get_object_type();
      SgNamedType* namedType = isSgNamedType(objt);
+     bool append_call_parens = true;
+     if (isSgFunctionCallExp(pdre->get_parent()) != NULL) {
+       append_call_parens = false;
+     } else if (SgBinaryOp *bin_op = isSgBinaryOp(pdre->get_parent())) {
+       append_call_parens = (isSgFunctionCallExp(bin_op->get_parent()) == NULL);
+     }
      if (namedType != NULL)
         {
 
@@ -6118,7 +6157,9 @@ Unparse_ExprStmt::unparsePseudoDtorRef(SgExpression* expr, SgUnparse_Info & info
           curprint(namedType->get_name().str());
 
        // DQ (3/14/2012): Note that I had to add this for older frontends; something in ROSE has likely changed.
-          curprint("()");
+          if (append_call_parens == true) {
+            curprint("()");
+          }
         }
        else
         {

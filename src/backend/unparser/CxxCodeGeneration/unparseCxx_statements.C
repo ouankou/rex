@@ -5801,7 +5801,59 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
 
      fixupScopeInUnparseInfo (ninfo,mfuncdecl_stmt);
 
-  // Unparse any comments of directives attached to the SgCtorInitializerList
+     auto unparse_enclosing_template_headers = [&]() {
+       if (mfuncdecl_stmt->get_parent() == mfuncdecl_stmt->get_scope()) {
+         return;
+       }
+       if (SgTemplateInstantiationMemberFunctionDecl *inst =
+               isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt)) {
+         if (inst->isSpecialization()) {
+           return;
+         }
+       }
+       SgClassDeclaration *assoc_class = isSgClassDeclaration(
+           mfuncdecl_stmt->get_associatedClassDeclaration());
+       if (assoc_class == NULL) {
+         return;
+       }
+
+       std::vector<SgTemplateClassDeclaration *> template_chain;
+       auto add_template = [&](SgTemplateClassDeclaration *tmpl) {
+         if (tmpl == NULL) {
+           return;
+         }
+         for (SgTemplateClassDeclaration *existing : template_chain) {
+           if (existing == tmpl) {
+             return;
+           }
+         }
+         template_chain.push_back(tmpl);
+       };
+
+       for (SgNode *node = assoc_class; node != NULL;
+            node = node->get_parent()) {
+         add_template(isSgTemplateClassDeclaration(node));
+         if (SgTemplateInstantiationDecl *inst =
+                 isSgTemplateInstantiationDecl(node)) {
+           add_template(
+               isSgTemplateClassDeclaration(inst->get_templateDeclaration()));
+         }
+       }
+
+       for (auto it = template_chain.rbegin(); it != template_chain.rend();
+            ++it) {
+         SgTemplateClassDeclaration *tmpl = *it;
+         if (tmpl->get_templateParameters().empty()) {
+           continue;
+         }
+         curprint("template ");
+         SgTemplateParameterPtrList tlist = tmpl->get_templateParameters();
+         Unparse_ExprStmt::unparseTemplateParameterList(tlist, info, true);
+         curprint("\n");
+       }
+     };
+
+     // Unparse any comments of directives attached to the SgCtorInitializerList
      if (mfuncdecl_stmt->get_CtorInitializerList() != NULL)
         {
           unparseAttachedPreprocessingInfo(mfuncdecl_stmt->get_CtorInitializerList(), ninfo, PreprocessingInfo::before);
@@ -5831,29 +5883,32 @@ Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement* stmt, SgUnparse_Info& info)
                info.set_CheckAccess();
              }
 
-          unp->u_sage->printSpecifier1(mfuncdecl_stmt, info);
+             unparse_enclosing_template_headers();
 
-          unp->u_sage->printSpecifier2(mfuncdecl_stmt, info);
-          info.unset_CheckAccess();
+             unp->u_sage->printSpecifier1(mfuncdecl_stmt, info);
 
-          SgType *rtype = NULL;
-          unparseReturnType (mfuncdecl_stmt,rtype,ninfo);
-          ASSERT_not_null(mfuncdecl_stmt);
+             unp->u_sage->printSpecifier2(mfuncdecl_stmt, info);
+             info.unset_CheckAccess();
 
-          ninfo.set_name_qualification_length(mfuncdecl_stmt->get_name_qualification_length());
-          ninfo.set_global_qualification_required(mfuncdecl_stmt->get_global_qualification_required());
+             SgType *rtype = NULL;
+             unparseReturnType(mfuncdecl_stmt, rtype, ninfo);
+             ASSERT_not_null(mfuncdecl_stmt);
 
-          SgName nameQualifier = mfuncdecl_stmt->get_qualified_name_prefix();
-          curprint ( nameQualifier.str() );
+             ninfo.set_name_qualification_length(
+                 mfuncdecl_stmt->get_name_qualification_length());
+             ninfo.set_global_qualification_required(
+                 mfuncdecl_stmt->get_global_qualification_required());
 
-       // DQ (4/2/2018): Adding support for alternative and more sophisticated handling of the function name 
-       // (e.g. with template arguments correctly qualified, etc.).
-          if (isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt) != NULL)
-             {
+             SgName nameQualifier = mfuncdecl_stmt->get_qualified_name_prefix();
+             curprint(nameQualifier.str());
+
+             // DQ (4/2/2018): Adding support for alternative and more
+             // sophisticated handling of the function name (e.g. with template
+             // arguments correctly qualified, etc.).
+             if (isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt) !=
+                 NULL) {
                unp->u_exprStmt->unparseTemplateMemberFunctionName(isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt),ninfo);
-             }
-            else
-             {
+             } else {
                curprint ( mfuncdecl_stmt->get_name().str());
              }
 

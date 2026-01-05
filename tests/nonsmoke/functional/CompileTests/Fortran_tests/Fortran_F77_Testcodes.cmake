@@ -1,12 +1,11 @@
+# Generated from Makefile.am test lists.
 set(F77_TESTCODES
   test2007_124.f
   test2007_125.f
   test2007_128.f
   test2007_129.f
   test2007_132.f
-  test2007_142.f
   test2007_145.f
-  test2007_147.f
   test2007_148.f
   test2007_150.f
   test2007_151.f
@@ -34,11 +33,9 @@ set(F77_TESTCODES
   test2007_196.f
   test2007_197.f
   test2007_198.f
-  test2007_199.f
   test2007_200.f
   test2007_201.f
   test2007_202.f
-  test2007_203.f
   test2007_204.f
   test2007_205.f
   test2007_206.f
@@ -58,7 +55,6 @@ set(F77_TESTCODES
   test2007_222.f
   test2007_223.f
   test2007_224.f
-  test2007_225.f
   test2007_226.f
   test2007_227.f
   test2007_228.f
@@ -67,35 +63,22 @@ set(F77_TESTCODES
   test2007_231.f
   test2007_232.f
   test2007_234.f
-  test2007_235.f
-  test2007_241.f
   test2007_242.f
   test2007_243.f
   test2007_245.f
   test2007_246.f
   test2007_247.f
   test2007_251.f
-  test2007_252.f
   test2007_253.f
   test2007_256.f
   test2007_258.f
   test2007_259.f
   test2007_260.f
   test2007_261.f
-  test2007_86.f
-  test2008_02.f
-  test2008_03.f
-  test2010_105.f
-  test2010_157.f
   test2010_29.f
   test2010_30.f
-  test2010_52.f
-  test2010_53.f
-  test2010_54.f
   test2010_68.f
   test2010_69.f
-  test2010_70.f
-  test2011_94.f
   test2011_Rice_char-star1-function.f
   test2011_Rice_char-star2-function.f
   test2011_Rice_computed-goto.f
@@ -105,4 +88,38 @@ set(F77_TESTCODES
   test2011_Rice_lost-func-return-type.f
   test2011_Rice_shared_continue.f
   test2011_Rice_shared_label_stmt.f
+  jacobi.f
+  default.f
+  flush.f
+  exmpaleA221f.f
+  exampleA251f.f
+  schedule.f
+  testNewOFP.f
+  test2007_86.f
+  test2007_142.f
+  test2007_147.f
+  test2007_199.f
+  test2007_203.f
+  test2007_225.f
+  test2007_235.f
+  test2007_241.f
+  test2007_252.f
+  test2008_02.f
+  test2008_03.f
+  test2010_52.f
+  test2010_53.f
+  test2010_54.f
+  test2010_70.f
+  test2010_105.f
+  test2010_157.f
+  test2011_94.f
+  test2007_85.f
+  test2007_146.f
+  test2007_167.f
+  test2007_210.f
+  test2007_233.f
+  test2010_55.f
+  test2010_56.f
+  test2010_57.f
+  gfortranTestSuite/gfortran.dg/continuation_6.f
 )

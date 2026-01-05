@@ -1,18 +1,5 @@
+# Generated from Makefile.am test lists.
 set(F03_TESTCODES
-  test2007_112.f03
-  test2007_113.f03
-  test2007_114.f03
-  test2007_115.f03
-  test2007_116.f03
-  test2007_120.f03
-  test2007_123.f03
-  test2007_130.f03
-  test2007_133.f03
-  test2007_134.f03
-  test2007_172.f03
-  test2007_173.f03
-  test2007_174.f03
-  test2007_176.f03
   test2007_30.f03
   test2007_31.f03
   test2007_35.f03
@@ -24,15 +11,24 @@ set(F03_TESTCODES
   test2007_45.f03
   test2007_47.f03
   test2007_98.f03
-  test2010_106.f03
-  test2010_171.f03
+  test2007_112.f03
+  test2007_113.f03
+  test2007_114.f03
+  test2007_115.f03
+  test2007_116.f03
+  test2007_120.f03
+  test2007_123.f03
+  test2007_130.f03
+  test2007_133.f03
+  test2007_134.f03
+  test2007_174.f03
+  test2007_176.f03
   test2010_176.f03
   test2010_177.f03
   test2010_178.f03
   test2010_179.f03
   test2010_180.f03
   test2010_181.f03
-  test2010_77.f03
   test2011_24.f03
   test2011_25.f03
   test2011_27.f03
@@ -44,11 +40,27 @@ set(F03_TESTCODES
   test2011_33.f03
   test2011_34.f03
   test2011_35.f03
-  test2011_74.f03
-  test2011_Rice_attrs-pointer-array.f03
   test2011_Rice_attrs-value-intent.f03
+  test2011_Rice_attrs-pointer-array.f03
   test2011_Rice_bindc-name-2.f03
   test2011_Rice_bindc-name-sub.f03
   test2011_Rice_bindc-name.f03
   test2011_Rice_bindc.f03
+  test2007_172.f03
+  test2007_173.f03
+  test2010_77.f03
+  test2010_106.f03
+  test2010_171.f03
+  test2011_74.f03
+  test2007_18.f03
+  test2007_171.f03
+  test2007_180.f03
+  test2010_27.f03
+  test2010_74.f03
+  test2010_75.f03
+  test2010_76.f03
+  test2010_104.f03
+  test2010_126.f03
+  test2011_26.f03
+  test2010_98.f08
 )

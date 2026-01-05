@@ -54,12 +54,10 @@ int main(int argc, char *argv[]) {
     * graph */
    StaticCFG::InterproceduralCFG cfg(mainDef);
    stringstream ss;
-   SgIncidenceDirectedGraph *g = new SgIncidenceDirectedGraph();
    /* We got the necessary internal SgIncidenceDirectedGraph from the cfg */
-   g = cfg.getGraph();
-   myGraph *mg = new myGraph();
+   SgIncidenceDirectedGraph *g = cfg.getGraph();
    /* Converting the cfg to a graph */
-   mg = instantiateGraph(g, cfg, mainDef);
+   auto mg = instantiateGraph(g, cfg, mainDef);
    /* Set internal variables */
    vis->paths = 0;
    /* invoking the traversal, the first argument is the graph, the second is
@@ -67,7 +65,7 @@ int main(int argc, char *argv[]) {
    arguments are starting and stopping vertices respectively, if you are not
    bounding simply insert 0. Finally the last argument is currently deprecated
  */
-   vis->constructPathAnalyzer(mg, true, 0, 0, true);
+   vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
    std::cout << "finished" << std::endl;
    std::cout << " paths: " << vis->paths << std::endl;
    delete vis;

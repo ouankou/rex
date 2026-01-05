@@ -24,22 +24,21 @@ class PrintPtrAnalMap : public ProcessAstNode<AstNodePtr>
    virtual bool Traverse( AstInterface &fa, const AstNodePtr& _n,
                              AstInterface::TraversalVisitType t) 
   {
-       
-       AstNodePtr n = fa.IsExpression(_n); 
-       if (n != AST_NULL) { // Expression
-          PtrAnal::VarRef p = m.translate_exp(n);
-          if (p.name != "") {
-            std::cout << AstInterface::AstToString(n) << ":" << 
-             ((long) p.stmt) << p.name << "\n"; 
-          }
-      }
-      else if (fa.IsStatement(_n)) { // statement
-          PtrAnal::StmtRef p = m.translate_stmt(_n);
-          if (p.size()) {
-            std::cout << AstInterface::AstToString(_n) << ":" << 
-             ((long) p.front()) << "->" << ((long)p.back()) << "\n"; 
-          }
-      }
+
+     AstNodePtr n = AST_NULL;
+     if (fa.IsExpression(_n, nullptr, &n)) { // Expression
+       PtrAnal::VarRef p = m.translate_exp(n);
+       if (p.name != "") {
+         std::cout << AstInterface::AstToString(n) << ":" << ((long)p.stmt)
+                   << p.name << "\n";
+       }
+     } else if (fa.IsStatement(_n)) { // statement
+       PtrAnal::StmtRef p = m.translate_stmt(_n);
+       if (p.size()) {
+         std::cout << AstInterface::AstToString(_n) << ":" << ((long)p.front())
+                   << "->" << ((long)p.back()) << "\n";
+       }
+     }
        return true;
   }
 };
@@ -208,4 +207,3 @@ main ( int argc,  char * argv[] )
    }
   return 0;
 }
-

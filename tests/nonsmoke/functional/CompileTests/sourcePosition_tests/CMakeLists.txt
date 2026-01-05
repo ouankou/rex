@@ -134,3 +134,62 @@ foreach(file_to_test ${TESTCODES})
       -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
   set_tests_properties(SOURCEPOSITIONTEST_${file_to_test} PROPERTIES LABELS SOURCEPOSITIONTEST)
 endforeach()
+
+set(_source_position_disabled_tests
+  lexPhase2003_02.C
+  test2004_25.C
+  test2005_04.C
+  test2005_06.C
+  test2005_69.C
+  test2005_85.C
+  test2005_88.C
+  test2005_115.C
+  test2005_151.C
+  test2005_188.C
+  test2005_200.C
+  test2005_201.C
+  test2005_204.C
+  test2006_09.C
+  test2006_11.C
+  test2006_15.C
+  test2006_21.C
+  test2006_24.C
+  test2006_27.C
+  test2006_33.C
+  test2006_35.C
+  test2006_36.C
+  test2006_49.C
+  test2006_60.C
+  test2006_64.C
+  test2006_127.C
+  test2006_128.C
+  test2006_130.C
+  test2006_131.C
+  test2006_138.C
+  test2006_167.C
+  test2006_168.C
+  test2006_169.C
+  test2006_170.C
+  test2006_171.C
+  test2006_172.C
+  test2006_173.C
+  test2006_174.C
+  test2006_175.C
+  test2006_176.C
+  test2006_177.C
+)
+
+foreach(file_to_test ${_source_position_disabled_tests})
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test}
+    ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
+    COPYONLY)
+
+  add_test(
+    NAME SOURCEPOSITIONTEST_${file_to_test}
+    COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
+      -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
+  set_tests_properties(SOURCEPOSITIONTEST_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS SOURCEPOSITIONTEST)
+endforeach()

@@ -8,8 +8,9 @@
 #include "SlicingInfo.h"
 #include "CreateSlice.h"
 // #include "ControlFlowGraph.h"
-#include "DominatorTree.h"
 #include "CreateSliceSet.h"
+#include "DominatorTree.h"
+#include "EDefUse.h"
 
 #include <list>
 #include <set>
@@ -27,11 +28,10 @@ int main(int argc, char *argv[])
 	std::vector<InterproceduralInfo*> ip;
 #ifdef NEWDU
 	// Create the global def-use analysis
-	DFAnalysis *defUseAnalysis=new DefUseAnalysis(project);
-	if (defUseAnalysis->run(false)==0)
-	{
-		std::cerr<<"DFAnalysis failed!"<<endl;
-	}
+        EDefUse *defUseAnalysis = new EDefUse(project);
+        if (defUseAnalysis->run(false) != 0) {
+          std::cerr << "DFAnalysis failed!" << endl;
+        }
 #endif
  string outputFileName=project->get_fileList().front()->get_sourceFileNameWithoutPath ();                                                                                                
  
@@ -112,36 +112,40 @@ int main(int argc, char *argv[])
 	sdg->performInterproceduralAnalysis();
 
 	filename = (outputFileName)+".deadEnds.sdg.dot";
-	sdg->writeDot((char *)filename.c_str());			
-	sdg->cleanUp();
-	filename = (outputFileName)+".final.sdg.dot";
-	sdg->writeDot((char *)filename.c_str());			
-	
+        sdg->writeDot((char *)filename.c_str());
+        {
+          std::set<SgNode *> preserve;
+          SgNode *mainFunction = sdg->getMainFunction();
+          if (mainFunction != NULL) {
+            preserve.insert(mainFunction);
+          }
+          sdg->cleanUp(preserve);
+        }
+        filename = (outputFileName) + ".final.sdg.dot";
+        sdg->writeDot((char *)filename.c_str());
 
-	//get SlicingInfo
+        //get SlicingInfo
 	SlicingInfo si;
 	si.traverse(project, preorder);
 
 	set < SgNode * >totalSlicingSet;
-	NodeQuerySynthesizedAttributeType targetList = si.getSlicingTargets();
-	if (targetList.size()==0)
-	{
-		cout <<"no slicing targes, exiting"<<endl;
-	}
-	else
-	{
-		CreateSliceSet sliceSet(sdg,targetList);
-		for (NodeQuerySynthesizedAttributeType::iterator i = targetList.begin(); i != targetList.end(); i++)
-		{
-			cout <<"slicing for \""<<(*i)->unparseToString()<<"\""<<endl;
-			set < SgNode * >currentSlicingSet, tmp;
-			currentSlicingSet=sliceSet.computeSliceSet(dynamic_cast<SgNode*>(*i));
-			set_union(totalSlicingSet.begin(), totalSlicingSet.end(),
-					currentSlicingSet.begin(), currentSlicingSet.end(),
-					inserter(tmp, tmp.begin()));
-			totalSlicingSet.swap(tmp);
-		}
-	}
-	filename = (outputFileName)+".sliced.sdg.dot";
-	sdg->writeDot((char *)filename.c_str());			
+        std::list<SgNode *> targetList = si.getSlicingTargets();
+        if (targetList.size() == 0) {
+          cout << "no slicing targes, exiting" << endl;
+        } else {
+          CreateSliceSet sliceSet(sdg, targetList);
+          for (std::list<SgNode *>::iterator i = targetList.begin();
+               i != targetList.end(); i++) {
+            cout << "slicing for \"" << (*i)->unparseToString() << "\"" << endl;
+            set<SgNode *> currentSlicingSet, tmp;
+            currentSlicingSet =
+                sliceSet.computeSliceSet(dynamic_cast<SgNode *>(*i));
+            set_union(totalSlicingSet.begin(), totalSlicingSet.end(),
+                      currentSlicingSet.begin(), currentSlicingSet.end(),
+                      inserter(tmp, tmp.begin()));
+            totalSlicingSet.swap(tmp);
+          }
+        }
+        filename = (outputFileName) + ".sliced.sdg.dot";
+        sdg->writeDot((char *)filename.c_str());			
 }

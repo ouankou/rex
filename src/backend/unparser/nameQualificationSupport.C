@@ -11033,63 +11033,27 @@ NameQualificationTraversal::evaluateInheritedAttribute(SgNode* n, NameQualificat
           MLOG_WARN_C(MLOG_UNPARSER, "################ Processing SgTemplateInstantiationDirectiveStatement (name qualification is handled within the nested template instantiation) \n");
 #endif
 
-#if 0
-       // DQ (6/3/2017): Commenting out this redundant handling because it is addressed in the nested template instantiation declaration directly.
-
-       // Note that test2005_63.C presents an example that triggers this case and so might be a relevant.
-       // This is also the reason why test2005_73.C is failing!!!  Fix it tomorrow!!! (SgTemplateInstantiationDirectiveStatement)
-       // SgDeclarationStatement* currentStatement = isSgDeclarationStatement(memberFunctionDeclaration->get_parent());
-          SgDeclarationStatement* declarationStatement = isSgDeclarationStatement(templateInstantiationDirectiveStatement->get_declaration());
-          ASSERT_not_null(declarationStatement);
-          SgDeclarationStatement* currentStatement = isSgDeclarationStatement(declarationStatement->get_parent());
-          if (currentStatement == NULL)
-             {
-#if 0
-               MLOG_WARN_C(MLOG_UNPARSER, "In name qualification: case SgTemplateInstantiationDirectiveStatement: Using backup mechanism to generate current statement (because legacy frontend 4.8 shared template instantiations) \n");
-#endif
-               currentStatement = templateInstantiationDirectiveStatement;
-             }
-          ASSERT_not_null(currentStatement);
-#if 0
-          MLOG_WARN_C(MLOG_UNPARSER, "declarationStatement = %p = %s \n",declarationStatement,declarationStatement->class_name().c_str());
-          MLOG_WARN_C(MLOG_UNPARSER, "currentStatement     = %p = %s \n",currentStatement,currentStatement->class_name().c_str());
-#endif
-          SgScopeStatement* currentScope = isSgScopeStatement(currentStatement->get_parent());
-          if (currentScope != NULL)
-             {
-#if 0
-               MLOG_WARN_C(MLOG_UNPARSER, "currentScope         = %p = %s \n",currentScope,currentScope->class_name().c_str());
-#endif
-               int amountOfNameQualificationRequired = nameQualificationDepth(declarationStatement,currentScope,declarationStatement);
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-               MLOG_WARN_C(MLOG_UNPARSER, "SgTemplateInstantiationDirectiveStatement: amountOfNameQualificationRequired = %d \n",amountOfNameQualificationRequired);
-#endif
-
-            // Since the reference to the class or function declaration is shared, we might want to
-            // attached the name qualification to the SgTemplateInstantiationDirectiveStatement instead.
-            // setNameQualification(templateInstantiationDirectiveStatement->get_declaration(),amountOfNameQualificationRequired);
-               SgClassDeclaration* classDeclaration       = isSgClassDeclaration(declarationStatement);
-               SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(declarationStatement);
-
-            // DQ (7/22/2017): We will have to also handle other types of template instantiations as well.
-            // (e.g. for typedefs, and variables).
-
-               if (classDeclaration != NULL)
-                  {
-                    setNameQualification(classDeclaration,amountOfNameQualificationRequired);
-                  }
-                 else
-                  {
-                    ASSERT_not_null(functionDeclaration);
-                    setNameQualification(functionDeclaration,amountOfNameQualificationRequired);
-                  }
-             }
-            else
-             {
-               MLOG_WARN_C(MLOG_UNPARSER, "WARNING: SgTemplateInstantiationDirectiveStatement -- currentScope is not available through parent of SgDeclarationStatement, not clear why! \n");
-               ROSE_ABORT();
-             }
-#endif
+          SgDeclarationStatement *declarationStatement =
+              isSgDeclarationStatement(
+                  templateInstantiationDirectiveStatement->get_declaration());
+          if (declarationStatement != NULL) {
+            SgScopeStatement *currentScope = isSgScopeStatement(
+                templateInstantiationDirectiveStatement->get_parent());
+            if (currentScope != NULL) {
+              int amountOfNameQualificationRequired = nameQualificationDepth(
+                  declarationStatement, currentScope,
+                  templateInstantiationDirectiveStatement);
+              if (SgClassDeclaration *classDeclaration =
+                      isSgClassDeclaration(declarationStatement)) {
+                setNameQualification(classDeclaration,
+                                     amountOfNameQualificationRequired);
+              } else if (SgFunctionDeclaration *functionDeclaration =
+                             isSgFunctionDeclaration(declarationStatement)) {
+                setNameQualification(functionDeclaration,
+                                     amountOfNameQualificationRequired);
+              }
+            }
+          }
 #if 0
           MLOG_WARN_C(MLOG_UNPARSER, "In case of name qualification for SgTemplateInstantiationDirectiveStatement \n");
           ROSE_ABORT();
@@ -15529,6 +15493,7 @@ NameQualificationTraversal::setNameQualification(SgFunctionRefExp* functionRefEx
      applyExplicitQualifier(functionRefExp, qualifier,
                             outputNameQualificationLength,
                             outputGlobalQualification);
+
      functionRefExp->set_global_qualification_required(outputGlobalQualification);
      functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
@@ -16183,7 +16148,15 @@ NameQualificationTraversal::setNameQualification ( SgFunctionDeclaration* functi
      MLOG_WARN_C(MLOG_UNPARSER, "In NameQualificationTraversal::setNameQualification(): outputGlobalQualification                                 = %s \n",outputGlobalQualification ? "true" : "false");
 #endif
 
-  // DQ (2/18/2024): Note that there may not be a nondefining declaration, and then we still don't want to output the global name qualification.
+     // DQ (2/18/2024): Note that there may not be a nondefining declaration,
+     // and then we still don't want to output the global name qualification.
+     // Global-scope function declarations should never emit a leading "::".
+     if (outputGlobalQualification == true &&
+         isSgGlobal(functionDeclaration->get_scope()) != NULL) {
+       outputNameQualificationLength = 0;
+       outputGlobalQualification = false;
+       qualifier = "";
+     }
   // DQ (2/16/2013): Note that test2013_67.C is a case where name qualification of the friend function is required.
   // I think it is because it is a non defining declaration instead of a defining declaration.
   // DQ (3/31/2012): I don't think that global qualification is allowed for friend functions (so test for this).
@@ -16204,6 +16177,52 @@ NameQualificationTraversal::setNameQualification ( SgFunctionDeclaration* functi
        // outputNameQualificationLength = 0;
           outputGlobalQualification = false;
           qualifier = "";
+        }
+
+        bool isFriendDecl =
+            functionDeclaration->get_declarationModifier().isFriend();
+        if (functionDeclaration->get_firstNondefiningDeclaration() != NULL) {
+          isFriendDecl = isFriendDecl ||
+                         functionDeclaration->get_firstNondefiningDeclaration()
+                             ->get_declarationModifier()
+                             .isFriend();
+        }
+        if (functionDeclaration->get_definingDeclaration() != NULL) {
+          isFriendDecl =
+              isFriendDecl || functionDeclaration->get_definingDeclaration()
+                                  ->get_declarationModifier()
+                                  .isFriend();
+        }
+
+        SgClassDefinition *friend_class_def = NULL;
+        if (isFriendDecl) {
+          friend_class_def =
+              isSgClassDefinition(functionDeclaration->get_parent());
+          if (friend_class_def == NULL &&
+              functionDeclaration->get_firstNondefiningDeclaration() != NULL) {
+            friend_class_def = isSgClassDefinition(
+                functionDeclaration->get_firstNondefiningDeclaration()
+                    ->get_parent());
+          }
+          if (friend_class_def == NULL &&
+              functionDeclaration->get_definingDeclaration() != NULL) {
+            friend_class_def = isSgClassDefinition(
+                functionDeclaration->get_definingDeclaration()->get_parent());
+          }
+        }
+
+        if (isFriendDecl && friend_class_def != NULL) {
+          SgScopeStatement *friend_enclosing_scope =
+              friend_class_def->get_scope();
+          SgScopeStatement *friend_decl_scope =
+              functionDeclaration->get_scope();
+          if (friend_enclosing_scope != NULL && friend_decl_scope != NULL &&
+              SgScopeStatement::isEquivalentScope(friend_enclosing_scope,
+                                                  friend_decl_scope)) {
+            outputNameQualificationLength = 0;
+            outputGlobalQualification = false;
+            qualifier = "";
+          }
         }
 
      functionDeclaration->set_global_qualification_required(outputGlobalQualification);

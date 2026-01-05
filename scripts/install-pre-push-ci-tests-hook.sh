@@ -59,7 +59,7 @@ run_ctest_regex() {
     echo "ctest -R \"${regex}\" found zero matching tests. Ensure the build matches CI configuration." >&2
     return 1
   fi
-  ctest -R "${regex}" -V --output-on-failure
+  ctest -R "${regex}" -j"$(nproc)" --output-on-failure
 }
 
 ci_regexes=(

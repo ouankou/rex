@@ -80,15 +80,13 @@ int main(int argc, char *argv[]) {
 
     cfgToDot(mainDef,dotFileName1); 
     //cfg->buildFullCFG();
-    SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
-    g = cfg.getGraph();
-    myGraph* mg = new myGraph();
-    mg = instantiateGraph(g, cfg);
+    SgIncidenceDirectedGraph *g = cfg.getGraph();
+    auto mg = instantiateGraph(g, cfg);
     vis->tltnodes = 0;
     vis->paths = 0;
     //vis->firstPrepGraph(constcfg);
     t1 = getCPUTime();
-    vis->constructPathAnalyzer(mg, true, 0, 0, true);
+    vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
     t2 = getCPUTime();
     std::cout << "took: " << timeDifference(t2, t1) << std::endl;
     //cfg.clearNodesAndEdges();

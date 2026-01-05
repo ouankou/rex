@@ -80,6 +80,25 @@
 
 #include "llvm/Frontend/OpenMP/OMPIRBuilder.h"
 
+class RexNonrealFlagAttribute : public AstAttribute {
+public:
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  AstAttribute *copy() const override { return new RexNonrealFlagAttribute(); }
+
+  std::string attribute_class_name() const override {
+    return "RexNonrealFlagAttribute";
+  }
+
+  std::string toString() override { return ""; }
+};
+
+extern const char kRexNonrealTemplateKeywordAttr[];
+extern const char kRexNonrealGlobalQualifierAttr[];
+extern const char kRexNonrealNoTypenameAttr[];
+
 // DQ (11/27/2020): Turn on/off the debugging information as we visit clang IR nodes.
 #define DEBUG_VISITOR             0
 #define DEBUG_TRAVERSAL           0
@@ -412,6 +431,14 @@ class ClangToSageTranslator : public clang::ASTConsumer {
                                     SgScopeStatement *fallback);
 
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
+
+        // Helper: Build nonreal return type for member typedefs of template
+        // specializations (e.g., Spec::value_type) when needed for unparsing.
+        SgType *buildSpecializedMemberTypedefReturnType(
+            const clang::FunctionDecl *decl,
+            const clang::ClassTemplateSpecializationDecl *spec_decl_override =
+                nullptr,
+            const clang::CXXRecordDecl *record_decl_override = nullptr);
 
         // Template helper methods
         // Helper: Get or create template class declaration

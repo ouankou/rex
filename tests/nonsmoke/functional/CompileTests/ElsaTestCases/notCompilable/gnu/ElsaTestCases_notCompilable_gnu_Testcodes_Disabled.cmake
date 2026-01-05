@@ -1,0 +1,24 @@
+# Generated from Makefile.am test lists.
+set(ELSATEST_NOTCOMPILABLE_GNU_DISABLED_TESTCODES
+  test2001_11.C
+  test2001_01.C
+  test2001_02.C
+  test2001_03.C
+  test2001_04.C
+  test2001_05.C
+  test2001_06.C
+  test2001_07.C
+  test2001_08.C
+  test2001_09.C
+  test2001_10.C
+  test2001_14.C
+  test2001_15.C
+  test2001_17.C
+  test2001_18.C
+  test2001_19.C
+  test2001_20.C
+  test2001_21.C
+  test2001_22.C
+  test_treeTrav_MK_01.C
+  test_treeTrav_MK_02.C
+)

@@ -6957,8 +6957,7 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
      // std::cerr << "DEBUG unparseBinaryExp: operator_name='" << info.get_operator_name()
      //           << "' node type=" << binary_op->class_name() << std::endl;
 
-     if (info.get_operator_name() == "[]" )
-        {
+     if (info.get_operator_name() == "[]" || isSgPntrArrRefExp(expr) != NULL) {
        // Special case:
 
        // DQ (4/14/2013): This likely requires some extra support where the operator syntax is not being used, but for
@@ -6972,9 +6971,7 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
           curprint ("[") ;
           unparseExpression(binary_op->get_rhs_operand(),info);
           curprint ("]");
-        }
-       else
-        {
+     } else {
        // This is the more general case (supporting both infix, prefix, and postfix operators.
        // DQ (4/14/2013): I think that postfix operators and handled using specific mechanims and may not be well tested.
 #if DEBUG_BINARY_OPERATORS
@@ -7508,7 +7505,7 @@ UnparseLanguageIndependentConstructs::unparseBinaryExpr(SgExpression* expr, SgUn
 #if DEBUG_BINARY_OPERATORS
                curprint ( "\n /* unparseBinaryExpr(): Test 6  after unparseExpression() rhs = " + rhs->class_name() + "*/ \n");
 #endif
-        }
+     }
 
      info.unset_nested_expression();
 

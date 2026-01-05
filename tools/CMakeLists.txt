@@ -19,8 +19,7 @@ target_link_libraries(tools_moveDeclarationToInnermostScope_exe ROSE_DLL)
 # include hack.
 target_include_directories(
   tools_moveDeclarationToInnermostScope_exe
-  PRIVATE ${CMAKE_INSTALL_PREFIX}/include/rose
-          ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/transformationTracking
+  PRIVATE ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/transformationTracking
           ${ROSE_INCLUDES})
 
 set_target_properties(tools_moveDeclarationToInnermostScope_exe

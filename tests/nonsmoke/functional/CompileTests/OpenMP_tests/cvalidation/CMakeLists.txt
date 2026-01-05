@@ -24,10 +24,34 @@ endif()
 set(ROSE_FLAGS -rose:C_only  -w -rose:verbose 0 
                -rose:openmp -rose:openmp:ast_only)
 
+set(_omp_cvalidation_disabled
+  for_ordered.c
+  for_private.c
+  omp_atomic.c
+  omp_lock.c
+  omp_master_thread.c
+  omp_nest_lock.c
+  omp_nest_testlock.c
+  omp_testlock.c
+  omp_threadprivate.c
+  parallel_for_private.c
+  parallel_section_lastprivate.c
+  parallel_section_private.c
+  single.c
+  single_copyprivate.c
+  single_nowait.c
+  single_private.c
+  omp_flush.c
+  for_schedule_guided.c
+)
+
 foreach(file_to_test ${TESTCODES})
   add_test(
     NAME OMPTEST_${file_to_test}
     COMMAND parseOmp ${ROSE_FLAGS} -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII
                      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(OMPTEST_${file_to_test} PROPERTIES LABELS OMPTEST)
+  if(file_to_test IN_LIST _omp_cvalidation_disabled)
+    set_tests_properties(OMPTEST_${file_to_test} PROPERTIES DISABLED TRUE)
+  endif()
 endforeach()

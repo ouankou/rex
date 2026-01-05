@@ -37,7 +37,7 @@ void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {
     std::vector<string> path;
     //ss << "vector<string> sss;\n";
     for (unsigned int j = 0; j < pathR.size(); j++) {
-       SgGraphNode* R = getGraphNode[pathR[j]];
+      SgGraphNode *R = orig->getGraphNode()[pathR[j]];
       CFGNode cf = cfg->toCFGNode(R);
    //    path.push_back(R->get_name());
       string str = cf.toString();
@@ -79,82 +79,86 @@ int main(int argc, char *argv[]) {
     
    // cfgToDot(mainDef,dotFileName1);
     //cfg->buildFullCFG();
-    SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
-    g = cfg.getGraph();
-    myGraph* mg = new myGraph();
-    mg = instantiateGraph(g, cfg);
-    //vis->constructPathAnalyzer(mg, true, 0, 0, true);
+    SgIncidenceDirectedGraph *g = cfg.getGraph();
+    auto mg = instantiateGraph(g, cfg);
+    vis->orig = mg.get();
+    vis->cfg = &cfg;
+    // vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
 
-   // std::cout << "took: " << timeDifference(t2, t1) << std::endl;
-    //cfg.clearNodesAndEdges();
-    //std::cout << "finished" << std::endl;
- //   std::cout << "tltnodes: " << vis->tltnodes << " paths: " << vis->paths << std::endl;
- //   delete vis;
-//}
+    // std::cout << "took: " << timeDifference(t2, t1) << std::endl;
+    // cfg.clearNodesAndEdges();
+    // std::cout << "finished" << std::endl;
+    //   std::cout << "tltnodes: " << vis->tltnodes << " paths: " << vis->paths
+    //   << std::endl; delete vis;
+    //}
 
+    ss << "class visitorTraversal : public SgGraphTraversal<CFGforT>\n";
+    ss << "  {\n";
+    ss << "     public:\n";
+    ss << "     vector<string> sss;\n";
+    ss << "     set<vector<string> > sssv;\n";
+    // vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
+    ss << "         void analyzePath(std::vector<VertexID>& pth);\n";
+    ss << "         SgIncidenceDirectedGraph* g;\n";
+    ss << "          myGraph* orig;\n";
+    ss << "          StaticCFG::CFG* cfg;\n";
+    ss << "          std::vector<std::vector<string> > paths;\n";
+    ss << "   };\n";
 
-ss << "class visitorTraversal : public SgGraphTraversal<CFGforT>\n";
-ss << "  {\n";
-ss << "     public:\n";
-ss << "     vector<string> sss;\n";
-ss << "     set<vector<string> > sssv;\n";
-//vis->constructPathAnalyzer(mg, true, 0, 0, true);
-ss << "         void analyzePath(std::vector<VertexID>& pth);\n";
-ss << "         SgIncidenceDirectedGraph* g;\n";
-ss << "          myGraph* orig;\n";
-ss << "          StaticCFG::CFG* cfg;\n";
-ss << "          std::vector<std::vector<string> > paths;\n";
-ss << "   };\n";
+    ss << "void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) "
+          "{\n";
+    ss << "    std::vector<string> path;\n";
+    ss << "   for (unsigned int j = 0; j < pathR.size(); j++) {\n";
+    ss << "       SgGraphNode* R = orig->getGraphNode()[pathR[j]];\n";
+    ss << "      CFGNode cf = cfg->toCFGNode(R);\n";
+    ss << "       string str = cf.toString();";
+    ss << "str.erase(std::remove(str.begin(), str.end(), '\\n'), str.end());\n";
 
-ss << "void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {\n";
-ss << "    std::vector<string> path;\n";
-ss << "   for (unsigned int j = 0; j < pathR.size(); j++) {\n";
-ss << "       SgGraphNode* R = getGraphNode[pathR[j]];\n";
-ss << "      CFGNode cf = cfg->toCFGNode(R);\n";
-ss << "       string str = cf.toString();";
-ss << "str.erase(std::remove(str.begin(), str.end(), '\\n'), str.end());\n";
+    ss << "       path.push_back(str);\n";
+    ss << "    }\n";
+    ss << "    paths.push_back(path);\n";
+    ss << "   // ROSE_ASSERT(sssv.find(path) != sssv.end());\n";
 
-ss << "       path.push_back(str);\n";
-ss << "    }\n";
-ss << "    paths.push_back(path);\n";
-ss << "   // ROSE_ASSERT(sssv.find(path) != sssv.end());\n";
+    ss << "}\n";
 
-ss << "}\n";
+    // ss << "set<vector<string> > sssv;\n";
 
-//ss << "set<vector<string> > sssv;\n";
-
-ss << "int main(int argc, char *argv[]) {\n";
-ss << "SgProject* proj = frontend(argc,argv);\n";
-ss << "ROSE_ASSERT (proj != NULL);\n";
-ss << "SgFunctionDeclaration* mainDefDecl = SageInterface::findMain(proj);\n";
-ss << "SgFunctionDefinition* mainDef = mainDefDecl->get_definition();\n";
-ss << "visitorTraversal* vis = new visitorTraversal();\n";
-ss << "StaticCFG::CFG cfg(mainDef);\n";
-ss << "stringstream ss;\n";
-ss << "string fileName= StringUtility::stripPathFromFileName(mainDef->get_file_info()->get_filenameString());\n";
-ss << "string dotFileName1=fileName+\".\"+ mainDef->get_declaration()->get_name() +\".dot\";\n";
-ss << "cfgToDot(mainDef,dotFileName1);\n";
-ss << "SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();\n";
-ss << "g = cfg.getGraph();\n";
-ss << "myGraph* mg = new myGraph();\n";
-ss << "mg = instantiateGraph(g, cfg);\n";
-//ss << "vis->tltnodes = 0;\n";
-//ss << "vis->paths = 0;\n";
-ss << "std::set<std::vector<string> > sssv;\n";
-ss << "std::vector<string> sss;\n";
-vis->constructPathAnalyzer(mg, true, 0, 0, true);
-ss << "vis->sssv = sssv;\n";
-ss << "vis->constructPathAnalyzer(mg, true, 0, 0, true);\n";
-ss << "ROSE_ASSERT(vis->sssv.size() == vis->paths.size());\n";
-ss << "std::cout << \"finished\" << std::endl;\n";
-ss << "std::cout << \" paths: \" << vis->paths.size() << std::endl;\n";
-ss << "delete vis;\n";
-ss << "}\n";
-string sst = ss.str();
-ofstream myfile;
-myfile.open(Cfilename.c_str());
-myfile << sst;
-myfile.close();
-delete vis;
-return 0;
+    ss << "int main(int argc, char *argv[]) {\n";
+    ss << "SgProject* proj = frontend(argc,argv);\n";
+    ss << "ROSE_ASSERT (proj != NULL);\n";
+    ss << "SgFunctionDeclaration* mainDefDecl = "
+          "SageInterface::findMain(proj);\n";
+    ss << "SgFunctionDefinition* mainDef = mainDefDecl->get_definition();\n";
+    ss << "visitorTraversal* vis = new visitorTraversal();\n";
+    ss << "StaticCFG::CFG cfg(mainDef);\n";
+    ss << "stringstream ss;\n";
+    ss << "string fileName= "
+          "StringUtility::stripPathFromFileName(mainDef->get_file_info()->get_"
+          "filenameString());\n";
+    ss << "string dotFileName1=fileName+\".\"+ "
+          "mainDef->get_declaration()->get_name() +\".dot\";\n";
+    ss << "cfgToDot(mainDef,dotFileName1);\n";
+    ss << "SgIncidenceDirectedGraph* g = cfg.getGraph();\n";
+    ss << "auto mg = instantiateGraph(g, cfg);\n";
+    ss << "vis->orig = mg.get();\n";
+    ss << "vis->cfg = &cfg;\n";
+    // ss << "vis->tltnodes = 0;\n";
+    // ss << "vis->paths = 0;\n";
+    ss << "std::set<std::vector<string> > sssv;\n";
+    ss << "std::vector<string> sss;\n";
+    vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
+    ss << "vis->sssv = sssv;\n";
+    ss << "vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);\n";
+    ss << "ROSE_ASSERT(vis->sssv.size() == vis->paths.size());\n";
+    ss << "std::cout << \"finished\" << std::endl;\n";
+    ss << "std::cout << \" paths: \" << vis->paths.size() << std::endl;\n";
+    ss << "delete vis;\n";
+    ss << "}\n";
+    string sst = ss.str();
+    ofstream myfile;
+    myfile.open(Cfilename.c_str());
+    myfile << sst;
+    myfile.close();
+    delete vis;
+    return 0;
 }

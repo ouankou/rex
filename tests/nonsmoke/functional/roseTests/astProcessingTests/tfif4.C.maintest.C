@@ -18,10 +18,11 @@ class visitorTraversal : public SgGraphTraversal<CFGforT>
 void visitorTraversal::analyzePath(std::vector<VertexID>& pathR) {
     std::vector<string> path;
    for (unsigned int j = 0; j < pathR.size(); j++) {
-       SgGraphNode* R = getGraphNode[pathR[j]];
-      CFGNode cf = cfg->toCFGNode(R);
-       string str = cf.toString();str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
-       path.push_back(str);
+     SgGraphNode *R = orig->getGraphNode()[pathR[j]];
+     CFGNode cf = cfg->toCFGNode(R);
+     string str = cf.toString();
+     str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+     path.push_back(str);
     }
     paths.push_back(path);
    // ROSE_ASSERT(sssv.find(path) != sssv.end());
@@ -37,10 +38,10 @@ stringstream ss;
 string fileName= StringUtility::stripPathFromFileName(mainDef->get_file_info()->get_filenameString());
 string dotFileName1=fileName+"."+ mainDef->get_declaration()->get_name() +".dot";
 cfgToDot(mainDef,dotFileName1);
-SgIncidenceDirectedGraph* g = new SgIncidenceDirectedGraph();
-g = cfg.getGraph();
-myGraph* mg = new myGraph();
-mg = instantiateGraph(g, cfg);
+SgIncidenceDirectedGraph *g = cfg.getGraph();
+auto mg = instantiateGraph(g, cfg);
+vis->orig = mg.get();
+vis->cfg = &cfg;
 std::set<std::vector<string> > sssv;
 std::vector<string> sss;
 sss.push_back("Start(::main)<SgFunctionDefinition> @line=1 :idx=0");
@@ -579,7 +580,7 @@ sss.push_back("End(::main)<SgFunctionDefinition> @line=1 :idx=3");
 sssv.insert(sss);
 sss.clear();
 vis->sssv = sssv;
-vis->constructPathAnalyzer(mg, true, 0, 0, true);
+vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
 ROSE_ASSERT(vis->sssv.size() == vis->paths.size());
 std::cout << "finished" << std::endl;
 std::cout << " paths: " << vis->paths.size() << std::endl;

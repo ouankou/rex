@@ -134,10 +134,8 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph* cg)
 
 };
 
-
-struct OnlyCurrentDirectory : public std::unary_function<bool, SgFunctionDeclaration*>
-{
-    static size_t nselected;
+struct OnlyCurrentDirectory {
+  static size_t nselected;
 
 #define DEBUG_SELECTOR 0
 

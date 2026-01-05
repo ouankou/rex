@@ -1,7 +1,13 @@
 include_directories(${ROSE_INCLUDES})
 add_executable(copyExample copyExample.C)
 target_link_libraries(copyExample ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
-install(TARGETS copyExample DESTINATION bin)
+add_executable(copyLoops copyLoops.C)
+target_link_libraries(copyLoops ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+add_executable(copyBlocks copyBlocks.C)
+target_link_libraries(copyBlocks ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+add_executable(copyFunctionDefinitions copyFunctionDefinitions.C)
+target_link_libraries(copyFunctionDefinitions ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+install(TARGETS copyExample copyLoops copyBlocks copyFunctionDefinitions DESTINATION bin)
 
 if(with-ROSE_LONG_MAKE_CHECK_RULE)
 
@@ -17,7 +23,7 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     copytest2007_36.C copytest2007_37.C copytest2007_39.C copytest2007_40.C
     copytest2007_41.C copytest2007_42.C copytest2007_44.C copytest2007_45.C
     copytest2007_46.C copytest2007_47.C copytest2007_49.C copytest2007_50.C
-    copyExampleInput.C)
+    copytest2014_01.C copytest2014_02.C copyExampleInput.C)
 
   set(EXTRA_TESTCODES_REQUIRED_TO_PASS
     test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C
@@ -141,17 +147,26 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     test2007_150.C test2007_158.C test_int_lexemes.C
     test_int_lexemes_donot_pass.C test_simple_int.C test_wchars.C
     lexPhase2003_01.C math.C inputForLoopLocator.C X.C
-    # DQ (4/20/2016): This test fails after having added Clang support which 
-    # fixed the version number of GNU compiler emulated by ROSE (not clear if 
-    # that is related).  I need to look into this more later.
-    # test2007_141.C
-    # DQ (1/13/2013): These demonstrate about three different types of failures
-    # that must be fixed.
-    # test2005_35.C test2005_103.C test2005_128.C test2005_129.C 
-    # test2005_130.C test2005_131.C test2005_132.C test2005_139.C 
-    # test2005_142.C test2005_161.C test2006_84.C test2006_124.C 
-    # test2006_141.C 
     )
+
+  set(_copyast_disabled_extra_tests
+    # DQ (4/20/2016): This test fails after adding Clang support; investigate.
+    test2007_141.C
+    # DQ (1/13/2013): These demonstrate failures that still need fixes.
+    test2005_35.C
+    test2005_103.C
+    test2005_128.C
+    test2005_129.C
+    test2005_130.C
+    test2005_131.C
+    test2005_132.C
+    test2005_139.C
+    test2005_142.C
+    test2005_161.C
+    test2006_84.C
+    test2006_124.C
+    test2006_141.C
+  )
 
 set(GNU_6_1_PROBLEM_FILE 
    test2004_149.C   test2005_28.C   test2005_45.C   test2005_93.C
@@ -171,6 +186,7 @@ else()
 
   set(EXTRA_TESTCODES_REQUIRED_TO_PASS
     test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C)
+  set(_copyast_disabled_extra_tests)
 endif()
 
 set(ROSE_FLAGS  -rose:verbose 0 )
@@ -187,6 +203,27 @@ foreach(testcode ${TESTCODES_REQUIRED_TO_PASS})
   set_tests_properties(copyAST_${basename} PROPERTIES LABELS COPYASTTEST)
 endforeach()
 
+add_test(
+  NAME copyAST_copyLoops
+  COMMAND copyLoops ${ROSE_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_60.C
+)
+set_tests_properties(copyAST_copyLoops PROPERTIES LABELS COPYASTTEST)
+
+add_test(
+  NAME copyAST_copyBlocks
+  COMMAND copyBlocks ${ROSE_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_63.C
+)
+set_tests_properties(copyAST_copyBlocks PROPERTIES LABELS COPYASTTEST)
+
+add_test(
+  NAME copyAST_copyFunctionDefinitions
+  COMMAND copyFunctionDefinitions ${ROSE_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_63.C
+)
+set_tests_properties(copyAST_copyFunctionDefinitions PROPERTIES LABELS COPYASTTEST)
+
 # Use tests from the Cxx_tests directory
 foreach(testcode ${EXTRA_TESTCODES_REQUIRED_TO_PASS})
   get_filename_component(basename ${testcode} NAME_WE)
@@ -196,4 +233,52 @@ foreach(testcode ${EXTRA_TESTCODES_REQUIRED_TO_PASS})
             -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${testcode})
   set_tests_properties(copyAST_${basename} PROPERTIES LABELS COPYASTTEST)
+endforeach()
+
+foreach(testcode ${_copyast_disabled_extra_tests})
+  get_filename_component(basename ${testcode} NAME_WE)
+  add_test(
+    NAME copyAST_${basename}
+    COMMAND copyExample ${ROSE_FLAGS}
+            -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+            -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${testcode})
+  set_tests_properties(copyAST_${basename}
+    PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
+endforeach()
+
+set(_copyast_disabled_tests
+  copytest2007_28.C
+  copytest2007_33.C
+  copytest2007_34.C
+  copytest2007_38.C
+  copytest2007_43.C
+  copytest2007_48.C
+  copytest2007_51.C
+  copytest2007_52.C
+  copytest2007_53.C
+  copytest2007_54.C
+  copytest2007_55.C
+  copytest2007_56.C
+  copytest2007_57.C
+  copytest2007_58.C
+  copytest2007_59.C
+  copytest2007_60.C
+  copytest2007_61.C
+  copytest2007_62.C
+  copytest2007_63.C
+  copytest2007_64.C
+  copytest2007_65.C
+  copytest2007_66.C
+  copytest2007_67.C
+  copytest2007_68.C
+)
+
+foreach(testcode ${_copyast_disabled_tests})
+  get_filename_component(basename ${testcode} NAME_WE)
+  add_test(
+    NAME copyAST_${basename}
+    COMMAND copyExample ${ROSE_FLAGS}
+            -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode})
+  set_tests_properties(copyAST_${basename}
+    PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
 endforeach()

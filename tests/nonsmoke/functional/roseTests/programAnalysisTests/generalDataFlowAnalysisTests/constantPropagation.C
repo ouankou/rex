@@ -52,10 +52,10 @@ bool
 ConstantPropagationLattice::setValue(int x)
    {
   // These are more than access functions, they return if the state of the lattice has changed.
-     bool modified = this->level != constantValue || this->value != value;
-     this->value = x;
-     level = constantValue;
-     return modified;
+  bool modified = this->level != constantValue || this->value != x;
+  this->value = x;
+  level = constantValue;
+  return modified;
    }
 
 bool

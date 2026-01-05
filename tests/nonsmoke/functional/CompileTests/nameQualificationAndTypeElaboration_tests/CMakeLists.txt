@@ -32,3 +32,17 @@ foreach(file_to_test ${TESTCODES})
      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(NAMEQUALIFICATIONTEST_${file_to_test} PROPERTIES LABELS NAMEQUALIFICATIONTEST)
 endforeach()
+set(_disabled_name_qual_tests
+  testNameQalTypeElab_19.C
+  testNameQalTypeElab_20.C
+  testNameQalTypeElab_21.C
+)
+
+foreach(file_to_test ${_disabled_name_qual_tests})
+  add_test(
+    NAME NAMEQUALIFICATIONTEST_${file_to_test}
+    COMMAND testTranslator ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+     -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(NAMEQUALIFICATIONTEST_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS NAMEQUALIFICATIONTEST)
+endforeach()

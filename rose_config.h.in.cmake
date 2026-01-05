@@ -465,7 +465,10 @@
 #undef RETSIGTYPE
 
 /* Location of ROSE Compile Tree. */
-#define ROSE_COMPILE_TREE_PATH ${ROSE_TOP_BINARY_DIR}
+#define ROSE_COMPILE_TREE_PATH "${ROSE_TOP_BINARY_DIR}"
+
+/* Location of ROSE Source Tree. */
+#define ROSE_SOURCE_TREE_PATH "${ROSE_TOP_SRC_DIR}"
 
 /* Runtime shared library path environment variable (Linux: LD_LIBRARY_PATH). */
 #define ROSE_SHLIBPATH_VAR "${ROSE_SHLIBPATH_VAR}"

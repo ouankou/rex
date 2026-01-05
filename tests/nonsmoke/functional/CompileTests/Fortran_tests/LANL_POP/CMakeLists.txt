@@ -8,6 +8,15 @@ function(LANL_POP_test file_to_compile)
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})
 endfunction()
 
+function(LANL_POP_parse_test file_to_compile)
+  add_test(
+    NAME lanl_pop_parse_${file_to_compile}
+    COMMAND testParser ${ROSE_FLAGS}
+            -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR}
+            -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})
+  set_tests_properties(lanl_pop_parse_${file_to_compile} PROPERTIES DISABLED TRUE)
+endfunction()
+
 set(files_to_compile
   advection.F90
   baroclinic.F90
@@ -78,6 +87,30 @@ set(files_to_compile
 
 foreach(file_to_compile ${files_to_compile})
   LANL_POP_test(${file_to_compile})
+  LANL_POP_parse_test(${file_to_compile})
+endforeach()
+
+set(disabled_files_to_compile
+  current_meters.F90
+  drifters.F90
+  hydro_sections.F90
+  fix_64.C
+)
+
+foreach(file_to_compile ${disabled_files_to_compile})
+  LANL_POP_test(${file_to_compile})
+  LANL_POP_parse_test(${file_to_compile})
+  set_tests_properties(${file_to_compile} PROPERTIES DISABLED TRUE)
+endforeach()
+
+set(failing_files_to_compile
+  io_netcdf_testcode_01.F90
+  io_netcdf_testcode_02.F90
+)
+
+foreach(file_to_compile ${failing_files_to_compile})
+  LANL_POP_test(${file_to_compile})
+  set_tests_properties(${file_to_compile} PROPERTIES DISABLED TRUE)
 endforeach()
 
 # set up dependencies between tests
@@ -265,4 +298,3 @@ set_tests_properties(vmix_rich.F90 PROPERTIES DEPENDS
 
 set_tests_properties(xdisplay.F90 PROPERTIES DEPENDS
   "kinds_mod.F90;blocks.F90;domain_size.F90;domain.F90;constants.F90;communicate.F90;io_types.F90;broadcast.F90;prognostic.F90;grid.F90;exit_mod.F90")
-
