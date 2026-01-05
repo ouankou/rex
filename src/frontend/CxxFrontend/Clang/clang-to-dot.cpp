@@ -155,27 +155,25 @@ int clang_to_dot_main(int argc, char ** argv)
                                                      );
 
     std::string install_prefix;
-    std::string rose_include_path;
+    std::string compiler_header_root;
     std::string builtin_include_path;
     bool in_install_tree = roseInstallPrefix(install_prefix);
     if (in_install_tree) {
-      rose_include_path =
-          install_prefix + "/" + std::string(ROSE_INSTALL_INCLUDE_DIR) + "/";
-      builtin_include_path = install_prefix + "/" +
+      compiler_header_root = install_prefix + "/" +
                              std::string(ROSE_INSTALL_CLANG_INCLUDE_DIR) + "/";
     } else {
-      rose_include_path =
+      compiler_header_root =
           std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
-      builtin_include_path = rose_include_path + "clang/";
     }
+    builtin_include_path = compiler_header_root + "clang/";
 
     std::vector<std::string>::iterator it;
     for (it = c_config_include_dirs.begin(); it != c_config_include_dirs.end(); it++)
         if (it->length() > 0 && (*it)[0] != '/')
-            *it = rose_include_path + *it;
+          *it = compiler_header_root + *it;
     for (it = cxx_config_include_dirs.begin(); it != cxx_config_include_dirs.end(); it++)
         if (it->length() > 0 && (*it)[0] != '/')
-            *it = rose_include_path + *it;
+          *it = compiler_header_root + *it;
 
     inc_dirs_list.push_back(builtin_include_path);
 
