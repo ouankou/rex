@@ -288,9 +288,11 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
     std::string compiler_header_root;
     std::string builtin_header_root;
     if (in_install_tree) {
-        const std::string include_root = install_prefix + "/include/";
-        compiler_header_root = include_root;
-        builtin_header_root = include_root + "clang/";
+      const std::string compiler_root =
+          install_prefix + "/" + std::string(ROSE_INSTALL_CLANG_INCLUDE_DIR) +
+          "/";
+      compiler_header_root = compiler_root;
+      builtin_header_root = compiler_root + "clang/";
     } else {
         compiler_header_root = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
         builtin_header_root = compiler_header_root + "clang/";
