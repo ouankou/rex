@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Post @codex review comment
+        if: ${{ secrets.CODEX_COMMENT_TOKEN != '' }}
         env:
           # Use PAT to post as user instead of github-actions bot
           # This allows Copilot to respond to the @codex mention
