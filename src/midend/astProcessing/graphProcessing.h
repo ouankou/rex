@@ -1,3 +1,6 @@
+#ifndef ROSE_MIDEND_ASTPROCESSING_GRAPHPROCESSING_H
+#define ROSE_MIDEND_ASTPROCESSING_GRAPHPROCESSING_H
+
 #define LP 1
 #define PERFDEBUG 0
 #ifdef _OPENMP
@@ -1235,3 +1238,5 @@ template <class CFG>
 void SgGraphTraversal<CFG>::storeCompact(std::vector<int> compactPath) {
   return;
 }
+
+#endif // ROSE_MIDEND_ASTPROCESSING_GRAPHPROCESSING_H
