@@ -157,7 +157,7 @@ int clang_to_dot_main(int argc, char ** argv)
     std::string rose_include_path;
     bool in_install_tree = roseInstallPrefix(rose_include_path);
     if (in_install_tree) {
-        rose_include_path += "/include/";
+      rose_include_path += "/" + std::string(ROSE_INSTALL_INCLUDE_DIR) + "/";
     }
     else {
         rose_include_path = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
