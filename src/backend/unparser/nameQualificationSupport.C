@@ -15494,31 +15494,6 @@ NameQualificationTraversal::setNameQualification(SgFunctionRefExp* functionRefEx
                             outputNameQualificationLength,
                             outputGlobalQualification);
 
-     bool isFriendRef = false;
-     if (functionDeclaration != NULL) {
-       isFriendRef =
-           functionDeclaration->get_declarationModifier().isFriend() ||
-           (functionDeclaration->get_firstNondefiningDeclaration() != NULL &&
-            functionDeclaration->get_firstNondefiningDeclaration()
-                ->get_declarationModifier()
-                .isFriend()) ||
-           (functionDeclaration->get_definingDeclaration() != NULL &&
-            functionDeclaration->get_definingDeclaration()
-                ->get_declarationModifier()
-                .isFriend());
-     }
-
-     if (isFriendRef) {
-       const int explicit_length =
-           functionRefExp->get_explicit_name_qualification_length();
-       const bool explicit_global =
-           functionRefExp->get_explicit_global_qualification();
-       if (!explicit_global && explicit_length <= 0) {
-         outputNameQualificationLength = 0;
-         outputGlobalQualification = false;
-         qualifier.clear();
-       }
-     }
      functionRefExp->set_global_qualification_required(outputGlobalQualification);
      functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
