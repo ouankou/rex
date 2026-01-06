@@ -195,6 +195,16 @@ std::optional<path> find_build_root(const std::vector<path> &candidates) {
   }
   return std::nullopt;
 }
+
+RoseClangPathRoots make_build_tree_roots(const path &build_root) {
+  RoseClangPathRoots roots;
+  roots.in_install_tree = false;
+  const path compiler_root = build_root / "include-staging";
+  roots.compiler_header_root = with_trailing_slash(compiler_root);
+  roots.builtin_header_root = with_trailing_slash(compiler_root / "clang");
+  roots.rose_include_root = with_trailing_slash(build_root / "include");
+  return roots;
+}
 } // namespace
 
 RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
@@ -217,14 +227,15 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
   }
   auto build_root = find_build_root(build_candidates);
 
+  if (!build_root) {
+    path build_staging(ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR);
+    if (dir_exists(build_staging)) {
+      build_root = build_staging.parent_path();
+    }
+  }
+
   if (build_root) {
-    RoseClangPathRoots roots;
-    roots.in_install_tree = false;
-    const path compiler_root = *build_root / "include-staging";
-    roots.compiler_header_root = with_trailing_slash(compiler_root);
-    roots.builtin_header_root = with_trailing_slash(compiler_root / "clang");
-    roots.rose_include_root = with_trailing_slash(*build_root / "include");
-    return roots;
+    return make_build_tree_roots(*build_root);
   }
 
   if (!force_build_tree) {
@@ -253,23 +264,6 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
       roots.rose_include_root = with_trailing_slash(rose_root);
       return roots;
     }
-  }
-
-  if (!build_root) {
-    path build_staging(ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR);
-    if (dir_exists(build_staging)) {
-      build_root = build_staging.parent_path();
-    }
-  }
-
-  if (build_root) {
-    RoseClangPathRoots roots;
-    roots.in_install_tree = false;
-    const path compiler_root = *build_root / "include-staging";
-    roots.compiler_header_root = with_trailing_slash(compiler_root);
-    roots.builtin_header_root = with_trailing_slash(compiler_root / "clang");
-    roots.rose_include_root = with_trailing_slash(*build_root / "include");
-    return roots;
   }
 
   ROSE_ASSERT(!"Unable to resolve ROSE build/install roots for Clang headers.");
