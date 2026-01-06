@@ -9077,7 +9077,6 @@ UnparseLanguageIndependentConstructs::unparseClinkageEndStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgClinkageEndStatement *linkage_stmt = isSgClinkageEndStatement(stmt);
   ASSERT_not_null(linkage_stmt);
-  ROSE_ASSERT(!linkage_stmt->get_languageSpecifier().empty());
 
   curprint("}");
   info.set_extern_C_with_braces(false);
