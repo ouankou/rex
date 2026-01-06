@@ -157,6 +157,22 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
   const bool force_build_tree = std::getenv("ROSE_IN_BUILD_TREE") != nullptr;
   auto argv_prefix = prefix_from_executable(argv0);
 
+  std::vector<path> build_candidates = override_candidates;
+  if (argv_prefix) {
+    build_candidates.push_back(*argv_prefix);
+  }
+  auto build_root = find_build_root(build_candidates);
+
+  if (build_root) {
+    RoseClangPathRoots roots;
+    roots.in_install_tree = false;
+    const path compiler_root = *build_root / "include-staging";
+    roots.compiler_header_root = with_trailing_slash(compiler_root);
+    roots.builtin_header_root = with_trailing_slash(compiler_root / "clang");
+    roots.rose_include_root = with_trailing_slash(*build_root / "include");
+    return roots;
+  }
+
   if (!force_build_tree) {
     std::vector<path> install_candidates = override_candidates;
     if (argv_prefix) {
@@ -181,11 +197,6 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
     }
   }
 
-  std::vector<path> build_candidates = override_candidates;
-  if (argv_prefix) {
-    build_candidates.push_back(*argv_prefix);
-  }
-  auto build_root = find_build_root(build_candidates);
   if (!build_root) {
     path build_staging(ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR);
     if (dir_exists(build_staging)) {
