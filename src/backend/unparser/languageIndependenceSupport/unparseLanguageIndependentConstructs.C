@@ -3621,6 +3621,8 @@ UnparseLanguageIndependentConstructs::unparseStatement(SgStatement* stmt, SgUnpa
                     case V_SgIdentDirectiveStatement:       unparseIdentDirectiveStatement       (stmt, info); break;
                     case V_SgIncludeNextDirectiveStatement: unparseIncludeNextDirectiveStatement (stmt, info); break;
                     case V_SgLinemarkerDirectiveStatement:  unparseLinemarkerDirectiveStatement  (stmt, info); break;
+                    case V_SgClinkageStartStatement:        unparseClinkageStartStatement        (stmt, info); break;
+                    case V_SgClinkageEndStatement:          unparseClinkageEndStatement          (stmt, info); break;
 
                  // Liao 10/21/2010. Handle generic OpenMP directive unparsing here.
                     case V_SgOmpSectionStatement:
@@ -5918,6 +5920,54 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
           return;
         }
 
+     auto has_adjacent_clinkage_marker = [&](bool want_start) -> bool {
+       SgStatement *statement = isSgStatement(stmt);
+       if (statement == NULL) {
+         return false;
+       }
+
+       SgScopeStatement *scope = isSgScopeStatement(statement->get_parent());
+       if (scope == NULL) {
+         return false;
+       }
+
+       if (scope->containsOnlyDeclarations()) {
+         SgDeclarationStatement *decl_stmt =
+             isSgDeclarationStatement(statement);
+         if (decl_stmt == NULL) {
+           return false;
+         }
+         const SgDeclarationStatementPtrList &decls =
+             scope->getDeclarationList();
+         for (size_t idx = 0; idx < decls.size(); ++idx) {
+           if (decls[idx] != decl_stmt) {
+             continue;
+           }
+           if (want_start) {
+             return idx > 0 &&
+                    isSgClinkageStartStatement(decls[idx - 1]) != NULL;
+           }
+           return idx + 1 < decls.size() &&
+                  isSgClinkageEndStatement(decls[idx + 1]) != NULL;
+         }
+         return false;
+       }
+
+       const SgStatementPtrList &stmts = scope->getStatementList();
+       for (size_t idx = 0; idx < stmts.size(); ++idx) {
+         if (stmts[idx] != statement) {
+           continue;
+         }
+         if (want_start) {
+           return idx > 0 &&
+                  isSgClinkageStartStatement(stmts[idx - 1]) != NULL;
+         }
+         return idx + 1 < stmts.size() &&
+                isSgClinkageEndStatement(stmts[idx + 1]) != NULL;
+       }
+       return false;
+     };
+
 #if 0
      info.display("In Unparse_ExprStmt::unparseAttachedPreprocessingInfo()");
 #endif
@@ -6168,6 +6218,13 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
                          case PreprocessingInfo::ClinkageSpecificationEnd:
                               if ( !info.SkipComments() )
                                  {
+                                   const bool is_start =
+                                       (*i)->getTypeOfDirective() ==
+                                       PreprocessingInfo::ClinkageSpecificationStart;
+                                   if (has_adjacent_clinkage_marker(is_start))
+                                      {
+                                        break;
+                                      }
 #if 0
                                    curprint ( string("/* case PreprocessingInfo::ClinkageSpecification (Start/End)") + (*i)->getString() + " */ \n");
 #endif
@@ -6179,7 +6236,7 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
                                    curprint ( string("/* DONE: case PreprocessingInfo::ClinkageSpecification (Start/End)") + (*i)->getString() + " */ \n");
 #endif
 
-                                   if ( (*i)->getTypeOfDirective() == PreprocessingInfo::ClinkageSpecificationStart)
+                                   if (is_start == true)
                                       {
 #if 0
                                         printf ("calling info.set_extern_C_with_braces(true) \n");
@@ -8997,6 +9054,30 @@ UnparseLanguageIndependentConstructs::unparseLinemarkerDirectiveStatement (SgSta
      curprint(directive->get_directiveString());
      unp->u_sage->curprint_newline();
    }
+
+void
+UnparseLanguageIndependentConstructs::unparseClinkageStartStatement(SgStatement *stmt,
+                                                                    SgUnparse_Info &info) {
+  SgClinkageStartStatement *linkage_stmt = isSgClinkageStartStatement(stmt);
+  ASSERT_not_null(linkage_stmt);
+
+  const std::string &language = linkage_stmt->get_languageSpecifier();
+  ROSE_ASSERT(!language.empty());
+
+  curprint("extern \"" + language + "\" {");
+  info.set_extern_C_with_braces(true);
+}
+
+void
+UnparseLanguageIndependentConstructs::unparseClinkageEndStatement(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  SgClinkageEndStatement *linkage_stmt = isSgClinkageEndStatement(stmt);
+  ASSERT_not_null(linkage_stmt);
+  ROSE_ASSERT(!linkage_stmt->get_languageSpecifier().empty());
+
+  curprint("}");
+  info.set_extern_C_with_braces(false);
+}
 
 void UnparseLanguageIndependentConstructs::unparseOmpDefaultClause(SgOmpClause* clause, SgUnparse_Info& info)
 {

@@ -1169,6 +1169,51 @@ bool detach_decl_from_scope_child_list(SgDeclarationStatement *decl,
   return erase_all(scope->getStatementList());
 }
 
+template <typename ListType, typename NodePtr>
+bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
+                           NodePtr start, NodePtr end) {
+  if (first == nullptr || last == nullptr || start == nullptr ||
+      end == nullptr) {
+    return false;
+  }
+
+  size_t first_index = list.size();
+  size_t last_index = list.size();
+  size_t idx = 0;
+  for (auto *entry : list) {
+    if (entry == first && first_index == list.size()) {
+      first_index = idx;
+    }
+    if (entry == last) {
+      last_index = idx;
+    }
+    ++idx;
+  }
+
+  if (first_index == list.size() || last_index == list.size()) {
+    return false;
+  }
+
+  if (last_index < first_index) {
+    std::swap(first_index, last_index);
+  }
+
+  auto insert_at = [&](size_t index, NodePtr node) {
+    auto it = list.begin();
+    for (size_t i = 0; i < index; ++i) {
+      ++it;
+    }
+    list.insert(it, node);
+  };
+
+  insert_at(first_index, start);
+  if (last_index >= first_index) {
+    ++last_index;
+  }
+  insert_at(last_index + 1, end);
+  return true;
+}
+
 void ensure_decl_in_scope_child_list(
     SgDeclarationStatement *decl, SgScopeStatement *scope,
     const char *context = "ClangToSageTranslator") {
@@ -2907,6 +2952,8 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
                                     "VisitLinkageSpecDecl");
   };
 
+  std::vector<SgDeclarationStatement *> linkage_decls;
+
   for (auto it = linkage_spec_decl->decls_begin();
        it != linkage_spec_decl->decls_end(); ++it) {
     clang::Decl *inner_decl = *it;
@@ -2918,6 +2965,107 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       apply_linkage(decl_stmt);
       apply_linkage(decl_stmt->get_firstNondefiningDeclaration());
       attach_to_current_scope(decl_stmt);
+      linkage_decls.push_back(decl_stmt);
+    }
+  }
+
+  SgStatement *first_decl_stmt = nullptr;
+  SgStatement *last_decl_stmt = nullptr;
+  if (has_braces && !linkage_decls.empty()) {
+    if (current_scope->containsOnlyDeclarations()) {
+      const SgDeclarationStatementPtrList &decls =
+          current_scope->getDeclarationList();
+      for (SgDeclarationStatement *decl : decls) {
+        if (std::find(linkage_decls.begin(), linkage_decls.end(), decl) ==
+            linkage_decls.end()) {
+          continue;
+        }
+        if (decl->get_parent() != current_scope) {
+          continue;
+        }
+        if (first_decl_stmt == nullptr) {
+          first_decl_stmt = decl;
+        }
+        last_decl_stmt = decl;
+      }
+    } else if (scope_supports_statement_list(current_scope)) {
+      const SgStatementPtrList &stmts = current_scope->getStatementList();
+      for (SgStatement *stmt : stmts) {
+        SgDeclarationStatement *decl = isSgDeclarationStatement(stmt);
+        if (decl == nullptr) {
+          continue;
+        }
+        if (std::find(linkage_decls.begin(), linkage_decls.end(), decl) ==
+            linkage_decls.end()) {
+          continue;
+        }
+        if (decl->get_parent() != current_scope) {
+          continue;
+        }
+        if (first_decl_stmt == nullptr) {
+          first_decl_stmt = decl;
+        }
+        last_decl_stmt = decl;
+      }
+    }
+    ROSE_ASSERT(first_decl_stmt != nullptr);
+    ROSE_ASSERT(last_decl_stmt != nullptr);
+  }
+
+  if (has_braces) {
+    SgClinkageStartStatement *start_stmt = new SgClinkageStartStatement();
+    SgClinkageEndStatement *end_stmt = new SgClinkageEndStatement();
+
+    start_stmt->set_languageSpecifier(linkage);
+    end_stmt->set_languageSpecifier(linkage);
+    start_stmt->set_linkage(linkage);
+    end_stmt->set_linkage(linkage);
+    start_stmt->set_scope(current_scope);
+    end_stmt->set_scope(current_scope);
+    start_stmt->set_firstNondefiningDeclaration(start_stmt);
+    start_stmt->set_definingDeclaration(start_stmt);
+    end_stmt->set_firstNondefiningDeclaration(end_stmt);
+    end_stmt->set_definingDeclaration(end_stmt);
+
+    applySourceRange(start_stmt,
+                     clang::SourceRange(linkage_spec_decl->getExternLoc(),
+                                        linkage_spec_decl->getExternLoc()));
+    applySourceRange(end_stmt,
+                     clang::SourceRange(linkage_spec_decl->getRBraceLoc(),
+                                        linkage_spec_decl->getRBraceLoc()));
+
+    bool inserted = false;
+    if (first_decl_stmt != nullptr && last_decl_stmt != nullptr) {
+      if (current_scope->containsOnlyDeclarations()) {
+        SgDeclarationStatement *start_decl =
+            isSgDeclarationStatement(start_stmt);
+        SgDeclarationStatement *end_decl = isSgDeclarationStatement(end_stmt);
+        SgDeclarationStatement *first_decl =
+            isSgDeclarationStatement(first_decl_stmt);
+        SgDeclarationStatement *last_decl =
+            isSgDeclarationStatement(last_decl_stmt);
+        if (start_decl != nullptr && end_decl != nullptr &&
+            first_decl != nullptr && last_decl != nullptr) {
+          inserted = insert_markers_around(current_scope->getDeclarationList(),
+                                           first_decl, last_decl, start_decl,
+                                           end_decl);
+        }
+      } else if (scope_supports_statement_list(current_scope)) {
+        inserted = insert_markers_around(
+            current_scope->getStatementList(), first_decl_stmt, last_decl_stmt,
+            static_cast<SgStatement *>(start_stmt),
+            static_cast<SgStatement *>(end_stmt));
+      }
+    }
+
+    if (inserted) {
+      start_stmt->set_parent(current_scope);
+      end_stmt->set_parent(current_scope);
+      start_stmt->set_scope(current_scope);
+      end_stmt->set_scope(current_scope);
+    } else {
+      SageInterface::appendStatement(start_stmt, current_scope);
+      SageInterface::appendStatement(end_stmt, current_scope);
     }
   }
 

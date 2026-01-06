@@ -3538,6 +3538,7 @@ Grammar::setUpStatements ()
 
   // DQ (11/28/2008): Thes are used to mark line numbers in generated CPP output.
      LinemarkerDirectiveStatement.setFunctionPrototype ( "HEADER_LINEMARKER_PREPROCESSOR_DIRECTIVE_STATEMENT", "../Grammar/Statement.code" );
+     ClinkageDeclarationStatement.setFunctionPrototype ( "HEADER_CLINKAGE_DECLARATION_STATEMENT", "../Grammar/Statement.code" );
      LinemarkerDirectiveStatement.setDataPrototype ( "int", "linenumber", "= -1",
                                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      LinemarkerDirectiveStatement.setDataPrototype ( "std::string", "filename", "= \"\"",
@@ -3548,7 +3549,7 @@ Grammar::setUpStatements ()
 
   // Support for extern "C" and extern "C++"
      ClinkageDeclarationStatement.setDataPrototype ( "std::string"   , "languageSpecifier", "= \"\"",
-                                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #if 0
   // DQ (11/23/2008): I am unclear why this is here, these are not used anywhere.
      ClinkageStartStatement.setDataPrototype ( "std::string"   , "dummyString16", "= \"\"",
@@ -3905,6 +3906,7 @@ Grammar::setUpStatements ()
      EmptyDirectiveStatement.setFunctionSource          ( "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
 
      ClinkageDeclarationStatement.setFunctionSource     ( "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
+     ClinkageDeclarationStatement.setFunctionSource     ( "SOURCE_CLINKAGE_DECLARATION_STATEMENT", "../Grammar/Statement.code" );
      ClinkageStartStatement.setFunctionSource           ( "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
      ClinkageEndStatement.setFunctionSource             ( "SOURCE_POST_CONSTRUCTION_INITIALIZATION_STATEMENT", "../Grammar/Statement.code" );
 

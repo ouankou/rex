@@ -1994,6 +1994,30 @@ SageInterface::get_name ( const SgDeclarationStatement* declaration )
                name = string("emptyDeclaration") + StringUtility::numberToString(const_cast<SgDeclarationStatement*>(declaration));
                break;
              }
+          case V_SgClinkageDeclarationStatement:
+          case V_SgClinkageStartStatement:
+          case V_SgClinkageEndStatement:
+             {
+               const SgClinkageDeclarationStatement *clinkage_decl =
+                   isSgClinkageDeclarationStatement(declaration);
+               ROSE_ASSERT(clinkage_decl != NULL);
+               std::string language = clinkage_decl->get_languageSpecifier();
+               if (!language.empty())
+                  {
+                    name = string("clinkage_") + language + "_" +
+                           StringUtility::numberToString(
+                               const_cast<SgDeclarationStatement *>(
+                                   declaration));
+                  }
+                 else
+                  {
+                    name = string("clinkage") +
+                           StringUtility::numberToString(
+                               const_cast<SgDeclarationStatement *>(
+                                   declaration));
+                  }
+               break;
+             }
        // Note that the case for SgVariableDeclaration is not implemented
           default:
             // name = "default name (default case reached: not handled)";

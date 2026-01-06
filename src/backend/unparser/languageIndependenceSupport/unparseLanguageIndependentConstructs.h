@@ -224,6 +224,8 @@ class UnparseLanguageIndependentConstructs
           virtual void unparseIdentDirectiveStatement       (SgStatement* stmt, SgUnparse_Info& info);
           virtual void unparseIncludeNextDirectiveStatement (SgStatement* stmt, SgUnparse_Info& info);
           virtual void unparseLinemarkerDirectiveStatement  (SgStatement* stmt, SgUnparse_Info& info);
+          virtual void unparseClinkageStartStatement        (SgStatement* stmt, SgUnparse_Info& info);
+          virtual void unparseClinkageEndStatement          (SgStatement* stmt, SgUnparse_Info& info);
 
          // Liao 10/20/2010 common unparsing support for OpenMP AST 
           virtual void unparseOmpPrefix                     (SgUnparse_Info& info); // = 0;
