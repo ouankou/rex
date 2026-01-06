@@ -5920,6 +5920,23 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
           return;
         }
 
+     auto has_adjacent_marker_in_list = [&](const auto &list,
+                                            SgStatement *target,
+                                            bool want_start) -> bool {
+       for (size_t idx = 0; idx < list.size(); ++idx) {
+         if (list[idx] != target) {
+           continue;
+         }
+         if (want_start) {
+           return idx > 0 &&
+                  isSgClinkageStartStatement(list[idx - 1]) != NULL;
+         }
+         return idx + 1 < list.size() &&
+                isSgClinkageEndStatement(list[idx + 1]) != NULL;
+       }
+       return false;
+     };
+
      auto has_adjacent_clinkage_marker = [&](bool want_start) -> bool {
        SgStatement *statement = isSgStatement(stmt);
        if (statement == NULL) {
@@ -5937,35 +5954,12 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
          if (decl_stmt == NULL) {
            return false;
          }
-         const SgDeclarationStatementPtrList &decls =
-             scope->getDeclarationList();
-         for (size_t idx = 0; idx < decls.size(); ++idx) {
-           if (decls[idx] != decl_stmt) {
-             continue;
-           }
-           if (want_start) {
-             return idx > 0 &&
-                    isSgClinkageStartStatement(decls[idx - 1]) != NULL;
-           }
-           return idx + 1 < decls.size() &&
-                  isSgClinkageEndStatement(decls[idx + 1]) != NULL;
-         }
-         return false;
+         return has_adjacent_marker_in_list(scope->getDeclarationList(),
+                                            decl_stmt, want_start);
        }
 
-       const SgStatementPtrList &stmts = scope->getStatementList();
-       for (size_t idx = 0; idx < stmts.size(); ++idx) {
-         if (stmts[idx] != statement) {
-           continue;
-         }
-         if (want_start) {
-           return idx > 0 &&
-                  isSgClinkageStartStatement(stmts[idx - 1]) != NULL;
-         }
-         return idx + 1 < stmts.size() &&
-                isSgClinkageEndStatement(stmts[idx + 1]) != NULL;
-       }
-       return false;
+       return has_adjacent_marker_in_list(scope->getStatementList(), statement,
+                                          want_start);
      };
 
 #if 0

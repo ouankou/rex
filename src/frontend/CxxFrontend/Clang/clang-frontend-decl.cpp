@@ -1214,6 +1214,37 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
   return true;
 }
 
+template <typename ListType>
+bool find_linkage_bounds_in_list(
+    const ListType &list,
+    const std::vector<SgDeclarationStatement *> &linkage_decls,
+    SgScopeStatement *scope, SgStatement *&first_stmt,
+    SgStatement *&last_stmt) {
+  if (scope == NULL) {
+    return false;
+  }
+
+  for (auto *entry : list) {
+    SgDeclarationStatement *decl = isSgDeclarationStatement(entry);
+    if (decl == NULL) {
+      continue;
+    }
+    if (std::find(linkage_decls.begin(), linkage_decls.end(), decl) ==
+        linkage_decls.end()) {
+      continue;
+    }
+    if (decl->get_parent() != scope) {
+      continue;
+    }
+    if (first_stmt == NULL) {
+      first_stmt = decl;
+    }
+    last_stmt = decl;
+  }
+
+  return first_stmt != NULL && last_stmt != NULL;
+}
+
 void ensure_decl_in_scope_child_list(
     SgDeclarationStatement *decl, SgScopeStatement *scope,
     const char *context = "ClangToSageTranslator") {
@@ -2973,40 +3004,13 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
   SgStatement *last_decl_stmt = nullptr;
   if (has_braces && !linkage_decls.empty()) {
     if (current_scope->containsOnlyDeclarations()) {
-      const SgDeclarationStatementPtrList &decls =
-          current_scope->getDeclarationList();
-      for (SgDeclarationStatement *decl : decls) {
-        if (std::find(linkage_decls.begin(), linkage_decls.end(), decl) ==
-            linkage_decls.end()) {
-          continue;
-        }
-        if (decl->get_parent() != current_scope) {
-          continue;
-        }
-        if (first_decl_stmt == nullptr) {
-          first_decl_stmt = decl;
-        }
-        last_decl_stmt = decl;
-      }
+      find_linkage_bounds_in_list(current_scope->getDeclarationList(),
+                                  linkage_decls, current_scope,
+                                  first_decl_stmt, last_decl_stmt);
     } else if (scope_supports_statement_list(current_scope)) {
-      const SgStatementPtrList &stmts = current_scope->getStatementList();
-      for (SgStatement *stmt : stmts) {
-        SgDeclarationStatement *decl = isSgDeclarationStatement(stmt);
-        if (decl == nullptr) {
-          continue;
-        }
-        if (std::find(linkage_decls.begin(), linkage_decls.end(), decl) ==
-            linkage_decls.end()) {
-          continue;
-        }
-        if (decl->get_parent() != current_scope) {
-          continue;
-        }
-        if (first_decl_stmt == nullptr) {
-          first_decl_stmt = decl;
-        }
-        last_decl_stmt = decl;
-      }
+      find_linkage_bounds_in_list(current_scope->getStatementList(),
+                                  linkage_decls, current_scope,
+                                  first_decl_stmt, last_decl_stmt);
     }
     ROSE_ASSERT(first_decl_stmt != nullptr);
     ROSE_ASSERT(last_decl_stmt != nullptr);
