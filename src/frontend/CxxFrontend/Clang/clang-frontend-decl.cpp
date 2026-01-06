@@ -1201,11 +1201,11 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
   }
 
   list.reserve(list.size() + 2);
-  auto inserted_end = list.insert(list.begin() + last_index + 1, end);
+  list.insert(list.begin() + first_index, start);
   try {
-    list.insert(list.begin() + first_index, start);
+    list.insert(list.begin() + last_index + 2, end);
   } catch (...) {
-    list.erase(inserted_end);
+    list.erase(list.begin() + first_index);
     throw;
   }
   return true;
@@ -1221,11 +1221,11 @@ bool insert_markers_at_index(ListType &list, size_t index, NodePtr start,
     return false;
   }
   list.reserve(list.size() + 2);
-  auto inserted_end = list.insert(list.begin() + index, end);
+  list.insert(list.begin() + index, start);
   try {
-    list.insert(list.begin() + index, start);
+    list.insert(list.begin() + index + 1, end);
   } catch (...) {
-    list.erase(inserted_end);
+    list.erase(list.begin() + index);
     throw;
   }
   return true;
