@@ -1235,6 +1235,11 @@ bool file_info_is_before(const Sg_File_Info *lhs, const Sg_File_Info *rhs) {
   if (lhs == nullptr || rhs == nullptr) {
     return false;
   }
+  const std::string lhs_file = lhs->get_filename();
+  const std::string rhs_file = rhs->get_filename();
+  if (lhs_file != rhs_file) {
+    return lhs_file < rhs_file;
+  }
   if (lhs->get_line() != rhs->get_line()) {
     return lhs->get_line() < rhs->get_line();
   }
