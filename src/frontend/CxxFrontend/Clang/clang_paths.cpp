@@ -86,8 +86,11 @@ std::optional<path> resolve_executable_path(const char *argv0) {
     path candidate = path(dir) / arg_path;
     if (std::filesystem::is_regular_file(candidate, ec) && !ec) {
       path canonical = std::filesystem::weakly_canonical(candidate, ec);
-      if (!ec && std::filesystem::exists(canonical, ec)) {
-        return canonical;
+      if (!ec) {
+        std::error_code exists_ec;
+        if (std::filesystem::exists(canonical, exists_ec) && !exists_ec) {
+          return canonical;
+        }
       }
       return candidate;
     }
@@ -109,8 +112,7 @@ std::optional<path> prefix_from_executable(const char *argv0) {
 
 std::optional<path> prefix_from_shared_library() {
 #ifdef HAVE_DLADDR
-  Dl_info info;
-  info.dli_fname = "";
+  Dl_info info{};
   if (dladdr(reinterpret_cast<void *>(&resolveRoseClangPaths), &info) == 0) {
     return std::nullopt;
   }
