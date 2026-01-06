@@ -6,6 +6,7 @@
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
 
+#include "clang_paths.h"
 #include "rose_config.h"
 
 #include "clang/Lex/Lexer.h"
@@ -13,12 +14,11 @@
 #include "clang-to-dot.hpp"
 #include "ompAstConstruction.h"
 
-extern bool roseInstallPrefix(std::string&);
-
 // DQ (11/28/2020): Use this for testing the DOT graph generator.
 #define EXIT_AFTER_BUILDING_DOT_FILE 0
 
-int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
+int clang_main(int argc, char **argv, SgSourceFile &sageFile,
+               const char *driver_argv0) {
 
   // CLANG FRONTEND FIX: Enable template unparsing from AST
   // The Clang frontend doesn't save template strings like the legacy frontend
@@ -39,7 +39,7 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
        {
 #if 1
       // DQ (10/23/2020): Calling clang-to-dot generator (I don't think this modifies the argv list).
-         int clang_to_dot_status = clang_to_dot_main(argc,argv);
+      int clang_to_dot_status = clang_to_dot_main(argc, argv, driver_argv0);
 #if 0
          printf ("Exiting as a test! \n");
          ROSE_ABORT();
@@ -282,21 +282,9 @@ int clang_main(int argc, char ** argv, SgSourceFile& sageFile) {
                                                        c_config_include_dirs_array + sizeof(c_config_include_dirs_array) / sizeof(const char*)
                                                      );
 
-    std::string install_prefix;
-    bool in_install_tree = roseInstallPrefix(install_prefix);
-
-    std::string compiler_header_root;
-    std::string builtin_header_root;
-    if (in_install_tree) {
-      const std::string compiler_root =
-          install_prefix + "/" + std::string(ROSE_INSTALL_CLANG_INCLUDE_DIR) +
-          "/";
-      compiler_header_root = compiler_root;
-      builtin_header_root = compiler_root + "clang/";
-    } else {
-        compiler_header_root = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
-        builtin_header_root = compiler_header_root + "clang/";
-    }
+    RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
+    std::string compiler_header_root = clang_paths.compiler_header_root;
+    std::string builtin_header_root = clang_paths.builtin_header_root;
 
     std::vector<std::string>::iterator it;
     for (it = c_config_include_dirs.begin(); it != c_config_include_dirs.end(); it++)

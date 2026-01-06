@@ -4,6 +4,7 @@
 #include "sage3basic.h"
 #include "clang-to-dot-private.hpp"
 
+#include "clang_paths.h"
 #include "rose_config.h"
 
 #if 0
@@ -32,9 +33,6 @@ void clang::PPCallbacks::type_info() {};
 #endif
 #endif
 
-
-extern bool roseInstallPrefix(std::string&);
-
 // DQ (11/1/2020): Added to resolve types (e.g string)
 using namespace std;
 
@@ -52,9 +50,8 @@ std::set<void*> graphNodeSet;
 // #define DEBUG_HEADER_GRAPH_SUPPORT 0
 
 
-// int clang_to_dot_main(int argc, char ** argv, SgSourceFile& sageFile) 
-int clang_to_dot_main(int argc, char ** argv)
-   {
+// int clang_to_dot_main(int argc, char ** argv, SgSourceFile& sageFile)
+int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   // Build a dot graph of the Clang AST.
 
   // Build filename...
@@ -154,18 +151,9 @@ int clang_to_dot_main(int argc, char ** argv)
                                                        c_config_include_dirs_array + sizeof(c_config_include_dirs_array) / sizeof(const char*)
                                                      );
 
-    std::string install_prefix;
-    std::string compiler_header_root;
-    std::string builtin_include_path;
-    bool in_install_tree = roseInstallPrefix(install_prefix);
-    if (in_install_tree) {
-      compiler_header_root = install_prefix + "/" +
-                             std::string(ROSE_INSTALL_CLANG_INCLUDE_DIR) + "/";
-    } else {
-      compiler_header_root =
-          std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
-    }
-    builtin_include_path = compiler_header_root + "clang/";
+    RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
+    std::string compiler_header_root = clang_paths.compiler_header_root;
+    std::string builtin_include_path = clang_paths.builtin_header_root;
 
     std::vector<std::string>::iterator it;
     for (it = c_config_include_dirs.begin(); it != c_config_include_dirs.end(); it++)

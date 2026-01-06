@@ -15,6 +15,7 @@ set(CLANG_FRONTEND_SOURCES
   clang-to-dot-decl.cpp
   clang-to-dot-stmt.cpp
   clang-to-dot-type.cpp
+  clang_paths.cpp
 )
 
 # Clang frontend headers
