@@ -50,9 +50,8 @@ std::set<void*> graphNodeSet;
 // #define DEBUG_HEADER_GRAPH_SUPPORT 0
 
 
-// int clang_to_dot_main(int argc, char ** argv, SgSourceFile& sageFile) 
-int clang_to_dot_main(int argc, char ** argv)
-   {
+// int clang_to_dot_main(int argc, char ** argv, SgSourceFile& sageFile)
+int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   // Build a dot graph of the Clang AST.
 
   // Build filename...
@@ -152,7 +151,7 @@ int clang_to_dot_main(int argc, char ** argv)
                                                        c_config_include_dirs_array + sizeof(c_config_include_dirs_array) / sizeof(const char*)
                                                      );
 
-    RoseClangPathRoots clang_paths = resolveRoseClangPaths(argv[0]);
+    RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
     std::string compiler_header_root = clang_paths.compiler_header_root;
     std::string builtin_include_path = clang_paths.builtin_header_root;
 

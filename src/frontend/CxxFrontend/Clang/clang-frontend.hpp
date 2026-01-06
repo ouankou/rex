@@ -8,6 +8,6 @@ int clang_main(int argc, char *argv[], SgSourceFile &sageFile,
                const char *driver_argv0);
 
 // DQ (11/1/2020): Adding DOD graph support.
-int clang_to_dot_main(int argc, char* argv[]);
+int clang_to_dot_main(int argc, char *argv[], const char *driver_argv0);
 
 #endif /* _CLANG_FRONTEND_HPP_ */

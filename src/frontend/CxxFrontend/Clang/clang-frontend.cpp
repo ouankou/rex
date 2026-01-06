@@ -39,7 +39,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
        {
 #if 1
       // DQ (10/23/2020): Calling clang-to-dot generator (I don't think this modifies the argv list).
-         int clang_to_dot_status = clang_to_dot_main(argc,argv);
+      int clang_to_dot_status = clang_to_dot_main(argc, argv, driver_argv0);
 #if 0
          printf ("Exiting as a test! \n");
          ROSE_ABORT();
