@@ -3024,6 +3024,7 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
   }
 
   if (has_braces) {
+    const bool allow_append = linkage_decls.empty();
     SgClinkageStartStatement *start_stmt = new SgClinkageStartStatement();
     SgClinkageEndStatement *end_stmt = new SgClinkageEndStatement();
 
@@ -3074,9 +3075,14 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       end_stmt->set_parent(current_scope);
       start_stmt->set_scope(current_scope);
       end_stmt->set_scope(current_scope);
-    } else {
+    } else if (allow_append) {
       SageInterface::appendStatement(start_stmt, current_scope);
       SageInterface::appendStatement(end_stmt, current_scope);
+    } else {
+      delete start_stmt;
+      delete end_stmt;
+      ROSE_ASSERT(
+          !"Failed to insert linkage markers around declarations in scope");
     }
   }
 
