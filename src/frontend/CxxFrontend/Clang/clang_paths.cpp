@@ -196,6 +196,32 @@ std::optional<path> find_build_root(const std::vector<path> &candidates) {
   return std::nullopt;
 }
 
+bool is_within_tree(const path &root, const path &candidate) {
+  if (root.empty() || candidate.empty()) {
+    return false;
+  }
+  std::error_code ec;
+  path canonical_root = std::filesystem::weakly_canonical(root, ec);
+  if (ec) {
+    return false;
+  }
+  ec.clear();
+  path canonical_candidate = std::filesystem::weakly_canonical(candidate, ec);
+  if (ec) {
+    return false;
+  }
+  auto root_it = canonical_root.begin();
+  auto candidate_it = canonical_candidate.begin();
+  for (; root_it != canonical_root.end() &&
+         candidate_it != canonical_candidate.end();
+       ++root_it, ++candidate_it) {
+    if (*root_it != *candidate_it) {
+      return false;
+    }
+  }
+  return root_it == canonical_root.end();
+}
+
 RoseClangPathRoots make_build_tree_roots(const path &build_root) {
   RoseClangPathRoots roots;
   roots.in_install_tree = false;
@@ -227,7 +253,17 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
   }
   auto build_root = find_build_root(build_candidates);
 
-  if (!build_root) {
+  bool allow_build_tree_fallback = force_build_tree;
+  if (!allow_build_tree_fallback) {
+    const path build_tree_root(ROSE_BUILD_TREE);
+    if (library_prefix && is_within_tree(build_tree_root, *library_prefix)) {
+      allow_build_tree_fallback = true;
+    } else if (argv_prefix && is_within_tree(build_tree_root, *argv_prefix)) {
+      allow_build_tree_fallback = true;
+    }
+  }
+
+  if (!build_root && allow_build_tree_fallback) {
     path build_staging(ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR);
     if (dir_exists(build_staging)) {
       build_root = build_staging.parent_path();
