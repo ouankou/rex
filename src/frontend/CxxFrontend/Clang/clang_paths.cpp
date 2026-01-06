@@ -163,7 +163,7 @@ bool looks_like_rose_install(const path &prefix) {
     return false;
   }
 
-  if (!file_exists(rose_root / "rosePublicConfig.h")) {
+  if (!file_exists(rose_root / "rose.h")) {
     return false;
   }
   if (!file_exists(clang_root / "clang" / "clang-builtin-c.h")) {
