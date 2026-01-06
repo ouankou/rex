@@ -13,6 +13,12 @@ file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string 
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_AUTOMAKE_TOP_BUILDDIR  = \"${ROSE_TOP_BINARY_DIR}\";\n")
 #FIXME: may be a different directory at times. Not sure what the semantics are.
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_AUTOMAKE_PREFIX        = \"${CMAKE_INSTALL_PREFIX}\";\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_TREE            = \"${ROSE_TOP_BINARY_DIR}\";\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_PREFIX        = \"${CMAKE_INSTALL_PREFIX}\";\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_INCLUDE_DIR   = \"${INCLUDE_INSTALL_DIR}\";\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_CLANG_INCLUDE_DIR = \"${CLANG_BUILTIN_HEADERS_INSTALL_DIR}\";\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR = \"${ROSE_TOP_BINARY_DIR}/include-staging\";\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_LIB_DIR         = \"${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_AUTOMAKE_DATADIR       = \"/*deprecated*/\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_AUTOMAKE_BINDIR        = \"/*deprecated*/\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_AUTOMAKE_INCLUDEDIR    = \"/*deprecated*/\";\n")

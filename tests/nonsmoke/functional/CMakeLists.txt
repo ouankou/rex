@@ -67,6 +67,25 @@ if(NOT ROSE_BUILD_C_LANGUAGE_SUPPORT AND ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT)
     ${CMAKE_CURRENT_SOURCE_DIR}/input_codes/minimal/minimal.f90)
 endif()
 
+if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
+  string(CONCAT _rex_install_cfe_command
+    "set -e;"
+    " unset ROSE_HOME ROSE_IN_BUILD_TREE;"
+    " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
+    " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
+    " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"
+    " cd \"$run_dir\";"
+    " \"$install_dir/bin/rose-compiler\" -rose:skipfinalCompileStep \"${_functional_minimal_input}\";"
+  )
+  add_test(
+    NAME rex_install_tree_clang_headers
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${BASH_EXECUTABLE} -c "${_rex_install_cfe_command}"
+  )
+  set_tests_properties(rex_install_tree_clang_headers
+    PROPERTIES RESOURCE_LOCK ${_functional_lock})
+endif()
+
 set(_keep_going_cmd $<TARGET_FILE:KeepGoingTranslator>)
 set(_keep_going_missing FALSE)
 if(NOT TARGET KeepGoingTranslator)
