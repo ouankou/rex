@@ -1179,34 +1179,32 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
     return false;
   }
 
-  auto first_it = list.end();
-  auto last_it = list.end();
   size_t first_index = list.size();
   size_t last_index = list.size();
   size_t idx = 0;
-  for (auto it = list.begin(); it != list.end(); ++it, ++idx) {
-    if (*it == first && first_it == list.end()) {
-      first_it = it;
+  for (auto *entry : list) {
+    if (entry == first && first_index == list.size()) {
       first_index = idx;
     }
-    if (*it == last) {
-      last_it = it;
+    if (entry == last) {
       last_index = idx;
     }
+    ++idx;
   }
 
-  if (first_it == list.end() || last_it == list.end()) {
+  if (first_index == list.size() || last_index == list.size()) {
     return false;
   }
 
   if (last_index < first_index) {
-    std::swap(first_it, last_it);
+    std::swap(first_index, last_index);
   }
 
-  list.insert(first_it, start);
-  auto after_last = last_it;
-  ++after_last;
-  list.insert(after_last, end);
+  list.insert(list.begin() + first_index, start);
+  if (last_index >= first_index) {
+    ++last_index;
+  }
+  list.insert(list.begin() + last_index + 1, end);
   return true;
 }
 
@@ -3031,6 +3029,8 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
     end_stmt_raw->set_linkage(linkage);
     start_stmt_raw->set_scope(current_scope);
     end_stmt_raw->set_scope(current_scope);
+    start_stmt_raw->set_parent(current_scope);
+    end_stmt_raw->set_parent(current_scope);
     start_stmt_raw->set_firstNondefiningDeclaration(start_stmt_raw);
     start_stmt_raw->set_definingDeclaration(start_stmt_raw);
     end_stmt_raw->set_firstNondefiningDeclaration(end_stmt_raw);
@@ -3061,10 +3061,6 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
     }
 
     if (inserted) {
-      start_stmt_raw->set_parent(current_scope);
-      end_stmt_raw->set_parent(current_scope);
-      start_stmt_raw->set_scope(current_scope);
-      end_stmt_raw->set_scope(current_scope);
       start_stmt.release();
       end_stmt.release();
     } else if (allow_append) {
