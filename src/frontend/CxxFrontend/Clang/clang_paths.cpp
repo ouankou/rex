@@ -246,6 +246,23 @@ bool is_within_tree(const path &root, const path &candidate) {
   return root_it == canonical_root.end();
 }
 
+bool is_same_path(const path &left, const path &right) {
+  if (left.empty() || right.empty()) {
+    return false;
+  }
+  std::error_code ec;
+  path canonical_left = std::filesystem::weakly_canonical(left, ec);
+  if (ec) {
+    return false;
+  }
+  ec.clear();
+  path canonical_right = std::filesystem::weakly_canonical(right, ec);
+  if (ec) {
+    return false;
+  }
+  return canonical_left == canonical_right;
+}
+
 RoseClangPathRoots make_build_tree_roots(const path &build_root) {
   RoseClangPathRoots roots;
   roots.in_install_tree = false;
@@ -280,9 +297,9 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
   bool allow_build_tree_fallback = force_build_tree;
   if (!allow_build_tree_fallback) {
     const path build_tree_root(ROSE_BUILD_TREE);
-    if (library_prefix && is_within_tree(build_tree_root, *library_prefix)) {
+    if (library_prefix && is_same_path(build_tree_root, *library_prefix)) {
       allow_build_tree_fallback = true;
-    } else if (argv_prefix && is_within_tree(build_tree_root, *argv_prefix)) {
+    } else if (argv_prefix && is_same_path(build_tree_root, *argv_prefix)) {
       allow_build_tree_fallback = true;
     }
   }
