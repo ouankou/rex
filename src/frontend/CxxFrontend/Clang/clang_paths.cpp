@@ -20,14 +20,14 @@ using std::filesystem::path;
 
 bool dir_exists(const path &dir) {
   std::error_code ec;
-  return std::filesystem::exists(dir, ec) &&
-         std::filesystem::is_directory(dir, ec);
+  bool is_dir = std::filesystem::is_directory(dir, ec);
+  return !ec && is_dir;
 }
 
 bool file_exists(const path &file) {
   std::error_code ec;
-  return std::filesystem::exists(file, ec) &&
-         std::filesystem::is_regular_file(file, ec);
+  bool is_file = std::filesystem::is_regular_file(file, ec);
+  return !ec && is_file;
 }
 
 std::string with_trailing_slash(const path &dir) {
@@ -84,8 +84,7 @@ std::optional<path> resolve_executable_path(const char *argv0) {
   const char *path_env = std::getenv("PATH");
   for (const auto &dir : split_path_env(path_env)) {
     path candidate = path(dir) / arg_path;
-    if (std::filesystem::exists(candidate, ec) &&
-        std::filesystem::is_regular_file(candidate, ec)) {
+    if (std::filesystem::is_regular_file(candidate, ec) && !ec) {
       path canonical = std::filesystem::weakly_canonical(candidate, ec);
       if (!ec && std::filesystem::exists(canonical, ec)) {
         return canonical;
