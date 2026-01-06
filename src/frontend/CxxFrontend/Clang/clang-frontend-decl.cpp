@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace {
@@ -3171,35 +3172,103 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
     bool inserted = false;
     if (first_decl_stmt != nullptr && last_decl_stmt != nullptr) {
       if (current_scope->containsOnlyDeclarations()) {
+        SgDeclarationStatement *start_decl =
+            isSgDeclarationStatement(start_stmt_raw);
+        SgDeclarationStatement *end_decl =
+            isSgDeclarationStatement(end_stmt_raw);
+        SgDeclarationStatement *first_decl =
+            isSgDeclarationStatement(first_decl_stmt);
+        SgDeclarationStatement *last_decl =
+            isSgDeclarationStatement(last_decl_stmt);
+        ROSE_ASSERT(start_decl != nullptr);
+        ROSE_ASSERT(end_decl != nullptr);
+        ROSE_ASSERT(first_decl != nullptr);
+        ROSE_ASSERT(last_decl != nullptr);
         inserted = insert_markers_around(
-            current_scope->getDeclarationList(),
-            static_cast<SgDeclarationStatement *>(first_decl_stmt),
-            static_cast<SgDeclarationStatement *>(last_decl_stmt),
-            static_cast<SgDeclarationStatement *>(start_stmt_raw),
-            static_cast<SgDeclarationStatement *>(end_stmt_raw));
+            current_scope->getDeclarationList(), first_decl, last_decl,
+            start_decl, end_decl);
       } else if (scope_supports_statement_list(current_scope)) {
+        SgStatement *start_stmt = isSgStatement(start_stmt_raw);
+        SgStatement *end_stmt = isSgStatement(end_stmt_raw);
+        ROSE_ASSERT(start_stmt != nullptr);
+        ROSE_ASSERT(end_stmt != nullptr);
         inserted = insert_markers_around(
             current_scope->getStatementList(), first_decl_stmt, last_decl_stmt,
-            static_cast<SgStatement *>(start_stmt_raw),
-            static_cast<SgStatement *>(end_stmt_raw));
+            start_stmt, end_stmt);
       }
     }
 
+    auto find_insertion_index_for_empty_linkage =
+        [&](const auto &list) -> size_t {
+      const clang::DeclContext *lexical_context =
+          linkage_spec_decl->getLexicalDeclContext();
+      if (lexical_context == nullptr) {
+        return find_insertion_index_for_range(list, range_start);
+      }
+      std::unordered_map<const SgStatement *, size_t> index_map;
+      index_map.reserve(list.size());
+      for (size_t idx = 0; idx < list.size(); ++idx) {
+        SgStatement *stmt = isSgStatement(list[idx]);
+        if (stmt != nullptr) {
+          index_map[stmt] = idx;
+        }
+      }
+      bool found_self = false;
+      size_t anchor_index = list.size();
+      for (auto it = lexical_context->decls_begin();
+           it != lexical_context->decls_end(); ++it) {
+        clang::Decl *decl = *it;
+        if (decl == linkage_spec_decl) {
+          found_self = true;
+          break;
+        }
+        auto map_it = p_decl_translation_map.find(decl);
+        if (map_it == p_decl_translation_map.end()) {
+          continue;
+        }
+        SgStatement *stmt = isSgStatement(map_it->second);
+        if (stmt == nullptr || stmt->get_parent() != current_scope) {
+          continue;
+        }
+        auto idx_it = index_map.find(stmt);
+        if (idx_it != index_map.end()) {
+          anchor_index = idx_it->second;
+        }
+      }
+      if (!found_self) {
+        return find_insertion_index_for_range(list, range_start);
+      }
+      if (anchor_index != list.size()) {
+        return anchor_index + 1;
+      }
+      return 0;
+    };
+
     if (!inserted && allow_append) {
       if (current_scope->containsOnlyDeclarations()) {
-        size_t insert_index = find_insertion_index_for_range(
-            current_scope->getDeclarationList(), range_start);
+        SgDeclarationStatement *start_decl =
+            isSgDeclarationStatement(start_stmt_raw);
+        SgDeclarationStatement *end_decl =
+            isSgDeclarationStatement(end_stmt_raw);
+        ROSE_ASSERT(start_decl != nullptr);
+        ROSE_ASSERT(end_decl != nullptr);
+        size_t insert_index =
+            find_insertion_index_for_empty_linkage(
+                current_scope->getDeclarationList());
         inserted = insert_markers_at_index(
-            current_scope->getDeclarationList(), insert_index,
-            static_cast<SgDeclarationStatement *>(start_stmt_raw),
-            static_cast<SgDeclarationStatement *>(end_stmt_raw));
+            current_scope->getDeclarationList(), insert_index, start_decl,
+            end_decl);
       } else if (scope_supports_statement_list(current_scope)) {
-        size_t insert_index = find_insertion_index_for_range(
-            current_scope->getStatementList(), range_start);
+        SgStatement *start_stmt = isSgStatement(start_stmt_raw);
+        SgStatement *end_stmt = isSgStatement(end_stmt_raw);
+        ROSE_ASSERT(start_stmt != nullptr);
+        ROSE_ASSERT(end_stmt != nullptr);
+        size_t insert_index =
+            find_insertion_index_for_empty_linkage(
+                current_scope->getStatementList());
         inserted = insert_markers_at_index(
-            current_scope->getStatementList(), insert_index,
-            static_cast<SgStatement *>(start_stmt_raw),
-            static_cast<SgStatement *>(end_stmt_raw));
+            current_scope->getStatementList(), insert_index, start_stmt,
+            end_stmt);
       }
     }
 
