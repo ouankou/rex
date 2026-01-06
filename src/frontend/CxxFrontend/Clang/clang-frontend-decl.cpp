@@ -1201,8 +1201,33 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
   }
 
   list.reserve(list.size() + 2);
-  list.insert(list.begin() + last_index + 1, end);
-  list.insert(list.begin() + first_index, start);
+  auto inserted_end = list.insert(list.begin() + last_index + 1, end);
+  try {
+    list.insert(list.begin() + first_index, start);
+  } catch (...) {
+    list.erase(inserted_end);
+    throw;
+  }
+  return true;
+}
+
+template <typename ListType, typename NodePtr>
+bool insert_markers_at_index(ListType &list, size_t index, NodePtr start,
+                             NodePtr end) {
+  if (start == nullptr || end == nullptr) {
+    return false;
+  }
+  if (index > list.size()) {
+    return false;
+  }
+  list.reserve(list.size() + 2);
+  auto inserted_end = list.insert(list.begin() + index, end);
+  try {
+    list.insert(list.begin() + index, start);
+  } catch (...) {
+    list.erase(inserted_end);
+    throw;
+  }
   return true;
 }
 
@@ -1250,6 +1275,35 @@ bool statement_in_linkage_range(const SgStatement *stmt,
     return false;
   }
   return file_info_in_range(stmt->get_startOfConstruct(), start, end);
+}
+
+template <typename ListType>
+size_t find_insertion_index_for_range(const ListType &list,
+                                      const Sg_File_Info *range_start) {
+  if (range_start == nullptr) {
+    return list.size();
+  }
+  const std::string range_file = range_start->get_filename();
+  if (range_file.empty()) {
+    return list.size();
+  }
+  for (size_t idx = 0; idx < list.size(); ++idx) {
+    SgStatement *stmt = isSgStatement(list[idx]);
+    if (stmt == nullptr) {
+      continue;
+    }
+    Sg_File_Info *fi = stmt->get_startOfConstruct();
+    if (fi == nullptr) {
+      continue;
+    }
+    if (fi->get_filename() != range_file) {
+      continue;
+    }
+    if (!file_info_is_before(fi, range_start)) {
+      return idx;
+    }
+  }
+  return list.size();
 }
 
 template <typename ListType>
@@ -3118,13 +3172,26 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       }
     }
 
+    if (!inserted && allow_append) {
+      if (current_scope->containsOnlyDeclarations()) {
+        size_t insert_index = find_insertion_index_for_range(
+            current_scope->getDeclarationList(), range_start);
+        inserted = insert_markers_at_index(
+            current_scope->getDeclarationList(), insert_index,
+            static_cast<SgDeclarationStatement *>(start_stmt_raw),
+            static_cast<SgDeclarationStatement *>(end_stmt_raw));
+      } else if (scope_supports_statement_list(current_scope)) {
+        size_t insert_index = find_insertion_index_for_range(
+            current_scope->getStatementList(), range_start);
+        inserted = insert_markers_at_index(
+            current_scope->getStatementList(), insert_index,
+            static_cast<SgStatement *>(start_stmt_raw),
+            static_cast<SgStatement *>(end_stmt_raw));
+      }
+    }
+
     if (inserted) {
       start_stmt.release();
-      end_stmt.release();
-    } else if (allow_append) {
-      SageInterface::appendStatement(start_stmt_raw, current_scope);
-      start_stmt.release();
-      SageInterface::appendStatement(end_stmt_raw, current_scope);
       end_stmt.release();
     } else {
       ROSE_ASSERT(
