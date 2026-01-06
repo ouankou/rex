@@ -122,9 +122,10 @@ std::optional<path> prefix_from_shared_library() {
   path lib_path(info.dli_fname);
   std::error_code ec;
   path abs_path = std::filesystem::absolute(lib_path, ec);
-  if (!ec) {
-    lib_path = abs_path;
+  if (ec) {
+    return std::nullopt;
   }
+  lib_path = abs_path;
 
   ec.clear();
   path canonical = std::filesystem::weakly_canonical(lib_path, ec);
