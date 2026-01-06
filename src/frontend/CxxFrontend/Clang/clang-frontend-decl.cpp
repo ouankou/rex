@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <functional>
+#include <memory>
 #include <set>
 #include <unordered_set>
 
@@ -3025,24 +3026,26 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
 
   if (has_braces) {
     const bool allow_append = linkage_decls.empty();
-    SgClinkageStartStatement *start_stmt = new SgClinkageStartStatement();
-    SgClinkageEndStatement *end_stmt = new SgClinkageEndStatement();
+    auto start_stmt = std::make_unique<SgClinkageStartStatement>();
+    auto end_stmt = std::make_unique<SgClinkageEndStatement>();
+    SgClinkageStartStatement *start_stmt_raw = start_stmt.get();
+    SgClinkageEndStatement *end_stmt_raw = end_stmt.get();
 
-    start_stmt->set_languageSpecifier(linkage);
-    end_stmt->set_languageSpecifier(linkage);
-    start_stmt->set_linkage(linkage);
-    end_stmt->set_linkage(linkage);
-    start_stmt->set_scope(current_scope);
-    end_stmt->set_scope(current_scope);
-    start_stmt->set_firstNondefiningDeclaration(start_stmt);
-    start_stmt->set_definingDeclaration(start_stmt);
-    end_stmt->set_firstNondefiningDeclaration(end_stmt);
-    end_stmt->set_definingDeclaration(end_stmt);
+    start_stmt_raw->set_languageSpecifier(linkage);
+    end_stmt_raw->set_languageSpecifier(linkage);
+    start_stmt_raw->set_linkage(linkage);
+    end_stmt_raw->set_linkage(linkage);
+    start_stmt_raw->set_scope(current_scope);
+    end_stmt_raw->set_scope(current_scope);
+    start_stmt_raw->set_firstNondefiningDeclaration(start_stmt_raw);
+    start_stmt_raw->set_definingDeclaration(start_stmt_raw);
+    end_stmt_raw->set_firstNondefiningDeclaration(end_stmt_raw);
+    end_stmt_raw->set_definingDeclaration(end_stmt_raw);
 
-    applySourceRange(start_stmt,
+    applySourceRange(start_stmt_raw,
                      clang::SourceRange(linkage_spec_decl->getExternLoc(),
                                         linkage_spec_decl->getExternLoc()));
-    applySourceRange(end_stmt,
+    applySourceRange(end_stmt_raw,
                      clang::SourceRange(linkage_spec_decl->getRBraceLoc(),
                                         linkage_spec_decl->getRBraceLoc()));
 
@@ -3050,8 +3053,9 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
     if (first_decl_stmt != nullptr && last_decl_stmt != nullptr) {
       if (current_scope->containsOnlyDeclarations()) {
         SgDeclarationStatement *start_decl =
-            isSgDeclarationStatement(start_stmt);
-        SgDeclarationStatement *end_decl = isSgDeclarationStatement(end_stmt);
+            isSgDeclarationStatement(start_stmt_raw);
+        SgDeclarationStatement *end_decl =
+            isSgDeclarationStatement(end_stmt_raw);
         SgDeclarationStatement *first_decl =
             isSgDeclarationStatement(first_decl_stmt);
         SgDeclarationStatement *last_decl =
@@ -3065,22 +3069,24 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       } else if (scope_supports_statement_list(current_scope)) {
         inserted = insert_markers_around(
             current_scope->getStatementList(), first_decl_stmt, last_decl_stmt,
-            static_cast<SgStatement *>(start_stmt),
-            static_cast<SgStatement *>(end_stmt));
+            static_cast<SgStatement *>(start_stmt_raw),
+            static_cast<SgStatement *>(end_stmt_raw));
       }
     }
 
     if (inserted) {
-      start_stmt->set_parent(current_scope);
-      end_stmt->set_parent(current_scope);
-      start_stmt->set_scope(current_scope);
-      end_stmt->set_scope(current_scope);
+      start_stmt_raw->set_parent(current_scope);
+      end_stmt_raw->set_parent(current_scope);
+      start_stmt_raw->set_scope(current_scope);
+      end_stmt_raw->set_scope(current_scope);
+      start_stmt.release();
+      end_stmt.release();
     } else if (allow_append) {
-      SageInterface::appendStatement(start_stmt, current_scope);
-      SageInterface::appendStatement(end_stmt, current_scope);
+      SageInterface::appendStatement(start_stmt_raw, current_scope);
+      SageInterface::appendStatement(end_stmt_raw, current_scope);
+      start_stmt.release();
+      end_stmt.release();
     } else {
-      delete start_stmt;
-      delete end_stmt;
       ROSE_ASSERT(
           !"Failed to insert linkage markers around declarations in scope");
     }
