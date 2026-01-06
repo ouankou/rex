@@ -5561,6 +5561,7 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
        // Setup an iterator to go through all the statements in the top scope of the file.
           SgDeclarationStatementPtrList & globalStatementList = globalScope->get_declarations();
           SgDeclarationStatementPtrList::iterator statementIterator = globalStatementList.begin();
+          bool extern_brace_active = info.get_extern_C_with_braces();
           while ( statementIterator != globalStatementList.end() )
              {
                SgStatement* currentStatement = *statementIterator;
@@ -5614,7 +5615,16 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
             // Namespace definition scope should not effect scope set in SgGlobal.
             // unparseStatement(currentStatement, info);
                SgUnparse_Info infoLocal(info);
+               infoLocal.set_extern_C_with_braces(extern_brace_active);
                unparseStatement(currentStatement, infoLocal);
+               if (isSgClinkageStartStatement(currentStatement) != NULL)
+                  {
+                    extern_brace_active = true;
+                  }
+                 else if (isSgClinkageEndStatement(currentStatement) != NULL)
+                  {
+                    extern_brace_active = false;
+                  }
 
             // DQ (12/10/2014): Save the last statement.
             // last_statement = currentStatement;

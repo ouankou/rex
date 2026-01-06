@@ -1200,17 +1200,9 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
     std::swap(first_index, last_index);
   }
 
-  ListType updated_list;
-  updated_list.reserve(list.size() + 2);
-  updated_list.insert(updated_list.end(), list.begin(),
-                      list.begin() + first_index);
-  updated_list.push_back(start);
-  updated_list.insert(updated_list.end(), list.begin() + first_index,
-                      list.begin() + last_index + 1);
-  updated_list.push_back(end);
-  updated_list.insert(updated_list.end(), list.begin() + last_index + 1,
-                      list.end());
-  list.swap(updated_list);
+  list.reserve(list.size() + 2);
+  list.insert(list.begin() + last_index + 1, end);
+  list.insert(list.begin() + first_index, start);
   return true;
 }
 
