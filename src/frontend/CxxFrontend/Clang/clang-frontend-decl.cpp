@@ -1208,31 +1208,86 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
   return true;
 }
 
+bool file_info_is_before(const Sg_File_Info *lhs, const Sg_File_Info *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+  if (lhs->get_line() != rhs->get_line()) {
+    return lhs->get_line() < rhs->get_line();
+  }
+  return lhs->get_col() < rhs->get_col();
+}
+
+bool file_info_is_before_or_equal(const Sg_File_Info *lhs,
+                                  const Sg_File_Info *rhs) {
+  return !file_info_is_before(rhs, lhs);
+}
+
+bool file_info_in_range(const Sg_File_Info *pos, const Sg_File_Info *start,
+                        const Sg_File_Info *end) {
+  if (pos == nullptr || start == nullptr || end == nullptr) {
+    return false;
+  }
+  const std::string start_file = start->get_filename();
+  const std::string end_file = end->get_filename();
+  if (start_file.empty() || end_file.empty() || start_file != end_file) {
+    return false;
+  }
+  if (pos->get_filename() != start_file) {
+    return false;
+  }
+  const Sg_File_Info *range_start = start;
+  const Sg_File_Info *range_end = end;
+  if (file_info_is_before(range_end, range_start)) {
+    std::swap(range_start, range_end);
+  }
+  return file_info_is_before_or_equal(range_start, pos) &&
+         file_info_is_before_or_equal(pos, range_end);
+}
+
+bool statement_in_linkage_range(const SgStatement *stmt,
+                                const Sg_File_Info *start,
+                                const Sg_File_Info *end) {
+  if (stmt == nullptr) {
+    return false;
+  }
+  return file_info_in_range(stmt->get_startOfConstruct(), start, end);
+}
+
 template <typename ListType>
 bool find_linkage_bounds_in_list(
     const ListType &list,
     const std::unordered_set<SgDeclarationStatement *> &linkage_decl_set,
     SgScopeStatement *scope, SgStatement *&first_stmt,
-    SgStatement *&last_stmt) {
+    SgStatement *&last_stmt, const Sg_File_Info *range_start,
+    const Sg_File_Info *range_end) {
   if (scope == NULL) {
     return false;
   }
 
   for (auto *entry : list) {
-    SgDeclarationStatement *decl = isSgDeclarationStatement(entry);
-    if (decl == NULL) {
+    SgStatement *stmt = isSgStatement(entry);
+    if (stmt == NULL) {
       continue;
     }
-    if (linkage_decl_set.find(decl) == linkage_decl_set.end()) {
+    if (stmt->get_parent() != scope) {
       continue;
     }
-    if (decl->get_parent() != scope) {
+
+    bool matches_linkage = false;
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(stmt)) {
+      matches_linkage = linkage_decl_set.find(decl) != linkage_decl_set.end();
+    }
+    const bool matches_range =
+        statement_in_linkage_range(stmt, range_start, range_end);
+    if (!matches_linkage && !matches_range) {
       continue;
     }
+
     if (first_stmt == NULL) {
-      first_stmt = decl;
+      first_stmt = stmt;
     }
-    last_stmt = decl;
+    last_stmt = stmt;
   }
 
   return first_stmt != NULL && last_stmt != NULL;
@@ -2998,23 +3053,6 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
 
   SgStatement *first_decl_stmt = nullptr;
   SgStatement *last_decl_stmt = nullptr;
-  if (has_braces && !linkage_decls.empty()) {
-    bool bounds_found = false;
-    if (current_scope->containsOnlyDeclarations()) {
-      bounds_found =
-          find_linkage_bounds_in_list(current_scope->getDeclarationList(),
-                                      linkage_decl_set, current_scope,
-                                      first_decl_stmt, last_decl_stmt);
-    } else if (scope_supports_statement_list(current_scope)) {
-      bounds_found =
-          find_linkage_bounds_in_list(current_scope->getStatementList(),
-                                      linkage_decl_set, current_scope,
-                                      first_decl_stmt, last_decl_stmt);
-    }
-    ROSE_ASSERT(bounds_found);
-    ROSE_ASSERT(first_decl_stmt != nullptr);
-    ROSE_ASSERT(last_decl_stmt != nullptr);
-  }
 
   if (has_braces) {
     const bool allow_append = linkage_decls.empty();
@@ -3043,6 +3081,28 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
                      clang::SourceRange(linkage_spec_decl->getRBraceLoc(),
                                         linkage_spec_decl->getRBraceLoc()));
 
+    const Sg_File_Info *range_start = start_stmt_raw->get_startOfConstruct();
+    const Sg_File_Info *range_end = end_stmt_raw->get_startOfConstruct();
+    bool bounds_found = false;
+    if (current_scope->containsOnlyDeclarations()) {
+      bounds_found =
+          find_linkage_bounds_in_list(current_scope->getDeclarationList(),
+                                      linkage_decl_set, current_scope,
+                                      first_decl_stmt, last_decl_stmt,
+                                      range_start, range_end);
+    } else if (scope_supports_statement_list(current_scope)) {
+      bounds_found =
+          find_linkage_bounds_in_list(current_scope->getStatementList(),
+                                      linkage_decl_set, current_scope,
+                                      first_decl_stmt, last_decl_stmt,
+                                      range_start, range_end);
+    }
+    if (!linkage_decls.empty()) {
+      ROSE_ASSERT(bounds_found);
+      ROSE_ASSERT(first_decl_stmt != nullptr);
+      ROSE_ASSERT(last_decl_stmt != nullptr);
+    }
+
     bool inserted = false;
     if (first_decl_stmt != nullptr && last_decl_stmt != nullptr) {
       if (current_scope->containsOnlyDeclarations()) {
@@ -3065,8 +3125,8 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       end_stmt.release();
     } else if (allow_append) {
       SageInterface::appendStatement(start_stmt_raw, current_scope);
-      SageInterface::appendStatement(end_stmt_raw, current_scope);
       start_stmt.release();
+      SageInterface::appendStatement(end_stmt_raw, current_scope);
       end_stmt.release();
     } else {
       ROSE_ASSERT(
