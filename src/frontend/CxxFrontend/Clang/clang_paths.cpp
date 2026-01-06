@@ -167,19 +167,8 @@ std::optional<path> find_builtin_root(const path &compiler_root,
 }
 
 bool has_rose_public_headers(const path &rose_root) {
-  if (file_exists(rose_root / "rose.h")) {
-    return true;
-  }
-  if (file_exists(rose_root / "rosePublicConfig.h")) {
-    return true;
-  }
-  if (file_exists(rose_root / "roseInternal.h")) {
-    return true;
-  }
-  if (file_exists(rose_root / "featureTests.h")) {
-    return true;
-  }
-  return false;
+  return file_exists(rose_root / "rose_paths.h") &&
+         file_exists(rose_root / "ROSE_ASSERT.h");
 }
 
 bool looks_like_rose_install(const path &prefix) {
