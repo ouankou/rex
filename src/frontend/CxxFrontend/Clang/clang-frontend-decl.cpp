@@ -7,6 +7,7 @@
 #include <cctype>
 #include <functional>
 #include <set>
+#include <unordered_set>
 
 namespace {
 static std::string trimWhitespace(std::string s) {
@@ -1217,7 +1218,7 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
 template <typename ListType>
 bool find_linkage_bounds_in_list(
     const ListType &list,
-    const std::vector<SgDeclarationStatement *> &linkage_decls,
+    const std::unordered_set<SgDeclarationStatement *> &linkage_decl_set,
     SgScopeStatement *scope, SgStatement *&first_stmt,
     SgStatement *&last_stmt) {
   if (scope == NULL) {
@@ -1229,8 +1230,7 @@ bool find_linkage_bounds_in_list(
     if (decl == NULL) {
       continue;
     }
-    if (std::find(linkage_decls.begin(), linkage_decls.end(), decl) ==
-        linkage_decls.end()) {
+    if (linkage_decl_set.find(decl) == linkage_decl_set.end()) {
       continue;
     }
     if (decl->get_parent() != scope) {
@@ -3000,18 +3000,25 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
     }
   }
 
+  std::unordered_set<SgDeclarationStatement *> linkage_decl_set(
+      linkage_decls.begin(), linkage_decls.end());
+
   SgStatement *first_decl_stmt = nullptr;
   SgStatement *last_decl_stmt = nullptr;
   if (has_braces && !linkage_decls.empty()) {
+    bool bounds_found = false;
     if (current_scope->containsOnlyDeclarations()) {
-      find_linkage_bounds_in_list(current_scope->getDeclarationList(),
-                                  linkage_decls, current_scope,
-                                  first_decl_stmt, last_decl_stmt);
+      bounds_found =
+          find_linkage_bounds_in_list(current_scope->getDeclarationList(),
+                                      linkage_decl_set, current_scope,
+                                      first_decl_stmt, last_decl_stmt);
     } else if (scope_supports_statement_list(current_scope)) {
-      find_linkage_bounds_in_list(current_scope->getStatementList(),
-                                  linkage_decls, current_scope,
-                                  first_decl_stmt, last_decl_stmt);
+      bounds_found =
+          find_linkage_bounds_in_list(current_scope->getStatementList(),
+                                      linkage_decl_set, current_scope,
+                                      first_decl_stmt, last_decl_stmt);
     }
+    ROSE_ASSERT(bounds_found);
     ROSE_ASSERT(first_decl_stmt != nullptr);
     ROSE_ASSERT(last_decl_stmt != nullptr);
   }
