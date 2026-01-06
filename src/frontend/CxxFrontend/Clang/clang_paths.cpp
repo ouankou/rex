@@ -67,10 +67,15 @@ std::optional<path> resolve_executable_path(const char *argv0) {
       return std::nullopt;
     }
     path canonical = std::filesystem::weakly_canonical(abs_path, ec);
-    if (!ec && std::filesystem::exists(canonical, ec)) {
-      return canonical;
+    if (!ec) {
+      std::error_code exists_ec;
+      if (std::filesystem::exists(canonical, exists_ec) && !exists_ec) {
+        return canonical;
+      }
     }
-    if (std::filesystem::exists(abs_path, ec)) {
+
+    ec.clear();
+    if (std::filesystem::exists(abs_path, ec) && !ec) {
       return abs_path;
     }
     return std::nullopt;
@@ -119,9 +124,14 @@ std::optional<path> prefix_from_shared_library() {
   if (!ec) {
     lib_path = abs_path;
   }
+
+  ec.clear();
   path canonical = std::filesystem::weakly_canonical(lib_path, ec);
-  if (!ec && std::filesystem::exists(canonical, ec)) {
-    lib_path = canonical;
+  if (!ec) {
+    std::error_code exists_ec;
+    if (std::filesystem::exists(canonical, exists_ec) && !exists_ec) {
+      lib_path = canonical;
+    }
   }
   path lib_dir = lib_path.parent_path();
   if (lib_dir.empty() || !lib_dir.has_parent_path()) {
