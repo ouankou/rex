@@ -1292,6 +1292,8 @@ size_t find_insertion_index_for_range(const ListType &list,
   if (range_file.empty()) {
     return list.size();
   }
+  bool saw_same_file = false;
+  size_t last_before = list.size();
   for (size_t idx = 0; idx < list.size(); ++idx) {
     SgStatement *stmt = isSgStatement(list[idx]);
     if (stmt == nullptr) {
@@ -1304,9 +1306,15 @@ size_t find_insertion_index_for_range(const ListType &list,
     if (fi->get_filename() != range_file) {
       continue;
     }
-    if (!file_info_is_before(fi, range_start)) {
-      return idx;
+    saw_same_file = true;
+    if (file_info_is_before(fi, range_start)) {
+      last_before = idx;
+      continue;
     }
+    return idx;
+  }
+  if (saw_same_file) {
+    return last_before == list.size() ? list.size() : last_before + 1;
   }
   return list.size();
 }
