@@ -19,6 +19,12 @@ bool dir_exists(const path &dir) {
          std::filesystem::is_directory(dir, ec);
 }
 
+bool file_exists(const path &file) {
+  std::error_code ec;
+  return std::filesystem::exists(file, ec) &&
+         std::filesystem::is_regular_file(file, ec);
+}
+
 std::string with_trailing_slash(const path &dir) {
   std::string value = dir.string();
   if (!value.empty() && value.back() != '/') {
@@ -100,10 +106,31 @@ path resolve_install_path(const path &prefix, const std::string &suffix) {
   return prefix / suffix_path;
 }
 
+bool looks_like_rose_install(const path &prefix) {
+  const path clang_root =
+      resolve_install_path(prefix, ROSE_INSTALL_CLANG_INCLUDE_DIR);
+  if (!dir_exists(clang_root)) {
+    return false;
+  }
+
+  const path rose_root = resolve_install_path(prefix, ROSE_INSTALL_INCLUDE_DIR);
+  if (!dir_exists(rose_root)) {
+    return false;
+  }
+
+  if (!file_exists(rose_root / "rosePublicConfig.h")) {
+    return false;
+  }
+  if (!file_exists(clang_root / "clang" / "clang-builtin-c.h")) {
+    return false;
+  }
+
+  return true;
+}
+
 std::optional<path> find_install_prefix(const std::vector<path> &candidates) {
   for (const auto &candidate : candidates) {
-    if (dir_exists(
-            resolve_install_path(candidate, ROSE_INSTALL_CLANG_INCLUDE_DIR))) {
+    if (looks_like_rose_install(candidate)) {
       return candidate;
     }
   }
