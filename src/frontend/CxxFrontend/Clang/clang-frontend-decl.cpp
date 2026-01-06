@@ -3052,20 +3052,12 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
     bool inserted = false;
     if (first_decl_stmt != nullptr && last_decl_stmt != nullptr) {
       if (current_scope->containsOnlyDeclarations()) {
-        SgDeclarationStatement *start_decl =
-            isSgDeclarationStatement(start_stmt_raw);
-        SgDeclarationStatement *end_decl =
-            isSgDeclarationStatement(end_stmt_raw);
-        SgDeclarationStatement *first_decl =
-            isSgDeclarationStatement(first_decl_stmt);
-        SgDeclarationStatement *last_decl =
-            isSgDeclarationStatement(last_decl_stmt);
-        if (start_decl != nullptr && end_decl != nullptr &&
-            first_decl != nullptr && last_decl != nullptr) {
-          inserted = insert_markers_around(current_scope->getDeclarationList(),
-                                           first_decl, last_decl, start_decl,
-                                           end_decl);
-        }
+        inserted = insert_markers_around(
+            current_scope->getDeclarationList(),
+            static_cast<SgDeclarationStatement *>(first_decl_stmt),
+            static_cast<SgDeclarationStatement *>(last_decl_stmt),
+            static_cast<SgDeclarationStatement *>(start_stmt_raw),
+            static_cast<SgDeclarationStatement *>(end_stmt_raw));
       } else if (scope_supports_statement_list(current_scope)) {
         inserted = insert_markers_around(
             current_scope->getStatementList(), first_decl_stmt, last_decl_stmt,
