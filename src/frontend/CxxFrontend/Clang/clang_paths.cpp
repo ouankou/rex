@@ -8,7 +8,12 @@
 #include <vector>
 
 #include "ROSE_ASSERT.h"
+#include "rose_config.h"
 #include "rose_paths.h"
+
+#ifdef HAVE_DLADDR
+#include <dlfcn.h>
+#endif
 
 namespace {
 using std::filesystem::path;
@@ -98,6 +103,36 @@ std::optional<path> prefix_from_executable(const char *argv0) {
   return bin_dir.parent_path();
 }
 
+std::optional<path> prefix_from_shared_library() {
+#ifdef HAVE_DLADDR
+  Dl_info info;
+  info.dli_fname = "";
+  if (dladdr(reinterpret_cast<void *>(&resolveRoseClangPaths), &info) == 0) {
+    return std::nullopt;
+  }
+  if (!info.dli_fname || *info.dli_fname == '\0') {
+    return std::nullopt;
+  }
+  path lib_path(info.dli_fname);
+  std::error_code ec;
+  path abs_path = std::filesystem::absolute(lib_path, ec);
+  if (!ec) {
+    lib_path = abs_path;
+  }
+  path canonical = std::filesystem::weakly_canonical(lib_path, ec);
+  if (!ec && std::filesystem::exists(canonical, ec)) {
+    lib_path = canonical;
+  }
+  path lib_dir = lib_path.parent_path();
+  if (lib_dir.empty() || !lib_dir.has_parent_path()) {
+    return std::nullopt;
+  }
+  return lib_dir.parent_path();
+#else
+  return std::nullopt;
+#endif
+}
+
 path resolve_install_path(const path &prefix, const std::string &suffix) {
   path suffix_path(suffix);
   if (suffix_path.is_absolute()) {
@@ -156,8 +191,12 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
 
   const bool force_build_tree = std::getenv("ROSE_IN_BUILD_TREE") != nullptr;
   auto argv_prefix = prefix_from_executable(argv0);
+  auto library_prefix = prefix_from_shared_library();
 
   std::vector<path> build_candidates = override_candidates;
+  if (library_prefix) {
+    build_candidates.push_back(*library_prefix);
+  }
   if (argv_prefix) {
     build_candidates.push_back(*argv_prefix);
   }
@@ -175,6 +214,9 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
 
   if (!force_build_tree) {
     std::vector<path> install_candidates = override_candidates;
+    if (library_prefix) {
+      install_candidates.push_back(*library_prefix);
+    }
     if (argv_prefix) {
       install_candidates.push_back(*argv_prefix);
     }
