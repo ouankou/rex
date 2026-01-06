@@ -12,7 +12,7 @@ GENERATE_RTF           = NO
 GENERATE_DOCSET        = NO
 GENERATE_TREEVIEW      = NO
 
-INPUT                  = src README.md
+INPUT                  = src/Rose src/rose.h src/util README.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hh *.hpp *.hxx *.md
 EXCLUDE                = src/frontend/SageIII/ompparser src/frontend/SageIII/accparser src/ROSETTA

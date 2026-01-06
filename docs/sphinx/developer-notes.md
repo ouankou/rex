@@ -35,5 +35,5 @@
 
 ## Scope
 
-- Doxygen is header-only (`*.h*`, plus Markdown), scoped to `src` + `README.md`.
+- Doxygen is header-only (`*.h*`, plus Markdown), scoped to `src/Rose`, `src/rose.h`, `src/util`, and `README.md`.
 - Private/internal members are included; undocumented/local/anon entries are skipped; heavy third-party headers (nlohmann copies) and submodules (ompparser/accparser) are excluded to keep the build manageable.
