@@ -164,6 +164,22 @@ std::optional<path> find_builtin_root(const path &compiler_root,
   return std::nullopt;
 }
 
+bool has_rose_public_headers(const path &rose_root) {
+  if (file_exists(rose_root / "rose.h")) {
+    return true;
+  }
+  if (file_exists(rose_root / "rosePublicConfig.h")) {
+    return true;
+  }
+  if (file_exists(rose_root / "roseInternal.h")) {
+    return true;
+  }
+  if (file_exists(rose_root / "featureTests.h")) {
+    return true;
+  }
+  return false;
+}
+
 bool looks_like_rose_install(const path &prefix) {
   const path rose_root = resolve_install_path(prefix, ROSE_INSTALL_INCLUDE_DIR);
   if (!dir_exists(rose_root)) {
@@ -176,7 +192,7 @@ bool looks_like_rose_install(const path &prefix) {
     return false;
   }
 
-  if (!file_exists(rose_root / "rose.h")) {
+  if (!has_rose_public_headers(rose_root)) {
     return false;
   }
   if (!find_builtin_root(compiler_root, rose_root)) {
