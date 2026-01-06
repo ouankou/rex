@@ -151,6 +151,19 @@ path resolve_install_path(const path &prefix, const std::string &suffix) {
   return prefix / suffix_path;
 }
 
+std::optional<path> find_builtin_root(const path &compiler_root,
+                                      const path &rose_root) {
+  const path compiler_builtin_root = compiler_root / "clang";
+  if (file_exists(compiler_builtin_root / "clang-builtin-c.h")) {
+    return compiler_builtin_root;
+  }
+  const path rose_builtin_root = rose_root / "clang";
+  if (file_exists(rose_builtin_root / "clang-builtin-c.h")) {
+    return rose_builtin_root;
+  }
+  return std::nullopt;
+}
+
 bool looks_like_rose_install(const path &prefix) {
   const path rose_root = resolve_install_path(prefix, ROSE_INSTALL_INCLUDE_DIR);
   if (!dir_exists(rose_root)) {
@@ -163,15 +176,10 @@ bool looks_like_rose_install(const path &prefix) {
     return false;
   }
 
-  const path builtin_root = rose_root / "clang";
-  if (!dir_exists(builtin_root)) {
-    return false;
-  }
-
   if (!file_exists(rose_root / "rose.h")) {
     return false;
   }
-  if (!file_exists(builtin_root / "clang-builtin-c.h")) {
+  if (!find_builtin_root(compiler_root, rose_root)) {
     return false;
   }
 
@@ -294,9 +302,10 @@ RoseClangPathRoots resolveRoseClangPaths(const char *argv0) {
           resolve_install_path(*install_prefix, ROSE_INSTALL_INCLUDE_DIR);
       const path compiler_root =
           resolve_install_path(*install_prefix, ROSE_INSTALL_CLANG_INCLUDE_DIR);
-      const path builtin_root = rose_root / "clang";
+      auto builtin_root = find_builtin_root(compiler_root, rose_root);
+      ROSE_ASSERT(builtin_root);
       roots.compiler_header_root = with_trailing_slash(compiler_root);
-      roots.builtin_header_root = with_trailing_slash(builtin_root);
+      roots.builtin_header_root = with_trailing_slash(*builtin_root);
       roots.rose_include_root = with_trailing_slash(rose_root);
       return roots;
     }
