@@ -1179,40 +1179,34 @@ bool insert_markers_around(ListType &list, NodePtr first, NodePtr last,
     return false;
   }
 
+  auto first_it = list.end();
+  auto last_it = list.end();
   size_t first_index = list.size();
   size_t last_index = list.size();
   size_t idx = 0;
-  for (auto *entry : list) {
-    if (entry == first && first_index == list.size()) {
+  for (auto it = list.begin(); it != list.end(); ++it, ++idx) {
+    if (*it == first && first_it == list.end()) {
+      first_it = it;
       first_index = idx;
     }
-    if (entry == last) {
+    if (*it == last) {
+      last_it = it;
       last_index = idx;
     }
-    ++idx;
   }
 
-  if (first_index == list.size() || last_index == list.size()) {
+  if (first_it == list.end() || last_it == list.end()) {
     return false;
   }
 
   if (last_index < first_index) {
-    std::swap(first_index, last_index);
+    std::swap(first_it, last_it);
   }
 
-  auto insert_at = [&](size_t index, NodePtr node) {
-    auto it = list.begin();
-    for (size_t i = 0; i < index; ++i) {
-      ++it;
-    }
-    list.insert(it, node);
-  };
-
-  insert_at(first_index, start);
-  if (last_index >= first_index) {
-    ++last_index;
-  }
-  insert_at(last_index + 1, end);
+  list.insert(first_it, start);
+  auto after_last = last_it;
+  ++after_last;
+  list.insert(after_last, end);
   return true;
 }
 
