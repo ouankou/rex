@@ -3382,8 +3382,11 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
 
 
      // REX: Always use Clang frontend (legacy frontend removed)
-     int clang_main(int, char *[], SgSourceFile & sageFile );
-     int frontendErrorLevel = clang_main (c_cxx_argc, c_cxx_argv, *this);
+     int clang_main(int, char *[], SgSourceFile &sageFile,
+                    const char *driver_argv0);
+     const char *driver_argv0 = argv.empty() ? nullptr : argv[0].c_str();
+     int frontendErrorLevel =
+         clang_main(c_cxx_argc, c_cxx_argv, *this, driver_argv0);
 
 #else
   // DQ (2/21/2016): Added "error: " to allow this to be caught by the ROSE Matrix Testing.
