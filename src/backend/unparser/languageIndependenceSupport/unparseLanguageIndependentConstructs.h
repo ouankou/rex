@@ -115,7 +115,12 @@ class UnparseLanguageIndependentConstructs
           bool statementFromFile ( SgStatement* stmt, std::string sourceFilename, SgUnparse_Info& info );
        // bool statementFromFile ( SgStatement* stmt, std::string sourceFilename );
 
-      //! Generate a CPP directive  
+          //! Unparse a statement while tracking extern "C" brace state.
+          void unparseStatementWithExternBraceTracking(
+              SgStatement *stmt, SgUnparse_Info &info,
+              size_t &extern_brace_depth, bool &extern_brace_active);
+
+          //! Generate a CPP directive
           void outputDirective ( PreprocessingInfo* directive );
   
       //! counts the number of statements in a basic block

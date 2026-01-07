@@ -5287,6 +5287,37 @@ UnparseLanguageIndependentConstructs::isTransformed(SgStatement* stmt)
 #endif
    }
 
+   void UnparseLanguageIndependentConstructs::
+       unparseStatementWithExternBraceTracking(
+           SgStatement * stmt, SgUnparse_Info & info,
+           size_t &extern_brace_depth, bool &extern_brace_active) {
+     ASSERT_not_null(stmt);
+
+     info.set_extern_C_with_braces(extern_brace_active ||
+                                   extern_brace_depth > 0);
+
+     SgClinkageStartStatement *clinkage_start =
+         isSgClinkageStartStatement(stmt);
+     SgClinkageEndStatement *clinkage_end = isSgClinkageEndStatement(stmt);
+     bool track_extern_marker = false;
+     if (clinkage_start != NULL || clinkage_end != NULL) {
+       track_extern_marker = statementFromFile(stmt, getFileName(), info);
+     }
+
+     unparseStatement(stmt, info);
+
+     if (track_extern_marker) {
+       if (clinkage_start != NULL) {
+         ++extern_brace_depth;
+       } else if (clinkage_end != NULL) {
+         if (extern_brace_depth > 0) {
+           --extern_brace_depth;
+         }
+       }
+     } else {
+       extern_brace_active = info.get_extern_C_with_braces();
+     }
+   }
 
 void
 UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUnparse_Info& info)
@@ -5616,37 +5647,12 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
             // Namespace definition scope should not effect scope set in SgGlobal.
             // unparseStatement(currentStatement, info);
                SgUnparse_Info infoLocal(info);
-               infoLocal.set_extern_C_with_braces(extern_brace_active ||
-                                                  extern_brace_depth > 0);
-               bool track_extern_marker = false;
-               if (isSgClinkageStartStatement(currentStatement) != NULL ||
-                   isSgClinkageEndStatement(currentStatement) != NULL)
-                  {
-                    track_extern_marker =
-                        statementFromFile(currentStatement, getFileName(), infoLocal);
-                  }
-               unparseStatement(currentStatement, infoLocal);
-               if (track_extern_marker)
-                  {
-                    if (isSgClinkageStartStatement(currentStatement) != NULL)
-                       {
-                         ++extern_brace_depth;
-                       }
-                      else if (isSgClinkageEndStatement(currentStatement) != NULL)
-                       {
-                         if (extern_brace_depth > 0)
-                            {
-                              --extern_brace_depth;
-                            }
-                       }
-                  }
-               else
-                  {
-                    extern_brace_active = infoLocal.get_extern_C_with_braces();
-                  }
+               unparseStatementWithExternBraceTracking(
+                   currentStatement, infoLocal, extern_brace_depth,
+                   extern_brace_active);
 
-            // DQ (12/10/2014): Save the last statement.
-            // last_statement = currentStatement;
+               // DQ (12/10/2014): Save the last statement.
+               // last_statement = currentStatement;
                if (sourceFile->get_unparse_tokens() == true)
                   {
                  // DQ (12/22/2014): The stl semantics are allowing NULL pointers to get into the tokenStreamSequenceMap container.

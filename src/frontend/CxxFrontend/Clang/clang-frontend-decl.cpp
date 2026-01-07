@@ -3205,6 +3205,19 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       if (lexical_context == nullptr) {
         return find_insertion_index_for_range(list, range_start);
       }
+      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+      clang::SourceLocation linkage_loc = linkage_spec_decl->getExternLoc();
+      if (!linkage_loc.isValid()) {
+        linkage_loc = linkage_spec_decl->getBeginLoc();
+      }
+      if (linkage_loc.isMacroID()) {
+        linkage_loc = sm.getSpellingLoc(linkage_loc);
+      }
+      if (!linkage_loc.isValid()) {
+        return find_insertion_index_for_range(list, range_start);
+      }
+      const clang::FileID linkage_fid = sm.getFileID(linkage_loc);
+
       std::unordered_map<const SgStatement *, size_t> index_map;
       index_map.reserve(list.size());
       for (size_t idx = 0; idx < list.size(); ++idx) {
@@ -3215,12 +3228,32 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       }
       bool found_self = false;
       size_t anchor_index = list.size();
+      clang::SourceLocation best_loc;
       for (auto it = lexical_context->decls_begin();
            it != lexical_context->decls_end(); ++it) {
         clang::Decl *decl = *it;
+        if (decl == nullptr) {
+          continue;
+        }
         if (decl == linkage_spec_decl) {
           found_self = true;
-          break;
+          continue;
+        }
+        clang::SourceLocation decl_loc = decl->getBeginLoc();
+        if (!decl_loc.isValid()) {
+          decl_loc = decl->getLocation();
+        }
+        if (decl_loc.isMacroID()) {
+          decl_loc = sm.getSpellingLoc(decl_loc);
+        }
+        if (!decl_loc.isValid()) {
+          continue;
+        }
+        if (sm.getFileID(decl_loc) != linkage_fid) {
+          continue;
+        }
+        if (!sm.isBeforeInTranslationUnit(decl_loc, linkage_loc)) {
+          continue;
         }
         auto map_it = p_decl_translation_map.find(decl);
         if (map_it == p_decl_translation_map.end()) {
@@ -3232,7 +3265,11 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
         }
         auto idx_it = index_map.find(stmt);
         if (idx_it != index_map.end()) {
-          anchor_index = idx_it->second;
+          if (!best_loc.isValid() ||
+              sm.isBeforeInTranslationUnit(best_loc, decl_loc)) {
+            best_loc = decl_loc;
+            anchor_index = idx_it->second;
+          }
         }
       }
       if (!found_self) {
