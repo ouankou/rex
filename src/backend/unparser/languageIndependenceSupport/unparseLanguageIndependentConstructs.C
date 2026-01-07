@@ -5314,7 +5314,7 @@ UnparseLanguageIndependentConstructs::isTransformed(SgStatement* stmt)
            --extern_brace_depth;
          }
        }
-     } else {
+     } else if (extern_brace_depth == 0) {
        extern_brace_active = info.get_extern_C_with_braces();
      }
    }
@@ -5966,8 +5966,7 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
            return idx > 0 &&
                   isSgClinkageStartStatement(list[idx - 1]) != NULL;
          }
-         return idx + 1 < list.size() &&
-                isSgClinkageEndStatement(list[idx + 1]) != NULL;
+         return idx > 0 && isSgClinkageEndStatement(list[idx - 1]) != NULL;
        }
        return false;
      };
