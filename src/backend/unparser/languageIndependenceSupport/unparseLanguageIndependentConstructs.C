@@ -5955,48 +5955,64 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
           return;
         }
 
-     auto has_adjacent_marker_in_list = [&](const auto &list,
-                                            SgStatement *target,
-                                            bool want_start) -> bool {
-       for (size_t idx = 0; idx < list.size(); ++idx) {
-         if (list[idx] != target) {
-           continue;
-         }
-         if (want_start) {
-           return idx > 0 &&
-                  isSgClinkageStartStatement(list[idx - 1]) != NULL;
-         }
-         return (idx > 0 && isSgClinkageEndStatement(list[idx - 1]) != NULL) ||
-                (idx + 1 < list.size() &&
-                 isSgClinkageEndStatement(list[idx + 1]) != NULL);
-       }
-       return false;
-     };
+        auto marker_output_eligible = [&](SgStatement *marker) -> bool {
+          if (marker == NULL) {
+            return false;
+          }
+          return statementFromFile(marker, getFileName(), info);
+        };
 
-     auto has_adjacent_clinkage_marker = [&](bool want_start) -> bool {
-       SgStatement *statement = isSgStatement(stmt);
-       if (statement == NULL) {
-         return false;
-       }
+        auto has_adjacent_marker_in_list = [&](const auto &list,
+                                               SgStatement *target,
+                                               bool want_start) -> bool {
+          for (size_t idx = 0; idx < list.size(); ++idx) {
+            if (list[idx] != target) {
+              continue;
+            }
+            if (want_start) {
+              if (idx == 0) {
+                return false;
+              }
+              SgStatement *marker = isSgStatement(list[idx - 1]);
+              return isSgClinkageStartStatement(marker) != NULL &&
+                     marker_output_eligible(marker);
+            }
+            SgStatement *prev_marker =
+                idx > 0 ? isSgStatement(list[idx - 1]) : NULL;
+            SgStatement *next_marker =
+                idx + 1 < list.size() ? isSgStatement(list[idx + 1]) : NULL;
+            return (isSgClinkageEndStatement(prev_marker) != NULL &&
+                    marker_output_eligible(prev_marker)) ||
+                   (isSgClinkageEndStatement(next_marker) != NULL &&
+                    marker_output_eligible(next_marker));
+          }
+          return false;
+        };
 
-       SgScopeStatement *scope = isSgScopeStatement(statement->get_parent());
-       if (scope == NULL) {
-         return false;
-       }
+        auto has_adjacent_clinkage_marker = [&](bool want_start) -> bool {
+          SgStatement *statement = isSgStatement(stmt);
+          if (statement == NULL) {
+            return false;
+          }
 
-       if (scope->containsOnlyDeclarations()) {
-         SgDeclarationStatement *decl_stmt =
-             isSgDeclarationStatement(statement);
-         if (decl_stmt == NULL) {
-           return false;
-         }
-         return has_adjacent_marker_in_list(scope->getDeclarationList(),
-                                            decl_stmt, want_start);
-       }
+          SgScopeStatement *scope = isSgScopeStatement(statement->get_parent());
+          if (scope == NULL) {
+            return false;
+          }
 
-       return has_adjacent_marker_in_list(scope->getStatementList(), statement,
-                                          want_start);
-     };
+          if (scope->containsOnlyDeclarations()) {
+            SgDeclarationStatement *decl_stmt =
+                isSgDeclarationStatement(statement);
+            if (decl_stmt == NULL) {
+              return false;
+            }
+            return has_adjacent_marker_in_list(scope->getDeclarationList(),
+                                               decl_stmt, want_start);
+          }
+
+          return has_adjacent_marker_in_list(scope->getStatementList(),
+                                             statement, want_start);
+        };
 
 #if 0
      info.display("In Unparse_ExprStmt::unparseAttachedPreprocessingInfo()");
