@@ -5562,6 +5562,7 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
           SgDeclarationStatementPtrList & globalStatementList = globalScope->get_declarations();
           SgDeclarationStatementPtrList::iterator statementIterator = globalStatementList.begin();
           size_t extern_brace_depth = 0;
+          bool extern_brace_active = info.get_extern_C_with_braces();
           while ( statementIterator != globalStatementList.end() )
              {
                SgStatement* currentStatement = *statementIterator;
@@ -5615,7 +5616,8 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
             // Namespace definition scope should not effect scope set in SgGlobal.
             // unparseStatement(currentStatement, info);
                SgUnparse_Info infoLocal(info);
-               infoLocal.set_extern_C_with_braces(extern_brace_depth > 0);
+               infoLocal.set_extern_C_with_braces(extern_brace_active ||
+                                                  extern_brace_depth > 0);
                bool track_extern_marker = false;
                if (isSgClinkageStartStatement(currentStatement) != NULL ||
                    isSgClinkageEndStatement(currentStatement) != NULL)
@@ -5637,6 +5639,10 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
                               --extern_brace_depth;
                             }
                        }
+                  }
+               else
+                  {
+                    extern_brace_active = infoLocal.get_extern_C_with_braces();
                   }
 
             // DQ (12/10/2014): Save the last statement.
