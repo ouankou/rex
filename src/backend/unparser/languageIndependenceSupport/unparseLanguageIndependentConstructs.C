@@ -5561,7 +5561,7 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
        // Setup an iterator to go through all the statements in the top scope of the file.
           SgDeclarationStatementPtrList & globalStatementList = globalScope->get_declarations();
           SgDeclarationStatementPtrList::iterator statementIterator = globalStatementList.begin();
-          bool extern_brace_active = info.get_extern_C_with_braces();
+          size_t extern_brace_depth = 0;
           while ( statementIterator != globalStatementList.end() )
              {
                SgStatement* currentStatement = *statementIterator;
@@ -5615,15 +5615,28 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
             // Namespace definition scope should not effect scope set in SgGlobal.
             // unparseStatement(currentStatement, info);
                SgUnparse_Info infoLocal(info);
-               infoLocal.set_extern_C_with_braces(extern_brace_active);
-               unparseStatement(currentStatement, infoLocal);
-               if (isSgClinkageStartStatement(currentStatement) != NULL)
+               infoLocal.set_extern_C_with_braces(extern_brace_depth > 0);
+               bool track_extern_marker = false;
+               if (isSgClinkageStartStatement(currentStatement) != NULL ||
+                   isSgClinkageEndStatement(currentStatement) != NULL)
                   {
-                    extern_brace_active = true;
+                    track_extern_marker =
+                        statementFromFile(currentStatement, getFileName(), infoLocal);
                   }
-                 else if (isSgClinkageEndStatement(currentStatement) != NULL)
+               unparseStatement(currentStatement, infoLocal);
+               if (track_extern_marker)
                   {
-                    extern_brace_active = false;
+                    if (isSgClinkageStartStatement(currentStatement) != NULL)
+                       {
+                         ++extern_brace_depth;
+                       }
+                      else if (isSgClinkageEndStatement(currentStatement) != NULL)
+                       {
+                         if (extern_brace_depth > 0)
+                            {
+                              --extern_brace_depth;
+                            }
+                       }
                   }
 
             // DQ (12/10/2014): Save the last statement.
