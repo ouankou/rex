@@ -5966,7 +5966,9 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
            return idx > 0 &&
                   isSgClinkageStartStatement(list[idx - 1]) != NULL;
          }
-         return idx > 0 && isSgClinkageEndStatement(list[idx - 1]) != NULL;
+         return (idx > 0 && isSgClinkageEndStatement(list[idx - 1]) != NULL) ||
+                (idx + 1 < list.size() &&
+                 isSgClinkageEndStatement(list[idx + 1]) != NULL);
        }
        return false;
      };
