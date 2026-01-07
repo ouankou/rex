@@ -5,6 +5,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <set>
@@ -1236,10 +1237,14 @@ bool file_info_is_before(const Sg_File_Info *lhs, const Sg_File_Info *rhs) {
   if (lhs == nullptr || rhs == nullptr) {
     return false;
   }
-  const std::string lhs_file = lhs->get_filename();
-  const std::string rhs_file = rhs->get_filename();
-  if (lhs_file != rhs_file) {
-    return lhs_file < rhs_file;
+  const char *lhs_file = lhs->get_filename_char_str();
+  const char *rhs_file = rhs->get_filename_char_str();
+  if (lhs_file == nullptr || rhs_file == nullptr) {
+    return lhs_file != nullptr;
+  }
+  const int file_cmp = std::strcmp(lhs_file, rhs_file);
+  if (file_cmp != 0) {
+    return file_cmp < 0;
   }
   if (lhs->get_line() != rhs->get_line()) {
     return lhs->get_line() < rhs->get_line();
