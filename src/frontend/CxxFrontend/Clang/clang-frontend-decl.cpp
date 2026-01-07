@@ -3241,7 +3241,7 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
       if (anchor_index != list.size()) {
         return anchor_index + 1;
       }
-      return 0;
+      return find_insertion_index_for_range(list, range_start);
     };
 
     if (!inserted && allow_append) {
