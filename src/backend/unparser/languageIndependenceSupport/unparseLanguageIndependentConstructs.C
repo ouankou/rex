@@ -5307,9 +5307,13 @@ UnparseLanguageIndependentConstructs::isTransformed(SgStatement* stmt)
      unparseStatement(stmt, info);
 
      if (track_extern_marker) {
-       if (clinkage_start != NULL) {
+       const bool start_is_c = clinkage_start != NULL &&
+                               clinkage_start->get_languageSpecifier() == "C";
+       const bool end_is_c =
+           clinkage_end != NULL && clinkage_end->get_languageSpecifier() == "C";
+       if (start_is_c) {
          ++extern_brace_depth;
-       } else if (clinkage_end != NULL) {
+       } else if (end_is_c) {
          if (extern_brace_depth > 0) {
            --extern_brace_depth;
          }
@@ -9111,7 +9115,9 @@ UnparseLanguageIndependentConstructs::unparseClinkageStartStatement(SgStatement 
   ROSE_ASSERT(!language.empty());
 
   curprint("extern \"" + language + "\" {");
-  info.set_extern_C_with_braces(true);
+  if (language == "C") {
+    info.set_extern_C_with_braces(true);
+  }
 }
 
 void
@@ -9121,7 +9127,9 @@ UnparseLanguageIndependentConstructs::unparseClinkageEndStatement(
   ASSERT_not_null(linkage_stmt);
 
   curprint("}");
-  info.set_extern_C_with_braces(false);
+  if (linkage_stmt->get_languageSpecifier() == "C") {
+    info.set_extern_C_with_braces(false);
+  }
 }
 
 void UnparseLanguageIndependentConstructs::unparseOmpDefaultClause(SgOmpClause* clause, SgUnparse_Info& info)
