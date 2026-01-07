@@ -1,10 +1,12 @@
+#ifndef ROSE_CollectionHelper_H
+#define ROSE_CollectionHelper_H
+
 #include <iostream>
-#include <map>
 #include <list>
+#include <map>
 #include <set>
 
 #include "FileHelper.h"
-
 
 using namespace std;
 
@@ -69,3 +71,5 @@ public:
     }
 
 };
+
+#endif

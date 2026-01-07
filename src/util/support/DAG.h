@@ -43,7 +43,11 @@ template <class Node, class Edge>
 class ROSE_UTIL_API DAG  : public DirectedGraph<Node,Edge>
 {
  public:
-  typedef enum {NON_SORT, TOPO_SORT, R_TOPO_SORT} SortType;
+  typedef enum {
+      NON_SORT,   ///< Do not sort nodes.
+      TOPO_SORT,  ///< Topological order.
+      R_TOPO_SORT ///< Reverse topological order.
+  } SortType;
   typedef typename DirectedGraph<Node,Edge>::EdgeDirection EdgeDirection;
   typedef typename DirectedGraph<Node,Edge>::EdgeIterator EdgeIterator;
   typedef typename DirectedGraph<Node,Edge>::NodeIterator NodeIterator;

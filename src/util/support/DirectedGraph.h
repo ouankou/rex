@@ -8,7 +8,10 @@
 
 class DirectedEdgeInterface
 { public:
-   typedef enum {EdgeOut = 0, EdgeIn = 1} EdgeDirection;
+   typedef enum {
+       EdgeOut = 0, ///< Outgoing edge direction.
+       EdgeIn = 1   ///< Incoming edge direction.
+   } EdgeDirection;
 };
 template <class Node, class Edge> class DirectedGraph;
 template <class Node, class Edge> class DirectedGraphEdge;

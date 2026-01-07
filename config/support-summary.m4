@@ -74,18 +74,4 @@ ROSE_COMPILER_FEATURES([fortran], [$FC $FCLAGS], [HOST_FC_])
 	echo "    fortran compiler                 ${BACKEND_FORTRAN_COMPILER:-none}"
     fi
 
-    #--------------------------------------------------------------------------------
-    if test -n "$DOXYGEN" -o -n "$verbose"; then
-        ROSE_SUMMARY_HEADING([Doxygen documentation generator])
-	echo "    executable                       ${DOXYGEN:-none}"
-	echo "    version                          ${DOXYGEN_VERSION:-unknown}"
-        echo "    indexer                          ${DOXYINDEXER:-none}"
-        echo "    stubs for undocumented entities  ${DOXYGEN_EXTRACT_ALL:-no}"
-        echo "    document private entities        ${DOXYGEN_EXTRACT_PRIVATE:-no}"
-        echo "    document static entities         ${DOXYGEN_EXTRACT_STATIC:-no}"
-        echo "    document internal entities       ${DOXYGEN_INTERNAL_DOCS:-no}"
-        echo "    hide undocumented members        ${DOXYGEN_HIDE_UNDOC_MEMBERS:-no}"
-        echo "    hide undocumented classes        ${DOXYGEN_HIDE_UNDOC_CLASSES:-no}"
-        echo "    hide friend compounds            ${DOXYGEN_HIDE_FRIEND_COMPOUNDS:-no}"
-    fi
 ])

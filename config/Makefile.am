@@ -56,7 +56,6 @@ FILES_NOT_REQUIRED_FOR_DISTRIBUTIONS = \
      enable-rosehpct.m4 \
      generate-backend-compiler-specific-headers.m4 \
      ROSE.m4 \
-     support-doxygen.m4 \
      support-i386.m4 \
      support-insure.m4 \
      support-maple.m4 \

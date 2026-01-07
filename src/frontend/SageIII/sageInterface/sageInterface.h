@@ -1021,13 +1021,13 @@ ROSE_DLL_API SgType* getElementType(SgType* t);
 ///         becomes responsible for freeing the expressions).
 ///         Note, the first entry of the array is a SgNullExpression, iff the
 ///         first array dimension was not specified.
-/// \code
+/// @code
 ///         int x[] = { 1, 2, 3 };
-/// \endcode
+/// @endcode
 ///         note, the expression does not have to be a constant
-/// \code
+/// @code
 ///         int x[i*5];
-/// \endcode
+/// @endcode
 /// \post   return-value.empty() == false
 /// \post   return-value[*] != NULL (no nullptr in the returned vector)
 std::vector<SgExpression*>
@@ -1041,14 +1041,14 @@ get_C_array_dimensions(const SgArrayType& arrtype);
 ///         becomes responsible for freeing the expressions).
 ///         If the first array dimension was not specified an expression
 ///         that indicates that size is generated.
-/// \code
+/// @code
 ///         int x[][3] = { 1, 2, 3, 4, 5, 6 };
-/// \endcode
+/// @endcode
 ///         the entry for the first dimension will be:
-/// \code
+/// @code
 ///         // 3 ... size of 2nd dimension
 ///         sizeof(x) / (sizeof(int) * 3)
-/// \endcode
+/// @endcode
 /// \pre    arrtype is the array-type of varref
 /// \post   return-value.empty() == false
 /// \post   return-value[*] != NULL (no nullptr in the returned vector)
@@ -1508,8 +1508,8 @@ T* findDeclarationStatement(SgNode* root, std::string name, SgScopeStatement* sc
 /** Find a node by type using upward traversal.
  *
  *  Traverse backward through a specified node's ancestors, starting with the node's parent and progressing to more distant
- *  ancestors, to find the first node matching the specified or derived type.  If @p includingSelf is true then the
- *  starting node, @p astNode, is returned if its type matches, otherwise the search starts at the parent of @p astNode.
+ *  ancestors, to find the first node matching the specified or derived type.  If `includingSelf` is true then the
+ *  starting node, `astNode,` is returned if its type matches, otherwise the search starts at the parent of `astNode.`
  *
  *  For the purposes of this function, the parent (P) of an SgDeclarationStatement node (N) is considered to be the first
  *  non-defining declaration of N if N has both a defining declaration and a first non-defining declaration and the defining
@@ -1517,7 +1517,7 @@ T* findDeclarationStatement(SgNode* root, std::string name, SgScopeStatement* sc
  *
  *  If no ancestor of the requisite type of subtypes is found then this function returns a null pointer.
  *
- *  If @p astNode is the null pointer, then the return value is a null pointer. That is, if there is no node, then there cannot
+ *  If `astNode` is the null pointer, then the return value is a null pointer. That is, if there is no node, then there cannot
  *  be an enclosing node of the specified type. */
 template <typename NodeType>
 NodeType* getEnclosingNode(const SgNode* astNode, const bool includingSelf = false)
@@ -2564,11 +2564,11 @@ SgCommaOpExp *insertAfterUsingCommaOp (SgExpression* new_exp, SgExpression* anch
 /// \details f's new body becomes { f`(...); } and { int res = f`(...); return res; }
 ///          for functions returning void and a value, respectively.
 ///          two function declarations are inserted in f's enclosing scope
-/// \code
+/// @code
 ///          result_type f`(...);                       <--- (1)
 ///          result_type f (...) { forward call to f` }
 ///          result_type f`(...) { original code }      <--- (2)
-/// \endcode
+/// @endcode
 ///          Calls to f are not updated, thus in the transformed code all
 ///          calls will continue calling f (this is also true for
 ///          recursive function calls from within the body of f`).

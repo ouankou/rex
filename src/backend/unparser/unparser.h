@@ -57,17 +57,15 @@ class Unparse_MOD_SAGE;
 // extern ROSEAttributesList* getPreprocessorDirectives( char *fileName);
 #endif
 
- /* \if documentDevelopmentVersionUsingDoxygen
-          \ingroup backendGenerator
-          \brief This function is used by the SgNode object to connect the unparser to the AST.
-
-          This function hides the complexity of generating a string from any subtree
-          of the AST (represented by a SgNode*).
-
-          \internal This function uses the standard stringstream mechanism in C++ to
-                    convert the stream output to a string.
-     \endif
-  */
+/*
+ * This function is used by the SgNode object to connect the unparser to the AST.
+ *
+ * This function hides the complexity of generating a string from any subtree
+ * of the AST (represented by a SgNode*).
+ *
+ * This function uses the standard stringstream mechanism in C++ to
+ * convert the stream output to a string.
+ */
 std::string get_output_filename( SgFile& file);
 //! returns the name of type t
 std::string get_type_name( SgType* t);
@@ -87,8 +85,26 @@ std::string unparseStatementWithoutBasicBlockToString      ( SgStatement* statem
 // void outputFirstAndLastIncludeFileInfo();
 void outputFirstAndLastIncludeFileInfo( SgSourceFile* sourceFile );
 
-// This is the class representing all the code generation support for C and C++.  It is separated from
-// being a part of the AST IR so that it can be more easily developed as a separate modular piece of ROSE.
+/** @brief Backend C and C++ code generator.
+ *
+ * This class represents the backend C++ code generator within ROSE. It is separated from the AST IR so that it can be more
+ * easily developed as a separate modular piece of ROSE.
+ *
+ * This is the source code generator. It traverses the AST (not using the newer traversal mechanisms) and generates C++
+ * source code from the constructs within the AST. Special attention is given to formatting the generated code.
+ *
+ * Note: Large parts of documentation contained in ROSE/src/unparser.docs.
+ *
+ * Internal: This class could be simplified now that comments and CPP directives are a part of the AST.
+ *
+ * Metadata:
+ * - Authors: Lee, Quinlan, Schordan, ...
+ * - Version: 0.5 cvs-version-#: $Name: $
+ * - Date: $Date: 2006/04/24 00:21:29 $
+ * - Bug: No known bugs.
+ * - Warning: Formatting still overly complex (can be simplified now that comments are part of the AST).
+ * - TODO: Finish documentation; make formatting easily tailorable to different styles (low priority at the moment).
+ */
 class Unparser
    {
      public:

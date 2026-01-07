@@ -12,11 +12,7 @@ HEADER_START
 
      public:
       /*
-          \if documentDevelopmentVersionUsingDoxygen
-          name Friend Classes
-               \brief Friend classes declarations
-
-          \endif
+          Friend class declarations.
        */
           friend class SgPointerType;         //!< provide access to private data
           friend class SgReferenceType;       //!< provide access to private data
@@ -27,13 +23,11 @@ HEADER_START
        /*! */
 
      public:
-      /*! \if documentDevelopmentVersionUsingDoxygen
-               \brief default constructor
+      /*! \brief default constructor
 
-               Default constructor and destructors are not documented in user
-               interface \ref defaultConstructorDestructorDocumentationPage.
-               \sa \ref defaultConstructorDestructorDocumentationPage
-          \endif
+          Default constructor and destructors are not documented in user
+          interface \ref defaultConstructorDestructorDocumentationPage.
+          \sa \ref defaultConstructorDestructorDocumentationPage
        */
           SgType();
 
@@ -3943,8 +3937,8 @@ SgModifierType::get_typeModifier (void) const
 
 #if 0
 // DQ (11/28/2015): I think that I might not require this (not that I have reviewed the new implementation).
-// It appears that it is already implemented as a friend function (acording to doxygen documentation).
-// Actually it shows up in Doxygen, but it does not appear to be implemented.
+// It appears that it is already implemented as a friend function (per the API docs).
+// Actually it shows up in the API docs, but it does not appear to be implemented.
 // That was a mistake, it appears that the SgTypeModifier has an operator==(), but not the SgModifierType.
 // These names make it easy to get confused!
 bool

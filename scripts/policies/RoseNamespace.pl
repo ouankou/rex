@@ -100,22 +100,6 @@ my @policies = (
 
     #------------------------------------------------------------------------
     {
-	name => 'doxygen_input',
-	
-	policy =>
-	'Every directory that contains a public header file MUST be listed as a
-	Doxygen input, and all directories listed as Doxygen input MUST contain
-	at least one header.',
-
-	reason =>
-	'Namespaces are useless if they\'re not documented, and Doxygen will not
-	pick up the documentation if the directory is not listed as an input. We
-	also want to make sure that our Doxygen configuration stays clean by not
-	listing directories that have been removed (or misspelled).'
-    },
-
-    #------------------------------------------------------------------------
-    {
 	name => 'namespace_header_includes_all',
 	
 	policy =>
@@ -350,27 +334,6 @@ sub multiInclusionProtectionSymbols {
 }
 
 ###############################################################################################################################
-# Read the Doxygen configuration file and get a list of input directories under src/Rose.
-sub doxygenInputDirectories {
-    my($lister) = @_;
-    my $configName = $lister->{gitdir} . "/docs/Rose/rose.cfg.in";
-    my %dirs;
-    open CONFIG, '<', $configName or return;
-    while (<CONFIG>) {
-        if (/^\s*INPUT\s*=/) {
-            $dirs{$1} = 1 if /\@top_srcdir\@\/src\/(Rose\S*)/;
-            while (<CONFIG>) {
-                $dirs{$1} = 1 if /\@top_srcdir\@\/src\/(Rose\S*)/;
-            }
-            close CONFIG;
-            return %dirs;
-        }
-    }
-    close CONFIG;
-    return %dirs;
-}
-
-###############################################################################################################################
 # Load English words
 sub loadWords {
     my %words;
@@ -535,7 +498,6 @@ my %violations;
 $violations{$_} = [] for keys %policies;
 
 my $files = FileLister->new(@ARGV);
-my %docdirs = doxygenInputDirectories($files);
 my %words = loadWords;
 while (my $filename = $files->next_file) {
     if ($filename =~ /^(.*\/src)\/(Rose\/.*)\.(h|hpp|h\+\+|H)/) {
@@ -553,13 +515,6 @@ while (my $filename = $files->next_file) {
 	    my($w,$u) = severity($filename, 'h_extension');
 	    push @{$violations{h_extension}}, "${w}file \"$filename\" must use \".h\" as its extension${u}";
         }
-
-        # The directory must be an input for Doxygen if it contains a header file
-        if (!exists $docdirs{$dir}) {
-	    my($w,$u) = severity($filename, 'doxygen_input');
-	    push @{$violations{doxygen_input}}, "${w}directory \"$root/$dir\" must be included in the list of Doxygen inputs${u}";
-        }
-        $docdirs{$dir} = 2;
 
 	# Namespace symbol must be composed of valid words.
 	if (keys %words) {
@@ -635,13 +590,6 @@ while (my $filename = $files->next_file) {
 		    "${w}file \"$parentHeader\" includes <$nsFile> more than once${u}";
 	    }
 	}
-    }
-}
-
-# Are there any doxygen directories that are not referenced?
-foreach (keys %docdirs) {
-    if ($docdirs{$_} == 1) {
-	push @{$violations{doxygen_input}}, "directory \"src/$_\" is listed as a doxygen input but is not used";
     }
 }
 

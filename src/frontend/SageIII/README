@@ -120,9 +120,7 @@ Here we summarize the separate sub-directoies of this directory:
       token stream is the one generated from cpp preprocessing).
 
    docs
-      This is the location of doxygen documentation (the input files for doxygen).
-      These are copied form the ROSE/docs/testDoxygen directory where the originals
-      are located and developed.
+      Legacy placeholder for documentation inputs (no longer used).
 
    sageInterface
       These are functions that support all different levels of support on the SageIII

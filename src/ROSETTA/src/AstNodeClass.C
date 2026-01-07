@@ -728,7 +728,7 @@ AstNodeClass::setFunctionPrototype ( const GrammarString & inputMemberFunction )
      string functionString;                                                    \
      string errorMessage;                                                      \
      /* First try the new approach where we locate everything at one place     \
-      * instead of five places; the five being: */                             \
+      * instead of four places; the four being: */                             \
      /*   (1) The #include's located at the top of                             \
       * src/ROSETTA/Grammar/xxx.code files */                                  \
      /*   (2) The class declaration and its properties in                      \
@@ -737,8 +737,6 @@ AstNodeClass::setFunctionPrototype ( const GrammarString & inputMemberFunction )
       * src/ROSETTA/Grammar/xxx.code files */                                  \
      /*   (4) Definitions for the extra members, at the end of                 \
       * src/ROSETTA/Grammar/xxx.code files */                                  \
-     /*   (5) Documentation for the ROSETTA members in                         \
-      * docs/testDoxygen/xxx.docs files. */                                    \
      /* We have to use try/catch because Grammar::extractStringFromFile throws \
       * (used to abort) if it can't find the string. */                        \
      try {                                                                     \

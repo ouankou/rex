@@ -3,20 +3,6 @@
 
 #include <string>
 
-/*!
-  \defgroup frontendSageHighLevelInterface High level AST builders
-  \ingroup ROSE_FrontEndGroup
-  \brief This namespace contains high level SAGE III AST node and subtree builders
-
-  Building AST trees using raw SgNode constructors is tedious and error-prone. It becomes
-  even more difficult with the presence of symbol tables. This namespace contains major
-  AST node builders on top of the constructors to take care of symbol tables, various
-  edges to scope,  parent and so on.
-
-  \authors Chunhua Liao (last modified 2/12/2008)
-
-*/
-
 #include "sageInterface.h"
 
 // forward declarations required for templated functions using those functions
@@ -25,7 +11,14 @@ namespace SageInterface {
   ROSE_DLL_API void setSourcePosition(SgNode* node);
 }
 
-/** Functions that build an AST. */
+/** @brief High level SAGE III AST node and subtree builders.
+ *
+ * Building AST trees using raw SgNode constructors is tedious and error-prone. It becomes even more difficult with the
+ * presence of symbol tables. This namespace contains major AST node builders on top of the constructors to take care of symbol
+ * tables, various edges to scope, parent relationships, and so on.
+ *
+ * See @ref frontendSageHighLevelInterface.
+ */
 namespace SageBuilder
 {
 
@@ -597,7 +590,7 @@ ROSE_DLL_API SgTypeIdOp* buildTypeIdOp(SgExpression *operand_expr, SgType *opera
 #undef BUILD_UNARY_PROTO
 
 /*! The instantiated functions' prototypes are not shown since they are expanded using macros.
- * Doxygen is not smart enough to handle macro expansion.
+ * Documentation tools do not expand these macros.
  */
 
 #define BUILD_BINARY_PROTO(suffix) \
@@ -1527,7 +1520,7 @@ All untyped IR nodes have been removed and this interface removed.
  //----------------------build unary expressions----------------------
 //!  Template function to build a unary expression of type T. Instantiated functions include:buildAddressOfOp(),buildBitComplementOp(),buildBitComplementOp(),buildMinusOp(),buildNotOp(),buildPointerDerefExp(),buildUnaryAddOp(),buildMinusMinusOp(),buildPlusPlusOp().  They are also used for the unary vararg operators (which are not technically unary operators).
 /*! The instantiated functions' prototypes are not shown since they are expanded using macros.
- * Doxygen is not smart enough to handle macro expansion.
+ * Documentation tools do not expand these macros.
  */
 
 template <class T>
@@ -1546,7 +1539,7 @@ template <class T>
 
 //!  Template function to build a unary expression of type T with no file info. Instantiated functions include:buildAddressOfOp(),buildBitComplementOp(),buildBitComplementOp(),buildMinusOp(),buildNotOp(),buildPointerDerefExp(),buildUnaryAddOp(),buildMinusMinusOp(),buildPlusPlusOp().  They are also used for the unary vararg operators (which are not technically unary operators).
 /*! The instantiated functions' prototypes are not shown since they are expanded using macros.
- * Doxygen is not smart enough to handle macro expansion.
+ * Documentation tools do not expand these macros.
  */
 template <class T>
 T* buildUnaryExpression_nfi(SgExpression* operand) {
@@ -1569,7 +1562,7 @@ T* buildUnaryExpression_nfi(SgExpression* operand) {
 
 //! Template function to build a binary expression of type T, taking care of parent pointers, file info, lvalue, etc. Available instances include: buildAddOp(), buildAndAssignOp(), buildAndOp(), buildArrowExp(),buildArrowStarOp(),buildAtOp, buildAssignOp(),buildBitAndOp(),buildBitOrOp(),buildBitXorOp(),buildCommaOpExp(), buildConcatenationOp(),buildDivAssignOp(),buildDivideOp(),buildDotExp(),buildEqualityOp(),buildExponentiationOp(),buildGreaterOrEqualOp(),buildGreaterThanOp(),buildIntegerDivideOp(),buildIorAssignOp(),buildLessOrEqualOp(),buildLessThanOp(),buildLshiftAssignOp(),buildLshiftOp(),buildMinusAssignOp(),buildModAssignOp(),buildModOp(),buildMultAssignOp(),buildMultiplyOp(),buildNotEqualOp(),buildOrOp(),buildPlusAssignOp(),buildPntrArrRefExp(),buildRshiftAssignOp(),buildRshiftOp(),buildReplicationOp,buildScopeOp(),buildSubtractOp()buildXorAssignOp()
 /*! The instantiated functions' prototypes are not shown since they are expanded using macros.
- * Doxygen is not smart enough to handle macro expansion.
+ * Documentation tools do not expand these macros.
  */
  template <class T>
    T* buildBinaryExpression(SgExpression* lhs, SgExpression* rhs) {
@@ -1590,7 +1583,7 @@ T* buildUnaryExpression_nfi(SgExpression* operand) {
 
 //! Template function to build a binary expression of type T, taking care of parent pointers, but without file-info. Available instances include: buildAddOp(), buildAndAssignOp(), buildAndOp(), buildArrowExp(),buildArrowStarOp(),buildAtOp, buildAssignOp(),buildBitAndOp(),buildBitOrOp(),buildBitXorOp(),buildCommaOpExp(), buildConcatenationOp(),buildDivAssignOp(),buildDivideOp(),buildDotExp(),buildEqualityOp(),buildExponentiationOp(),buildGreaterOrEqualOp(),buildGreaterThanOp(),buildIntegerDivideOp(),buildIorAssignOp(),buildLessOrEqualOp(),buildLessThanOp(),buildLshiftAssignOp(),buildLshiftOp(),buildMinusAssignOp(),buildModAssignOp(),buildModOp(),buildMultAssignOp(),buildMultiplyOp(),buildNotEqualOp(),buildOrOp(),buildPlusAssignOp(),buildPntrArrRefExp(),buildRshiftAssignOp(),buildRshiftOp(),buildReplicationOp(),buildScopeOp(),buildSubtractOp()buildXorAssignOp()
 /*! The instantiated functions' prototypes are not shown since they are expanded using macros.
- * Doxygen is not smart enough to handle macro expansion.
+ * Documentation tools do not expand these macros.
  */
  template <class T>
    T* buildBinaryExpression_nfi(SgExpression* lhs, SgExpression* rhs) {

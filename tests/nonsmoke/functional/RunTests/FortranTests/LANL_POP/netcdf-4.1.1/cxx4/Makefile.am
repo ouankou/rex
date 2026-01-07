@@ -70,9 +70,3 @@ TESTS = $(TESTFILES)
 
 CLEANFILES=firstFile.cdf
 
-# Empty file that gets time-stamped after docs are generated
-doxygen_stamp: $(libnetcdf_c__4_la_SOURCES) $(include_HEADERS)
-	doxygen
-	touch doxygen_stamp
-
-

@@ -18,16 +18,22 @@ namespace StringUtility {
 
 /** Splits strings into parts.
  *
- *  Find all non-overlapping occurrences the specified @p separator string by greedily scanning from left to right in the input
- *  string, @p str.  The input string is then logically chopped into parts at each separator position and the parts are
- *  assembled into the return value. Only up to @p maxparts-1 occurrences of the @p separator string are found, and any
- *  remaining occurrences are not treated specially.  For instance, if @p maxparts is two then at most one separator is found
+ *  Find all non-overlapping occurrences the specified `separator` string by greedily scanning from left to right in the input
+ *  string, `str.`  The input string is then logically chopped into parts at each separator position and the parts are
+ *  assembled into the return value. Only up to `maxparts-1` occurrences of the `separator` string are found, and any
+ *  remaining occurrences are not treated specially.  For instance, if `maxparts` is two then at most one separator is found
  *  and at most two substrings are returned. Separators at positions that would result in empty substrings being returned are
  *  not treated specially--empty substrings can be returned. This occurs when a separator is found at the beginning or end of a
  *  string or two separators are adjacent. The C++ library already has other functions for removing empty strings from a list.
- *  If @p trim_white_space is true then white space is removed from the beginning and end of each returned substring and
+ *  If `trim_white_space` is true then white space is removed from the beginning and end of each returned substring and
  *  resulting empty substrings are not removed from the return value. The first few arguments are in the same order as for
  *  Perl's "split" operator.
+ *
+ * @param separator Separator string.
+ * @param str Input string.
+ * @param maxparts Maximum number of parts.
+ * @param trim_white_space Trim whitespace in parts.
+ * @return List of substrings.
  *
  * @{ */
 ROSE_UTIL_API std::vector<std::string> split(const std::string &separator, const std::string &str, size_t maxparts = UNLIMITED,
@@ -39,14 +45,22 @@ ROSE_UTIL_API std::vector<std::string> split(char separator, const std::string &
 /** Split a string into a list based on a separator character.
  *
  *  Scans the input string for delimiter characters and splits the input into substrings at each delimiter positions. The
- *  delimiter is not included in the substring. Consecutive delimiter characters will result in an empty substring. */
+ *  delimiter is not included in the substring. Consecutive delimiter characters will result in an empty substring.
+ *
+ * @param delim Delimiter character.
+ * @return List of substrings. */
 ROSE_UTIL_API std::list<std::string> tokenize(const std::string&, char delim);
 
 /** Join individual items to form a single string.
  *
- *  Given a container containing printable objects (such as <code>std::list<std::string></code>, join the objects together
- *  separated from one another by the specified @p separator. The separator does not appear before the first object or after
+ *  Given a container containing printable objects (such as `std::list<std::string>`, join the objects together
+ *  separated from one another by the specified `separator.` The separator does not appear before the first object or after
  *  the final object.  If the container is empty then an empty string is returned.
+ *
+ * @param separator Separator string.
+ * @param begin Begin iterator.
+ * @param end End iterator.
+ * @return Joined string.
  *
  * @{ */
 template<class Iterator>
@@ -79,20 +93,25 @@ ROSE_UTIL_API std::string join(char separator, const char *strings[], size_t nst
  *  This is useful when generating documentation strings.
  *
  *  If the input is empty, the output is the empty string.
- *  I.e., <code>() => ""</code>
+ *  I.e., `() => ""`
  *
  *  If the input is one phrase, the output is that phrase.
- *  E.g., <code>("foo") => "foo"</code>
+ *  E.g., `("foo") => "foo"`
  *
- *  If the input is two phrases, the output will be those two phrases separated by "and" (the @p finalIntro).
- *  E.g., <code>("foo", "bar") => "foo and bar"</code>
+ *  If the input is two phrases, the output will be those two phrases separated by "and" (the `finalIntro).`
+ *  E.g., `("foo", "bar") => "foo and bar"`
  *
- *  If the input is three or more phrases, they will be separated from one another by commas (the @p separator) and the last
- *  item will also be introduced with "and" (the @p finalIntro).
- *  E.g., <code>("foo", "bar", "baz") => "foo, bar, and baz"</code>
+ *  If the input is three or more phrases, they will be separated from one another by commas (the `separator)` and the last
+ *  item will also be introduced with "and" (the `finalIntro).`
+ *  E.g., `("foo", "bar", "baz") => "foo, bar, and baz"`
  *
- *  No transformations are performed on the input phrases. Space characters are inserted after each @p separator and @p
- *  finalIntro. A space is also inserted before the @p finalIntro when the input is two phrases. */
+ *  No transformations are performed on the input phrases. Space characters are inserted after each `separator` and
+ *  `finalIntro`. A space is also inserted before the `finalIntro` when the input is two phrases.
+ *
+ * @param phrases Input phrases.
+ * @param separator Separator between items.
+ * @param finalIntro Intro before the final item.
+ * @return Joined string. */
 ROSE_UTIL_API std::string joinEnglish(const std::vector<std::string> &phrases,
                                       const std::string &separator = ",",
                                       const std::string &finalIntro = "and");
@@ -107,13 +126,19 @@ ROSE_UTIL_API std::string joinEnglish(const std::vector<std::string> &phrases,
  *
  *  The return value is the concatenation of substrings. Each substring is formed by converting the corresponding integer from
  *  the list into a string via @ref numberToString and then adding a single space character and an optional line feed. The line
- *  feeds are added only if @p separateStrings is true. */
+ *  feeds are added only if `separateStrings` is true.
+ *
+ * @param separateStrings Whether to include line breaks.
+ * @return Joined string. */
 ROSE_UTIL_API std::string listToString(const std::list<int>&, bool separateStrings = false);
 
 /** Generate a string from a container of strings.
  *
  *  The return value is the concatenation of substrings. Each substring is formed by adding a single space to the corresponding
- *  list element and an optional line feed. The line feeds are added only if @p separateStrings is true.
+ *  list element and an optional line feed. The line feeds are added only if `separateStrings` is true.
+ *
+ * @param separateStrings Whether to include line breaks.
+ * @return Joined string.
  *
  *  @{ */
 ROSE_UTIL_API std::string listToString(const std::list<std::string>&, bool separateStrings = false);
@@ -127,13 +152,19 @@ ROSE_UTIL_API std::string listToString(const std::vector<std::string>&, bool sep
  *
  *  The original implementation (pre-2016) had a bug (ROSE-304) that caused the last substring to not be returned if it was not
  *  followed by a linefeed.  That implementation was also slow for large inputs (ROSE-305). Both of these are now fixed since
- *  stringToList is now implemented in terms of @ref split. */
+ *  stringToList is now implemented in terms of @ref split.
+ *
+ * @return List of non-empty lines. */
 ROSE_UTIL_API std::list<std::string> stringToList(const std::string&);
 
 /** Splits string into substring based on a separator character.
  *
- *  Empty strings are removed from the result, which is returned in the @p stringList argument. The return argument is cleared
- *  before the splitting begins. */
+ *  Empty strings are removed from the result, which is returned in the `stringList` argument. The return argument is cleared
+ *  before the splitting begins.
+ *
+ * @param inputString Input string.
+ * @param separator Separator character.
+ * @param stringList Output list of substrings. */
 ROSE_UTIL_API void splitStringIntoStrings(const std::string& inputString, char separator, std::vector<std::string>& stringList);
 
 } // namespace

@@ -19,6 +19,7 @@ namespace StringUtility {
 
 /** Convert an integer to a string.
  *
+ * @return String representation of the input value.
  *
  *  @{ */
 ROSE_UTIL_API std::string numberToString(long long);
@@ -39,15 +40,21 @@ ROSE_UTIL_API std::string numberToString(unsigned __int128 x);
 
 /** @} */
 
-/** Convert a pointer to a string. */
+/** Convert a pointer to a string.
+ *
+ * @return String representation of the pointer. */
 ROSE_UTIL_API std::string numberToString(const void*);
 
 /** Convert a floating-point number to a string.
  *
- *  The returned string uses @c printf with "%2.2f" format. */
+ *  The returned string uses `printf` with "%2.2f" format.
+ *
+ * @return String representation of the input value. */
 ROSE_UTIL_API std::string numberToString(double);
 
-/** Convert an integer to a hexadecimal string. */
+/** Convert an integer to a hexadecimal string.
+ *
+ * @return Hexadecimal string. */
 ROSE_UTIL_API std::string intToHex(uint64_t);
 
 /** Convert a number to a hexadecimal and decimal string.
@@ -57,6 +64,13 @@ ROSE_UTIL_API std::string intToHex(uint64_t);
  *  is interpretted as signed and whether the sign bit is set.  The signedToHex versions print the decimal value for only
  *  the signed interpretation; the unsignedToHex versions print only the decimal unsigned interpretation, and the toHex
  *  versions print both (but not redunantly).
+ *
+ * @param value Input value.
+ * @param nbits Bit width to display.
+ * @param show_unsigned_decimal Whether to show unsigned decimal.
+ * @param show_signed_decimal Whether to show signed decimal.
+ * @param decimal_threshold Threshold for showing decimal.
+ * @return Formatted string.
  *
  *  @{ */
 ROSE_UTIL_API std::string toHex2(uint64_t value, size_t nbits,
@@ -73,17 +87,32 @@ template<typename T> std::string unsignedToHex(T value) { return unsignedToHex2(
 /** Convert a virtual address to a string.
  *
  *  Converts a virtual address to a hexadecimal string with a leading "0x". The string is zero-padded so that it explicitly
- *  represents at least @p nbits bits (four bits per hexadecimal digits). If @p nbits is zero then the function uses 32 bits
- *  for values that fit in 32 bits, otherwise 64 bits. */
+ *  represents at least `nbits` bits (four bits per hexadecimal digits). If `nbits` is zero then the function uses 32 bits
+ *  for values that fit in 32 bits, otherwise 64 bits.
+ *
+ * @param value Address value.
+ * @param nbits Minimum bit width to display.
+ * @return Formatted address string. */
 ROSE_UTIL_API std::string addrToString(uint64_t value, size_t nbits = 0);
 
 /** Convert an interval of virtual addresses to a string.
  *
  *  Converts an interval to a string by converting each address to a string, separating them with a comma, and enclosing the
- *  whole string in square brackets. */
+ *  whole string in square brackets.
+ *
+ * @param low Low address.
+ * @param high High address.
+ * @param nbits Minimum bit width to display.
+ * @return Formatted interval string. */
 ROSE_UTIL_API std::string addrIntervalToString(uint64_t low, uint64_t high, size_t nbits = 0);
 
-/** Convert a number to a binary string. */
+/** Convert a number to a binary string.
+ *
+ * @param value Input value.
+ * @param nBits Bit width to display (0 means use value width).
+ * @param groupSize Group size for separators.
+ * @param groupSeparator Separator string between groups.
+ * @return Binary string. */
 template<typename Unsigned>
 std::string toBinary(Unsigned value, size_t nBits = 0, size_t groupSize = 4, const std::string groupSeparator = "_") {
     if (0 == nBits)

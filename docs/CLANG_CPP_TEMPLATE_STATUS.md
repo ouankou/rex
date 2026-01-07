@@ -452,7 +452,7 @@ if (p_decl_translation_map.find(decl) != p_decl_translation_map.end()) {
 ### Clang Documentation
 - Clang AST: https://clang.llvm.org/docs/IntroductionToTheClangAST.html
 - Template handling: https://clang.llvm.org/docs/LibASTMatchers.html
-- ClassTemplateDecl: https://clang.llvm.org/doxygen/classclang_1_1ClassTemplateDecl.html
+- ClassTemplateDecl: clang/AST/DeclTemplate.h
 
 ### Related Issues
 - ROSE-1378: SgDeclarationScope not implemented (2018)

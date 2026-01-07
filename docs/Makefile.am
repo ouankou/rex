@@ -1,5 +1,3 @@
-# SUBDIRS = Rose Rosetta testDoxygen
-# SUBDIRS = Rose testDoxygen
 SUBDIRS = Rose 
 
 docs:

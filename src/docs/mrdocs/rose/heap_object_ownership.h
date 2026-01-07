@@ -1,0 +1,59 @@
+// -*- c++ -*-
+
+#ifndef ROSE_DOCS_ROSE_HEAP_OBJECT_OWNERSHIP_H
+#define ROSE_DOCS_ROSE_HEAP_OBJECT_OWNERSHIP_H
+
+/** @brief Ownership of heap-allocated objects
+ *
+ * Paradigms for allocation/deallocation of objects.
+ *
+ * Any time an object is allocated on the heap the library needs to be clear about who owns that object, i.e., which other
+ * object(s) has a pointer to this heap-allocated object. Lack of clear ownership rules leads to either unsafe deletion caused
+ * deleting an object when something else is still using it, or memory leaks caused by users not deleting objects because
+ * they're afraid of unsafe deletion. A number of ownership paradigms exist:
+ *
+ * The **single ownership paradigm** is when a heap-allocated object has exactly one owner. If the owner object is copied then
+ * the heap-allocated object must also be copied so that each owner continues to point to its own singly-owned child. This
+ * paradigm usually leads to excessive copying and is not generally used by ROSE.
+ *
+ * The **shared, no-owner** paradigm is when heap-allocated objects can be referenced from multiple parent objects and none of
+ * those objects clearly own the heap-allocated object. Thus, none of the parent objects can ever safely delete the
+ * heap-allocated object because the parents generally don't know about each other. This obviously leads to memory leaks. This
+ * is the paradigm used by some parts of ROSE where ownership is not made clear.
+ *
+ * The **shared ownership** paradigm allows multiple parents to point to the same heap-allocated object, and all parents share
+ * the ownership of the that object. The parents coordinate with each other so that when the last parent relinquishes
+ * ownership then the heap-allocated object is deleted. This is the paradigm used by some ROSE subsystems.
+ *
+ * @section heap_object_shared_ownership Shared ownership
+ *
+ * Within ROSE, shared ownership is implemented using smart pointers. A smart pointer behaves for the most part like a native
+ * C++ pointer, but performs additional functions. Some ROSE subsystems implement shared ownership using `std::shared_ptr`,
+ * which uses reference counting.
+ *
+ * Most heap-allocated, shared-ownership objects have a typedef for their pointer type. The pointer type name is either the
+ * same as the class name with \"Ptr\" appended, or a public \"Ptr\" type defined in the class (or both). These objects normally
+ * have protected constructors in order to prevent users from accidentally allocating them on the stack or data/bss sections.
+ * Instead, they provide a class method (static member function) to create a new, heap-allocated instance. This factory
+ * method goes by the name of \"instance\", although a few classes use other names. The destructor for a heap-allocated shared
+ * object is only called automatically as a result of the object's final owner relinquishing ownership (i.e., the reference
+ * count reaches zero).
+ *
+ * Shared pointers are often passed as function arguments using a const reference to avoid the need to increment and decrement
+ * the reference count. Occasionally the underlying raw pointer is even passed directly, but this is only safe when the
+ * caller holds the ownership for the duration of the callee's use of the raw pointer (i.e., the callee should not save the
+ * raw pointer). A new shared-ownership pointer can be created from a raw pointer, but `std::shared_ptr` requires that the
+ * class inherit from `std::enable_shared_from_this` to use shared_from_this safely.
+ *
+ * Because reference counting by itself doesn't work well with ownership cycles, and since detecting ownership cycles in C++
+ * is too invasive to the API, ROSE is designed to not use internal data structures that could introduce cycles. If you find a
+ * cycle you've found a flaw in the design. On the other hand, nothing prevents the user from creating data structures that
+ * cause ownership cycles. Any shared object that can be reached from such a cycle will never be freed until the cycle is
+ * broken by the user. One way to break these cycles is to reset one of the cycle's shared-ownership pointers, but the details
+ * of which pointer to reset is entirely the responsibility of the person that designed the data structure.
+ *
+ * See @ref library_general_principles.
+ */
+struct heap_object_ownership {};
+
+#endif

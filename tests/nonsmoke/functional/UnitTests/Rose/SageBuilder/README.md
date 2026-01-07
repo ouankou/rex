@@ -1,6 +1,6 @@
 # SageBuilder
 
-See Doxygen Documentation: http://rosecompiler.org/ROSE_HTML_Reference/namespaceSageBuilder.html.
+See the API reference under `docs/reference/` for the `SageBuilder` namespace.
 
 # Example Output
 

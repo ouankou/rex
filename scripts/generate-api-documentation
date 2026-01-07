@@ -1,9 +1,9 @@
 #!/bin/bash
-set -e -o pipefail
+set -euo pipefail
 
 arg0="${0##*/}"
 dir0="${0%/*}"
-DEFAULT_CONFIG=user
+DEFAULT_CONFIG="docs/mrdocs.yml"
 
 ####################################################################################################################################
 help() {
@@ -11,48 +11,35 @@ help() {
     echo "$arg0"
     echo
     echo "Name"
-    echo "        $arg0 - generate ROSE documentation"
+    echo "        $arg0 - generate ROSE API documentation with MrDocs"
     echo
     echo "Synopsis"
-    echo "        $arg0 [CONFIG]"
+    echo "        $arg0 [MRDOCS_CONFIG]"
     echo
     echo "Description"
-    echo "        This command runs Doxygen to parse ROSE header files and generate HTML"
-    echo "        documentation. The optional argument, CONFIG, is the name of a Doxygen"
-    echo "        configuration file. If the CONFIG file cannot be found as specified,"
-    echo "        then the ROSE/src/docs directory is searched for a file named CONFIG or"
-    echo "        CONFIG.cfg, and this file is passed as an argument to Doxygen."
+    echo "        This command runs MrDocs to generate HTML API documentation."
+    echo "        The optional argument, MRDOCS_CONFIG, is the path to a mrdocs.yml"
+    echo "        configuration file. If not provided, docs/mrdocs.yml is used."
     echo
     echo "        This command can be run from any directory, but the command must either"
     echo "        be located inside the ROSE source directory hierarchy, or the"
     echo "        ROSE_SOURCE environment variable must point to the ROSE source"
     echo "        directory."
     echo
+    echo "        The build tree must provide a compile_commands.json file. The default"
+    echo "        configuration expects it at ./build/compile_commands.json."
+    echo
     echo "        The following command-line switches are understood:"
     echo
     echo "        --help | -h"
     echo "                Show this documentation."
     echo
-    echo "        --list | -l"
-    echo "                List the names of the standard ROSE documentation audiences."
-    echo "                These are the names that can appear on the command line for"
-    echo "                this tool."
-    echo
     echo "        --version | -V"
     echo "                Print the tool version on standard output and exit success."
-    echo
-    echo "        This tool fails if doxygen produces any output that is not suppressed"
-    echo "        by the filter defined in this tool."
     ######--------------------------------------------------------------------------------##### 80 columns
 }
 
-#
-# This script, which can be run from any working directory but which must live in the ROSE source directory hierarchy, runs Doxygen
-# to parse ROSE header files and generate HTML user documentation. The script takes one optional argument, the name of a Doxygen
-# configuration file.
-
 ####################################################################################################################################
-# Die with an error message
 die() {
     echo "$arg0: error:" "$@" >&2
     exit 1
@@ -64,7 +51,7 @@ cached_rose_source=
 rose-source() {
     if [ "$cached_rose_source" = "" ]; then
         local rose_src=
-        for rose_src in "$ROSE_SOURCE" "$RG_SRC" "$dir0/.." "$ROSE"; do
+        for rose_src in "${ROSE_SOURCE-}" "${RG_SRC-}" "$dir0/.." "${ROSE-}"; do
             if [ -n "$rose_src" ] && [ -d "$rose_src/." ] && [ -f "$rose_src/ROSE_VERSION" ]; then
                 cached_rose_source="$(cd "$rose_src"; pwd)"
                 break
@@ -76,168 +63,817 @@ rose-source() {
 }
 
 ####################################################################################################################################
-# Returns the ROSE version number
 rose-version-short() {
     cat "$(rose-source)/ROSE_VERSION"
 }
 
 rose-version-long() {
     rose-version-short
-    
-    local branch="$(git branch --show-current)"
+
+    local branch="$(git branch --show-current 2>/dev/null)"
     if [ -n "$branch" ]; then
         echo "$branch"
     fi
 
-    local commit="$(git rev-parse --short HEAD)"
+    local commit="$(git rev-parse --short HEAD 2>/dev/null)"
     if [ -n "$commit" ]; then
         echo "$commit"
     fi
-
 }
 
 ####################################################################################################################################
-# Assert prerequisites
+resolve-mrdocs() {
+    if [ -n "${MRDOCS_BIN-}" ]; then
+        if [ -x "$MRDOCS_BIN" ]; then
+            echo "$MRDOCS_BIN"
+            return 0
+        fi
+        die "MRDOCS_BIN is set but not executable: $MRDOCS_BIN"
+    fi
+
+    if type -t mrdocs >/dev/null; then
+        echo "mrdocs"
+        return 0
+    fi
+
+    die "mrdocs command is required (set MRDOCS_BIN or add mrdocs to PATH)"
+}
+
+mrdocs-root() {
+    local cmd="${MRDOCS_CMD-}"
+    local path=""
+    if [ -n "$cmd" ] && [ -x "$cmd" ]; then
+        path="$cmd"
+    else
+        path="$(command -v "$cmd" 2>/dev/null || true)"
+    fi
+    if [ -z "$path" ]; then
+        die "unable to resolve mrdocs binary path"
+    fi
+    echo "$(cd "$(dirname "$path")/.." && pwd)"
+}
+
 check-prerequisites() {
-    # Doxygen
-    type -t doxygen >/dev/null || die "doxygen command is required"
-    doxygen --version >/dev/null || die "cannot run doxygen command"
+    MRDOCS_CMD="$(resolve-mrdocs)"
+    "$MRDOCS_CMD" --version >/dev/null 2>&1 || true
 }
 
 ####################################################################################################################################
-# List known configuration files
-list-known-configs() {
-    for config in $(rose-source)/docs/*.cfg; do
-        local basename="${config##*/}"
-        echo "${basename%.cfg}"
-    done
-}
-
-
-####################################################################################################################################
-# Name of the Doxygen configuration file
 config-file() {
     local name="${1-}"
-    for config in "$name" "$(rose-source)/docs/$name" "$(rose-source)/docs/$name.cfg"; do
+    for config in "$name" "$(rose-source)/$name" "$(rose-source)/docs/$name" "$(rose-source)/docs/$name.yml"; do
         if [ -f "$config" ]; then
             echo "$config"
-            echo "$arg0: configuring Doxygen with $config" >&2
             return 0
         fi
     done
-    die "cannot find Doxygen config file for \"$name\""
+    die "cannot find MrDocs config file for \"$name\""
 }
 
 ####################################################################################################################################
-# Passes input to output and counts lines. Fails if there are any lines.
-fail-if-not-empty() {
-    local n=0
-    while IFS=$'\n' read -r line; do
-        echo "$line"
-        n=$[n + 1]
-    done
-    [ $n -eq 0 ] || false
-}
-
-####################################################################################################################################
-# Filter out some dangling references. These dangling references are pointing to parts of the ROSE API that have been excluded from
-# the generated documentation for one or more reasons, but yet the otherwise valid reference is still present in the non-excluded
-# documentation.
-#
-# Such references fall into a few main categories:
-#
-#   (1) The target symbol was not parsed by Doxygen because it falls outside the src/Rose directory (or other Doxygen inputs).
-#       Fix this by moving the source code into src/Rose and making sure all ::Rose namespace policies are followed. The
-#       $ROSE/scripts/policies/RoseNamespace.pl policy checker can help with this and contains documentation for the policies we
-#       try to enforce.
-#
-#   (2) The target symbol or its file is explicitly ignored by Doxygen. This can happen for a number of reasons:
-#
-#       (BAD_NAME) The name of the entity violates ROSE naming convention for public symbols. Fix this by changing the name so
-#       the file passes the RoseNamespace.pl policy checks without any warnings.
-#
-#       (UNDOC) Large parts of the public API for this namespace or class is undocumented. Presenting the few documented parts to the
-#       user would be confusing because of the incompleteness. Fix this by documenting the entire public API.
-#
-#       (PRIVATE) The entity is documented as part of the public API intended for users, but in fact serves an internal
-#       purpose. Fix this in any number of ways, such as (a) change the Doxygen comment to a normal C++- comment, or (b) make the
-#       entity "private" or "protected" in the C++ source code, or (c) mark the entity as internal by using the Doxygen @internal
-#       marker.
-#
-#   (3) A enclosing class or namespace is not documented. Fix this by documenting all enclosing namespaces and classes. These kinds
-#       of dangling references should NOT be added to the suppression list defined in this shell function!
-#
-# When adding a new suppression, please mark the reason for suppression.
-#
-filter-doxygen-warnings() {
-    sed -e "
-        #   Pattern                                                               Reasons (see above)
-        #-----------------------------------------------------------------------#--------------------
-        /unable to resolve reference to 'SageInterface/d                        # 1
-        /unable to resolve reference to 'InstructionMap'/d                      # 1
-        /unable to resolve reference to 'frontend'/d                            # 1, 2.BAD_NAME
-        /unable to resolve reference to 'Sg_File_Info'/d                        # 1, 2.BAD_NAME
-        /unable to resolve reference to 'rose_addr_t'/d                         # 1, 2.BAD_NAME
-        "
-}
-
-####################################################################################################################################
-# Figure out and report where the documentation was output, but also create the directory since Doxygen won't create the
-# intermediate directories if they don't exist.
-make-output-directories() {
-    local all_inputs=($(rose-source)/docs/DoxygenSettings/*.cfg "$1")
+compilation-db-from-config() {
     local config="$1"
-    local last_name=
-    for dir in $(sed -n 's/^OUTPUT_DIRECTORY[ \t]*=[ \t]*\([^ \t]\+\).*/\1/p' "${all_inputs[@]}" /dev/null); do
-        dir="$(echo "$dir" |sed "s|\$(ROSE_SOURCE)|$(rose-source)|g")"
-        dir="$(echo "$dir" |sed "s|\$(ROSE_VERSION)|$(rose-version-short)|g")"
-        last_name="$dir"
-        echo "$dir"
-
-        if [ -n "$(echo "$dir" |sed -n '/^[-+.\/_a-zA-Z0-9]\+$/p')" ]; then
-            mkdir -p "$dir"
-        fi
-    done
-
-    if [ -n "$last_name" ]; then
-        echo "$arg0: documentation output to $last_name" >&2
+    local value
+    value="$(sed -n 's/^[[:space:]]*compilation-database:[[:space:]]*//p' "$config" | head -n 1)"
+    value="${value%%#*}"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    if [ -z "$value" ]; then
+        return 0
+    fi
+    if [[ "$value" = /* ]]; then
+        echo "$value"
+    else
+        echo "$(cd "$(dirname "$config")" && pwd)/$value"
     fi
 }
 
 ####################################################################################################################################
-# Post-process the HTML. Too bad doxygen doesn't have a way to run these kinds of things on the intermediate representation.
-fixup-html() {
-    local root_dir="$1"
-    echo -n "$arg0: post-processing HTML files..." >&2
-    local i=0
-    find "$root_dir" -type f -name '*.html' |
-        while IFS="" read -r html_file; do
-            printf " %5d\b\b\b\b\b\b" $[++i] >&2
-
-            # The files in the AstNodes/Expression directory are Rosebud inputs for generating
-            # ROSETTA inputs. The eventual ROSETTA output headers don't need any path component in their #include names.
-            #
-            # The other files under AstNodes are Rosebud inputs for which Rosebud generates the C++ output (ROSETTA is not involved).
-            # For these, if the input is named AstNodes/Foo/Bar/Baz.h then the #include should be <Foo/Bar/Baz.h>
-            sed -i \
-                -e 's%^\(<p><code>#include.*>\)AstNodes/\(Expression\)/\(.*\)%\1\3%' \
-                -e 's%^\(<p><code>#include.*>\)AstNodes/\(.*\)%\1\2%' \
-                "$html_file"
-        done
-    echo >&2
+config-bool() {
+    local config="$1"
+    local key="$2"
+    local value
+    value="$(sed -n "s/^[[:space:]]*$key:[[:space:]]*//p" "$config" | head -n 1)"
+    value="${value%%#*}"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+    case "$value" in
+        true|yes|on|1)
+            echo "true"
+            ;;
+        *)
+            echo "false"
+            ;;
+    esac
 }
 
 ####################################################################################################################################
+compiler-from-db() {
+    local db="$1"
+    python3 - "$db" <<'PY'
+import json
+import os
+import shlex
+import sys
 
+db = sys.argv[1]
+with open(db, "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+if not isinstance(data, list) or not data:
+    raise SystemExit("compile_commands.json is empty")
+
+entry = data[0]
+args = entry.get("arguments")
+if not isinstance(args, list) or not args:
+    cmd = entry.get("command")
+    if not isinstance(cmd, str):
+        raise SystemExit("compile_commands entry missing command/arguments")
+    args = shlex.split(cmd)
+if not args:
+    raise SystemExit("compile_commands entry has empty command")
+
+wrappers = {"ccache", "sccache", "distcc", "icecc", "buildcache"}
+tool = args[0]
+if os.path.basename(tool) in wrappers and len(args) > 1:
+    tool = args[1]
+print(tool)
+PY
+}
+
+resolve-compiler() {
+    local compiler="$1"
+    if [ -x "$compiler" ]; then
+        echo "$compiler"
+        return 0
+    fi
+    local found
+    found="$(command -v "$compiler" 2>/dev/null || true)"
+    if [ -n "$found" ] && [ -x "$found" ]; then
+        echo "$found"
+        return 0
+    fi
+    die "compiler not found: $compiler"
+}
+
+collect-include-paths() {
+    local compiler="$1"
+    python3 - "$compiler" <<'PY'
+import subprocess
+import sys
+
+compiler = sys.argv[1]
+proc = subprocess.run(
+    [compiler, "-E", "-x", "c++", "-", "-v"],
+    input=b"",
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    check=True,
+)
+text = proc.stderr.decode("utf-8", errors="ignore")
+
+paths = []
+in_block = False
+for line in text.splitlines():
+    if line.strip() == "#include <...> search starts here:":
+        in_block = True
+        continue
+    if in_block:
+        if line.strip() == "End of search list.":
+            break
+        line = line.strip()
+        if not line or line.startswith("("):
+            continue
+        paths.append(line)
+
+seen = set()
+deduped = []
+for path in paths:
+    if path in seen:
+        continue
+    seen.add(path)
+    deduped.append(path)
+
+libc = []
+stdlib = []
+system = []
+for path in deduped:
+    if "/lib/clang/" in path or "/llvm" in path:
+        system.append(path)
+    elif "/include/c++/" in path or "/c++/" in path:
+        stdlib.append(path)
+    else:
+        libc.append(path)
+
+for path in libc:
+    print(f"libc:{path}")
+for path in stdlib:
+    print(f"stdlib:{path}")
+for path in system:
+    print(f"system:{path}")
+PY
+}
+
+####################################################################################################################################
+build-docs-compilation-db() {
+    local config="$1"
+    local out_dir="$2"
+    local compiler="$3"
+    local build_dir="$4"
+    local compile_db="$5"
+python3 - "$config" "$out_dir" "$compiler" "$build_dir" "$compile_db" <<'PY'
+import fnmatch
+import json
+import os
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+out_dir = Path(sys.argv[2])
+compiler = sys.argv[3]
+build_dir_arg = sys.argv[4]
+compile_db_path = Path(sys.argv[5]) if len(sys.argv) > 5 else None
+build_dir = Path(build_dir_arg).resolve() if build_dir_arg else None
+lines = config_path.read_text(encoding="utf-8").splitlines()
+
+def parse_scalar(key: str) -> str | None:
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith(f"{key}:"):
+            value = stripped.split(":", 1)[1].strip()
+            if value:
+                return value.strip("\"'")
+    return None
+
+def parse_list(key: str) -> list[str]:
+    items = []
+    in_block = False
+    indent = None
+    for line in lines:
+        stripped = line.lstrip()
+        if not in_block:
+            if stripped.startswith(f"{key}:"):
+                in_block = True
+                indent = len(line) - len(stripped) + 2
+            continue
+        if not stripped:
+            continue
+        leading = len(line) - len(stripped)
+        if leading < (indent or 0):
+            break
+        if stripped.startswith("- "):
+            item = stripped[2:].strip().strip("\"'")
+            if item:
+                items.append(item)
+    return items
+
+config_dir = config_path.parent
+source_root_value = parse_scalar("source-root")
+if source_root_value:
+    source_root_path = Path(source_root_value)
+    if not source_root_path.is_absolute():
+        source_root_path = (config_dir / source_root_path).resolve()
+    else:
+        source_root_path = source_root_path.resolve()
+else:
+    source_root_path = config_dir.resolve()
+
+input_items = parse_list("input") or [str(source_root_path / "src")]
+input_paths = []
+for item in input_items:
+    path = Path(item)
+    if not path.is_absolute():
+        path = (config_dir / path).resolve()
+    else:
+        path = path.resolve()
+    input_paths.append(path)
+
+exclude_items = parse_list("exclude")
+exclude_paths = []
+for item in exclude_items:
+    path = Path(item)
+    if not path.is_absolute():
+        path = (config_dir / path).resolve()
+    else:
+        path = path.resolve()
+    exclude_paths.append(path)
+
+patterns = parse_list("file-patterns")
+if not patterns:
+    patterns = ["*.h", "*.hh", "*.hpp", "*.hxx", "*.H", "*.inl", "*.ipp", "*.tpp", "*.tcc"]
+exclude_patterns = parse_list("exclude-patterns")
+
+def matches_exclude_patterns(path: Path) -> bool:
+    if not exclude_patterns:
+        return False
+    path_posix = path.as_posix()
+    for pat in exclude_patterns:
+        if fnmatch.fnmatch(path_posix, pat):
+            return True
+    try:
+        rel = path.resolve().relative_to(source_root_path)
+    except ValueError:
+        return False
+    rel_posix = rel.as_posix()
+    for pat in exclude_patterns:
+        if fnmatch.fnmatch(rel_posix, pat):
+            return True
+    return False
+
+def is_excluded(path: Path) -> bool:
+    for ex in exclude_paths:
+        try:
+            path.relative_to(ex)
+            return True
+        except ValueError:
+            continue
+    return matches_exclude_patterns(path)
+
+headers = []
+for base in input_paths:
+    if not base.is_dir():
+        continue
+    for root_dir, _, files in os.walk(base):
+        root_path = Path(root_dir)
+        if is_excluded(root_path):
+            continue
+        for name in files:
+            if any(fnmatch.fnmatch(name, pat) for pat in patterns):
+                file_path = root_path / name
+                if is_excluded(file_path):
+                    continue
+                headers.append(file_path)
+
+if not headers:
+    raise SystemExit("no headers found for documentation input")
+
+headers = sorted(set(headers))
+src_root = source_root_path / "src"
+
+include_dirs = []
+if src_root.is_dir():
+    include_dirs.append(src_root)
+if build_dir and build_dir.is_dir():
+    include_dirs.append(build_dir)
+include_dirs.extend([p for p in input_paths if p.is_dir()])
+util_dir = source_root_path / "src" / "util"
+if util_dir.is_dir():
+    include_dirs.append(util_dir)
+sage_dir = source_root_path / "src" / "frontend" / "SageIII"
+if sage_dir.is_dir():
+    include_dirs.append(sage_dir)
+
+def is_under(path: Path, base: Path | None) -> bool:
+    if base is None:
+        return False
+    try:
+        path.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+def collect_local_includes(db_path: Path | None) -> list[Path]:
+    if not db_path or not db_path.is_file():
+        return []
+    data = json.loads(db_path.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        return []
+    includes = []
+    for entry in data:
+        directory = entry.get("directory")
+        base_dir = Path(directory).resolve() if directory else source_root_path
+        args = entry.get("arguments")
+        if not isinstance(args, list) or not args:
+            cmd = entry.get("command")
+            if not isinstance(cmd, str):
+                continue
+            import shlex
+            args = shlex.split(cmd)
+        it = iter(range(len(args)))
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            next_val = args[i + 1] if i + 1 < len(args) else None
+            path = None
+            if arg in ("-I", "-isystem") and next_val:
+                path = next_val
+                i += 1
+            elif arg.startswith("-I") and len(arg) > 2:
+                path = arg[2:]
+            elif arg.startswith("-isystem") and len(arg) > len("-isystem"):
+                path = arg[len("-isystem"):]
+            if path:
+                inc_path = Path(path)
+                if not inc_path.is_absolute():
+                    inc_path = (base_dir / inc_path).resolve()
+                else:
+                    inc_path = inc_path.resolve()
+                if is_under(inc_path, source_root_path) or is_under(inc_path, build_dir):
+                    includes.append(inc_path)
+            i += 1
+    return includes
+
+include_dirs.extend(collect_local_includes(compile_db_path))
+
+seen = set()
+include_args = []
+for path in include_dirs:
+    path = path.resolve()
+    if path in seen:
+        continue
+    seen.add(path)
+    include_args.extend(["-I", str(path)])
+
+entries = []
+for idx, path in enumerate(headers):
+    try:
+        rel = path.relative_to(src_root)
+    except ValueError:
+        rel = path.relative_to(source_root_path)
+    cpp_path = out_dir / f"mrdocs_{idx}.cpp"
+    doc_prelude = source_root_path / "src" / "docs" / "mrdocs" / "doc_prelude.h"
+    fallback_prelude = source_root_path / "src" / "docs" / "mrdocs" / "ast_node_docs.h"
+    prelude_include = ""
+    if doc_prelude.is_file():
+        prelude_include = "#include \"docs/mrdocs/doc_prelude.h\"\n"
+    elif fallback_prelude.is_file():
+        prelude_include = "#include \"docs/mrdocs/ast_node_docs.h\"\n"
+    cpp_path.write_text(
+        "// Generated by generate-api-documentation to include a public header.\n"
+        + prelude_include
+        + f"#include \"{rel.as_posix()}\"\n",
+        encoding="utf-8",
+    )
+    obj_path = out_dir / f"mrdocs_{idx}.o"
+    args = [compiler, "-std=gnu++17", *include_args, "-c", str(cpp_path), "-o", str(obj_path)]
+    entries.append({
+        "directory": str(out_dir),
+        "file": str(cpp_path),
+        "arguments": args,
+    })
+
+compile_db = out_dir / "compile_commands.json"
+compile_db.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+print(compile_db)
+PY
+}
+
+####################################################################################################################################
+filter-compilation-db() {
+    local config="$1"
+    local compile_db="$2"
+    local out_dir="$3"
+    local overlay="${4-}"
+python3 - "$config" "$compile_db" "$out_dir" "$overlay" <<'PY'
+import fnmatch
+import json
+import os
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+compile_db_path = Path(sys.argv[2])
+out_dir = Path(sys.argv[3])
+overlay_path = Path(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] else None
+
+lines = config_path.read_text(encoding="utf-8").splitlines()
+
+def parse_scalar(key: str) -> str | None:
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith(f"{key}:"):
+            value = stripped.split(":", 1)[1].strip()
+            if value:
+                return value.strip("\"'")
+    return None
+
+def parse_list(key: str) -> list[str]:
+    items = []
+    in_block = False
+    indent = None
+    for line in lines:
+        stripped = line.lstrip()
+        if not in_block:
+            if stripped.startswith(f"{key}:"):
+                in_block = True
+                indent = len(line) - len(stripped) + 2
+            continue
+        if not stripped:
+            continue
+        leading = len(line) - len(stripped)
+        if leading < (indent or 0):
+            break
+        if stripped.startswith("- "):
+            item = stripped[2:].strip().strip("\"'")
+            if item:
+                items.append(item)
+    return items
+
+config_dir = config_path.parent
+use_system_stdlib_value = parse_scalar("use-system-stdlib")
+use_system_stdlib = (use_system_stdlib_value or "").lower() == "true"
+source_root_value = parse_scalar("source-root")
+if source_root_value:
+    source_root_path = Path(source_root_value)
+    if not source_root_path.is_absolute():
+        source_root_path = (config_dir / source_root_path).resolve()
+    else:
+        source_root_path = source_root_path.resolve()
+else:
+    source_root_path = config_dir.resolve()
+
+input_items = parse_list("input") or [str(source_root_path / "src")]
+input_paths = []
+for item in input_items:
+    path = Path(item)
+    if not path.is_absolute():
+        path = (config_dir / path).resolve()
+    else:
+        path = path.resolve()
+    input_paths.append(path)
+
+exclude_items = parse_list("exclude")
+exclude_paths = []
+for item in exclude_items:
+    path = Path(item)
+    if not path.is_absolute():
+        path = (config_dir / path).resolve()
+    else:
+        path = path.resolve()
+    exclude_paths.append(path)
+exclude_patterns = parse_list("exclude-patterns")
+
+def matches_exclude_patterns(path: Path) -> bool:
+    if not exclude_patterns:
+        return False
+    path_posix = path.as_posix()
+    for pat in exclude_patterns:
+        if fnmatch.fnmatch(path_posix, pat):
+            return True
+    try:
+        rel = path.resolve().relative_to(source_root_path)
+    except ValueError:
+        return False
+    rel_posix = rel.as_posix()
+    for pat in exclude_patterns:
+        if fnmatch.fnmatch(rel_posix, pat):
+            return True
+    return False
+
+def is_excluded(path: Path) -> bool:
+    for ex in exclude_paths:
+        try:
+            path.relative_to(ex)
+            return True
+        except ValueError:
+            continue
+    return matches_exclude_patterns(path)
+
+def is_in_inputs(path: Path) -> bool:
+    if not input_paths:
+        return True
+    for base in input_paths:
+        try:
+            path.relative_to(base)
+            return True
+        except ValueError:
+            continue
+    return False
+
+data = json.loads(compile_db_path.read_text(encoding="utf-8"))
+if not isinstance(data, list):
+    raise SystemExit("compile_commands.json is not a list")
+
+filtered = []
+for entry in data:
+    file_value = entry.get("file")
+    if not file_value:
+        continue
+    file_path = Path(file_value)
+    if not file_path.is_absolute():
+        directory = entry.get("directory")
+        base_dir = Path(directory) if directory else source_root_path
+        file_path = (base_dir / file_path).resolve()
+    else:
+        file_path = file_path.resolve()
+    if is_excluded(file_path):
+        continue
+    if not is_in_inputs(file_path):
+        continue
+    new_entry = dict(entry)
+    new_entry["file"] = str(file_path)
+    if "directory" in new_entry and new_entry["directory"]:
+        new_entry["directory"] = str(Path(new_entry["directory"]).resolve())
+    args = new_entry.get("arguments")
+    if not isinstance(args, list) or not args:
+        cmd = new_entry.get("command")
+        if isinstance(cmd, str):
+            import shlex
+            args = shlex.split(cmd)
+    if isinstance(args, list) and args:
+        def is_cpp_source(path: Path, argv: list[str]) -> bool:
+            suffix = path.suffix
+            suffix_lower = suffix.lower()
+            if suffix == ".C":
+                return True
+            if suffix_lower in {".cc", ".cpp", ".cxx", ".c++", ".cp"}:
+                return True
+            if suffix_lower == ".c":
+                return False
+            it = iter(range(len(argv)))
+            i = 0
+            while i < len(argv):
+                arg = argv[i]
+                if arg == "-x" and i + 1 < len(argv):
+                    if "c++" in argv[i + 1]:
+                        return True
+                    i += 1
+                elif arg.startswith("-x") and "c++" in arg:
+                    return True
+                i += 1
+            return False
+
+        if is_cpp_source(file_path, args):
+            if not use_system_stdlib and "-nostdinc++" not in args:
+                args.insert(1, "-nostdinc++")
+            if overlay_path and overlay_path.is_dir():
+                overlay_args = [args[i:i + 2] for i in range(len(args) - 1)]
+                if ["-I", str(overlay_path)] not in overlay_args and ["-isystem", str(overlay_path)] not in overlay_args:
+                    insert_at = 2 if len(args) > 1 and args[1] == "-nostdinc++" else 1
+                    args[insert_at:insert_at] = ["-I", str(overlay_path)]
+            prelude_arg = None
+            doc_prelude = source_root_path / "src" / "docs" / "mrdocs" / "doc_prelude.h"
+            if not doc_prelude.is_file():
+                doc_prelude = source_root_path / "src" / "docs" / "mrdocs" / "ast_node_docs.h"
+            if doc_prelude.is_file():
+                prelude_arg = str(doc_prelude.resolve())
+                if ["-include", prelude_arg] not in [args[i:i+2] for i in range(len(args) - 1)]:
+                    insert_at = 1
+                    while insert_at < len(args):
+                        if args[insert_at] == "-nostdinc++":
+                            insert_at += 1
+                            continue
+                        if overlay_path and overlay_path.is_dir():
+                            if args[insert_at] in {"-I", "-isystem"} and insert_at + 1 < len(args) and args[insert_at + 1] == str(overlay_path):
+                                insert_at += 2
+                                continue
+                        break
+                    args[insert_at:insert_at] = ["-include", prelude_arg]
+            if "-DROSE_DOCGEN" not in args:
+                insert_at = 1
+                while insert_at < len(args):
+                    if args[insert_at] == "-nostdinc++":
+                        insert_at += 1
+                        continue
+                    if overlay_path and overlay_path.is_dir():
+                        if args[insert_at] in {"-I", "-isystem"} and insert_at + 1 < len(args) and args[insert_at + 1] == str(overlay_path):
+                            insert_at += 2
+                            continue
+                    if prelude_arg and args[insert_at] == "-include" and insert_at + 1 < len(args) and args[insert_at + 1] == prelude_arg:
+                        insert_at += 2
+                        continue
+                    break
+                args.insert(insert_at, "-DROSE_DOCGEN")
+        new_entry["arguments"] = args
+        new_entry.pop("command", None)
+    filtered.append(new_entry)
+
+if not filtered:
+    raise SystemExit("no compile_commands entries matched documentation input")
+
+out_path = out_dir / "compile_commands.json"
+out_path.write_text(json.dumps(filtered, indent=2), encoding="utf-8")
+print(out_path)
+PY
+}
+
+####################################################################################################################################
+build-include-overlay() {
+    local compiler="$1"
+    local out_dir="$2"
+    local compile_db="${3-}"
+    local overlay_dir="$out_dir/include-overlay"
+    local include_paths=()
+
+    while IFS=: read -r kind path; do
+        if [ -n "$path" ]; then
+            include_paths+=("$path")
+        fi
+    done < <(collect-include-paths "$compiler")
+
+    if [ -n "$compile_db" ] && [ -f "$compile_db" ]; then
+        while IFS= read -r path; do
+            if [ -n "$path" ]; then
+                include_paths+=("$path")
+            fi
+        done < <(python3 - "$compile_db" <<'PY'
+import json
+import shlex
+import sys
+from pathlib import Path
+
+db = Path(sys.argv[1])
+data = json.loads(db.read_text(encoding="utf-8"))
+if not isinstance(data, list):
+    raise SystemExit(0)
+
+paths = []
+for entry in data:
+    args = entry.get("arguments")
+    if not isinstance(args, list) or not args:
+        cmd = entry.get("command")
+        if not isinstance(cmd, str):
+            continue
+        args = shlex.split(cmd)
+    it = iter(range(len(args)))
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        next_val = args[i + 1] if i + 1 < len(args) else None
+        if arg == "-isystem" and next_val:
+            paths.append(next_val)
+            i += 1
+        i += 1
+
+seen = set()
+for raw in paths:
+    path = Path(raw).resolve()
+    if path in seen:
+        continue
+    seen.add(path)
+    print(path)
+PY
+)
+    fi
+
+    if [ "${#include_paths[@]}" -eq 0 ]; then
+        echo ""
+        return 0
+    fi
+
+    python3 - "$overlay_dir" "${include_paths[@]}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+overlay = Path(sys.argv[1])
+bases = []
+seen = set()
+for raw in sys.argv[2:]:
+    path = Path(raw)
+    try:
+        resolved = path.resolve()
+    except Exception:
+        resolved = path
+    if resolved in seen:
+        continue
+    seen.add(resolved)
+    bases.append(path)
+pattern_tags = re.compile(r"</?\s*(tt|summary|p|strong|pre|ul|li|code|em)\b[^>]*>", re.IGNORECASE)
+written = 0
+
+for base in bases:
+    if not base.is_dir():
+        continue
+    for path in base.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        if not pattern_tags.search(text):
+            continue
+        replaced = pattern_tags.sub("", text)
+        if replaced == text:
+            continue
+        rel = path.relative_to(base)
+        dest = overlay / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(replaced, encoding="utf-8")
+        written += 1
+
+if written == 0:
+    sys.exit(0)
+PY
+
+    if [ -d "$overlay_dir" ]; then
+        echo "$overlay_dir"
+    else
+        echo ""
+    fi
+}
+
+####################################################################################################################################
 # Parse command-line
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --help|-h)
             help
-            exit 0
-            ;;
-        --list|-l)
-            list-known-configs
             exit 0
             ;;
         --version|-V)
@@ -252,28 +888,56 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
+
 if [ "$#" -gt 1 ]; then
     die "incorrect usage; see source code for help"
-elif [ "$#" -eq 1 ]; then
-    CONFIG="$1"
 fi
 
 check-prerequisites
 CONFIG="$(config-file "${1-$DEFAULT_CONFIG}")"
-[ -r "$CONFIG" ] || die "cannot find Doxygen config file for \"${1-$DEFAULT_CONFIG}\""
 
-root_dirs="$(make-output-directories "$CONFIG")"
+compilation_db="$(compilation-db-from-config "$CONFIG")"
+if [ -z "$compilation_db" ]; then
+    if [ -n "${MRDOCS_COMPILATION_DATABASE-}" ]; then
+        compilation_db="$MRDOCS_COMPILATION_DATABASE"
+    else
+        compilation_db="$(rose-source)/build/compile_commands.json"
+    fi
+fi
+if [ -n "$compilation_db" ] && [ ! -f "$compilation_db" ]; then
+    die "compile_commands.json not found at $compilation_db (run build-rex.sh or CMake with CMAKE_EXPORT_COMPILE_COMMANDS=ON)"
+fi
 
-env ROSE_SOURCE="$(rose-source)" ROSE_VERSION="$(rose-version-short)" ROSE_VERSION_LONG="$(rose-version-long)" \
-    doxygen "$CONFIG" 2>&1 |
-    filter-doxygen-warnings |
-    fail-if-not-empty
+libc_args=()
+stdlib_args=()
+use_system_libc="$(config-bool "$CONFIG" "use-system-libc")"
+use_system_stdlib="$(config-bool "$CONFIG" "use-system-stdlib")"
+if [ "$use_system_libc" = "true" ]; then
+    libc_args+=("--use-system-libc")
+else
+    mrdocs_root="$(mrdocs-root)"
+    libc_args+=("--libc-includes" "$mrdocs_root/share/mrdocs/headers/libc-stubs")
+fi
 
-for root_dir in $root_dirs; do
-    fixup-html "$root_dir"
-done
+if [ "$use_system_stdlib" = "true" ]; then
+    stdlib_args+=("--use-system-stdlib")
+else
+    mrdocs_root="${mrdocs_root-$(mrdocs-root)}"
+    stdlib_args+=("--stdlib-includes" "$mrdocs_root/share/mrdocs/headers/libcxx")
+    stdlib_args+=("--stdlib-includes" "$mrdocs_root/share/mrdocs/headers/clang")
+fi
 
-# Check for stuff we shouldn't release
-if find "$root_dir" -type f -print0 |xargs -0 grep Edison; then
-    die "possible contamination"
+compiler="$(resolve-compiler "$(compiler-from-db "$compilation_db")")"
+build_dir="$(cd "$(dirname "$compilation_db")" && pwd)"
+docs_dir="$(mktemp -d)"
+include_overlay="$(build-include-overlay "$compiler" "$docs_dir" "$compilation_db")"
+docs_db="$(filter-compilation-db "$CONFIG" "$compilation_db" "$docs_dir" "$include_overlay")"
+
+"$MRDOCS_CMD" --config "$CONFIG" --compilation-database "$docs_db" \
+    "${stdlib_args[@]}" \
+    "${libc_args[@]}"
+if [ -n "${MRDOCS_KEEP_TMP-}" ]; then
+    echo "Keeping temporary documentation directory at $docs_dir"
+else
+    rm -rf "$docs_dir"
 fi

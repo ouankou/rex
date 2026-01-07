@@ -38,7 +38,7 @@ namespace CallTargetSet
    * @param[in] pointerDerefExp : A function pointer dereference.  
    * @return: A vector of all functionDeclarations that match the type of the function dereferenced in pointerDerefExp
    **/
-  std::vector<SgFunctionDeclaration*> solveFunctionPointerCall ( SgPointerDerefExp *);
+  std::vector<SgFunctionDeclaration*> solveFunctionPointerCall ( SgPointerDerefExp *pointerDerefExp );
 
   // returns the list of declarations of all functions that may get called via a member function pointer
   std::vector<SgFunctionDeclaration*> solveMemberFunctionPointerCall ( SgExpression *,ClassHierarchyWrapper * );

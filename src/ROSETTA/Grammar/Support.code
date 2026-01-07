@@ -16,10 +16,7 @@ HEADER_END
 HEADER_GRAPH_PREDECLARATION_START
 
 /*!
-    Doxygen documentation for graph class (should maybe be put with the rest of the
-doxygen documentation in docs/testDoxygen directory instead).
-
-
+    Documentation for graph class (consider grouping with other API docs).
 */
 HEADER_GRAPH_PREDECLARATION_END
 

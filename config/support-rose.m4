@@ -691,30 +691,6 @@ ROSE_CHECK_CUDA
 # Check: --with-opencl-inc, --with-opencl-lib
 ROSE_CHECK_OPENCL
 
-# *****************************************************************
-#            Option to define DOXYGEN SUPPORT
-# *****************************************************************
-
-# allow either user or developer level documentation using Doxygen
-ROSE_SUPPORT_DOXYGEN
-
-# DQ (8/25/2004): Disabled fast docs option.
-# Setup Automake conditional to allow use of Doxygen Tag file to speedup
-# generation of Rose documentation this does not however provide the
-# best organized documentation so we use it as an option to speed up
-# the development of the documenation and then alternatively build the
-# final documentation.
-# AM_CONDITIONAL(DOXYGEN_GENERATE_FAST_DOCS,test "$enable_doxygen_generate_fast_docs" = yes)
-# echo "In configure.in: enable_doxygen_generate_fast_docs = $enable_doxygen_generate_fast_docs"
-
-# Test for setup of document merge of Sage docs with Rose docs
-# Causes document build process to take longer but builds better documentation
-if (test "$enable_doxygen_generate_fast_docs" = yes) ; then
-   AC_MSG_NOTICE([generate Doxygen documentation faster (using tag file mechanism)])
-else
-   AC_MSG_NOTICE([generate Doxygen documentation slower (reading all of Sage III and Rose together)])
-fi
-
 AC_PROG_CXXCPP
 dnl AC_PROG_RANLIB
 
@@ -1066,8 +1042,6 @@ docs/Rose/manual.tex
 docs/Rose/rose-install-demo.cfg
 docs/Rose/rose.cfg
 docs/Rose/sage.cfg
-docs/testDoxygen/Makefile
-docs/testDoxygen/test.cfg
 exampleTranslators/AstCopyReplTester/Makefile
 exampleTranslators/DOTGenerator/Makefile
 exampleTranslators/Makefile

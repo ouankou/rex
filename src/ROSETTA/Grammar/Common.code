@@ -135,7 +135,7 @@ HEADER_START
           virtual const char* sage_class_name() const  override ROSE_DEPRECATED_FUNCTION;
 
       // JJW (10/16/2008): Changed to a single function in Node.code, and put
-      // getVariant() in #if 0 block to prevent confusing Doxygen
+      // getVariant() in #if 0 block to prevent confusing documentation tools
 #if 0
       /*! returns old style Sage II enum values */
           virtual int variant() const ROSE_DEPRECATED_FUNCTION;
@@ -278,13 +278,13 @@ HEADER_START
           a correspinding one in the AST_FILE_IO class!
        */
       // DQ (9/2/2015): This typedef is no longer used, we can't define the 
-      // comment here (changed to be a C style comment and not be a doxygen comment).
+      // comment here (changed to be a C style comment and not a doc comment).
       /* \brief Typedef used for low level memory access.
        */
        // typedef unsigned char* TestType;
 
       // DQ (9/2/2015): This typedef is no longer used, we can't define the 
-      // comment here (changed to be a C style comment and not be a doxygen comment).
+      // comment here (changed to be a C style comment and not a doc comment).
       /* \brief Typedef used to hold memory addresses as values.
        */
        // typedef unsigned long  AddressType;

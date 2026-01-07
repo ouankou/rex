@@ -9,7 +9,11 @@
 
 class GraphAccess {
  public:
-  typedef enum {EdgeOut = 1, EdgeIn = 2, BiEdge = 3} EdgeDirection;
+  typedef enum {
+      EdgeOut = 1, ///< Outgoing edge direction.
+      EdgeIn = 2,  ///< Incoming edge direction.
+      BiEdge = 3   ///< Both directions.
+  } EdgeDirection;
   static EdgeDirection Reverse(EdgeDirection d)
     {  switch (d) {
        case EdgeOut: return EdgeIn;

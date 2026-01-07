@@ -12,33 +12,20 @@ class BooleanQueryInheritedAttributeType;
 
 typedef bool BooleanQuerySynthesizedAttributeType;
 
-/*!
-     \defgroup booleanQueryLib Boolean Query Library
-     \brief This class simplifies the development of queries on the AST resulting in a 
-            single boolean value.
-     \authors Quinlan
-     \ingroup subtreeQueryLib
-
-     This class represents a library of queries.. Basically it will support a large number of
-     different types of queries that can be ask of an AST and that return a boolean value.
- */
-
-/*! \brief This class simplifies the development of queries on the AST resulting in a 
-           single boolean value.
-    \ingroup booleanQueryLib
-
-    This class used several static member function within it's interface.  Each member function
-    takes an AST node pointer (any subtree of the AST).
+/** @brief Simplifies development of queries on the AST resulting in a single boolean value.
+ *
+ * This class uses several static member functions within its interface. Each member function takes an AST node pointer
+ * (any subtree of the AST).
+ *
+ * See @ref booleanQueryLib.
  */
 class BooleanQuery
    : public SgTopDownBottomUpProcessing<BooleanQueryInheritedAttributeType,BooleanQuerySynthesizedAttributeType>
    {
      public:
 
-      /*! \if documentDevelopmentVersionUsingDoxygen 
-               \brief Specify return of variable names or type names (list\<string\> is not specific enough so
-                      we can't handle this).
-          \endif
+      /*! \brief Specify return of variable names or type names (list\<string\> is not specific enough so
+                 we can't handle this).
        */
           enum TypeOfQueryType
              {
@@ -57,11 +44,9 @@ class BooleanQuery
              };
 
       /*! @{ */
-      /*! \if documentDevelopmentVersionUsingDoxygen 
-               \brief default constructor, destructor, copy constructor and assignment operator.
+      /*! \brief default constructor, destructor, copy constructor and assignment operator.
 
-                These are required only for internal use and are not part of the public interface.
-          \endif
+          These are required only for internal use and are not part of the public interface.
       */
          ~BooleanQuery();
           BooleanQuery();
@@ -167,8 +152,6 @@ class BooleanQueryReverseTraversal : public TraverseToRoot<BooleanQueryReverseTr
 
 // endif for ROSE_BOOLEAN_QUERY
 #endif
-
-
 
 
 

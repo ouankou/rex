@@ -34,15 +34,15 @@ class RoseAst {
 
   /** Defines the starting node for traversal.
    *
-   *  The traversal is over a subtree rooted at the specified @p root node. All operations are specific to this subtree, and
-   *  the traversal does not iterate above this @p root. */
+   *  The traversal is over a subtree rooted at the specified `root` node. All operations are specific to this subtree, and
+   *  the traversal does not iterate above this `root.` */
   RoseAst(SgNode* astNode); 
 
   /** AST iterator.
    *
    *  This is an STL-compliant forward iterator for traversing AST nodes in depth-first pre-order. The @ref withoutNullValues
-   *  and @ref withNullValues functions control whether the traversal follows null child pointers (the default is that null
-   *  pointers are not followed). Entire subtrees can be exluded from traversal with the @ref skipSubtreeOnForward function.
+ *  and @ref withNullValues functions control whether the traversal follows null child pointers (the default is that null
+ *  pointers are not followed). Entire subtrees can be excluded from traversal with the @ref skipChildrenOnForward function.
    *
    *  The iterator also provides a number of auxiliary functions for querying some structural properties of the AST w.r.t. the
    *  position in the traversal (e.g., @ref is_at_first_child, @ref is_at_last_child, @ref is_at_root, @ref parent, etc.).
@@ -81,7 +81,7 @@ class RoseAst {
     /** Dereference an iterator.
      *
      *  Dereference an iterator to obtain the AST node to which it points. Dereferencing an end iterator will throw an
-     *  <code>std::out_of_range</code> exception.  If null AST pointers are being followed, the return value can be a null
+     *  `std::out_of_range` exception.  If null AST pointers are being followed, the return value can be a null
      *  node (see @ref withNullValues and @ref withoutNullValues). */
     SgNode* operator*() const;
 
@@ -127,7 +127,7 @@ class RoseAst {
     
     /** Parent AST node relative to the iteration.
      *
-     *  Returns the parent relative to the current iterator position, which might differ from the @c get_parent property of the
+     *  Returns the parent relative to the current iterator position, which might differ from the `get_parent` property of the
      *  current node. For instance, @ref parent can return a non-null pointer when the current node is null. */
     SgNode* parent() const;
 

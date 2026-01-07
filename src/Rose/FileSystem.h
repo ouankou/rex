@@ -28,19 +28,34 @@ typedef std::filesystem::directory_iterator DirectoryIterator;
 /** Iterate recursively into subdirectories. */
 typedef std::filesystem::recursive_directory_iterator RecursiveDirectoryIterator;
 
-/** Predicate returning true if path exists. */
+/** Predicate returning true if path exists.
+ *
+ * @param path Path to test.
+ * @return True if the path exists. */
 ROSE_UTIL_API bool isExisting(const Path &path);
 
-/** Predicate returning true for existing regular files. */
+/** Predicate returning true for existing regular files.
+ *
+ * @param path Path to test.
+ * @return True if the path exists and is a regular file. */
 ROSE_UTIL_API bool isFile(const Path &path);
 
-/** Predicate returning true for existing directories. */
+/** Predicate returning true for existing directories.
+ *
+ * @param path Path to test.
+ * @return True if the path exists and is a directory. */
 ROSE_UTIL_API bool isDirectory(const Path &path);
 
-/** Predicate returning true for existing symbolic links. */
+/** Predicate returning true for existing symbolic links.
+ *
+ * @param path Path to test.
+ * @return True if the path exists and is a symbolic link. */
 ROSE_UTIL_API bool isSymbolicLink(const Path &path);
 
-/** Predicate returning inverse of @ref isSymbolicLink. */
+/** Predicate returning inverse of @ref isSymbolicLink.
+ *
+ * @param path Path to test.
+ * @return True if the path exists and is not a symbolic link. */
 ROSE_UTIL_API bool isNotSymbolicLink(const Path &path);
 
 /** Predicate returning true for matching names.
@@ -90,18 +105,22 @@ ROSE_UTIL_API Path makeRelative(const Path &path, const Path &root = std::filesy
 
 /** Make path absolute.
  *
- *  Makes the specified path an absolute path if it is a relative path.  If relative, then assume @p root is what the path is
+ *  Makes the specified path an absolute path if it is a relative path.  If relative, then assume `root` is what the path is
  *  relative to. */
 ROSE_UTIL_API Path makeAbsolute(const Path &path, const Path &root = std::filesystem::current_path());
 
 /** Entries within a directory.
  *
  *  Returns a list of entries in a directory--the contents of a directory--without recursing into subdirectories. The return
- *  value is a sorted list of paths, each of which contains @p root as a prefix.  If a @p select predicate is supplied then
+ *  value is a sorted list of paths, each of which contains `root` as a prefix.  If a `select` predicate is supplied then
  *  only paths for which the predicate returns true become part of the return value. The predicate is called with the path that
- *  would become part of the return value. The @p root itself is never returned and never tested by the predicate.
+ *  would become part of the return value. The `root` itself is never returned and never tested by the predicate.
  *
- *  If @p select is not specified then all entries are returned.
+ *  If `select` is not specified then all entries are returned.
+ *
+ * @param root Directory to search.
+ * @param select Predicate to include paths.
+ * @return Sorted list of matching paths.
  *
  * @{ */
 template<class Select>
@@ -123,14 +142,19 @@ ROSE_UTIL_API std::vector<Path> findNames(const Path &root);
 /** Recursive list of names satisfying predicate.
  *
  *  Returns a list of entries in a directory and all subdirectories recursively.  The return value is a sorted list of
- *  paths, each of which contains @p root as a prefix.  If a @p select predicate is supplied then only paths for which the
- *  predicate returns true become part of the return value.  If a @p descend predicate is supplied then this algorithm only
- *  recurses into subdirectories for which @p descend returns true.  The predicates are called with the path that would become
- *  part of the return value.  The @p root itself is never returned and never tested by the @p select or @p descend predicates.
+ *  paths, each of which contains `root` as a prefix.  If a `select` predicate is supplied then only paths for which the
+ *  predicate returns true become part of the return value.  If a `descend` predicate is supplied then this algorithm only
+ *  recurses into subdirectories for which `descend` returns true.  The predicates are called with the path that would become
+ *  part of the return value.  The `root` itself is never returned and never tested by the `select` or `descend` predicates.
  *
- *  If @p select is not specified then all entries are returned. If @p descend is not specified then the algorithm traverses
- *  into all subdirectories.  Symbolic links to directories are never followed, but are returned if the @p select predicate
+ *  If `select` is not specified then all entries are returned. If `descend` is not specified then the algorithm traverses
+ *  into all subdirectories.  Symbolic links to directories are never followed, but are returned if the `select` predicate
  *  allows them.
+ *
+ * @param root Directory to search.
+ * @param select Predicate to include paths.
+ * @param descend Predicate controlling recursion.
+ * @return Sorted list of matching paths.
  *
  * @{ */
 template<class Select, class Descend>
@@ -164,21 +188,30 @@ ROSE_UTIL_API void copyFile(const Path &sourceFileName, const Path &destinationF
 
 /** Copy files from one directory to another.
  *
- *  Each of the specified files are copied from their location under @p root to a similar location under @p
- *  destinationDirectory. Subdirectories of the destination directory are created as necessary.
+ *  Each of the specified files are copied from their location under `root` to a similar location under
+ *  `destinationDirectory.` Subdirectories of the destination directory are created as necessary.
  *
- *  Any file whose name is outside the @p root directory will similarly be created outside the @p destinationDirectory.
+ *  Any file whose name is outside the `root` directory will similarly be created outside the `destinationDirectory.`
  *  For instance, copyFiles(["bar/baz"], "foo", "frob") will copy "bar/baz" to "frob/../bar/baz" since "bar" is apparently
  *  a sibling of "foo", and therefore must be a sibling of "frob".
  *
- *  Throws a `std::filesystem::filesystem_error` on failure. */
+ *  Throws a `std::filesystem::filesystem_error` on failure.
+ *
+ * @param files Files to copy, relative to `root`.
+ * @param root Root directory for source paths.
+ * @param destinationDirectory Destination root directory. */
 ROSE_UTIL_API void copyFiles(const std::vector<Path> &files, const Path &root, const Path &destinationDirectory);
 
 /** Recursively copy files.
  *
- *  Get a list of files by recursively matching files under @p root and then copy them to similar locations relative to @p
- *  destination. The @p root and @p destination must not overlap.  The @p select and @p descend arguments are the same as
- *  for the @ref findAllNames method. */
+ *  Get a list of files by recursively matching files under `root` and then copy them to similar locations relative to
+ *  `destination.` The `root` and `destination` must not overlap.  The `select` and `descend` arguments are the same as
+ *  for the @ref findNamesRecursively method.
+ *
+ * @param root Root directory to search.
+ * @param destination Destination root directory.
+ * @param select Predicate to include paths.
+ * @param descend Predicate controlling recursion. */
 template<class Select, class Descend>
 void copyFilesRecursively(const Path &root, const Path &destination, Select select, Descend descend) {
     std::vector<Path> files = findNamesRecursively(root, select, descend);
@@ -191,10 +224,17 @@ ROSE_UTIL_API std::vector<Path> findRoseFilesRecursively(const Path &root);
 
 /** Convert a path to a string.
  *
- *  Try not to use this.  Paths contain more information than std::string and the conversion may loose that info. */
-ROSE_UTIL_API std::string toString(const Path&);
+ *  Try not to use this.  Paths contain more information than std::string and the conversion may loose that info.
+ *
+ * @param path Path to convert.
+ * @return String representation of the path. */
+ROSE_UTIL_API std::string toString(const Path &path);
 
-/** Load an entire file into an STL container. */
+/** Load an entire file into an STL container.
+ *
+ * @param fileName File path to read.
+ * @param openMode Stream open mode.
+ * @return Container filled with file contents. */
 template<class Container>
 Container readFile(const std::filesystem::path &fileName,
                    std::ios_base::openmode openMode = std::ios_base::in | std::ios_base::binary) {

@@ -35,21 +35,21 @@ enum traversalType
 
 template <class _T1, class _T2, class _T3>
 struct my_pair {
-  typedef _T1 first_type;    ///<  @c first_type is the first bound type
-  typedef _T2 second_type;   ///<  @c second_type is the second bound type
-  typedef _T2 third_type;   ///<  @c second_type is the second bound type
+  typedef _T1 first_type;    ///<  `first_type` is the first bound type
+  typedef _T2 second_type;   ///<  `second_type` is the second bound type
+  typedef _T2 third_type;   ///<  `second_type` is the second bound type
 
-  _T1 addToGraph;                 ///< @c first is a copy of the first object
-  _T2 DOTOptions;                ///< @c second is a copy of the second object
+  _T1 addToGraph;                 ///< `first` is a copy of the first object
+  _T2 DOTOptions;                ///< `second` is a copy of the second object
   _T3 DOTLabel;
   
-  /** The default constructor creates @c first and @c second using their
+  /** The default constructor creates `first` and `second` using their
    *  respective default constructors.  */
   my_pair() : addToGraph(), DOTOptions() , DOTLabel(){}
-  /** Two objects may be passed to a @c my_pair constructor to be copied.  */
+  /** Two objects may be passed to a `my_pair` constructor to be copied.  */
   my_pair(const _T1& a, const _T2& b, const _T3& c) : addToGraph(a), DOTOptions(b), DOTLabel(c) {}
 
-  /** There is also a templated copy ctor for the @c my_pair class itself.  */
+  /** There is also a templated copy ctor for the `my_pair` class itself.  */
   template <class _U1, class _U2, class _U3>
   my_pair(const my_pair<_U1, _U2,_U3>& p) : addToGraph(p.addToGraph), DOTOptions(p.DOTOptions), DOTLabel(p.label) {}
     };
@@ -68,25 +68,25 @@ inline bool operator<(const my_pair<_T1, _T2,_T3>& x, const my_pair<_T1, _T2,_T3
          (!(y.addToGraph < x.addToGraph) && x.DOTOptions < y.DOTOptions); 
 }
 
-/// Uses @c operator== to find the result.
+/// Uses `operator==` to find the result.
 template <class _T1, class _T2, class _T3>
 inline bool operator!=(const my_pair<_T1, _T2, _T3>& x, const my_pair<_T1, _T2,_T3>& y) {
   return !(x == y);
 }
 
-/// Uses @c operator< to find the result.
+/// Uses `operator<` to find the result.
 template <class _T1, class _T2, class _T3>
 inline bool operator>(const my_pair<_T1, _T2, _T3>& x, const my_pair<_T1, _T2,_T3>& y) {
   return y < x;
 }
 
-/// Uses @c operator< to find the result.
+/// Uses `operator<` to find the result.
 template <class _T1, class _T2, class _T3>
 inline bool operator<=(const my_pair<_T1, _T2, _T3>& x, const my_pair<_T1, _T2,_T3>& y) {
   return !(y < x);
 }
 
-/// Uses @c operator< to find the result.
+/// Uses `operator<` to find the result.
 template <class _T1, class _T2, class _T3>
 inline bool operator>=(const my_pair<_T1, _T2, _T3>& x, const my_pair<_T1, _T2,_T3>& y) {
   return !(x < y);

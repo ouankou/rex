@@ -79,7 +79,6 @@ pending docs/Rose/Tutorial
 pending docs/Rose/powerpoints
 pending docs/Rosetta
 pending docs/readmes
-pending docs/testDoxygen
 pending docs/todos
 in-progress docs/upstream-sync
 pending exampleTranslators

@@ -21,8 +21,7 @@
 !Syntax errors detected in input fortran program ...
 !---------
 !
-!The rose doxygen shows the following todo:
-!http://*www.*rosecompiler.org/ROSE_HTML_Reference/todo.html#_todo000092
+!The API reference TODO list mentions:
 !
 !Class SgStatement
 !    Fortran support requires statements in section 15 (modifiers for ISO_C_BINDING).

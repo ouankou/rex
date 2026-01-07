@@ -1,13 +1,11 @@
 #ifndef ROSE_NAME_QUERY_INHERITED_ATTRIBUTE_H
 #define ROSE_NAME_QUERY_INHERITED_ATTRIBUTE_H
 
-/*! \if documentDevelopmentVersionUsingDoxygen
-  \brief Inherited attribute for NameQuery class.
-  \ingroup nameQueryLib
-
-  This class defines the inherited attribute used within the traversal associated 
-  with the NameQuery library.
-  \endif
+/** @brief Inherited attribute for NameQuery class.
+ *
+ * This class defines the inherited attribute used within the traversal associated with the NameQuery library.
+ *
+ * See @ref nameQueryLib.
  */
 class NameQueryInheritedAttributeType
 {

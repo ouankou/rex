@@ -707,7 +707,6 @@ if(ENABLE-TESTS-DIRECTORY)
 endif()
 option(REX_ENABLE_DISABLED_TESTS "Enable tests marked disabled in CTest" OFF)
 option(ENABLE-TUTORIAL-DIRECTORY "Enable compilation and testing of the ROSE/tutorial directory" OFF)
-option(ENABLE_DOXYGEN "Enable Doxygen support" OFF)
 
 option(ENABLE-ADVANCED-WARNINGS "Support for an advanced uniform warning level for ROSE development" OFF)
 if(ENABLE-ADVANCED-WARNINGS)
@@ -734,15 +733,6 @@ endif()
 # To use Bison, set BISON_ROOT to the Bison installation prefix. To avoid Bison, use BISON_ROOT=no
 include(FindBison)
 find_bison()
-
-# To use doxygen, set ENABLE_DOXYGEN=ON and DOXYGEN_ROOT=<doxygen/installation/path>
-if(ENABLE_DOXYGEN)
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND "${DOXYGEN_ROOT}" STREQUAL "")
-    message(STATUS "Set DOXYGEN_ROOT to the directory doxygen is installed if you want to explicitly control which Doxygen to use")
-  endif()
-  include(FindDoxygen)
-  find_doxygen()
-endif()
 
 # Zlib is required by libharu. To find it in a special place, set ZLIB_ROOT to its installation prefix.
 include(FindZlib)

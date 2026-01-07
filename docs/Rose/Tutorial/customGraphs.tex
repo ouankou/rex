@@ -12,7 +12,7 @@ Nodes and edges in a \textit{SgGraph} are represented by \textit{SgGraphNode} an
 A \textit{SgGraph} is built by adding \textit{SgGraphNode}s and \textit{SgGraphEdge}s using its member function
 \textit{addNode} and \textit{addEdge}. You can get all nodes and edges of a \textit{SgGraph} by calling its functions
 \textit{computeNodeSet} and \textit{computeEdgeSet} separately.
-More interfaces of \textit{SgGraph} and its subclasses can be found in doxygen of Rose.
+More interfaces of \textit{SgGraph} and its subclasses can be found in the ROSE API reference.
 
 Since \textit{SgGraph} is for Rose use, each node in it holds a pointer to \textit{SgNode}, which is 
 the default attribute of a \textit{SgGraphNode}. If you want to add more attributes inside, you
@@ -21,6 +21,5 @@ object to add a new attribute to a node. Normally, you have to build your own
 attribute class which should be derived from class
 \textit{AstAttribute}. At least three attribute
 classes are provided by ROSE: \textit{AstRegExAttribute}, \textit{AstTextAttribute}, and \textit{MetricAttribute}. 
-For more information about them, please refer to Rose's doxygen. 
-
+For more information about them, please refer to the ROSE API reference.
 

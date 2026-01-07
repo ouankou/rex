@@ -822,7 +822,7 @@ CallTargetSet::solveMemberFunctionPointerCall(SgExpression *functionExp, ClassHi
                             SgMemberFunctionDeclaration *nonDefDecl = isSgMemberFunctionDeclaration(cls_mb_decl->get_firstNondefiningDeclaration());
                             SgMemberFunctionDeclaration *defDecl = isSgMemberFunctionDeclaration(cls_mb_decl->get_definingDeclaration());
 
-                         // TV (10/26/2018): this case happens in Doxygen, not sure it is valid... FIXME ROSE-1487
+                         // TV (10/26/2018): this case happens in generated docs, not sure it is valid... FIXME ROSE-1487
                          // ROSE_ASSERT((!nonDefDecl && defDecl == cls_mb_decl) || (nonDefDecl == cls_mb_decl && nonDefDecl));
 
                             if (nonDefDecl)

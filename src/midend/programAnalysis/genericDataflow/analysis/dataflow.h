@@ -138,14 +138,14 @@ class IntraUnitDataflow : virtual public IntraProceduralDataflow
     //           and std::shared_pointer management overhead per transfer).
     //           A transfer function using the visitor would look like (if desired this can be
     //           simplified by providing a convenience function taking a visitor as argument):
-    // \code
+    // @code
     //           virtual bool transfer(const Function& func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>& dfInfo, std::vector<Lattice*>** retState, bool fw)
     //           {
     //             MyTransferVisitor visitor(myarguments, func, n, ...);
     //             n.getNode().accept(visitor);
     //             return visitor.finish();
     //           }
-    // \endcode
+    // @endcode
     virtual std::shared_ptr<IntraDFTransferVisitor> getTransferVisitor(const Function& func, const DataflowNode& n,
                                                                   NodeState& state, const std::vector<Lattice*>& dfInfo)
   { return std::shared_ptr<IntraDFTransferVisitor>(new DefaultTransfer(func, n, state, dfInfo, this)); }

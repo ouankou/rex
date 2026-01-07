@@ -1,8 +1,6 @@
 #ifndef ROSE_As_H
 #define ROSE_As_H
 
-#include <RoseFirst.h>
-
 #include <memory>
 
 namespace Rose {
@@ -27,15 +25,21 @@ namespace Rose {
  *  @endcode
  *
  *  @{ */
+/** Cast a shared pointer to a derived type.
+ *
+ * @param p Pointer to cast.
+ * @return Cast pointer or null if the dynamic cast fails. */
 template<class T, class U>
-std::shared_ptr<T>
-as(const std::shared_ptr<U> &p) {
+std::shared_ptr<T> as(const std::shared_ptr<U> &p) {
     return std::dynamic_pointer_cast<T>(p);
 }
 
+/** Cast a raw pointer to a derived type.
+ *
+ * @param p Pointer to cast.
+ * @return Cast pointer or null if the dynamic cast fails. */
 template<class T, class U>
-T*
-as(U *p) {
+T* as(U *p) {
     return dynamic_cast<T*>(p);
 }
 /** @} */

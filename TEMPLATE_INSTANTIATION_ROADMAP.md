@@ -647,7 +647,7 @@ src/frontend/CxxFrontend/Clang/
 - Template post-processing: `src/frontend/SageIII/astPostProcessing/fixupTemplateInstantiations.C`
 
 ### Clang Documentation
-- Template AST: https://clang.llvm.org/doxygen/classclang_1_1TemplateSpecializationType.html
+- Template AST: clang/AST/Type.h (TemplateSpecializationType)
 
 ## Next Steps After Completion
 

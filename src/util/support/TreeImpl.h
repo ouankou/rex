@@ -34,7 +34,12 @@ class TreeNodeImpl
   typedef typename DoublyLinkedListWrap<T*>::iterator iterator;
   typedef typename DoublyLinkedListWrap<T*>::const_iterator const_iterator;
 
-  typedef enum {AsFirstChild,AsLastChild, AsPrevSibling, AsNextSibling} LinkOption;
+  typedef enum {
+      AsFirstChild, ///< Insert as first child.
+      AsLastChild,  ///< Insert as last child.
+      AsPrevSibling, ///< Insert before the reference sibling.
+      AsNextSibling  ///< Insert after the reference sibling.
+  } LinkOption;
 
   T* Parent() const { return parent; }
   T* FirstChild() const { return (ChildCount() > 0)? children.First()->GetEntry() : 0; }
@@ -81,7 +86,11 @@ template <class T>
 class TreeTraverse 
 {
  public:
-  typedef enum {PreOrder, PostOrder, ChildrenOnly} TraversalOpt;
+  typedef enum {
+      PreOrder,     ///< Visit node before its children.
+      PostOrder,    ///< Visit node after its children.
+      ChildrenOnly  ///< Only traverse immediate children.
+  } TraversalOpt;
   static T* FirstNode(T *n, TraversalOpt opt=PreOrder)
     { switch (opt) {
        case PreOrder: return n;
@@ -162,4 +171,3 @@ class TreeTraverse
 };
 
 #endif
-

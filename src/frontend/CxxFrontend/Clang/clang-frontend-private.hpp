@@ -566,7 +566,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         /* Visit methods */
         /*
-           Reference: https://clang.llvm.org/doxygen/classclang_1_1Decl.html
+           Reference: clang/AST/Decl.h
            Overall 84 decl AST nodes according as 04/24/2019
         */
         virtual bool VisitDecl(clang::Decl * decl, SgNode ** node);
@@ -709,7 +709,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             virtual bool VisitTranslationUnitDecl(clang::TranslationUnitDecl * translation_unit_decl, SgNode ** node);
 
   /* 
-     Reference: https://clang.llvm.org/doxygen/classclang_1_1Stmt.html 
+     Reference: clang/AST/Stmt.h
      Overall 198 stmt AST nodes according as 02/19/2019
   */
         virtual bool VisitStmt(clang::Stmt * stmt, SgNode ** node);
@@ -917,7 +917,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
 
   /* 
-     Reference: https://clang.llvm.org/doxygen/classclang_1_1Type.html 
+     Reference: clang/AST/Type.h
      Overall 58 type AST nodes according as 02/19/2019
   */
 
