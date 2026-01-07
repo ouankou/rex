@@ -47,7 +47,7 @@ jobs:
         run: doxygen docs/Doxyfile
 
       - name: Build Sphinx HTML
-        run: python -m sphinx -j auto -d docs/_build/doctrees -b html docs/sphinx docs/_build/html
+        run: python -m sphinx -d docs/_build/doctrees -b html docs/sphinx docs/_build/html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
