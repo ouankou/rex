@@ -1257,12 +1257,12 @@ bool file_info_in_range(const Sg_File_Info *pos, const Sg_File_Info *start,
   if (pos == nullptr || start == nullptr || end == nullptr) {
     return false;
   }
-  const std::string start_file = start->get_filename();
-  const std::string end_file = end->get_filename();
+  const std::string &start_file = start->get_filenameString();
+  const std::string &end_file = end->get_filenameString();
   if (start_file.empty() || end_file.empty() || start_file != end_file) {
     return false;
   }
-  if (pos->get_filename() != start_file) {
+  if (pos->get_filenameString() != start_file) {
     return false;
   }
   const Sg_File_Info *range_start = start;
@@ -1289,7 +1289,7 @@ size_t find_insertion_index_for_range(const ListType &list,
   if (range_start == nullptr) {
     return list.size();
   }
-  const std::string range_file = range_start->get_filename();
+  const std::string &range_file = range_start->get_filenameString();
   if (range_file.empty()) {
     return list.size();
   }
@@ -1304,7 +1304,7 @@ size_t find_insertion_index_for_range(const ListType &list,
     if (fi == nullptr) {
       continue;
     }
-    if (fi->get_filename() != range_file) {
+    if (fi->get_filenameString() != range_file) {
       continue;
     }
     saw_same_file = true;
