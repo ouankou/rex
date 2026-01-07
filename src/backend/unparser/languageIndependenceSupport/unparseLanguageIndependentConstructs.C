@@ -5999,6 +5999,18 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
             return false;
           }
 
+          if (want_start) {
+            if (isSgClinkageStartStatement(statement) != NULL &&
+                marker_output_eligible(statement)) {
+              return true;
+            }
+          } else {
+            if (isSgClinkageEndStatement(statement) != NULL &&
+                marker_output_eligible(statement)) {
+              return true;
+            }
+          }
+
           SgScopeStatement *scope = isSgScopeStatement(statement->get_parent());
           if (scope == NULL) {
             return false;
