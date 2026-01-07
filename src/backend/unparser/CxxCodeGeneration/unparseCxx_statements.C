@@ -2074,13 +2074,34 @@ Unparse_ExprStmt::unparseNamespaceDefinitionStatement ( SgStatement* stmt, SgUnp
   // unparse all the declarations
      SgDeclarationStatementPtrList & statementList = namespaceDefinition->get_declarations();
      SgDeclarationStatementPtrList::iterator statementIterator = statementList.begin();
+     size_t extern_brace_depth = 0;
+     bool extern_brace_active = ninfo.get_extern_C_with_braces();
      while ( statementIterator != statementList.end() )
         {
           SgStatement* currentStatement = *statementIterator;
           ASSERT_not_null(currentStatement);
 
        // DQ (11/6/2004): use ninfo instead of info for nested declarations in namespace
+          ninfo.set_extern_C_with_braces(extern_brace_active ||
+                                         extern_brace_depth > 0);
+          bool track_extern_marker = false;
+          if (isSgClinkageStartStatement(currentStatement) != NULL ||
+              isSgClinkageEndStatement(currentStatement) != NULL) {
+            track_extern_marker =
+                statementFromFile(currentStatement, getFileName(), ninfo);
+          }
           unparseStatement(currentStatement, ninfo);
+          if (track_extern_marker) {
+            if (isSgClinkageStartStatement(currentStatement) != NULL) {
+              ++extern_brace_depth;
+            } else if (isSgClinkageEndStatement(currentStatement) != NULL) {
+              if (extern_brace_depth > 0) {
+                --extern_brace_depth;
+              }
+            }
+          } else {
+            extern_brace_active = ninfo.get_extern_C_with_braces();
+          }
 
        // DQ (12/18/2014): Save the last statement so that we can use the trailing token stream if using the token-based unparsing.
           last_stmt = currentStatement;
