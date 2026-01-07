@@ -115,7 +115,12 @@ class UnparseLanguageIndependentConstructs
           bool statementFromFile ( SgStatement* stmt, std::string sourceFilename, SgUnparse_Info& info );
        // bool statementFromFile ( SgStatement* stmt, std::string sourceFilename );
 
-      //! Generate a CPP directive  
+          //! Unparse a statement while tracking extern "C" brace state.
+          void unparseStatementWithExternBraceTracking(
+              SgStatement *stmt, SgUnparse_Info &info,
+              size_t &extern_brace_depth, bool &extern_brace_active);
+
+          //! Generate a CPP directive
           void outputDirective ( PreprocessingInfo* directive );
   
       //! counts the number of statements in a basic block
@@ -224,6 +229,8 @@ class UnparseLanguageIndependentConstructs
           virtual void unparseIdentDirectiveStatement       (SgStatement* stmt, SgUnparse_Info& info);
           virtual void unparseIncludeNextDirectiveStatement (SgStatement* stmt, SgUnparse_Info& info);
           virtual void unparseLinemarkerDirectiveStatement  (SgStatement* stmt, SgUnparse_Info& info);
+          virtual void unparseClinkageStartStatement        (SgStatement* stmt, SgUnparse_Info& info);
+          virtual void unparseClinkageEndStatement          (SgStatement* stmt, SgUnparse_Info& info);
 
          // Liao 10/20/2010 common unparsing support for OpenMP AST 
           virtual void unparseOmpPrefix                     (SgUnparse_Info& info); // = 0;

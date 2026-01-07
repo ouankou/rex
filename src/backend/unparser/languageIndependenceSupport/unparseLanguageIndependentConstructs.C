@@ -3621,6 +3621,8 @@ UnparseLanguageIndependentConstructs::unparseStatement(SgStatement* stmt, SgUnpa
                     case V_SgIdentDirectiveStatement:       unparseIdentDirectiveStatement       (stmt, info); break;
                     case V_SgIncludeNextDirectiveStatement: unparseIncludeNextDirectiveStatement (stmt, info); break;
                     case V_SgLinemarkerDirectiveStatement:  unparseLinemarkerDirectiveStatement  (stmt, info); break;
+                    case V_SgClinkageStartStatement:        unparseClinkageStartStatement        (stmt, info); break;
+                    case V_SgClinkageEndStatement:          unparseClinkageEndStatement          (stmt, info); break;
 
                  // Liao 10/21/2010. Handle generic OpenMP directive unparsing here.
                     case V_SgOmpSectionStatement:
@@ -5285,6 +5287,41 @@ UnparseLanguageIndependentConstructs::isTransformed(SgStatement* stmt)
 #endif
    }
 
+   void UnparseLanguageIndependentConstructs::
+       unparseStatementWithExternBraceTracking(
+           SgStatement * stmt, SgUnparse_Info & info,
+           size_t &extern_brace_depth, bool &extern_brace_active) {
+     ASSERT_not_null(stmt);
+
+     info.set_extern_C_with_braces(extern_brace_active ||
+                                   extern_brace_depth > 0);
+
+     SgClinkageStartStatement *clinkage_start =
+         isSgClinkageStartStatement(stmt);
+     SgClinkageEndStatement *clinkage_end = isSgClinkageEndStatement(stmt);
+     bool track_extern_marker = false;
+     if (clinkage_start != NULL || clinkage_end != NULL) {
+       track_extern_marker = statementFromFile(stmt, getFileName(), info);
+     }
+
+     unparseStatement(stmt, info);
+
+     if (track_extern_marker) {
+       const bool start_is_c = clinkage_start != NULL &&
+                               clinkage_start->get_languageSpecifier() == "C";
+       const bool end_is_c =
+           clinkage_end != NULL && clinkage_end->get_languageSpecifier() == "C";
+       if (start_is_c) {
+         ++extern_brace_depth;
+       } else if (end_is_c) {
+         if (extern_brace_depth > 0) {
+           --extern_brace_depth;
+         }
+       }
+     } else if (extern_brace_depth == 0) {
+       extern_brace_active = info.get_extern_C_with_braces();
+     }
+   }
 
 void
 UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUnparse_Info& info)
@@ -5559,6 +5596,8 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
        // Setup an iterator to go through all the statements in the top scope of the file.
           SgDeclarationStatementPtrList & globalStatementList = globalScope->get_declarations();
           SgDeclarationStatementPtrList::iterator statementIterator = globalStatementList.begin();
+          size_t extern_brace_depth = 0;
+          bool extern_brace_active = info.get_extern_C_with_braces();
           while ( statementIterator != globalStatementList.end() )
              {
                SgStatement* currentStatement = *statementIterator;
@@ -5612,10 +5651,12 @@ UnparseLanguageIndependentConstructs::unparseGlobalStmt (SgStatement* stmt, SgUn
             // Namespace definition scope should not effect scope set in SgGlobal.
             // unparseStatement(currentStatement, info);
                SgUnparse_Info infoLocal(info);
-               unparseStatement(currentStatement, infoLocal);
+               unparseStatementWithExternBraceTracking(
+                   currentStatement, infoLocal, extern_brace_depth,
+                   extern_brace_active);
 
-            // DQ (12/10/2014): Save the last statement.
-            // last_statement = currentStatement;
+               // DQ (12/10/2014): Save the last statement.
+               // last_statement = currentStatement;
                if (sourceFile->get_unparse_tokens() == true)
                   {
                  // DQ (12/22/2014): The stl semantics are allowing NULL pointers to get into the tokenStreamSequenceMap container.
@@ -5918,6 +5959,77 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
           return;
         }
 
+        auto marker_output_eligible = [&](SgStatement *marker) -> bool {
+          if (marker == NULL) {
+            return false;
+          }
+          return statementFromFile(marker, getFileName(), info);
+        };
+
+        auto has_adjacent_marker_in_list = [&](const auto &list,
+                                               SgStatement *target,
+                                               bool want_start) -> bool {
+          for (size_t idx = 0; idx < list.size(); ++idx) {
+            if (list[idx] != target) {
+              continue;
+            }
+            if (want_start) {
+              if (idx == 0) {
+                return false;
+              }
+              SgStatement *marker = isSgStatement(list[idx - 1]);
+              return isSgClinkageStartStatement(marker) != NULL &&
+                     marker_output_eligible(marker);
+            }
+            SgStatement *prev_marker =
+                idx > 0 ? isSgStatement(list[idx - 1]) : NULL;
+            SgStatement *next_marker =
+                idx + 1 < list.size() ? isSgStatement(list[idx + 1]) : NULL;
+            return (isSgClinkageEndStatement(prev_marker) != NULL &&
+                    marker_output_eligible(prev_marker)) ||
+                   (isSgClinkageEndStatement(next_marker) != NULL &&
+                    marker_output_eligible(next_marker));
+          }
+          return false;
+        };
+
+        auto has_adjacent_clinkage_marker = [&](bool want_start) -> bool {
+          SgStatement *statement = isSgStatement(stmt);
+          if (statement == NULL) {
+            return false;
+          }
+
+          if (want_start) {
+            if (isSgClinkageStartStatement(statement) != NULL &&
+                marker_output_eligible(statement)) {
+              return true;
+            }
+          } else {
+            if (isSgClinkageEndStatement(statement) != NULL &&
+                marker_output_eligible(statement)) {
+              return true;
+            }
+          }
+
+          SgScopeStatement *scope = isSgScopeStatement(statement->get_parent());
+          if (scope == NULL) {
+            return false;
+          }
+
+          if (scope->containsOnlyDeclarations()) {
+            SgDeclarationStatement *decl_stmt =
+                isSgDeclarationStatement(statement);
+            if (decl_stmt == NULL) {
+              return false;
+            }
+            return has_adjacent_marker_in_list(scope->getDeclarationList(),
+                                               decl_stmt, want_start);
+          }
+
+          return has_adjacent_marker_in_list(scope->getStatementList(),
+                                             statement, want_start);
+        };
+
 #if 0
      info.display("In Unparse_ExprStmt::unparseAttachedPreprocessingInfo()");
 #endif
@@ -6168,6 +6280,13 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
                          case PreprocessingInfo::ClinkageSpecificationEnd:
                               if ( !info.SkipComments() )
                                  {
+                                   const bool is_start =
+                                       (*i)->getTypeOfDirective() ==
+                                       PreprocessingInfo::ClinkageSpecificationStart;
+                                   if (has_adjacent_clinkage_marker(is_start))
+                                      {
+                                        break;
+                                      }
 #if 0
                                    curprint ( string("/* case PreprocessingInfo::ClinkageSpecification (Start/End)") + (*i)->getString() + " */ \n");
 #endif
@@ -6179,7 +6298,7 @@ UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
                                    curprint ( string("/* DONE: case PreprocessingInfo::ClinkageSpecification (Start/End)") + (*i)->getString() + " */ \n");
 #endif
 
-                                   if ( (*i)->getTypeOfDirective() == PreprocessingInfo::ClinkageSpecificationStart)
+                                   if (is_start == true)
                                       {
 #if 0
                                         printf ("calling info.set_extern_C_with_braces(true) \n");
@@ -8997,6 +9116,33 @@ UnparseLanguageIndependentConstructs::unparseLinemarkerDirectiveStatement (SgSta
      curprint(directive->get_directiveString());
      unp->u_sage->curprint_newline();
    }
+
+void
+UnparseLanguageIndependentConstructs::unparseClinkageStartStatement(SgStatement *stmt,
+                                                                    SgUnparse_Info &info) {
+  SgClinkageStartStatement *linkage_stmt = isSgClinkageStartStatement(stmt);
+  ASSERT_not_null(linkage_stmt);
+
+  const std::string &language = linkage_stmt->get_languageSpecifier();
+  ROSE_ASSERT(!language.empty());
+
+  curprint("extern \"" + language + "\" {");
+  if (language == "C") {
+    info.set_extern_C_with_braces(true);
+  }
+}
+
+void
+UnparseLanguageIndependentConstructs::unparseClinkageEndStatement(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  SgClinkageEndStatement *linkage_stmt = isSgClinkageEndStatement(stmt);
+  ASSERT_not_null(linkage_stmt);
+
+  curprint("}");
+  if (linkage_stmt->get_languageSpecifier() == "C") {
+    info.set_extern_C_with_braces(false);
+  }
+}
 
 void UnparseLanguageIndependentConstructs::unparseOmpDefaultClause(SgOmpClause* clause, SgUnparse_Info& info)
 {

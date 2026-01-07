@@ -3879,6 +3879,13 @@ HEADER_LINEMARKER_PREPROCESSOR_DIRECTIVE_STATEMENT_START
 
 HEADER_LINEMARKER_PREPROCESSOR_DIRECTIVE_STATEMENT_END
 
+HEADER_CLINKAGE_DECLARATION_STATEMENT_START
+
+       // DQ (2/18/2006): Added general name mangling for all declarations (and some other IR nodes).
+          virtual SgName get_mangled_name(void) const override;
+
+HEADER_CLINKAGE_DECLARATION_STATEMENT_END
+
 
 HEADER_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT_START
 
@@ -18717,6 +18724,35 @@ SOURCE_PREPROCESSOR_DIRECTIVE_STATEMENT_END
 
 SOURCE_LINEMARKER_PREPROCESSOR_DIRECTIVE_STATEMENT_START
 SOURCE_LINEMARKER_PREPROCESSOR_DIRECTIVE_STATEMENT_END
+
+SOURCE_CLINKAGE_DECLARATION_STATEMENT_START
+
+SgName
+SgClinkageDeclarationStatement::get_mangled_name(void) const
+   {
+     SgScopeStatement* scope = get_scope();
+     ROSE_ASSERT(scope != NULL);
+
+     std::string language = get_languageSpecifier();
+     if (language == "C++")
+        {
+          language = "CXX";
+        }
+       else
+        {
+          if (language.empty())
+             {
+               language = "unknown";
+             }
+        }
+
+     SgName returnName = scope->get_mangled_name() + SgName("_clinkage_") +
+                         SgName(class_name()) + SgName("_") +
+                         SgName(language);
+     return returnName;
+   }
+
+SOURCE_CLINKAGE_DECLARATION_STATEMENT_END
 
 SOURCE_OMP_EXEC_STATEMENT_START
 void
