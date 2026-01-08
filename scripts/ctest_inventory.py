@@ -37,6 +37,22 @@ def _strip_cmake_comments(text: str) -> str:
         lines.append("".join(cleaned))
     return "\n".join(lines)
 
+def _parse_bracket_quote(text: str, start: int) -> Optional[tuple[str, int]]:
+    if start >= len(text) or text[start] != "[":
+        return None
+    i = start + 1
+    while i < len(text) and text[i] == "=":
+        i += 1
+    if i >= len(text) or text[i] != "[":
+        return None
+    eq_count = i - start - 1
+    closing = "]" + ("=" * eq_count) + "]"
+    end = text.find(closing, i + 1)
+    if end == -1:
+        return None
+    content = text[i + 1 : end]
+    return content, end + len(closing)
+
 
 def _tokenize_cmake_args(value: str) -> list[str]:
     tokens: list[str] = []
@@ -51,6 +67,15 @@ def _tokenize_cmake_args(value: str) -> list[str]:
             else:
                 current.append(ch)
             i += 1
+            continue
+        parsed = _parse_bracket_quote(value, i)
+        if parsed:
+            content, next_i = parsed
+            if current:
+                tokens.append("".join(current))
+                current = []
+            tokens.append(content)
+            i = next_i
             continue
         if ch.isspace():
             if current:
@@ -86,7 +111,12 @@ def _parse_cmake_commands(text: str) -> list[tuple[str, list[str]]]:
             ch = text[i]
             if ch == '"' and (i == 0 or text[i - 1] != "\\"):
                 in_quote = not in_quote
-            elif not in_quote:
+            if not in_quote:
+                parsed = _parse_bracket_quote(text, i)
+                if parsed:
+                    _, next_i = parsed
+                    i = next_i
+                    continue
                 if ch == "(":
                     depth += 1
                 elif ch == ")":
