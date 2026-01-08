@@ -1,0 +1,92 @@
+
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest" COMMAND ctest)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest64" COMMAND ctest64)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest64" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ncdump" COMMAND ncdump)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ncdump" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_rewrite-scalar" COMMAND rewrite-scalar)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_rewrite-scalar" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_run_back_comp_tests.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_back_comp_tests.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_run_back_comp_tests.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_run_tests.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_run_tests.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_run_utf8_tests.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_utf8_tests.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_run_utf8_tests.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_64bit.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_64bit.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_64bit.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_calendars.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_calendars.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_calendars.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_comp" COMMAND tst_comp)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_comp" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_comp2" COMMAND tst_comp2)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_comp2" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_enum_data" COMMAND tst_enum_data)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_enum_data" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_group_data" COMMAND tst_group_data)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_group_data" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_h_rdc0" COMMAND tst_h_rdc0)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_h_rdc0" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_lengths.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_lengths.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_lengths.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_fillbug.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_fillbug.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_fillbug.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_nans" COMMAND tst_nans)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_nans" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_nccopy3.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_nccopy3.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_nccopy3.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_nccopy4.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_nccopy4.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_nccopy4.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_ncgen4.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_ncgen4.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_ncgen4.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_ncgen4_classic.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_ncgen4_classic.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_ncgen4_classic.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_netcdf4.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_netcdf4.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_netcdf4.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_netcdf4_4.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_netcdf4_4.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_netcdf4_4.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_opaque_data" COMMAND tst_opaque_data)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_opaque_data" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_output.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tst_output.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_output.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_special_atts" COMMAND tst_special_atts)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_special_atts" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_string_data" COMMAND tst_string_data)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_string_data" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_unicode" COMMAND tst_unicode)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_unicode" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_vlen_data" COMMAND tst_vlen_data)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_tst_vlen_data" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")

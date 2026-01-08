@@ -80,3 +80,17 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "${CMAKE_C_COMPILER} -isystem ${CMAKE_CURRENT_SOURCE_DIR}/doNotChooseMe -I${CMAKE_CURRENT_SOURCE_DIR}/doChooseMe -c ${CMAKE_CURRENT_SOURCE_DIR}/testIncludeOptionOrder.c > testIncludeOptionOrder.out && ${ROSE_TEST_TRANSLATOR} -isystem ${CMAKE_CURRENT_SOURCE_DIR}/doNotChooseMe -I${CMAKE_CURRENT_SOURCE_DIR}/doChooseMe -c ${CMAKE_CURRENT_SOURCE_DIR}/testIncludeOptionOrder.c > testIncludeOptionOrder.out"
 )
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompilerOptionsTests_testCpreprocessorOption_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=compiler_options_cpreprocessor_data_hash\;compiler_options_cpreprocessor_include_order\;compiler_options_cpreprocessor_sys_include_translator
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testCpreprocessorOption_check-local PROPERTIES
+  DEPENDS "compiler_options_cpreprocessor_data_hash;compiler_options_cpreprocessor_include_order;compiler_options_cpreprocessor_sys_include_translator"
+)

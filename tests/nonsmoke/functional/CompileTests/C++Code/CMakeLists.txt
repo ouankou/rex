@@ -145,7 +145,8 @@ set(files_to_test
   test2004_64.C test2004_70.C test2004_71.C test2004_72.C test2004_73.C
   test2004_74.C test2004_75.C test2004_76.C test2004_77.C test2004_78.C
   test2004_79.C test2004_80.C test2004_81.C test2004_82.C test2004_84.C
-  test2004_85.C test2004_86.C test2004_87.C test2004_88.C test2004_90.C
+  test2004_85.C test2004_86.C test2004_87.C test2004_88.C test2004_89.C
+  test2004_90.C
   test2004_91.C test2004_93.C test2004_94.C test2004_95.C
   test2004_96.C test2004_97.C test2004_98.C test2004_99.C test2004_100.C
   test2004_101.C test2004_102.C test2004_103.C test2004_104.C test2004_105.C
@@ -157,7 +158,7 @@ set(files_to_test
   test2004_132.C test2004_133.C test2004_134.C test2004_135.C test2004_136.C
   test2004_137.C test2004_138.C test2004_139.C test2004_140.C test2004_141.C
   test2004_142.C test2004_143.C test2004_144.C test2004_145.C test2004_146.C
-  test2004_147.C test2004_149.C test2004_150.C test2004_151.C
+  test2004_147.C test2004_148.C test2004_149.C test2004_150.C test2004_151.C
   test2004_152.C test2004_155.C test2004_156.C test2004_157.C test2004_158.C
   test2004_159.C test2004_160.C test2004_161.C test2004_162.C test2004_163.C
   test2004_164.C test2005_02.C test2005_03.C test2005_04.C test2005_05.C
@@ -178,7 +179,8 @@ set(files_to_test
   test2005_79.C test2005_80.C test2005_82.C test2005_83.C test2005_84.C
   test2005_86.C test2005_87.C test2005_88.C test2005_89.C test2005_90.C
   test2005_91.C test2005_92.C test2005_94.C test2005_95.C test2005_96.C
-  test2005_97.C test2005_99.C test2005_100.C test2005_101.C test2005_103.C
+  test2005_97.C test2005_99.C test2005_100.C test2005_101.C test2005_102.C
+  test2005_103.C
   test2005_104.C test2005_105.C test2005_106.C test2005_107.C
   test2005_108.C test2005_109.C test2005_110.C test2005_111.C test2005_112.C
   test2005_113.C test2005_114.C test2005_116.C test2005_117.C test2005_118.C
@@ -243,3 +245,61 @@ foreach(file_to_test ${_cxxcode_disabled_tests})
   string(REPLACE "." "_" _test_key "${_test_key}")
   set_tests_properties(CXXCODE_${_test_key} PROPERTIES DISABLED TRUE LABELS CXXCODE)
 endforeach()
+
+# Makefile check targets.
+set(_cxxcode_group_tests
+  test2004_19
+  test2004_21
+  test2005_56
+  test2005_168
+  test2005_172
+  gconv_info_Cpp
+  gconv_info_C
+  gconv_info_C99
+  stdio_Cpp
+  stdio_C
+  stdio_C99
+  test_CplusplusMacro_C
+  test_CplusplusMacro_Cpp
+  test2004_30
+  test2004_41
+  test2005_64
+)
+set(_cxxcode_special_inputs
+  test2004_19.C
+  test2004_21.c
+  test2005_56.C
+  test2005_64.C
+  test2005_168.c
+  test2005_172.c
+  test2004_30.C
+  test2004_41.C
+  test_CplusplusMacro_C.C
+  test_CplusplusMacro_Cpp.C
+  gconv_info.c
+  stdio.c
+)
+foreach(file_to_test ${files_to_test})
+  if(file_to_test IN_LIST _cxxcode_special_inputs)
+    continue()
+  endif()
+  string(REPLACE "/" "_" _test_key "${file_to_test}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  list(APPEND _cxxcode_group_tests "CXXCODE_${_test_key}")
+endforeach()
+list(JOIN _cxxcode_group_tests "$<SEMICOLON>" _cxxcode_group_tests_joined)
+add_test(
+  NAME nonsmoke_functional_CompileTests_C++Code_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_cxxcode_group_tests_joined}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_C++Code_check-local PROPERTIES
+  DEPENDS "${_cxxcode_group_tests}"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_CompileTests_C++Code_check-local PROPERTIES DISABLED TRUE)
+endif()

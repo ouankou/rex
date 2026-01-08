@@ -58,3 +58,17 @@ set_tests_properties(RunTests_LANL_POP_OLD PROPERTIES LABELS RunTests RESOURCE_L
 if(NOT _lanl_pop_old_enabled)
   set_tests_properties(RunTests_LANL_POP_OLD PROPERTIES DISABLED TRUE)
 endif()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_RunTests_FortranTests_LANL_POP_OLD_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=RunTests_LANL_POP_OLD
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_OLD_check-local PROPERTIES
+  DEPENDS "RunTests_LANL_POP_OLD"
+)

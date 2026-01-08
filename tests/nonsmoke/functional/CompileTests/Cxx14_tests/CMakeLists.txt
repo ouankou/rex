@@ -52,3 +52,17 @@ set(ROSE_DISABLED_TESTCODES ${CXX14_DISABLED_TESTCODES})
 foreach(file_to_test ${CXX14_TESTCODES})
   compile_test(${file_to_test} "Cxx14_tests")
 endforeach()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompileTests_Cxx14_tests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=Cxx14_tests_test2016_01_C\;Cxx14_tests_test2016_06_C\;Cxx14_tests_test2016_07_C\;Cxx14_tests_test2016_08_C\;Cxx14_tests_test2016_09_C\;Cxx14_tests_test2016_12_C\;Cxx14_tests_test2016_13_C\;Cxx14_tests_test2016_14_C\;Cxx14_tests_test2016_16_C\;Cxx14_tests_test2016_17_C\;Cxx14_tests_test2016_18_C\;Cxx14_tests_test2016_20_C\;Cxx14_tests_test2016_21_C\;Cxx14_tests_test2016_22_C\;Cxx14_tests_test2016_23_C\;Cxx14_tests_test2016_26_C\;Cxx14_tests_test2017_01_C\;Cxx14_tests_test2018_01_C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_Cxx14_tests_check-local PROPERTIES
+  DEPENDS "Cxx14_tests_test2016_01_C;Cxx14_tests_test2016_06_C;Cxx14_tests_test2016_07_C;Cxx14_tests_test2016_08_C;Cxx14_tests_test2016_09_C;Cxx14_tests_test2016_12_C;Cxx14_tests_test2016_13_C;Cxx14_tests_test2016_14_C;Cxx14_tests_test2016_16_C;Cxx14_tests_test2016_17_C;Cxx14_tests_test2016_18_C;Cxx14_tests_test2016_20_C;Cxx14_tests_test2016_21_C;Cxx14_tests_test2016_22_C;Cxx14_tests_test2016_23_C;Cxx14_tests_test2016_26_C;Cxx14_tests_test2017_01_C;Cxx14_tests_test2018_01_C"
+)

@@ -327,3 +327,53 @@ if(BASH_EXECUTABLE)
 endif()
 
 install(TARGETS testTranslator DESTINATION bin)
+
+# Makefile check targets.
+set(_functional_check_tests
+  functional_testObjectFileTokenGeneration
+  functional_testObjectFileAnalysis
+  functional_testLinkFileAnalysis
+  functional_testCppFileAnalysis
+  functional_testExecutableFileAnalysis
+  functional_testObjectFileCodeGeneration
+  functional_testLinkFileCodeGeneration
+  functional_testCppFileCodeGeneration
+  functional_testExecutableFileCodeGeneration
+  functional_testObjectFileTranslator
+  functional_testLinkFileTranslator
+  functional_testCppFileTranslator
+  functional_testExecutableFileTranslator
+  functional_testTemplates
+  functional_testGraphGeneration
+  functional_testPDFGeneration
+  functional_testSimpleLinkFileTranslator
+  functional_testTranslatorFoldedConstants
+  functional_testTranslatorUnfoldedConstants
+  functional_testKeepGoingTranslator
+  functional_testExampleIdentityTranslator
+  functional_testReadFileTwice
+)
+add_test(
+  NAME nonsmoke_functional_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_functional_check_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_check-local PROPERTIES
+  DEPENDS "${_functional_check_tests}"
+)
+add_test(
+  NAME nonsmoke_functional_conditional-check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_functional_check_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_conditional-check-local PROPERTIES
+  DEPENDS "${_functional_check_tests}"
+)

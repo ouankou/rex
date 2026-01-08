@@ -26,6 +26,10 @@ foreach(file_to_test ${TESTCODES})
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(HIDDENTYPETEST_${file_to_test} PROPERTIES LABELS HIDDENTYPETEST)
 endforeach()
+set(_hidden_type_tests)
+foreach(file_to_test ${TESTCODES})
+  list(APPEND _hidden_type_tests "HIDDENTYPETEST_${file_to_test}")
+endforeach()
 
 set(_disabled_hidden_type_tests
   test15.C
@@ -50,3 +54,17 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/test2005_56.C
     -o ${CMAKE_CURRENT_BINARY_DIR}/test2005_56.o)
   set_tests_properties(HIDDENTYPETEST_test2005_56.C PROPERTIES LABELS HIDDENTYPETEST)
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompileTests_hiddenTypeAndDeclarationListTests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_hidden_type_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_hiddenTypeAndDeclarationListTests_check-local PROPERTIES
+  DEPENDS "${_hidden_type_tests}"
+)

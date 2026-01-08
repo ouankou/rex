@@ -462,4 +462,9 @@ set(F90_TESTCODES
   test2011_37.f90
   test2011_66.f90
   module_B_file.f90
+  test2007_263.f90
+  test2011_Rice_funcdecl-4.f90
+  test2011_Rice_function-no-result-1.f90
+  test2011_Rice_function-no-result-2.f90
+  test2011_Rice_function-result-1.f90
 )

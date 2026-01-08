@@ -39,3 +39,58 @@ foreach(spec ${_parser_specimens})
       parser_${spec}.passed)
   set_tests_properties(nonsmoke_examples_parser_${spec} PROPERTIES LABELS "nonsmoke;examples")
 endforeach()
+
+# Makefile check targets.
+set(_examples_parser_tests)
+foreach(spec ${_parser_specimens})
+  list(APPEND _examples_parser_tests "nonsmoke_examples_parser_${spec}")
+endforeach()
+set(_examples_noinputs_test nonsmoke_examples_noInputs)
+add_test(
+  NAME nonsmoke_ExamplesForTestWriters_check-parser
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_examples_parser_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_ExamplesForTestWriters_check-parser PROPERTIES
+  LABELS "disabled"
+  DEPENDS "${_examples_parser_tests}"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_ExamplesForTestWriters_check-parser PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_ExamplesForTestWriters_check-parser2
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_examples_noinputs_test}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_ExamplesForTestWriters_check-parser2 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "${_examples_noinputs_test}"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_ExamplesForTestWriters_check-parser2 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_ExamplesForTestWriters_check-runAlgorithm
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_examples_noinputs_test}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES
+  LABELS "disabled"
+  DEPENDS "${_examples_noinputs_test}"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES DISABLED TRUE)
+endif()

@@ -298,3 +298,61 @@ set_tests_properties(vmix_rich.F90 PROPERTIES DEPENDS
 
 set_tests_properties(xdisplay.F90 PROPERTIES DEPENDS
   "kinds_mod.F90;blocks.F90;domain_size.F90;domain.F90;constants.F90;communicate.F90;io_types.F90;broadcast.F90;prognostic.F90;grid.F90;exit_mod.F90")
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=POP.F90\;kinds_mod.F90\;typeSizes.F90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis PROPERTIES
+  LABELS "disabled"
+  DEPENDS "POP.F90;kinds_mod.F90;typeSizes.F90"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=POP.F90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-local PROPERTIES
+  DEPENDS "POP.F90"
+)
+add_test(
+  NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-parsing
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=POP.F90\;kinds_mod.F90\;typeSizes.F90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-parsing PROPERTIES
+  LABELS "disabled"
+  DEPENDS "POP.F90;kinds_mod.F90;typeSizes.F90"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-parsing PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_conditional-check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=POP.F90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_conditional-check-local PROPERTIES
+  DEPENDS "POP.F90"
+)

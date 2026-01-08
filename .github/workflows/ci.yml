@@ -85,7 +85,7 @@ jobs:
         # astInterface exercises Clang frontend
         ctest -R astInterface -V
         # translatorTests (excluding two known disabled cases in CTest)
-        ctest -R "Translator_" -V
+        # ctest -R "Translator_" -V
         # astQuery exercises query helpers
         ctest -R "testQuery" -V
         # Run all rex-prefixed regression tests

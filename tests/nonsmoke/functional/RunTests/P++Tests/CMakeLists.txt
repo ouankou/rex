@@ -19,3 +19,17 @@ foreach(test_file IN LISTS _pplus_tests)
   )
   set_tests_properties(RunTests_Pxx_${_name} PROPERTIES DISABLED TRUE LABELS RunTests)
 endforeach()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_RunTests_P++Tests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=RunTests_Pxx_test1_C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_RunTests_P++Tests_check-local PROPERTIES
+  DEPENDS "RunTests_Pxx_test1_C"
+)

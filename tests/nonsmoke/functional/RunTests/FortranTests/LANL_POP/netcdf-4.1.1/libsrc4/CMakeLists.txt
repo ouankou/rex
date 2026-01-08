@@ -4,6 +4,7 @@ set(_netcdf_libsrc4_tests
   tst_h_atts
   tst_h_atts3
   tst_h_vars
+  tst_h_par
   tst_h_vars2
   tst_h_vars3
   tst_h_grps
@@ -26,6 +27,7 @@ set(_netcdf_libsrc4_tests
   tst_dims3
   tst_files
   tst_files4
+  tst_large
   tst_vars
   tst_varms
   tst_unlim_vars

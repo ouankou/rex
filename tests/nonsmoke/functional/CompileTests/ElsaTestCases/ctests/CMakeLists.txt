@@ -20,3 +20,17 @@ set(ROSE_FLAGS -rose:C  -w)
 foreach(file_to_test ${TESTCODES})
   compile_test(${file_to_test} ELSATEST)
 endforeach()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompileTests_ElsaTestCases_ctests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=ELSATEST_dC0010_c\;ELSATEST_dC0011_c\;ELSATEST_dC0013_c\;ELSATEST_dC0017_c\;ELSATEST_dC0018_c
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_ctests_check-local PROPERTIES
+  DEPENDS "ELSATEST_dC0010_c;ELSATEST_dC0011_c;ELSATEST_dC0013_c;ELSATEST_dC0017_c;ELSATEST_dC0018_c"
+)

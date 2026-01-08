@@ -990,6 +990,46 @@ set(TESTCODE_CURRENTLY_FAILING
   test2020_25.c
   test2020_26.c
   test2020_27.c
+  constants.c
+  test2012_100.c
+  test2012_116.c
+  test2012_133.c
+  test2012_141.c
+  test2012_58.c
+  test2012_82.c
+  test2013_07.c
+  test2013_08.c
+  test2013_17.c
+  test2013_46.c
+  test2013_47.c
+  test2013_76.c
+  test2014_29.c
+  test2014_41.c
+  test2014_66.c
+  test2014_91.c
+  test2015_09.c
+  test2015_137.c
+  test2015_138.c
+  test2015_156.c
+  test2015_157.c
+  test2015_23.c
+  test2015_29.c
+  test2015_30.c
+  test2017_17.c
+  test2018_08.c
+  test2018_09.c
+  test2018_10.c
+  test2018_24.c
+  test2018_31.c
+  test2018_33.c
+  test2019_15.c
+  test2020_14.c
+  test2020_15.c
+  test2020_16.c
+  test2021_01.c
+  test2022_02.c
+  test2022_03.c
+  test2022_04.c
 )
 
 list(REMOVE_ITEM TESTCODES_REQUIRED_TO_PASS test2005_168.c test2012_145.c)
@@ -1003,12 +1043,11 @@ set(C_TESTCODES_TO_RUN ${TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM C_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
 
 set(ROSE_DISABLED_TESTCODES ${TESTCODES_REQUIRED_TO_PASS_DISABLED})
+set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
 
-if(REX_ENABLE_FAILING_TESTS)
-  foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
-    compile_test(${file_to_test} "C_tests_failing")
-  endforeach()
-endif()
+foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
+  compile_test(${file_to_test} "C_tests_failing")
+endforeach()
 
 foreach(file_to_test ${C_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "C_tests")
@@ -1247,3 +1286,91 @@ add_test(
           ${CMAKE_CURRENT_SOURCE_DIR}/test2015_133.S
 )
 set_tests_properties(C_tests_file_suffix PROPERTIES DISABLED TRUE LABELS C_tests)
+
+# Makefile check targets.
+set(_c_tests_check_local_files ${C_TESTCODES_TO_RUN})
+list(REMOVE_ITEM _c_tests_check_local_files test2009_05.c test2009_17.c)
+
+set(_c_tests_check_local_tests "")
+foreach(file_to_test ${_c_tests_check_local_files})
+  set(_test_key "${file_to_test}")
+  string(REPLACE "/" "_" _test_key "${_test_key}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  list(APPEND _c_tests_check_local_tests "C_tests_${_test_key}")
+endforeach()
+
+set(_c_tests_check_tests "")
+foreach(file_to_test IN ITEMS test2009_05.c test2009_17.c)
+  set(_test_key "${file_to_test}")
+  string(REPLACE "/" "_" _test_key "${_test_key}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  list(APPEND _c_tests_check_tests "C_tests_${_test_key}")
+endforeach()
+list(APPEND _c_tests_check_tests C_tests_caller_out)
+
+list(APPEND _c_tests_check_local_tests
+  C_tests_check_pthread
+  C_tests_link_using_asm_symbol_injection
+  C_tests_link_using_alias_attribute
+  C_tests_build_generated_file_in_same_directory_as_input_file
+  C_tests_unparse_includes_option
+  C_tests_unparse_includes_option_with_link
+  C_tests_else_case_disambiguation
+  C_tests_common_configure_test_with_link
+  C_tests_using_explicit_output_file_option
+  C_tests_using_implicit_output_file_option
+  C_tests_rtd_use
+  C_tests_optimization_specifier_O
+  C_tests_optimization_specifier_Os
+  C_tests_optimization_specifier_O1
+  C_tests_optimization_specifier_O2
+  C_tests_mregparm_m32_use
+  C_tests_compile_and_link_with_NDEBUG
+  C_tests_compile_and_link_without_NDEBUG
+  C_tests_multiple_file_test_01
+)
+list(REMOVE_DUPLICATES _c_tests_check_local_tests)
+list(REMOVE_DUPLICATES _c_tests_check_tests)
+
+add_test(
+  NAME nonsmoke_functional_CompileTests_C_tests_check-TESTS
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_c_tests_check_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-TESTS PROPERTIES
+  LABELS "disabled"
+  DEPENDS "${_c_tests_check_tests}"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-TESTS PROPERTIES DISABLED TRUE)
+endif()
+
+add_test(
+  NAME nonsmoke_functional_CompileTests_C_tests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_c_tests_check_local_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-local PROPERTIES
+  DEPENDS "${_c_tests_check_local_tests}"
+)
+
+add_test(
+  NAME nonsmoke_functional_CompileTests_C_tests_check-pthread.passed
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=C_tests_check_pthread
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-pthread.passed PROPERTIES
+  DEPENDS "C_tests_check_pthread"
+)

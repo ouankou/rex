@@ -1,16 +1,124 @@
-This directory contains script files useful for ROSE as a project (testing etc.).
+Scripts in this directory support test inventory and parity checking between REX
+and upstream rose-archive.
 
-These scripts need to be documented.
+Files
+- gen_test_manifest.py
+  Scan rex + rose-archive sources (autotools + CMake) and emit a unified tests
+  manifest JSON. Includes disabled/commented-out/known-failing tests and does
+  not execute anything.
+- ctest_inventory.py
+  Run `ctest -N -V` in a rex build dir and emit a CTest inventory JSON.
+- check_test_parity.py
+  Compare manifest vs inventory and fail on missing tests or mismatches
+  (including DEPENDS lists when present).
+- test_port_whitelist.yml
+  Optional renames/exclusions/allowlists for parity comparisons, including
+  allow_depends_mismatch.
+- run_ctest_group.cmake
+  Helper used by make-target tests to run their dependency lists via CTest.
 
+Usage (no tests executed)
+1) Configure a build directory:
+   cmake -S . -B build -DREX_ENABLE_TESTING=ON
+2) Generate the unified manifest (requires rose-archive checkout on develop):
+   git -C /path/to/rose-archive fetch origin
+   git -C /path/to/rose-archive checkout develop
+   python3 scripts/gen_test_manifest.py --rex . --rex-build build \
+     --rose-archive /path/to/rose-archive --output build/tests_manifest.json
+3) Generate the CTest inventory:
+   python3 scripts/ctest_inventory.py --build-dir build \
+     --output build/ctest_inventory.json
+4) Compare for parity:
+   python3 scripts/check_test_parity.py --manifest build/tests_manifest.json \
+     --inventory build/ctest_inventory.json \
+     --whitelist scripts/test_port_whitelist.yml --build-dir build
 
-Example used to configure and compile with dotgl:
-     ../ROSE/configure --enable-dq-developer-tests --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=/home/dquinlan2/ROSE/AndreasWork/CompilerTree --with-GraphViz_include=/usr/apps/graphviz/1.10/include/graphviz --with-GraphViz_libs=/usr/apps/graphviz/1.10/lib/graphviz --with-FLTK_include="/home/dquinlan/FLTK/fltk_install/include -I/home/dquinlan/FreeGlut/freeglut_install/include" --with-FLTK_libs="/home/dquinlan/FLTK/fltk_install/lib -L/home/dquinlan/FreeGlut/freeglut_install/lib"
+Verification (union completeness + runnable commands)
+1) Parity gate (missing tests = 0 when this passes):
+   python3 scripts/check_test_parity.py --manifest build/tests_manifest.json \
+     --inventory build/ctest_inventory.json \
+     --whitelist scripts/test_port_whitelist.yml --build-dir build
+2) Union vs CTest counts:
+   python3 - <<'PY'
+import json
+m = json.load(open('build/tests_manifest.json'))
+i = json.load(open('build/ctest_inventory.json'))
+print('union_total', len(m))
+print('ctest_total', len(i))
+print('missing', 0 if len(m) == len(i) else 'see parity diff')
+PY
+3) No placeholder/no-op commands (should all be 0):
+   python3 - <<'PY'
+import json
+m = json.load(open('build/tests_manifest.json'))
+def is_placeholder(cmd):
+    if not cmd: return True
+    if cmd[0] in {'true','false',':'}: return True
+    if cmd[:3] in (['cmake','-E','echo'], ['cmake','-E','true']): return True
+    return False
+print('empty_command', sum(1 for t in m if not t.get('command')))
+print('placeholder_heuristic', sum(1 for t in m if is_placeholder(t.get('command') or [])))
+print('make_commands', sum(1 for t in m if (t.get('command') or [None])[0] in {'make','gmake'}))
+PY
+4) Executable presence check (optional; requires build artifacts):
+   cmake --build build -j16
+   python3 - <<'PY'
+import json, os, shutil
+i = json.load(open('build/ctest_inventory.json'))
+missing = []
+for t in i:
+    cmd = t.get('command') or []
+    if not cmd:
+        missing.append((t['name'], '<empty>'))
+        continue
+    exe = cmd[0]
+    if '/' in exe:
+        if not os.path.exists(exe):
+            missing.append((t['name'], exe))
+    else:
+        if shutil.which(exe) is None:
+            missing.append((t['name'], exe))
+print('missing_executable', len(missing))
+if missing:
+    for name, exe in missing[:20]:
+        print(' -', name, exe)
+PY
+Note: this check ignores whether tests are disabled and will also flag
+executables that are created during test execution (e.g., netcdf test_prog),
+so a nonzero count can be expected.
 
-Example using QT Libraries:
-     ../ROSE/configure --enable-dq-developer-tests --with-CXX_DEBUG=-g --with-C_DEBUG=-g --with-CXX_WARNINGS=-Wall --with-AxxPxx=/home/dquinlan/ROSE/A++P++Install --prefix=/home/dquinlan2/ROSE/AndreasWork/CompilerTree --with-GraphViz_include=/usr/apps/graphviz/1.10/include/graphviz --with-GraphViz_libs=/usr/apps/graphviz/1.10/lib/graphviz --with-FLTK_include=/home/dquinlan/FLTK/fltk_install/include -I/home/dquinlan/FreeGlut/freeglut_install/include --with-FLTK_libs=/home/dquinlan/FLTK/fltk_install/lib -L/home/dquinlan/FreeGlut/freeglut_install/lib --with-qt-includes=/home/jose/local/qt/include --with-qt-libraries=/home/jose/local/qt/lib
+Common ways to reduce missing_executable (optional)
+- Example translators (KeepGoingTranslator, identityTranslator):
+  configure with `-DENABLE-EXAMPLE-TRANSLATORS-DIRECTORY=ON` and rebuild.
+- Valgrind-based uninitializedField_tests:
+  install Valgrind headers and define `ROSE_USE_VALGRIND` in CMake output
+  (currently not exposed via a CMake option; see `rose_config.h.in.cmake`).
+  Reconfigure, rebuild, and run with `-DREX_ENABLE_DISABLED_TESTS=ON`.
+- HPCToolkit tests:
+  install HPCToolkit so `hpcrun` is on `PATH`.
+- LANL_POP/netcdf tests:
+  configure with `-DENABLE-FORTRAN=ON`, ensure netcdf subdir builds, and
+  run disabled tests with `-DREX_ENABLE_DISABLED_TESTS=ON`. These tests
+  compile `test_prog` during execution, so it may be missing before runs.
 
-Location of Gabriel's work:
-ROSE/exampleTranslators/graphicalUserInterfaceExamples/slicing
-ROSE/exampleTranslators/graphicalUserInterfaceExamples/query
-etc.
+Make-target wrapper example (runs dependencies in CTest)
+ctest --test-dir build -R nonsmoke_functional_check-local
 
+Counts (optional)
+python3 - <<'PY'
+import json
+m = json.load(open('build/tests_manifest.json'))
+i = json.load(open('build/ctest_inventory.json'))
+print('manifest', len(m))
+print('inventory', len(i))
+print('needs_manual_followup', sum('needs_manual_followup' in t.get('labels', []) for t in m))
+PY
+
+Notes
+- Outputs are build artifacts; keep them under build/.
+- Scope is governed by docs/upstream-sync/rose-upstream-sync-guide.md keep/drop lists.
+- Exclusions tracked in gen_test_manifest.py include Sawyer/Boost-only utility tests
+  (bitFlags, progressReports, graphIO, graphPerformance, hash) and related dropped
+  headers (Rose/BitFlags.h, Rose/GraphUtility.h, Rose/Diagnostics.h).
+- gen_test_manifest.py and check_test_parity.py enforce rose-archive is on branch
+  develop via origin notes; regenerate the manifest if the check fails.

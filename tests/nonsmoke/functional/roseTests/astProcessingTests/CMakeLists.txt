@@ -298,3 +298,385 @@ if (HAVE_SYS_TIME_H)
   endforeach()
 
 endif()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-astTraversalTest
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-astTraversalTest PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-astTraversalTest PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-bPTP
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-bPTP PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-bPTP PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-binaryPaths
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-binaryPaths PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-binaryPaths PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-createTest
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-createTest PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-createTest PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-e0
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=e0_efor2.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-e0 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "e0_efor2.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-e0 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-e1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=e1_efor3.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-e1 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "e1_efor3.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-e1 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-f1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=f1_tfif1.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f1 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "f1_tfif1.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f1 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-f2
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=f2_tfif2.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f2 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "f2_tfif2.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f2 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-f3
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=f3_tfif3.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f3 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "f3_tfif3.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f3 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-f4
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=f4_tfif4.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f4 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "f4_tfif4.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-f4 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-ff1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=ff1_tf1.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-ff1 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "ff1_tf1.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-ff1 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-ff2
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=ff2_tf2.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-ff2 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "ff2_tf2.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-ff2 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-ff3
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=ff3_tf3.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-ff3 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "ff3_tf3.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-ff3 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-interproceduralCFG
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-interproceduralCFG PROPERTIES
+  LABELS "disabled"
+  DEPENDS "ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-interproceduralCFG PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-local PROPERTIES
+  DEPENDS "astTraversalTest_input1C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-proFunSIG
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-proFunSIG PROPERTIES
+  LABELS "disabled"
+  DEPENDS "pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-proFunSIG PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-processnew3Down4SgIncGraph2
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-processnew3Down4SgIncGraph2 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-processnew3Down4SgIncGraph2 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-processnew3Down4SgIncGraph3
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-processnew3Down4SgIncGraph3 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-processnew3Down4SgIncGraph3 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-smtlibParser
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-smtlibParser PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-smtlibParser PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-sourcePTP
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-sourcePTP PROPERTIES
+  LABELS "disabled"
+  DEPENDS "sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-sourcePTP PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest2
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest2 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest2 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest3
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest3 PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest3 PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_roseTests_astProcessingTests_check-yicesParser
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astTraversalTest_input1C\;createTest_input1\;e0_efor2.C\;e1_efor3.C\;f1_tfif1.C\;f2_tfif2.C\;f3_tfif3.C\;f4_tfif4.C\;ff1_tf1.C\;ff2_tf2.C\;ff3_tf3.C\;ipcfg_test11.C\;ipcfg_test12.C\;ipcfg_test13.C\;ipcfg_test14.C\;pfs_mf1.C\;pfs_mf3.C\;pfs_mf4.C\;pfs_mf5.C\;pnew2_test11.C\;pnew2_test12.C\;pnew2_test13.C\;pnew2_test14.C\;pnew3_eif.C\;pnew3_eif2.C\;pnew3_eif3.C\;pnew3_eif4.C\;sourcePTP_test14.C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-yicesParser PROPERTIES
+  LABELS "disabled"
+  DEPENDS "astTraversalTest_input1C;createTest_input1;e0_efor2.C;e1_efor3.C;f1_tfif1.C;f2_tfif2.C;f3_tfif3.C;f4_tfif4.C;ff1_tf1.C;ff2_tf2.C;ff3_tf3.C;ipcfg_test11.C;ipcfg_test12.C;ipcfg_test13.C;ipcfg_test14.C;pfs_mf1.C;pfs_mf3.C;pfs_mf4.C;pfs_mf5.C;pnew2_test11.C;pnew2_test12.C;pnew2_test13.C;pnew2_test14.C;pnew3_eif.C;pnew3_eif2.C;pnew3_eif3.C;pnew3_eif4.C;sourcePTP_test14.C"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astProcessingTests_check-yicesParser PROPERTIES DISABLED TRUE)
+endif()

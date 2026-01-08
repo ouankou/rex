@@ -75,6 +75,13 @@ extern void mlog_C(MLOG_LEVEL_t level, const char * subject, const char * file, 
 [[noreturn]]
 #endif
 extern void mlogAssertFail_C(const char * subject, const char * expr, const char * file, int line, const char * funcname, const char * format, ...);
+#if __cplusplus >= 201103L
+inline void
+mlogAssertFail_C(const char *subject, const char *expr, const char *file, int line,
+                 const char *funcname, const std::string &message) {
+  mlogAssertFail_C(subject, expr, file, line, funcname, "%s", message.c_str());
+}
+#endif
 extern void mlogMore_C(const char * format, ...);
 extern const char * mlogLevelToString_C[];
 extern std::string mlogLevelToString_CXX(MLOG_LEVEL_t level);
@@ -146,6 +153,26 @@ extern std::string mlogLevelToString_CXX(MLOG_LEVEL_t level);
 #define ASSERT_require(expr) ASSERT_require2(expr, "")
 #define ASSERT_require2(expr, ...)         \
     (expr) ? static_cast<void>(0) : mlogAssertFail_C("ASSERTION:require:", #expr, WHEREARG, __VA_ARGS__)
+
+#ifndef ASSERT_always_require
+#define ASSERT_always_require ASSERT_require
+#endif
+#ifndef ASSERT_always_require2
+#define ASSERT_always_require2 ASSERT_require2
+#endif
+
+#ifndef ASSERT_always_forbid
+#define ASSERT_always_forbid ASSERT_forbid
+#endif
+#ifndef ASSERT_always_forbid2
+#define ASSERT_always_forbid2 ASSERT_forbid2
+#endif
+#ifndef ASSERT_always_not_null
+#define ASSERT_always_not_null ASSERT_not_null
+#endif
+#ifndef ASSERT_always_not_null2
+#define ASSERT_always_not_null2 ASSERT_not_null2
+#endif
 
 
 #define ASSERT_forbid(expr) ASSERT_forbid2(expr, "")

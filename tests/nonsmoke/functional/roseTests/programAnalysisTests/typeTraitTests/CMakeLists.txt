@@ -79,3 +79,17 @@ add_test(
 
 set_tests_properties(type_trait_without_ret_roseHeader PROPERTIES TIMEOUT 600)
 set_tests_properties(type_trait_without_ret_roseHeader PROPERTIES DISABLED TRUE)
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_roseTests_programAnalysisTests_typeTraitTests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=type_trait_with_ret_test10_C\;type_trait_with_ret_test11_C\;type_trait_with_ret_test12_C\;type_trait_with_ret_test13_C\;type_trait_with_ret_test14_C\;type_trait_with_ret_test15_C\;type_trait_with_ret_test16_C\;type_trait_with_ret_test1_C\;type_trait_with_ret_test2_C\;type_trait_with_ret_test3_C\;type_trait_with_ret_test4_C\;type_trait_with_ret_test5_C\;type_trait_with_ret_test6_C\;type_trait_with_ret_test7_C\;type_trait_with_ret_test8_C\;type_trait_with_ret_test9_C
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_typeTraitTests_check-local PROPERTIES
+  DEPENDS "type_trait_with_ret_test10_C;type_trait_with_ret_test11_C;type_trait_with_ret_test12_C;type_trait_with_ret_test13_C;type_trait_with_ret_test14_C;type_trait_with_ret_test15_C;type_trait_with_ret_test16_C;type_trait_with_ret_test1_C;type_trait_with_ret_test2_C;type_trait_with_ret_test3_C;type_trait_with_ret_test4_C;type_trait_with_ret_test5_C;type_trait_with_ret_test6_C;type_trait_with_ret_test7_C;type_trait_with_ret_test8_C;type_trait_with_ret_test9_C"
+)

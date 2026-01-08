@@ -153,9 +153,9 @@ function(_experimental_add_frontend_test test_prefix specimen)
   )
 endfunction()
 
-set(_disable_experimental FALSE)
-if(NOT enable-fortran)
-  set(_disable_experimental TRUE)
+set(_disable_experimental TRUE)
+if(REX_ENABLE_DISABLED_TESTS AND enable-fortran)
+  set(_disable_experimental FALSE)
 endif()
 
 foreach(specimen IN LISTS _f90_tests)
@@ -200,3 +200,17 @@ foreach(specimen IN LISTS _non_fortran_failing_tests)
     set_tests_properties(experimental_frontend_non_fortran_${_name} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompileTests_Fortran_tests_experimental_frontend_tests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=experimental_frontend_f90_R1101a_f90\;experimental_frontend_f90_R1101b_f90\;experimental_frontend_f90_R1101c_f90\;experimental_frontend_f90_R1101d_f90\;experimental_frontend_f90_R1101e_f90\;experimental_frontend_f90_R1101f_f90\;experimental_frontend_f90_R1101g_f90\;experimental_frontend_f90_R1120a_f90\;experimental_frontend_f90_R404_a_f90\;experimental_frontend_f90_R521_f90\;experimental_frontend_f90_R545_f90\;experimental_frontend_f90_R611a_f90\;experimental_frontend_f90_R719a_f90\;experimental_frontend_f90_R832_f90\;experimental_frontend_f90_R837_f90\;experimental_frontend_f90_R854_f90\;experimental_frontend_f90_R856_f90\;experimental_frontend_f90_contiguous_attr_f90\;experimental_frontend_f90_test2014_02_f90\;experimental_frontend_f90_tiny_f90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_experimental_frontend_tests_check-local PROPERTIES
+  DEPENDS "experimental_frontend_f90_R1101a_f90;experimental_frontend_f90_R1101b_f90;experimental_frontend_f90_R1101c_f90;experimental_frontend_f90_R1101d_f90;experimental_frontend_f90_R1101e_f90;experimental_frontend_f90_R1101f_f90;experimental_frontend_f90_R1101g_f90;experimental_frontend_f90_R1120a_f90;experimental_frontend_f90_R404_a_f90;experimental_frontend_f90_R521_f90;experimental_frontend_f90_R545_f90;experimental_frontend_f90_R611a_f90;experimental_frontend_f90_R719a_f90;experimental_frontend_f90_R832_f90;experimental_frontend_f90_R837_f90;experimental_frontend_f90_R854_f90;experimental_frontend_f90_R856_f90;experimental_frontend_f90_contiguous_attr_f90;experimental_frontend_f90_test2014_02_f90;experimental_frontend_f90_tiny_f90"
+)
