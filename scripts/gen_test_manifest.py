@@ -4159,7 +4159,15 @@ def _extract_cmake_tests_from_ctest(
     test_re = re.compile(r"^\s*Test\s+#\d+\s*:")
     for line in output.splitlines():
         stripped = re.sub(r"^\d+:\s*", "", line.strip())
-        if stripped.startswith("Test command:"):
+        if test_re.match(stripped):
+            if current.get("name"):
+                entries.append(_ctest_entry(repo_label, current, repo_root))
+            current = {}
+            raw_name = stripped.split(":", 1)[1].strip()
+            if any(token in raw_name for token in ("(Disabled)", "(Not Run)", "(Skipped)")):
+                current["disabled"] = True
+            current["name"] = _strip_ctest_suffix(raw_name)
+        elif stripped.startswith("Test command:"):
             cmd = stripped.split("Test command:", 1)[1].strip()
             current["command"] = _tokenize(cmd)
         elif stripped.startswith("Working Directory:"):
@@ -4171,15 +4179,7 @@ def _extract_cmake_tests_from_ctest(
         elif stripped.startswith("Disabled:"):
             value = stripped.split("Disabled:", 1)[1].strip()
             current["disabled"] = value.lower() == "true"
-        elif test_re.match(stripped):
-            raw_name = stripped.split(":", 1)[1].strip()
-            if raw_name.endswith("(Disabled)"):
-                current["disabled"] = True
-            name = _strip_ctest_suffix(raw_name)
-            current["name"] = name
-            entries.append(_ctest_entry(repo_label, current, repo_root))
-            current = {}
-    if current:
+    if current.get("name"):
         entries.append(_ctest_entry(repo_label, current, repo_root))
     filtered: list[TestEntry] = []
     for entry in entries:
