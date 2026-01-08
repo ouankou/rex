@@ -55,3 +55,17 @@ foreach(file_to_test ${_device_transform_tests})
       PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompileTests_CudaTests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=CUDA_header_test_cu\;CUDA_mm_single_cu\;CUDA_test_2011_01_cu\;CUDA_test_2011_02_cu\;CUDA_test_2011_11_cu\;CUDA_test_2011_12_cu\;CUDA_test_2011_13_cu
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_check-local PROPERTIES
+  DEPENDS "CUDA_header_test_cu;CUDA_mm_single_cu;CUDA_test_2011_01_cu;CUDA_test_2011_02_cu;CUDA_test_2011_11_cu;CUDA_test_2011_12_cu;CUDA_test_2011_13_cu"
+)

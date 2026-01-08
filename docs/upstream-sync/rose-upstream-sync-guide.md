@@ -549,6 +549,17 @@ Core source subtrees dropped in REX:
 - src/Rose/Diagnostics/
 - src/Rose/FileSystem/
 - src/Rose/Traits/
+- src/roseSupport/
+
+Explicit file drops (never reintroduce):
+- src/Rose/BitFlags.h
+- src/Rose/GraphUtility.h
+- src/Rose/Diagnostics.h
+- tests/nonsmoke/functional/Utility/bitFlags.C
+- tests/nonsmoke/functional/Utility/progressReports.C
+- tests/nonsmoke/functional/Utility/graphIO.C
+- tests/nonsmoke/functional/Utility/graphPerformance.C
+- tests/nonsmoke/functional/Utility/hash.C
 
 Docs/scripts/tools/tutorial/tests dropped from upstream:
 - docs/IDE-Hints/

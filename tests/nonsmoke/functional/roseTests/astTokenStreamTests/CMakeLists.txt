@@ -51,6 +51,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2010_17.c
   test2011_05.c
   test2012_01.c
+  test2012_02.c
   test2012_03.c
   test2012_04.c
   test2012_05.c
@@ -62,6 +63,9 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2012_11.c
   test2012_12.c
   test2012_13.c
+  test2012_14.c
+  test2012_15.c
+  test2012_16.c
   test2012_18.c
   test2012_20.c
   test2012_21.c
@@ -72,6 +76,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2012_26.c
   test2012_27.c
   test2012_29.c
+  test2012_30.c
   test2012_32.c
   test2012_33.c
   test2012_34.c
@@ -101,6 +106,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2012_60.c
   test2012_61.c
   test2012_62.c
+  test2012_63.c
   test2012_64.c
   test2012_65.c
   test2012_66.c
@@ -143,6 +149,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2012_105.c
   test2012_106.c
   test2012_107.c
+  test2012_108.c
   test2012_109.c
   test2012_110.c
   test2012_111.c
@@ -199,6 +206,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2012_170.c
   test2012_171.c
   test2012_172.c
+  test2012_173.c
   test2012_174.c
   test2012_175.c
   test2013_01.c
@@ -222,6 +230,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2013_22.c
   test2013_23.c
   test2013_24.c
+  test2013_25.c
   test2013_26.c
   test2013_27.c
   test2013_28.c
@@ -236,6 +245,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2013_37.c
   test2013_38.c
   test2013_39.c
+  test2013_40.c
   test2013_41.c
   test2013_42.c
   test2013_43.c
@@ -271,6 +281,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2013_75.c
   test2013_76.c
   test2013_77.c
+  test2013_78.c
   test2013_79.c
   test2013_80.c
   test2013_81.c
@@ -288,6 +299,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2013_93.c
   test2013_94.c
   test2013_95.c
+  math.c
   stdio.c
   test2006_48.c
   test2006_132.c
@@ -1304,3 +1316,21 @@ install(
     testUnparsingUsingTokenStream
     testTokenUnparserTransformations
   DESTINATION bin)
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_roseTests_astTokenStreamTests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=tokenLinearization_testLin1_c\;tokenLinearization_testLin2_c
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES
+  LABELS "disabled"
+  DEPENDS "tokenLinearization_testLin1_c;tokenLinearization_testLin2_c"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES DISABLED TRUE)
+endif()

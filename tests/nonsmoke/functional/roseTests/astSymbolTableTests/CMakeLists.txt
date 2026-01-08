@@ -16,3 +16,17 @@ add_test(
     ${_exit_status}
     test1.passed
 )
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_roseTests_astSymbolTableTests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=astSymbolTable_test1
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_roseTests_astSymbolTableTests_check-local PROPERTIES
+  DEPENDS "astSymbolTable_test1"
+)

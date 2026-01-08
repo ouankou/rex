@@ -63,3 +63,17 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f outputFile; ${ROSE_TEST_TRANSLATOR} -DHAVE_CONFIG_H -rose:skip_transformation ${_aplus_include_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_bool.C > outputFile 2>&1; outputLines=$(wc -l < outputFile); if [ \"$outputLines\" -eq 0 ]; then exit 0; else cat outputFile; exit 1; fi"
 )
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompilerOptionsTests_A++Code_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=compiler_options_aplus_abstract_op\;compiler_options_aplus_array_notemplates\;compiler_options_aplus_comm_man\;compiler_options_aplus_data_hash\;compiler_options_aplus_descriptor_cache\;compiler_options_aplus_descriptor_notemplates\;compiler_options_aplus_domain\;compiler_options_aplus_error_checking\;compiler_options_aplus_index\;compiler_options_aplus_index_operator_notemplates\;compiler_options_aplus_lazy_aggregate\;compiler_options_aplus_lazy_expression\;compiler_options_aplus_lazy_operand\;compiler_options_aplus_lazy_statement\;compiler_options_aplus_lazy_task\;compiler_options_aplus_lazy_taskset\;compiler_options_aplus_lazyarray\;compiler_options_aplus_new_operators_notemplates\;compiler_options_aplus_partitioning\;compiler_options_aplus_static_initialization\;compiler_options_aplus_test_bool\;compiler_options_aplus_where
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_A++Code_check-local PROPERTIES
+  DEPENDS "compiler_options_aplus_abstract_op;compiler_options_aplus_array_notemplates;compiler_options_aplus_comm_man;compiler_options_aplus_data_hash;compiler_options_aplus_descriptor_cache;compiler_options_aplus_descriptor_notemplates;compiler_options_aplus_domain;compiler_options_aplus_error_checking;compiler_options_aplus_index;compiler_options_aplus_index_operator_notemplates;compiler_options_aplus_lazy_aggregate;compiler_options_aplus_lazy_expression;compiler_options_aplus_lazy_operand;compiler_options_aplus_lazy_statement;compiler_options_aplus_lazy_task;compiler_options_aplus_lazy_taskset;compiler_options_aplus_lazyarray;compiler_options_aplus_new_operators_notemplates;compiler_options_aplus_partitioning;compiler_options_aplus_static_initialization;compiler_options_aplus_test_bool;compiler_options_aplus_where"
+)

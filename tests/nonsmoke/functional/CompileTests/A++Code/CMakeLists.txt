@@ -59,3 +59,25 @@ endif()
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} AXXTEST)
 endforeach()
+
+# Makefile check targets.
+set(_axx_group_sources ${files_to_test})
+list(REMOVE_ITEM _axx_group_sources ${ROSE_DISABLED_TESTCODES})
+set(_axx_group_tests)
+foreach(file_to_test ${_axx_group_sources})
+  string(REPLACE "/" "_" _test_key "${file_to_test}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  list(APPEND _axx_group_tests "AXXTEST_${_test_key}")
+endforeach()
+add_test(
+  NAME nonsmoke_functional_CompileTests_A++Code_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_axx_group_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_A++Code_check-local PROPERTIES
+  DEPENDS "${_axx_group_tests}"
+)

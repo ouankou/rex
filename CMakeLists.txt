@@ -374,6 +374,9 @@ option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." 
 option(ENABLE-FORTRAN-FLANG "Enable experimental Flang frontend (f18) support." OFF)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
+# Legacy tests still reference enable-fortran (lowercase).
+set(enable-fortran "${ENABLE-FORTRAN}")
+
 if(ENABLE-FORTRAN AND NOT (ENABLE-FORTRAN-OFP OR ENABLE-FORTRAN-FLANG))
   message(FATAL_ERROR "Fortran analysis requires at least one frontend: OFP or Flang. Set -DENABLE-FORTRAN-OFP=ON or -DENABLE-FORTRAN-FLANG=ON, or disable Fortran.")
 endif()
@@ -696,6 +699,13 @@ find_package(Perl REQUIRED)
 
 option(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY "Enable compilation and testing of exampleTranslators directory" OFF)
 option(ENABLE-TESTS-DIRECTORY "Enable compilation and testing of the ROSE/tests directory" ON)
+set(_rex_enable_testing_default "${ENABLE-TESTS-DIRECTORY}")
+option(REX_ENABLE_TESTING "Enable REX tests (alias for ENABLE-TESTS-DIRECTORY)" ${_rex_enable_testing_default})
+set(ENABLE-TESTS-DIRECTORY "${REX_ENABLE_TESTING}" CACHE BOOL "Enable compilation and testing of the ROSE/tests directory" FORCE)
+if(ENABLE-TESTS-DIRECTORY)
+  enable_testing()
+endif()
+option(REX_ENABLE_DISABLED_TESTS "Enable tests marked disabled in CTest" OFF)
 option(ENABLE-TUTORIAL-DIRECTORY "Enable compilation and testing of the ROSE/tutorial directory" OFF)
 option(ENABLE_DOXYGEN "Enable Doxygen support" OFF)
 
@@ -1265,7 +1275,6 @@ configure_file(${ROSE_TOP_SRC_DIR}/rose_config.h.in.cmake ${ROSE_TOP_BINARY_DIR}
 
 add_subdirectory(tools)
 if(ENABLE-TESTS-DIRECTORY)
-  enable_testing()
   add_subdirectory(tests)
 endif()
 if(ENABLE-TUTORIAL-DIRECTORY)

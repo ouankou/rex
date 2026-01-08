@@ -1,0 +1,4 @@
+
+
+rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_nctest_compare_test_files.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/compare_test_files.sh)
+set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_nctest_compare_test_files.sh" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")

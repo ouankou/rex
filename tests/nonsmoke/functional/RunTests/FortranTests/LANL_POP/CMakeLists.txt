@@ -36,3 +36,45 @@ set_tests_properties(
   lanl_pop_run_modified
   lanl_pop_compare_answers
   PROPERTIES DISABLED TRUE)
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_RunTests_FortranTests_LANL_POP_check
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=lanl_pop_compare_answers\;lanl_pop_run_modified\;lanl_pop_run_pristine\;netcdf_check_nc_config\;netcdf_test_prog_F\;netcdf_test_prog_c\;netcdf_test_prog_f90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_check PROPERTIES
+  LABELS "disabled"
+  DEPENDS "lanl_pop_compare_answers;lanl_pop_run_modified;lanl_pop_run_pristine;netcdf_check_nc_config;netcdf_test_prog_F;netcdf_test_prog_c;netcdf_test_prog_f90"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_check PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_RunTests_FortranTests_LANL_POP_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=lanl_pop_compare_answers\;lanl_pop_run_modified\;lanl_pop_run_pristine\;netcdf_check_nc_config\;netcdf_test_prog_F\;netcdf_test_prog_c\;netcdf_test_prog_f90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_check-local PROPERTIES
+  DEPENDS "lanl_pop_compare_answers;lanl_pop_run_modified;lanl_pop_run_pristine;netcdf_check_nc_config;netcdf_test_prog_F;netcdf_test_prog_c;netcdf_test_prog_f90"
+)
+add_test(
+  NAME nonsmoke_functional_RunTests_FortranTests_LANL_POP_conditional-check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=lanl_pop_compare_answers\;lanl_pop_run_modified\;lanl_pop_run_pristine\;netcdf_check_nc_config\;netcdf_test_prog_F\;netcdf_test_prog_c\;netcdf_test_prog_f90
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_conditional-check-local PROPERTIES
+  DEPENDS "lanl_pop_compare_answers;lanl_pop_run_modified;lanl_pop_run_pristine;netcdf_check_nc_config;netcdf_test_prog_F;netcdf_test_prog_c;netcdf_test_prog_f90"
+)

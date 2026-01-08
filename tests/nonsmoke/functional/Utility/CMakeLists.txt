@@ -72,3 +72,17 @@ endif()
 if(_utility_ctest_names)
   set_tests_properties(${_utility_ctest_names} PROPERTIES LABELS "nonsmoke;utility")
 endif()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_Utility_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=nonsmoke_utility_directorySupport\;nonsmoke_utility_filenameSupport\;nonsmoke_utility_testCopyFile\;nonsmoke_utility_testFileNameClassifier
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_Utility_check-local PROPERTIES
+  DEPENDS "nonsmoke_utility_directorySupport;nonsmoke_utility_filenameSupport;nonsmoke_utility_testCopyFile;nonsmoke_utility_testFileNameClassifier"
+)

@@ -57,3 +57,25 @@ foreach(specimen IN LISTS _specimen_only_cxx_names)
       ${specimen}.passed
   )
 endforeach()
+
+# Makefile check targets.
+set(_make_target_tests)
+foreach(specimen IN LISTS _specimen_c_and_cxx_names)
+  list(APPEND _make_target_tests "compiler_options_file_names_${specimen}")
+endforeach()
+foreach(specimen IN LISTS _specimen_only_cxx_names)
+  list(APPEND _make_target_tests "compiler_options_file_names_cxx_${specimen}")
+endforeach()
+
+add_test(
+  NAME nonsmoke_functional_CompilerOptionsTests_testFileNamesAndExtensions_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_make_target_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testFileNamesAndExtensions_check-local PROPERTIES
+  DEPENDS "${_make_target_tests}"
+)

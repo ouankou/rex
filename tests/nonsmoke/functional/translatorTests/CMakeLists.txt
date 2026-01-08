@@ -64,10 +64,11 @@ if(ENABLE-C)
     NAME AstConsistencyTests
     COMMAND testTranslator -rose:ast:consistencyCheck -rose:skipfinalCompileStep ${CMAKE_CURRENT_SOURCE_DIR}/inputAstConsistency.cpp)
 
-  if(HAVE_SYSTEM_TIME_H)
-    add_test(
-      NAME testqualifiedName
-      COMMAND qualifiedName -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests/jacobi.c)
+  add_test(
+    NAME testqualifiedName
+    COMMAND qualifiedName -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests/jacobi.c)
+  if(NOT HAVE_SYSTEM_TIME_H)
+    set_tests_properties(testqualifiedName PROPERTIES DISABLED TRUE LABELS disabled)
   endif()
 
   add_test(
@@ -174,3 +175,63 @@ if(ENABLE-C)
   set_tests_properties(Translator_testFortranProtected PROPERTIES DISABLED TRUE)
 
 endif()
+
+# Makefile check targets.
+set(_translator_cxx_tests
+  testbug125
+  testqualifiedName
+  Translator_testPragmaInBody
+  Translator_ompVariableCollecting
+  Translator_testConstDeclarations
+  Translator_testTranslator2010_02
+  Translator_testTranslator2010_03
+  Translator_label_stmt_file_info
+  Translator_querySubTree
+)
+set(_translator_fortran_tests
+  Translator_testTranslator2010_01
+)
+add_test(
+  NAME nonsmoke_functional_translatorTests_check-cxx
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_translator_cxx_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES
+  LABELS "disabled"
+  DEPENDS "${_translator_cxx_tests}"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_translatorTests_check-fortran
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_translator_fortran_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_translatorTests_check-fortran PROPERTIES
+  LABELS "disabled"
+  DEPENDS "${_translator_fortran_tests}"
+)
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(nonsmoke_functional_translatorTests_check-fortran PROPERTIES DISABLED TRUE)
+endif()
+add_test(
+  NAME nonsmoke_functional_translatorTests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_translator_cxx_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_translatorTests_check-local PROPERTIES
+  DEPENDS "${_translator_cxx_tests}"
+)

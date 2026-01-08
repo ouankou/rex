@@ -3,7 +3,7 @@ target_link_libraries(roseTestMerge ROSE_DLL ${link_with_libraries})
 
 # This is a shortened list that tests more quickly.
 set(TESTCODES
-  mergeTest_01.C mergeTest_02.C mergeTest_03.C
+  mergeTest_01.C mergeTest_02.C mergeTest_03.C mergeTest_04.C mergeTest_05.C
   mergeTest_08.C mergeTest_10.C mergeTest_11.C
   mergeTest_12.C mergeTest_13.C mergeTest_14.C mergeTest_15.C mergeTest_16.C
   mergeTest_17.C mergeTest_18.C mergeTest_19.C mergeTest_20.C mergeTest_21.C
@@ -27,7 +27,7 @@ set(TESTCODES
   mergeTest_131.C mergeTest_133.C mergeTest_134.C mergeTest_138.C)
 
 set(TESTCODES_TO_FIX
-mergeTest_04.C mergeTest_05.C mergeTest_121.C
+mergeTest_121.C
 )
 
 if(NOT ROSE_USING_GCC_VERSION_LATER_6_1 EQUAL 1)
@@ -86,3 +86,30 @@ foreach(file_to_test ${_mergeast_disabled_tests})
   set_tests_properties(MERGEASTTEST_${file_to_test}
     PROPERTIES DISABLED TRUE LABELS MERGEASTTEST)
 endforeach()
+
+foreach(file_to_test ${TESTCODES_TO_FIX})
+  add_test(
+    NAME MERGEASTTEST_${file_to_test}
+    COMMAND roseTestMerge ${ROSE_FLAGS}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
+  set_tests_properties(MERGEASTTEST_${file_to_test}
+    PROPERTIES DISABLED TRUE LABELS "MERGEASTTEST;disabled")
+endforeach()
+
+# Makefile check targets.
+set(_mergeast_group_tests)
+foreach(file_to_test ${TESTCODES})
+  list(APPEND _mergeast_group_tests "MERGEASTTEST_${file_to_test}")
+endforeach()
+add_test(
+  NAME nonsmoke_functional_CompileTests_mergeAST_tests_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_mergeast_group_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_mergeAST_tests_check-local PROPERTIES
+  DEPENDS "${_mergeast_group_tests}"
+)

@@ -4,7 +4,10 @@ set(SMOKE_UTILITY_TESTS
     attributeTests
     testMLog
     testStringUtility
-    testSourceLocation)
+    testSourceLocation
+    testBitOps
+    testToNumber)
+set(_smoke_utility_tests)
 
 foreach(test_target IN LISTS SMOKE_UTILITY_TESTS)
   add_executable(${test_target} ${test_target}.C)
@@ -50,5 +53,41 @@ add_test(
     ${_exit_status}
     testSourceLocation.passed)
 
-set_tests_properties(smoke_attributeTests smoke_testMLog smoke_testStringUtility smoke_testSourceLocation
+add_test(
+  NAME smoke_testBitOps
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${_rth}
+    "TITLE=test bit operations [testBitOps.passed]"
+    "CMD=$<TARGET_FILE:testBitOps>"
+    ${_exit_status}
+    testBitOps.passed)
+
+add_test(
+  NAME smoke_testToNumber
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${_rth}
+    "TITLE=test number parsing [testToNumber.passed]"
+    "CMD=$<TARGET_FILE:testToNumber>"
+    ${_exit_status}
+    testToNumber.passed)
+
+set_tests_properties(smoke_attributeTests smoke_testMLog smoke_testStringUtility
+  smoke_testSourceLocation smoke_testBitOps smoke_testToNumber
   PROPERTIES LABELS "smoke;utility")
+foreach(test_target IN LISTS SMOKE_UTILITY_TESTS)
+  list(APPEND _smoke_utility_tests "smoke_${test_target}")
+endforeach()
+
+# Makefile check targets.
+add_test(
+  NAME smoke_unit_Utility_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=${_smoke_utility_tests}
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(smoke_unit_Utility_check-local PROPERTIES
+  DEPENDS "${_smoke_utility_tests}"
+)

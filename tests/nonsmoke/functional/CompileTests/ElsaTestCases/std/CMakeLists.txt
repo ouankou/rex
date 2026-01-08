@@ -22,3 +22,17 @@ foreach(file_to_test ${TESTCODES})
     set_tests_properties(ELSATEST_${file_to_test} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
+
+# Makefile check targets.
+add_test(
+  NAME nonsmoke_functional_CompileTests_ElsaTestCases_std_check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
+    -DREX_CTEST_GROUP_TESTS=ELSATEST_12.3.2c.cc\;ELSATEST_13.1a.cc\;ELSATEST_13.1d.cc\;ELSATEST_3.4.3a.cc\;ELSATEST_7.3.1.2b.cc\;ELSATEST_7.3.3d.cc\;ELSATEST_7.3.4b.cc
+    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
+)
+set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_std_check-local PROPERTIES
+  DEPENDS "ELSATEST_12.3.2c.cc;ELSATEST_13.1a.cc;ELSATEST_13.1d.cc;ELSATEST_3.4.3a.cc;ELSATEST_7.3.1.2b.cc;ELSATEST_7.3.3d.cc;ELSATEST_7.3.4b.cc"
+)
