@@ -23,7 +23,7 @@ foreach(alg a b c d)
   set_tests_properties(smoke_runAlgorithm_${alg} PROPERTIES LABELS "smoke;examples")
   list(APPEND _smoke_run_algorithm_tests "smoke_runAlgorithm_${alg}")
 endforeach()
-list(JOIN _smoke_run_algorithm_tests "\\;" _smoke_run_algorithm_tests_joined)
+list(JOIN _smoke_run_algorithm_tests "$<SEMICOLON>" _smoke_run_algorithm_tests_joined)
 
 # Makefile check targets.
 add_test(

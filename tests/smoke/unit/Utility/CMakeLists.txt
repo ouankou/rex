@@ -77,7 +77,7 @@ set_tests_properties(smoke_attributeTests smoke_testMLog smoke_testStringUtility
 foreach(test_target IN LISTS SMOKE_UTILITY_TESTS)
   list(APPEND _smoke_utility_tests "smoke_${test_target}")
 endforeach()
-list(JOIN _smoke_utility_tests "\\;" _smoke_utility_tests_joined)
+list(JOIN _smoke_utility_tests "$<SEMICOLON>" _smoke_utility_tests_joined)
 
 # Makefile check targets.
 add_test(

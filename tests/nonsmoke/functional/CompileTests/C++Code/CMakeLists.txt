@@ -287,7 +287,7 @@ foreach(file_to_test ${files_to_test})
   string(REPLACE "." "_" _test_key "${_test_key}")
   list(APPEND _cxxcode_group_tests "CXXCODE_${_test_key}")
 endforeach()
-list(JOIN _cxxcode_group_tests "\\;" _cxxcode_group_tests_joined)
+list(JOIN _cxxcode_group_tests "$<SEMICOLON>" _cxxcode_group_tests_joined)
 add_test(
   NAME nonsmoke_functional_CompileTests_C++Code_check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
