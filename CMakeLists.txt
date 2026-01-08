@@ -268,10 +268,11 @@ if(NOT ROSE_VERSION_FROM_SCM_DATE STREQUAL ROSE_VERSION_ENCODED)
     "ROSE SCM Date file ${ROSE_SCM_DATE_FILE} (${ROSE_VERSION_FROM_SCM_DATE}) does not match "
     "ROSE_VERSION (${ROSE_PACKAGE_VERSION}); expected ${ROSE_VERSION_ENCODED}")
 endif()
-set(ROSE_VERSION "${ROSE_VERSION_FROM_SCM_DATE}")
+set(ROSE_VERSION_INT "${ROSE_VERSION_FROM_SCM_DATE}")
+set(ROSE_VERSION "${ROSE_VERSION_INT}UL")
 
 # Results
-message(STATUS "The ROSE version integer is ${ROSE_VERSION}")
+message(STATUS "The ROSE version integer is ${ROSE_VERSION_INT}")
 message(STATUS "The ROSE version string is ${ROSE_PACKAGE_VERSION}")
 
 # Paths to install header, executable, and libraries
