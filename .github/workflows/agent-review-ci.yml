@@ -1,6 +1,6 @@
-name: Codex review (on PR updates)
+name: Agent review (on PR updates)
 
-# This workflow posts @codex review comment on PR updates.
+# This workflow posts the review-trigger comment on PR updates.
 # It runs on new commits pushed to PRs (synchronize) and when PRs are opened/reopened.
 #
 # REQUIRES: Repository secret 'CODEX_COMMENT_TOKEN' - Personal Access Token with:
@@ -24,15 +24,15 @@ jobs:
     env:
       CODEX_COMMENT_TOKEN: ${{ secrets.CODEX_COMMENT_TOKEN }}
     steps:
-      - name: Post @codex review comment
+      - name: Post agent review comment
         if: ${{ env.CODEX_COMMENT_TOKEN != '' }}
         env:
           # Use PAT to post as user instead of github-actions bot
-          # This allows Copilot to respond to the @codex mention
+          # This allows the review agent to respond to the mention
           GH_TOKEN: ${{ env.CODEX_COMMENT_TOKEN }}
         run: |
-          echo "Posting @codex review comment to PR #${{ github.event.pull_request.number }}"
+          echo "Posting review comment to PR #${{ github.event.pull_request.number }}"
           gh pr comment ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
-            --body "@codex review"
-          echo "✓ Posted @codex review comment"
+            --body "/gemini review"
+          echo "✓ Posted review comment"
