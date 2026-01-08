@@ -260,7 +260,15 @@ def _parse_ctest_output(output: str, repo_root: Path, build_dir: Path) -> list[d
     test_re = re.compile(r"^\s*Test\s+#\d+\s*:")
     for line in output.splitlines():
         stripped = re.sub(r"^\d+:\s*", "", line.strip())
-        if stripped.startswith("Test command:"):
+        if test_re.match(stripped):
+            if current:
+                entries.append(_finalize_entry(current, repo_root, build_dir))
+                current = {}
+            raw_name = stripped.split(":", 1)[1].strip()
+            if any(token in raw_name for token in ("(Disabled)", "(Not Run)", "(Skipped)")):
+                current["disabled"] = True
+            current["name"] = _strip_ctest_suffix(raw_name)
+        elif stripped.startswith("Test command:"):
             cmd = stripped.split("Test command:", 1)[1].strip()
             current["command"] = _tokenize(cmd)
         elif stripped.startswith("Working Directory:"):
@@ -271,10 +279,6 @@ def _parse_ctest_output(output: str, repo_root: Path, build_dir: Path) -> list[d
         elif stripped.startswith("Disabled:"):
             value = stripped.split("Disabled:", 1)[1].strip()
             current["disabled"] = value.lower() == "true"
-        elif test_re.match(stripped):
-            current["name"] = _strip_ctest_suffix(stripped.split(":", 1)[1].strip())
-            entries.append(_finalize_entry(current, repo_root, build_dir))
-            current = {}
     if current:
         entries.append(_finalize_entry(current, repo_root, build_dir))
     return entries
