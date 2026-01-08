@@ -225,29 +225,61 @@ set(ROSE_TOP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 ########################################################################################################################
 
 # The ROSE version string was already read from ROSE_VERSION file before the project() command.
-# Now read the numerical version from SCM_DATE file.
+# The numerical version is encoded in SCM_DATE as ABBCCCDDDD (see configure.ac).
 set(ROSE_SCM_DATE_FILE "${PROJECT_SOURCE_DIR}/config/SCM_DATE")
 if(NOT EXISTS "${ROSE_SCM_DATE_FILE}")
   message(FATAL_ERROR "ROSE SCM Date file not found: ${ROSE_SCM_DATE_FILE}")
 endif()
 
 file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_SCM_VERSION_ID LIMIT_COUNT 1)
-file(READ ${ROSE_SCM_DATE_FILE} ROSE_VERSION)
-
-# Fix trailing whitespace
-string(STRIP "${ROSE_VERSION}" ROSE_VERSION)
-
-# Results
-message(STATUS "The ROSE version integer is ${ROSE_VERSION}")
-message(STATUS "The ROSE version string is ${ROSE_PACKAGE_VERSION}")
 
 # Parse version into components for package configuration
 # Note: PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, etc. are also set by project() command
 string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)\\.([0-9]+)" _version_match "${ROSE_PACKAGE_VERSION}")
+if(NOT _version_match)
+  message(FATAL_ERROR "Invalid ROSE version string: ${ROSE_PACKAGE_VERSION}")
+endif()
 set(ROSE_VERSION_MAJOR "${CMAKE_MATCH_1}")
 set(ROSE_VERSION_MINOR "${CMAKE_MATCH_2}")
 set(ROSE_VERSION_PATCH "${CMAKE_MATCH_3}")
 set(ROSE_VERSION_BUILD "${CMAKE_MATCH_4}")
+
+# Compute the encoded numeric version and enforce consistency with SCM_DATE.
+if(ROSE_VERSION_MAJOR GREATER 9)
+  message(FATAL_ERROR "ROSE version major component must be < 10: ${ROSE_VERSION_MAJOR}")
+endif()
+if(ROSE_VERSION_MINOR GREATER 99)
+  message(FATAL_ERROR "ROSE version minor component must be < 100: ${ROSE_VERSION_MINOR}")
+endif()
+if(ROSE_VERSION_PATCH GREATER 999)
+  message(FATAL_ERROR "ROSE version patch component must be < 1000: ${ROSE_VERSION_PATCH}")
+endif()
+if(ROSE_VERSION_BUILD GREATER 9999)
+  message(FATAL_ERROR "ROSE version build component must be < 10000: ${ROSE_VERSION_BUILD}")
+endif()
+math(EXPR ROSE_VERSION_ENCODED
+  "(((${ROSE_VERSION_MAJOR} * 100 + ${ROSE_VERSION_MINOR}) * 1000 + ${ROSE_VERSION_PATCH}) * 10000 + ${ROSE_VERSION_BUILD})")
+
+file(READ ${ROSE_SCM_DATE_FILE} ROSE_VERSION_FROM_SCM_DATE)
+string(STRIP "${ROSE_VERSION_FROM_SCM_DATE}" ROSE_VERSION_FROM_SCM_DATE)
+if(ROSE_VERSION_FROM_SCM_DATE STREQUAL "")
+  message(FATAL_ERROR "ROSE SCM Date file is empty or contains only whitespace: ${ROSE_SCM_DATE_FILE}")
+endif()
+string(REGEX REPLACE "^0+" "" ROSE_VERSION_FROM_SCM_DATE "${ROSE_VERSION_FROM_SCM_DATE}")
+if(ROSE_VERSION_FROM_SCM_DATE STREQUAL "")
+  set(ROSE_VERSION_FROM_SCM_DATE "0")
+endif()
+if(NOT ROSE_VERSION_FROM_SCM_DATE STREQUAL ROSE_VERSION_ENCODED)
+  message(FATAL_ERROR
+    "ROSE SCM Date file ${ROSE_SCM_DATE_FILE} (${ROSE_VERSION_FROM_SCM_DATE}) does not match "
+    "ROSE_VERSION (${ROSE_PACKAGE_VERSION}); expected ${ROSE_VERSION_ENCODED}")
+endif()
+set(ROSE_VERSION_INT "${ROSE_VERSION_FROM_SCM_DATE}")
+set(ROSE_VERSION "${ROSE_VERSION_INT}UL")
+
+# Results
+message(STATUS "The ROSE version integer is ${ROSE_VERSION_INT}")
+message(STATUS "The ROSE version string is ${ROSE_PACKAGE_VERSION}")
 
 # Paths to install header, executable, and libraries
 set(INCLUDE_INSTALL_DIR "include/rose")
