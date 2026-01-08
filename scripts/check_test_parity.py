@@ -54,7 +54,131 @@ def _load_whitelist(path: Path) -> dict:
     text = path.read_text()
     if yaml:
         return yaml.safe_load(text) or {}
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    try:
+        return _minimal_yaml_load(text)
+    except ValueError as exc:
+        raise RuntimeError(
+            "PyYAML is not installed and whitelist is not valid JSON/minimal YAML. "
+            "Install PyYAML (pip install pyyaml) or convert scripts/test_port_whitelist.yml to JSON."
+        ) from exc
+
+
+def _strip_yaml_comment(line: str) -> str:
+    in_single = False
+    in_double = False
+    escaped = False
+    for idx, ch in enumerate(line):
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\":
+            escaped = True
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            continue
+        if ch == "#" and not in_single and not in_double:
+            return line[:idx]
+    return line
+
+
+def _parse_yaml_scalar(value: str):
+    value = value.strip()
+    if value in {"", "null", "~"}:
+        return None
+    if value.lower() == "true":
+        return True
+    if value.lower() == "false":
+        return False
+    if value.startswith('"') and value.endswith('"'):
+        return value[1:-1]
+    if value.startswith("'") and value.endswith("'"):
+        return value[1:-1]
+    if value.startswith("[") and value.endswith("]"):
+        return _parse_yaml_inline_list(value)
+    if value == "{}":
+        return {}
+    if value == "[]":
+        return []
+    return value
+
+
+def _parse_yaml_inline_list(value: str) -> list:
+    content = value.strip()[1:-1].strip()
+    if not content:
+        return []
+    parts = [item.strip() for item in content.split(",")]
+    return [_parse_yaml_scalar(item) for item in parts if item]
+
+
+def _minimal_yaml_load(text: str) -> dict:
+    data: dict[str, object] = {}
+    current_key = None
+    current_item = None
+    for raw_line in text.splitlines():
+        line = _strip_yaml_comment(raw_line)
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+        if indent == 0:
+            current_key = None
+            current_item = None
+            if ":" not in stripped:
+                raise ValueError(f"Invalid YAML line: {raw_line}")
+            key, rest = stripped.split(":", 1)
+            key = key.strip()
+            rest = rest.strip()
+            if rest == "":
+                data[key] = None
+                current_key = key
+                continue
+            data[key] = _parse_yaml_scalar(rest)
+            continue
+        if current_key is None:
+            raise ValueError(f"Unexpected indent: {raw_line}")
+        if stripped.startswith("- "):
+            if data.get(current_key) is None or not isinstance(data.get(current_key), list):
+                data[current_key] = []
+            item_content = stripped[2:].strip()
+            if not item_content:
+                current_item = {}
+                data[current_key].append(current_item)
+                continue
+            if ":" in item_content:
+                item_key, item_rest = item_content.split(":", 1)
+                item_key = item_key.strip()
+                item_rest = item_rest.strip()
+                current_item = {item_key: _parse_yaml_scalar(item_rest) if item_rest else None}
+                data[current_key].append(current_item)
+                continue
+            current_item = None
+            data[current_key].append(_parse_yaml_scalar(item_content))
+            continue
+        if ":" not in stripped:
+            raise ValueError(f"Invalid YAML mapping: {raw_line}")
+        map_key, map_rest = stripped.split(":", 1)
+        map_key = map_key.strip()
+        map_rest = map_rest.strip()
+        if isinstance(data.get(current_key), list):
+            if current_item is None:
+                current_item = {}
+                data[current_key].append(current_item)
+            current_item[map_key] = _parse_yaml_scalar(map_rest) if map_rest else None
+        else:
+            if data.get(current_key) is None or not isinstance(data.get(current_key), dict):
+                data[current_key] = {}
+            data[current_key][map_key] = _parse_yaml_scalar(map_rest) if map_rest else None
+    if not isinstance(data, dict):
+        raise ValueError("Whitelist YAML did not produce a mapping.")
+    return data
 
 
 def _assert_rose_branch(manifest_list: list[dict]) -> None:
