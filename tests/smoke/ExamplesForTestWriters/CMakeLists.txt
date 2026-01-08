@@ -23,6 +23,7 @@ foreach(alg a b c d)
   set_tests_properties(smoke_runAlgorithm_${alg} PROPERTIES LABELS "smoke;examples")
   list(APPEND _smoke_run_algorithm_tests "smoke_runAlgorithm_${alg}")
 endforeach()
+list(JOIN _smoke_run_algorithm_tests "\\;" _smoke_run_algorithm_tests_joined)
 
 # Makefile check targets.
 add_test(
@@ -31,7 +32,7 @@ add_test(
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests}
+    -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests_joined}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(smoke_ExamplesForTestWriters_check-local PROPERTIES
@@ -43,7 +44,7 @@ add_test(
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests}
+    -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests_joined}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(smoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES
