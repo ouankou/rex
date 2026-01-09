@@ -376,10 +376,7 @@ SgType *ClangToSageTranslator::buildSpecializedMemberTypedefReturnType(
   if (SgNonrealDecl *member_decl = isSgNonrealDecl(
           member_type ? member_type->get_declaration() : nullptr)) {
     if (!spec_decl->isDependentType()) {
-      if (member_decl->getAttribute(kRexNonrealNoTypenameAttr) == NULL) {
-        member_decl->setAttribute(kRexNonrealNoTypenameAttr,
-                                  new RexNonrealFlagAttribute());
-      }
+      member_decl->set_suppress_typename(true);
     }
   }
   return member_type;

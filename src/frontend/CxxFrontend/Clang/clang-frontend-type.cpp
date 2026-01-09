@@ -2242,8 +2242,7 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
           isSgNonrealDecl(segment_type->get_declaration());
       ROSE_ASSERT(segment_decl != nullptr);
       if (nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
-        segment_decl->setAttribute(kRexNonrealTemplateKeywordAttr,
-                                   new RexNonrealFlagAttribute());
+        segment_decl->set_has_template_keyword(true);
       }
       current_scope = segment_decl->get_nonreal_decl_scope();
     }
@@ -2260,10 +2259,7 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
   if (has_global_qualifier) {
     SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
     ROSE_ASSERT(nrdecl != nullptr);
-    if (nrdecl->getAttribute(kRexNonrealGlobalQualifierAttr) == NULL) {
-      nrdecl->setAttribute(kRexNonrealGlobalQualifierAttr,
-                           new RexNonrealFlagAttribute());
-    }
+    nrdecl->set_has_global_qualifier(true);
   }
 
   return nrtype;
@@ -2699,10 +2695,7 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType *typedef_type,
     if (SgNonrealDecl *member_decl = isSgNonrealDecl(
             member_type ? member_type->get_declaration() : nullptr)) {
       if (!spec_decl->isDependentType()) {
-        if (member_decl->getAttribute(kRexNonrealNoTypenameAttr) == NULL) {
-          member_decl->setAttribute(kRexNonrealNoTypenameAttr,
-                                    new RexNonrealFlagAttribute());
-        }
+        member_decl->set_suppress_typename(true);
       }
     }
     return member_type;
@@ -2888,8 +2881,7 @@ bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(
   if (SgNonrealType *nrtype = isSgNonrealType(*node)) {
     if (SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration())) {
       if (name_info.has_template_keyword) {
-        nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,
-                             new RexNonrealFlagAttribute());
+        nrdecl->set_has_template_keyword(true);
       }
     }
   }
@@ -3019,10 +3011,7 @@ bool ClangToSageTranslator::VisitElaboratedType(
         if (SgNonrealType *nrtype = isSgNonrealType(*node)) {
           if (SgNonrealDecl *nrdecl =
                   isSgNonrealDecl(nrtype->get_declaration())) {
-            if (nrdecl->getAttribute(kRexNonrealNoTypenameAttr) == NULL) {
-              nrdecl->setAttribute(kRexNonrealNoTypenameAttr,
-                                   new RexNonrealFlagAttribute());
-            }
+            nrdecl->set_suppress_typename(true);
           }
         }
       }

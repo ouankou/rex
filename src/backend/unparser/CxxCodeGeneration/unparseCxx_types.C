@@ -4749,17 +4749,10 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
      SgNonrealDecl * nrdecl = isSgNonrealDecl(nrtype->get_declaration());
      ASSERT_not_null(nrdecl);
 
-     static const char kRexNonrealTemplateKeywordAttr[] =
-         "rex_nonreal_template_keyword";
-     static const char kRexNonrealGlobalQualifierAttr[] =
-         "rex_nonreal_global_qualifier";
-     static const char kRexNonrealNoTypenameAttr[] = "rex_nonreal_no_typename";
      bool has_global_qualifier =
-         is_first_in_nonreal_chain &&
-         nrdecl->getAttribute(kRexNonrealGlobalQualifierAttr) != NULL;
+         is_first_in_nonreal_chain && nrdecl->get_has_global_qualifier();
      bool suppress_typename =
-         is_first_in_nonreal_chain &&
-         nrdecl->getAttribute(kRexNonrealNoTypenameAttr) != NULL;
+         is_first_in_nonreal_chain && nrdecl->get_suppress_typename();
      if (is_first_in_nonreal_chain) {
        if (const SgTemplateArgument *template_arg = isSgTemplateArgument(
                info.get_reference_node_for_qualification())) {
@@ -4813,8 +4806,7 @@ Unparse_Type::unparseNonrealType(SgType* type, SgUnparse_Info& info, bool is_fir
 
      SgTemplateArgumentPtrList & tpl_args = nrdecl->get_tpl_args();
 
-     if (has_nonreal_parent &&
-         nrdecl->getAttribute(kRexNonrealTemplateKeywordAttr) != NULL)
+     if (has_nonreal_parent && nrdecl->get_has_template_keyword())
        curprint("template ");
 
      // output the name of the non-real type
