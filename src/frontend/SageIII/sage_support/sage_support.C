@@ -97,47 +97,6 @@ static std::string normalizePathIfPossible(const std::string& path)
      return FileHelper::normalizePath(path);
    }
 
-static SgSourceFile* findSourceFileByPath(
-    const SgFilePtrList& files, const std::string& normalizedPath)
-   {
-     for (SgFile* file : files)
-        {
-          SgSourceFile* sourceFile = isSgSourceFile(file);
-          if (sourceFile == NULL)
-             {
-               continue;
-             }
-          if (normalizePathIfPossible(sourceFile->getFileName()) ==
-              normalizedPath)
-             {
-               return sourceFile;
-             }
-        }
-     return NULL;
-   }
-
-static SgSourceFile* findSourceFileInTokenMaps(
-    const std::string& normalizedPath)
-   {
-     for (std::map<SgSourceFile*,
-                   std::map<SgNode*, TokenStreamSequenceToNodeMapping*>*>::const_iterator
-              it = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
-          it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end(); ++it)
-        {
-          SgSourceFile* sourceFile = it->first;
-          if (sourceFile == NULL)
-             {
-               continue;
-             }
-          if (normalizePathIfPossible(sourceFile->getFileName()) ==
-              normalizedPath)
-             {
-               return sourceFile;
-             }
-        }
-     return NULL;
-   }
-
 static void copyLanguageSettings(SgSourceFile* target,
                                  const SgSourceFile* reference)
    {
@@ -1704,6 +1663,7 @@ SgProject::parse()
 
           if (unparse_using_tokens == true)
              {
+               std::map<std::string, SgSourceFile*> sourceFilesByPath;
                std::map<std::string, SgSourceFile*> includingSourceFiles;
                for (SgFile* file : get_fileList())
                   {
@@ -1712,12 +1672,41 @@ SgProject::parse()
                        {
                          continue;
                        }
+                    std::string normalizedPath =
+                        normalizePathIfPossible(sourceFile->getFileName());
+                    if (!normalizedPath.empty())
+                       {
+                         sourceFilesByPath[normalizedPath] = sourceFile;
+                       }
                     if (sourceFile->get_isHeaderFile() == true)
                        {
                          continue;
                        }
-                    includingSourceFiles[normalizePathIfPossible(
-                        sourceFile->getFileName())] = sourceFile;
+                    if (!normalizedPath.empty())
+                       {
+                         includingSourceFiles[normalizedPath] = sourceFile;
+                       }
+                  }
+
+               std::map<std::string, SgSourceFile*> tokenMapFilesByPath;
+               for (std::map<SgSourceFile*,
+                             std::map<SgNode*,
+                                      TokenStreamSequenceToNodeMapping*>*>::const_iterator
+                        mapIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
+                    mapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end();
+                    ++mapIt)
+                  {
+                    SgSourceFile* sourceFile = mapIt->first;
+                    if (sourceFile == NULL)
+                       {
+                         continue;
+                       }
+                    std::string normalizedPath =
+                        normalizePathIfPossible(sourceFile->getFileName());
+                    if (!normalizedPath.empty())
+                       {
+                         tokenMapFilesByPath[normalizedPath] = sourceFile;
+                       }
                   }
 
                std::set<std::string> processedHeaders;
@@ -1755,17 +1744,31 @@ SgProject::parse()
                               continue;
                             }
 
+                         std::map<std::string, SgSourceFile*>::const_iterator
+                             headerIt = sourceFilesByPath.find(includedPath);
                          SgSourceFile* headerFile =
-                             findSourceFileByPath(get_fileList(), includedPath);
+                             headerIt != sourceFilesByPath.end()
+                                 ? headerIt->second
+                                 : NULL;
                          if (headerFile == NULL)
                             {
-                              headerFile =
-                                  findSourceFileInTokenMaps(includedPath);
+                              std::map<std::string, SgSourceFile*>::const_iterator
+                                  tokenMapIt =
+                                      tokenMapFilesByPath.find(includedPath);
+                              if (tokenMapIt != tokenMapFilesByPath.end())
+                                 {
+                                   headerFile = tokenMapIt->second;
+                                 }
                             }
                          if (headerFile == NULL)
                             {
                               headerFile = buildHeaderSourceFile(
                                   this, includedPath, traversalRoot);
+                              if (headerFile != NULL)
+                                 {
+                                   tokenMapFilesByPath[includedPath] =
+                                       headerFile;
+                                 }
                             }
                          if (headerFile == NULL)
                             {

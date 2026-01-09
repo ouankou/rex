@@ -2,8 +2,6 @@
 #include "tokenStreamMapping.h"
 #include "previousAndNextNode.h"
 
-#include <set>
-
 using namespace std;
 
 namespace {
@@ -90,28 +88,35 @@ detectMacroExpansionsToBeUnparsedAsAstTransformations(SgSourceFile* sourceFile)
           return;
         }
 
-     std::set<MacroExpansion*> processed;
+     std::map<MacroExpansion*, std::vector<SgStatement*> >
+         expansionToStatements;
      for (std::map<SgStatement*, MacroExpansion*>::const_iterator it =
               macroExpansionMap.begin();
           it != macroExpansionMap.end(); ++it)
         {
-          MacroExpansion* macroExpansion = it->second;
-          if (macroExpansion == NULL)
+          if (it->second != NULL)
              {
-               continue;
+               expansionToStatements[it->second].push_back(it->first);
              }
-          if (!processed.insert(macroExpansion).second)
-             {
-               continue;
-             }
+        }
+
+     for (std::map<MacroExpansion*, std::vector<SgStatement*> >::const_iterator
+              it = expansionToStatements.begin();
+          it != expansionToStatements.end(); ++it)
+        {
+          MacroExpansion* macroExpansion = it->first;
+          const std::vector<SgStatement*>& statementsFromMap = it->second;
 
           bool needsTransformation = macroExpansion->isTransformed;
-          const std::vector<SgStatement*>& statements =
+          const std::vector<SgStatement*>& associatedStatements =
               macroExpansion->associatedStatementVector;
 
           if (!needsTransformation)
              {
-               for (SgStatement* statement : statements)
+               const std::vector<SgStatement*>& statementsToCheck =
+                   !associatedStatements.empty() ? associatedStatements
+                                                 : statementsFromMap;
+               for (SgStatement* statement : statementsToCheck)
                   {
                     if (subtreeHasTransformation(statement))
                        {
@@ -121,47 +126,12 @@ detectMacroExpansionsToBeUnparsedAsAstTransformations(SgSourceFile* sourceFile)
                   }
              }
 
-          if (!needsTransformation && statements.empty())
+          if (needsTransformation)
              {
-               // Fallback: check the map entries if the association list is empty.
-               for (std::map<SgStatement*, MacroExpansion*>::const_iterator mapIt =
-                        macroExpansionMap.begin();
-                    mapIt != macroExpansionMap.end(); ++mapIt)
-                  {
-                    if (mapIt->second != macroExpansion)
-                       {
-                         continue;
-                       }
-                    if (subtreeHasTransformation(mapIt->first))
-                       {
-                         needsTransformation = true;
-                         break;
-                       }
-                  }
-             }
-
-          if (!needsTransformation)
-             {
-               continue;
-             }
-
-          if (!statements.empty())
-             {
-               markStatementsForMacro(macroExpansion, statements);
-             }
-          else
-             {
-               std::vector<SgStatement*> fallbackStatements;
-               for (std::map<SgStatement*, MacroExpansion*>::const_iterator mapIt =
-                        macroExpansionMap.begin();
-                    mapIt != macroExpansionMap.end(); ++mapIt)
-                  {
-                    if (mapIt->second == macroExpansion)
-                       {
-                         fallbackStatements.push_back(mapIt->first);
-                       }
-                  }
-               markStatementsForMacro(macroExpansion, fallbackStatements);
+               const std::vector<SgStatement*>& statementsToMark =
+                   !associatedStatements.empty() ? associatedStatements
+                                                 : statementsFromMap;
+               markStatementsForMacro(macroExpansion, statementsToMark);
              }
         }
    }
