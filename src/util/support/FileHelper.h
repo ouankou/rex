@@ -1,10 +1,16 @@
+#ifndef ROSE_FileHelper_H
+#define ROSE_FileHelper_H
+
 // Consider using $ROSE/src/Rose/FileSystem.h since that one is documented and uses a proper path type and supports both
 // version 2 and version 3 of std::filesystem.
 
 #include <Rose/FileSystem.h>
 
-#include <string>
 #include <filesystem>
+#include <list>
+#include <string>
+
+class PreprocessingInfo;
 
 class FileHelper {
 public:
@@ -142,3 +148,5 @@ public:
         return str1.compare(str1.size() - str2.size(), str2.size(), str2) == 0;
     }
 };
+
+#endif

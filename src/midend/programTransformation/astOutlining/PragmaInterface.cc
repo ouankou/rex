@@ -184,13 +184,13 @@ Outliner::preprocess (SgPragmaDeclaration* decl)
  * tree traversals yield the desired bottomup processing for outlining
  * pragmas. To see why, consider the following code example:
  *
- * \code
+ * @code
  * #pragma rose_outline
  * {
  *   #pragma rose_outline
  *   statement1;
  * }
- * \endcode
+ * @endcode
  *
  * The corresponding AST is:
  *

@@ -93,7 +93,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%        system.  
 %%       % The development versions are what are found in the ROSE software
 %%       % repositories and have additional software requirements: subversion, JDK, autoconf,
-%%       % automake, Doxygen, LaTeX, {\it etc}.
+%%       % automake, MrDocs, LaTeX, {\it etc}.
 %%      \end{itemize}
 %%     % ROSE is delivered as either a development version (svn) or as a distribution for
 %%     % users. The (typical) user version comes either with legacy frontend source or binary distribution.
@@ -133,13 +133,11 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%    \item {\bf GNU Bison}: Needed \emph{ONLY} for development versions. \\
 %%    Yacc is used to generate some annotation\/OpenMP directive parsers in ROSE. 
 %%
-%%    \item {\bf Doxygen} : Needed \emph{ONLY} for development versions. \\
-%%           Most ROSE documentation is generated using LaTex and Doxygen, thus
-%%           Doxygen is required for ROSE developers that want to regenerate the ROSE
-%%           documentation. This is not required for ROSE users, since all documentation is 
-%%           included in the ROSE distribution. Visit {\it www.doxygen.org} for details and to
-%%           download software.  There are no ROSE-specific configure options to use Doxygen;
-%%           it must only be available within your path.
+%%    \item {\bf MrDocs} : Needed \emph{ONLY} for development versions. \\
+%%           The API reference is generated using MrDocs, so ROSE developers that want
+%%           to regenerate it need the MrDocs binary available in their PATH. This is
+%%           not required for ROSE users, since all documentation is included in the
+%%           ROSE distribution.
 %%  
 %%    \item {\bf ghostscript}: Needed \emph{ONLY} for development versions. \\
 %%    ps2pdf is need  to generate ROSE documentations.
@@ -147,7 +145,6 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%    \item {\bf DOT (GraphViz)} : Required since many ROSE tests generate
 %%    AST/CFG graph in dot format.\\
 %%           ROSE uses DOT for generating graphs of ASTs, Control Flow, etc.
-%%           DOT is also used internally by Doxygen.
 %%           Visit {\it www.graphviz.org} for details and to download software.
 %%           An example showing the use of the DOT to build graphs is in the ROSE Tutorial.
 %%           There are no ROSE-specific configure options to use dot; it must only be 
@@ -209,7 +206,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %% There are two versions of ROSE supported: the 
 %% {\it Distribution Version} for users (typical) and the {\it Development Version}
 %% (intended only for ROSE development team), which is what is found in the ROSE software
-%% repository and has additional software requirements (autoconf, automake, Doxygen, LaTeX,
+%% repository and has additional software requirements (autoconf, automake, MrDocs, LaTeX,
 %% etc.).  The exact requirements are listed in the {\tt ROSE/ChangeLog} (including version 
 %% numbers for each release of ROSE).
 %% \begin{itemize}
@@ -726,17 +723,17 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 % in the Developer's Appendix (see \ref{rose_email_list_info}).
 
 % DQ (1/21/2009): Note this information is maintained in several locations and in LaTeX
-% and doxygen formats:
+% and HTML formats:
 %    1) ROSE User Manual: Developer's: Appendix,
 %    2) ROSE Installation Manual
 %    3) ROSE Tutorial
-%    4) doxygen generated web pages for ROSE
+%    4) API reference web pages for ROSE
 %
 % DQ (10/28/2008): This information is copied from:
 %                  ROSE User Manual: Developer's: Appendix: ROSE Email
 %                  Lists.
 
-See http://rosecompiler.org/ROSE\_HTML\_Reference/index.html
+See https://rosecompiler.org/reference/index.html
 
 %% We have three mailing lists for core developers (those who have write access to
 %% the internal repository), all developers (anyone who has write access to the

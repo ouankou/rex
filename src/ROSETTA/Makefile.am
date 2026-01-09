@@ -13,15 +13,13 @@ EXTRA_DIST = CMakeLists.txt astNodeList
 # ***********************************************************************
 # Don't build a "docs" rule just yet since the dist rule (which builds distributions)
 # will call it to generate documentation and this both causes errors and we don't
-# want to test the generation of doxygen just yet (too long of a process).
+# want to test documentation generation just yet (too long of a process).
 
 docs:
 	@echo "Skipping the creation of documentation within the docs rule."
 
 # sage-docs:
-#	@echo "Generate documentation for C++ grammar (using Doxygen)"
 #	mkdir -p ../docs/CxxGrammar
-#	doxygen $(srcdir)/ROSE_CxxGrammar.cfg
 
 clean-docs:
 	@echo Removing generated documentation

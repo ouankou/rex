@@ -1,6 +1,12 @@
 #ifndef ROSE_FileUtility_H
 #define ROSE_FileUtility_H
 
+#include <rosedll.h>
+
+#include <list>
+#include <string>
+#include <vector>
+
 #include "commandline_processing.h"
 
 namespace Rose {
@@ -19,15 +25,18 @@ namespace StringUtility {
 // systems.
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-enum OSType { OS_TYPE_UNKNOWN, OS_TYPE_LINUX };
+enum OSType {
+    OS_TYPE_UNKNOWN, ///< Unknown operating system.
+    OS_TYPE_LINUX    ///< Linux operating system.
+};
 
 /** String with source location information.
  *
  *  The location information is a file name string (empty means generated code) and a line number. Line numbers are one-origin;
  *  the first line of a file is numbered 1, not 0.
  *
- *  @todo What does it mean to have a non-positive line number? What line number should be used for generated code when the @p
- *  filename member is empty? */
+ *  @todo What does it mean to have a non-positive line number? What line number should be used for generated code when the
+ *  `filename` member is empty? */
 struct StringWithLineNumber {
     std::string str;                                    // DQ (1/23/2010): this name is difficult to trace within the code.
     std::string filename;                               // Empty string means generated code
@@ -47,11 +56,15 @@ ROSE_UTIL_API OSType getOSType();
 
 /** Create a file.
  *
- *  Creates a new file, truncating any existing file with the same name, and writes the string @p outputString into the
- *  file. The name of the file is constructed by concatenating @p directoryName and @p fileNameString without any intervening
+ *  Creates a new file, truncating any existing file with the same name, and writes the string `outputString` into the
+ *  file. The name of the file is constructed by concatenating `directoryName` and `fileNameString` without any intervening
  *  component separator (e.g., no "/").
  *
- *  If the file cannot be created then this function silently fails (or aborts if ROSE is compiled in debug mode). */
+ *  If the file cannot be created then this function silently fails (or aborts if ROSE is compiled in debug mode).
+ *
+ * @param outputString Contents to write.
+ * @param fileNameString File name component.
+ * @param directoryName Directory path. */
 ROSE_UTIL_API void writeFile(const std::string& outputString, const std::string& fileNameString,
                              const std::string& directoryName);
 
@@ -60,7 +73,10 @@ ROSE_UTIL_API void writeFile(const std::string& outputString, const std::string&
  *  Opens the specified file, reads its contents into a string, closes the file, and returns that string.
  *
  *  If the file cannot be opened then an std::string error message is thrown. The message reads "File not found" regardless of
- *  the actual error condition. */
+ *  the actual error condition.
+ *
+ * @param fileName File to read.
+ * @return File contents. */
 ROSE_UTIL_API std::string readFile(const std::string& fileName);
 
 /** Reads an entire text file.
@@ -70,20 +86,28 @@ ROSE_UTIL_API std::string readFile(const std::string& fileName);
  *  have their final line-feeds removed.
  *
  *  If the file cannot be opened then an std::string error message is thrown. The message reads "File not found" regardless of
- *  the actual error condition. */
+ *  the actual error condition.
+ *
+ * @param fileName File to read.
+ * @return File contents with line numbers. */
 ROSE_UTIL_API FileWithLineNumbers readFileWithPos(const std::string& fileName);
 
 /** Name of the home directory.
  *
- *  Returns the value of the "HOME" environment variable by copying it into the @p dir argument. Will segfault if this
- *  environment variable is not set. */
+ *  Returns the value of the "HOME" environment variable by copying it into the `dir` argument. Will segfault if this
+ *  environment variable is not set.
+ *
+ * @param dir Receives the home directory path. */
 ROSE_UTIL_API void homeDir(std::string& dir);
 
 /** Returns the last component of a path in a filesystem.
  *
  *  Removes the "path" part of a "filename" (if there is one) and returns just the file name.
  *
- *  Terms are loosely defined and not likely to work for non-POSIX systems; consider using std::filesystem instead. */
+ *  Terms are loosely defined and not likely to work for non-POSIX systems; consider using std::filesystem instead.
+ *
+ * @param fileNameWithPath Path-like string.
+ * @return Last path component. */
 ROSE_UTIL_API std::string stripPathFromFileName(const std::string &fileNameWithPath);
 
 /** Returns all but the last component of a path in a filesystem.
@@ -92,19 +116,29 @@ ROSE_UTIL_API std::string stripPathFromFileName(const std::string &fileNameWithP
  *  Make it safe to input a filename without a path name (return the filename).
  *
  *  Terms are loosely defined and this function possibly doesn't work for non-POSIX file systems; consider using
- *  std::filesystem instead. */
+ *  std::filesystem instead.
+ *
+ * @param fileNameWithPath Path-like string.
+ * @return Path component. */
 ROSE_UTIL_API std::string getPathFromFileName(const std::string &fileNameWithPath);
 
 /** Get the file name without the ".suffix".
  *
  *  Terms are loosely defined and it's not clear what happens for inputs like ".", ".foo", "..", ".foo.bar", "/.",
- *  etc. Consider using std::filesystem instead. */
+ *  etc. Consider using std::filesystem instead.
+ *
+ * @param fileNameWithSuffix File name with extension.
+ * @return File name without suffix. */
 ROSE_UTIL_API std::string stripFileSuffixFromFileName(const std::string & fileNameWithSuffix);
 
 /** Get the absolute path from the relative path.
  *
  *  Terms are loosely defined and this function is not likely to work on non-POSIX systems. Consider using std::filesystem
- *  instead. */
+ *  instead.
+ *
+ * @param relativePath Relative path string.
+ * @param printErrorIfAny Whether to print errors.
+ * @return Absolute path string. */
 ROSE_UTIL_API std::string getAbsolutePathFromRelativePath(const std::string &relativePath, bool printErrorIfAny = false);
 
 /** Get the file name suffix (extension) without the leading dot.
@@ -113,7 +147,10 @@ ROSE_UTIL_API std::string getAbsolutePathFromRelativePath(const std::string &rel
  *  returns the original fileName.
  *
  *  Terms are loosely defined and this function is not likely to work correctly in some situations, such as when the "." is not
- *  in the last component of the file name.  Consider using std::filesystem instead. */
+ *  in the last component of the file name.  Consider using std::filesystem instead.
+ *
+ * @param fileName Input path or filename.
+ * @return Suffix without the leading dot. */
 ROSE_UTIL_API std::string fileNameSuffix(const std::string &fileName);
 
 
@@ -125,9 +162,9 @@ ROSE_UTIL_API std::string fileNameSuffix(const std::string &fileName);
 
 /** Find file names non-recursively.
  *
- *  Scans the directory named @p pathString and returns a list of files in that directory which have @p patternString as a
- *  substring of their name. Note that @p patternString is not a glob or regular expression.  The return value strings are
- *  formed by concatenating the @p pathString and the file name with an intervening slash.
+ *  Scans the directory named `pathString` and returns a list of files in that directory which have `patternString` as a
+ *  substring of their name. Note that `patternString` is not a glob or regular expression.  The return value strings are
+ *  formed by concatenating the `pathString` and the file name with an intervening slash.
  *
  *  This function does not work for non-POSIX systems. Consider using std::filesystem instead, which has a directory iterator
  *  that works for non-POSIX systems also. */
@@ -139,10 +176,10 @@ ROSE_UTIL_API std::string fileNameSuffix(const std::string &fileName);
  * Files can be classified as being in one of three locations: We don't know if it's user or system It is a user (application)
  * file It is a system library This file does not exist */
 enum FileNameLocation {
-    FILENAME_LOCATION_UNKNOWN,
-    FILENAME_LOCATION_USER,
-    FILENAME_LOCATION_LIBRARY,
-    FILENAME_LOCATION_NOT_EXIST
+    FILENAME_LOCATION_UNKNOWN, ///< Location cannot be determined.
+    FILENAME_LOCATION_USER, ///< User/application file.
+    FILENAME_LOCATION_LIBRARY, ///< System/library file.
+    FILENAME_LOCATION_NOT_EXIST ///< File does not exist.
 };
 
 static const std::string FILENAME_LIBRARY_UNKNOWN = "Unknown";
@@ -214,34 +251,57 @@ public:
  *
  *  Given a fileName and an appPath that is a path to some application's source code directory, return a FileNameClassification
  *  indicating whether the fileName is part of the source code or some system library and automatically determine the operating
- *  system from the host uname */
+ *  system from the host uname.
+ *
+ * @param fileName File to classify.
+ * @param appPath Application source root.
+ * @return Classification result. */
 ROSE_UTIL_API FileNameClassification classifyFileName(const std::string& fileName, const std::string& appPath);
 
 /** Determine whether a file is source code or system library.
  *
  *  Given a fileName and an appPath that is a path to some application's source code directory, return a FileNameClassification
- *  indicating whether the fileName is part of the source code or some system library */
+ *  indicating whether the fileName is part of the source code or some system library.
+ *
+ * @param fileName File to classify.
+ * @param appPath Application source root.
+ * @param os Operating system type to assume.
+ * @return Classification result. */
 ROSE_UTIL_API FileNameClassification classifyFileName(const std::string& fileName, const std::string& appPath, OSType os);
 
 /** Determine whether a file is source code or system library.
  *
  *  Given a fileName and an appPath that is a path to some application's source code directory, and a collection of library
  *  paths, return a FileNameClassification indicating whether the fileName is part of the source code or some system library
- *  and automatically determine the operating system from the host uname */
+ *  and automatically determine the operating system from the host uname.
+ *
+ * @param fileName File to classify.
+ * @param appPath Application source root.
+ * @param libPathCollection Library search paths.
+ * @return Classification result. */
 ROSE_UTIL_API FileNameClassification classifyFileName(const std::string& fileName, const std::string& appPath,
                                                       const std::map<std::string, std::string>& libPathCollection);
 
 /** Determine whether a file is source code or system library.
  *
  *  Given a fileName and an appPath that is a path to some application's source code directory, and a collection of library
- *  paths, return a FileNameClassification indicating whether the fileName is part of the source code or some system library */
+ *  paths, return a FileNameClassification indicating whether the fileName is part of the source code or some system library.
+ *
+ * @param fileName File to classify.
+ * @param appPath Application source root.
+ * @param libPathCollection Library search paths.
+ * @param os Operating system type to assume.
+ * @return Classification result. */
 ROSE_UTIL_API FileNameClassification classifyFileName(const std::string& fileName, const std::string& appPath,
                                                       const std::map<std::string, std::string>& libPathCollection,
                                                       OSType os);
 
 /** Remove leading dots.
  *
- *  Removes leading dots plus a space from a header file name that is given in the format that g++ -H returns */
+ *  Removes leading dots plus a space from a header file name that is given in the format that g++ -H returns.
+ *
+ * @param name Header name string.
+ * @return Cleaned header name. */
 ROSE_UTIL_API const std::string stripDotsFromHeaderFileName(const std::string& name);
 
 /** Edit distance between two directory names.
@@ -251,14 +311,21 @@ ROSE_UTIL_API const std::string stripDotsFromHeaderFileName(const std::string& n
  *  take to move from the directory of the filename to the directory that was given by appPath.  This is intended as a
  *  heuristic to gage whether or not one believes that the left is related to the right directory.  Examples:
  *
- *  Between /a/b/c/file.h and /a/b/d/e/ the distance is 3 because one must cd ..; cd d; cd e */
+ *  Between /a/b/c/file.h and /a/b/d/e/ the distance is 3 because one must cd ..; cd d; cd e
+ *
+ * @param left Left directory path.
+ * @param right Right directory path.
+ * @return Directory distance. */
 ROSE_UTIL_API int directoryDistance(const std::string& left, const std::string& right);
 
 /** Reads words from a file.
  *
- *  Opens the specified file for reading and reads all words from the file using <code>std::istream</code>
- *  <code>operator>></code> into <code>std::string</code>.  If the file cannot be opened then an error message is printed to
- *  standard output (not error) and the program exits with status 1. */
+ *  Opens the specified file for reading and reads all words from the file using `std::istream`
+ *  `operator>>` into `std::string`.  If the file cannot be opened then an error message is printed to
+ *  standard output (not error) and the program exits with status 1.
+ *
+ * @param filename File to read.
+ * @return List of words. */
 ROSE_UTIL_API std::vector<std::string> readWordsInFile(std::string filename);
 
 // popen_wrapper is defined in sage_support.C
@@ -267,7 +334,11 @@ ROSE_UTIL_API std::vector<std::string> readWordsInFile(std::string filename);
  *
  *  If there is a failure (cannot create pipes, command not found, command terminated abnormally, input buffer too small, etc),
  *  then an error is printed to standard error (with or without line termination) and false is returned.  When an error occurs
- *  the pipes that were opened to communicate with the subcommand might not be closed. */
+ *  the pipes that were opened to communicate with the subcommand might not be closed.
+ *
+ * @param command Command to execute.
+ * @param result Output lines collected from the command.
+ * @return True on success, false on failure. */
 bool popen_wrapper(const std::string &command, std::vector<std::string> &result);
 
 /** Prints a StringWithLineNumber. */
@@ -279,17 +350,22 @@ inline std::ostream& operator<<(std::ostream& os, const StringWithLineNumber& s)
 /** Generate C preprocessor #line directives.
  *
  *  Given a vector of strings with source location information, print those strings with intervening C preprocessor #line
- *  directives. For strings that have no source location, use the specified @p filename argument as the name of the file. The
- *  @p physicalLine is the line number to assume for the first line of output (the return value). The #line directives are
- *  not emitted into the return value when they're not needed (e.g., two @p strings are at successive line numbers of the same
- *  source file) or if ROSE has been configured to not emit #line directivies (i.e., the @c
- *  SKIP_HASH_LINE_NUMBER_DECLARATIONS_IN_GENERATED_FILES preprocessor symbol is defined). The @p strings should not have
- *  trailing linefeeds or else the output will contain extra blank lines. */
+ *  directives. For strings that have no source location, use the specified `filename` argument as the name of the file. The
+ *  `physicalLine` is the line number to assume for the first line of output (the return value). The #line directives are
+ *  not emitted into the return value when they're not needed (e.g., two `strings` are at successive line numbers of the same
+ *  source file) or if ROSE has been configured to not emit #line directivies (i.e., the
+ *  `SKIP_HASH_LINE_NUMBER_DECLARATIONS_IN_GENERATED_FILES` preprocessor symbol is defined). The `strings` should not have
+ *  trailing linefeeds or else the output will contain extra blank lines.
+ *
+ * @param strings Lines with source locations.
+ * @param filename Default filename to use for generated lines.
+ * @param line Starting line number.
+ * @return Combined string with #line directives. */
 ROSE_UTIL_API std::string toString(const FileWithLineNumbers& strings, const std::string& filename = "<unknown>", int line = 1);
 
 /** Append strings with source location information to vector of such.
  *
- *  Modifies @p a by appending those strings from @p b. */
+ *  Modifies `a` by appending those strings from `b.` */
 inline FileWithLineNumbers& operator+=(FileWithLineNumbers& a, const FileWithLineNumbers& b) {
     a.insert(a.end(), b.begin(), b.end());
     return a;
@@ -297,7 +373,7 @@ inline FileWithLineNumbers& operator+=(FileWithLineNumbers& a, const FileWithLin
 
 /** Concatenate vectors of strings with source location.
  *
- *  Returns a new vector of strings with location information by concatenating vector @p a with @p b. */
+ *  Returns a new vector of strings with location information by concatenating vector `a` with `b.` */
 inline FileWithLineNumbers operator+(const FileWithLineNumbers& a, const FileWithLineNumbers& b) {
     FileWithLineNumbers f = a;
     f += b;
@@ -306,7 +382,7 @@ inline FileWithLineNumbers operator+(const FileWithLineNumbers& a, const FileWit
 
 /** Append string to vector of strings with location information.
  *
- *  Appends @p str to the last string in the vector of strings with location information. If the vector is empty then a new
+ *  Appends `str` to the last string in the vector of strings with location information. If the vector is empty then a new
  *  element is created.
  *
  *  The new code is marked as either generated (empty file name) or not generated (non-empty name) based on whether the vector
@@ -314,7 +390,7 @@ inline FileWithLineNumbers operator+(const FileWithLineNumbers& a, const FileWit
  *  always be a generated string; adding it to a non-empty vector makes it generated or not generated depending on whether the
  *  last element of the vector is generated or not generated.
  *
- *  The string @p str should not include line termination. (see @ref toString).
+ *  The string `str` should not include line termination. (see @ref toString).
  *
  *  @{ */
 inline FileWithLineNumbers& operator<<(FileWithLineNumbers& f, const std::string& str) {
@@ -334,8 +410,13 @@ inline FileWithLineNumbers& operator<<(FileWithLineNumbers& f, const char* str) 
 
 /** Replace all occurrences of a string with another string.
  *
- *  Finds all occurrences of the @p oldToken string in @p inputString and replaces them each with @p newToken, returning the
+ *  Finds all occurrences of the `oldToken` string in `inputString` and replaces them each with `newToken,` returning the
  *  result.
+ *
+ * @param inputString Input string or line list.
+ * @param oldToken Token to replace.
+ * @param newToken Replacement value.
+ * @return Updated string or line list.
  *
  * @{ */
 ROSE_UTIL_API std::string copyEdit(const std::string& inputString, const std::string & oldToken, const std::string & newToken);

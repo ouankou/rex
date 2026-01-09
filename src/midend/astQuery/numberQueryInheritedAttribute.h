@@ -1,13 +1,11 @@
 #ifndef ROSE_NUMBER_QUERY_INHERITED_ATTRIBUTE_H
 #define ROSE_NUMBER_QUERY_INHERITED_ATTRIBUTE_H
 
-/*! \if documentDevelopmentVersionUsingDoxygen
-  \brief Inherited attribute for NumberQuery class.
-  \ingroup nodeQueryLib
-
-  This class defines the inherited attribute used within the traversal associated 
-  with the NumberQuery library.
-  \endif
+/** @brief Inherited attribute for NumberQuery class.
+ *
+ * This class defines the inherited attribute used within the traversal associated with the NumberQuery library.
+ *
+ * See @ref nodeQueryLib.
  */
 class NumberQueryInheritedAttributeType
 {

@@ -2,6 +2,7 @@
 #define MULTI_GRAPH_OBSERVE_H
 
 #include <MultiGraphCreate.h>
+#include <ObserveObject.h>
 
 class MultiGraphObserver
 {

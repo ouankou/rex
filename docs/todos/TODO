@@ -164,7 +164,7 @@ DONE (see below) * Need a way to display the AST (currently we can print out the
 
 * DONE: Call graph support is required for many other features to be added to ROSE 
   (e.g. dependence analysis).  This is a great student project. DOT could be used to
-  visualize the graph (seems to work well for even large graphs in Doxygen).
+  visualize the graph (seems to work well for even large graphs in generated docs).
 
 * Our ROSE unparser writes directly to an output stream. I have noticed that other
   unparsers used a separate structure with several function pointers (e.g. legacy frontend).  
@@ -1100,11 +1100,10 @@ across copy constructor calls had to be maintained (something like that).
 * (1/12/2004) Documentation Requirements (reported by Beata)
 ********************************************************************************
 
-DONE: Specify where to get DOT (GraphViz) and Doxygen software used in ROSE 
+DONE: Specify where to get DOT (GraphViz) and API doc tooling used in ROSE 
 developers (added where to find MySQL as well).
 
  
-
 
 
 

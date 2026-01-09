@@ -1,0 +1,25 @@
+site_name: REX Documentation
+site_dir: _site
+
+theme:
+  name: material
+  features:
+    - navigation.top
+    - navigation.tabs
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Build: build.md
+  - Notes:
+      - Clang Frontend (AXPY): axpy_clang_frontend.md
+      - Clang OpenMP: clang-openmp-notes.md
+      - Template Status: CLANG_CPP_TEMPLATE_STATUS.md
+      - System Header Mutation: system-header-mutation.md
+      - Upstream Sync: upstream-sync/rose-upstream-sync-guide.md
+  - API Reference: api.md

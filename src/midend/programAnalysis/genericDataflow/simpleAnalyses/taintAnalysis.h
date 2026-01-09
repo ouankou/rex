@@ -11,7 +11,7 @@
 // someone other than the author of the genericDataflow framework.  It is based
 // on the sign analysis (sgnAnalysis.[Ch]) in this same directory since
 // documentation for the genericDataflow framework is fairly sparse: 5 pages in
-// the tutorial, not counting the code listings) and no doxygen documentation.
+// the tutorial, not counting the code listings) and no API reference.
 //
 // This file contains two types of comments:
 //    1. Comments that try to document some of the things I've discovered
@@ -35,9 +35,8 @@
 //            the assumption throughout that when the dynamic_cast returns null, the node in question points to a variable or
 //            expression that the live/dead analysis has determined to be dead.
 //
-// USABILITY: No doxygen comments throughout genericDataflow framework?!?  But it looks like there's some doxygen-like stuff
-//            describing a few function parameters, so is it using some other documenting system?  I at least added the headers
-//            to the docs/Rose/rose.cfg file so doxygen picks up the structure.
+// USABILITY: No API reference for the genericDataflow framework?!? It looks like there are some doc-style comments
+//            describing a few function parameters, but overall documentation coverage is sparse.
 //
 // USABILITY: The genericDataflow framework always produces files named "index.html", "summary.html", and "detail.html" and
 //            a directory named "dbg_imgs" regardless of any debug settings.  These are apprently the result of the Dbg::init()
@@ -96,7 +95,7 @@ public:
     }
 
     // USABILITY: The base class defines copy() without a const argument, so we must do the same here.
-    /** Assignment-like operator. Makes this object point to the same lattice vertex as the @p other object. The other object
+    /** Assignment-like operator. Makes this object point to the same lattice vertex as the `other` object. The other object
      *  must also be a TaintLattice object. */
     virtual void copy(/*const*/ Lattice *other_) override;
 
@@ -113,7 +112,7 @@ public:
     // USABILITY: The "prefix" argument is pointless. Why not just use StringUtility::prefixLines() in the base class rather
     //            than replicate this functionality all over the place?
     /** String representation of the lattice vertex to which this object points.  The return value is the name of the vertex to
-     *  which this object points, sans "VERTEX_" prefix, and converted to lower case.  The @p prefix is prepended to the
+     *  which this object points, sans "VERTEX_" prefix, and converted to lower case.  The `prefix` is prepended to the
      *  returned string. */
     virtual std::string str(/*const*/ std::string /*&*/prefix) /*const*/ override {
         return prefix + to_string();
@@ -173,7 +172,7 @@ public:
     // USABILITY: Copied from
     // src/midend/programAnalysis/genericDataflow/simpleAnalyses/sgnAnalysis.C.
     // I'm not sure what
-    //            it's doing yet since there's no doxygen documentation for
+    //            it's doing yet since there's no API reference for
     //            FiniteVarsExprsProductLattice or any of its members.
     //
     /** Generate initial lattice state.  Generates the initial lattice state for
@@ -182,7 +181,7 @@ public:
     void genInitState(const Function& func, const DataflowNode& node, const NodeState& state,
                       std::vector<Lattice*>& initLattices, std::vector<NodeFact*>& initFacts);
 
-    // USABILITY: Not documented in doxygen, so I'm more or less copying from the SgnAnalysis::transfer() method defined in
+    // USABILITY: Not documented in the API reference, so I'm more or less copying from the SgnAnalysis::transfer() method defined in
     //            src/midend/programAnalysis/genericDataflow/sgnAnalysis.C.
     /** Adjust a result vertex pointer.  This function has an opportunity to adjust the result lattice vertex pointer based on
      *  input lattice vertices at a particular AST node at a particular time in the data flow.  For instance, if the AST node

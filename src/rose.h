@@ -12,6 +12,10 @@
 
 #include "rosedefs.h"
 
+#ifdef ROSE_DOCGEN
+#include "docs/Attributes.h"
+#endif
+
 // DQ (4/21/2009): This header file contains the definitions of the IR nodes.
 // tps : avoid detection" header files are scanned whether they include sage3basic.h for .h and .hh
 

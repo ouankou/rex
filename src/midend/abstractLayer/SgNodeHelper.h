@@ -572,7 +572,7 @@ namespace SgNodeHelper {
       : rep(NULL)
       {}
 
-      /// node @ref callnode contanins some function call
+      /// @param callnode Node containing some function call.
       ExtendedCallInfo(SgLocatedNode& callnode)
       : rep(&callnode)
       {}

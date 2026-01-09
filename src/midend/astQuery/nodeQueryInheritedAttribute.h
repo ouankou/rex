@@ -1,13 +1,11 @@
 #ifndef ROSE_NODE_QUERY_INHERITED_ATTRIBUTE_H
 #define ROSE_NODE_QUERY_INHERITED_ATTRIBUTE_H
 
-/*! \if documentDevelopmentVersionUsingDoxygen
-  \brief Inherited attribute for NodeQuery class.
-  \ingroup nodeQueryLib
-
-  This class defines the inherited attribute used within the traversal associated 
-  with the NodeQuery library.
-  \endif
+/** @brief Inherited attribute for NodeQuery class.
+ *
+ * This class defines the inherited attribute used within the traversal associated with the NodeQuery library.
+ *
+ * See @ref nodeQueryLib.
  */
 class NodeQueryInheritedAttributeType
 {

@@ -13,8 +13,8 @@ set(_unparse_template_passing
 
 set(_unparse_template_failing
   kripke-tpl-007.cxx
-  doxygen-000.cxx
-  doxygen-001.cxx
+  docgen-000.cxx
+  docgen-001.cxx
 )
 
 set(_unparse_template_tests

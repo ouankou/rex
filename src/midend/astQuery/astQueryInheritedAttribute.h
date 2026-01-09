@@ -1,13 +1,11 @@
 #ifndef ROSE_AST_QUERY_INHERITED_ATTRIBUTE_H
 #define ROSE_AST_QUERY_INHERITED_ATTRIBUTE_H
 
-/*! \if documentDevelopmentVersionUsingDoxygen
-  \brief Inherited attribute for AstQuery class.
-  \ingroup nodeQueryLib
-
-  This class defines the inherited attribute used within the traversal associated 
-  with the AstQuery library.
-  \endif
+/** @brief Inherited attribute for AstQuery class.
+ *
+ * This class defines the inherited attribute used within the traversal associated with the AstQuery library.
+ *
+ * See @ref nodeQueryLib.
  */
 namespace AstQueryNamespace{
 

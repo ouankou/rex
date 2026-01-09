@@ -34,9 +34,9 @@ for the Rosebud code generator. The differences from C++ are:
   constructors and the destructor). What gets generated depends on
   the midends and backends that are employed for a particular run.
   
-* Doxygen documentation is limited to one block comment per item;
-  i.e., Doxygen comments are not combined. Furthermore, the only C++
-  tokens that can separate the Doxygen comment from the entity it
+* Documentation comments are limited to one block comment per item;
+  i.e., doc comments are not combined. Furthermore, the only C++
+  tokens that can separate the doc comment from the entity it
   documents are access specifiers (e.g., "public:").
   
 * A "property" is a ROSE IR concept. A property stores a value in the

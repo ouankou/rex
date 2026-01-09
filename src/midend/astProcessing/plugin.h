@@ -232,7 +232,7 @@ namespace Rose {
         /// Abstract base class for registry listeners, which are informed when new
         /// entries are added to the registry. Simply subclass and instantiate:
         ///
-        /// \code
+        /// @code
         ///   class CollectorPrinter : public Registry<Collector>::listener {
         ///   protected:
         ///     void registered(const Registry<Collector>::entry &e) {
@@ -244,7 +244,7 @@ namespace Rose {
         ///   };
         ///
         ///   CollectorPrinter Printer;
-        /// \endcode
+        /// @endcode
         class listener {
           listener *Prev, *Next;
 

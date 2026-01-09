@@ -2,8 +2,9 @@
 #ifndef MULTI_GRAPH_CREATE
 #define MULTI_GRAPH_CREATE
 
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <string>
 
 class MultiGraphCreate;
 class MultiGraphElem 

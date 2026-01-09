@@ -26,3 +26,19 @@ cmake --install build
 ```bash
 ctest --test-dir build --output-on-failure
 ```
+
+## Docs
+
+REX uses MrDocs for API documentation and MkDocs Material for the site.
+Use the helper script below to set up a Python venv, fetch the latest MrDocs,
+and build the site.
+
+```bash
+# Ensure a build tree exists with compile_commands.json
+./build-rex.sh $HOME/rex-install Release
+
+# Build the docs site (API reference + MkDocs)
+scripts/build-docs
+```
+
+Output is written to `_site`.

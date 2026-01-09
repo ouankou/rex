@@ -68,7 +68,7 @@ HEADER_START
              statement.
 
              \param target - location in the AST where new statements are to be inserted.
-             \param newstmt - List of new statements to be placed into the AST.
+             \param newstmtList - List of new statements to be placed into the AST.
              \param inFront - if true the new statements are inserted before the target statement, else
                               the new statements are inserted after the target statement (default = true).
              \return Function returns void.
@@ -91,7 +91,7 @@ HEADER_START
              a list of statements at the target location.
 
              \param target - location of the statement to be replaced.
-             \param newstmt - List of new statements to replace the target statement in the AST.
+             \param newstmtList - List of new statements to replace the target statement in the AST.
              \return Function returns void.
           */
            void replace_statement(SgStatement* target, const SgStatementPtrList& newstmtList);
@@ -106,7 +106,7 @@ HEADER_START
              \param target - location of the statement to be removed.
              \return Function returns void.
           */
-           void remove_statement(SgStatement *);
+           void remove_statement(SgStatement *target);
 
           /*!
              \brief This function inserts a statement at the position indicated by target.
@@ -7763,10 +7763,10 @@ SgDeclarationStatement::testForBadGenerateTemplateName( const std::string & name
                   {
                     // PP (4/10/2025): refined message and commented out ROSE_ASSERT(false)
                     // example code where this warning is issued:
-                    //   \code
+                    //   ```
                     //   template <class...> struct make_void {};
                     //   struct require_left_shift : make_void<decltype(1 << 1)> {};
-                    //   \endcode
+                    //   ```
                     printf ("WARNING: \"<<\" or \">>\" found in generated name, this could lead to an error in compiling the generated code later\n");
                     printf ("..... name generated in processing a %s IR node \n",class_name().c_str());
                     printf ("..... generated name = %s \n",name.c_str());

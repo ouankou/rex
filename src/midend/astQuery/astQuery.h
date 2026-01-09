@@ -114,25 +114,12 @@ namespace AstQueryNamespace
 
   //typedef std::list<SgNode*> AstQuerySynthesizedAttributeType;
 
-  /*!
-    \defgroup nodeQueryLib Node Query Library
-    \brief This class simplifies the development of queries on the AST resulting in a 
-    list of AST nodes (SgNode pointer values).
-    \authors Quinlan, Saebjornsen
-    \ingroup subtreeQueryLib
-
-    This class represents a library of queries. Basically it will support a large number of
-    different types of queries that can be ask of an AST and that return a list of AST nodes.
-   */
-
-  /*! \brief This class simplifies the development of queries on the AST resulting in a 
-    list of AST nodes.
-    \ingroup nodeQueryLib
-
-    This class used several  member function within it's interface.  Each member function
-    takes an AST node pointer (any subtree of the AST).
-    This class represents a library of queries.. Basically it will support a large number of
-    different types of queries that can be ask of an AST and that return a list of SgNode pointers.
+  /** @brief Simplifies development of queries on the AST that return lists of AST nodes.
+   *
+   * This class uses several member functions within its interface. Each member function takes an AST node pointer (any
+   * subtree of the AST). It represents a library of queries that return a list of SgNode pointers.
+   *
+   * See @ref nodeQueryLib.
    */
   struct DefaultNodeFunctional {
     using result_type = Rose_STL_Container<SgNode*>;

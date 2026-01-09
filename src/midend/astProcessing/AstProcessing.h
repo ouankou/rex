@@ -93,6 +93,20 @@ class SgCombinedTreeTraversal;
 
 
 // Base class for all traversals.
+/** @brief Temporary traversal base class (do not use).
+ *
+ * This class is internal and should not be used directly. Use the Ast*Processing classes instead.
+ *
+ * Internal: This class is temporary. Currently it is a base class for the AstProcessing classes providing the implementation
+ * of the traversal and attribute evaluation.
+ *
+ * Metadata:
+ * - Authors: Markus Schordan
+ * - Version: 0.5
+ * - Date: Dec 14th 2002
+ * - Bug: No known bugs.
+ * - TODO: eliminate class
+ */
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 class SgTreeTraversal
 {
@@ -181,6 +195,20 @@ template <class InheritedAttributeType, class SynthesizedAttributeType>
 class AstCombinedTopDownBottomUpProcessing;
 
 template <class InheritedAttributeType, class SynthesizedAttributeType>
+/** @brief Attribute evaluator for inherited and synthesized attributes.
+ *
+ * In general, this class combines the classes TopDownProcessing and BottomUpProcessing and also allows to use the inherited
+ * attribute of a node in the computation of the synthesized attribute at the same node.
+ *
+ * This class allows computation of inherited and synthesized attributes on the AST. It requires an inherited attribute type
+ * and a synthesized attribute type as template parameters and the implementation of the functions evaluateInheritedAttribute
+ * and evaluateSynthesizedAttribute. The function evaluateInheritedAttribute is invoked in pre-order, the function
+ * evaluateSynthesizedAttribute is invoked in post-order while the AST is traversed. The function evaluateSynthesizedAttribute
+ * gets an additional parameter: the inheritedAttribute value which is computed at the respective node. It can be used to make
+ * the computation of the synthesized attribute at a node dependent on the value of the inherited attribute of the same node.
+ *
+ * Internal: This class is derived from the SgTreeTraversal class.
+ */
 class AstTopDownBottomUpProcessing
     : public SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>
 { 
@@ -234,6 +262,14 @@ template <class InheritedAttributeType>
 class DistributedMemoryAnalysisPreTraversal;
 
 template <class InheritedAttributeType>
+/** @brief Attribute evaluator for inherited attributes.
+ *
+ * This class allows computation of inherited attributes on the AST. It requires an inherited attribute type as a template
+ * parameter and the implementation of the function evaluateInheritedAttribute. This function is invoked in pre-order while
+ * the AST is traversed. It can be used for passing context information down the AST.
+ *
+ * Internal: This class is derived from the SgTreeTraversal class.
+ */
 class AstTopDownProcessing
     : public SgTreeTraversal<InheritedAttributeType, DummyAttribute>
 {
@@ -286,6 +322,24 @@ template <class InheritedAttributeType>
 class DistributedMemoryAnalysisPostTraversal;
 
 template <class SynthesizedAttributeType>
+/** @brief Attribute evaluator for synthesized attributes.
+ *
+ * This class allows computation of synthesized attributes on the AST. It requires a synthesized attribute type as a
+ * template parameter and the implementation of the function evaluateSynthesizedAttribute. This function is invoked in
+ * post-order while the AST is traversed. It can be used for passing information up the AST and for computing a synthesized
+ * attribute at each node based on the results of its children in the AST.
+ *
+ * Initialization of synthesized attributes is necessary for values which represent results of non-existent nodes (null
+ * pointers in the AST) or skipped nodes (e.g. traverseWithinFile skips all nodes which do not represent the same file as from
+ * where the evaluation of attributes started).
+ * - Class as synthesized attribute type. The default constructor is sufficient to initialize the object representing an
+ *   attribute value.
+ * - Primitive type as synthesized attribute type (e.g. int, bool, etc.). The method defaultSynthesizedAttribute must be
+ *   implemented to initialize the synthesized attribute. This function is automatically called during attribute evaluation
+ *   whenever necessary.
+ *
+ * Internal: This class is derived from the SgTreeTraversal class.
+ */
 class AstBottomUpProcessing
     : public SgTreeTraversal<DummyAttribute,SynthesizedAttributeType>
 {

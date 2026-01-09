@@ -1,11 +1,11 @@
 
-This directory contains most of the ROSE documentation. Both LaTeX and Doxygen
-are used to document ROSE.  
+This directory contains most of the ROSE documentation. Both LaTeX and MrDocs
+are used to document ROSE.
 
     There are three pieces to the ROSE documentation.
    1) HTML Documentation
-         included html version of manual, tutorial, and Doxygen generated 
-         documentation about all the classes within ROSE (or most of them).
+         included html version of manual, tutorial, and MrDocs-generated
+         documentation about the ROSE API.
    2) ROSE User Manual
          Contains a readable introduction to ROSE and it's mechanisms.
 
@@ -43,7 +43,7 @@ Notes:
     already built and copied into the Source Tree.  This is the only case of the build process
     modifying the source tree, but this avoid having the user build the documentation for
     ROSE (which would force a dependence upon latex (setup with extended internal buffer
-    sizes) and Doxygen and some other tools (dot, etc.).
+    sizes) and MrDocs and some other tools (dot, etc.).
   
    4) Be very careful about specifying makefile targets to force the generation of the
     documentation when it is out of date, because this will often force the makefiles

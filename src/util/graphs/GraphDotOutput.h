@@ -63,7 +63,10 @@ class GraphDotOutput
  public:
   GraphDotOutput( Graph &_g) : g(_g) {}
 
-     //! get the name of a vertex
+     /** Get the vertex label text.
+      *
+      * @param v Vertex to label.
+      * @return Escaped vertex label. */
      std::string getVertexName(typename Graph::Node* v) 
        { 
          std::string r1 = v->toString();

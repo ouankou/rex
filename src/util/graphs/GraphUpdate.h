@@ -133,6 +133,10 @@ _GraphStructure::DeleteNode must be implemented
 protected in IDGraphCreateTemplate
  * so it should be easy.
  *************************************************************************************************/
+/** Filter nodes from a graph.
+ *
+ * @param graph Graph to filter in place.
+ * @param _nodePred Predicate selecting nodes to remove. */
 template<typename _GraphStructure, typename _NodePredicate>
 void filterGraph(_GraphStructure& graph, _NodePredicate _nodePred){
      typename _GraphStructure::NodeIterator it1 =  graph. GetNodeIterator();

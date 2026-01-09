@@ -18,7 +18,9 @@ namespace StringUtility {
 /** Convert an ASCII hexadecimal character to an integer.
  *
  *  Converts the characters 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, a, b, c, d, e, f, A, B, C, D, E, and F into their hexadecimal integer
- *  equivalents. Returns zero if the input character is not in this set. */
+ *  equivalents. Returns zero if the input character is not in this set.
+ *
+ * @return Integer value for the character, or zero on failure. */
 ROSE_UTIL_API unsigned hexadecimalToInt(char);
 
 template<typename T>

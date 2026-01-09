@@ -306,7 +306,7 @@ Extend to Fortran when Clang Fortran (flang-new) frontend is integrated.
 
 - ROSE Documentation: http://rosecompiler.org
 - OpenMP Specification: https://www.openmp.org/specifications/
-- Clang PPCallbacks: https://clang.llvm.org/doxygen/classclang_1_1PPCallbacks.html
+- Clang PPCallbacks: clang/Lex/PPCallbacks.h
 - ROSE ompAstConstruction.cpp: OpenMP AST construction implementation
 - Open Fortran Parser connector: Reference implementation for pragma handling
 

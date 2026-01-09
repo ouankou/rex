@@ -33,30 +33,40 @@ namespace IntegerOpsPrivate {
  *  indicate that they should be the second choice--used only when the template version cannot be used. */
 namespace IntegerOps {
 
-/** Bitmask constant with bit @p n set.  Handles the case where @p n is greater than the width of type @p T. */
+/** Bitmask constant with bit `n` set.  Handles the case where `n` is greater than the width of type `T.` */
 template <typename T, size_t n>
 struct SHL1: public IntegerOpsPrivate::SHL1Helper<T, n, (n >= IntegerOpsPrivate::NumBits<T>::value)> {};
 
-/** Bitmask with bit @p n set.  Handles the case where @p n is greater than the width of type @p T. */
+/** Bitmask with bit `n` set.  Handles the case where `n` is greater than the width of type `T.`
+ *
+ * @param n Bit index.
+ * @return Bitmask value. */
 template <typename T>
 inline T shl1(size_t n) {
     return (n >= IntegerOpsPrivate::NumBits<T>::value) ? T(0) : (T(1) << n);
 }
 
-/** Bit mask constant with bits 0 through @p n-1 set. */
+/** Bit mask constant with bits 0 through `n-1` set. */
 template <typename T, size_t n>
 struct GenMask {
     static const T value = SHL1<T, n>::value - T(1);
 };
 
-/** Bitmask with bits 0 through @p N-1 set. */
+/** Bitmask with bits 0 through `N-1` set.
+ *
+ * @param n Number of low bits to set.
+ * @return Bitmask value. */
 template <typename T>
 inline T genMask(size_t n) {
     return shl1<T>(n) - 1;
 }
 
-/** Generate a bitmask. The return value has bits @p lobit (inclusive) through @p hibit (inclusive) set, and all other bits
- *  are clear. */
+/** Generate a bitmask. The return value has bits `lobit` (inclusive) through `hibit` (inclusive) set, and all other bits
+ *  are clear.
+ *
+ * @param lobit Least significant bit index.
+ * @param hibit Most significant bit index.
+ * @return Bitmask value. */
 template <typename T>
 inline T genMask(size_t lobit, size_t hibit)
 {
@@ -66,6 +76,9 @@ inline T genMask(size_t lobit, size_t hibit)
 }
 
 /** Returns true if the sign bit is set, false if clear.
+ *
+ * @param value Input value.
+ * @return True if the sign bit is set.
  * @{ */
 template <size_t NBits, typename T>
 inline bool signBit(T value) {
@@ -80,8 +93,11 @@ inline bool signBit2(T value, size_t width=8*sizeof(T)) {
 }
 /** @} */
 
-/** Sign extend value.  If the bit @p FromBits-1 is set set for @p value, then the result will have bits @p FromBits through @p
-*  ToBits-1 also set (other bits are unchanged).  If @p ToBits is less than or equal to @p FromBits then nothing happens.
+/** Sign extend value.  If the bit `FromBits-1` is set set for `value,` then the result will have bits `FromBits` through
+*  `ToBits-1` also set (other bits are unchanged).  If `ToBits` is less than or equal to `FromBits` then nothing happens.
+*
+* @param value Input value.
+* @return Sign-extended value.
 * @{ */
 template <size_t FromBits, size_t ToBits, typename T>
 inline T signExtend(T value) {
@@ -96,7 +112,11 @@ inline T signExtend2(T value, size_t from_width, size_t to_width) {
 }
 /** @} */
 
-/** Shifts bits of @p value left by @p count bits.
+/** Shifts bits of `value` left by `count` bits.
+ *
+ * @param value Input value.
+ * @param count Shift count.
+ * @return Shifted value.
  * @{ */
 template <size_t NBits, typename T>
 inline T shiftLeft(T value, size_t count) {
@@ -110,7 +130,11 @@ inline T shiftLeft2(T value, size_t count, size_t width=8*sizeof(T)) {
 }
 /** @} */
 
-/** Shifts bits of @p value right by @p count bits without sign extension.
+/** Shifts bits of `value` right by `count` bits without sign extension.
+ *
+ * @param value Input value.
+ * @param count Shift count.
+ * @return Shifted value.
  * @{ */
 template <size_t NBits, typename T>
 inline T shiftRightLogical(T value, size_t count) {
@@ -124,7 +148,11 @@ inline T shiftRightLogical2(T value, size_t count, size_t width=8*sizeof(T)) {
 }
 /** @} */
 
-/** Shifts bits of @p value right by @p count bits with sign extension.
+/** Shifts bits of `value` right by `count` bits with sign extension.
+ *
+ * @param value Input value.
+ * @param count Shift count.
+ * @return Shifted value.
  * @{ */
 template <size_t NBits, typename T>
 inline T shiftRightArithmetic(T value, size_t count) {
@@ -148,6 +176,10 @@ inline T shiftRightArithmetic2(T value, size_t count, size_t width=8*sizeof(T)) 
 /** @} */
 
 /** Rotate the bits of the value left by count bits.
+ *
+ * @param value Input value.
+ * @param count Rotation count.
+ * @return Rotated value.
  * @{ */
 template <size_t NBits, typename T>
 inline T rotateLeft(T value, size_t count) {
@@ -163,7 +195,11 @@ inline T rotateLeft2(T value, size_t count, size_t width=8*sizeof(T)) {
 }
 /** @} */
 
-/** Rotate bits of the value right by @p count bits.
+/** Rotate bits of the value right by `count` bits.
+ *
+ * @param value Input value.
+ * @param count Rotation count.
+ * @return Rotated value.
  * @{ */
 template <size_t NBits, typename T>
 inline T rotateRight(T value, size_t count) {
@@ -178,7 +214,10 @@ inline T rotateRight2(T value, size_t count, size_t width=8*sizeof(T)) {
 }
 /** @} */
 
-/** Returns true if the value is a power of two.  Zero is considered a power of two. */
+/** Returns true if the value is a power of two.  Zero is considered a power of two.
+ *
+ * @param value Input value.
+ * @return True if value is a power of two. */
 template <typename T>
 inline bool isPowerOfTwo(T value)
 {
@@ -194,8 +233,11 @@ inline bool isPowerOfTwo(T value)
     return true; // treat zero as a power of two
 }
 
-/** Returns the base-2 logorithm of @p value.  If @p value is not a power of two then the return value is rounded up to the
- *  next integer. The @p value is treated as an unsigned value. Returns zero if @p value is zero. */
+/** Returns the base-2 logorithm of `value.`  If `value` is not a power of two then the return value is rounded up to the
+ *  next integer. The `value` is treated as an unsigned value. Returns zero if `value` is zero.
+ *
+ * @param value Input value.
+ * @return Rounded-up base-2 log value. */
 template <typename T>
 inline T log2max(T value)
 {
@@ -226,9 +268,11 @@ inline T log2(T a) {
     return i;
 }
 
-/** Create a shifted value. The return value is created by shifting @p value to the specified position in the result. Other
- *  bits of the return value are clear. The @p hibit is specified so that we can check at run-time that a valid value was
+/** Create a shifted value. The return value is created by shifting `value` to the specified position in the result. Other
+ *  bits of the return value are clear. The `hibit` is specified so that we can check at run-time that a valid value was
  *  specified (i.e., the value isn't too wide).
+ * @param value Input value.
+ * @return Shifted value.
  * @{ */
 template<size_t lobit, size_t hibit, typename T>
 inline T shift_to(T value) {
@@ -247,8 +291,11 @@ inline T shift_to2(size_t lobit, size_t hibit, T value)
 }
 /** @} */
 
-/** Extract bits from a value.  Bits @p lobit through @p hibit, inclusive, are right shifted into the result and higher-order
+/** Extract bits from a value.  Bits `lobit` through `hibit,` inclusive, are right shifted into the result and higher-order
  *  bits of the result are cleared.
+ *
+ * @param bits Input value.
+ * @return Extracted bits.
  * @{ */
 template<size_t lobit, size_t hibit, typename T>
 inline T extract(T bits) {
@@ -266,14 +313,21 @@ inline T extract2(size_t lobit, size_t hibit, T bits)
 /** @} */
 
 /** Determines if one bitmask is a subset of another.  Returns true if the bits set in the first argument form a subset of the
- *  bits set in the second argument. */
+ *  bits set in the second argument.
+ *
+ * @param m1 Candidate subset mask.
+ * @param m2 Candidate superset mask.
+ * @return True if `m1` is a subset of `m2`. */
 template<typename T>
 inline bool bitmask_subset(T m1, T m2)
 {
     return 0 == (~m1 & m2); // m2 must not contain bits that are not in m1
 }
 
-/** Counts how many bits are set (one). */
+/** Counts how many bits are set (one).
+ *
+ * @param val Input value.
+ * @return Number of set bits. */
 template<typename T>
 inline size_t countSet(T val)
 {
@@ -285,7 +339,10 @@ inline size_t countSet(T val)
     return retval;
 }
 
-/** Counts how many bits are clear (zero). */
+/** Counts how many bits are clear (zero).
+ *
+ * @param val Input value.
+ * @return Number of clear bits. */
 template<typename T>
 inline size_t countClear(T val)
 {
@@ -297,7 +354,10 @@ inline size_t countClear(T val)
     return retval;
 }
 
-/** Optionally returns the zero-origin position of the most significant set bit.  Returns nothing if no bits are set. */
+/** Optionally returns the zero-origin position of the most significant set bit.  Returns nothing if no bits are set.
+ *
+ * @param val Input value.
+ * @return Index of most significant set bit, or empty. */
 template<typename T>
 inline std::optional<size_t> msb_set(T val)
 {

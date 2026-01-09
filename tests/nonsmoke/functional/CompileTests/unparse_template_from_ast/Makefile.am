@@ -15,8 +15,8 @@ TESTCODES_PASSING = \
 
 TESTCODES_FAILING = \
    kripke-tpl-007.cxx \
-   doxygen-000.cxx \
-   doxygen-001.cxx
+   docgen-000.cxx \
+   docgen-001.cxx
    
 TESTCODES = $(TESTCODES_PASSING) $(TESTCODES_FAILING)
 
@@ -48,4 +48,3 @@ clean-local:
 	rm -f *.failed
 
 EXTRA_DIST = $(TESTCODES)
-

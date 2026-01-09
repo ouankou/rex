@@ -378,7 +378,7 @@ class Grammar
 
        // DQ (3/24/2006): Separated these functions so that we could position the data member 
        // variable declaration at the base of the class and the generated access functions at 
-       // the top.  This permist us to present the documentation better using Doxygen.
+       // the top.  This permist us to present the generated documentation better.
        // string buildDataPrototypesAndAccessFunctionPrototypesAndConstuctorPrototype ( GrammarTreeNode & node );
           Rose::StringUtility::FileWithLineNumbers buildDataMemberVariableDeclarations ( AstNodeClass & node );
           Rose::StringUtility::FileWithLineNumbers buildMemberAccessFunctionPrototypesAndConstuctorPrototype ( AstNodeClass & node );

@@ -4890,7 +4890,7 @@ fixupScopeInUnparseInfo ( SgUnparse_Info& ninfo , SgDeclarationStatement* declar
   // to be almost always correct :-).  Note that "ninfo" will go out of scope, so we don't have to reset it at the end of this function.
   // Note that that it is FROM this scope that the name qualification is computed, so this is structural, not semantic.
 
-  // DQ (11/9/2007): If we want to force the use of qualified names then don't reset the internal scope (required for new ROSE Doxygen 
+  // DQ (11/9/2007): If we want to force the use of qualified names then don't reset the internal scope (required for new ROSE
   // documentation generator).
      if (ninfo.forceQualifiedNames() == false)
         {

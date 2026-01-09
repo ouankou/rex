@@ -12,13 +12,13 @@ namespace Rose {
 class Logger {
   public:
     enum class Level {
-      debug   = 0,
-      info    = 1,
-      warning = 2,
-      error   = 3,
-      fatal   = 4,
-      enter   = 5, //< Used internally for "Enter: mnenonic(ptr_id)"
-      leave   = 6  //< Used internally for "Leave: mnenonic(ptr_id)"
+      debug   = 0, ///< Debug output.
+      info    = 1, ///< Informational output.
+      warning = 2, ///< Warning output.
+      error   = 3, ///< Error output.
+      fatal   = 4, ///< Fatal error output.
+      enter   = 5, ///< Used internally for "Enter: mnenonic(ptr_id)".
+      leave   = 6  ///< Used internally for "Leave: mnenonic(ptr_id)".
     };
 
   private:

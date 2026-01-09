@@ -39,17 +39,17 @@
 
 //logging levels
 typedef enum MLOG_LEVEL{
-	MLOG_LEVEL_FAIL = 0,
-	MLOG_LEVEL_FATAL,
-	MLOG_LEVEL_ERROR,
-	MLOG_LEVEL_WARN,
-	MLOG_LEVEL_NONE,   //internal value 4, user verbose level 0 in --rose:verbose cmdline options
-	MLOG_LEVEL_KEY,    //internal value 5, user verbose level 1
-	MLOG_LEVEL_INFO,   //internal value 6, user verbose level 2
-	MLOG_LEVEL_MARCH,  //internal value 7, user verbose level 3
-	MLOG_LEVEL_TRACE,  //internal value 8, user verbose level 4
-	MLOG_LEVEL_DEBUG,
-	MLOG_LEVEL_UNDEFINED,
+	MLOG_LEVEL_FAIL = 0,  ///< Internal failure level.
+	MLOG_LEVEL_FATAL,     ///< Fatal errors; program cannot continue.
+	MLOG_LEVEL_ERROR,     ///< Error conditions; results are unreliable.
+	MLOG_LEVEL_WARN,      ///< Warning conditions.
+	MLOG_LEVEL_NONE,      ///< No optional logging output.
+	MLOG_LEVEL_KEY,       ///< Key optional messages (user verbose level 1).
+	MLOG_LEVEL_INFO,      ///< Informational messages (user verbose level 2).
+	MLOG_LEVEL_MARCH,     ///< Marching/debug progress (user verbose level 3).
+	MLOG_LEVEL_TRACE,     ///< Detailed trace output (user verbose level 4).
+	MLOG_LEVEL_DEBUG,     ///< Debug-only logging.
+	MLOG_LEVEL_UNDEFINED, ///< Unspecified logging level.
 } MLOG_LEVEL_t;
 
 //logging subjects, which are one word names

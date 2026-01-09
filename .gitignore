@@ -99,6 +99,8 @@ GTAGS
 # Docs build artifacts
 docs/_build/
 docs/doxygen-xml/
+docs/reference/
+_site/
 
 # compiled python files
 *.pyc
@@ -113,5 +115,7 @@ docs/doxygen-xml/
 
 # CMake build directory
 /build/
+/.venv-docs/
+/.tools/
 
 .vscode/
