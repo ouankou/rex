@@ -750,7 +750,9 @@ void finishSageAST(ClangToSageTranslator & translator) {
     }
 }
 
-SgGlobal * ClangToSageTranslator::getGlobalScope() { return p_global_scope; }
+SgGlobal *ClangToSageTranslator::getGlobalScope() const {
+  return p_global_scope;
+}
 
 ClangToSageTranslator::ClangToSageTranslator(clang::CompilerInstance * compiler_instance, Language language_, SgSourceFile * sage_source_file) :
     clang::ASTConsumer(),

@@ -554,7 +554,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         virtual ~ClangToSageTranslator();
 
-        SgGlobal * getGlobalScope();
+        SgGlobal * getGlobalScope() const;
 
         void setOpenMPPragmaCallback(const RoseOpenMPPragmaCallback* callback) {
             p_openmp_pragma_callback = callback;
