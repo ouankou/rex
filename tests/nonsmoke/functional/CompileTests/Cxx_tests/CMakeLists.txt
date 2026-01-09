@@ -4269,6 +4269,62 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2025_issue148_system_header_mutation
   rex_test2025_issue148_system_header_mutation.cpp)
 
+# Issue 189: CFE token-stream mapping validation.
+add_executable(
+  rex_test2025_cfe_token_stream_mapping_translator
+  rex_test2025_cfe_token_stream_mapping_translator.cpp
+)
+target_link_libraries(
+  rex_test2025_cfe_token_stream_mapping_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+set(rex_test2025_cfe_token_stream_mapping_tests
+  rex_test2025_cfe_token_stream_mapping_basic.cpp
+  rex_test2025_cfe_token_stream_mapping_shared_intervals.cpp
+  rex_test2025_cfe_token_stream_mapping_else_whitespace.cpp
+  rex_test2025_cfe_token_stream_mapping_macro_transform.cpp
+  rex_test2025_cfe_token_stream_mapping_preproc_order.cpp
+)
+
+foreach(file_to_test ${rex_test2025_cfe_token_stream_mapping_tests})
+  get_filename_component(test_name ${file_to_test} NAME_WE)
+  add_test(
+    NAME Cxx_tests_${test_name}_token_mapping
+    COMMAND
+      $<TARGET_FILE:rex_test2025_cfe_token_stream_mapping_translator>
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:unparse_tokens
+      ${ROSE_INCLUDE_FLAGS}
+      -I${CMAKE_CURRENT_SOURCE_DIR}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
+  )
+  set_tests_properties(
+    Cxx_tests_${test_name}_token_mapping
+    PROPERTIES LABELS Cxx_tests
+  )
+  rex_lock_test_for_input(
+    Cxx_tests_${test_name}_token_mapping
+    ${file_to_test})
+endforeach()
+
+add_test(
+  NAME Cxx_tests_rex_test2025_cfe_token_stream_mapping_macros_includes_token_mapping
+  COMMAND
+    $<TARGET_FILE:rex_test2025_cfe_token_stream_mapping_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:unparse_tokens
+    -rose:unparseHeaderFiles ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_cfe_token_stream_mapping_macros_includes.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2025_cfe_token_stream_mapping_macros_includes_token_mapping
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_cfe_token_stream_mapping_macros_includes_token_mapping
+  rex_test2025_cfe_token_stream_mapping_macros_includes.cpp)
+
 # Issue 151: LinkageSpecDecl (extern "C") must not drop declarations and must
 # preserve linkage in the generated output.
 add_test(

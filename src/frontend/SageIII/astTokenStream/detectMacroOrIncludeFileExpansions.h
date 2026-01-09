@@ -1,6 +1,22 @@
 
 // Header file
 
+#ifndef DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
+#define DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
+
+#include <map>
+#include <string>
+#include <vector>
+
+struct MacroDirective {
+  int line;
+  int col;
+  std::string name;
+  bool is_define;
+};
+
+using MacroDirectiveMap = std::map<std::string, std::vector<MacroDirective> >;
+
 class MacroExpansion
    {
      public:
@@ -61,6 +77,7 @@ class DetectMacroOrIncludeFileExpansions
      public:
           std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap;
           SgSourceFile* sourceFile;
+          MacroDirectiveMap macroDirectives;
 
           std::vector<MacroExpansion*> macroExpansionStack;
 
@@ -83,3 +100,5 @@ class DetectMacroOrIncludeFileExpansions
 
 // Main API function to call the AST traversals
 void detectMacroOrIncludeFileExpansions ( SgSourceFile* sourceFile );
+
+#endif  // DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H

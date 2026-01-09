@@ -1,4 +1,10 @@
 # Cxx test additions tracked for downstream tooling.
 list(APPEND EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_extern_c_brace_roundtrip.cpp
+  rex_test2025_cfe_token_stream_mapping_basic.cpp
+  rex_test2025_cfe_token_stream_mapping_shared_intervals.cpp
+  rex_test2025_cfe_token_stream_mapping_else_whitespace.cpp
+  rex_test2025_cfe_token_stream_mapping_macros_includes.cpp
+  rex_test2025_cfe_token_stream_mapping_macro_transform.cpp
+  rex_test2025_cfe_token_stream_mapping_preproc_order.cpp
 )

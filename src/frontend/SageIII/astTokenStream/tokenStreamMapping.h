@@ -157,6 +157,13 @@ class Graph_TokenMappingTraversal : public AstSimpleProcessing
 
 
 // DQ (1/7/2021): Adding function to header so that I can call it elsewhere for testing.
-std::vector<stream_element*> getTokenStream( SgSourceFile* file );
+std::vector<stream_element*> getTokenStream(SgSourceFile* file);
+
+// DQ (1/18/2021): Token stream mapping entry points.
+void buildTokenStreamMapping(SgSourceFile* sourceFile,
+                             std::vector<stream_element*>& tokenVector);
+void buildTokenStreamMappingForRoot(SgSourceFile* sourceFile,
+                                    SgNode* traversalRoot,
+                                    std::vector<stream_element*>& tokenVector);
 
 #endif

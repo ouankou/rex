@@ -1460,11 +1460,7 @@ TokenMappingTraversal::discoverElseSyntax(TokenStreamSequenceToNodeMapping* if_s
         }
        else
         {
-#if 0
-          printf ("In discoverElseSyntax(): no initial whitespace detected to start the  loop (reset to not define whitespace) \n");
-#endif
-          else_whitespace_start = -1;
-          else_whitespace_end   = -1;
+          // No leading whitespace; preserve the else token position.
         }
 
   // Set the else_whitespace_start to the end (since "else" is a single token.
@@ -8268,8 +8264,14 @@ buildTokenStreamFrontier(SgSourceFile* sourceFile, bool traverseHeaderFiles)
 
 
 // void buildTokenStreamMapping(SgSourceFile* sourceFile)
-void
-buildTokenStreamMapping(SgSourceFile* sourceFile, vector<stream_element*> & tokenVector)
+void buildTokenStreamMapping(SgSourceFile* sourceFile,
+                             vector<stream_element*>& tokenVector) {
+  buildTokenStreamMappingForRoot(sourceFile, sourceFile, tokenVector);
+}
+
+void buildTokenStreamMappingForRoot(SgSourceFile* sourceFile,
+                                    SgNode* traversalRoot,
+                                    vector<stream_element*>& tokenVector)
    {
   // DQ (12/6/2014): This function seperates the initial generation of the token stream and it's mapping to the AST from 
   // the assocaited connection to the computed frontier after transformations have been done to define where the AST
@@ -8447,7 +8449,8 @@ buildTokenStreamMapping(SgSourceFile* sourceFile, vector<stream_element*> & toke
   // tokenMappingTraversal.traverseInputFiles(sourceFile,inheritedAttribute);
   // tokenMappingTraversal.traverse(sourceFile,inheritedAttribute);
   // tokenMappingTraversal.traverseInputFiles(sourceFile,inheritedAttribute);
-     tokenMappingTraversal.traverse(sourceFile,inheritedAttribute);
+     SgNode* traversalRootNode = traversalRoot != NULL ? traversalRoot : sourceFile;
+     tokenMappingTraversal.traverse(traversalRootNode, inheritedAttribute);
    }
 
 #if DEBUG_TOKEN_STREAM_MAPPING || 0

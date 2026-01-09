@@ -854,32 +854,37 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
 
           if (begin.isValid() && end.isValid())
              {
-               if (begin.isMacroID())
+               clang::SourceManager &sm =
+                   p_compiler_instance->getSourceManager();
+               const clang::LangOptions &lang_opts =
+                   p_compiler_instance->getLangOpts();
+
+               bool begin_is_macro = begin.isMacroID();
+               bool end_is_macro = end.isMacroID();
+               clang::SourceLocation spelling_begin = sm.getSpellingLoc(begin);
+               clang::SourceLocation spelling_end = sm.getSpellingLoc(end);
+
+               if (begin_is_macro)
                   {
 #if DEBUG_SOURCE_LOCATION
                     std::cerr << "\tDump SourceLocation begin as it is a MacroID: ";
-                    begin.dump(p_compiler_instance->getSourceManager());
+                    begin.dump(sm);
                     std::cerr << std::endl;
 #endif
-                    begin = p_compiler_instance->getSourceManager().getExpansionLoc(begin);
+                    begin = sm.getExpansionLoc(begin);
                     ROSE_ASSERT(begin.isValid());
                   }
 
-               if (end.isMacroID())
+               if (end_is_macro)
                   {
 #if DEBUG_SOURCE_LOCATION
                     std::cerr << "\tDump SourceLocation end as it is a MacroID: ";
-                    end.dump(p_compiler_instance->getSourceManager());
+                    end.dump(sm);
                     std::cerr << std::endl;
 #endif
-                    end = p_compiler_instance->getSourceManager().getExpansionLoc(end);
+                    end = sm.getExpansionLoc(end);
                     ROSE_ASSERT(end.isValid());
                   }
-
-                  clang::SourceManager &sm =
-                      p_compiler_instance->getSourceManager();
-                  const clang::LangOptions &lang_opts =
-                      p_compiler_instance->getLangOpts();
 
                   clang::FileID file_begin = sm.getFileID(begin);
                   clang::FileID file_end = sm.getFileID(end);
@@ -997,6 +1002,35 @@ void ClangToSageTranslator::applySourceRange(SgNode * node, clang::SourceRange s
                           start_fi->setOutputInCodeGeneration();
                           end_fi->setOutputInCodeGeneration();
                         }
+                      }
+
+                      if (begin_is_macro || end_is_macro) {
+                        auto set_physical_info =
+                            [&](Sg_File_Info *fi,
+                                const clang::SourceLocation &loc) {
+                              if (fi == NULL || !loc.isValid())
+                                return;
+                              clang::FileID spelling_id = sm.getFileID(loc);
+                              if (!spelling_id.isInvalid()) {
+                                const clang::FileEntry *spelling_entry =
+                                    sm.getFileEntryForID(spelling_id);
+                                if (spelling_entry) {
+                                  std::string spelling_file =
+                                      spelling_entry->tryGetRealPathName()
+                                          .str();
+                                  if (!spelling_file.empty())
+                                    fi->set_physical_filename(spelling_file);
+                                }
+                              }
+                              bool inv_line = false;
+                              unsigned spelling_line =
+                                  sm.getSpellingLineNumber(loc, &inv_line);
+                              if (!inv_line && spelling_line > 0)
+                                fi->set_physical_line(spelling_line);
+                            };
+
+                        set_physical_info(start_fi, spelling_begin);
+                        set_physical_info(end_fi, spelling_end);
                       }
 
 #if DEBUG_SOURCE_LOCATION

@@ -44,6 +44,7 @@ operator<<(std::basic_ostream<char, std::char_traits<char> >& os, std::vector<bo
 #endif
 
 // DQ (9/26/2018): Added so that we can call the display function for TokenStreamSequenceToNodeMapping (for debugging).
+#include "attachPreprocessingInfo.h"
 #include "tokenStreamMapping.h"
 
 using namespace std;
@@ -70,6 +71,124 @@ extern const std::string ROSE_OFP_VERSION_STRING;
 
 // DQ (11/30/2015): Adding general support fo the detection of macro expansions and include file expansions.
 void detectMacroOrIncludeFileExpansions(SgSourceFile* sourceFile);
+
+static bool shouldBuildTokenMapping(const SgSourceFile* sourceFile)
+   {
+     if (sourceFile == NULL)
+        {
+          return false;
+        }
+
+     return (sourceFile->get_unparse_tokens() == true ||
+             sourceFile->get_use_token_stream_to_improve_source_position_info() ==
+                 true);
+   }
+
+static std::string normalizePathIfPossible(const std::string& path)
+   {
+     if (path.empty())
+        {
+          return path;
+        }
+     if (!FileHelper::fileExists(path))
+        {
+          return path;
+        }
+     return FileHelper::normalizePath(path);
+   }
+
+static void copyLanguageSettings(SgSourceFile* target,
+                                 const SgSourceFile* reference)
+   {
+     ROSE_ASSERT(target != NULL);
+     ROSE_ASSERT(reference != NULL);
+
+     target->set_outputLanguage(reference->get_outputLanguage());
+     target->set_inputLanguage(reference->get_inputLanguage());
+
+     target->set_C_only(reference->get_C_only());
+     if (reference->get_C99_only())
+        {
+          target->set_C99_only();
+        }
+     if (reference->get_C11_only())
+        {
+          target->set_C11_only();
+        }
+     target->set_Cxx_only(reference->get_Cxx_only());
+
+     target->set_Cuda_only(reference->get_Cuda_only());
+     target->set_OpenCL_only(reference->get_OpenCL_only());
+     target->set_Fortran_only(reference->get_Fortran_only());
+   }
+
+static SgSourceFile* buildHeaderSourceFile(SgProject* project,
+                                           const std::string& headerPath,
+                                           const SgSourceFile* referenceFile)
+   {
+     ROSE_ASSERT(project != NULL);
+     ROSE_ASSERT(referenceFile != NULL);
+
+     vector<string> argv = project->get_originalCommandLineArgumentList();
+     Rose_STL_Container<string> fileList =
+         CommandlineProcessing::generateSourceFilenames(argv,
+                                                        project->get_binary_only());
+     CommandlineProcessing::removeAllFileNamesExcept(argv, fileList, headerPath);
+     if (std::find(argv.begin(), argv.end(), headerPath) == argv.end())
+        {
+          argv.push_back(headerPath);
+        }
+
+     SgSourceFile* headerFile = new SgSourceFile(argv, project);
+     ROSE_ASSERT(headerFile != NULL);
+
+     headerFile->set_isHeaderFile(true);
+     headerFile->set_unparseHeaderFiles(referenceFile->get_unparseHeaderFiles());
+     headerFile->set_unparse_tokens(referenceFile->get_unparse_tokens());
+     headerFile->set_use_token_stream_to_improve_source_position_info(
+         referenceFile->get_use_token_stream_to_improve_source_position_info());
+     headerFile->set_unparse_using_leading_and_trailing_token_mappings(
+         referenceFile->get_unparse_using_leading_and_trailing_token_mappings());
+
+     copyLanguageSettings(headerFile, referenceFile);
+
+     headerFile->set_requires_C_preprocessor(false);
+     headerFile->initializeGlobalScope();
+
+     if (headerFile->get_preprocessorDirectivesAndCommentsList() == NULL)
+        {
+          headerFile->set_preprocessorDirectivesAndCommentsList(
+              new ROSEAttributesListContainer());
+        }
+
+     return headerFile;
+   }
+
+static void ensureHeaderTokenMapping(SgSourceFile* headerFile,
+                                     SgSourceFile* traversalRoot)
+   {
+     ROSE_ASSERT(headerFile != NULL);
+     ROSE_ASSERT(traversalRoot != NULL);
+
+     ROSEAttributesListContainerPtr filePreprocInfo =
+         headerFile->get_preprocessorDirectivesAndCommentsList();
+     if (filePreprocInfo == NULL)
+        {
+          filePreprocInfo = new ROSEAttributesListContainer();
+          headerFile->set_preprocessorDirectivesAndCommentsList(filePreprocInfo);
+        }
+
+     const std::string headerPath = headerFile->getFileName();
+     std::map<std::string, ROSEAttributesList*>& listMap =
+         filePreprocInfo->getList();
+     if (listMap.find(headerPath) == listMap.end())
+        {
+          listMap[headerPath] = getPreprocessorDirectives(headerPath);
+        }
+
+     std::vector<stream_element*> tokenVector = getTokenStream(headerFile);
+     buildTokenStreamMappingForRoot(headerFile, traversalRoot, tokenVector);
+   }
 
 // DQ (2/12/2011): Added const so that this could be called in get_mangled() (and more generally).
 // std::string SgValueExp::get_constant_folded_value_as_string()
@@ -1542,6 +1661,142 @@ SgProject::parse()
           const map<string, set<PreprocessingInfo*> >& includingPreprocessingInfosMap = includingPreprocessingInfosCollector.collect();
           set_includingPreprocessingInfosMap(includingPreprocessingInfosMap);
 
+          if (unparse_using_tokens == true)
+             {
+               std::map<std::string, SgSourceFile*> sourceFilesByPath;
+               std::map<std::string, SgSourceFile*> includingSourceFiles;
+               for (SgFile* file : get_fileList())
+                  {
+                    SgSourceFile* sourceFile = isSgSourceFile(file);
+                    if (sourceFile == NULL)
+                       {
+                         continue;
+                       }
+                    std::string normalizedPath =
+                        normalizePathIfPossible(sourceFile->getFileName());
+                    if (!normalizedPath.empty())
+                       {
+                         sourceFilesByPath[normalizedPath] = sourceFile;
+                       }
+                    if (sourceFile->get_isHeaderFile() == true)
+                       {
+                         continue;
+                       }
+                    if (!normalizedPath.empty())
+                       {
+                         includingSourceFiles[normalizedPath] = sourceFile;
+                       }
+                  }
+
+               std::map<std::string, SgSourceFile*> tokenMapFilesByPath;
+               for (std::map<SgSourceFile*,
+                             std::map<SgNode*,
+                                      TokenStreamSequenceToNodeMapping*>*>::const_iterator
+                        mapIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
+                    mapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end();
+                    ++mapIt)
+                  {
+                    SgSourceFile* sourceFile = mapIt->first;
+                    if (sourceFile == NULL)
+                       {
+                         continue;
+                       }
+                    std::string normalizedPath =
+                        normalizePathIfPossible(sourceFile->getFileName());
+                    if (!normalizedPath.empty())
+                       {
+                         tokenMapFilesByPath[normalizedPath] = sourceFile;
+                       }
+                  }
+
+               std::set<std::string> processedHeaders;
+               for (map<string, set<string> >::const_iterator it =
+                        includedFilesMap.begin();
+                    it != includedFilesMap.end(); ++it)
+                  {
+                    const std::string includingPath =
+                        normalizePathIfPossible(it->first);
+                    std::map<std::string, SgSourceFile*>::const_iterator
+                        rootIt = includingSourceFiles.find(includingPath);
+                    if (rootIt == includingSourceFiles.end())
+                       {
+                         continue;
+                       }
+
+                    SgSourceFile* traversalRoot = rootIt->second;
+                    if (!shouldBuildTokenMapping(traversalRoot))
+                       {
+                         continue;
+                       }
+
+                    const set<string>& includedSet = it->second;
+                    for (set<string>::const_iterator incIt = includedSet.begin();
+                         incIt != includedSet.end(); ++incIt)
+                       {
+                         std::string includedPath =
+                             normalizePathIfPossible(*incIt);
+                         if (!processedHeaders.insert(includedPath).second)
+                            {
+                              continue;
+                            }
+                         if (!FileHelper::fileExists(includedPath))
+                            {
+                              continue;
+                            }
+
+                         std::map<std::string, SgSourceFile*>::const_iterator
+                             headerIt = sourceFilesByPath.find(includedPath);
+                         SgSourceFile* headerFile =
+                             headerIt != sourceFilesByPath.end()
+                                 ? headerIt->second
+                                 : NULL;
+                         if (headerFile == NULL)
+                            {
+                              std::map<std::string, SgSourceFile*>::const_iterator
+                                  tokenMapIt =
+                                      tokenMapFilesByPath.find(includedPath);
+                              if (tokenMapIt != tokenMapFilesByPath.end())
+                                 {
+                                   headerFile = tokenMapIt->second;
+                                 }
+                            }
+                         if (headerFile == NULL)
+                            {
+                              // Detached header files are cleaned up with token-map teardown in SageInterface::deleteAST().
+                              headerFile = buildHeaderSourceFile(
+                                  this, includedPath, traversalRoot);
+                              if (headerFile != NULL)
+                                 {
+                                   tokenMapFilesByPath[includedPath] =
+                                       headerFile;
+                                 }
+                            }
+                         if (headerFile == NULL)
+                            {
+                              continue;
+                            }
+
+                         if (Rose::tokenSubsequenceMapOfMapsBySourceFile
+                                     .find(headerFile) !=
+                                 Rose::tokenSubsequenceMapOfMapsBySourceFile
+                                     .end())
+                            {
+                              std::map<SgNode*,
+                                       TokenStreamSequenceToNodeMapping*>*
+                                  existingMap =
+                                      Rose::tokenSubsequenceMapOfMapsBySourceFile
+                                          [headerFile];
+                              if (existingMap != NULL && !existingMap->empty())
+                                 {
+                                   continue;
+                                 }
+                            }
+
+                         ensureHeaderTokenMapping(headerFile, traversalRoot);
+                       }
+                  }
+             }
+
           if (SgProject::get_verbose() >= 1)
              {
                printf ("\nOutput info for unparse headers support: \n");
@@ -2945,8 +3200,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
   // Initialize token subsequence map for unparsing
   // The backend unparser expects this map to exist (even if empty) for token-based unparsing
   // Note: Raw pointer allocation follows ROSE's standard memory management pattern (see tokenStreamMapping.C).
-  // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and persists
-  // for the program lifetime, consistent with ROSE's architecture for AST-related data structures.
+  // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and cleared
+  // when the AST is deleted (see SageInterface::deleteAST()).
   //
   // Check if a token map already exists (e.g., from a previous parse after deleteAST).
   // If it exists, clear it for reuse. Otherwise, create a new one.

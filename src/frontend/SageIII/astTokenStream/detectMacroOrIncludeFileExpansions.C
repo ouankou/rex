@@ -2,7 +2,134 @@
 #include "tokenStreamMapping.h"
 #include "previousAndNextNode.h"
 
+#include <algorithm>
+#include <cctype>
+
 using namespace std;
+
+namespace {
+bool isIdentifierChar(char ch) {
+  return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_';
+}
+
+std::string extractMacroName(const std::string &directive,
+                             const std::string &keyword) {
+  size_t pos = 0;
+  while (pos < directive.size() &&
+         std::isspace(static_cast<unsigned char>(directive[pos])) != 0) {
+    ++pos;
+  }
+  if (pos >= directive.size() || directive[pos] != '#') {
+    return "";
+  }
+  ++pos;
+  while (pos < directive.size() &&
+         std::isspace(static_cast<unsigned char>(directive[pos])) != 0) {
+    ++pos;
+  }
+  if (directive.compare(pos, keyword.size(), keyword) != 0) {
+    return "";
+  }
+  pos += keyword.size();
+  while (pos < directive.size() &&
+         std::isspace(static_cast<unsigned char>(directive[pos])) != 0) {
+    ++pos;
+  }
+  size_t start = pos;
+  while (pos < directive.size() && isIdentifierChar(directive[pos])) {
+    ++pos;
+  }
+  if (start == pos) {
+    return "";
+  }
+  return directive.substr(start, pos - start);
+}
+
+MacroDirectiveMap buildMacroDirectives(SgSourceFile *sourceFile) {
+  MacroDirectiveMap directives;
+  if (sourceFile == NULL) {
+    return directives;
+  }
+
+  ROSEAttributesListContainerPtr container =
+      sourceFile->get_preprocessorDirectivesAndCommentsList();
+  if (container != nullptr) {
+    std::map<std::string, ROSEAttributesList *>::iterator it =
+        container->getList().begin();
+    for (; it != container->getList().end(); ++it) {
+      const std::string &filename = it->first;
+      ROSEAttributesList *list = it->second;
+      if (list == nullptr) {
+        continue;
+      }
+      std::vector<MacroDirective> &entries = directives[filename];
+      std::vector<PreprocessingInfo *> &infos = list->getList();
+      for (size_t i = 0; i < infos.size(); ++i) {
+        PreprocessingInfo *info = infos[i];
+        if (info == nullptr) {
+          continue;
+        }
+        PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+        if (type != PreprocessingInfo::CpreprocessorDefineDeclaration &&
+            type != PreprocessingInfo::CpreprocessorUndefDeclaration) {
+          continue;
+        }
+        const std::string &directive = info->getString();
+        const std::string keyword =
+            (type == PreprocessingInfo::CpreprocessorDefineDeclaration)
+                ? "define"
+                : "undef";
+        std::string name = extractMacroName(directive, keyword);
+        if (name.empty()) {
+          continue;
+        }
+        int line = 0;
+        int col = 0;
+        Sg_File_Info *fi = info->get_file_info();
+        if (fi != nullptr) {
+          line = fi->get_line();
+          col = fi->get_col();
+        }
+        entries.push_back(
+            MacroDirective{line, col, name,
+                           type == PreprocessingInfo::CpreprocessorDefineDeclaration});
+      }
+      std::stable_sort(entries.begin(), entries.end(),
+                       [](const MacroDirective &a, const MacroDirective &b) {
+                         if (a.line != b.line) {
+                           return a.line < b.line;
+                         }
+                         return a.col < b.col;
+                       });
+    }
+  }
+
+  return directives;
+}
+
+bool isMacroDefinedAt(const MacroDirectiveMap &directives,
+                      const std::string &filename, int line,
+                      const std::string &name) {
+  if (line <= 0) {
+    return false;
+  }
+  MacroDirectiveMap::const_iterator it = directives.find(filename);
+  if (it == directives.end()) {
+    return false;
+  }
+  bool defined = false;
+  const std::vector<MacroDirective> &entries = it->second;
+  for (size_t i = 0; i < entries.size(); ++i) {
+    if (entries[i].line > line) {
+      break;
+    }
+    if (entries[i].name == name) {
+      defined = entries[i].is_define;
+    }
+  }
+  return defined;
+}
+} // namespace
 
 
 MacroExpansion::MacroExpansion (const string & name) : macro_name(name), shared(false)
@@ -59,7 +186,9 @@ DetectMacroOrIncludeFileExpansionsSynthesizedAttribute( const DetectMacroOrInclu
 // AST traversal class member functions
 // DetectMacroOrIncludeFileExpansions::DetectMacroOrIncludeFileExpansions( std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & input_tokenStreamSequenceMap )
 DetectMacroOrIncludeFileExpansions::DetectMacroOrIncludeFileExpansions( SgSourceFile* input_sourceFile, std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & input_tokenStreamSequenceMap )
-  : tokenStreamSequenceMap(input_tokenStreamSequenceMap), sourceFile(input_sourceFile)
+  : tokenStreamSequenceMap(input_tokenStreamSequenceMap),
+    sourceFile(input_sourceFile),
+    macroDirectives(buildMacroDirectives(input_sourceFile))
    {
      ASSERT_not_null(sourceFile);
    }
@@ -258,8 +387,80 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* locate
      ASSERT_not_null(end);
 
      MacroExpansion* macroExpansion = nullptr;
+     TokenStreamSequenceToNodeMapping* tokenStreamSequence = nullptr;
+     int token_subsequence_start = -1;
+     int token_subsequence_end   = -1;
+     string macroNameFromTokens;
 
-     if ( (start->get_line() > 0) && (start->get_line() == end->get_line()) && (start->get_col() == end->get_col()) )
+     std::map<SgNode*,TokenStreamSequenceToNodeMapping*>::iterator tokenMapIt =
+         tokenStreamSequenceMap.find(currentStatement);
+     if (tokenMapIt != tokenStreamSequenceMap.end() &&
+         tokenMapIt->second != nullptr)
+        {
+          tokenStreamSequence = tokenMapIt->second;
+          token_subsequence_start = tokenStreamSequence->token_subsequence_start;
+          token_subsequence_end   = tokenStreamSequence->token_subsequence_end;
+
+          SgTokenPtrList & roseTokenList = sourceFile->get_token_list();
+          if (roseTokenList.empty() == false &&
+              token_subsequence_start >= 0 &&
+              token_subsequence_start < static_cast<int>(roseTokenList.size()))
+             {
+               SgToken* tokenAssociatedWithMacroCall = roseTokenList[token_subsequence_start];
+               if (tokenAssociatedWithMacroCall != nullptr)
+                  {
+                    macroNameFromTokens = tokenAssociatedWithMacroCall->get_lexeme_string();
+                  }
+             }
+        }
+
+     bool has_valid_location = (start->get_line() > 0);
+     bool is_macro_location = false;
+     if (has_valid_location)
+        {
+          if ( (start->get_line() == end->get_line()) && (start->get_col() == end->get_col()) )
+             {
+               is_macro_location = true;
+             }
+            else
+             {
+               int physical_line = start->get_physical_line();
+               if (physical_line > 0 && physical_line != start->get_line())
+                  {
+                    is_macro_location = true;
+                  }
+                 else if (start->get_physical_file_id() != start->get_file_id())
+                  {
+                    is_macro_location = true;
+                  }
+             }
+        }
+
+     bool macro_by_definition = false;
+     if (is_macro_location == false && macroNameFromTokens.empty() == false)
+        {
+          const MacroDirectiveMap &directives = macroDirectives;
+          string filename = start->get_filenameString();
+          if (isMacroDefinedAt(directives, filename, start->get_line(),
+                               macroNameFromTokens) == false)
+             {
+               string physical = start->get_physical_filename();
+               if (physical.empty() == false && physical != filename && physical != "transformation")
+                  {
+                    macro_by_definition = isMacroDefinedAt(
+                        directives, physical, start->get_physical_line(),
+                        macroNameFromTokens);
+                  }
+             }
+            else
+             {
+               macro_by_definition = true;
+             }
+        }
+
+     bool is_macro_expansion = is_macro_location || macro_by_definition;
+
+     if (is_macro_expansion)
         {
        // Filter out the only case of a single character statement ";", that I know of at the moment.
           bool detectedNullExpression = false;
@@ -276,13 +477,8 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* locate
 #endif
             // Build a macro data structure, and add to set (or multi-map) of macro expansions.
 
-               if (tokenStreamSequenceMap.find(currentStatement) != tokenStreamSequenceMap.end())
+               if (tokenStreamSequence != nullptr)
                   {
-                    TokenStreamSequenceToNodeMapping* tokenStreamSequence = tokenStreamSequenceMap[currentStatement];
-
-                    int token_subsequence_start = tokenStreamSequence->token_subsequence_start;
-                    int token_subsequence_end   = tokenStreamSequence->token_subsequence_end;
-
                     startingToken = token_subsequence_start;
                     endingToken = token_subsequence_end;
 
@@ -295,7 +491,9 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* locate
                     SgToken* tokenAssociatedWithMacroCall = roseTokenList[token_subsequence_start];
                     ASSERT_not_null(tokenAssociatedWithMacroCall);
 
-                    string macroName = tokenAssociatedWithMacroCall->get_lexeme_string();
+                    string macroName = macroNameFromTokens.empty() == false
+                                           ? macroNameFromTokens
+                                           : tokenAssociatedWithMacroCall->get_lexeme_string();
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION
                     printf ("   --- macro name = %s \n",macroName.c_str());
 #endif
