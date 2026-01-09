@@ -3473,7 +3473,6 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitArrayTypeTraitExpr" << std::endl;
 #endif
-  bool res = true;
 
   // Array type traits map to builtins like __array_rank and __array_extent.
   const char *trait_spelling =
@@ -3489,11 +3488,7 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
   if (clang::Expr *dimension = array_type_trait_expr->getDimensionExpression()) {
     SgNode *tmp_dim = Traverse(dimension);
     SgExpression *dim_expr = isSgExpression(tmp_dim);
-    if (tmp_dim != NULL && dim_expr == NULL) {
-      std::cerr << "Runtime error: tmp_dim != NULL && dim_expr == NULL"
-                << std::endl;
-      res = false;
-    }
+    ROSE_ASSERT(tmp_dim == NULL || dim_expr != NULL);
     if (dim_expr != NULL) {
       args.push_back(dim_expr);
     }
@@ -3501,7 +3496,7 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
 
   *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_spelling, args);
 
-  return VisitExpr(array_type_trait_expr, node) && res;
+  return VisitExpr(array_type_trait_expr, node);
 }
 
 bool ClangToSageTranslator::VisitAsTypeExpr(clang::AsTypeExpr *as_type_expr,
