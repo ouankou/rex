@@ -1762,6 +1762,7 @@ SgProject::parse()
                             }
                          if (headerFile == NULL)
                             {
+                              // Detached header files are cleaned up with token-map teardown in SageInterface::deleteAST().
                               headerFile = buildHeaderSourceFile(
                                   this, includedPath, traversalRoot);
                               if (headerFile != NULL)
