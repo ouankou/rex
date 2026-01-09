@@ -11,6 +11,7 @@
 
 #include "sageInterface.h"
 #include "clang/AST/LambdaCapture.h"
+#include "clang/Basic/TypeTraits.h"
 #include "clang/Lex/Lexer.h"
 
 using llvm::isa; // For LLVM type checking (isa<Type>)
@@ -3474,7 +3475,31 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
 #endif
   bool res = true;
 
-  // TODO
+  // Array type traits map to builtins like __array_rank and __array_extent.
+  const char *trait_spelling =
+      clang::getTraitSpelling(array_type_trait_expr->getTrait());
+  ROSE_ASSERT(trait_spelling != NULL);
+
+  SgNodePtrList args;
+  SgType *queried_type =
+      buildTypeFromQualifiedType(array_type_trait_expr->getQueriedType());
+  ROSE_ASSERT(queried_type != NULL);
+  args.push_back(queried_type);
+
+  if (clang::Expr *dimension = array_type_trait_expr->getDimensionExpression()) {
+    SgNode *tmp_dim = Traverse(dimension);
+    SgExpression *dim_expr = isSgExpression(tmp_dim);
+    if (tmp_dim != NULL && dim_expr == NULL) {
+      std::cerr << "Runtime error: tmp_dim != NULL && dim_expr == NULL"
+                << std::endl;
+      res = false;
+    }
+    if (dim_expr != NULL) {
+      args.push_back(dim_expr);
+    }
+  }
+
+  *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_spelling, args);
 
   return VisitExpr(array_type_trait_expr, node) && res;
 }

@@ -369,6 +369,36 @@ SgType *getTypeFromTraversedRecordDecl(ClangToSageTranslator *translator,
 }
 } // anonymous namespace
 
+SgScopeStatement *
+ClangToSageTranslator::getOpaqueTypeInsertionScope(
+    SgScopeStatement *scope) const {
+  while (scope != nullptr) {
+    if (scope->containsOnlyDeclarations()) {
+      return scope;
+    }
+    switch (scope->variantT()) {
+    case V_SgBasicBlock:
+    case V_SgCatchOptionStmt:
+    case V_SgDoWhileStmt:
+    case V_SgForStatement:
+    case V_SgRangeBasedForStatement:
+    case V_SgTemplateFunctionDefinition:
+    case V_SgFunctionDefinition:
+    case V_SgSwitchStatement:
+    case V_SgWhileStmt:
+    case V_SgAssociateStatement:
+    case V_SgFortranDo:
+    case V_SgForAllStatement:
+    case V_SgCAFWithTeamStatement:
+      return scope;
+    default:
+      break;
+    }
+    scope = SageInterface::getEnclosingScope(scope, false);
+  }
+  return nullptr;
+}
+
 SgType *ClangToSageTranslator::buildTypeFromQualifiedType(
     const clang::QualType &qual_type) {
   SgNode *tmp_type = Traverse(qual_type.getTypePtr());
@@ -1015,14 +1045,17 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
         builtin_type->getName(p_compiler_instance->getLangOpts()).str();
     // Using fallback type for unknown builtin (suppressed)
 
-    // Check if scope stack is initialized before building opaque type
-    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    // Prefer a scope that can accept a typedef; avoid scopes like SgIfStmt.
+    SgScopeStatement *scope =
+        getOpaqueTypeInsertionScope(SageBuilder::topScopeStack());
+    if (scope == nullptr) {
+      scope = getGlobalScope();
+    }
     if (scope != nullptr) {
-      // Build opaque type if we have a valid scope
       *node = SageBuilder::buildOpaqueType(type_name, scope);
     } else {
       // Fall back to int type if scope not yet initialized (early header
-      // processing) Scope not initialized, using int type (suppressed)
+      // processing)
       *node = SageBuilder::buildIntType();
     }
     break;
@@ -1560,9 +1593,10 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
             ch = '_';
           }
         }
-        SgScopeStatement *scope = SageBuilder::topScopeStack();
+        SgScopeStatement *scope =
+            getOpaqueTypeInsertionScope(SageBuilder::topScopeStack());
         if (scope == NULL) {
-          scope = p_global_scope;
+          scope = getGlobalScope();
         }
         *node = SageBuilder::buildOpaqueType(qualified_name, scope);
       }

@@ -430,6 +430,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         resolveScopeFromDeclContext(clang::DeclContext *context,
                                     SgScopeStatement *fallback);
 
+        // Select a scope that can safely accept an opaque type declaration.
+        SgScopeStatement *
+        getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
+
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
 
         // Helper: Build nonreal return type for member typedefs of template
