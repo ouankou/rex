@@ -4,19 +4,10 @@
 
 #include <algorithm>
 #include <cctype>
-#include <mutex>
 
 using namespace std;
 
 namespace {
-struct MacroDirective {
-  int line;
-  std::string name;
-  bool is_define;
-};
-
-using MacroDirectiveMap = std::map<std::string, std::vector<MacroDirective>>;
-
 bool isIdentifierChar(char ch) {
   return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_';
 }
@@ -54,23 +45,12 @@ std::string extractMacroName(const std::string &directive,
   return directive.substr(start, pos - start);
 }
 
-const MacroDirectiveMap &getMacroDirectives(SgSourceFile *sourceFile) {
+MacroDirectiveMap buildMacroDirectives(SgSourceFile *sourceFile) {
+  MacroDirectiveMap directives;
   if (sourceFile == NULL) {
-    static const MacroDirectiveMap empty_map;
-    return empty_map;
-  }
-  static std::map<const SgSourceFile *, MacroDirectiveMap> cache;
-  static std::mutex cache_mutex;
-  {
-    std::lock_guard<std::mutex> lock(cache_mutex);
-    std::map<const SgSourceFile *, MacroDirectiveMap>::iterator cached =
-        cache.find(sourceFile);
-    if (cached != cache.end()) {
-      return cached->second;
-    }
+    return directives;
   }
 
-  MacroDirectiveMap directives;
   ROSEAttributesListContainerPtr container =
       sourceFile->get_preprocessorDirectivesAndCommentsList();
   if (container != nullptr) {
@@ -122,18 +102,7 @@ const MacroDirectiveMap &getMacroDirectives(SgSourceFile *sourceFile) {
     }
   }
 
-  {
-    std::lock_guard<std::mutex> lock(cache_mutex);
-    std::map<const SgSourceFile *, MacroDirectiveMap>::iterator cached =
-        cache.find(sourceFile);
-    if (cached != cache.end()) {
-      return cached->second;
-    }
-    std::pair<std::map<const SgSourceFile *, MacroDirectiveMap>::iterator, bool>
-        inserted = cache.insert(
-            std::make_pair(sourceFile, std::move(directives)));
-    return inserted.first->second;
-  }
+  return directives;
 }
 
 bool isMacroDefinedAt(const MacroDirectiveMap &directives,
@@ -215,7 +184,9 @@ DetectMacroOrIncludeFileExpansionsSynthesizedAttribute( const DetectMacroOrInclu
 // AST traversal class member functions
 // DetectMacroOrIncludeFileExpansions::DetectMacroOrIncludeFileExpansions( std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & input_tokenStreamSequenceMap )
 DetectMacroOrIncludeFileExpansions::DetectMacroOrIncludeFileExpansions( SgSourceFile* input_sourceFile, std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & input_tokenStreamSequenceMap )
-  : tokenStreamSequenceMap(input_tokenStreamSequenceMap), sourceFile(input_sourceFile)
+  : tokenStreamSequenceMap(input_tokenStreamSequenceMap),
+    sourceFile(input_sourceFile),
+    macroDirectives(buildMacroDirectives(input_sourceFile))
    {
      ASSERT_not_null(sourceFile);
    }
@@ -463,7 +434,7 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* locate
      bool macro_by_definition = false;
      if (is_macro_location == false && macroNameFromTokens.empty() == false)
         {
-          const MacroDirectiveMap &directives = getMacroDirectives(sourceFile);
+          const MacroDirectiveMap &directives = macroDirectives;
           string filename = start->get_filenameString();
           if (isMacroDefinedAt(directives, filename, start->get_line(), macroNameFromTokens) == false)
              {

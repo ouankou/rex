@@ -1,6 +1,18 @@
 
 // Header file
 
+#include <map>
+#include <string>
+#include <vector>
+
+struct MacroDirective {
+  int line;
+  std::string name;
+  bool is_define;
+};
+
+using MacroDirectiveMap = std::map<std::string, std::vector<MacroDirective> >;
+
 class MacroExpansion
    {
      public:
@@ -61,6 +73,7 @@ class DetectMacroOrIncludeFileExpansions
      public:
           std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap;
           SgSourceFile* sourceFile;
+          MacroDirectiveMap macroDirectives;
 
           std::vector<MacroExpansion*> macroExpansionStack;
 
