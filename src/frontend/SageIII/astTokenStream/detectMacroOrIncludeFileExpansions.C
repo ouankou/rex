@@ -55,6 +55,10 @@ std::string extractMacroName(const std::string &directive,
 }
 
 const MacroDirectiveMap &getMacroDirectives(SgSourceFile *sourceFile) {
+  if (sourceFile == NULL) {
+    static const MacroDirectiveMap empty_map;
+    return empty_map;
+  }
   static std::map<const SgSourceFile *, MacroDirectiveMap> cache;
   static std::mutex cache_mutex;
   {
