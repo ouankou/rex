@@ -7,6 +7,7 @@
 
 struct MacroDirective {
   int line;
+  int col;
   std::string name;
   bool is_define;
 };

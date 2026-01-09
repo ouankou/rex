@@ -84,21 +84,23 @@ MacroDirectiveMap buildMacroDirectives(SgSourceFile *sourceFile) {
           continue;
         }
         int line = 0;
+        int col = 0;
         Sg_File_Info *fi = info->get_file_info();
         if (fi != nullptr) {
           line = fi->get_line();
+          col = fi->get_col();
         }
         entries.push_back(
-            MacroDirective{line, name,
+            MacroDirective{line, col, name,
                            type == PreprocessingInfo::CpreprocessorDefineDeclaration});
       }
-      std::sort(entries.begin(), entries.end(),
-                [](const MacroDirective &a, const MacroDirective &b) {
-                  if (a.line != b.line) {
-                    return a.line < b.line;
-                  }
-                  return a.is_define && !b.is_define;
-                });
+      std::stable_sort(entries.begin(), entries.end(),
+                       [](const MacroDirective &a, const MacroDirective &b) {
+                         if (a.line != b.line) {
+                           return a.line < b.line;
+                         }
+                         return a.col < b.col;
+                       });
     }
   }
 
@@ -436,12 +438,15 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* locate
         {
           const MacroDirectiveMap &directives = macroDirectives;
           string filename = start->get_filenameString();
-          if (isMacroDefinedAt(directives, filename, start->get_line(), macroNameFromTokens) == false)
+          if (isMacroDefinedAt(directives, filename, start->get_line(),
+                               macroNameFromTokens) == false)
              {
                string physical = start->get_physical_filename();
                if (physical.empty() == false && physical != filename && physical != "transformation")
                   {
-                    macro_by_definition = isMacroDefinedAt(directives, physical, start->get_line(), macroNameFromTokens);
+                    macro_by_definition = isMacroDefinedAt(
+                        directives, physical, start->get_physical_line(),
+                        macroNameFromTokens);
                   }
              }
             else
