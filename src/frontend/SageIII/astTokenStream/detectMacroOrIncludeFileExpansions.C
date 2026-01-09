@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <mutex>
 
 using namespace std;
 
@@ -55,10 +56,14 @@ std::string extractMacroName(const std::string &directive,
 
 const MacroDirectiveMap &getMacroDirectives(SgSourceFile *sourceFile) {
   static std::map<const SgSourceFile *, MacroDirectiveMap> cache;
-  std::map<const SgSourceFile *, MacroDirectiveMap>::iterator cached =
-      cache.find(sourceFile);
-  if (cached != cache.end()) {
-    return cached->second;
+  static std::mutex cache_mutex;
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    std::map<const SgSourceFile *, MacroDirectiveMap>::iterator cached =
+        cache.find(sourceFile);
+    if (cached != cache.end()) {
+      return cached->second;
+    }
   }
 
   MacroDirectiveMap directives;
@@ -113,9 +118,18 @@ const MacroDirectiveMap &getMacroDirectives(SgSourceFile *sourceFile) {
     }
   }
 
-  std::pair<std::map<const SgSourceFile *, MacroDirectiveMap>::iterator, bool>
-      inserted = cache.insert(std::make_pair(sourceFile, directives));
-  return inserted.first->second;
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    std::map<const SgSourceFile *, MacroDirectiveMap>::iterator cached =
+        cache.find(sourceFile);
+    if (cached != cache.end()) {
+      return cached->second;
+    }
+    std::pair<std::map<const SgSourceFile *, MacroDirectiveMap>::iterator, bool>
+        inserted = cache.insert(
+            std::make_pair(sourceFile, std::move(directives)));
+    return inserted.first->second;
+  }
 }
 
 bool isMacroDefinedAt(const MacroDirectiveMap &directives,
