@@ -373,26 +373,8 @@ SgScopeStatement *
 ClangToSageTranslator::getOpaqueTypeInsertionScope(
     SgScopeStatement *scope) const {
   while (scope != nullptr) {
-    if (scope->containsOnlyDeclarations()) {
+    if (scope->containsOnlyDeclarations() || isSgBasicBlock(scope)) {
       return scope;
-    }
-    switch (scope->variantT()) {
-    case V_SgBasicBlock:
-    case V_SgCatchOptionStmt:
-    case V_SgDoWhileStmt:
-    case V_SgForStatement:
-    case V_SgRangeBasedForStatement:
-    case V_SgTemplateFunctionDefinition:
-    case V_SgFunctionDefinition:
-    case V_SgSwitchStatement:
-    case V_SgWhileStmt:
-    case V_SgAssociateStatement:
-    case V_SgFortranDo:
-    case V_SgForAllStatement:
-    case V_SgCAFWithTeamStatement:
-      return scope;
-    default:
-      break;
     }
     scope = SageInterface::getEnclosingScope(scope, false);
   }
