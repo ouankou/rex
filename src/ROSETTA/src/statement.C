@@ -2021,6 +2021,9 @@ Grammar::setUpStatements ()
      NonrealDecl.setDataPrototype ("bool","is_class_member","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      NonrealDecl.setDataPrototype ("bool","is_template_param","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      NonrealDecl.setDataPrototype ("bool","is_template_template_param","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     NonrealDecl.setDataPrototype ("bool","has_template_keyword","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     NonrealDecl.setDataPrototype ("bool","has_global_qualifier","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+     NonrealDecl.setDataPrototype ("bool","suppress_typename","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      NonrealDecl.setDataPrototype ("bool","is_nonreal_template","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
      NonrealDecl.setDataPrototype ("bool","is_nonreal_function","= false", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 

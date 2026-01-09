@@ -642,8 +642,7 @@ ClangToSageTranslator::buildNonrealRefExpFromNestedNameSpecifier(
   ROSE_ASSERT(nrdecl != nullptr);
 
   if (terminalHasTemplateKeyword) {
-    nrdecl->setAttribute(kRexNonrealTemplateKeywordAttr,
-                         new RexNonrealFlagAttribute());
+    nrdecl->set_has_template_keyword(true);
   }
 
   SgNonrealSymbol *sym =
