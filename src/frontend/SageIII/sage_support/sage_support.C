@@ -3199,8 +3199,8 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
   // Initialize token subsequence map for unparsing
   // The backend unparser expects this map to exist (even if empty) for token-based unparsing
   // Note: Raw pointer allocation follows ROSE's standard memory management pattern (see tokenStreamMapping.C).
-  // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and persists
-  // for the program lifetime, consistent with ROSE's architecture for AST-related data structures.
+  // Memory is managed by the global Rose::tokenSubsequenceMapOfMapsBySourceFile map and cleared
+  // when the AST is deleted (see SageInterface::deleteAST()).
   //
   // Check if a token map already exists (e.g., from a previous parse after deleteAST).
   // If it exists, clear it for reuse. Otherwise, create a new one.

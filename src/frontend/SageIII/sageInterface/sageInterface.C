@@ -1,4 +1,5 @@
 #include "sage3basic.h"
+#include "tokenStreamMapping.h"
 #include "markLhsValues.h"
 #include "fixupNames.h"
 #include "FileUtility.h"
@@ -20587,10 +20588,133 @@ SageInterface::appendStatementWithDependentDeclaration( SgDeclarationStatement* 
 #endif
    }
 
+static void clearTokenSubsequenceMapForSourceFile(SgSourceFile* sourceFile)
+   {
+     if (sourceFile == NULL)
+        {
+          return;
+        }
+
+     std::map<SgSourceFile*,
+              std::map<SgNode*,TokenStreamSequenceToNodeMapping*>*>::iterator
+         mapIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(sourceFile);
+     if (mapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+        {
+          std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap =
+              mapIt->second;
+          if (tokenMap != NULL)
+             {
+               delete tokenMap;
+             }
+
+          Rose::tokenSubsequenceMapOfMapsBySourceFile.erase(mapIt);
+        }
+
+     std::map<TokenStreamSequenceToNodeMapping_key,
+              TokenStreamSequenceToNodeMapping*>::iterator poolIt =
+         TokenStreamSequenceToNodeMapping::tokenSequencePool.begin();
+     while (poolIt != TokenStreamSequenceToNodeMapping::tokenSequencePool.end())
+        {
+          if (poolIt->first.sourceFile == sourceFile)
+             {
+               delete poolIt->second;
+               poolIt = TokenStreamSequenceToNodeMapping::tokenSequencePool.erase(poolIt);
+             }
+            else
+             {
+               ++poolIt;
+             }
+        }
+   }
+
+static void clearTokenSubsequenceMapsForProject(SgProject* project)
+   {
+     if (project == NULL)
+        {
+          return;
+        }
+
+     std::set<SgSourceFile*> projectFiles;
+     for (SgFile* file : project->get_fileList())
+        {
+          SgSourceFile* sourceFile = isSgSourceFile(file);
+          if (sourceFile != NULL)
+             {
+               projectFiles.insert(sourceFile);
+             }
+        }
+
+     std::vector<SgSourceFile*> detachedHeaders;
+     std::set<SgSourceFile*> sourceFilesToClear(projectFiles);
+     std::map<SgSourceFile*,
+              std::map<SgNode*,TokenStreamSequenceToNodeMapping*>*>::iterator
+         mapIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
+     while (mapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+        {
+          SgSourceFile* sourceFile = mapIt->first;
+          if (sourceFile != NULL && sourceFile->get_project() == project)
+             {
+               std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenMap =
+                   mapIt->second;
+               if (tokenMap != NULL)
+                  {
+                    delete tokenMap;
+                  }
+
+               if (sourceFile->get_isHeaderFile() == true &&
+                   projectFiles.find(sourceFile) == projectFiles.end())
+                  {
+                    detachedHeaders.push_back(sourceFile);
+                    sourceFilesToClear.insert(sourceFile);
+                  }
+
+               mapIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.erase(mapIt);
+             }
+            else
+             {
+               ++mapIt;
+             }
+        }
+
+     if (!sourceFilesToClear.empty())
+        {
+          std::map<TokenStreamSequenceToNodeMapping_key,
+                   TokenStreamSequenceToNodeMapping*>::iterator poolIt =
+              TokenStreamSequenceToNodeMapping::tokenSequencePool.begin();
+          while (poolIt != TokenStreamSequenceToNodeMapping::tokenSequencePool.end())
+             {
+               if (sourceFilesToClear.find(poolIt->first.sourceFile) !=
+                   sourceFilesToClear.end())
+                  {
+                    delete poolIt->second;
+                    poolIt = TokenStreamSequenceToNodeMapping::tokenSequencePool.erase(poolIt);
+                  }
+                 else
+                  {
+                    ++poolIt;
+                  }
+             }
+        }
+
+     for (SgSourceFile* headerFile : detachedHeaders)
+        {
+          SageInterface::deleteAST(headerFile);
+        }
+   }
+
 void
 SageInterface::deleteAST ( SgNode* n )
    {
 //Tan, August/25/2010:       //Re-implement DeleteAST function
+
+     if (SgProject* project = isSgProject(n))
+        {
+          clearTokenSubsequenceMapsForProject(project);
+        }
+       else if (SgSourceFile* sourceFile = isSgSourceFile(n))
+        {
+          clearTokenSubsequenceMapForSourceFile(sourceFile);
+        }
 
         //Use MemoryPoolTraversal to count the number of references to a certain symbol
         //This class defines the visitors for the MemoryPoolTraversal

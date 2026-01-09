@@ -392,9 +392,12 @@ DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(SgLocatedNode* locate
      int token_subsequence_end   = -1;
      string macroNameFromTokens;
 
-     if (tokenStreamSequenceMap.find(currentStatement) != tokenStreamSequenceMap.end())
+     std::map<SgNode*,TokenStreamSequenceToNodeMapping*>::iterator tokenMapIt =
+         tokenStreamSequenceMap.find(currentStatement);
+     if (tokenMapIt != tokenStreamSequenceMap.end() &&
+         tokenMapIt->second != nullptr)
         {
-          tokenStreamSequence = tokenStreamSequenceMap[currentStatement];
+          tokenStreamSequence = tokenMapIt->second;
           token_subsequence_start = tokenStreamSequence->token_subsequence_start;
           token_subsequence_end   = tokenStreamSequence->token_subsequence_end;
 

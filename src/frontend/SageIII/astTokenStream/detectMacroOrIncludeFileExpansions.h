@@ -1,6 +1,9 @@
 
 // Header file
 
+#ifndef DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
+#define DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
+
 #include <map>
 #include <string>
 #include <vector>
@@ -97,3 +100,5 @@ class DetectMacroOrIncludeFileExpansions
 
 // Main API function to call the AST traversals
 void detectMacroOrIncludeFileExpansions ( SgSourceFile* sourceFile );
+
+#endif  // DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
