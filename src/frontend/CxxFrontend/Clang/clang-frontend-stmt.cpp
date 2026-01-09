@@ -3488,10 +3488,8 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
   if (clang::Expr *dimension = array_type_trait_expr->getDimensionExpression()) {
     SgNode *tmp_dim = Traverse(dimension);
     SgExpression *dim_expr = isSgExpression(tmp_dim);
-    ROSE_ASSERT(tmp_dim == NULL || dim_expr != NULL);
-    if (dim_expr != NULL) {
-      args.push_back(dim_expr);
-    }
+    ROSE_ASSERT(dim_expr != NULL);
+    args.push_back(dim_expr);
   }
 
   *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_spelling, args);
