@@ -167,7 +167,7 @@ void CompilerOutputParser::parseIncludedFilesSearchPathsFromCompilerOutput() {
     }
 }
 
-void CompilerOutputParser::processFile(SgFile* inputFile, bool /*isVerbose*/)
+void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
    {
   // This code duplicates parts of methods int SgFile::compileOutput ( int fileNameIndex ) from file Cxx_Grammar.C and
   // int SgFile::compileOutput ( vector<string>& argv, int fileNameIndex ) from file sageSupport.C
@@ -218,8 +218,7 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool /*isVerbose*/)
      printf (" --- isVerbose = %s \n",isVerbose ? "true" : "false");
 #endif
 
-#if 0
-  // DQ (3/14/2020): I don't think this is required anymore within the improved design of the header file unparsing support.
+  // Collect include trees and search paths from compiler output (-H/-v).
      vector<string> compilerNameString = inputFile -> buildCompilerCommandLineOptions(argv, 0, compilerName);
      compilerOutputReader = new CompilerOutputReader(getCompilerOutput(compilerNameString, isVerbose));
      workingDirectory = inputFile -> getWorkingDirectory();
@@ -231,14 +230,6 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool /*isVerbose*/)
         {
           parseIncludedFilesFromCompilerOutput(FileHelper::normalizePath(inputFile -> getFileName()), topLevelParsePrefix);
         }
-#else
-  // DQ (3/14/2020): Output a message until I verify this is no longer required.
-  // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-     if (SgProject::get_unparseHeaderFilesDebug() >= 1)
-        {
-          printf ("In CompilerOutputParser::processFile(): skipping call to buildCompilerCommandLineOptions() and parseIncludedFilesFromCompilerOutput() \n");
-        }
-#endif
 
 #if 0
   // DQ (11/5/2018): Output as part of debugging unparsing of header files (filename and directory selection).

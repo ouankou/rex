@@ -44,6 +44,7 @@ operator<<(std::basic_ostream<char, std::char_traits<char> >& os, std::vector<bo
 #endif
 
 // DQ (9/26/2018): Added so that we can call the display function for TokenStreamSequenceToNodeMapping (for debugging).
+#include "attachPreprocessingInfo.h"
 #include "tokenStreamMapping.h"
 
 using namespace std;
@@ -70,6 +71,165 @@ extern const std::string ROSE_OFP_VERSION_STRING;
 
 // DQ (11/30/2015): Adding general support fo the detection of macro expansions and include file expansions.
 void detectMacroOrIncludeFileExpansions(SgSourceFile* sourceFile);
+
+static bool shouldBuildTokenMapping(const SgSourceFile* sourceFile)
+   {
+     if (sourceFile == NULL)
+        {
+          return false;
+        }
+
+     return (sourceFile->get_unparse_tokens() == true ||
+             sourceFile->get_use_token_stream_to_improve_source_position_info() ==
+                 true);
+   }
+
+static std::string normalizePathIfPossible(const std::string& path)
+   {
+     if (path.empty())
+        {
+          return path;
+        }
+     if (!FileHelper::fileExists(path))
+        {
+          return path;
+        }
+     return FileHelper::normalizePath(path);
+   }
+
+static SgSourceFile* findSourceFileByPath(
+    const SgFilePtrList& files, const std::string& normalizedPath)
+   {
+     for (SgFile* file : files)
+        {
+          SgSourceFile* sourceFile = isSgSourceFile(file);
+          if (sourceFile == NULL)
+             {
+               continue;
+             }
+          if (normalizePathIfPossible(sourceFile->getFileName()) ==
+              normalizedPath)
+             {
+               return sourceFile;
+             }
+        }
+     return NULL;
+   }
+
+static SgSourceFile* findSourceFileInTokenMaps(
+    const std::string& normalizedPath)
+   {
+     for (std::map<SgSourceFile*,
+                   std::map<SgNode*, TokenStreamSequenceToNodeMapping*>*>::const_iterator
+              it = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
+          it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end(); ++it)
+        {
+          SgSourceFile* sourceFile = it->first;
+          if (sourceFile == NULL)
+             {
+               continue;
+             }
+          if (normalizePathIfPossible(sourceFile->getFileName()) ==
+              normalizedPath)
+             {
+               return sourceFile;
+             }
+        }
+     return NULL;
+   }
+
+static void copyLanguageSettings(SgSourceFile* target,
+                                 const SgSourceFile* reference)
+   {
+     ROSE_ASSERT(target != NULL);
+     ROSE_ASSERT(reference != NULL);
+
+     target->set_outputLanguage(reference->get_outputLanguage());
+     target->set_inputLanguage(reference->get_inputLanguage());
+
+     target->set_C_only(reference->get_C_only());
+     if (reference->get_C99_only())
+        {
+          target->set_C99_only();
+        }
+     if (reference->get_C11_only())
+        {
+          target->set_C11_only();
+        }
+     target->set_Cxx_only(reference->get_Cxx_only());
+
+     target->set_Cuda_only(reference->get_Cuda_only());
+     target->set_OpenCL_only(reference->get_OpenCL_only());
+     target->set_Fortran_only(reference->get_Fortran_only());
+   }
+
+static SgSourceFile* buildHeaderSourceFile(SgProject* project,
+                                           const std::string& headerPath,
+                                           const SgSourceFile* referenceFile)
+   {
+     ROSE_ASSERT(project != NULL);
+     ROSE_ASSERT(referenceFile != NULL);
+
+     vector<string> argv = project->get_originalCommandLineArgumentList();
+     Rose_STL_Container<string> fileList =
+         CommandlineProcessing::generateSourceFilenames(argv,
+                                                        project->get_binary_only());
+     CommandlineProcessing::removeAllFileNamesExcept(argv, fileList, headerPath);
+     if (std::find(argv.begin(), argv.end(), headerPath) == argv.end())
+        {
+          argv.push_back(headerPath);
+        }
+
+     SgSourceFile* headerFile = new SgSourceFile(argv, project);
+     ROSE_ASSERT(headerFile != NULL);
+
+     headerFile->set_isHeaderFile(true);
+     headerFile->set_unparseHeaderFiles(referenceFile->get_unparseHeaderFiles());
+     headerFile->set_unparse_tokens(referenceFile->get_unparse_tokens());
+     headerFile->set_use_token_stream_to_improve_source_position_info(
+         referenceFile->get_use_token_stream_to_improve_source_position_info());
+     headerFile->set_unparse_using_leading_and_trailing_token_mappings(
+         referenceFile->get_unparse_using_leading_and_trailing_token_mappings());
+
+     copyLanguageSettings(headerFile, referenceFile);
+
+     headerFile->set_requires_C_preprocessor(false);
+     headerFile->initializeGlobalScope();
+
+     if (headerFile->get_preprocessorDirectivesAndCommentsList() == NULL)
+        {
+          headerFile->set_preprocessorDirectivesAndCommentsList(
+              new ROSEAttributesListContainer());
+        }
+
+     return headerFile;
+   }
+
+static void ensureHeaderTokenMapping(SgSourceFile* headerFile,
+                                     SgSourceFile* traversalRoot)
+   {
+     ROSE_ASSERT(headerFile != NULL);
+     ROSE_ASSERT(traversalRoot != NULL);
+
+     ROSEAttributesListContainerPtr filePreprocInfo =
+         headerFile->get_preprocessorDirectivesAndCommentsList();
+     if (filePreprocInfo == NULL)
+        {
+          filePreprocInfo = new ROSEAttributesListContainer();
+          headerFile->set_preprocessorDirectivesAndCommentsList(filePreprocInfo);
+        }
+
+     const std::string headerPath = headerFile->getFileName();
+     std::map<std::string, ROSEAttributesList*>& listMap =
+         filePreprocInfo->getList();
+     if (listMap.find(headerPath) == listMap.end())
+        {
+          listMap[headerPath] = getPreprocessorDirectives(headerPath);
+        }
+
+     std::vector<stream_element*> tokenVector = getTokenStream(headerFile);
+     buildTokenStreamMappingForRoot(headerFile, traversalRoot, tokenVector);
+   }
 
 // DQ (2/12/2011): Added const so that this could be called in get_mangled() (and more generally).
 // std::string SgValueExp::get_constant_folded_value_as_string()
@@ -1541,6 +1701,97 @@ SgProject::parse()
           IncludingPreprocessingInfosCollector includingPreprocessingInfosCollector(this, includedFilesMap);
           const map<string, set<PreprocessingInfo*> >& includingPreprocessingInfosMap = includingPreprocessingInfosCollector.collect();
           set_includingPreprocessingInfosMap(includingPreprocessingInfosMap);
+
+          if (unparse_using_tokens == true)
+             {
+               std::map<std::string, SgSourceFile*> includingSourceFiles;
+               for (SgFile* file : get_fileList())
+                  {
+                    SgSourceFile* sourceFile = isSgSourceFile(file);
+                    if (sourceFile == NULL)
+                       {
+                         continue;
+                       }
+                    if (sourceFile->get_isHeaderFile() == true)
+                       {
+                         continue;
+                       }
+                    includingSourceFiles[normalizePathIfPossible(
+                        sourceFile->getFileName())] = sourceFile;
+                  }
+
+               std::set<std::string> processedHeaders;
+               for (map<string, set<string> >::const_iterator it =
+                        includedFilesMap.begin();
+                    it != includedFilesMap.end(); ++it)
+                  {
+                    const std::string includingPath =
+                        normalizePathIfPossible(it->first);
+                    std::map<std::string, SgSourceFile*>::const_iterator
+                        rootIt = includingSourceFiles.find(includingPath);
+                    if (rootIt == includingSourceFiles.end())
+                       {
+                         continue;
+                       }
+
+                    SgSourceFile* traversalRoot = rootIt->second;
+                    if (!shouldBuildTokenMapping(traversalRoot))
+                       {
+                         continue;
+                       }
+
+                    const set<string>& includedSet = it->second;
+                    for (set<string>::const_iterator incIt = includedSet.begin();
+                         incIt != includedSet.end(); ++incIt)
+                       {
+                         std::string includedPath =
+                             normalizePathIfPossible(*incIt);
+                         if (!processedHeaders.insert(includedPath).second)
+                            {
+                              continue;
+                            }
+                         if (!FileHelper::fileExists(includedPath))
+                            {
+                              continue;
+                            }
+
+                         SgSourceFile* headerFile =
+                             findSourceFileByPath(get_fileList(), includedPath);
+                         if (headerFile == NULL)
+                            {
+                              headerFile =
+                                  findSourceFileInTokenMaps(includedPath);
+                            }
+                         if (headerFile == NULL)
+                            {
+                              headerFile = buildHeaderSourceFile(
+                                  this, includedPath, traversalRoot);
+                            }
+                         if (headerFile == NULL)
+                            {
+                              continue;
+                            }
+
+                         if (Rose::tokenSubsequenceMapOfMapsBySourceFile
+                                     .find(headerFile) !=
+                                 Rose::tokenSubsequenceMapOfMapsBySourceFile
+                                     .end())
+                            {
+                              std::map<SgNode*,
+                                       TokenStreamSequenceToNodeMapping*>*
+                                  existingMap =
+                                      Rose::tokenSubsequenceMapOfMapsBySourceFile
+                                          [headerFile];
+                              if (existingMap != NULL && !existingMap->empty())
+                                 {
+                                   continue;
+                                 }
+                            }
+
+                         ensureHeaderTokenMapping(headerFile, traversalRoot);
+                       }
+                  }
+             }
 
           if (SgProject::get_verbose() >= 1)
              {

@@ -437,7 +437,11 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
 #endif
 
   // found a keyword?
-     if(is_keyword != -1)
+     if (tokenId == C_CXX_PRAGMA)
+        {
+          p_tok_elem->token_id = C_CXX_PRAGMA;
+        }
+       else if(is_keyword != -1)
         {
        // printf("%s is a keyword\n", str.c_str());
           p_tok_elem->token_id = is_keyword;
