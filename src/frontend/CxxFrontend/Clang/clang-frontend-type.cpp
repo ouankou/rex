@@ -399,6 +399,16 @@ ClangToSageTranslator::getOpaqueTypeInsertionScope(
   return nullptr;
 }
 
+SgScopeStatement *
+ClangToSageTranslator::getSafeOpaqueTypeInsertionScope() const {
+  SgScopeStatement *scope =
+      getOpaqueTypeInsertionScope(SageBuilder::topScopeStack());
+  if (scope == nullptr) {
+    scope = getGlobalScope();
+  }
+  return scope;
+}
+
 SgType *ClangToSageTranslator::buildTypeFromQualifiedType(
     const clang::QualType &qual_type) {
   SgNode *tmp_type = Traverse(qual_type.getTypePtr());
@@ -1046,11 +1056,7 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
     // Using fallback type for unknown builtin (suppressed)
 
     // Prefer a scope that can accept a typedef; avoid scopes like SgIfStmt.
-    SgScopeStatement *scope =
-        getOpaqueTypeInsertionScope(SageBuilder::topScopeStack());
-    if (scope == nullptr) {
-      scope = getGlobalScope();
-    }
+    SgScopeStatement *scope = getSafeOpaqueTypeInsertionScope();
     if (scope != nullptr) {
       *node = SageBuilder::buildOpaqueType(type_name, scope);
     } else {
@@ -1593,11 +1599,7 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
             ch = '_';
           }
         }
-        SgScopeStatement *scope =
-            getOpaqueTypeInsertionScope(SageBuilder::topScopeStack());
-        if (scope == NULL) {
-          scope = getGlobalScope();
-        }
+        SgScopeStatement *scope = getSafeOpaqueTypeInsertionScope();
         *node = SageBuilder::buildOpaqueType(qualified_name, scope);
       }
     } else {

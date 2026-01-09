@@ -434,6 +434,10 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         SgScopeStatement *
         getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
 
+        // Find a safe insertion scope for opaque types using current scope
+        // stack and falling back to global scope.
+        SgScopeStatement *getSafeOpaqueTypeInsertionScope() const;
+
         SgType * buildTypeFromQualifiedType(const clang::QualType & qual_type);
 
         // Helper: Build nonreal return type for member typedefs of template
