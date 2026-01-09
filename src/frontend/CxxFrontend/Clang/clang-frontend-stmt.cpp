@@ -11,6 +11,7 @@
 
 #include "sageInterface.h"
 #include "clang/AST/LambdaCapture.h"
+#include "clang/Basic/TypeTraits.h"
 #include "clang/Lex/Lexer.h"
 
 using llvm::isa; // For LLVM type checking (isa<Type>)
@@ -3471,11 +3472,28 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitArrayTypeTraitExpr" << std::endl;
 #endif
-  bool res = true;
 
-  // TODO
+  // Array type traits map to builtins like __array_rank and __array_extent.
+  const char *trait_spelling =
+      clang::getTraitSpelling(array_type_trait_expr->getTrait());
+  ROSE_ASSERT(trait_spelling != NULL);
 
-  return VisitExpr(array_type_trait_expr, node) && res;
+  SgNodePtrList args;
+  SgType *queried_type =
+      buildTypeFromQualifiedType(array_type_trait_expr->getQueriedType());
+  ROSE_ASSERT(queried_type != NULL);
+  args.push_back(queried_type);
+
+  if (clang::Expr *dimension = array_type_trait_expr->getDimensionExpression()) {
+    SgNode *tmp_dim = Traverse(dimension);
+    SgExpression *dim_expr = isSgExpression(tmp_dim);
+    ROSE_ASSERT(dim_expr != NULL);
+    args.push_back(dim_expr);
+  }
+
+  *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_spelling, args);
+
+  return VisitExpr(array_type_trait_expr, node);
 }
 
 bool ClangToSageTranslator::VisitAsTypeExpr(clang::AsTypeExpr *as_type_expr,

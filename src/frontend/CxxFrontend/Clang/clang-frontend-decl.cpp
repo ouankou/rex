@@ -5579,7 +5579,8 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
   }
   if (type_has_unknown) {
     std::string spelled = typedef_decl->getUnderlyingType().getAsString();
-    type = SageBuilder::buildOpaqueType(spelled, SageBuilder::topScopeStack());
+    SgScopeStatement *opaque_scope = getSafeOpaqueTypeInsertionScope();
+    type = SageBuilder::buildOpaqueType(spelled, opaque_scope);
     sg_underlyingType = type;
   }
 
@@ -6239,8 +6240,9 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
   }
 
   if (type_has_unknown) {
+    SgScopeStatement *opaque_scope = getSafeOpaqueTypeInsertionScope();
     type = SageBuilder::buildOpaqueType(field_decl->getType().getAsString(),
-                                        SageBuilder::topScopeStack());
+                                        opaque_scope);
     sg_fieldType = type;
   }
 

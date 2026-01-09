@@ -369,6 +369,28 @@ SgType *getTypeFromTraversedRecordDecl(ClangToSageTranslator *translator,
 }
 } // anonymous namespace
 
+SgScopeStatement *
+ClangToSageTranslator::getOpaqueTypeInsertionScope(
+    SgScopeStatement *scope) const {
+  while (scope != nullptr) {
+    if (scope->containsOnlyDeclarations() || isSgBasicBlock(scope)) {
+      return scope;
+    }
+    scope = SageInterface::getEnclosingScope(scope, false);
+  }
+  return nullptr;
+}
+
+SgScopeStatement *
+ClangToSageTranslator::getSafeOpaqueTypeInsertionScope() const {
+  SgScopeStatement *scope =
+      getOpaqueTypeInsertionScope(SageBuilder::topScopeStack());
+  if (scope == nullptr) {
+    scope = getGlobalScope();
+  }
+  return scope;
+}
+
 SgType *ClangToSageTranslator::buildTypeFromQualifiedType(
     const clang::QualType &qual_type) {
   SgNode *tmp_type = Traverse(qual_type.getTypePtr());
@@ -1015,16 +1037,10 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
         builtin_type->getName(p_compiler_instance->getLangOpts()).str();
     // Using fallback type for unknown builtin (suppressed)
 
-    // Check if scope stack is initialized before building opaque type
-    SgScopeStatement *scope = SageBuilder::topScopeStack();
-    if (scope != nullptr) {
-      // Build opaque type if we have a valid scope
-      *node = SageBuilder::buildOpaqueType(type_name, scope);
-    } else {
-      // Fall back to int type if scope not yet initialized (early header
-      // processing) Scope not initialized, using int type (suppressed)
-      *node = SageBuilder::buildIntType();
-    }
+    // Prefer a scope that can accept a typedef; avoid scopes like SgIfStmt.
+    SgScopeStatement *scope = getSafeOpaqueTypeInsertionScope();
+    ROSE_ASSERT(scope != nullptr);
+    *node = SageBuilder::buildOpaqueType(type_name, scope);
     break;
   }
   }
@@ -1560,10 +1576,7 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
             ch = '_';
           }
         }
-        SgScopeStatement *scope = SageBuilder::topScopeStack();
-        if (scope == NULL) {
-          scope = p_global_scope;
-        }
+        SgScopeStatement *scope = getSafeOpaqueTypeInsertionScope();
         *node = SageBuilder::buildOpaqueType(qualified_name, scope);
       }
     } else {
