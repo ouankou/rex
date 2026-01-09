@@ -1057,13 +1057,8 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
 
     // Prefer a scope that can accept a typedef; avoid scopes like SgIfStmt.
     SgScopeStatement *scope = getSafeOpaqueTypeInsertionScope();
-    if (scope != nullptr) {
-      *node = SageBuilder::buildOpaqueType(type_name, scope);
-    } else {
-      // Fall back to int type if scope not yet initialized (early header
-      // processing)
-      *node = SageBuilder::buildIntType();
-    }
+    ROSE_ASSERT(scope != nullptr);
+    *node = SageBuilder::buildOpaqueType(type_name, scope);
     break;
   }
   }
