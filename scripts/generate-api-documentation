@@ -99,6 +99,35 @@ resolve-mrdocs() {
     die "mrdocs command is required (set MRDOCS_BIN or add mrdocs to PATH)"
 }
 
+resolve-python() {
+    if [ -n "${PYTHON_BIN-}" ]; then
+        if [ -x "$PYTHON_BIN" ]; then
+            echo "$PYTHON_BIN"
+            return 0
+        fi
+        die "PYTHON_BIN is set but not executable: $PYTHON_BIN"
+    fi
+
+    if [ -n "${DOCS_VENV_DIR-}" ] && [ -x "$DOCS_VENV_DIR/bin/python" ]; then
+        echo "$DOCS_VENV_DIR/bin/python"
+        return 0
+    fi
+
+    local root
+    root="$(rose-source)"
+    if [ -x "$root/.venv-docs/bin/python" ]; then
+        echo "$root/.venv-docs/bin/python"
+        return 0
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        echo "python3"
+        return 0
+    fi
+
+    die "python3 is required to run this script"
+}
+
 mrdocs-root() {
     local cmd="${MRDOCS_CMD-}"
     local path=""
@@ -116,6 +145,7 @@ mrdocs-root() {
 check-prerequisites() {
     MRDOCS_CMD="$(resolve-mrdocs)"
     "$MRDOCS_CMD" --version >/dev/null 2>&1 || true
+    PYTHON_BIN="$(resolve-python)"
 }
 
 ####################################################################################################################################
@@ -154,61 +184,35 @@ compilation-db-from-config() {
 output-dir-from-config() {
     local config="$1"
     local value
-    value="$(python3 - "$config" <<'PY'
-import re
+    value="$("$PYTHON_BIN" - "$config" <<'PY'
 import sys
+
+try:
+    import yaml
+except Exception:
+    print("generate-api-documentation: error: PyYAML is required to parse mrdocs.yml", file=sys.stderr)
+    raise SystemExit(1)
 
 path = sys.argv[1]
 try:
     with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            stripped = line.lstrip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            match = re.match(r"output\s*:\s*(.*)$", stripped)
-            if not match:
-                continue
-            raw = match.group(1).strip()
-            if not raw or raw.startswith("#"):
-                break
-            if raw[0] in ('"', "'"):
-                quote = raw[0]
-                i = 1
-                out = []
-                if quote == '"':
-                    while i < len(raw):
-                        ch = raw[i]
-                        if ch == "\\":
-                            if i + 1 < len(raw):
-                                out.append(raw[i + 1])
-                                i += 2
-                                continue
-                            break
-                        if ch == '"':
-                            i += 1
-                            break
-                        out.append(ch)
-                        i += 1
-                else:
-                    while i < len(raw):
-                        ch = raw[i]
-                        if ch == "'":
-                            if i + 1 < len(raw) and raw[i + 1] == "'":
-                                out.append("'")
-                                i += 2
-                                continue
-                            i += 1
-                            break
-                        out.append(ch)
-                        i += 1
-                value = "".join(out)
-            else:
-                value = re.split(r"\s+#", raw, maxsplit=1)[0].strip()
-            if value:
-                print(value)
-            break
+        data = yaml.safe_load(fh) or {}
 except FileNotFoundError:
-    pass
+    raise SystemExit(0)
+except yaml.YAMLError as exc:
+    print(f"generate-api-documentation: error: failed to parse {path}: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(data, dict):
+    raise SystemExit(0)
+
+value = data.get("output")
+if value is None:
+    raise SystemExit(0)
+if not isinstance(value, str):
+    print("generate-api-documentation: error: output must be a string", file=sys.stderr)
+    raise SystemExit(1)
+print(value)
 PY
 )"
     if [ -z "$value" ]; then
@@ -224,7 +228,7 @@ PY
 ####################################################################################################################################
 generate-reference-sections() {
     local out_dir="$1"
-    python3 - "$out_dir" <<'PY'
+    "$PYTHON_BIN" - "$out_dir" <<'PY'
 from pathlib import Path
 import shutil
 import sys
@@ -308,7 +312,7 @@ config-bool() {
 ####################################################################################################################################
 compiler-from-db() {
     local db="$1"
-    python3 - "$db" <<'PY'
+    "$PYTHON_BIN" - "$db" <<'PY'
 import json
 import os
 import shlex
@@ -355,7 +359,7 @@ resolve-compiler() {
 
 collect-include-paths() {
     local compiler="$1"
-    python3 - "$compiler" <<'PY'
+    "$PYTHON_BIN" - "$compiler" <<'PY'
 import subprocess
 import sys
 
@@ -418,7 +422,7 @@ build-docs-compilation-db() {
     local compiler="$3"
     local build_dir="$4"
     local compile_db="$5"
-python3 - "$config" "$out_dir" "$compiler" "$build_dir" "$compile_db" <<'PY'
+"$PYTHON_BIN" - "$config" "$out_dir" "$compiler" "$build_dir" "$compile_db" <<'PY'
 import fnmatch
 import json
 import os
@@ -661,7 +665,7 @@ filter-compilation-db() {
     local compile_db="$2"
     local out_dir="$3"
     local overlay="${4-}"
-python3 - "$config" "$compile_db" "$out_dir" "$overlay" <<'PY'
+"$PYTHON_BIN" - "$config" "$compile_db" "$out_dir" "$overlay" <<'PY'
 import fnmatch
 import json
 import os
@@ -903,7 +907,7 @@ build-include-overlay() {
             if [ -n "$path" ]; then
                 include_paths+=("$path")
             fi
-        done < <(python3 - "$compile_db" <<'PY'
+        done < <("$PYTHON_BIN" - "$compile_db" <<'PY'
 import json
 import shlex
 import sys
@@ -948,7 +952,7 @@ PY
         return 0
     fi
 
-    python3 - "$overlay_dir" "${include_paths[@]}" <<'PY'
+    "$PYTHON_BIN" - "$overlay_dir" "${include_paths[@]}" <<'PY'
 import re
 import sys
 from pathlib import Path
