@@ -5097,6 +5097,25 @@ def _command_input_name(entry: TestEntry) -> Optional[str]:
     return Path(input_path).name if input_path else None
 
 
+def _elsa_label_from_input(
+    input_path: Optional[str], include_ctests: bool = False
+) -> Optional[str]:
+    if not input_path:
+        return None
+    normalized = input_path.replace("\\", "/")
+    if "notCompilable" in normalized:
+        return "ELSATEST"
+    if "/std/" in normalized:
+        return "ELSATEST_std"
+    if "/gnu/" in normalized:
+        return "ELSATEST_gnu"
+    if "/kandr/" in normalized:
+        return "ELSATEST_kandr"
+    if include_ctests and "/ctests/" in normalized:
+        return "ELSATEST"
+    return None
+
+
 def _map_cmake_compile_tests(
     entry: TestEntry,
     repo_roots: dict[str, Path],
@@ -5152,16 +5171,9 @@ def _map_cmake_compile_tests(
     if "CompileTests/ElsaTestCases/" in origin_path or (
         input_path and "ElsaTestCases" in input_path
     ):
-        if input_path and "notCompilable" in input_path:
-            label = "ELSATEST"
-        elif input_path and "/std/" in input_path:
-            label = "ELSATEST_std"
-        elif input_path and "/gnu/" in input_path:
-            label = "ELSATEST_gnu"
-        elif input_path and "/kandr/" in input_path:
-            label = "ELSATEST_kandr"
-        elif input_path and "/ctests/" in input_path:
-            label = "ELSATEST"
+        elsa_label = _elsa_label_from_input(input_path, include_ctests=True)
+        if elsa_label:
+            label = elsa_label
     if label == "Cxx_tests" and input_name in cxx_failing:
         label = "Cxx_tests_failing"
     if label == "C_tests" and input_name in c_tests_failing:
@@ -5606,14 +5618,9 @@ def _explicit_name_mapping(
                         break
                 label = "ElsaTestCases_failing" if failing else "ELSATEST"
             else:
-                if input_path and "notCompilable" in input_path:
-                    label = "ELSATEST"
-                elif input_path and "/std/" in input_path:
-                    label = "ELSATEST_std"
-                elif input_path and "/gnu/" in input_path:
-                    label = "ELSATEST_gnu"
-                elif input_path and "/kandr/" in input_path:
-                    label = "ELSATEST_kandr"
+                elsa_label = _elsa_label_from_input(input_path, include_ctests=False)
+                if elsa_label:
+                    label = elsa_label
             return f"{label}_{_compile_test_key(input_name)}"
 
     if "gfortranTestSuite/" in origin_path and origin_path.endswith("Makefile.am"):
