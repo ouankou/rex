@@ -154,14 +154,63 @@ compilation-db-from-config() {
 output-dir-from-config() {
     local config="$1"
     local value
-    value="$(sed -n 's/^[[:space:]]*output:[[:space:]]*//p' "$config" | head -n 1)"
-    value="${value%%#*}"
-    value="$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    if [[ "${value:0:1}" == '"' && "${value: -1}" == '"' ]]; then
-        value="${value:1:-1}"
-    elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
-        value="${value:1:-1}"
-    fi
+    value="$(python3 - "$config" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.lstrip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            match = re.match(r"output\s*:\s*(.*)$", stripped)
+            if not match:
+                continue
+            raw = match.group(1).strip()
+            if not raw or raw.startswith("#"):
+                break
+            if raw[0] in ('"', "'"):
+                quote = raw[0]
+                i = 1
+                out = []
+                if quote == '"':
+                    while i < len(raw):
+                        ch = raw[i]
+                        if ch == "\\":
+                            if i + 1 < len(raw):
+                                out.append(raw[i + 1])
+                                i += 2
+                                continue
+                            break
+                        if ch == '"':
+                            i += 1
+                            break
+                        out.append(ch)
+                        i += 1
+                else:
+                    while i < len(raw):
+                        ch = raw[i]
+                        if ch == "'":
+                            if i + 1 < len(raw) and raw[i + 1] == "'":
+                                out.append("'")
+                                i += 2
+                                continue
+                            i += 1
+                            break
+                        out.append(ch)
+                        i += 1
+                value = "".join(out)
+            else:
+                value = re.split(r"\s+#", raw, maxsplit=1)[0].strip()
+            if value:
+                print(value)
+            break
+except FileNotFoundError:
+    pass
+PY
+)"
     if [ -z "$value" ]; then
         return 0
     fi
