@@ -6,6 +6,7 @@ from pathlib import Path
 _PRE_TAG_RE = re.compile(r"<pre(?![^>]*\bdata-search-exclude\b)([^>]*)>", re.IGNORECASE)
 _MAX_SEARCH_TEXT = 100_000
 _TRUNCATE_THRESHOLD = 0.8
+_MIN_WHITESPACE_POS = int(_MAX_SEARCH_TEXT * _TRUNCATE_THRESHOLD)
 
 
 def on_files(files, config):
@@ -86,7 +87,7 @@ def on_post_build(config):
                 truncated.rfind("\t"),
                 truncated.rfind("\r"),
             )
-            if last_space > _MAX_SEARCH_TEXT * _TRUNCATE_THRESHOLD:
+            if last_space >= 0 and last_space > _MIN_WHITESPACE_POS:
                 truncated = truncated[:last_space]
             doc["text"] = truncated
             changed = True
