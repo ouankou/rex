@@ -555,7 +555,7 @@ findRoseSupportPathFromSource(const string& sourceTreeLocation,
   if (inInstallTree) {
     return installTreePath + "/" + installTreeLocation;
   } else {
-    return string(ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR) + "/" + sourceTreeLocation;
+    return string(ROSE_SOURCE_TREE) + "/" + sourceTreeLocation;
   }
 }
 
@@ -567,19 +567,23 @@ findRoseSupportPathFromBuild(const string& buildTreeLocation,
   if (inInstallTree) {
     return installTreePath + "/" + installTreeLocation;
   } else {
-    return string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/" + buildTreeLocation;
+    return string(ROSE_BUILD_TREE) + "/" + buildTreeLocation;
   }
 }
-//! Check if we can get an installation prefix of rose based on the current running translator.
+//! Check if we can get an installation prefix of rose based on the current
+//! running translator.
 // There are two ways
-//   1. if dladdr is supported: we resolve a rose function (roseInstallPrefix()) to obtain the
+//   1. if dladdr is supported: we resolve a rose function (roseInstallPrefix())
+//   to obtain the
 //      file (librose.so) defining this function
 //      Then we check the parent directory of librose.so
 //          if .libs or src --> in a build tree
 //          otherwise: librose.so is in an installation tree
-//   2. if dladdr is not supported or anything goes wrong, we check an environment variable
-//     ROSE_IN_BUILD_TREE to tell if the translator is started from a build tree or an installation tree
-//     Otherwise we pass the --prefix= ROSE_AUTOMAKE_PREFIX as the installation prefix
+//   2. if dladdr is not supported or anything goes wrong, we check an
+//   environment variable
+//     ROSE_IN_BUILD_TREE to tell if the translator is started from a build tree
+//     or an installation tree Otherwise we return ROSE_INSTALL_PREFIX as the
+//     installation prefix
 bool roseInstallPrefix(std::string& result) {
 #ifdef HAVE_DLADDR
   {
@@ -628,32 +632,24 @@ bool roseInstallPrefix(std::string& result) {
     string prefix = prefixCS;
     free(libdirCopy2);
 
-    // Zack Galbreath, June 2013
-    // When building with CMake, detect build directory by searching
-    // for the presence of a CMakeCache.txt file.  If this cannot
-    // be found, then assume we are running from within an install tree.
-    // Pei-Hung (04/08/21) use prefix to find CMakeCache.txt and return ROSE_AUTOMAKE_PREFIX if installation is used
-    #ifdef USE_CMAKE
+// Zack Galbreath, June 2013
+// Detect the build directory by searching for CMakeCache.txt in the
+// parent of librose. If this cannot be found, assume we are running
+// from within an install tree.
+#ifdef USE_CMAKE
     std::string pathToCache = prefix;
     pathToCache += "/CMakeCache.txt";
     if ( SgProject::get_verbose() > 1 )
           printf ("Inside of roseInstallPrefix libdir = %s pathToCache = %s \n",libdir, pathToCache.c_str());
     if (std::filesystem::exists(pathToCache)) {
       return false;
-    } else {
-      result = ROSE_AUTOMAKE_PREFIX;
-      return true;
     }
-    #endif
+#endif
 
     free(libroseName);
-// Liao, 12/2/2009
-// Check the librose's parent directory name to tell if it is within a build or installation tree
-// This if statement has the assumption that libtool is used to build librose so librose.so is put under .libs
-// which is not true for cmake building system
-// For cmake, librose is created directly under build/src
-//    if (libdirBasename == ".libs") {
-    if (libdirBasename == ".libs" || libdirBasename == "src") {
+    // Check the librose parent directory name to tell if it is within a build
+    // or installation tree. With CMake, librose is created under build/src.
+    if (libdirBasename == "src") {
       return false;
     } else {
       // the translator must locate in the installation_tree/lib
@@ -680,12 +676,7 @@ default_check:
   if (getenv("ROSE_IN_BUILD_TREE") != nullptr) {
     return false;
   } else {
-// Liao, 12/1/2009
-// this variable is set via a very bad way, there is actually a right way to use --prefix VALUE within automake/autoconfig
-// config/build_rose_paths.Makefile
-// Makefile:       @@echo "const std::string ROSE_AUTOMAKE_PREFIX        = \"/home/liao6/opt/roseLatest\";" >> src/util/rose_paths.C
-// TODO fix this to support both automake and cmake 's installation configuration options
-    result = ROSE_AUTOMAKE_PREFIX;
+    result = ROSE_INSTALL_PREFIX;
     return true;
   }
 }
@@ -4686,21 +4677,21 @@ int SgProject::link ( const std::vector<std::string>& argv, std::string linkerNa
 #endif
         }
 
+        // TOO1 (2015/05/11): Causes configure-time tests to fail. Checking ld
+        // linker, as example:
+        //
+        //     identityTranslator -print-prog-name=ld -rose:verbose 0
+        //     In SgProject::link command line = g++ -print-prog-name=ld
+        //     ld
+        // if ( get_verbose() > 0 )
+        //   {
+        //     printf ("In SgProject::link command line = %s
+        //     \n",CommandlineProcessing::generateStringFromArgList(linkingCommand,false,false).c_str());
+        //   }
 
-     // TOO1 (2015/05/11): Causes automake configure tests to fail. Checking ld linker, as example:
-     //
-     //     identityTranslator -print-prog-name=ld -rose:verbose 0
-     //     In SgProject::link command line = g++ -print-prog-name=ld
-     //     ld
-     //if ( get_verbose() > 0 )
-     //   {
-     //     printf ("In SgProject::link command line = %s \n",CommandlineProcessing::generateStringFromArgList(linkingCommand,false,false).c_str());
-     //   }
+        int status = systemFromVector(linkingCommand);
 
-     int status = systemFromVector(linkingCommand);
-
-     if ( get_verbose() > 1 )
-        {
+        if (get_verbose() > 1) {
           printf ("linker error status = %d \n",status);
         }
 

@@ -1,24 +1,19 @@
 # List in "distributedScripts" only those scripts that are useful after ROSE is installed
 
 set(distributedScripts
-  autoconf-filter.pl
-  quiet-mode
   Error.pm
   Git.pm
-  check-dist-file
   dotgenLetter
   dotgen
   dotgen2
   dotgenLetterPDF
   dotgenLetterPNG
   generateDirectoryGraph
-  libtoolcp
   lsdot
   policies-checker.sh
   publicConfiguration.pl
   rth_run.pl
   rth_stats.pl
-  runscript
   shtool)
 
 set(distributedPolicyScripts

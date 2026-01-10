@@ -1,5 +1,4 @@
-# These files install in the same location as the Autoconf system
-# i.e., /<rose-install-dir>/include
+# These headers install under /<rose-install-dir>/include.
 # rose-install-dir == ${CMAKE_INSTALL_PREFIX}
 set(ROSE_CONFIG_HEADER_FILES rose-g++-headerfilefixup.h
                              rose_specific_ammintrin.h

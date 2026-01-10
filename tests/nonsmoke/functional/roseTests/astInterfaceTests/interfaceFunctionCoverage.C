@@ -105,7 +105,8 @@ void RoseVisitor::visit ( SgNode* node)
   if (isSgLocatedNode(node))
   {
     // cover string getVariantName ( VariantT v )
-    // the test harness in Makefile.am will redirect output to rose_inputinterfaceFunctionCoverage.C.passed
+    // the test harness will redirect output to
+    // rose_inputinterfaceFunctionCoverage.C.passed
     cout<<"calling getVariantName() "<<endl;
     cout<<getVariantName (node->variantT())<<endl;
   }

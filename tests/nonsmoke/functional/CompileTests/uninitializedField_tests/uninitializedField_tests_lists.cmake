@@ -1,4 +1,4 @@
-# Generated from Makefile.am and Makefile-pass.inc test lists.
+# Generated from legacy test lists and Makefile-pass.inc test lists.
 set(UNINIT_CXX_TEST_SOURCES
   Area-01.C
   X.C

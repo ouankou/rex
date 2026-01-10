@@ -1,14 +1,15 @@
 #include <featureTests.h>
 
-// DQ (10/14/2010):  This should only be included by source files that require it.
-// This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
+// DQ (10/14/2010):  This should only be included by source files that require
+// it. This fixed a reported bug which caused conflicts with configure-time
+// macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
 
 #include "grammar.h"
 
 #include "ROSETTA_macros.h"
 #include "AstNodeClass.h"
-//#include "OmpAttribute.h"
+// #include "OmpAttribute.h"
 
 // What should be the behavior of the default constructor for Grammar
 

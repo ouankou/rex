@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(F90_DISABLED_TESTCODES
   test2007_108.f90
   test2007_46.f90

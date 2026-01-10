@@ -13,8 +13,8 @@ void f(double x, double y)
 */
 #include "rose.h"
 #ifdef HAVE_CONFIG_H
-// This avoids requiring the user to use config.h and follows 
-// the automake manual request that we use <> instead of ""
+// This avoids requiring the user to use config.h and follows
+// the style guide request that we use <> instead of ""
 #include <config.h>
 #endif
 

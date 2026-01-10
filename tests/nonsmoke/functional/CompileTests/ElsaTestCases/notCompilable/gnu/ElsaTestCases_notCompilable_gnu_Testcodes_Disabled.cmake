@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(ELSATEST_NOTCOMPILABLE_GNU_DISABLED_TESTCODES
   test2001_11.C
   test2001_01.C

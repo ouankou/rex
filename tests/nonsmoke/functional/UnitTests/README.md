@@ -9,19 +9,12 @@ Common unit testing framework code is defined in `UNITS/include/rose/tests/unitT
 #include <rose/tests/unitTests/common.h>
 ```
 
-Note: Your test executable must be compiled with the appropriate header include search path:
-
-```Makefile
-AM_CPPFLAGS = -I$(top_srcdir)/tests/nonsmoke/functional/UnitTests/include/
-```
+Note: Your test executable must be compiled with the appropriate header include search path. In CMake,
+linking against `unitTestsCommon` will add the required include directories.
 
 ### Linking
 
-Unit test executables must link with `common.la` in their respective `Makefile.am`:
-
-```Makefile
-LDADD = $(top_builddir)/tests/nonsmoke/functional/UnitTests/libcommon.la
-```
+Unit test executables should link against the `unitTestsCommon` CMake target.
 
 ## Unit Tests
 
@@ -39,4 +32,3 @@ namespace MyXyzUnitTests {
   }
 }
 ```
-

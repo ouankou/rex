@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(F90_COMMENTS_TESTCODES
   test2020_comment_1.f90
   test2020_comment_2.f90

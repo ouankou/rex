@@ -1,7 +1,7 @@
 // DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with autoconf macros
-// (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the list of
-// include files.
+// it. This fixed a reported bug which caused conflicts with configure-time
+// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
+// list of include files.
 #include "rose_config.h"
 #undef CONFIG_ROSE /* prevent error about including both private and public    \
                       headers; must be between rose_config.h and rose.h */
@@ -80,7 +80,7 @@ std::string getTrueFilePath(SgFunctionDeclaration *inFuncDecl) {
 struct OnlyCurrentDirectory {
   bool operator()(SgFunctionDeclaration *node) const {
     std::string stringToFilter = ROSE_COMPILE_TREE_PATH + std::string("/tests");
-    std::string srcDir = ROSE_AUTOMAKE_TOP_SRCDIR;
+    std::string srcDir = ROSE_SOURCE_TREE;
 
     // #if 0
     printf("stringToFilter = %s %zu\n", stringToFilter.c_str(),

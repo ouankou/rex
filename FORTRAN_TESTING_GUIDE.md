@@ -2,9 +2,9 @@
 
 ## Overview
 
-This document explains how to run the Fortran test suite in REX, based on the Autotools configuration (reference only - we use CMake).
+This document explains how to run the Fortran test suite in REX, based on legacy test lists from the upstream ROSE tree (reference only - we use CMake).
 
-## Test Organization (from Autotools Makefile.am)
+## Test Organization (from legacy test lists)
 
 The Fortran tests are organized into categories:
 
@@ -119,9 +119,9 @@ echo ""
 echo "Results: $PASSED passed, $FAILED failed"
 ```
 
-## Known Test Exclusions (from Autotools)
+## Known Test Exclusions (from legacy test lists)
 
-Based on Autotools Makefile.am, some tests are intentionally excluded:
+Based on legacy test lists, some tests are intentionally excluded:
 
 ### Compiler Version Dependent
 - `test2007_263.f90` - Fails with gfortran 4.0
@@ -134,7 +134,7 @@ Based on Autotools Makefile.am, some tests are intentionally excluded:
 - Various alternative-return tests - Historical reliability issues
 
 ### Mutually Exclusive Tests
-Some tests conflict with each other (from Autotools comments):
+Some tests conflict with each other (from legacy notes):
 - test2007_103.f90, test2007_139.f90 conflict with test2010_172.f90, test2010_184.f90
 
 ## Test Subdirectories
@@ -196,6 +196,6 @@ Based on evaluation testing:
 
 ## References
 
-- Autotools: `tests/nonsmoke/functional/CompileTests/Fortran_tests/Makefile.am`
+- Legacy list: upstream ROSE test manifests (see `scripts/gen_test_manifest.py`)
 - CMake: `tests/nonsmoke/functional/CompileTests/Fortran_tests/CMakeLists.txt`
 - Evaluation: `FORTRAN_EVALUATION_STATUS.md`

@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(COLLECT_COMMENTS_TEST_SOURCES
   test_CplusplusMacro_Cpp.C
   test2001_01.C

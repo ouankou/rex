@@ -3,7 +3,7 @@ and upstream rose-archive.
 
 Files
 - gen_test_manifest.py
-  Scan rex + rose-archive sources (autotools + CMake) and emit a unified tests
+  Scan REX sources and rose-archive (legacy test lists) to emit a unified tests
   manifest JSON. Includes disabled/commented-out/known-failing tests and does
   not execute anything.
 - ctest_inventory.py
@@ -91,9 +91,10 @@ Common ways to reduce missing_executable (optional)
 - Example translators (KeepGoingTranslator, identityTranslator):
   configure with `-DENABLE-EXAMPLE-TRANSLATORS-DIRECTORY=ON` and rebuild.
 - Valgrind-based uninitializedField_tests:
-  install Valgrind headers and define `ROSE_USE_VALGRIND` in CMake output
-  (currently not exposed via a CMake option; see `rose_config.h.in.cmake`).
-  Reconfigure, rebuild, and run with `-DREX_ENABLE_DISABLED_TESTS=ON`.
+  install Valgrind headers and configure with `-DWITH-VALGRIND=<prefix>` or
+  `-DWITH-VALGRIND-INCLUDE=<dir>`/`-DWITH-VALGRIND-LIB=<dir>` so CMake sets
+  `ROSE_USE_VALGRIND`. Reconfigure, rebuild, and run with
+  `-DREX_ENABLE_DISABLED_TESTS=ON`.
 - HPCToolkit tests:
   install HPCToolkit so `hpcrun` is on `PATH`.
 - LANL_POP/netcdf tests:

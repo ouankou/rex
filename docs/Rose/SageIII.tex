@@ -950,7 +950,8 @@ bugs in g++:
    \item static const data members defined in the class definition (floats only)
          legacy frontend accepts static and g++ supports const, and neither accepts what the other
          considers correct. ROSE generates code specific for the back-end and so the
-         back-end must be specified in when running {\tt configure} for ROSE.  We
+         back-end must be specified at CMake configuration time (e.g.,
+         {\tt -DWITH-ALT-BACKEND-CXX-COMPILER=<path>}).  We
          don't currently support legacy frontend as a back-end, though we support Intel C++ as a
          back-end and they use legacy frontend, so this should work.
          \fixme{verify the details here.}
@@ -1657,7 +1658,7 @@ refers to code such as:
   % reference.
     We use the {\tt --preinclude} mechanism in legacy frontend to force a specific generated header file 
     to be read ahead of any ROSE system header files (translated from the back-end system
-    header files by the ROSE {\tt configure} mechanism).  This head file contains
+    header files by the ROSE build header-staging mechanism).  This head file contains
     all the back-end specific macros definitions. The file name is:
     {\tt rose\_required\_macros\_and\_functions.h} and is placed in the install
     tree ({\tt <prefix>/include/<back-end compiler name>\_HEADERS/}.
@@ -1952,8 +1953,6 @@ low level handling of the AST.  Significant new work is being done
 to simplify the direct construction of the AST.  This work is not
 available yet.  It is not discussed in this draft of the manual.
 }
-
-
 
 
 

@@ -78,8 +78,7 @@ Grammar::Grammar ( const string& inputGrammarName,
      {
 
        std::string astNodeListFilename =
-           std::string(ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR) +
-           "/src/ROSETTA/astNodeList";
+           std::string(ROSE_SOURCE_TREE) + "/src/ROSETTA/astNodeList";
        std::ifstream astNodeList(astNodeListFilename.c_str());
        size_t c = 1;
        while (astNodeList) {
@@ -91,7 +90,7 @@ Grammar::Grammar ( const string& inputGrammarName,
          ++c;
        }
        if( !astNodeList.eof() )
-         std::cout << "We have the path " << ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR << std::endl;
+         std::cout << "We have the path " << ROSE_SOURCE_TREE << std::endl;
        ROSE_ASSERT (astNodeList.eof());
        astNodeList.close();
      }
@@ -2784,9 +2783,10 @@ Grammar::buildCode ()
        "// MACHINE GENERATED SOURCE FILE WITH ROSE (Grammar.h)--- DO NOT MODIFY!\n\n#include \"" + includeHeaderFileName + "\"\n\n";
      string includeHeaderStringWithoutROSE =
        "// MACHINE GENERATED SOURCE FILE --- DO NOT MODIFY! (Grammar.C) \n\n";
-  // DQ (10/14/2010):  This should only be included by source files that require it.
-  // This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
-  // Interestingly it must be at the top of the list of include files.
+     // DQ (10/14/2010):  This should only be included by source files that
+     // require it. This fixed a reported bug which caused conflicts with
+     // configure-time macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be
+     // at the top of the list of include files.
      includeHeaderString += "// The header file (\"rose_config.h\") should only be included by source files that require it.\n";
      string includeHeader_rose_config ="#include \"rose_config.h\"\n\n";
      includeHeaderString += includeHeader_rose_config;

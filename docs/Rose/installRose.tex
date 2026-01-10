@@ -92,8 +92,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%        and external developers with access to our internal network file
 %%        system.  
 %%       % The development versions are what are found in the ROSE software
-%%       % repositories and have additional software requirements: subversion, JDK, autoconf,
-%%       % automake, MrDocs, LaTeX, {\it etc}.
+%%       % repositories and have additional software requirements: subversion, JDK, MrDocs, LaTeX, {\it etc}.
 %%      \end{itemize}
 %%     % ROSE is delivered as either a development version (svn) or as a distribution for
 %%     % users. The (typical) user version comes either with legacy frontend source or binary distribution.
@@ -122,7 +121,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %%      Autoconf is an extensible package of M4 macros that produce shell scripts to automatically configure software source code packages. 
 %% 
 %%    \item {\bf Automake} : version $>=$ 1.96. Needed \emph{ONLY} for development versions. \\
-%%      Automake is a tool for automatically generating `Makefile.in' files compliant with
+%%      The build system generates platform-specific build files compliant with
 %%      the GNU Coding Standards.
 %% 
 %%    \item {\bf GNU Libtool}: version $>=$1.5.6.  Needed \emph{ONLY} for development versions. 
@@ -206,7 +205,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 %% There are two versions of ROSE supported: the 
 %% {\it Distribution Version} for users (typical) and the {\it Development Version}
 %% (intended only for ROSE development team), which is what is found in the ROSE software
-%% repository and has additional software requirements (autoconf, automake, MrDocs, LaTeX,
+%% repository and has additional software requirements (MrDocs, LaTeX,
 %% etc.).  The exact requirements are listed in the {\tt ROSE/ChangeLog} (including version 
 %% numbers for each release of ROSE).
 %% \begin{itemize}
@@ -273,15 +272,8 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation\_prerequisites.ht
 \subsection{Using Insure++}
 \label{gettingStarted:insure}
 
-   It is possible to configure ROSE to use insure++ for static and dynamic analysis
-of the ROSE source code as part of development of ROSE or ROSE based tools.  This
-is a feature that is experimental, and currently not working well (because our older
-version of insure++ (version 7.1.6) is failing to compile the Linux header files used in ROSE).
-The configure option to turn on the use of insure++ is: {\em --enable-insure}.
-This is all that is required if {\tt insure} is in your path (at LLNL run: 
-{\tt source /usr/apps/insure++/default/setup.csh} for csh and 
-{\tt source /usr/apps/insure++/default/setup.sh} for bash).  
-{\em Don't use Insure++ until you have some experience with ROSE development, it makes everything more complex.}.
+   Insure++ integration is experimental and not currently wired into the CMake build.
+Use external tooling if you need this kind of analysis support.
 
 % I don't know if this actually works since I use the setup script.
 % If you need to specify the location of {\tt insure++} then use {\em --with-insure=<path>}.
@@ -320,7 +312,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %% 
 %% 
 %%    The process for building ROSE from a ROSE {\em Distribution Version} is the same as for
-%%    most standard software distributions (e.g those using autoconf tools). Specific details for particular
+%%    most standard software distributions. Specific details for particular
 %%    operating system distributions can be found in various README files in the top of the source tree. In
 %%    general:
 %% \begin{enumerate}
@@ -348,8 +340,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %%            command line is only required if you run {\tt make install} (suggested), because 
 %%            the default location for installation is {\tt \//usr\//local} and most users don't
 %%            have permission to write to that directory. This is common to all projects that
-%%            use autoconf.  ROSE follows the GNU Makefile Standards as a result of using
-%%            autoconf and automake tools for its build system. As of ROSE-0.8.9a, the
+%%            use the standard GNU Makefile layout for installed artifacts. As of ROSE-0.8.9a, the
 %%            default setting for the install directory (prefix) is the build tree.
 %%            For more on ROSE configure options, see section \ref{gettingStarted:configureOptions}.
 %%            {\em Note: If configure is not present, you may have a development version. 
@@ -387,7 +378,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %% for development versions, there is no configure script available . 
 %% 
 %% You have to type {\tt ./build} in the source tree to 
-%% generate the configure script and Makefile.ins. Once this is done, the rest
+%% generate the build configuration files. Once this is done, the rest
 %% steps are the same as those of building a distribution version.
 
 \subsection{TroubleShooting the ROSE Installation}
@@ -396,95 +387,24 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 
    There are a number of famous ways to screw up your installation of ROSE.
 \begin{enumerate}
-   This message from running the {\tt configure} command in ROSE (an initial step in building
-   ROSE) indicates that your {\tt LD\_LIBRARY\_PATH} (environment variable) is not set to 
-   {\tt LD\_LIBRARY\_PATH} is finally required and is not properly set.
+   \item If CMake cannot locate the JVM needed for the Open Fortran Parser (OFP),
+   ensure {\tt JAVA\_HOME} points to a JDK and {\tt LD\_LIBRARY\_PATH} includes the
+   JVM server library (e.g., {\em libjvm.so}).
 
-   \item Message: {\tt Making all in libltdl \\
-      make[2]: *** No rule to make target `all'.  Stop.} \\
-   Run {\tt glibtoolize --force} to rebuild the libtool support in ROSE for your machine 
-   at the top level of the source tree. If that does not work then give up on the libtool 
-   that came with your system toolchain and just build your own libtool in your home directory.
-
-   \item {\bf Don't build ROSE in the source tree, it is not tested often, but it should work.} \\
-    Save yourself some trouble and build a separate compile tree.  This will also allow
-    you to build a number of different versions of ROSE with different options.
-
-   \item Message: {\bf configure: error: Unable to find path to JVM library} \\
-   This message from running the {\tt configure} command in ROSE (an initial step in building
-   ROSE) indicates that your {\tt LD\_LIBRARY\_PATH} (environment variable) is not set to 
-   the location of {\em libjvm.so} or that {\tt JAVA\_HOME} points to a JVM installation that
-   does not provide the required runtime libraries. The JVM dependency exists only for the
-   Open Fortran Parser (OFP) frontend; REX does not support Java as a source language.
-   Alternatively, your {\tt LD\_LIBRARY\_PATH} should contain the path to the file 
-   {\em libjvm.so}.  The likely path is specified in the lines just before the message.  
-   The full message will appear as:
-\begin{verbatim}
-checking for Java... /usr/lib/jvm/java-1.5.0-ibm.x86_64/bin/../bin/java
-checking for Java JVM include and link options... JavaJREDir  = /usr/lib/jvm/java-1.5.0-ibm-1.5.0.8.x86_64/jre/bin
-JavaHomeDir = /usr/lib/jvm/java-1.5.0-ibm-1.5.0.8.x86_64
-JavaJVMDir  = /usr/lib/jvm/java-1.5.0-ibm-1.5.0.8.x86_64/jre/bin/classic
-configure: error: Unable to find path to JVM library
-\end{verbatim}
-
-   \item libtoolize not available (or old version) \\
-  The problem is that ROSE is calling {\tt libtoolize} or {\tt glibtoolize} and 
-it seems that you don't have it on your machine (called by the build script). 
-You will need it, it is a requirement. The {\tt build} script will run this to build you the
-required libtool support.  Since this happens upsteam of {\tt configure} we don't have a test
-for it. The clue is the output:
-\begin{verbatim}
-ls: cannot access libltdl/*: No such file or directory
-libtoolize: cannot list files in `/usr/share/libtool/libltdl'
-\end{verbatim}
-If you build libtool on your machine and add the installed libtool {\tt bin} directory
-to you path, then it should work.  I often use {\tt libtool-2.2.4.tar} when I have 
-this problem on a new platform.
-
-Report from use:
-\begin{verbatim}
-Reason for the problem: I am not building libtools from source, instead using
-the packages from the Linux distribution repository. On my distribution
-(Ubuntu 8.04, X86_64), the libltdl3 (and libltdl3-dev)  does not come with
-the libtool package. After installing the libtools, I still need to install
-both the libltdl3 and libltdl3-dev package. That is the issues of unable to
-find libltdl folders.
-\end{verbatim}
-
-   \item ROSE fails to compile after {\bf svn update}: \\
-   We have seen this problem and had it reported and we don't understand it.
-It does however disappear after a fresh checkout from SVN into an empty directory.
-If you figure this out please let us know.  Where this has happened to us, we
-were using svn version  1.4.6, where as our svn repository is more commonly
-(within development) had work checked in using svn version 1.5.1; since a lot
-changed from svn version 1.4 to version 1.5, this may be the issue.
-{\scriptsize
-\begin{verbatim}
-make[2]: Entering directory `<Your ROSE compile tree path>/src/frontend/SageIII'
-  COMPILE preproc.lo
-/home/dquinlan/ROSE/svn-rose/src/frontend/SageIII/preproc.lex: In function `ROSEAttributesList* getPreprocessorDirectives(std::string)':
-/home/dquinlan/ROSE/svn-rose/src/frontend/SageIII/preproc.lex:961: error: conversion from `std::_Rb_tree_iterator<std::pair<const std::string, ROSEAttributesList*> >' to non-scalar type `std::_Rb_tree_iterator<std::pair<const std::string, std::vector<PreprocessingInfo*, std::allocator<PreprocessingInfo*> >*> >' requested
-/home/dquinlan/ROSE/svn-rose/src/frontend/SageIII/preproc.lex:963: error: no match for 'operator!=' in 'iItr != (&mapFilenameToAttributes)->std::map<_Key, _Tp, _Compare, _Alloc>::end [with _Key = std::string, _Tp = ROSEAttributesList*, _Compare = std::less<std::string>, _Alloc = std::allocator<std::pair<const std::string, ROSEAttributesList*> >]()'
-/home/dquinlan/local/gcc/3.4.3/bin/../lib/gcc/i686-pc-linux-gnu/3.4.3/../../../../include/c++/3.4.3/bits/stl_tree.h:213: note: candidates are: bool std::_Rb_tree_iterator<_Tp>::operator!=(const std::_Rb_tree_iterator<_Tp>&) const [with _Tp = std::pair<const std::string, std::vector<PreprocessingInfo*, std::allocator<PreprocessingInfo*> >*>]
-/home/dquinlan/ROSE/svn-rose/src/ROSETTA/Grammar/Node.code:50: note:      bool operator!=(const rose_rva_t&, const rose_rva_t&)
-/home/dquinlan/ROSE/svn-rose/src/ROSETTA/Grammar/Support.code:3984: note: bool operator!=(const Sg_File_Info&, const Sg_File_Info&)
-make[2]: *** [preproc.lo] Error 1
-make[2]: Leaving directory `<Your ROSE compile tree path>/src/frontend/SageIII'
-make[1]: *** [all-recursive] Error 1
-make[1]: Leaving directory `<Your ROSE compile tree path>/src/frontend/SageIII'
-make: *** [all] Error 2
-\end{verbatim}
-}
-
+   \item If you see stale generated-file or build errors after a large update,
+   create a fresh build directory and reconfigure with CMake.
 \end{enumerate}
 
 
 
-\subsection{ROSE Configure Options}
+\subsection{ROSE CMake Options}
 \label{gettingStarted:configureOptions}
 
-     For GNU autotools configuration options and documentation, run
-     ``configure --help''.
+     For CMake configuration options and documentation, run:
+\begin{verbatim}
+cmake -S . -B build -LH
+\end{verbatim}
+     or use {\tt ccmake} / {\tt cmake-gui} for an interactive view.
 
 %%      A few example configure options are:
 %% \begin{itemize}
@@ -542,77 +462,13 @@ make: *** [all] Error 2
 %\fixme{It is suggested by TID that we move the figures to this location.
 %       Checkout if this is possible.}
 
-Output of {\tt configure --help} is detailed in Figures 
-\ref{gettingStarted:configureHelpOptionOutputPart1} (Part 1) and
-\ref{gettingStarted:configureHelpOptionOutputPart2} (Part 2):
-{\indent
-{\mySmallestFontSize
-% Do this when processing latex to generate non-html (not using latex2html)
-\begin{latexonly}
-\begin{figure}[tb]
-\begin{center}
-\begin{tabular}{|c|} \hline
-     {\tt configure --help} Option Output (Part 1)
-\\\hline\hline
-{\tiny
-   \lstinputlisting{roseConfigureOptions.aa}
-}
-\\\hline
-\end{tabular}
-\end{center}
-\caption{ Example output from configure --help in {\tt ROSE} directory (Part 1). }
-\end{figure}
-\end{latexonly}
-
-% Do this when processing latex to build html (using latex2html)
-\begin{htmlonly}
-   \verbatiminput{roseConfigureOptions.aa}
-   \vspace{0.5in}
-   Example output from configure --help in {\tt ROSE} directory (Part 1).
-\end{htmlonly}
-\label{gettingStarted:configureHelpOptionOutputPart1}
-%end of scope in font size
-}
-% End of scope in indentation
-}
-
-% Output of {\tt configure --help} (Part 2):
-{\indent
-{\mySmallestFontSize
-% Do this when processing latex to generate non-html (not using latex2html)
-\begin{latexonly}
-\begin{figure}[tb]
-\begin{center}
-\begin{tabular}{|c|} \hline
-     {\tt configure --help} Option Output (Part 2)
-\\\hline\hline
-{\tiny
-   \lstinputlisting{roseConfigureOptions.ab}
-}
-\\\hline
-\end{tabular}
-\end{center}
-\caption{ Example output from configure --help in {\tt ROSE} directory (Part 2). }
-\end{figure}
-\end{latexonly}
-
-% Do this when processing latex to build html (using latex2html)
-\begin{htmlonly}
-   \verbatiminput{roseConfigureOptions.ab}
-   \vspace{0.5in}
-   Example output from configure --help in {\tt ROSE} directory (Part 2).
-\end{htmlonly}
-\label{gettingStarted:configureHelpOptionOutputPart2}
-%end of scope in font size
-}
-% End of scope in indentation
-}
-
-
-\subsection{Running {\em GNU Make} in Parallel}
+\subsection{Running Parallel Builds}
 \label{gettingStarted:parallelMake}
 
-See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
+Use CMake's parallel build support, e.g.:
+\begin{verbatim}
+cmake --build build --parallel 16
+\end{verbatim}
 
 %%      ROSE uses general {\tt Makefiles} and is not dependent on {\em GNU Make}.
 %%      However, {\em GNU Make} has an option to permit compilation in parallel and 
@@ -645,8 +501,7 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %% by {\tt make installcheck} and the {\tt example\_makefile} there can also serve as
 %% an example.
 %%
-%%      {\bf autoconf} uses {\tt /usr/local} as the default location for all 
-%% installations. Only {\em root} has write privileges to that directory, so you
+%%      The default install prefix is {\tt /usr/local}. Only {\em root} has write privileges to that directory, so you
 %% will likely get an error if you have not overridden the default value with a new
 %% location.  To change the location, you need to have used the 
 %% {\tt --prefix=\{install\_dir\}} to run the {\tt configure} script.  You can 
@@ -822,11 +677,8 @@ See http://rosecompiler.org/ROSE\_HTML\_Reference/installation.html
 %%    These are comments collected from users about what 
 %% platform specific details they have discovered and shared.
 \subsubsection{Fedora 11}
-   Some trivia with regard to libtool and building the SVN version of Rose:
-Fedora (11), at least, has a package, libtool-ltdl-devel that is needed (and separate from
-the libtool package) to make autoconfiguration work right.  The symptom is that the
-post-configure build enters libltdl, and finds no Makefile and fails immediately.
-Before running Rose's "./build", make sure the libtool-ltdl-devel RPM is installed.
+   Ensure required system development packages are installed for your toolchain and
+dependencies (e.g., Java runtime for OFP).
 
 \subsubsection{Intel C++ Compiler}
 The Intel compiler can run out of space compiling some of the larger files in ROSE.
@@ -844,17 +696,14 @@ this flag to the Intel compiler will fix this (the mcpcom process goes above
 \subsection{Options for Static vs. Dynamic Linking of Executables}
 \label{linking_options}
 
-   ROSE will by default build dynamically linked executables. ROSE
-supports both static and dynamic linking.  Some developers want the
+   ROSE supports both static and dynamic linking. Some developers want the
 space savings of dynamic linking (also might link faster) and some
 want the simplicity of static linked executables (since they can be
-easily moved in a single step).  The configure options to support
-linking options are:
+easily moved in a single step). Control this with CMake's
+{\tt BUILD_SHARED_LIBS} option:
 \begin{itemize}
-     \item dynamic linking (default): {\bf --enable-shared}
-     \item dynamic and static linking (builds the static libraries, but executables are by
-           default linked dynamically): {\bf --enable-static}
-     \item static linking only:  {\bf --enable-static --disable-shared}
+     \item build shared libraries: {\bf -DBUILD\_SHARED\_LIBS=ON}
+     \item build static libraries: {\bf -DBUILD\_SHARED\_LIBS=OFF}
 \end{itemize}
 
 

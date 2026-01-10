@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(ELSATEST_NOTCOMPILABLE_STD_TESTCODES
   13.3.3.1.4.cc
   13.3.3.2d.cc

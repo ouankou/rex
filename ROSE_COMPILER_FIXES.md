@@ -49,7 +49,7 @@ if (in_install_tree) {
     rose_include_path += "/include/";
 }
 else {
-    rose_include_path = std::string(ROSE_AUTOMAKE_TOP_BUILDDIR) + "/include-staging/";
+    rose_include_path = std::string(ROSE_BUILD_TREE) + "/include-staging/";
 }
 ...
 sys_dirs_list.push_back(rose_include_path + "clang/");

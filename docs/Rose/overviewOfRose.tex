@@ -67,9 +67,9 @@ the original source code.
 
    The top level of the ROSE directory tree has a simple design.
 All the source code is in {\tt src}, all the tests are in {\tt tests},
-all the documentation is in {\tt docs}.  ROSE uses {\bf autoconf} and {\bf automake}
-so there is an autoconf generated {\em configure} script included.  The
-{\tt conf} directory contains all the {\em autconf macros} used in ROSE.
+all the documentation is in {\tt docs}.  REX uses CMake; build helpers live in
+{\tt build-rex.sh} and {\tt cmake/}. The {\tt config} directory contains
+compiler header staging assets used by the build.
 The {\tt projects} directory contains a collection of ongoing and past
 projects in ROSE that are either not large enough or mature enough to stand
 along as sperate projects.  We use this location to incubate developing tools

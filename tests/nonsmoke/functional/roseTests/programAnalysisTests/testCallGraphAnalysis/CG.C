@@ -1,6 +1,7 @@
-// DQ (10/14/2010):  This should only be included by source files that require it.
-// This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
-// Interestingly it must be at the top of the list of include files.
+// DQ (10/14/2010):  This should only be included by source files that require
+// it. This fixed a reported bug which caused conflicts with configure-time
+// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
+// list of include files.
 
 // DQ (8/26/2016): Added support for the call graph generation for template
 // functions in classes that are moved by legacy frontend outside of the class
@@ -147,10 +148,12 @@ struct OnlyCurrentDirectory {
         std::string stringToFilter = ROSE_COMPILE_TREE_PATH + std::string("/tests"); 
         // Liao 6/20/2011, we have to use the same source path without symbolic links to have the right match
         std::string srcDir = ROSE_SOURCE_TREE_PATH + std::string("/tests");  //source tree
-        //std::string srcDir = ROSE_AUTOMAKE_TOP_SRCDIR + std::string("/tests");  //source tree
+        // std::string srcDir = ROSE_SOURCE_TREE + std::string("/tests");
+        // //source tree
         //
-        // Hard code this for initial testing on target exercise.
-        std::string secondaryTestSrcDir = ROSE_AUTOMAKE_TOP_SRCDIR + std::string("/developersScratchSpace");
+        //  Hard code this for initial testing on target exercise.
+        std::string secondaryTestSrcDir =
+            ROSE_SOURCE_TREE + std::string("/developersScratchSpace");
 
         // Not all SgFunctionDeclaration's come from a file.  If ROSE only ever encountered a defining declaration in the input
         // then it will create a compiler-generated non-defining declaration that is not associated with any file.  The call

@@ -3888,8 +3888,8 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
      if (func_symbol == nullptr)
         return false;
 
-     return (func_symbol->get_name().str() == "operator->" ||
-             func_symbol->get_name().str() == "operator->*");
+     const SgName name = func_symbol->get_name();
+     return (name == "operator->" || name == "operator->*");
    }
 
 bool
@@ -10942,8 +10942,6 @@ SageInterface::wrapAllTemplateInstantiationsInAssociatedNamespaces(SgProject* ro
 
      std::vector<SgDeclarationStatement*> templateInstantiationVector;
 
-  // DQ (9/24/2015): This feature is not available yet in CMake (Markus is adding the library support for this feature).
-#ifndef USE_CMAKEx
      RoseAst ast(root);
 
      for (RoseAst::iterator i= ast.begin(); i!= ast.end(); ++i)
@@ -10961,11 +10959,7 @@ SageInterface::wrapAllTemplateInstantiationsInAssociatedNamespaces(SgProject* ro
                  // I think it is OK that not all are a SgDeclarationStatement.
                   }
              }
-       }
-#else
-     std::cerr << "This feature for now is available with autotools only!" << std::endl;
-     ROSE_ABORT();
-#endif
+     }
 
      std::vector<SgDeclarationStatement*>::iterator j = templateInstantiationVector.begin();
      while (j != templateInstantiationVector.end())
@@ -24050,9 +24044,6 @@ SageInterface::isStructurallyEquivalentAST( SgNode* tree1, SgNode* tree2 )
    {
   // DQ (3/4/2014): Added support for testing two trees for equivalents using the AST iterators.
 
-#ifndef USE_CMAKEx
-  // DQ (3/8/2014): Make this conditionally compiled based on when CMake is not used because the libraries are not configured yet.
-
   // This is AST container for the ROSE AST that will provide an iterator.
   // We want two iterators (one for the copy of the snippet and one for the
   // original snippet so that we can query the original snippet's AST
@@ -24097,10 +24088,9 @@ SageInterface::isStructurallyEquivalentAST( SgNode* tree1, SgNode* tree2 )
         }
 
   // We have reached the end of both ASTs.
-     ROSE_ASSERT(i_copy == ast_of_copy.end() && i_original == ast_of_original.end());
-#endif
-
-     return true;
+        ROSE_ASSERT(i_copy == ast_of_copy.end() &&
+                    i_original == ast_of_original.end());
+        return true;
    }
 
 
@@ -24703,7 +24693,6 @@ bool typesAreEqual(SgType *t1, SgType *t2) {
 //    std::cout << "Pointers are equal, returning true" << std::endl;
     return true;
   }
-#ifndef USE_CMAKEx
   RoseAst subT1(t1);
   RoseAst subT2(t2);
 
@@ -24830,10 +24819,6 @@ bool typesAreEqual(SgType *t1, SgType *t2) {
   }
   // this should be unreachable code...
   return equal;
-#else
-  std::cerr << "This feature for now is available with autotools only!" << std::endl;
-  ROSE_ABORT();
-#endif
 }
 
 int getNamedTypeCount() {

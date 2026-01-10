@@ -1,15 +1,16 @@
 #ifndef __fileoffsetbits
 #define __fileoffsetbits
-// DQ (3/12/2006): This is included here as specified in the Autoconf manual (using <> instead of "")
-// We have also abandoned the ifdef HAVE_CONFIG_H cpp conditional use of rose_config.h as well.
-// This is placed here in sage3.h instead of in rose.h because it needs to always be seen even 
+// DQ (3/12/2006): This is included here as specified in the configuration
+// guidelines (using <> instead of "") We have also abandoned the ifdef
+// HAVE_CONFIG_H cpp conditional use of rose_config.h as well. This is placed
+// here in sage3.h instead of in rose.h because it needs to always be seen even
 // by internal ROSE files that only include sage3.h.
 
 // DQ (10/14/2010): We don't want to include this into our header file system
-// since then users will see the defined macros in our autoconf generated 
+// since then users will see the defined macros in our configuration-generated
 // config.h (which we generate as rose_config.h to avoid filename conflicts).
-// This fixes the problem that causes macro names to conflict (e.g. PACKAGE_BUGREPORT).
-// #include <rose_config.h>
+// This fixes the problem that causes macro names to conflict (e.g.
+// PACKAGE_BUGREPORT). #include <rose_config.h>
 
 // DQ (4/21/2009): Error checking to avoid difficult to debug ODR violations on 32-bit systems.
 #if defined(_SYS_STAT_H)

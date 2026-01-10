@@ -20,7 +20,7 @@
 // Note that CAN_NOT_COMPILE_WITH_ROSE is set by the following projects:
 //     1) projects/DocumentationGenerator
 //     2) projects/haskellport
-// in their Makefile.am files.  I think that using CXX_IS_ROSE_ANALYSIS
+// in their build configuration.  I think that using CXX_IS_ROSE_ANALYSIS
 // will be equivalent (used to indicate the a ROSE translator is being
 // used to compile the ROSE source code).
 // However, it might be that this is equivalent to the USE_ROSE macro,

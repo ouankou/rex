@@ -51,11 +51,11 @@ for my $file (FileLister->new(@ARGV)->all_files()) {
     push @{$index{$key}}, $file;
 }
 
-# Look for file names in makefiles (Makefile.am and CMakeList.txt) and remove those that we find
+# Look for file names in build metadata files (Makefile_variables, CMakeLists.txt, etc.) and remove those that we find
 # from the %index.
 my $files = FileLister->new(@ARGV);
 while (my $file = $files->next_file) {
-  next unless $file =~ /\/(Makefile\.am|Makefile_variables|CMakeList\.txt|make_rule\.inc|Makefile-.*\.inc)$/;
+  next unless $file =~ /\/(Makefile_variables|CMakeLists\.txt|make_rule\.inc|Makefile-.*\.inc)$/;
   next if $file =~ /\b(tests|projects|src\/AstNodes)\//; # skip test and project directories
   if (open FILE, "<", $file) {
     while (<FILE>) {

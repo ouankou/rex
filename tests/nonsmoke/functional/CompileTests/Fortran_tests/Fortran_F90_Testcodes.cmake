@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(F90_TESTCODES
   jira-par-2_literal_max.f90
   jira-par-11_write_format.f90

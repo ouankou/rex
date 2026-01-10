@@ -43,31 +43,15 @@
    is intended only for *comparisons* of time intervals.
 
    (In order to use some of the OS-dependent timer routines like
-   gethrtime, you need to paste the autoconf snippet below
-   into your configure.ac file and #include "config.h" before cycle.h,
-   or define the relevant macros manually if you are not using autoconf.)
+   gethrtime, you need to define the relevant HAVE_* macros via
+   configure-time checks and include "rose_config.h" before cycle.h,
+   or define the relevant macros manually.)
 */
 
 /***************************************************************************/
 /* This file uses macros like HAVE_GETHRTIME that are assumed to be
    defined according to whether the corresponding function/type/header
-   is available on your system.  The necessary macros are most
-   conveniently defined if you are using GNU autoconf, via the tests:
-
-   dnl ---------------------------------------------------------------------
-
-   AC_C_INLINE
-   AC_HEADER_TIME
-   AC_CHECK_HEADERS([sys/time.h])
-
-   AC_CHECK_TYPE([hrtime_t],[AC_DEFINE(HAVE_HRTIME_T, 1, [Define to 1 if
-hrtime_t is defined in <sys/time.h>])],,[#if HAVE_SYS_TIME_H #include
-<sys/time.h> #endif])
-
-   AC_CHECK_FUNCS([clock_gettime])
-
-   dnl ---------------------------------------------------------------------
-*/
+   is available on your system. */
 
 /***************************************************************************/
 
