@@ -5,6 +5,7 @@ from pathlib import Path
 
 _PRE_TAG_RE = re.compile(r"<pre(?![^>]*\bdata-search-exclude\b)([^>]*)>", re.IGNORECASE)
 _MAX_SEARCH_TEXT = 100_000
+_TRUNCATE_THRESHOLD = 0.8
 
 
 def on_files(files, config):
@@ -85,7 +86,7 @@ def on_post_build(config):
                 truncated.rfind("\t"),
                 truncated.rfind("\r"),
             )
-            if last_space > _MAX_SEARCH_TEXT * 0.8:
+            if last_space > _MAX_SEARCH_TEXT * _TRUNCATE_THRESHOLD:
                 truncated = truncated[:last_space]
             doc["text"] = truncated
             changed = True
@@ -108,7 +109,8 @@ def on_post_build(config):
                 temp_path = None
             except OSError as exc:
                 raise OSError(
-                    f"Failed to replace search index file '{path}' with temporary file '{temp_path}'."
+                    f"Failed to replace search index file '{path}' with temporary file '{temp_path}'. "
+                    f"Original OS error: {exc}"
                 ) from exc
         finally:
             if temp_path is not None:
