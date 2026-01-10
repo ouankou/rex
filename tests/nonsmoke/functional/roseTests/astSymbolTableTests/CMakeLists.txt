@@ -23,7 +23,19 @@ add_test(
   COMMAND $<TARGET_FILE:testSymbolTable>
     -c ${CMAKE_CURRENT_SOURCE_DIR}/input.C
 )
-set_tests_properties(testSymbolTable_test1 PROPERTIES DEPENDS astSymbolTable_test1)
+set_tests_properties(astSymbolTable_test1 PROPERTIES DEPENDS testSymbolTable_test1)
+
+add_test(
+  NAME test1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${_rth}
+    "TITLE=testSymbolTable input.C [test1.passed]"
+    "USE_SUBDIR=yes"
+    "CMD=$<TARGET_FILE:testSymbolTable> -c ${CMAKE_CURRENT_SOURCE_DIR}/input.C"
+    ${_exit_status}
+    test1.passed
+)
+set_tests_properties(test1 PROPERTIES DEPENDS testSymbolTable_test1)
 
 # Makefile check targets.
 add_test(
