@@ -204,21 +204,6 @@ foreach(testcode ${TESTCODES_REQUIRED_TO_PASS})
 endforeach()
 
 add_test(
-  NAME copytest2007_01.C
-  COMMAND copyExample ${ROSE_FLAGS}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_01.C
-)
-set_tests_properties(copytest2007_01.C PROPERTIES LABELS COPYASTTEST)
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_copyAST_tests_copytest2007_01.C
-  COMMAND copyExample ${ROSE_FLAGS}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_01.C
-)
-set_tests_properties(nonsmoke_functional_CompileTests_copyAST_tests_copytest2007_01.C
-  PROPERTIES LABELS COPYASTTEST DEPENDS copyAST_copytest2007_01)
-
-add_test(
   NAME copyAST_copyLoops
   COMMAND copyLoops ${ROSE_FLAGS}
           -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_60.C
