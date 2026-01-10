@@ -2753,7 +2753,7 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
   if (SgDeclarationStatement *declStmt = isSgDeclarationStatement(*node)) {
     SgAccessModifier &access_mod =
         declStmt->get_declarationModifier().get_accessModifier();
-    if (access_mod.isUnknown()) {
+    if (access_mod.isUnknown() || access_mod.isDefault()) {
       clang::AccessSpecifier accessSpec = decl->getAccess();
       switch (accessSpec) {
       case clang::AS_public:

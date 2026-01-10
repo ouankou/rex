@@ -1152,41 +1152,7 @@ bool Unparse_MOD_SAGE::printConstructorName(SgExpression* expr)
 bool
 Unparse_MOD_SAGE::isOverloadedArrowOperator(SgExpression* expr)
    {
-     SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr);
-     SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-     if (!func_ref && !mfunc_ref) return false;
-
-     string func_name;
-     if (func_ref != NULL)
-        {
-          func_name = func_ref->get_symbol()->get_name().str();
-        }
-       else
-        {
-       // [DT] 4/4/2000 -- Adding checks before trying to access
-       //      mfunc_ref->get_symbol()->get_name().str().
-       //
-       //    func_name = strdup(mfunc_ref->get_symbol()->get_name().str());
-       //
-       // (4/4,cont'd) Substituting the following code, because the call to
-       // strdup() gives rise to a core dump sometimes.  I don't know why.
-       //
-       // Unfortunately, this doesn't solve the problem anyway.
-       //
-       // strcmp(mfunc_ref->get_symbol()->get_name().str(), "operator->");
-       // strcmp(mfunc_ref->get_symbol()->get_name().str(), "operator->");
-          if ( ( mfunc_ref->get_symbol()->get_name().getString() == "operator->" ||
-                mfunc_ref->get_symbol()->get_name().getString() == "operator->*"   ) )
-               return true;
-            else
-               return false;
-        }
-
-  // [DT] 4/4/2000 -- Added check for func_name!=NULL.
-     if ( func_name == "operator->" || func_name == "operator->*" )
-          return true;
-     return false;
+     return SageInterface::isOverloadedArrowOperator(expr);
    }
 
 bool
