@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import tempfile
 from pathlib import Path
@@ -76,19 +75,22 @@ def on_post_build(config):
             changed = True
     if changed:
         json_str = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
-        fd, temp_path_str = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=path.name + ".",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_file.write(json_str)
+            temp_path = Path(temp_file.name)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
-                temp_file.write(json_str)
-            Path(temp_path_str).replace(path)
+            temp_path.replace(path)
         except OSError:
             try:
-                os.close(fd)
-            except OSError:
-                pass
-            try:
-                os.unlink(temp_path_str)
-            except OSError:
+                temp_path.unlink()
+            except FileNotFoundError:
                 pass
             raise
 
