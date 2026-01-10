@@ -1,5 +1,5 @@
 add_library(util_support OBJECT
-  BitVectorRepr.C CommandOptions.C VectorCommandOptions.C DAG.C DirectedGraph.C)
+  BitVectorRepr.C CommandOptions.C VectorCommandOptions.C)
 
 ########### install files ###############
 install(FILES

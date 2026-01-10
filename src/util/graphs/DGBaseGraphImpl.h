@@ -73,5 +73,12 @@ class DAGBaseGraphImpl
    { impl->TopoSort(reverse); }
 };
 
-#endif
+// Explicit instantiations are provided in DGBaseGraphImpl.C.
+extern template class DirectedGraphEdge<DGBaseNodeImpl,DGBaseEdgeImpl>;
+extern template class DirectedGraphEdge<DAGBaseNodeImpl, DAGBaseEdgeImpl>;
+extern template class DirectedGraphNode<DGBaseNodeImpl,DGBaseEdgeImpl>;
+extern template class DirectedGraphNode<DAGBaseNodeImpl,DAGBaseEdgeImpl>;
+extern template class DAGEdge<DAGBaseNodeImpl,DAGBaseEdgeImpl>;
+extern template class DAGNode<DAGBaseNodeImpl,DAGBaseEdgeImpl>;
 
+#endif
