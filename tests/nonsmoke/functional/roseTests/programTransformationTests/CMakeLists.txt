@@ -124,9 +124,6 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation2.C
 )
 
-
-
-
 #-------------------------------------------------------------------------------
 # implicitCodeGenerationTest
 

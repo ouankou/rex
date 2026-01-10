@@ -937,7 +937,6 @@ foreach(specimen IN LISTS OUTLINE_CXX4_TESTS)
   )
 endforeach()
 
-
 set(_dlopen5_flags
   -fpermissive
   ${_outline_dlopen_header_include}
