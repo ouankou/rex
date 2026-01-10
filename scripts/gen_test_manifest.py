@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
+from ctest_parse_utils import parse_ctest_output_records, should_override_ctest_command
+
 
 TEST_FILE_EXTS = {
     ".c",
@@ -1690,10 +1692,13 @@ def _resolve_make_target_to_source(
 
 def _resolve_script_token(token: str, base_dir: Path) -> Optional[Path]:
     path = Path(token)
-    if not path.is_absolute():
-        path = (base_dir / path).resolve()
-    else:
-        path = path.resolve()
+    try:
+        if not path.is_absolute():
+            path = (base_dir / path).resolve()
+        else:
+            path = path.resolve()
+    except OSError:
+        return None
     try:
         if not path.exists() or not path.is_file():
             return None
@@ -1719,10 +1724,13 @@ def _resolve_test_file_token(token: str, base_dir: Path) -> Optional[Path]:
     ):
         return None
     path = Path(token)
-    if not path.is_absolute():
-        path = (base_dir / path).resolve()
-    else:
-        path = path.resolve()
+    try:
+        if not path.is_absolute():
+            path = (base_dir / path).resolve()
+        else:
+            path = path.resolve()
+    except OSError:
+        return None
     if path.name.startswith(OUTPUT_FILE_PREFIXES):
         return None
     if path.suffix in TEST_FILE_EXTS and path.exists():
@@ -4151,12 +4159,6 @@ def _parse_ctest_testfiles(build_dir: Path) -> dict[str, dict[str, object]]:
     return tests
 
 
-def _should_override_ctest_command(entry_cmd: list[str], data_cmd: list[str]) -> bool:
-    if not data_cmd:
-        return False
-    return not entry_cmd or entry_cmd != data_cmd
-
-
 def _extract_cmake_tests_from_ctest(
     repo_label: str, build_dir: Path, repo_root: Path
 ) -> list[TestEntry]:
@@ -4170,69 +4172,9 @@ def _extract_cmake_tests_from_ctest(
 
     entries: list[TestEntry] = []
     testfile_data = _parse_ctest_testfiles(build_dir)
-    records: dict[int, dict[str, object]] = {}
-    current_num: Optional[int] = None
-    header_re = re.compile(r"^Test\s+#(\d+)\s*:\s*(.+)$")
-    prefix_re = re.compile(r"^\s*(\d+):\s*(.+)$")
-    for line in output.splitlines():
-        raw = line.rstrip()
-        num: Optional[int] = None
-        content = raw
-        prefix = prefix_re.match(raw)
-        if prefix:
-            num = int(prefix.group(1))
-            content = prefix.group(2)
-            current_num = num
-        stripped = content.strip()
-
-        header = header_re.match(stripped)
-        if header:
-            num = int(header.group(1))
-            raw_name = header.group(2).strip()
-            record = records.setdefault(num, {})
-            if any(token in raw_name for token in ("(Disabled)", "(Not Run)", "(Skipped)")):
-                record["disabled"] = True
-            record["name"] = _strip_ctest_suffix(raw_name)
-            current_num = num
-            continue
-
-        if stripped.startswith("Test command:"):
-            record_num = num if num is not None else current_num
-            if record_num is None:
-                continue
-            cmd = stripped.split("Test command:", 1)[1].strip()
-            records.setdefault(record_num, {})["command"] = _tokenize(cmd)
-            continue
-
-        if stripped.startswith("Working Directory:"):
-            record_num = num if num is not None else current_num
-            if record_num is None:
-                continue
-            workdir = stripped.split("Working Directory:", 1)[1].strip()
-            records.setdefault(record_num, {})["workdir"] = workdir
-            continue
-
-        if stripped.startswith("Labels:"):
-            record_num = num if num is not None else current_num
-            if record_num is None:
-                continue
-            labels = stripped.split("Labels:", 1)[1].strip()
-            records.setdefault(record_num, {})["labels"] = [
-                label for label in re.split(r"[;\s]+", labels) if label
-            ]
-            continue
-
-        if stripped.startswith("Disabled:"):
-            record_num = num if num is not None else current_num
-            if record_num is None:
-                continue
-            value = stripped.split("Disabled:", 1)[1].strip()
-            records.setdefault(record_num, {})["disabled"] = value.lower() == "true"
-            continue
-
-    for record in (records[key] for key in sorted(records)):
-        if record.get("name"):
-            entries.append(_ctest_entry(repo_label, record, repo_root))
+    records = parse_ctest_output_records(output, _tokenize, _strip_ctest_suffix)
+    for record in records:
+        entries.append(_ctest_entry(repo_label, record, repo_root))
     filtered: list[TestEntry] = []
     for entry in entries:
         data = testfile_data.get(entry.name)
@@ -4243,7 +4185,7 @@ def _extract_cmake_tests_from_ctest(
             if data.get("command"):
                 data_cmd = list(data.get("command") or [])
                 entry_cmd = list(entry.command or [])
-                if _should_override_ctest_command(entry_cmd, data_cmd):
+                if should_override_ctest_command(entry_cmd, data_cmd):
                     entry.command = data_cmd
             entry.workdir = entry.workdir or data.get("workdir")
             if data.get("labels"):
@@ -4811,7 +4753,7 @@ def _input_signature(entry: TestEntry, repo_roots: dict[str, Path]) -> Optional[
         if repo_root:
             try:
                 path = path.relative_to(repo_root)
-            except ValueError:
+            except (ValueError, OSError):
                 pass
         input_str = str(path)
         input_str = re.sub(r"\.temp\.int(?=\.)", ".temp", input_str)
