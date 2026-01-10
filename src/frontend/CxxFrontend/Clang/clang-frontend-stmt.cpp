@@ -6624,8 +6624,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
           new SgDesignatedInitializer(expr_list_exp, base_init);
       applySourceRange(design_init,
                        designated_init_expr->getDesignatorsSourceRange());
-      expr_list_exp->set_parent(design_init);
-      base_init->set_parent(design_init);
+      design_init->post_construction_initialization();
       SgExprListExp *aggListExp = SageBuilder::buildExprListExp_nfi();
       design_init->set_parent(aggListExp);
       aggListExp->append_expression(design_init);
@@ -6639,8 +6638,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
   applySourceRange(expr_list_exp,
                    designated_init_expr->getDesignatorsSourceRange());
   designated_init = new SgDesignatedInitializer(expr_list_exp, base_init);
-  expr_list_exp->set_parent(base_init);
-  base_init->set_parent(designated_init);
+  designated_init->post_construction_initialization();
 
   *node = designated_init;
 
