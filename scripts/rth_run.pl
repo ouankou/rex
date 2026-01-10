@@ -568,11 +568,7 @@ while (@ARGV) {
   /^(\w+)=(.*)/ and do {
     my ($var, $val) = ($1, $2);
     # Allow CMD="..."; strip one layer so the shell sees the full command.
-    if ($val =~ /^"(.*)"$/s) {
-      $val = $1;
-    } elsif ($val =~ /^'(.*)'$/s) {
-      $val = $1;
-    }
+    $val =~ s/^(['"])(.*)\1$/$2/s;
     $variables{$var} = $val;
     next;
   };
