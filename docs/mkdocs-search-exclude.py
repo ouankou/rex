@@ -29,12 +29,10 @@ def on_files(files, config):
         child = urls[i + 1]
         if not child.startswith(url):
             continue
-        if len(child) <= len(url):
-            continue
         if url.endswith("/"):
             has_children.add(url)
         else:
-            if child[len(url)] == "/":
+            if child[len(url):].startswith("/"):
                 has_children.add(url)
 
     setattr(config, "_search_exclude_leaf_urls", set(urls) - has_children)
@@ -110,7 +108,8 @@ def on_post_build(config):
                 temp_path = None
             except OSError as exc:
                 raise OSError(
-                    f"Failed to replace search index file '{path}' with temporary file '{temp_path}'. "
+                    f"Failed to replace search index file '{path}' with temporary file '{temp_path}' "
+                    f"(note: the temporary file may already have been deleted). "
                     f"Original OS error: {exc}"
                 ) from exc
         finally:
