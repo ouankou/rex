@@ -62,8 +62,9 @@ editing them then assembling them together).
 member functions, for example) are abstracted away from most of the
 ROSE implementation and buried into the array_class_interface.C file
 (and the array_class_interface object provided).  Thus other array
-class libraries may be readily used alternatively to A++/P++.  This
-sort of thing has not been tried yet (it is treated as a design goal).
+class libraries may be readily used alternatively to legacy array
+libraries.  This sort of thing has not been tried yet (it is treated
+as a design goal).
 
 
 6) Transform_1 directory is not used (it will be removed) it contains
@@ -81,4 +82,3 @@ grammar (but other grammars have not be 'fully' generated).
 8) The generation of the Sage grammar is a current test project and is incomplete
 (only the header files were generated, not the source code) using the grammar generation
 technique.  This method requires more work.
-

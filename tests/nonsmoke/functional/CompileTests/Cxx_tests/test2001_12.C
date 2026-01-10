@@ -1,25 +1,12 @@
-// Skip version 4.x gnu compilers
-// #if ( __GNUC__ == 3 )
-#if ( defined(__clang__) == 0 && __GNUC__ == 3 )
+struct Pair {
+  int a;
+  int b;
+  Pair(int x, int y) : a(x), b(y) {}
+};
 
-#include "A++.h"
+int sum(const Pair &p) { return p.a + p.b; }
 
-int
-main ()
-   {
-  // Test 1
-     doubleArray* arrayPtr1 = new doubleArray(42);
-
-  // Test 2
-     doubleArray* arrayPtr2 = new doubleArray();
-
-  // Test 3
-     char* copyString = new char[1];
-
-     return 0;
-   }
-
-#else
-  #warning "Not tested on gnu 4.0 or greater versions"
-#endif
-
+int main() {
+  Pair p(1, 2);
+  return sum(p) - 3;
+}

@@ -8,8 +8,7 @@ set(ROSE_FLAGS  -w )
 
 set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 
-set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code
-                      -I${TESTCODE_DIR})
+set(TESTCODE_INCLUDES -I${TESTCODE_DIR})
 set(rex_test2025_issue148_system_header_dir
   ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
 

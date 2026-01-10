@@ -16,10 +16,8 @@ if(NOT ENABLE-FORTRAN)
   set_tests_properties(RunTests_traverseCommonBlock PROPERTIES DISABLED TRUE)
 endif()
 
-add_subdirectory(A++Tests)
 add_subdirectory(AstDeleteTests)
 add_subdirectory(FortranTests)
-add_subdirectory(P++Tests)
 
 
 ########### install files ###############

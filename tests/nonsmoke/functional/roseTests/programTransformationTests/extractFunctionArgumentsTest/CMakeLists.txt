@@ -12,8 +12,7 @@ set(NORMALIZATION_SYSTEM_HEADER_DIR
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like)
 
 set(normalizationTranslator_SWITCHES
-	 -w -rose:verbose 0 -I${TESTCODE_DIR}
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
+  -w -rose:verbose 0 -I${TESTCODE_DIR})
 
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)

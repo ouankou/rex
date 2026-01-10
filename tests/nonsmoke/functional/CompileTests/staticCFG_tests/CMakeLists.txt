@@ -8,9 +8,7 @@ target_link_libraries(testStaticCFG ROSE_DLL ${link_with_libraries} )
 add_executable(testInterproceduralCFG testInterproceduralCFG.C)
 target_link_libraries(testInterproceduralCFG ROSE_DLL ${link_with_libraries} )
 
-# Some of these test codes reference A++ header fiels as part of their tests
-# Include the path to A++ and the transformation specification
-set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
+set(TESTCODE_INCLUDES "")
 set(rex_test2025_issue148_system_header_dir
   ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
 

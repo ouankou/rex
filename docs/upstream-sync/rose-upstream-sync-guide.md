@@ -9,6 +9,7 @@ rose upstream github repo: https://github.com/rose-compiler/rose
 - Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, Java (source language), UPC, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, and other legacy frontends/tools (excluding experimental Flang).
 - Java is still required only as a runtime dependency for the OFP Fortran parser; no Java frontend support.
 - Rosebud: keep the generator engine if present, but drop Rosebud inputs tied to dropped subsystems (e.g., binary analysis, Jovial).
+- Legacy array test suites are dropped from CompileTests and CompilerOptionsTests inventories.
 
 ## Non-negotiable rules
 - Top rule: do not pause for any reason until the PR is created.
@@ -244,8 +245,6 @@ pending tests/nonsmoke/ExamplesForTestWriters
 pending tests/nonsmoke/acceptance
 pending tests/nonsmoke/functional
 in-progress tests/nonsmoke/functional/CompileTests
-pending tests/nonsmoke/functional/CompileTests/A++Code
-pending tests/nonsmoke/functional/CompileTests/A++Tests
 pending tests/nonsmoke/functional/CompileTests/C++Code
 pending tests/nonsmoke/functional/CompileTests/C11_tests
 pending tests/nonsmoke/functional/CompileTests/C89_std_c89_tests
@@ -300,7 +299,6 @@ pending tests/nonsmoke/functional/CompileTests/OpenMP_tests/fortran
 pending tests/nonsmoke/functional/CompileTests/OpenMP_tests/fortran/referenceResults
 pending tests/nonsmoke/functional/CompileTests/OpenMP_tests/referenceResults
 pending tests/nonsmoke/functional/CompileTests/OvertureCode
-pending tests/nonsmoke/functional/CompileTests/P++Tests
 pending tests/nonsmoke/functional/CompileTests/RoseExample_tests
 pending tests/nonsmoke/functional/CompileTests/STL_tests
 pending tests/nonsmoke/functional/CompileTests/STL_tests/missing-support
@@ -368,7 +366,6 @@ pending tests/nonsmoke/functional/CompileTests/unparseToString_tests
 pending tests/nonsmoke/functional/CompileTests/unparse_template_from_ast
 pending tests/nonsmoke/functional/CompileTests/virtualCFG_tests
 pending tests/nonsmoke/functional/CompilerOptionsTests
-pending tests/nonsmoke/functional/CompilerOptionsTests/A++Code
 pending tests/nonsmoke/functional/CompilerOptionsTests/collectAllCommentsAndDirectives_tests
 pending tests/nonsmoke/functional/CompilerOptionsTests/preinclude_tests
 pending tests/nonsmoke/functional/CompilerOptionsTests/testAnsiOption

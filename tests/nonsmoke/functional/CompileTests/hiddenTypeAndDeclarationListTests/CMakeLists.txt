@@ -15,9 +15,7 @@ endif()
 
 set(ROSE_FLAGS  -w -rose:verbose 0)
 
-set(TESTCODE_INCLUDES
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code
-  -I${CMAKE_CURRENT_SOURCE_DIR})
+set(TESTCODE_INCLUDES -I${CMAKE_CURRENT_SOURCE_DIR})
 
 foreach(file_to_test ${TESTCODES})
   add_test(

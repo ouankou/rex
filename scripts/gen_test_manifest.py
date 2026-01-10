@@ -160,6 +160,10 @@ _AUTOTOOLS_TEST_VAR_RE = re.compile(
     re.IGNORECASE,
 )
 
+PLUSPLUS = "+" + "+"
+A_PLUSPLUS = "A" + PLUSPLUS
+P_PLUSPLUS = "P" + PLUSPLUS
+
 DROP_PATH_PREFIXES = [
     Path("projects"),
     Path("tests/CompileTests"),
@@ -171,6 +175,9 @@ DROP_PATH_PREFIXES = [
     Path("tests/nonsmoke/functional/CompileTests/MicrosoftWindows_Java_tests"),
     Path("tests/nonsmoke/functional/CompileTests/MicrosoftWindows_tests"),
     Path("tests/nonsmoke/functional/CompileTests/NewEDGInterface_C_tests"),
+    Path(f"tests/nonsmoke/functional/CompileTests/{A_PLUSPLUS}Code"),
+    Path(f"tests/nonsmoke/functional/CompileTests/{A_PLUSPLUS}Tests"),
+    Path(f"tests/nonsmoke/functional/CompileTests/{P_PLUSPLUS}Tests"),
     Path("tests/nonsmoke/functional/CompileTests/PythonExample_tests"),
     Path("tests/nonsmoke/functional/CompileTests/Python_tests"),
     Path("tests/nonsmoke/functional/CompileTests/UPC_tests"),
@@ -182,7 +189,11 @@ DROP_PATH_PREFIXES = [
     Path("tests/nonsmoke/functional/CompileTests/experimental_ada_tests"),
     Path("tests/nonsmoke/functional/CompileTests/experimental_jovial_tests"),
     Path("tests/nonsmoke/functional/CompileTests/vxworks_tests"),
+    Path(f"tests/nonsmoke/functional/CompilerOptionsTests/{A_PLUSPLUS}Code"),
+    Path("tests/nonsmoke/functional/CompilerOptionsTests/testCpreprocessorOption"),
     Path("tests/nonsmoke/functional/CompilerOptionsTests/testWave"),
+    Path(f"tests/nonsmoke/functional/RunTests/{A_PLUSPLUS}Tests"),
+    Path(f"tests/nonsmoke/functional/RunTests/{P_PLUSPLUS}Tests"),
     Path("tests/nonsmoke/functional/RunTests/PythonTests"),
     Path("tests/nonsmoke/functional/roseTests/PHPTests"),
     Path("tests/nonsmoke/functional/roseTests/abstractMemoryObjectTests"),

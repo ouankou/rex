@@ -81,7 +81,7 @@ set(_vfa_specimen_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 set(_vfa_switches "-w -rose:verbose 0")
 set(_vfa_includes
-  "-I${_vfa_specimen_dir} -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code")
+  "-I${_vfa_specimen_dir}")
 set(_vfa_system_header_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like)
 
