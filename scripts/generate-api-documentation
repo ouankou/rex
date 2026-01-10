@@ -983,8 +983,8 @@ output_dir="$(output-dir-from-config "$CONFIG")"
 if [ -n "$output_dir" ] && [ -d "$output_dir" ]; then
     rose_root="$(cd "$(rose-source)" && pwd -P)"
     resolved_output_dir="$(cd "$output_dir" && pwd -P)" || die "unable to resolve output directory: $output_dir"
-    if [ "$resolved_output_dir" != "$rose_root" ] && [[ "$resolved_output_dir" != "$rose_root/"* ]]; then
-        die "refusing to remove output directory outside project root: $output_dir"
+    if [ "$resolved_output_dir" = "$rose_root" ] || [[ "$resolved_output_dir" != "$rose_root/"* ]]; then
+        die "refusing to remove output directory that is not a strict subdirectory of the project root: $output_dir"
     fi
     if [ "$resolved_output_dir" = "/" ]; then
         die "refusing to remove output directory at /"
