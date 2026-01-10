@@ -3894,6 +3894,29 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
      return false;
    }
 
+bool
+SageInterface::isUnaryOperatorArrowSubtree(SgExpression* expr)
+   {
+     if (expr == nullptr)
+        return false;
+
+     if (SgPointerDerefExp* deref = isSgPointerDerefExp(expr))
+        return isUnaryOperatorArrowSubtree(deref->get_operand());
+
+     SgFunctionCallExp* functionCall = isSgFunctionCallExp(expr);
+     if (functionCall == nullptr)
+        return false;
+
+     SgBinaryOp* binaryOperator = isSgBinaryOp(functionCall->get_function());
+     if (binaryOperator == nullptr)
+        return false;
+
+     if (isSgDotExp(binaryOperator) == nullptr && isSgArrowExp(binaryOperator) == nullptr)
+        return false;
+
+     return isOverloadedArrowOperator(binaryOperator->get_rhs_operand());
+   }
+
 
 
 

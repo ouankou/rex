@@ -1159,37 +1159,7 @@ bool
 Unparse_MOD_SAGE::isUnaryOperatorArrowSubtree(SgExpression* expr)
    {
   // DQ (12/11/2004): This function recognizes a subtree which represents the "S* T::operator->()" for some class type "T" and type "S"
-     bool returnValue = false;
-     SgPointerDerefExp *returnType = isSgPointerDerefExp(expr);
-     if (returnType != NULL)
-        {
-          SgFunctionCallExp* functionCall = isSgFunctionCallExp(returnType->get_operand());
-
-       // Note recurprintsive function call!
-          returnValue = isUnaryOperatorArrowSubtree(functionCall);
-        }
-       else
-        {
-          SgFunctionCallExp* functionCall = isSgFunctionCallExp(expr);
-          if (functionCall != NULL)
-             {
-               SgBinaryOp *binaryOperator = isSgBinaryOp(functionCall->get_function());
-               if (binaryOperator != NULL)
-                  {
-                 // Verify that this is either a SgDotExp or a SgArrowExp
-                    SgDotExp   *dotExpression   = isSgDotExp  (binaryOperator);
-                    SgArrowExp *arrowExpression = isSgArrowExp(binaryOperator);
-                    ROSE_ASSERT(dotExpression != NULL || arrowExpression != NULL);
-
-                    if (isOverloadedArrowOperator(binaryOperator->get_rhs_operand()) == true)
-                       {
-                         returnValue = true;
-                       }
-                  }
-             }
-        }
-
-     return returnValue;
+     return SageInterface::isUnaryOperatorArrowSubtree(expr);
    }
 
 //-----------------------------------------------------------------------------------

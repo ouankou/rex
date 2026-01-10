@@ -4,29 +4,6 @@
 
 using namespace std;
 
-namespace {
-bool isUnaryOperatorArrowSubtree(SgExpression* expr) {
-    if (expr == nullptr) {
-        return false;
-    }
-    if (SgPointerDerefExp* deref = isSgPointerDerefExp(expr)) {
-        return isUnaryOperatorArrowSubtree(deref->get_operand());
-    }
-    SgFunctionCallExp* functionCall = isSgFunctionCallExp(expr);
-    if (functionCall == nullptr) {
-        return false;
-    }
-    SgBinaryOp* binaryOperator = isSgBinaryOp(functionCall->get_function());
-    if (binaryOperator == nullptr) {
-        return false;
-    }
-    if (isSgDotExp(binaryOperator) == nullptr && isSgArrowExp(binaryOperator) == nullptr) {
-        return false;
-    }
-    return SageInterface::isOverloadedArrowOperator(binaryOperator->get_rhs_operand());
-}
-} // namespace
-
 /** Performs the function argument extraction on all function calls in the given subtree of the AST. */
 /** It does not do transofrmations in places where it is not safe. If you pass doUnsafeNormalization= true, we will normalize all callsites ignoring the safety (Suggested by Markus Schordan) */
 
@@ -286,7 +263,7 @@ bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(SgExpression* arg
     {
         argument = isSgUnaryOp(argument)->get_operand();
     }
-    if (isUnaryOperatorArrowSubtree(argument)) {
+    if (SageInterface::isUnaryOperatorArrowSubtree(argument)) {
         return false;
     }
     // Don't include SgConstructorInitializer since it will be called even on the temporary, so avoid double copy.
