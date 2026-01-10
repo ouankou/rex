@@ -2051,7 +2051,58 @@ bool ClangToSageTranslator::VisitCXXCatchStmt(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
+  SgCatchOptionStmt *catch_stmt =
+      SageBuilder::buildCatchOptionStmt(NULL, NULL);
+
+  SgScopeStatement *catch_scope = isSgScopeStatement(catch_stmt);
+  ROSE_ASSERT(catch_scope != NULL);
+  SageBuilder::pushScopeStack(catch_scope);
+
+  SgVariableDeclaration *condition_decl = NULL;
+  if (clang::VarDecl *exception_decl = cxx_catch_stmt->getExceptionDecl()) {
+    SgNode *tmp_condition = Traverse(exception_decl);
+    condition_decl = isSgVariableDeclaration(tmp_condition);
+    if (tmp_condition != NULL && condition_decl == NULL) {
+      std::cerr << "Runtime error: tmp_condition != NULL && condition_decl == "
+                   "NULL"
+                << std::endl;
+      res = false;
+    }
+  } else {
+    SgName empty_name("");
+    SgType *ellipsis_type = SgTypeEllipse::createType();
+    condition_decl = SageBuilder::buildVariableDeclaration_nfi(
+        empty_name, ellipsis_type, NULL, SageBuilder::topScopeStack());
+  }
+
+  if (condition_decl != NULL) {
+    SgInitializedName *init_name =
+        SageInterface::getFirstInitializedName(condition_decl);
+    if (init_name != NULL && init_name->get_scope() == NULL) {
+      init_name->set_scope(catch_scope);
+    }
+  }
+
+  SgNode *tmp_body = Traverse(cxx_catch_stmt->getHandlerBlock());
+  SgStatement *body_stmt = isSgStatement(tmp_body);
+  if (tmp_body != NULL && body_stmt == NULL) {
+    std::cerr << "Runtime error: tmp_body != NULL && body_stmt == NULL"
+              << std::endl;
+    res = false;
+  }
+
+  SageBuilder::popScopeStack();
+
+  catch_stmt->set_condition(condition_decl);
+  if (condition_decl != NULL) {
+    condition_decl->set_parent(catch_stmt);
+  }
+
+  ROSE_ASSERT(body_stmt != NULL);
+  catch_stmt->set_body(body_stmt);
+  body_stmt->set_parent(catch_stmt);
+
+  *node = catch_stmt;
   return VisitStmt(cxx_catch_stmt, node) && res;
 }
 
@@ -2226,7 +2277,28 @@ bool ClangToSageTranslator::VisitCXXTryStmt(clang::CXXTryStmt *cxx_try_stmt,
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
+  SgNode *tmp_body = Traverse(cxx_try_stmt->getTryBlock());
+  SgStatement *try_body = isSgStatement(tmp_body);
+  ROSE_ASSERT(try_body != NULL);
+
+  SgTryStmt *try_stmt = SageBuilder::buildTryStmt(try_body);
+
+  for (unsigned i = 0; i < cxx_try_stmt->getNumHandlers(); ++i) {
+    SgNode *tmp_handler = Traverse(cxx_try_stmt->getHandler(i));
+    SgCatchOptionStmt *handler_stmt = isSgCatchOptionStmt(tmp_handler);
+    if (tmp_handler != NULL && handler_stmt == NULL) {
+      std::cerr << "Runtime error: tmp_handler != NULL && handler_stmt == NULL"
+                << std::endl;
+      res = false;
+      continue;
+    }
+    if (handler_stmt != NULL) {
+      try_stmt->append_catch_statement(handler_stmt);
+      handler_stmt->set_trystmt(try_stmt);
+    }
+  }
+
+  *node = try_stmt;
   return VisitStmt(cxx_try_stmt, node) && res;
 }
 

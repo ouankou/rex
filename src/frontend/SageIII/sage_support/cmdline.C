@@ -4129,6 +4129,11 @@ SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine, vector<string>
              current_arg.rfind("-fopenmp=", 0) == 0 ||
              current_arg == "-fopenmp-simd") {
     } else if (current_arg.find("--rex-omp-") == 0) {
+    } else if (current_arg == "-fexceptions" ||
+               current_arg == "-fno-exceptions" ||
+               current_arg == "-fcxx-exceptions" ||
+               current_arg == "-fno-cxx-exceptions") {
+      clang_frontend_args.push_back(current_arg);
     } else if (current_arg == "-rex:clang:continue-on-error") {
       clang_frontend_args.push_back(current_arg);
     } else if (!current_arg.empty() && current_arg[0] == '-') {

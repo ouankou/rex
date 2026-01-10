@@ -7,15 +7,31 @@ void VirtualFunctionAnalysis::run()
 
      printf ("In VirtualFunctionAnalysis::run() \n");
 
-        vector<SgExpression*> callSites = SageInterface::querySubTree<SgExpression> (project, V_SgFunctionCallExp);
+        VariantVector call_variants(V_SgFunctionCallExp);
+        Rose_STL_Container<SgNode*> call_nodes =
+            NodeQuery::queryMemoryPool(call_variants);
+        vector<SgExpression*> callSites;
+        callSites.reserve(call_nodes.size());
+        for (SgNode *node: call_nodes) {
+            if (SgExpression *expr = isSgExpression(node)) {
+                callSites.push_back(expr);
+            }
+        }
 
-     printf ("In VirtualFunctionAnalysis::run(): after querySubTree on V_SgFunctionCallExp \n");
+     printf ("In VirtualFunctionAnalysis::run(): after queryMemoryPool on V_SgFunctionCallExp \n");
 
-        vector<SgExpression*> constrs = SageInterface::querySubTree<SgExpression> (project, V_SgConstructorInitializer);
+        VariantVector ctor_variants(V_SgConstructorInitializer);
+        Rose_STL_Container<SgNode*> ctor_nodes =
+            NodeQuery::queryMemoryPool(ctor_variants);
 
      printf ("In VirtualFunctionAnalysis::run(): callSites.insert() \n");
 
-        callSites.insert(callSites.end(), constrs.begin(), constrs.end());
+        callSites.reserve(callSites.size() + ctor_nodes.size());
+        for (SgNode *node: ctor_nodes) {
+            if (SgExpression *expr = isSgExpression(node)) {
+                callSites.push_back(expr);
+            }
+        }
 
      printf ("DONE: VirtualFunctionAnalysis::run(): callSites.insert() \n");
 

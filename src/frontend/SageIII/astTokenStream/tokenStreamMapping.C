@@ -4498,50 +4498,17 @@ TokenMappingTraversal::evaluateSynthesizedAttribute ( SgNode* n, InheritedAttrib
                          size_t starting_NodeSequenceWithoutTokenMapping = childrenWithoutTokenMappings[i];
                          size_t ending_NodeSequenceWithoutTokenMapping   = starting_NodeSequenceWithoutTokenMapping;
 
-                         bool endOfSequence = false;
-                         size_t j = 1;
-                         while ( (endOfSequence == false) && 
-                                 (starting_NodeSequenceWithoutTokenMapping+j < childAttributes.size()) && 
-                                 (childAttributes[starting_NodeSequenceWithoutTokenMapping+j].node != NULL) &&
-                                 (tokenStreamSequenceMap.find(childAttributes[starting_NodeSequenceWithoutTokenMapping+j].node) != tokenStreamSequenceMap.end()) )
+                         size_t j = i + 1;
+                         while (j < childrenWithoutTokenMappings.size() &&
+                                childrenWithoutTokenMappings[j] ==
+                                    ending_NodeSequenceWithoutTokenMapping + 1)
                             {
-#if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-                              printf ("find the end of the interval of sibling IR nodes: j = %zu \n",j);
-#endif
-#if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-                              printf ("childrenWithoutTokenMappings[j=%zu] = %zu ending_NodeSequenceWithoutTokenMapping = %zu \n",j,childrenWithoutTokenMappings[j],ending_NodeSequenceWithoutTokenMapping);
-#endif
-                           // Is this the next child IR node in a sequence.
-                              if (childrenWithoutTokenMappings[j] == ending_NodeSequenceWithoutTokenMapping+1)
-                                 {
-                                // Does this IR node have an associated token subsequence mapping.
-                                   SgNode* childNode = childAttributes[childrenWithoutTokenMappings[i]].node;
-                                   ROSE_ASSERT(childNode != NULL);
-
-                                   if (tokenStreamSequenceMap.find(childNode) != tokenStreamSequenceMap.end())
-                                      {
-                                     // This is the end of the sequence of IR nodes withouth a token mapping.
-                                        endOfSequence = true;
-                                      }
-                                     else
-                                      {
-                                     // The end of the sequence of IR nodes that is without a token sequence is at least one longer...
-                                        ending_NodeSequenceWithoutTokenMapping++;
-                                        endOfSequence = false;
-                                      }
-
-                                   if (ending_NodeSequenceWithoutTokenMapping < childrenWithoutTokenMappings.size())
-                                      {
-                                      }
-                                 }
-
-                              j++;
+                              ending_NodeSequenceWithoutTokenMapping =
+                                  childrenWithoutTokenMappings[j];
+                              ++j;
                             }
 
-                      // i++;
-                      // i = ending_NodeSequenceWithoutTokenMapping + 1;
-                      // i = j;
-                         i += j;
+                         i = j;
 
                       // At this point we have identified a subsequence of children that don't have an associated token sequence.
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
