@@ -180,6 +180,10 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   target_link_libraries(ROSE_DLL PRIVATE ${FLANG_LIBS})
 endif()
 
+if(TARGET Cereal::cereal)
+  target_link_libraries(ROSE_DLL PRIVATE Cereal::cereal)
+endif()
+
 set_target_properties(ROSE_DLL PROPERTIES
   VERSION "${PROJECT_VERSION}"
   SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
@@ -232,9 +236,10 @@ if(ZLIB_FOUND)
   add_library_dependency(${ZLIB_LIBRARY})
 endif()
 
-set(LINK_FILES
-  libhpdf
-  ${CMAKE_DL_LIBS})
+set(LINK_FILES ${CMAKE_DL_LIBS})
+if(WITH-LIBHARU)
+  list(APPEND LINK_FILES libhpdf)
+endif()
 
 # Depending on which language analysis (frontend) features are enabled in ROSE, we may need some additional libraries.
 if(ENABLE-FORTRAN)
@@ -265,7 +270,11 @@ endif()
 
 # If the C preprocessor is enabled, ROSE has some additional depenendencies
 if(ENABLE-CPP)
-  add_dependencies(ROSE_DLL ROSE_PREPROCESSOR libhpdf generate_rosePublicConfig)
+  set(_rose_preprocessor_deps ROSE_PREPROCESSOR generate_rosePublicConfig)
+  if(WITH-LIBHARU)
+    list(APPEND _rose_preprocessor_deps libhpdf)
+  endif()
+  add_dependencies(ROSE_DLL ${_rose_preprocessor_deps})
 endif()
 
 ########################################################################################################################

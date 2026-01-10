@@ -51,8 +51,14 @@
 /* Define if Capstone is available. */
 #cmakedefine ROSE_HAVE_CAPSTONE
 
+/* Define if Cereal is available. */
+#cmakedefine ROSE_HAVE_CEREAL
+
 /* Define if libreadline is available. */
 #cmakedefine ROSE_HAVE_LIBREADLINE
+
+/* Define if libharu is enabled. */
+#cmakedefine ROSE_WITH_LIBHARU 1
 
 /* Define to 1 if you have the <byteswap.h> header file. */
 #cmakedefine HAVE_BYTESWAP_H 1
@@ -467,6 +473,9 @@
 /* Location of ROSE Compile Tree. */
 #define ROSE_COMPILE_TREE_PATH "${ROSE_TOP_BINARY_DIR}"
 
+/* Location of ROSE installation prefix. */
+#cmakedefine ROSE_INSTALLATION_PATH "@ROSE_INSTALLATION_PATH@"
+
 /* Location of ROSE Source Tree. */
 #define ROSE_SOURCE_TREE_PATH "${ROSE_TOP_SRC_DIR}"
 
@@ -478,8 +487,13 @@
 #cmakedefine ROSE_USE_CLANG_FRONTEND
 
 /* Use Valgrind calls in ROSE */
-//AS Don't know what to do with this
-#undef ROSE_USE_VALGRIND
+#cmakedefine ROSE_USE_VALGRIND 1
+
+/* Use sanitizer flags in ROSE */
+#cmakedefine ROSE_USE_SANITIZER 1
+
+/* Use lcov coverage flags in ROSE */
+#cmakedefine ROSE_USE_LCOV 1
 
 /* REX: SAGE_TRANSFORM - legacy legacy frontend setting, kept for backwards compatibility */
 //AS Need configure flag to control this variable
@@ -540,6 +554,12 @@
 //AS Don't know what to do with this
 #undef USE_ROSE_GCC_OMP
 
+/* Controls use of ROSE support for OpenMP Translator targeting GCC's GOMP runtime. */
+#cmakedefine USE_ROSE_GOMP_OPENMP_LIBRARY
+
+/* Location (unquoted) of the GCC GOMP OpenMP runtime library. */
+#cmakedefine GCC_GOMP_OPENMP_LIB_PATH "@GCC_GOMP_OPENMP_LIB_PATH@"
+
 /* Controls use of IDA support for disassembling. */
 //AS Don't know what to do with this
 #undef USE_ROSE_IDA_SUPPORT
@@ -555,7 +575,13 @@
 
 /* Controls use of ROSE support for OpenMP Translator targeting Omni RTL. */
 //AS Don't know what to do with this
-#undef USE_ROSE_OMNI_OPENMP_SUPPORT
+#cmakedefine USE_ROSE_OMNI_OPENMP_SUPPORT
+
+/* Location (unquoted) of the Omni OpenMP runtime library. */
+#cmakedefine OMNI_OPENMP_LIB_PATH "@OMNI_OPENMP_LIB_PATH@"
+
+/* Location (unquoted) of the LLVM OpenMP runtime library. */
+#cmakedefine LLVM_OPENMP_LIB_PATH "@LLVM_OPENMP_LIB_PATH@"
 
 /* Controls use of ROSE Open Fortran Parser (OFP) support. */
 #cmakedefine USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT

@@ -693,6 +693,16 @@ set(CMAKE_REQUIRED_QUIET FALSE)
 
 find_package(Perl REQUIRED)
 
+# Optional Cereal serialization support (header-only)
+set(CEREAL_ROOT "" CACHE PATH "Cereal installation directory (empty to auto-detect, 'no' to disable)")
+include(FindCereal)
+find_cereal()
+if(CEREAL_FOUND)
+  set(ROSE_HAVE_CEREAL 1)
+else()
+  unset(ROSE_HAVE_CEREAL)
+endif()
+
 ########################################################################################################################
 # Miscellaneous user-selectable features
 ########################################################################################################################
@@ -714,6 +724,36 @@ if(ENABLE-ADVANCED-WARNINGS)
   set(ROSE_USE_UNIFORM_ADVANCED_WARNINGS_SUPPORT 1)
 endif()
 
+option(ENABLE-SANITIZER "Support address sanitizer and related sanitizer tools for ROSE development" OFF)
+if(ENABLE-SANITIZER)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(_rose_sanitizer_flags "-fsanitize=address" "-fsanitize-recover=address")
+    add_compile_options(
+      $<$<COMPILE_LANGUAGE:C>:${_rose_sanitizer_flags}>
+      $<$<COMPILE_LANGUAGE:CXX>:${_rose_sanitizer_flags}>)
+    add_link_options(${_rose_sanitizer_flags})
+    set(ROSE_USE_SANITIZER 1)
+  else()
+    message(WARNING "ENABLE-SANITIZER requested but compiler does not support sanitizer flags")
+  endif()
+endif()
+
+option(ENABLE-LCOV "Support lcov coverage instrumentation for ROSE development" OFF)
+if(ENABLE-LCOV)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(_rose_lcov_flags "-g" "-fprofile-arcs" "-ftest-coverage")
+    add_compile_options(
+      $<$<COMPILE_LANGUAGE:C>:${_rose_lcov_flags}>
+      $<$<COMPILE_LANGUAGE:CXX>:${_rose_lcov_flags}>)
+    add_link_options("--coverage")
+    set(ROSE_USE_LCOV 1)
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(WARNING "ENABLE-LCOV requested with Clang; coverage flags are not configured for lcov")
+  else()
+    message(WARNING "ENABLE-LCOV requested but compiler does not support lcov flags")
+  endif()
+endif()
+
 option(ENABLE-GNU-EXTENSIONS "Enable internal support in ROSE for GNU language extensions" OFF)
 if(ENABLE-GNU-EXTENSIONS)
   set(ROSE_SUPPORT_GNU_EXTENSIONS TRUE)
@@ -723,6 +763,18 @@ option(ENABLE-MICROSOFT-EXTENSIONS "Enable internal support in ROSE for GNU lang
 if(ENABLE-MICROSOFT-EXTENSIONS)
   set(ROSE_SUPPORT_MICROSOFT_EXTENSIONS TRUE)
 endif()
+
+option(ENABLE-SMALLER-GENERATED-FILES "Build smaller generated Sage III IR files" OFF)
+set(enable-smaller-generated-files ${ENABLE-SMALLER-GENERATED-FILES})
+
+option(WITH-LIBHARU "Build bundled libharu PDF support" ON)
+set(WITH-VALGRIND "" CACHE PATH "Valgrind installation prefix (empty to disable)")
+set(WITH-VALGRIND-BIN "" CACHE PATH "Valgrind bin directory")
+set(WITH-VALGRIND-INCLUDE "" CACHE PATH "Valgrind include directory")
+set(WITH-VALGRIND-LIB "" CACHE PATH "Valgrind library directory")
+set(WITH-GOMP-OMP-RUNTIME-LIBRARY "" CACHE PATH "GCC GOMP OpenMP runtime library directory")
+set(WITH-OMNI-OMP-RUNTIME-SUPPORT "" CACHE PATH "Omni OpenMP runtime library directory")
+set(WITH-LLVM-OMP-RUNTIME-LIBRARY "" CACHE PATH "LLVM OpenMP runtime library directory")
 
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   set(enable-ofp-version "20200819-JDK8" CACHE STRING "version number for OFP")
@@ -736,7 +788,86 @@ find_bison()
 
 # Zlib is required by libharu. To find it in a special place, set ZLIB_ROOT to its installation prefix.
 include(FindZlib)
-find_zlib()
+if(WITH-LIBHARU)
+  find_zlib()
+  set(ROSE_WITH_LIBHARU 1)
+else()
+  set(ZLIB_FOUND FALSE)
+endif()
+
+set(VALGRIND_INSTALL_PATH "")
+set(VALGRIND_BIN_PATH "")
+set(VALGRIND_INCLUDE_PATH "")
+set(VALGRIND_LIBRARY_PATH "")
+set(VALGRIND_BINARY "")
+
+set(_rose_with_vars
+  WITH-VALGRIND
+  WITH-VALGRIND-BIN
+  WITH-VALGRIND-INCLUDE
+  WITH-VALGRIND-LIB
+  WITH-GOMP-OMP-RUNTIME-LIBRARY
+  WITH-OMNI-OMP-RUNTIME-SUPPORT
+  WITH-LLVM-OMP-RUNTIME-LIBRARY)
+foreach(_rose_var IN LISTS _rose_with_vars)
+  if("${${_rose_var}}" STREQUAL "no" OR "${${_rose_var}}" STREQUAL "OFF")
+    set(${_rose_var} "")
+  endif()
+endforeach()
+unset(_rose_with_vars)
+unset(_rose_var)
+
+if(WITH-VALGRIND)
+  set(VALGRIND_INSTALL_PATH "${WITH-VALGRIND}")
+  set(VALGRIND_BIN_PATH "${WITH-VALGRIND}/bin")
+  set(VALGRIND_INCLUDE_PATH "${WITH-VALGRIND}/include")
+  set(VALGRIND_LIBRARY_PATH "${WITH-VALGRIND}/lib")
+endif()
+if(WITH-VALGRIND-BIN)
+  set(VALGRIND_BIN_PATH "${WITH-VALGRIND-BIN}")
+endif()
+if(WITH-VALGRIND-INCLUDE)
+  set(VALGRIND_INCLUDE_PATH "${WITH-VALGRIND-INCLUDE}")
+endif()
+if(WITH-VALGRIND-LIB)
+  set(VALGRIND_LIBRARY_PATH "${WITH-VALGRIND-LIB}")
+endif()
+
+if(VALGRIND_BIN_PATH)
+  find_program(VALGRIND_BINARY valgrind PATHS "${VALGRIND_BIN_PATH}" NO_DEFAULT_PATH)
+  if(NOT VALGRIND_BINARY)
+    message(FATAL_ERROR "Valgrind binary is missing, can't configure with Valgrind")
+  endif()
+  execute_process(
+    COMMAND "${VALGRIND_BINARY}" --version
+    RESULT_VARIABLE _rose_valgrind_status
+    OUTPUT_VARIABLE _rose_valgrind_version
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT _rose_valgrind_status EQUAL 0)
+    message(FATAL_ERROR "Could not execute your Valgrind binary")
+  endif()
+  if(_rose_valgrind_version)
+    message(STATUS "Valgrind version: ${_rose_valgrind_version}")
+  endif()
+  set(ROSE_USE_VALGRIND 1)
+endif()
+if(VALGRIND_INCLUDE_PATH AND NOT EXISTS "${VALGRIND_INCLUDE_PATH}/valgrind/valgrind.h")
+  message(FATAL_ERROR "valgrind.h is missing, can't compile with Valgrind")
+endif()
+
+if(WITH-GOMP-OMP-RUNTIME-LIBRARY)
+  set(USE_ROSE_GOMP_OPENMP_LIBRARY 1)
+  set(GCC_GOMP_OPENMP_LIB_PATH "${WITH-GOMP-OMP-RUNTIME-LIBRARY}")
+  set(ROSE_INSTALLATION_PATH "${CMAKE_INSTALL_PREFIX}")
+endif()
+if(WITH-OMNI-OMP-RUNTIME-SUPPORT)
+  set(USE_ROSE_OMNI_OPENMP_SUPPORT 1)
+  set(OMNI_OPENMP_LIB_PATH "${WITH-OMNI-OMP-RUNTIME-SUPPORT}")
+  set(ROSE_INSTALLATION_PATH "${CMAKE_INSTALL_PREFIX}")
+endif()
+if(WITH-LLVM-OMP-RUNTIME-LIBRARY)
+  set(LLVM_OPENMP_LIB_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}")
+endif()
 
 set(ASSERTION_BEHAVIOR "exit" CACHE STRING "Default behavior of failed assertions. Can be 'abort', 'exit', or 'throw'.")
 if(ASSERTION_BEHAVIOR STREQUAL "abort")
@@ -1035,8 +1166,11 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/finiteDifferencing
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/functionCallNormalization
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/constantFolding
-  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration
-  ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include)
+  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration)
+
+if(WITH-LIBHARU)
+  list(APPEND ROSE_INCLUDES ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include)
+endif()
 
 ########################################################################################################################
 # Set output directories

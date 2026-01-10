@@ -1,38 +1,26 @@
-add_executable(defaultTranslator defaultTranslator.C)
-add_dependencies(defaultTranslator ROSE_DLL)
-target_link_libraries(defaultTranslator ROSE_DLL)
-install(TARGETS defaultTranslator DESTINATION bin)
+set(DEFAULT_TRANSLATOR_SOURCES
+  defaultTranslator.C
+  KeepGoingTranslator.cpp
+  preprocessingInfoDumper.C
+  mangledNameDumper.C
+  qualifiedNameDumper.C
+  textASTGenerator.C
+  fileInfoDumper.C
+  simpleTraversal.C
+  astTermGenerator.C)
 
-add_executable(KeepGoingTranslator KeepGoingTranslator.cpp)
-add_dependencies(KeepGoingTranslator ROSE_DLL)
-target_link_libraries(KeepGoingTranslator ROSE_DLL)
-install(TARGETS KeepGoingTranslator DESTINATION bin)
-
-add_executable(preprocessingInfoDumper preprocessingInfoDumper.C)
-add_dependencies(preprocessingInfoDumper ROSE_DLL)
-target_link_libraries(preprocessingInfoDumper ROSE_DLL)
-install(TARGETS preprocessingInfoDumper DESTINATION bin)
-
-add_executable(mangledNameDumper mangledNameDumper.C)
-add_dependencies(mangledNameDumper ROSE_DLL)
-target_link_libraries(mangledNameDumper ROSE_DLL)
-install(TARGETS mangledNameDumper DESTINATION bin)
-
-add_executable(qualifiedNameDumper qualifiedNameDumper.C)
-add_dependencies(qualifiedNameDumper ROSE_DLL)
-target_link_libraries(qualifiedNameDumper ROSE_DLL)
-install(TARGETS qualifiedNameDumper DESTINATION bin)
-
-add_executable(textASTGenerator textASTGenerator.C)
-add_dependencies(textASTGenerator ROSE_DLL)
-target_link_libraries(textASTGenerator ROSE_DLL)
-install(TARGETS textASTGenerator DESTINATION bin)
+set(DEFAULT_TRANSLATOR_TARGETS "")
+foreach(translator_src IN LISTS DEFAULT_TRANSLATOR_SOURCES)
+  get_filename_component(translator_name "${translator_src}" NAME_WE)
+  add_executable(${translator_name} ${translator_src})
+  add_dependencies(${translator_name} ROSE_DLL)
+  target_link_libraries(${translator_name} ROSE_DLL)
+  install(TARGETS ${translator_name} DESTINATION bin)
+  list(APPEND DEFAULT_TRANSLATOR_TARGETS ${translator_name})
+endforeach()
 
 if(TARGET rose_clang_libstdcxx_headers)
-  target_link_libraries(defaultTranslator PRIVATE rose_clang_libstdcxx_headers)
-  target_link_libraries(KeepGoingTranslator PRIVATE rose_clang_libstdcxx_headers)
-  target_link_libraries(preprocessingInfoDumper PRIVATE rose_clang_libstdcxx_headers)
-  target_link_libraries(mangledNameDumper PRIVATE rose_clang_libstdcxx_headers)
-  target_link_libraries(qualifiedNameDumper PRIVATE rose_clang_libstdcxx_headers)
-  target_link_libraries(textASTGenerator PRIVATE rose_clang_libstdcxx_headers)
+  foreach(translator IN LISTS DEFAULT_TRANSLATOR_TARGETS)
+    target_link_libraries(${translator} PRIVATE rose_clang_libstdcxx_headers)
+  endforeach()
 endif()

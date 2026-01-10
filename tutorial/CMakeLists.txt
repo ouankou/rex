@@ -37,7 +37,8 @@ if(ENABLE-TUTORIAL-DIRECTORY)
     graphGenerationOfSubtree virtualCFG interproceduralCFG
     virtualFunctionIdentification switchWithoutDefault addStruct
     sprintf_to_snprintf seedBugsExample_arrayIndexing volatileTypeModifier
-    findVariableDeclarations)
+    findVariableDeclarations
+    buildCFG buildFile defuseAnalysis)
 
   if(HAVE_PTHREAD_H)
     list(APPEND tutorials sharedMemoryTraversals)
