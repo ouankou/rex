@@ -60,6 +60,4 @@ macro(find_cereal)
     message(STATUS "Cereal not found.")
   endif()
 
-  # ROSE variables
-  set(ROSE_HAVE_CEREAL ${CEREAL_FOUND})
 endmacro()
