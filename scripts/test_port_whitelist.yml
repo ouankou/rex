@@ -54,7 +54,6 @@ renames:
   nonsmoke_functional_roseTests_astInliningTests_specimen22_1.C: inlineEverything_v2_specimen22_1_C
   nonsmoke_functional_roseTests_astInliningTests_specimen25_1.C: inlineEverything_v2_specimen25_1_C
   nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_shell-check: nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_check-local
-  CaseSensitivtyUnitTests.test: CaseSensitivityUnitTests.test
   nonsmoke_functional_roseTests_astOutliningTests_ft_cfftz_omp.cpp: outline_dlopen4_ft_cfftz_omp_cpp
   nonsmoke_functional_roseTests_astProcessingTests_check-bPTP: nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest2
   nonsmoke_functional_roseTests_astProcessingTests_check-binaryPaths: nonsmoke_functional_roseTests_astProcessingTests_check-strictGraphTest2
@@ -83,7 +82,10 @@ renames:
   nonsmoke_unit_SageInterface_tests_alias-001.cpp: sage_performAliasAnalysis_alias_001_cpp
   nonsmoke_unit_SageInterface_tests_alias-002.cpp: sage_performAliasAnalysis_alias_002_cpp
   nonsmoke_unit_SageInterface_tests_alias-003.cpp: sage_performAliasAnalysis_alias_003_cpp
+  single2.o: omp_lowering_single2
+  sizeof.o: omp_lowering_sizeof
   test1: astSymbolTable_test1
+  testTranslator2010_01: Translator_testTranslator2010_01
   testInterproceduralCFG_Cxx_failing_test2005_42.C: testInterproceduralCFG_Cxx_test2005_42
   testStaticCFG_Cxx_failing_test2005_42.C: testStaticCFG_Cxx_test2005_42
   testUnits-1: netcdf_udunits_testUnits_1

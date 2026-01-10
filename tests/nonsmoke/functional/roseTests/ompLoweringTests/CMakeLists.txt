@@ -208,18 +208,18 @@ set(_omp_flags ${_omp_test_includes} -rose:openmp:lowering -g)
 set(_omp_acc_flags ${_omp_test_includes} -rose:openmp:lowering -g)
 
 add_test(
-  NAME single2.o
+  NAME omp_lowering_single2
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} --edg:no_warnings -c ${_omp_test_dir}/single2.c
 )
-set_tests_properties(single2.o PROPERTIES DISABLED TRUE)
+set_tests_properties(omp_lowering_single2 PROPERTIES DISABLED TRUE)
 
 add_test(
-  NAME sizeof.o
+  NAME omp_lowering_sizeof
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} --edg:no_warnings -c ${_omp_test_dir}/sizeof.c
 )
-set_tests_properties(sizeof.o PROPERTIES DISABLED TRUE)
+set_tests_properties(omp_lowering_sizeof PROPERTIES DISABLED TRUE)
 
 foreach(testcode IN LISTS OMP_C_COMPILE_TESTS)
   string(REPLACE "." "_" _omp_name ${testcode})

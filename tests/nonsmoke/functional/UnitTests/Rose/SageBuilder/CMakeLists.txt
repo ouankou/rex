@@ -26,11 +26,11 @@ foreach(test_target IN LISTS SAGE_BUILDER_TESTS)
 endforeach()
 
 add_test(
-  NAME CaseSensitivityUnitTests.test
+  NAME CaseSensitivtyUnitTests.test
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND $<TARGET_FILE:CaseSensitivtyUnitTests>
 )
-set_tests_properties(CaseSensitivityUnitTests.test PROPERTIES LABELS "nonsmoke;unittests")
+set_tests_properties(CaseSensitivtyUnitTests.test PROPERTIES LABELS "nonsmoke;unittests")
 
 # Makefile check targets.
 add_test(
