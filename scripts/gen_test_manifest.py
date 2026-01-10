@@ -5198,8 +5198,10 @@ def _explicit_name_mapping(
             input_path = None
             if input_signature and "inputs=" in input_signature:
                 input_part = input_signature.split("inputs=", 1)[1]
-                input_path = input_part.split()[0]
-                input_name = Path(input_path).name
+                input_tokens = input_part.split()
+                if input_tokens:
+                    input_path = input_tokens[0]
+                    input_name = Path(input_path).name
             if not input_name:
                 input_path = _command_input_path(entry)
                 if input_path:
