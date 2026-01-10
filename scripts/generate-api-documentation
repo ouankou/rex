@@ -1059,6 +1059,10 @@ if [ -n "$output_dir" ] && [ -d "$output_dir" ]; then
     if [ "$resolved_output_dir" = "/" ]; then
         die "refusing to remove output directory at /"
     fi
+    config_dir_resolved="$(cd "$(dirname "$CONFIG")" && pwd -P)" || die "unable to resolve config directory"
+    if [[ "$config_dir_resolved" == "$resolved_output_dir" || "$config_dir_resolved" == "$resolved_output_dir/"* ]]; then
+        die "refusing to remove output directory that contains or is the parent of the config file: $output_dir"
+    fi
     rm -rf "$resolved_output_dir"
 fi
 
