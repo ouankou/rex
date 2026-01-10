@@ -259,7 +259,12 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(const FunctionCallIn
 // If we have a limitation in normalizing the function return false
 bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(SgExpression* argument)
 {
-    if (SageInterface::isOverloadedArrowOperatorChain(argument)) {
+    // Strip casts/address-of for the chain check, but keep deref nodes.
+    SgExpression* arrowCheckExpr = argument;
+    while (isSgCastExp(arrowCheckExpr) || isSgAddressOfOp(arrowCheckExpr)) {
+        arrowCheckExpr = isSgUnaryOp(arrowCheckExpr)->get_operand();
+    }
+    if (SageInterface::isOverloadedArrowOperatorChain(arrowCheckExpr)) {
         return false;
     }
     while ((isSgPointerDerefExp(argument) || isSgCastExp(argument) || isSgAddressOfOp(argument)))
