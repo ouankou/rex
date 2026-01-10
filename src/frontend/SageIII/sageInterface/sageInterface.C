@@ -3888,8 +3888,8 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
      if (func_symbol == nullptr)
         return false;
 
-     const std::string func_name = func_symbol->get_name().str();
-     return (func_name == "operator->" || func_name == "operator->*");
+     return (func_symbol->get_name().str() == "operator->" ||
+             func_symbol->get_name().str() == "operator->*");
    }
 
 bool
