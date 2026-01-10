@@ -259,12 +259,12 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(const FunctionCallIn
 // If we have a limitation in normalizing the function return false
 bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(SgExpression* argument)
 {
+    if (SageInterface::isUnaryOperatorArrowSubtree(argument)) {
+        return false;
+    }
     while ((isSgPointerDerefExp(argument) || isSgCastExp(argument) || isSgAddressOfOp(argument)))
     {
         argument = isSgUnaryOp(argument)->get_operand();
-    }
-    if (SageInterface::isUnaryOperatorArrowSubtree(argument)) {
-        return false;
     }
     // Don't include SgConstructorInitializer since it will be called even on the temporary, so avoid double copy.
     if (isSgFunctionRefExp(argument) || isSgMemberFunctionRefExp(argument) || isSgConstructorInitializer(argument))
