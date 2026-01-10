@@ -35,7 +35,8 @@ set(SAGE3_SOURCES
   IncludeDirective.C
   rtiHelpers.C
   rose_graph_support.C
-  Utf8.C)
+  Utf8.C
+  memory-pool-snapshot.C)
 
 #GENERATING the license_string.h file
 add_custom_command(
@@ -97,6 +98,7 @@ install(
     omp_lib_kinds.h omp_lib.h rosedll.h fileoffsetbits.h rosedefs.h
     sage3basic.hhh sage_support/cmdline.h sage_support/sage_support.h
     sage_support/utility_functions.h sage_support/utility_functionsImpl.C
+    memory-pool-snapshot.h
     ${CMAKE_CURRENT_BINARY_DIR}/Cxx_Grammar.h
     ${CMAKE_CURRENT_BINARY_DIR}/Cxx_GrammarDeclarations.h
     ${CMAKE_CURRENT_BINARY_DIR}/Cxx_GrammarVariants.h

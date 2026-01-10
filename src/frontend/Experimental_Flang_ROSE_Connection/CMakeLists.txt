@@ -1,7 +1,8 @@
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   add_library(flang_frontend OBJECT
     fortran_flang_support.C
-    sage-build.cc)
+    unparse-sage.cpp
+    sage-build.C)
 
   target_include_directories(flang_frontend PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -11,3 +12,5 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
 
   target_compile_features(flang_frontend PRIVATE cxx_std_17)
 endif()
+
+install(FILES fortran_flang_support.h DESTINATION ${INCLUDE_INSTALL_DIR})

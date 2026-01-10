@@ -6,6 +6,10 @@ set(outlineIfs_SRCS outlineIfs.cc)
 add_executable(outlineIfs ${outlineIfs_SRCS})
 target_link_libraries(outlineIfs ROSE_DLL)
 
+set(outlineIfs2_SRCS outlineIfs2.C)
+add_executable(outlineIfs2 ${outlineIfs2_SRCS})
+target_link_libraries(outlineIfs2 ROSE_DLL)
+
 set(outlinePreproc_SRCS outlinePreproc.cc)
 add_executable(outlinePreproc ${outlinePreproc_SRCS})
 target_link_libraries(outlinePreproc ROSE_DLL)

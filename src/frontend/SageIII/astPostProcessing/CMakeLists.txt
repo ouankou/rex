@@ -77,4 +77,3 @@ install(FILES  astPostProcessing.h       fixupDefiningAndNondefiningDeclarations
     fixupInitializers.h
 
     DESTINATION ${INCLUDE_INSTALL_DIR})
-

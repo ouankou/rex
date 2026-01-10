@@ -6,6 +6,7 @@ add_subdirectory(FortranCodeGeneration)
 ########### next target ###############
 
 add_library (unparser OBJECT
+  FortranCodeGeneration/UnparserFortran.C
   FortranCodeGeneration/unparseFortran_expressions.C
   FortranCodeGeneration/unparseFortran_modfile.C
   FortranCodeGeneration/unparseFortran_statements.C

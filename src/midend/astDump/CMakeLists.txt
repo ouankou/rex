@@ -1,24 +1,38 @@
-add_library( astDump OBJECT
+set(astDumpSources
   astGraph.C
   AstAttributeDOT.C
   wholeAST.C
   copyGraph.C
   walrus.C
+  intermediateRepresentationNodeGraphs.C
   includeGraph.C
   AstDOTGeneration.C
-  AstPDFGeneration.C
-  PDFGeneration.C)
+  DOTGraphInterface.C
+  AstTerm.C)
+
+if(WITH-LIBHARU)
+  list(APPEND astDumpSources AstPDFGeneration.C PDFGeneration.C)
+endif()
+
+add_library(astDump OBJECT ${astDumpSources})
 add_dependencies(astDump rosetta_generated)
 
 
 ########### install files ###############
 
-install(FILES  AstAttributeDOT.h astGraph.h astGraphTemplateImpl.h wholeAST.h
-               wholeAST_API.h copyGraph.h walrus.h
-               intermediateRepresentationNodeGraphs.h
-               includeGraph.h
-               AstDOTGeneration.h AstPDFGeneration.h
-	       DOTGeneration.h DOTGenerationImpl.h DOTGraphInterface.h
-               DOTRepresentation.h DOTRepresentationImpl.h DOTSubgraphRepresentation.h
-               DOTSubgraphRepresentationImpl.h PDFGeneration.h
-        DESTINATION ${INCLUDE_INSTALL_DIR})
+set(astDumpHeaders
+  AstAttributeDOT.h astGraph.h astGraphTemplateImpl.h wholeAST.h
+  wholeAST_API.h copyGraph.h walrus.h
+  intermediateRepresentationNodeGraphs.h
+  includeGraph.h
+  AstDOTGeneration.h
+  DOTGeneration.h DOTGenerationImpl.h DOTGraphInterface.h
+  DOTRepresentation.h DOTRepresentationImpl.h DOTSubgraphRepresentation.h
+  DOTSubgraphRepresentationImpl.h
+  AstTerm.h)
+
+if(WITH-LIBHARU)
+  list(APPEND astDumpHeaders AstPDFGeneration.h PDFGeneration.h)
+endif()
+
+install(FILES ${astDumpHeaders} DESTINATION ${INCLUDE_INSTALL_DIR})

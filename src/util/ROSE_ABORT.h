@@ -1,7 +1,9 @@
 #ifndef ROSE_ABORT_H
 #define ROSE_ABORT_H
 
+#ifdef __cplusplus
 #include "mlog.h"
+#endif
 #include <assert.h>
 #include <stdlib.h>
 
@@ -10,7 +12,7 @@
   #ifdef NDEBUG
     #define ROSE_ABORT() abort()
   #else
-    #define ROSE_ABORT() assert(false)
+    #define ROSE_ABORT() assert(0)
   #endif
 #endif
 
