@@ -319,17 +319,106 @@ def _normalize_command(command: list[str], repo_root: Path, build_dir: Path) -> 
     return normalized
 
 
-def _apply_renames(manifest: dict[str, dict], renames: dict[str, str]) -> dict[str, dict]:
+def _normalize_workdir(workdir: str | None, repo_root: Path, build_dir: Path) -> str | None:
+    if not workdir:
+        return None
+    repo_root = repo_root.resolve()
+    build_dir = build_dir.resolve()
+    try:
+        path = Path(workdir)
+    except TypeError:
+        return workdir
+    if not path.is_absolute():
+        path = (build_dir / path).resolve()
+    else:
+        try:
+            path = path.resolve()
+        except OSError:
+            path = Path(workdir)
+    for base in (repo_root, build_dir):
+        try:
+            return str(path.relative_to(base))
+        except ValueError:
+            continue
+    return str(path)
+
+
+def _entries_equivalent(
+    left: dict,
+    right: dict,
+    normalize_cmd,
+    normalize_workdir,
+) -> bool:
+    left_cmd = normalize_cmd(left.get("command") or [])
+    right_cmd = normalize_cmd(right.get("command") or [])
+    if left_cmd != right_cmd:
+        return False
+    if normalize_workdir(left.get("workdir")) != normalize_workdir(right.get("workdir")):
+        return False
+    if left.get("status") != right.get("status"):
+        return False
+    left_labels = sorted(set(left.get("labels", []) or []))
+    right_labels = sorted(set(right.get("labels", []) or []))
+    if left_labels != right_labels:
+        return False
+    left_depends = sorted(set(left.get("depends", []) or []))
+    right_depends = sorted(set(right.get("depends", []) or []))
+    if left_depends != right_depends:
+        return False
+    return True
+
+
+def _entry_priority(entry: dict) -> int:
+    order = {"ctest": 0, "cmake": 1, "autotools": 2}
+    origins = entry.get("origin") or []
+    best = 9
+    for origin in origins:
+        if not isinstance(origin, dict):
+            continue
+        buildsys = origin.get("buildsys")
+        best = min(best, order.get(buildsys, 9))
+    return best
+
+
+def _apply_renames(
+    manifest: dict[str, dict],
+    renames: dict[str, str],
+    normalize_cmd,
+    normalize_workdir,
+) -> dict[str, dict]:
     updated = {}
-    for name, entry in manifest.items():
+    items = sorted(manifest.items(), key=lambda item: _entry_priority(item[1]))
+    for name, entry in items:
         new_name = renames.get(name, name)
-        if new_name in updated:
-            raise RuntimeError(f"rename collision for {new_name}")
         entry = dict(entry)
         entry["name"] = new_name
         if entry.get("depends"):
             entry["depends"] = [renames.get(dep, dep) for dep in entry["depends"]]
-        updated[new_name] = entry
+        existing = updated.get(new_name)
+        if existing is None:
+            updated[new_name] = entry
+            continue
+        if not _entries_equivalent(existing, entry, normalize_cmd, normalize_workdir):
+            existing_priority = _entry_priority(existing)
+            entry_priority = _entry_priority(entry)
+            if existing_priority == entry_priority:
+                raise RuntimeError(f"rename collision for {new_name}")
+            if entry_priority < existing_priority:
+                existing, entry = entry, existing
+        merged = dict(existing)
+        existing_origin = existing.get("origin") or []
+        entry_origin = entry.get("origin") or []
+        if existing_origin or entry_origin:
+            merged_origin = []
+            seen = set()
+            for origin in [*existing_origin, *entry_origin]:
+                key = tuple(sorted(origin.items())) if isinstance(origin, dict) else origin
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged_origin.append(origin)
+            merged["origin"] = merged_origin
+        updated[new_name] = merged
     return updated
 
 
@@ -366,7 +455,12 @@ def main() -> int:
         return normalized
 
     manifest = {item["name"]: item for item in manifest_list}
-    manifest = _apply_renames(manifest, renames)
+    manifest = _apply_renames(
+        manifest,
+        renames,
+        _normalized,
+        lambda workdir: _normalize_workdir(workdir, args.repo_root, args.build_dir),
+    )
     inventory = {item["name"]: item for item in inventory_list}
 
     missing = sorted(name for name in manifest if name not in inventory and name not in exclusions)

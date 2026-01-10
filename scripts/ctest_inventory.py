@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from ctest_parse_utils import parse_ctest_output_records, should_override_ctest_command
+
 
 def _tokenize(value: str) -> list[str]:
     try:
@@ -266,51 +268,15 @@ def _parse_ctest_testfiles(build_dir: Path) -> dict[str, dict[str, object]]:
     return tests
 
 
-def _should_override_ctest_command(entry_cmd: list[str], data_cmd: list[str]) -> bool:
-    if not data_cmd:
-        return False
-    if not entry_cmd:
-        return True
-    if any(" " in tok for tok in data_cmd):
-        return True
-    if len(data_cmd) > len(entry_cmd):
-        return True
-    if entry_cmd and entry_cmd[0].startswith("-") and data_cmd and not data_cmd[0].startswith("-"):
-        return True
-    return False
-
-
 def _key_from_command(name: str, command: list[str], repo_root: Path) -> str:
     return f"name:{name}"
 
 
 def _parse_ctest_output(output: str, repo_root: Path, build_dir: Path) -> list[dict]:
-    entries = []
-    current = {}
-    test_re = re.compile(r"^\s*Test\s+#\d+\s*:")
-    for line in output.splitlines():
-        stripped = re.sub(r"^\d+:\s*", "", line.strip())
-        if test_re.match(stripped):
-            if current:
-                entries.append(_finalize_entry(current, repo_root, build_dir))
-                current = {}
-            raw_name = stripped.split(":", 1)[1].strip()
-            if any(token in raw_name for token in ("(Disabled)", "(Not Run)", "(Skipped)")):
-                current["disabled"] = True
-            current["name"] = _strip_ctest_suffix(raw_name)
-        elif stripped.startswith("Test command:"):
-            cmd = stripped.split("Test command:", 1)[1].strip()
-            current["command"] = _tokenize(cmd)
-        elif stripped.startswith("Working Directory:"):
-            current["workdir"] = stripped.split("Working Directory:", 1)[1].strip()
-        elif stripped.startswith("Labels:"):
-            labels = stripped.split("Labels:", 1)[1].strip()
-            current["labels"] = [l for l in re.split(r"[;\s]+", labels) if l]
-        elif stripped.startswith("Disabled:"):
-            value = stripped.split("Disabled:", 1)[1].strip()
-            current["disabled"] = value.lower() == "true"
-    if current:
-        entries.append(_finalize_entry(current, repo_root, build_dir))
+    entries: list[dict] = []
+    records = parse_ctest_output_records(output, _tokenize, _strip_ctest_suffix)
+    for record in records:
+        entries.append(_finalize_entry(record, repo_root, build_dir))
     return entries
 
 
@@ -322,7 +288,7 @@ def _apply_ctest_testfile_data(entries: list[dict], testfile_data: dict[str, dic
         if data.get("command"):
             current_cmd = entry.get("command", [])
             data_cmd = data.get("command", [])
-            if _should_override_ctest_command(current_cmd, data_cmd):
+            if should_override_ctest_command(current_cmd, data_cmd):
                 entry["command"] = data_cmd
                 labels = set(entry.get("labels", []))
                 labels.discard("needs_manual_followup")

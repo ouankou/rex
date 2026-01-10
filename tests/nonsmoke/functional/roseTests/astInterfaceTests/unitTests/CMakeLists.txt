@@ -40,16 +40,15 @@ add_test(
   COMMAND sageBuilderTest
 )
 
-# Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_astInterfaceTests_unitTests_check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=astInterface_unit_sageBuilderTest
+    -DREX_CTEST_GROUP_TESTS=astInterface_unit_sageInterfaceTest\;astInterface_unit_sageBuilderTest
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_unitTests_check-local PROPERTIES
-  DEPENDS "astInterface_unit_sageBuilderTest"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_unitTests_check-local PROPERTIES DEPENDS "astInterface_unit_sageInterfaceTest;astInterface_unit_sageBuilderTest" )
+
+# Makefile check targets.

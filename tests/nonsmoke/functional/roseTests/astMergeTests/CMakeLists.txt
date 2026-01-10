@@ -37,9 +37,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=testMerge_test1\;testMerge_test2\;testMerge_test3
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astMergeTests_check-local PROPERTIES
-  DEPENDS "testMerge_test1;testMerge_test2;testMerge_test3"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astMergeTests_check-local PROPERTIES DEPENDS "testMerge_test1;testMerge_test2;testMerge_test3" )
 add_test(
   NAME nonsmoke_functional_roseTests_astMergeTests_check_testMerge
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -49,10 +47,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=testMerge_test1\;testMerge_test2\;testMerge_test3
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astMergeTests_check_testMerge PROPERTIES
-  LABELS "disabled"
-  DEPENDS "testMerge_test1;testMerge_test2;testMerge_test3"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astMergeTests_check_testMerge PROPERTIES LABELS disabled DEPENDS "testMerge_test1;testMerge_test2;testMerge_test3" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_astMergeTests_check_testMerge PROPERTIES DISABLED TRUE)
 endif()

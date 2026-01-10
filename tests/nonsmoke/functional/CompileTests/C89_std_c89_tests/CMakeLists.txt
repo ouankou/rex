@@ -29,6 +29,16 @@ foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} C89TEST TRUE)
 endforeach()
 
+add_test(
+  NAME C89TEST_test2003_12
+  COMMAND testTranslator -std=c89 --edg:no_warnings --edg:restrict -w
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2003_12.c
+)
+set_tests_properties(C89TEST_test2003_12 PROPERTIES LABELS "C89TEST;disabled")
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(C89TEST_test2003_12 PROPERTIES DISABLED TRUE)
+endif()
+
 # Makefile check targets.
 set(_c89_test_names "")
 foreach(file_to_test ${files_to_test})
@@ -48,10 +58,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_c89_test_names}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-TESTS PROPERTIES
-  LABELS "disabled"
-  DEPENDS "${_c89_test_names}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-TESTS PROPERTIES LABELS disabled DEPENDS "${_c89_test_names}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-TESTS PROPERTIES DISABLED TRUE)
 endif()
@@ -64,6 +71,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_c89_test_names}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-local PROPERTIES
-  DEPENDS "${_c89_test_names}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-local PROPERTIES DEPENDS "${_c89_test_names}" )

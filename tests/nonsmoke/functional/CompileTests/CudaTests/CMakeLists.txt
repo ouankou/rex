@@ -30,6 +30,23 @@ foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} CUDA TRUE)
 endforeach()
 
+add_test(
+  NAME CUDA_test_2011_01
+  COMMAND testTranslator -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_01.cu
+)
+set_tests_properties(CUDA_test_2011_01 PROPERTIES LABELS CUDA)
+
+add_test(
+  NAME nonsmoke_functional_CompileTests_CudaTests_test_2011_01.cu
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ../../testTranslator
+    -DSKIP_ROSE_BUILTIN_DECLARATIONS
+    -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_01.cu
+)
+set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_test_2011_01.cu PROPERTIES LABELS CUDA)
+
 add_executable(deviceTranformation deviceTranformation.C)
 target_link_libraries(deviceTranformation ROSE_DLL ${link_with_libraries})
 
@@ -51,8 +68,7 @@ foreach(file_to_test ${_device_transform_tests})
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
   if(_gcc_later_4_9 OR _cuda_tests_disabled)
-    set_tests_properties(CUDATEST_deviceTranformation_${file_to_test}
-      PROPERTIES DISABLED TRUE)
+    set_tests_properties(CUDATEST_deviceTranformation_${file_to_test} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
 
@@ -66,6 +82,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=CUDA_header_test_cu\;CUDA_mm_single_cu\;CUDA_test_2011_01_cu\;CUDA_test_2011_02_cu\;CUDA_test_2011_11_cu\;CUDA_test_2011_12_cu\;CUDA_test_2011_13_cu
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_check-local PROPERTIES
-  DEPENDS "CUDA_header_test_cu;CUDA_mm_single_cu;CUDA_test_2011_01_cu;CUDA_test_2011_02_cu;CUDA_test_2011_11_cu;CUDA_test_2011_12_cu;CUDA_test_2011_13_cu"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_check-local PROPERTIES DEPENDS "CUDA_header_test_cu;CUDA_mm_single_cu;CUDA_test_2011_01_cu;CUDA_test_2011_02_cu;CUDA_test_2011_11_cu;CUDA_test_2011_12_cu;CUDA_test_2011_13_cu" )

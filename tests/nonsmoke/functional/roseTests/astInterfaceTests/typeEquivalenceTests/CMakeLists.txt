@@ -29,6 +29,7 @@ add_test(
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_check-local
@@ -39,18 +40,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=typeEquivalence_functionTypeTest\;typeEquivalence_variableTypeTest
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_check-local PROPERTIES
-  DEPENDS "typeEquivalence_functionTypeTest;typeEquivalence_variableTypeTest"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_shell-check
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=typeEquivalence_functionTypeTest\;typeEquivalence_variableTypeTest
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_shell-check PROPERTIES
-  DEPENDS "typeEquivalence_functionTypeTest;typeEquivalence_variableTypeTest"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_check-local PROPERTIES DEPENDS "typeEquivalence_functionTypeTest;typeEquivalence_variableTypeTest" )

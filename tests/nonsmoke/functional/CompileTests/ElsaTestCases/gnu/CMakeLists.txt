@@ -40,6 +40,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=ELSATEST_asm01_c\;ELSATEST_d0085_cc
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_gnu_check-local PROPERTIES
-  DEPENDS "ELSATEST_asm01_c;ELSATEST_d0085_cc"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_gnu_check-local PROPERTIES DEPENDS "ELSATEST_asm01_c;ELSATEST_d0085_cc" )

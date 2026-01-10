@@ -14,3 +14,4 @@ foreach(test IN LISTS _netcdf_udunits_tests)
     COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${test}
   )
 endforeach()
+

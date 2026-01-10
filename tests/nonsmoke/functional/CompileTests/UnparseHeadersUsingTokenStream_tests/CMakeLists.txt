@@ -45,8 +45,7 @@ foreach(spec IN LISTS _specimens)
   )
 
   set_tests_properties(unparse_tokens_prepare_${spec} PROPERTIES LABELS UNPARSEHEADERTOKEN)
-  set_tests_properties(unparse_tokens_${spec}
-    PROPERTIES DEPENDS unparse_tokens_prepare_${spec} LABELS UNPARSEHEADERTOKEN)
+  set_tests_properties(unparse_tokens_${spec} PROPERTIES DEPENDS unparse_tokens_prepare_${spec} LABELS UNPARSEHEADERTOKEN)
 endforeach()
 
 foreach(spec IN LISTS _disabled_specimens)
@@ -74,6 +73,7 @@ add_test(
   COMMAND transformVariable -rose:unparse_tokens -c ${CMAKE_CURRENT_SOURCE_DIR}/badInput2.c
 )
 
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_CompileTests_UnparseHeadersUsingTokenStream_tests_check-local
@@ -84,6 +84,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=astQuery_test2_input1\;astQuery_test3_cxx_grammar\;astSymbolTable_test1\;unparse_tokens_test0\;unparse_tokens_test11\;unparse_tokens_test12\;unparse_tokens_test13\;unparse_tokens_test14\;unparse_tokens_test15\;unparse_tokens_test16\;unparse_tokens_test17\;unparse_tokens_test18\;unparse_tokens_test19\;unparse_tokens_test21\;unparse_tokens_test22\;unparse_tokens_test5\;unparse_tokens_test6\;unparse_tokens_test7\;unparse_tokens_transformVariable\;unparse_tokens_transformVariable2
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_UnparseHeadersUsingTokenStream_tests_check-local PROPERTIES
-  DEPENDS "astQuery_test2_input1;astQuery_test3_cxx_grammar;astSymbolTable_test1;unparse_tokens_test0;unparse_tokens_test11;unparse_tokens_test12;unparse_tokens_test13;unparse_tokens_test14;unparse_tokens_test15;unparse_tokens_test16;unparse_tokens_test17;unparse_tokens_test18;unparse_tokens_test19;unparse_tokens_test21;unparse_tokens_test22;unparse_tokens_test5;unparse_tokens_test6;unparse_tokens_test7;unparse_tokens_transformVariable;unparse_tokens_transformVariable2"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_UnparseHeadersUsingTokenStream_tests_check-local PROPERTIES DEPENDS "astQuery_test2_input1;astQuery_test3_cxx_grammar;astSymbolTable_test1;unparse_tokens_test0;unparse_tokens_test11;unparse_tokens_test12;unparse_tokens_test13;unparse_tokens_test14;unparse_tokens_test15;unparse_tokens_test16;unparse_tokens_test17;unparse_tokens_test18;unparse_tokens_test19;unparse_tokens_test21;unparse_tokens_test22;unparse_tokens_test5;unparse_tokens_test6;unparse_tokens_test7;unparse_tokens_transformVariable;unparse_tokens_transformVariable2" )

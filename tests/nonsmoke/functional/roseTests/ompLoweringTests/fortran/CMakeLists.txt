@@ -51,8 +51,7 @@ foreach(specimen IN LISTS _omp_fortran_f77_compile_tests _omp_fortran_f77_run_te
       -c ${_omp_fortran_dir}/${specimen}
   )
   if(_omp_fortran_disable_all)
-    set_tests_properties(omp_lowering_fortran_${_name}
-      PROPERTIES DISABLED TRUE)
+    set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
 
@@ -66,24 +65,11 @@ foreach(specimen IN LISTS _omp_fortran_f77_failing_tests)
   )
   set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
   if(_omp_fortran_disable_all)
-    set_tests_properties(omp_lowering_fortran_${_name}
-      PROPERTIES DISABLED TRUE)
+    set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
 
 # Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_ompLoweringTests_fortran_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=omp_lowering_fortran_array-one_f\;omp_lowering_fortran_shared-array_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_fortran_check-local PROPERTIES
-  DEPENDS "omp_lowering_fortran_array-one_f;omp_lowering_fortran_shared-array_f"
-)
 add_test(
   NAME nonsmoke_functional_roseTests_ompLoweringTests_fortran_conditional-check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -93,6 +79,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=omp_lowering_fortran_array-one_f\;omp_lowering_fortran_shared-array_f
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_fortran_conditional-check-local PROPERTIES
-  DEPENDS "omp_lowering_fortran_array-one_f;omp_lowering_fortran_shared-array_f"
-)
+set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_fortran_conditional-check-local PROPERTIES DEPENDS "omp_lowering_fortran_array-one_f;omp_lowering_fortran_shared-array_f" )

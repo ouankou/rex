@@ -43,8 +43,7 @@ foreach(file_to_test ${_disabled_hidden_type_tests})
     NAME HIDDENTYPETEST_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(HIDDENTYPETEST_${file_to_test}
-    PROPERTIES DISABLED TRUE LABELS HIDDENTYPETEST)
+  set_tests_properties(HIDDENTYPETEST_${file_to_test} PROPERTIES DISABLED TRUE LABELS HIDDENTYPETEST)
 endforeach()
 
 add_test(
@@ -65,6 +64,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_hidden_type_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_hiddenTypeAndDeclarationListTests_check-local PROPERTIES
-  DEPENDS "${_hidden_type_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_hiddenTypeAndDeclarationListTests_check-local PROPERTIES DEPENDS "${_hidden_type_tests}" )

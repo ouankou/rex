@@ -27,6 +27,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=Cxx03_tests_test2020_03_C\;Cxx03_tests_test2022_super_long_line_C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_Cxx03_tests_check-local PROPERTIES
-  DEPENDS "Cxx03_tests_test2020_03_C;Cxx03_tests_test2022_super_long_line_C"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_Cxx03_tests_check-local PROPERTIES DEPENDS "Cxx03_tests_test2020_03_C;Cxx03_tests_test2022_super_long_line_C" )

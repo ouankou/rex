@@ -45,6 +45,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=merge_traversal_cxx_grammar\;merge_traversal_input
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_mergeTraversal_tests_check-local PROPERTIES
-  DEPENDS "merge_traversal_cxx_grammar;merge_traversal_input"
-)
+set_tests_properties(nonsmoke_functional_roseTests_mergeTraversal_tests_check-local PROPERTIES DEPENDS "merge_traversal_cxx_grammar;merge_traversal_input" )

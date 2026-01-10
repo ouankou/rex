@@ -9,7 +9,7 @@ function(rex_add_disabled_test)
     set(_name "${ARGV0}")
   endif()
   if(_name)
-    set_tests_properties(${_name} PROPERTIES LABELS "disabled")
+    set_tests_properties(${_name} PROPERTIES LABELS disabled)
     if(NOT REX_ENABLE_DISABLED_TESTS)
       set_tests_properties(${_name} PROPERTIES DISABLED TRUE)
     endif()
@@ -70,10 +70,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=netcdf_check_nc_config\;netcdf_test_prog_F\;netcdf_test_prog_c\;netcdf_test_prog_f90
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_check_nc_config PROPERTIES
-  LABELS "disabled"
-  DEPENDS "netcdf_check_nc_config;netcdf_test_prog_F;netcdf_test_prog_c;netcdf_test_prog_f90"
-)
+set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_check_nc_config PROPERTIES LABELS disabled DEPENDS "netcdf_check_nc_config;netcdf_test_prog_F;netcdf_test_prog_c;netcdf_test_prog_f90" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_check_nc_config PROPERTIES DISABLED TRUE)
 endif()

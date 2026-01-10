@@ -16,6 +16,12 @@ add_test(
     testLValues_1.passed
 )
 
+add_test(
+  NAME testLValues_1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND $<TARGET_FILE:testLValues> ${CMAKE_CURRENT_SOURCE_DIR}/test_astLValues.C
+)
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_astLValueTests_check-local
@@ -26,6 +32,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=astLValue_testLValues
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astLValueTests_check-local PROPERTIES
-  DEPENDS "astLValue_testLValues"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astLValueTests_check-local PROPERTIES DEPENDS astLValue_testLValues )

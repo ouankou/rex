@@ -9,6 +9,13 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test_preinclude.C
 )
 
+add_test(
+  NAME nonsmoke_functional_CompilerOptionsTests_preinclude_tests_test_preinclude.C
+  COMMAND $<TARGET_FILE:testTranslator> -rose:verbose 0
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test_preinclude.C
+)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_preinclude_tests_test_preinclude.C PROPERTIES DEPENDS compiler_options_preinclude)
+
 
 ########### install files ###############
 
@@ -22,6 +29,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=compiler_options_preinclude
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_preinclude_tests_check-local PROPERTIES
-  DEPENDS "compiler_options_preinclude"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_preinclude_tests_check-local PROPERTIES DEPENDS compiler_options_preinclude )

@@ -30,6 +30,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=RunTests_Pxx_test1_C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_RunTests_P++Tests_check-local PROPERTIES
-  DEPENDS "RunTests_Pxx_test1_C"
-)
+set_tests_properties(nonsmoke_functional_RunTests_P++Tests_check-local PROPERTIES DEPENDS RunTests_Pxx_test1_C )

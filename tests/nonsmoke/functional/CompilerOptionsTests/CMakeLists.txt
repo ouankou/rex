@@ -36,6 +36,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=compiler_options_output_file
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_check-local PROPERTIES
-  DEPENDS "compiler_options_output_file"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_check-local PROPERTIES DEPENDS compiler_options_output_file )

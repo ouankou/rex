@@ -35,9 +35,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests_joined}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(smoke_ExamplesForTestWriters_check-local PROPERTIES
-  DEPENDS "${_smoke_run_algorithm_tests}"
-)
+set_tests_properties(smoke_ExamplesForTestWriters_check-local PROPERTIES DEPENDS "${_smoke_run_algorithm_tests}" )
 add_test(
   NAME smoke_ExamplesForTestWriters_check-runAlgorithm
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -47,10 +45,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests_joined}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(smoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES
-  LABELS "disabled"
-  DEPENDS "${_smoke_run_algorithm_tests}"
-)
+set_tests_properties(smoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES LABELS disabled DEPENDS "${_smoke_run_algorithm_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(smoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES DISABLED TRUE)
 endif()

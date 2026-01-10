@@ -33,6 +33,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=ELSATEST_12.3.2c.cc\;ELSATEST_13.1a.cc\;ELSATEST_13.1d.cc\;ELSATEST_3.4.3a.cc\;ELSATEST_7.3.1.2b.cc\;ELSATEST_7.3.3d.cc\;ELSATEST_7.3.4b.cc
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_std_check-local PROPERTIES
-  DEPENDS "ELSATEST_12.3.2c.cc;ELSATEST_13.1a.cc;ELSATEST_13.1d.cc;ELSATEST_3.4.3a.cc;ELSATEST_7.3.1.2b.cc;ELSATEST_7.3.3d.cc;ELSATEST_7.3.4b.cc"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_std_check-local PROPERTIES DEPENDS "ELSATEST_12.3.2c.cc;ELSATEST_13.1a.cc;ELSATEST_13.1d.cc;ELSATEST_3.4.3a.cc;ELSATEST_7.3.1.2b.cc;ELSATEST_7.3.3d.cc;ELSATEST_7.3.4b.cc" )

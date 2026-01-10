@@ -44,6 +44,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=rosePerformanceTest\;testPerformance
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astPerformanceTests_check-local PROPERTIES
-  DEPENDS "rosePerformanceTest;testPerformance"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astPerformanceTests_check-local PROPERTIES DEPENDS "rosePerformanceTest;testPerformance" )

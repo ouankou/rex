@@ -1143,6 +1143,14 @@ foreach(specimen IN LISTS _linearization_specimens)
   )
 endforeach()
 
+add_test(
+  NAME lin_testLin1.c
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:testLinearization>
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/tests/testLin1.c
+)
+set_tests_properties(lin_testLin1.c PROPERTIES DEPENDS tokenLinearization_testLin1_c)
+
 #-------------------------------------------------------------------------------
 # Token Stream Mapping
 add_executable(tokenStreamMapping tokenStreamMapping.C)
@@ -1327,10 +1335,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=tokenLinearization_testLin1_c\;tokenLinearization_testLin2_c
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES
-  LABELS "disabled"
-  DEPENDS "tokenLinearization_testLin1_c;tokenLinearization_testLin2_c"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES LABELS disabled DEPENDS "tokenLinearization_testLin1_c;tokenLinearization_testLin2_c" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES DISABLED TRUE)
 endif()

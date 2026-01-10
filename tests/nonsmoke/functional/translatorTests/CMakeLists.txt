@@ -200,10 +200,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_translator_cxx_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES
-  LABELS "disabled"
-  DEPENDS "${_translator_cxx_tests}"
-)
+set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES LABELS disabled DEPENDS "${_translator_cxx_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES DISABLED TRUE)
 endif()
@@ -216,10 +213,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_translator_fortran_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_translatorTests_check-fortran PROPERTIES
-  LABELS "disabled"
-  DEPENDS "${_translator_fortran_tests}"
-)
+set_tests_properties(nonsmoke_functional_translatorTests_check-fortran PROPERTIES LABELS disabled DEPENDS "${_translator_fortran_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_translatorTests_check-fortran PROPERTIES DISABLED TRUE)
 endif()
@@ -232,6 +226,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_translator_cxx_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_translatorTests_check-local PROPERTIES
-  DEPENDS "${_translator_cxx_tests}"
-)
+set_tests_properties(nonsmoke_functional_translatorTests_check-local PROPERTIES DEPENDS "${_translator_cxx_tests}" )

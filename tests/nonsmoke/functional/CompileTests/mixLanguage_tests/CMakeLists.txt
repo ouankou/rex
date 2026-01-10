@@ -26,6 +26,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=astQuery_test2_input1\;astSymbolTable_test1
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_mixLanguage_tests_check-local PROPERTIES
-  DEPENDS "astQuery_test2_input1;astSymbolTable_test1"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_mixLanguage_tests_check-local PROPERTIES DEPENDS "astQuery_test2_input1;astSymbolTable_test1" )

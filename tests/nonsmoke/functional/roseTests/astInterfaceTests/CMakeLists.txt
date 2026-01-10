@@ -138,10 +138,7 @@ foreach(test ${group1_tests})
   )
 endforeach()
 
-set_tests_properties(astInterface_interfaceFunctionCoverage PROPERTIES
-  FAIL_REGULAR_EXPRESSION
-  "In addToNameMap\\(\\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope"
-)
+set_tests_properties(astInterface_interfaceFunctionCoverage PROPERTIES FAIL_REGULAR_EXPRESSION "In addToNameMap\(\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope" )
 
 set(_disable_interface_coverage FALSE)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
@@ -334,6 +331,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=astInterface_abiStuffTest\;astInterface_deepDelete\;astInterface_movePreprocessingInfo
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_check-local PROPERTIES
-  DEPENDS "astInterface_abiStuffTest;astInterface_deepDelete;astInterface_movePreprocessingInfo"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_check-local PROPERTIES DEPENDS "astInterface_abiStuffTest;astInterface_deepDelete;astInterface_movePreprocessingInfo" )

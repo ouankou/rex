@@ -25,10 +25,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=smoke_fortran_testBafio
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(smoke_functional_Fortran_check-fortran PROPERTIES
-  LABELS "disabled"
-  DEPENDS "smoke_fortran_testBafio"
-)
+set_tests_properties(smoke_functional_Fortran_check-fortran PROPERTIES LABELS disabled DEPENDS smoke_fortran_testBafio )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(smoke_functional_Fortran_check-fortran PROPERTIES DISABLED TRUE)
 endif()
@@ -41,6 +38,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=smoke_fortran_testBafio
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(smoke_functional_Fortran_check-local PROPERTIES
-  DEPENDS "smoke_fortran_testBafio"
-)
+set_tests_properties(smoke_functional_Fortran_check-local PROPERTIES DEPENDS smoke_fortran_testBafio )

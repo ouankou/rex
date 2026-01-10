@@ -21,6 +21,16 @@ foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} OPENCLTEST TRUE)
 endforeach()
 
+add_test(
+  NAME OPENCLTEST_empty
+  COMMAND testTranslator ${ROSE_FLAGS}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/empty.cl
+)
+set_tests_properties(OPENCLTEST_empty PROPERTIES LABELS "OPENCLTEST;disabled")
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(OPENCLTEST_empty PROPERTIES DISABLED TRUE)
+endif()
+
 # Makefile check targets.
 set(_opencl_group_tests)
 foreach(file_to_test ${files_to_test})
@@ -37,12 +47,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_opencl_group_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES
-  DEPENDS "${_opencl_group_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES DEPENDS "${_opencl_group_tests}" )
 if(NOT ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT)
-  set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES
-    DISABLED TRUE
-    LABELS "disabled"
-  )
+  set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES DISABLED TRUE LABELS disabled )
 endif()

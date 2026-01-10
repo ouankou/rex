@@ -76,6 +76,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_make_target_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testFileNamesAndExtensions_check-local PROPERTIES
-  DEPENDS "${_make_target_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testFileNamesAndExtensions_check-local PROPERTIES DEPENDS "${_make_target_tests}" )

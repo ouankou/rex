@@ -1314,54 +1314,6 @@ endforeach()
 
 # Makefile check targets.
 add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-c-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-c-constprop PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-c-languages
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-c-languages PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-c99-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-c99-constprop PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
   NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND}
@@ -1370,33 +1322,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop-local PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-liveness
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-liveness PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-pointer-alias
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-pointer-alias PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop-local PROPERTIES DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f" )
 add_test(
   NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -1406,9 +1332,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop PROPERTIES DEPENDS gdf_f03_constprop_test2007_37_f03 )
 add_test(
   NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -1418,54 +1342,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=gdf_f77_constprop_test2007_222_f
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop PROPERTIES
-  DEPENDS "gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f90-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f90-constprop PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-fortran-languages
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-fortran-languages PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-local PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-taint-analysis
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-taint-analysis PROPERTIES
-  DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop PROPERTIES DEPENDS gdf_f77_constprop_test2007_222_f )

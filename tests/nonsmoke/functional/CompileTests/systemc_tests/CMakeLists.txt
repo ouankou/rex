@@ -10,6 +10,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/input_member_function.cpp
 )
 
+
 add_test(
   NAME systemc_input_hello_world
   COMMAND testTranslator -w
@@ -29,6 +30,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=systemc_member_function
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_systemc_tests_check-local PROPERTIES
-  DEPENDS "systemc_member_function"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_systemc_tests_check-local PROPERTIES DEPENDS systemc_member_function )

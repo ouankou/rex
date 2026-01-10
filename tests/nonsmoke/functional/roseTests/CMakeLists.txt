@@ -56,6 +56,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=rosetta_nodeHierarchyTest
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_check-local PROPERTIES
-  DEPENDS "rosetta_nodeHierarchyTest"
-)
+set_tests_properties(nonsmoke_functional_roseTests_check-local PROPERTIES DEPENDS rosetta_nodeHierarchyTest )
