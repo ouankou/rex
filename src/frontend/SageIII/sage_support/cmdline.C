@@ -4143,6 +4143,62 @@ SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine, vector<string>
     }
   }
 
+  std::string standard_flag;
+  switch (get_standard()) {
+  case e_default_standard:
+    break;
+  case e_c89_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu89" : "-std=c89";
+    break;
+  case e_c90_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu90" : "-std=c90";
+    break;
+  case e_c99_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu99" : "-std=c99";
+    break;
+  case e_c11_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu11" : "-std=c11";
+    break;
+  case e_c17_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu17" : "-std=c17";
+    break;
+  case e_c23_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu2x" : "-std=c2x";
+    break;
+  case e_c2y_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu2y" : "-std=c2y";
+    break;
+  case e_cxx98_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++98" : "-std=c++98";
+    break;
+  case e_cxx03_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++03" : "-std=c++03";
+    break;
+  case e_cxx11_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++11" : "-std=c++11";
+    break;
+  case e_cxx14_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++14" : "-std=c++14";
+    break;
+  case e_cxx17_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++17" : "-std=c++17";
+    break;
+  case e_cxx20_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++20" : "-std=c++20";
+    break;
+  case e_cxx23_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++23" : "-std=c++23";
+    break;
+  case e_cxx26_standard:
+    standard_flag = is_gnu_standard() ? "-std=gnu++2c" : "-std=c++2c";
+    break;
+  default:
+    break;
+  }
+  if (!standard_flag.empty()) {
+    clang_frontend_args.push_back(standard_flag);
+  }
+
     std::vector<std::string>::iterator it_str;
     for (it_str = define_list.begin(); it_str != define_list.end(); it_str++)
         inputCommandLine.push_back("-D" + *it_str);

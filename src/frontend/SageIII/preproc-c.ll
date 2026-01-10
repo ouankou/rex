@@ -779,10 +779,17 @@ BEGIN NORMAL;
      printf("%s is a mlinkagespecification token \n",yytext);
 #endif
      preprocessorList.addElement(PreprocessingInfo::ClinkageSpecificationStart,yytext,globalFileName,preproc_line_num,preproc_column_num,0); 
-     preproc_line_num+=num_of_newlines(yytext); 
-
+     int number_of_lines = num_of_newlines(yytext);
      add_token(yytext,preproc_line_num,preproc_column_num,0);
-  // preproc_column_num+=strlen(yytext); 
+     if (number_of_lines > 0)
+        {
+          preproc_line_num += number_of_lines;
+          preproc_column_num = getColumnNumberOfEndOfString(yytext);
+        }
+     else
+        {
+          preproc_column_num += strlen(yytext);
+        }
 
      curr_brace_depth++; 
      pushbracestack(curr_brace_depth);
