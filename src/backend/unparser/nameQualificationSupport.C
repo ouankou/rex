@@ -741,7 +741,7 @@ NameQualificationTraversal::associatedDeclaration(SgScopeStatement* scope)
                break;
              }
 
-       // DQ (9/20/2025): Added support for template function definitions.
+       // Added support for template function definitions.
           case V_SgTemplateFunctionDefinition:
              {
                SgTemplateFunctionDefinition* definition = isSgTemplateFunctionDefinition(scope);
