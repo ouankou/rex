@@ -5604,7 +5604,7 @@ def _explicit_name_mapping(
             try:
                 rel = Path(input_path).resolve().relative_to(origin_dir.resolve())
                 return f"GFORTRANSUITE_{rel.as_posix()}"
-            except ValueError:
+            except (ValueError, OSError):
                 pass
         input_name = _command_input_name(entry)
         if input_name:
