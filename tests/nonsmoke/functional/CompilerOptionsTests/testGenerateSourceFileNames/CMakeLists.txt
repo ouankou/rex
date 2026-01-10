@@ -29,9 +29,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=compiler_options_generate_source_file_names
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGenerateSourceFileNames_check-local PROPERTIES
-  DEPENDS "compiler_options_generate_source_file_names"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGenerateSourceFileNames_check-local PROPERTIES DEPENDS compiler_options_generate_source_file_names )
 
 add_test(
   NAME nonsmoke_functional_CompilerOptionsTests_testGenerateSourceFileNames_conditional-check-local
@@ -42,11 +40,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=compiler_options_generate_source_file_names
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGenerateSourceFileNames_conditional-check-local PROPERTIES
-  LABELS "disabled"
-  DEPENDS "compiler_options_generate_source_file_names"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGenerateSourceFileNames_conditional-check-local PROPERTIES LABELS disabled DEPENDS compiler_options_generate_source_file_names )
 if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGenerateSourceFileNames_conditional-check-local
-    PROPERTIES DISABLED TRUE)
+  set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGenerateSourceFileNames_conditional-check-local PROPERTIES DISABLED TRUE)
 endif()

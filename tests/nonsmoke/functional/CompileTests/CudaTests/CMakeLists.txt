@@ -68,8 +68,7 @@ foreach(file_to_test ${_device_transform_tests})
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
   if(_gcc_later_4_9 OR _cuda_tests_disabled)
-    set_tests_properties(CUDATEST_deviceTranformation_${file_to_test}
-      PROPERTIES DISABLED TRUE)
+    set_tests_properties(CUDATEST_deviceTranformation_${file_to_test} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
 
@@ -83,6 +82,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=CUDA_header_test_cu\;CUDA_mm_single_cu\;CUDA_test_2011_01_cu\;CUDA_test_2011_02_cu\;CUDA_test_2011_11_cu\;CUDA_test_2011_12_cu\;CUDA_test_2011_13_cu
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_check-local PROPERTIES
-  DEPENDS "CUDA_header_test_cu;CUDA_mm_single_cu;CUDA_test_2011_01_cu;CUDA_test_2011_02_cu;CUDA_test_2011_11_cu;CUDA_test_2011_12_cu;CUDA_test_2011_13_cu"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_check-local PROPERTIES DEPENDS "CUDA_header_test_cu;CUDA_mm_single_cu;CUDA_test_2011_01_cu;CUDA_test_2011_02_cu;CUDA_test_2011_11_cu;CUDA_test_2011_12_cu;CUDA_test_2011_13_cu" )

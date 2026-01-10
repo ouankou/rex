@@ -49,6 +49,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=varDeclNorm_int_function_scope.C\;varDeclNorm_int_global_scope.C\;varDeclNorm_int_struct_scope.C\;varDeclNorm_mix_global_scope.C\;varDeclNorm_nonreal_type_template_class_scope.C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_varDeclNorm_check-local PROPERTIES
-  DEPENDS "varDeclNorm_int_function_scope.C;varDeclNorm_int_global_scope.C;varDeclNorm_int_struct_scope.C;varDeclNorm_mix_global_scope.C;varDeclNorm_nonreal_type_template_class_scope.C"
-)
+set_tests_properties(nonsmoke_functional_roseTests_varDeclNorm_check-local PROPERTIES DEPENDS "varDeclNorm_int_function_scope.C;varDeclNorm_int_global_scope.C;varDeclNorm_int_struct_scope.C;varDeclNorm_mix_global_scope.C;varDeclNorm_nonreal_type_template_class_scope.C" )

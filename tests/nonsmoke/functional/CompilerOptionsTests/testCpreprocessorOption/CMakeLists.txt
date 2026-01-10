@@ -50,8 +50,7 @@ foreach(testcode IN LISTS _cpre_disabled_testcodes)
     COMMAND ${BASH_EXECUTABLE} -c
       "${ROSE_TEST_TRANSLATOR} -rose:verbose 0 -E -DHAVE_CONFIG_H ${_cpre_include_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode} > ${_cpre_name}.out.C && ${CMAKE_CXX_COMPILER} -DHAVE_CONFIG_H -c ${_cpre_name}.out.C"
   )
-  set_tests_properties(compiler_options_cpreprocessor_${_cpre_name}
-    PROPERTIES DISABLED TRUE)
+  set_tests_properties(compiler_options_cpreprocessor_${_cpre_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 add_test(
@@ -61,8 +60,7 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}/doNotChooseMe
     -c ${CMAKE_CURRENT_SOURCE_DIR}/testSysIncludeOptionOrder.c
 )
-set_tests_properties(compiler_options_cpreprocessor_sys_include_cc
-  PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(compiler_options_cpreprocessor_sys_include_cc PROPERTIES WILL_FAIL TRUE)
 
 add_test(
   NAME compiler_options_cpreprocessor_sys_include_translator
@@ -71,8 +69,7 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}/doNotChooseMe
     -c ${CMAKE_CURRENT_SOURCE_DIR}/testSysIncludeOptionOrder.c
 )
-set_tests_properties(compiler_options_cpreprocessor_sys_include_translator
-  PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(compiler_options_cpreprocessor_sys_include_translator PROPERTIES WILL_FAIL TRUE)
 
 add_test(
   NAME compiler_options_cpreprocessor_include_order
@@ -91,6 +88,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=compiler_options_cpreprocessor_data_hash\;compiler_options_cpreprocessor_include_order\;compiler_options_cpreprocessor_sys_include_translator
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testCpreprocessorOption_check-local PROPERTIES
-  DEPENDS "compiler_options_cpreprocessor_data_hash;compiler_options_cpreprocessor_include_order;compiler_options_cpreprocessor_sys_include_translator"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testCpreprocessorOption_check-local PROPERTIES DEPENDS "compiler_options_cpreprocessor_data_hash;compiler_options_cpreprocessor_include_order;compiler_options_cpreprocessor_sys_include_translator" )

@@ -247,8 +247,7 @@ foreach(testcode IN LISTS OMP_C_COMPILE_DISABLED_TESTS)
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_lowering_c_compile_${_omp_name}
-    PROPERTIES DISABLED TRUE)
+  set_tests_properties(omp_lowering_c_compile_${_omp_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 foreach(testcode IN LISTS OMP_C_RUN_TESTS)
@@ -277,8 +276,7 @@ foreach(testcode IN LISTS OMP_C_RUN_DISABLED_TESTS)
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_lowering_c_run_${_omp_name}
-    PROPERTIES DISABLED TRUE)
+  set_tests_properties(omp_lowering_c_run_${_omp_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 foreach(testcode IN LISTS OMP_CXX_COMPILE_TESTS)
@@ -335,8 +333,7 @@ foreach(testcode IN LISTS OMP_ACC_C_DISABLED_TESTS)
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_acc_lowering_c_${_omp_name}
-    PROPERTIES DISABLED TRUE)
+  set_tests_properties(omp_acc_lowering_c_${_omp_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 foreach(testcode IN LISTS OMP_ACC_CXX_TESTS)
@@ -365,8 +362,7 @@ foreach(testcode IN LISTS OMP_ACC_CXX_DISABLED_TESTS)
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_acc_lowering_cxx_${_omp_name}
-    PROPERTIES DISABLED TRUE)
+  set_tests_properties(omp_acc_lowering_cxx_${_omp_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 set(_omp_rex_reference_dir ${CMAKE_CURRENT_SOURCE_DIR}/REXReferenceTest)
@@ -378,11 +374,9 @@ foreach(testcode IN LISTS OMP_C_COMPILE_TESTS)
       ${CMAKE_CURRENT_BINARY_DIR}/rose_${testcode}
       ${_omp_rex_reference_dir}/rex_${testcode}
   )
-  set_tests_properties(omp_lowering_rex_diff_${_omp_name}
-    PROPERTIES DEPENDS omp_lowering_c_compile_${_omp_name})
+  set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DEPENDS omp_lowering_c_compile_${_omp_name})
   if(testcode IN_LIST OMP_REX_DIFF_DISABLED_TESTS)
-    set_tests_properties(omp_lowering_rex_diff_${_omp_name}
-      PROPERTIES DISABLED TRUE)
+    set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
 
@@ -394,29 +388,15 @@ foreach(testcode IN LISTS OMP_C_RUN_TESTS)
       ${CMAKE_CURRENT_BINARY_DIR}/rose_${testcode}
       ${_omp_rex_reference_dir}/rex_${testcode}
   )
-  set_tests_properties(omp_lowering_rex_diff_${_omp_name}
-    PROPERTIES DEPENDS omp_lowering_c_run_${_omp_name})
+  set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DEPENDS omp_lowering_c_run_${_omp_name})
   if(testcode IN_LIST OMP_REX_DIFF_DISABLED_TESTS)
-    set_tests_properties(omp_lowering_rex_diff_${_omp_name}
-      PROPERTIES DISABLED TRUE)
+    set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DISABLED TRUE)
   endif()
 endforeach()
 
 add_subdirectory(fortran)
 
 # Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_ompLoweringTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=OMPTEST_memberFunction.cpp\;OMPTEST_memberFunction2.cpp\;OMPTEST_ompfor5.c\;OMPTEST_ompfor6.c\;OMPTEST_ompfor7.c\;OMPTEST_referenceType.cpp\;OMPTEST_twoRegions.c
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_check-local PROPERTIES
-  DEPENDS "OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_referenceType.cpp;OMPTEST_twoRegions.c"
-)
 add_test(
   NAME nonsmoke_functional_roseTests_ompLoweringTests_conditional-check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -426,9 +406,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=OMPTEST_memberFunction.cpp\;OMPTEST_memberFunction2.cpp\;OMPTEST_ompfor5.c\;OMPTEST_ompfor6.c\;OMPTEST_ompfor7.c\;OMPTEST_referenceType.cpp\;OMPTEST_twoRegions.c
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_conditional-check-local PROPERTIES
-  DEPENDS "OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_referenceType.cpp;OMPTEST_twoRegions.c"
-)
+set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_conditional-check-local PROPERTIES DEPENDS "OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_referenceType.cpp;OMPTEST_twoRegions.c" )
 add_test(
   NAME nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -438,10 +416,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=OMPTEST_alignment.c\;OMPTEST_collapse.c\;OMPTEST_dijkstra_open_mp.c\;OMPTEST_dynamicChunk.c\;OMPTEST_endif.c\;OMPTEST_endif3.c\;OMPTEST_full_verify.c\;OMPTEST_include_header_only.c\;OMPTEST_init.c\;OMPTEST_lastprivateOrphaned.c\;OMPTEST_linebreak.c\;OMPTEST_master.c\;OMPTEST_md_open_mp.c\;OMPTEST_memberFunction.cpp\;OMPTEST_memberFunction2.cpp\;OMPTEST_nowait.c\;OMPTEST_ompfor5.c\;OMPTEST_ompfor6.c\;OMPTEST_ompfor7.c\;OMPTEST_parallel_pragma.c\;OMPTEST_private-duplicate.c\;OMPTEST_referenceType.cpp\;OMPTEST_single2.c\;OMPTEST_sizeof.c\;OMPTEST_staticChunk.c\;OMPTEST_task_array2.c\;OMPTEST_task_orphaned.c\;OMPTEST_task_underIf.c\;OMPTEST_task_untied4.c\;OMPTEST_taskwait.c\;OMPTEST_taskwait2.c\;OMPTEST_twoRegions.c
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check PROPERTIES
-  LABELS "disabled"
-  DEPENDS "OMPTEST_alignment.c;OMPTEST_collapse.c;OMPTEST_dijkstra_open_mp.c;OMPTEST_dynamicChunk.c;OMPTEST_endif.c;OMPTEST_endif3.c;OMPTEST_full_verify.c;OMPTEST_include_header_only.c;OMPTEST_init.c;OMPTEST_lastprivateOrphaned.c;OMPTEST_linebreak.c;OMPTEST_master.c;OMPTEST_md_open_mp.c;OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_nowait.c;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_parallel_pragma.c;OMPTEST_private-duplicate.c;OMPTEST_referenceType.cpp;OMPTEST_single2.c;OMPTEST_sizeof.c;OMPTEST_staticChunk.c;OMPTEST_task_array2.c;OMPTEST_task_orphaned.c;OMPTEST_task_underIf.c;OMPTEST_task_untied4.c;OMPTEST_taskwait.c;OMPTEST_taskwait2.c;OMPTEST_twoRegions.c"
-)
+set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check PROPERTIES LABELS disabled DEPENDS "OMPTEST_alignment.c;OMPTEST_collapse.c;OMPTEST_dijkstra_open_mp.c;OMPTEST_dynamicChunk.c;OMPTEST_endif.c;OMPTEST_endif3.c;OMPTEST_full_verify.c;OMPTEST_include_header_only.c;OMPTEST_init.c;OMPTEST_lastprivateOrphaned.c;OMPTEST_linebreak.c;OMPTEST_master.c;OMPTEST_md_open_mp.c;OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_nowait.c;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_parallel_pragma.c;OMPTEST_private-duplicate.c;OMPTEST_referenceType.cpp;OMPTEST_single2.c;OMPTEST_sizeof.c;OMPTEST_staticChunk.c;OMPTEST_task_array2.c;OMPTEST_task_orphaned.c;OMPTEST_task_underIf.c;OMPTEST_task_untied4.c;OMPTEST_taskwait.c;OMPTEST_taskwait2.c;OMPTEST_twoRegions.c" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check PROPERTIES DISABLED TRUE)
 endif()

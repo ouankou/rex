@@ -24,16 +24,6 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/input.C
 )
 
-add_test(
-  NAME test1
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${_rth}
-    "TITLE=testSymbolTable input.C [test1.passed]"
-    "USE_SUBDIR=yes"
-    "CMD=$<TARGET_FILE:testSymbolTable> -c ${CMAKE_CURRENT_SOURCE_DIR}/input.C"
-    ${_exit_status}
-    test1.passed
-)
 
 # Makefile check targets.
 add_test(
@@ -45,6 +35,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=astSymbolTable_test1
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astSymbolTableTests_check-local PROPERTIES
-  DEPENDS "astSymbolTable_test1"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astSymbolTableTests_check-local PROPERTIES DEPENDS astSymbolTable_test1 )

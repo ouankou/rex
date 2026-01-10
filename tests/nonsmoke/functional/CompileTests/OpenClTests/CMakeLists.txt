@@ -47,12 +47,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_opencl_group_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES
-  DEPENDS "${_opencl_group_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES DEPENDS "${_opencl_group_tests}" )
 if(NOT ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT)
-  set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES
-    DISABLED TRUE
-    LABELS "disabled"
-  )
+  set_tests_properties(nonsmoke_functional_CompileTests_OpenClTests_check-local PROPERTIES DISABLED TRUE LABELS disabled )
 endif()

@@ -19,8 +19,7 @@ foreach(file_to_test ${files_to_test})
       ${CMAKE_CURRENT_SOURCE_DIR}/rose_${file_to_test}.save
       ${CMAKE_CURRENT_BINARY_DIR}/rose_${file_to_test}
   )
-  set_tests_properties(pre_${file_to_test}_verify
-    PROPERTIES DEPENDS pre_${file_to_test})
+  set_tests_properties(pre_${file_to_test}_verify PROPERTIES DEPENDS pre_${file_to_test})
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -39,8 +38,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/rose_rewrite_test1.C.save
     ${CMAKE_CURRENT_BINARY_DIR}/rose_rewrite_test1.C
 )
-set_tests_properties(pr_rewrite_test1.C_verify
-  PROPERTIES DEPENDS pr_rewrite_test1.C)
+set_tests_properties(pr_rewrite_test1.C_verify PROPERTIES DEPENDS pr_rewrite_test1.C)
 
 #-------------------------------------------------------------------------------
 # finiteDifferencingTest
@@ -62,8 +60,7 @@ foreach(file_to_test ${files_to_test})
       ${CMAKE_CURRENT_SOURCE_DIR}/rose_${file_to_test}.save
       ${CMAKE_CURRENT_BINARY_DIR}/rose_${file_to_test}
   )
-  set_tests_properties(fd_${file_to_test}_verify
-    PROPERTIES DEPENDS fd_${file_to_test})
+  set_tests_properties(fd_${file_to_test}_verify PROPERTIES DEPENDS fd_${file_to_test})
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -127,28 +124,8 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation2.C
 )
 
-add_test(
-  NAME cf_1
-  COMMAND constantFoldingTest
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation.C
-)
 
-add_test(
-  NAME cf_2
-  COMMAND constantFoldingTest2
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation.C
-    -rose:output rose_inputCode_constantFoldingTransformation_1.C
-)
 
-add_test(
-  NAME cf_3
-  COMMAND constantFoldingTest2
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation2.C
-)
-
-set_tests_properties(constantFoldingTest_1 PROPERTIES DEPENDS cf_1)
-set_tests_properties(constantFoldingTest_2 PROPERTIES DEPENDS cf_2)
-set_tests_properties(constantFoldingTest_3 PROPERTIES DEPENDS cf_3)
 
 #-------------------------------------------------------------------------------
 # implicitCodeGenerationTest
@@ -183,10 +160,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=constantFoldingTest_1\;constantFoldingTest_2\;constantFoldingTest_3
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-constantFoldingTests PROPERTIES
-  LABELS "disabled"
-  DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-constantFoldingTests PROPERTIES LABELS disabled DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-constantFoldingTests PROPERTIES DISABLED TRUE)
 endif()
@@ -199,25 +173,10 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=fd_finitediff_test1.C\;fd_finitediff_test2.C\;fd_finitediff_test3.C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES
-  LABELS "disabled"
-  DEPENDS "fd_finitediff_test1.C;fd_finitediff_test2.C;fd_finitediff_test3.C"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES LABELS disabled DEPENDS "fd_finitediff_test1.C;fd_finitediff_test2.C;fd_finitediff_test3.C" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES DISABLED TRUE)
 endif()
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=constantFoldingTest_1\;constantFoldingTest_2\;constantFoldingTest_3\;fd_finitediff_test1.C\;fd_finitediff_test2.C\;fd_finitediff_test3.C\;finiteDifferencingDemo_finitediff_test1.C\;functionNormalization_functionNormalizationTest1.C\;icg_1\;icg_2\;pr_rewrite_test1.C\;pre_pass1.C\;pre_pass2.C\;pre_pass3.C
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-local PROPERTIES
-  DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3;fd_finitediff_test1.C;fd_finitediff_test2.C;fd_finitediff_test3.C;finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C;icg_1;icg_2;pr_rewrite_test1.C;pre_pass1.C;pre_pass2.C;pre_pass3.C"
-)
 add_test(
   NAME nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -227,10 +186,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=pr_rewrite_test1.C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES
-  LABELS "disabled"
-  DEPENDS "pr_rewrite_test1.C"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES LABELS disabled DEPENDS pr_rewrite_test1.C )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES DISABLED TRUE)
 endif()
@@ -243,10 +199,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=pre_pass1.C\;pre_pass2.C\;pre_pass3.C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES
-  LABELS "disabled"
-  DEPENDS "pre_pass1.C;pre_pass2.C;pre_pass3.C"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES LABELS disabled DEPENDS "pre_pass1.C;pre_pass2.C;pre_pass3.C" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES DISABLED TRUE)
 endif()
@@ -259,10 +212,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=finiteDifferencingDemo_finitediff_test1.C\;functionNormalization_functionNormalizationTest1.C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditinal-check-local PROPERTIES
-  LABELS "disabled"
-  DEPENDS "finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditinal-check-local PROPERTIES LABELS disabled DEPENDS "finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditinal-check-local PROPERTIES DISABLED TRUE)
 endif()
@@ -275,6 +225,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=constantFoldingTest_1\;constantFoldingTest_2\;constantFoldingTest_3\;fd_finitediff_test1.C\;fd_finitediff_test2.C\;fd_finitediff_test3.C\;finiteDifferencingDemo_finitediff_test1.C\;functionNormalization_functionNormalizationTest1.C\;icg_1\;icg_2\;pr_rewrite_test1.C\;pre_pass1.C\;pre_pass2.C\;pre_pass3.C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditional-check-local PROPERTIES
-  DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3;fd_finitediff_test1.C;fd_finitediff_test2.C;fd_finitediff_test3.C;finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C;icg_1;icg_2;pr_rewrite_test1.C;pre_pass1.C;pre_pass2.C;pre_pass3.C"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditional-check-local PROPERTIES DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3;fd_finitediff_test1.C;fd_finitediff_test2.C;fd_finitediff_test3.C;finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C;icg_1;icg_2;pr_rewrite_test1.C;pre_pass1.C;pre_pass2.C;pre_pass3.C" )

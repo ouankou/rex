@@ -29,6 +29,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=SIZEOFOPTEST_inputCode_SizeofTest.C_GNU
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_sizeofOperation_tests_check-local PROPERTIES
-  DEPENDS "SIZEOFOPTEST_inputCode_SizeofTest.C_GNU"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_sizeofOperation_tests_check-local PROPERTIES DEPENDS SIZEOFOPTEST_inputCode_SizeofTest.C_GNU )

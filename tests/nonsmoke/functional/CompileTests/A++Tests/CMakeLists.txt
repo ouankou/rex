@@ -11,6 +11,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_axx_group_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_A++Tests_check-local PROPERTIES
-  DEPENDS "${_axx_group_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_A++Tests_check-local PROPERTIES DEPENDS "${_axx_group_tests}" )

@@ -15,6 +15,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=compiler_options_ansi
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testAnsiOption_check-local PROPERTIES
-  DEPENDS "compiler_options_ansi"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testAnsiOption_check-local PROPERTIES DEPENDS compiler_options_ansi )

@@ -20,8 +20,7 @@ add_test(
   NAME nonsmoke_functional_RunTests_AstDeleteTests_test1.C
   COMMAND testTranslator -c ${CMAKE_CURRENT_SOURCE_DIR}/test1.C
 )
-set_tests_properties(nonsmoke_functional_RunTests_AstDeleteTests_test1.C
-  PROPERTIES DEPENDS ast_delete_memory_translator)
+set_tests_properties(nonsmoke_functional_RunTests_AstDeleteTests_test1.C PROPERTIES DEPENDS ast_delete_memory_translator)
 
 
 ########### install files ###############
@@ -36,6 +35,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=ast_delete_memory_translator
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_RunTests_AstDeleteTests_check-local PROPERTIES
-  DEPENDS "ast_delete_memory_translator"
-)
+set_tests_properties(nonsmoke_functional_RunTests_AstDeleteTests_check-local PROPERTIES DEPENDS ast_delete_memory_translator )

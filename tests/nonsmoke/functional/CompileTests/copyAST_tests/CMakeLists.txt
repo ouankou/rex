@@ -242,8 +242,7 @@ foreach(testcode ${_copyast_disabled_extra_tests})
     COMMAND copyExample ${ROSE_FLAGS}
             -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${testcode})
-  set_tests_properties(copyAST_${basename}
-    PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
+  set_tests_properties(copyAST_${basename} PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
 endforeach()
 
 set(_copyast_disabled_tests
@@ -279,8 +278,7 @@ foreach(testcode ${_copyast_disabled_tests})
     NAME copyAST_${basename}
     COMMAND copyExample ${ROSE_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode})
-  set_tests_properties(copyAST_${basename}
-    PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
+  set_tests_properties(copyAST_${basename} PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
 endforeach()
 
 # Makefile check targets.
@@ -293,6 +291,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=copyAST_copyExampleInput\;copyAST_copytest2007_01\;copyAST_copytest2007_02\;copyAST_copytest2007_03\;singleStatementToBlockNormalization_test2001_01.C\;singleStatementToBlockNormalization_test2001_02.C\;singleStatementToBlockNormalization_test2001_03.C\;singleStatementToBlockNormalization_test_CplusplusMacro_Cpp.C
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_copyAST_tests_check-local PROPERTIES
-  DEPENDS "copyAST_copyExampleInput;copyAST_copytest2007_01;copyAST_copytest2007_02;copyAST_copytest2007_03;singleStatementToBlockNormalization_test2001_01.C;singleStatementToBlockNormalization_test2001_02.C;singleStatementToBlockNormalization_test2001_03.C;singleStatementToBlockNormalization_test_CplusplusMacro_Cpp.C"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_copyAST_tests_check-local PROPERTIES DEPENDS "copyAST_copyExampleInput;copyAST_copytest2007_01;copyAST_copytest2007_02;copyAST_copytest2007_03;singleStatementToBlockNormalization_test2001_01.C;singleStatementToBlockNormalization_test2001_02.C;singleStatementToBlockNormalization_test2001_03.C;singleStatementToBlockNormalization_test_CplusplusMacro_Cpp.C" )

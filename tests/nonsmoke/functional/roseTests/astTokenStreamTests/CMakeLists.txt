@@ -1335,10 +1335,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=tokenLinearization_testLin1_c\;tokenLinearization_testLin2_c
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES
-  LABELS "disabled"
-  DEPENDS "tokenLinearization_testLin1_c;tokenLinearization_testLin2_c"
-)
+set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES LABELS disabled DEPENDS "tokenLinearization_testLin1_c;tokenLinearization_testLin2_c" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES DISABLED TRUE)
 endif()

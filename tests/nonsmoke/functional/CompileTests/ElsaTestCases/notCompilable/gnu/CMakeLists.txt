@@ -21,10 +21,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=ELSATEST_d0082_cc\;ELSATEST_d0096_c\;ELSATEST_d0099_c\;ELSATEST_d0122_c\;ELSATEST_dC0002_c\;ELSATEST_dC0007_c\;ELSATEST_dC0014_c\;ELSATEST_g0009_c\;ELSATEST_g0015_cc\;ELSATEST_g0016_cc\;ELSATEST_g0019_cc\;ELSATEST_g0021_cc\;ELSATEST_g0031_cc\;ELSATEST_k0002_cc
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_notCompilable_gnu_check-local PROPERTIES
-  LABELS "disabled"
-  DEPENDS "ELSATEST_d0082_cc;ELSATEST_d0096_c;ELSATEST_d0099_c;ELSATEST_d0122_c;ELSATEST_dC0002_c;ELSATEST_dC0007_c;ELSATEST_dC0014_c;ELSATEST_g0009_c;ELSATEST_g0015_cc;ELSATEST_g0016_cc;ELSATEST_g0019_cc;ELSATEST_g0021_cc;ELSATEST_g0031_cc;ELSATEST_k0002_cc"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_notCompilable_gnu_check-local PROPERTIES LABELS disabled DEPENDS "ELSATEST_d0082_cc;ELSATEST_d0096_c;ELSATEST_d0099_c;ELSATEST_d0122_c;ELSATEST_dC0002_c;ELSATEST_dC0007_c;ELSATEST_dC0014_c;ELSATEST_g0009_c;ELSATEST_g0015_cc;ELSATEST_g0016_cc;ELSATEST_g0019_cc;ELSATEST_g0021_cc;ELSATEST_g0031_cc;ELSATEST_k0002_cc" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_notCompilable_gnu_check-local PROPERTIES DISABLED TRUE)
 endif()

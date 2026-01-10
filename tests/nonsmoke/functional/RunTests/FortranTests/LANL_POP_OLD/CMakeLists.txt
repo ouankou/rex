@@ -69,6 +69,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=RunTests_LANL_POP_OLD
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_OLD_check-local PROPERTIES
-  DEPENDS "RunTests_LANL_POP_OLD"
-)
+set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_OLD_check-local PROPERTIES DEPENDS RunTests_LANL_POP_OLD )

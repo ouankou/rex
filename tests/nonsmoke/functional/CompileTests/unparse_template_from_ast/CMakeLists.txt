@@ -51,6 +51,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=unparse_template_kripke-tpl-000.cxx\;unparse_template_kripke-tpl-001.cxx\;unparse_template_kripke-tpl-002.cxx\;unparse_template_kripke-tpl-003.cxx\;unparse_template_kripke-tpl-004.cxx\;unparse_template_kripke-tpl-005.cxx\;unparse_template_kripke-tpl-006.cxx
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_unparse_template_from_ast_check-local PROPERTIES
-  DEPENDS "unparse_template_kripke-tpl-000.cxx;unparse_template_kripke-tpl-001.cxx;unparse_template_kripke-tpl-002.cxx;unparse_template_kripke-tpl-003.cxx;unparse_template_kripke-tpl-004.cxx;unparse_template_kripke-tpl-005.cxx;unparse_template_kripke-tpl-006.cxx"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_unparse_template_from_ast_check-local PROPERTIES DEPENDS "unparse_template_kripke-tpl-000.cxx;unparse_template_kripke-tpl-001.cxx;unparse_template_kripke-tpl-002.cxx;unparse_template_kripke-tpl-003.cxx;unparse_template_kripke-tpl-004.cxx;unparse_template_kripke-tpl-005.cxx;unparse_template_kripke-tpl-006.cxx" )

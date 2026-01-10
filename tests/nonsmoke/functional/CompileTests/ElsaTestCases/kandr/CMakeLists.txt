@@ -17,6 +17,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=ELSATEST_t0001_c
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_kandr_check-local PROPERTIES
-  DEPENDS "ELSATEST_t0001_c"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_kandr_check-local PROPERTIES DEPENDS ELSATEST_t0001_c )

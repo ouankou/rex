@@ -58,10 +58,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_c89_test_names}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-TESTS PROPERTIES
-  LABELS "disabled"
-  DEPENDS "${_c89_test_names}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-TESTS PROPERTIES LABELS disabled DEPENDS "${_c89_test_names}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-TESTS PROPERTIES DISABLED TRUE)
 endif()
@@ -74,6 +71,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_c89_test_names}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-local PROPERTIES
-  DEPENDS "${_c89_test_names}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_C89_std_c89_tests_check-local PROPERTIES DEPENDS "${_c89_test_names}" )

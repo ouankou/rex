@@ -34,6 +34,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=compiler_options_gnu_minus_x\;compiler_options_gnu_options
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGnuOptions_check-local PROPERTIES
-  DEPENDS "compiler_options_gnu_minus_x;compiler_options_gnu_options"
-)
+set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testGnuOptions_check-local PROPERTIES DEPENDS "compiler_options_gnu_minus_x;compiler_options_gnu_options" )

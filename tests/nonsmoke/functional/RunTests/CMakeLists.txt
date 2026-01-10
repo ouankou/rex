@@ -34,6 +34,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=RunTests_traverseCommonBlock
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_RunTests_check-local PROPERTIES
-  DEPENDS "RunTests_traverseCommonBlock"
-)
+set_tests_properties(nonsmoke_functional_RunTests_check-local PROPERTIES DEPENDS RunTests_traverseCommonBlock )

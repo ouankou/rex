@@ -31,6 +31,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=overtureBug_01
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_OvertureCode_check-local PROPERTIES
-  DEPENDS "overtureBug_01"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_OvertureCode_check-local PROPERTIES DEPENDS overtureBug_01 )

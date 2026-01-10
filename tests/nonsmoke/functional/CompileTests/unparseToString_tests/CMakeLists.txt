@@ -48,33 +48,14 @@ set(REX_UNPARSE_ALIAS_FAILING
 
 function(rex_lock_test_for_input test_name input_file)
   get_filename_component(lock_base ${input_file} NAME_WE)
-  set_tests_properties(${test_name}
-    PROPERTIES RESOURCE_LOCK "rose_output_${lock_base}")
+  set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK rose_output_${lock_base})
 endfunction()
 
 foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
-  add_test(
-    NAME ut_failing_${file_to_test}
-    COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
-            -c ${TESTCODE_DIR}/${file_to_test})
-  add_test(
-    NAME ua_failing_${file_to_test}
-    COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
-            -c ${TESTCODE_DIR}/${file_to_test})
-
-  rex_lock_test_for_input(ut_failing_${file_to_test} ${file_to_test})
-  rex_lock_test_for_input(ua_failing_${file_to_test} ${file_to_test})
-
   set(_labels UNPARSETOSTRING_FAILING known_fail)
   if(NOT REX_ENABLE_FAILING_TESTS)
     list(APPEND _labels disabled)
-    set_tests_properties(ut_failing_${file_to_test} PROPERTIES DISABLED TRUE)
-    set_tests_properties(ua_failing_${file_to_test} PROPERTIES DISABLED TRUE)
   endif()
-  set_tests_properties(ut_failing_${file_to_test} PROPERTIES LABELS "${_labels}")
-  set_tests_properties(ua_failing_${file_to_test}
-    PROPERTIES DEPENDS ut_failing_${file_to_test}
-    LABELS "${_labels}")
 
   if(file_to_test IN_LIST REX_UNPARSE_ALIAS_FAILING)
     add_test(
@@ -94,9 +75,26 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
       set_tests_properties(ua_${file_to_test} PROPERTIES DISABLED TRUE)
     endif()
     set_tests_properties(ut_${file_to_test} PROPERTIES LABELS "${_labels}")
-    set_tests_properties(ua_${file_to_test}
-      PROPERTIES DEPENDS ut_${file_to_test}
-      LABELS "${_labels}")
+    set_tests_properties(ua_${file_to_test} PROPERTIES DEPENDS ut_${file_to_test} LABELS "${_labels}")
+  else()
+    add_test(
+      NAME ut_failing_${file_to_test}
+      COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+              -c ${TESTCODE_DIR}/${file_to_test})
+    add_test(
+      NAME ua_failing_${file_to_test}
+      COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+              -c ${TESTCODE_DIR}/${file_to_test})
+
+    rex_lock_test_for_input(ut_failing_${file_to_test} ${file_to_test})
+    rex_lock_test_for_input(ua_failing_${file_to_test} ${file_to_test})
+
+    if(NOT REX_ENABLE_FAILING_TESTS)
+      set_tests_properties(ut_failing_${file_to_test} PROPERTIES DISABLED TRUE)
+      set_tests_properties(ua_failing_${file_to_test} PROPERTIES DISABLED TRUE)
+    endif()
+    set_tests_properties(ut_failing_${file_to_test} PROPERTIES LABELS "${_labels}")
+    set_tests_properties(ua_failing_${file_to_test} PROPERTIES DEPENDS ut_failing_${file_to_test} LABELS "${_labels}")
   endif()
 endforeach()
 
@@ -122,9 +120,7 @@ foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
   rex_lock_test_for_input(ut_${file_to_test} ${file_to_test})
   rex_lock_test_for_input(ua_${file_to_test} ${file_to_test})
 
-  set_tests_properties(ua_${file_to_test}
-    PROPERTIES DEPENDS ut_${file_to_test} 
-    LABELS UNPARSETOSTRING)
+  set_tests_properties(ua_${file_to_test} PROPERTIES DEPENDS ut_${file_to_test} LABELS UNPARSETOSTRING)
 endforeach()
 
 add_test(
@@ -155,9 +151,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_unparse_check_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-local PROPERTIES
-  DEPENDS "${_unparse_check_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-local PROPERTIES DEPENDS "${_unparse_check_tests}" )
 
 add_test(
   NAME nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseAll
@@ -168,10 +162,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_unparse_all_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseAll PROPERTIES
-  LABELS "disabled"
-  DEPENDS "${_unparse_all_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseAll PROPERTIES LABELS disabled DEPENDS "${_unparse_all_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseAll PROPERTIES DISABLED TRUE)
 endif()
@@ -185,10 +176,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_unparse_type_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseType PROPERTIES
-  LABELS "disabled"
-  DEPENDS "${_unparse_type_tests}"
-)
+set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseType PROPERTIES LABELS disabled DEPENDS "${_unparse_type_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseType PROPERTIES DISABLED TRUE)
 endif()

@@ -107,6 +107,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_slice_chain_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_staticInterproceduralSlicingTests_check-local PROPERTIES
-  DEPENDS "${_slice_chain_tests}"
-)
+set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_staticInterproceduralSlicingTests_check-local PROPERTIES DEPENDS "${_slice_chain_tests}" )

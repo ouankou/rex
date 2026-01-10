@@ -82,8 +82,7 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${BASH_EXECUTABLE} -c "${_rex_install_cfe_command}"
   )
-  set_tests_properties(rex_install_tree_clang_headers
-    PROPERTIES RESOURCE_LOCK ${_functional_lock})
+  set_tests_properties(rex_install_tree_clang_headers PROPERTIES RESOURCE_LOCK ${_functional_lock})
 endif()
 
 set(_keep_going_cmd $<TARGET_FILE:KeepGoingTranslator>)
@@ -106,24 +105,21 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f inputObjectFileAnalysis.C alt_Analysis_inputFile.o; cp ${_functional_input} inputObjectFileAnalysis.C && $<TARGET_FILE:testAnalysis> -c inputObjectFileAnalysis.C -o alt_Analysis_inputFile.o"
 )
-set_tests_properties(functional_testObjectFileAnalysis
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testObjectFileAnalysis PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testLinkFileAnalysis
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testAnalysis> alt_Analysis_inputFile.o -o testLinkFileAnalysisExecutable
 )
-set_tests_properties(functional_testLinkFileAnalysis
-  PROPERTIES DEPENDS functional_testObjectFileAnalysis RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testLinkFileAnalysis PROPERTIES DEPENDS functional_testObjectFileAnalysis RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testCppFileAnalysis
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testAnalysis> -E ${_functional_input}
 )
-set_tests_properties(functional_testCppFileAnalysis
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testCppFileAnalysis PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testExecutableFileAnalysis
@@ -131,8 +127,7 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f inputFileAnalysis.C testExecutableFileAnalysisExecutable; cp ${_functional_input} inputFileAnalysis.C && $<TARGET_FILE:testAnalysis> inputFileAnalysis.C -o testExecutableFileAnalysisExecutable"
 )
-set_tests_properties(functional_testExecutableFileAnalysis
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testExecutableFileAnalysis PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testObjectFileCodeGeneration
@@ -140,24 +135,21 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f inputObjectFileCodeGeneration.C alt_CodeGeneration_inputFile.o; cp ${_functional_input} inputObjectFileCodeGeneration.C && $<TARGET_FILE:testCodeGeneration> -c inputObjectFileCodeGeneration.C -o alt_CodeGeneration_inputFile.o"
 )
-set_tests_properties(functional_testObjectFileCodeGeneration
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testObjectFileCodeGeneration PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testLinkFileCodeGeneration
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testCodeGeneration> -rose:Cxx alt_CodeGeneration_inputFile.o -o testLinkFileCodeGenerationExecutable
 )
-set_tests_properties(functional_testLinkFileCodeGeneration
-  PROPERTIES DEPENDS functional_testObjectFileCodeGeneration RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testLinkFileCodeGeneration PROPERTIES DEPENDS functional_testObjectFileCodeGeneration RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testCppFileCodeGeneration
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testCodeGeneration> -E ${_functional_input}
 )
-set_tests_properties(functional_testCppFileCodeGeneration
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testCppFileCodeGeneration PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testExecutableFileCodeGeneration
@@ -165,8 +157,7 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f inputFileCodeGeneration.C testExecutableFileCodeGenerationExecutable; cp ${_functional_input} inputFileCodeGeneration.C && $<TARGET_FILE:testCodeGeneration> inputFileCodeGeneration.C -o testExecutableFileCodeGenerationExecutable"
 )
-set_tests_properties(functional_testExecutableFileCodeGeneration
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testExecutableFileCodeGeneration PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testObjectFileTranslator
@@ -174,24 +165,21 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f inputObjectFileTranslator.C alt_Translator_inputFile.o; cp ${_functional_input} inputObjectFileTranslator.C && $<TARGET_FILE:testTranslator> -c inputObjectFileTranslator.C -o alt_Translator_inputFile.o"
 )
-set_tests_properties(functional_testObjectFileTranslator
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testObjectFileTranslator PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testLinkFileTranslator
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testTranslator> alt_Translator_inputFile.o -o testLinkFileTranslatorExecutable
 )
-set_tests_properties(functional_testLinkFileTranslator
-  PROPERTIES DEPENDS functional_testObjectFileTranslator RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testLinkFileTranslator PROPERTIES DEPENDS functional_testObjectFileTranslator RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testCppFileTranslator
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testTranslator> -E ${_functional_include_flags} ${_functional_input}
 )
-set_tests_properties(functional_testCppFileTranslator
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testCppFileTranslator PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testExecutableFileTranslator
@@ -199,8 +187,7 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f inputFileTranslator.C testExecutableFileTranslatorExecutable; cp ${_functional_input} inputFileTranslator.C && $<TARGET_FILE:testTranslator> inputFileTranslator.C -o testExecutableFileTranslatorExecutable"
 )
-set_tests_properties(functional_testExecutableFileTranslator
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testExecutableFileTranslator PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testSimpleLinkFileTranslator
@@ -208,8 +195,7 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f inputSimpleLinkFileTranslator.C; cp ${_functional_input} inputSimpleLinkFileTranslator.C && $<TARGET_FILE:testTranslator> inputSimpleLinkFileTranslator.C -lm"
 )
-set_tests_properties(functional_testSimpleLinkFileTranslator
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testSimpleLinkFileTranslator PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testObjectFileTokenGeneration
@@ -217,48 +203,42 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f alt_ObjectFileTokenGeneration_inputFile.C alt_TokenGeneration_inputFile.o; cp ${_functional_input} alt_ObjectFileTokenGeneration_inputFile.C && $<TARGET_FILE:testTokenGeneration> -c alt_ObjectFileTokenGeneration_inputFile.C -o alt_TokenGeneration_inputFile.o"
 )
-set_tests_properties(functional_testObjectFileTokenGeneration
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testObjectFileTokenGeneration PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testGraphGeneration
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testGraphGeneration> -c ${_functional_input}
 )
-set_tests_properties(functional_testGraphGeneration
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testGraphGeneration PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testPDFGeneration
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testPDFGeneration> ${_functional_input}
 )
-set_tests_properties(functional_testPDFGeneration
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testPDFGeneration PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testTemplates
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testTemplates> -c ${_functional_input}
 )
-set_tests_properties(functional_testTemplates
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testTemplates PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testTranslatorFoldedConstants
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testTranslatorFoldedConstants> -c ${_functional_input}
 )
-set_tests_properties(functional_testTranslatorFoldedConstants
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testTranslatorFoldedConstants PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testTranslatorUnfoldedConstants
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testTranslatorUnfoldedConstants> -c ${_functional_input}
 )
-set_tests_properties(functional_testTranslatorUnfoldedConstants
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testTranslatorUnfoldedConstants PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testKeepGoingTranslator
@@ -268,8 +248,7 @@ add_test(
     ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2017_13_Liao.C
     ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2017_12_Liao.C
 )
-set_tests_properties(functional_testKeepGoingTranslator
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testKeepGoingTranslator PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testExampleIdentityTranslator
@@ -277,28 +256,17 @@ add_test(
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f alt_identityTranslator_inputFile.C; cp ${_functional_input} alt_identityTranslator_inputFile.C && ${_identity_translator_cmd} -c alt_identityTranslator_inputFile.C && ${_identity_translator_cmd} -I${CMAKE_CURRENT_BINARY_DIR}/XXX -c alt_identityTranslator_inputFile.C"
 )
-set_tests_properties(functional_testExampleIdentityTranslator
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testExampleIdentityTranslator PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
   NAME functional_testReadFileTwice
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:readFileTwice> -c ${_functional_input}
 )
-set_tests_properties(functional_testReadFileTwice
-  PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set_tests_properties(functional_testReadFileTwice PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 if(ROSE_USE_CLANG_FRONTEND)
-  set_tests_properties(
-    functional_testGraphGeneration
-    functional_testPDFGeneration
-    functional_testTemplates
-    functional_testTranslatorFoldedConstants
-    functional_testTranslatorUnfoldedConstants
-    functional_testKeepGoingTranslator
-    functional_testExampleIdentityTranslator
-    functional_testReadFileTwice
-    PROPERTIES DISABLED TRUE)
+  set_tests_properties(functional_testGraphGeneration functional_testPDFGeneration functional_testTemplates functional_testTranslatorFoldedConstants functional_testTranslatorUnfoldedConstants functional_testKeepGoingTranslator functional_testExampleIdentityTranslator functional_testReadFileTwice PROPERTIES DISABLED TRUE)
 endif()
 
 if(_keep_going_missing)
@@ -354,18 +322,6 @@ set(_functional_check_tests
   functional_testReadFileTwice
 )
 add_test(
-  NAME nonsmoke_functional_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_functional_check_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_check-local PROPERTIES
-  DEPENDS "${_functional_check_tests}"
-)
-add_test(
   NAME nonsmoke_functional_conditional-check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND}
@@ -374,6 +330,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_functional_check_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_conditional-check-local PROPERTIES
-  DEPENDS "${_functional_check_tests}"
-)
+set_tests_properties(nonsmoke_functional_conditional-check-local PROPERTIES DEPENDS "${_functional_check_tests}" )

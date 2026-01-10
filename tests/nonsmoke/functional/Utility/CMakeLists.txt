@@ -83,6 +83,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=nonsmoke_utility_directorySupport\;nonsmoke_utility_filenameSupport\;nonsmoke_utility_testCopyFile\;nonsmoke_utility_testFileNameClassifier
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_Utility_check-local PROPERTIES
-  DEPENDS "nonsmoke_utility_directorySupport;nonsmoke_utility_filenameSupport;nonsmoke_utility_testCopyFile;nonsmoke_utility_testFileNameClassifier"
-)
+set_tests_properties(nonsmoke_functional_Utility_check-local PROPERTIES DEPENDS "nonsmoke_utility_directorySupport;nonsmoke_utility_filenameSupport;nonsmoke_utility_testCopyFile;nonsmoke_utility_testFileNameClassifier" )
