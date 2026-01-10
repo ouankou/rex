@@ -75,24 +75,31 @@ def on_post_build(config):
             changed = True
     if changed:
         json_str = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=path.parent,
-            prefix=path.name + ".",
-            suffix=".tmp",
-            delete=False,
-        ) as temp_file:
-            temp_file.write(json_str)
-            temp_path = Path(temp_file.name)
+        temp_path = None
         try:
-            temp_path.replace(path)
-        except OSError:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=path.name + ".",
+                suffix=".tmp",
+                delete=False,
+            ) as temp_file:
+                temp_file.write(json_str)
+                temp_path = Path(temp_file.name)
             try:
-                temp_path.unlink()
-            except FileNotFoundError:
-                pass
-            raise
+                temp_path.replace(path)
+                temp_path = None
+            except OSError as exc:
+                raise OSError(
+                    f"Failed to replace search index file '{path}' with temporary file '{temp_path}'."
+                ) from exc
+        finally:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink()
+                except FileNotFoundError:
+                    pass
 
 
 on_post_build.mkdocs_priority = -100
