@@ -1,18 +1,14 @@
-set(outlineTutorial_SRCS outlineTutorial.cc)
-add_executable(outlineTutorial ${outlineTutorial_SRCS})
-target_link_libraries(outlineTutorial ROSE_DLL)
+set(OUTLINER_SOURCES
+  outlineTutorial.cc
+  outlineIfs.cc
+  outlineIfs2.C
+  outlinePreproc.cc)
 
-set(outlineIfs_SRCS outlineIfs.cc)
-add_executable(outlineIfs ${outlineIfs_SRCS})
-target_link_libraries(outlineIfs ROSE_DLL)
-
-set(outlineIfs2_SRCS outlineIfs2.C)
-add_executable(outlineIfs2 ${outlineIfs2_SRCS})
-target_link_libraries(outlineIfs2 ROSE_DLL)
-
-set(outlinePreproc_SRCS outlinePreproc.cc)
-add_executable(outlinePreproc ${outlinePreproc_SRCS})
-target_link_libraries(outlinePreproc ROSE_DLL)
+foreach(outliner_src IN LISTS OUTLINER_SOURCES)
+  get_filename_component(outliner_name "${outliner_src}" NAME_WE)
+  add_executable(${outliner_name} ${outliner_src})
+  target_link_libraries(${outliner_name} ROSE_DLL)
+endforeach()
 
 # Install only those executables that are useful to users after ROSE is installed. If the main purpose of compiling
 # the tool is to ensure that the source code is correct for the purposes of documentation in the various tutorials,

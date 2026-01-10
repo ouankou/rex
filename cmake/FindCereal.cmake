@@ -37,7 +37,15 @@ macro(find_cereal)
     else()
       # Assume Cereal is present at the specified installation prefix
       set(CEREAL_FOUND TRUE)
-      include_directories("${CEREAL_ROOT}/include")
+    endif()
+  endif()
+
+  if(CEREAL_FOUND)
+    if(NOT TARGET Cereal::cereal)
+      add_library(Cereal::cereal INTERFACE)
+      if(NOT "${CEREAL_ROOT}" STREQUAL "")
+        target_include_directories(Cereal::cereal INTERFACE "${CEREAL_ROOT}/include")
+      endif()
     endif()
   endif()
 

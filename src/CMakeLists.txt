@@ -180,6 +180,10 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   target_link_libraries(ROSE_DLL PRIVATE ${FLANG_LIBS})
 endif()
 
+if(TARGET Cereal::cereal)
+  target_link_libraries(ROSE_DLL PRIVATE Cereal::cereal)
+endif()
+
 set_target_properties(ROSE_DLL PROPERTIES
   VERSION "${PROJECT_VERSION}"
   SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
