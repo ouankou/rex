@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 
 _PRE_TAG_RE = re.compile(r"<pre(?![^>]*\bdata-search-exclude\b)([^>]*)>", re.IGNORECASE)
-_LEAF_URLS = set()
 _MAX_SEARCH_TEXT = 100_000
 
 
@@ -25,11 +24,18 @@ def on_files(files, config):
     urls = sorted(set(urls))
     has_children = set()
     for i, url in enumerate(urls[:-1]):
-        if urls[i + 1].startswith(url):
+        child = urls[i + 1]
+        if not child.startswith(url):
+            continue
+        if len(child) <= len(url):
+            continue
+        if url.endswith("/"):
             has_children.add(url)
+        else:
+            if child[len(url)] == "/":
+                has_children.add(url)
 
-    global _LEAF_URLS
-    _LEAF_URLS = set(urls) - has_children
+    setattr(config, "_search_exclude_leaf_urls", set(urls) - has_children)
     return files
 
 
@@ -43,12 +49,13 @@ def _should_keep_leaf(page):
 
 
 def on_page_context(context, page, config, nav):
-    if page.url in _LEAF_URLS and not _should_keep_leaf(page):
+    leaf_urls = getattr(config, "_search_exclude_leaf_urls", set())
+    if page.url in leaf_urls and not _should_keep_leaf(page):
         search = page.meta.setdefault("search", {})
         search["exclude"] = True
     return context
 
-
+# Run early so search exclusions are applied before the search plugin indexes pages.
 on_page_context.mkdocs_priority = 100
 
 
@@ -71,7 +78,16 @@ def on_post_build(config):
             continue
         text = doc.get("text")
         if isinstance(text, str) and len(text) > _MAX_SEARCH_TEXT:
-            doc["text"] = text[:_MAX_SEARCH_TEXT]
+            truncated = text[:_MAX_SEARCH_TEXT]
+            last_space = max(
+                truncated.rfind(" "),
+                truncated.rfind("\n"),
+                truncated.rfind("\t"),
+                truncated.rfind("\r"),
+            )
+            if last_space > _MAX_SEARCH_TEXT * 0.8:
+                truncated = truncated[:last_space]
+            doc["text"] = truncated
             changed = True
     if changed:
         json_str = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
@@ -102,4 +118,5 @@ def on_post_build(config):
                     pass
 
 
+# Ensure this runs after the search plugin writes search_index.json.
 on_post_build.mkdocs_priority = -100
