@@ -3895,13 +3895,13 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
    }
 
 bool
-SageInterface::isUnaryOperatorArrowSubtree(SgExpression* expr)
+SageInterface::isOverloadedArrowOperatorChain(SgExpression* expr)
    {
      if (expr == nullptr)
         return false;
 
      if (SgPointerDerefExp* deref = isSgPointerDerefExp(expr))
-        return isUnaryOperatorArrowSubtree(deref->get_operand());
+        return isOverloadedArrowOperatorChain(deref->get_operand());
 
      SgFunctionCallExp* functionCall = isSgFunctionCallExp(expr);
      if (functionCall == nullptr)

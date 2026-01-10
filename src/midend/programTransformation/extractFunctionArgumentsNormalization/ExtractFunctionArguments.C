@@ -259,7 +259,7 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(const FunctionCallIn
 // If we have a limitation in normalizing the function return false
 bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(SgExpression* argument)
 {
-    if (SageInterface::isUnaryOperatorArrowSubtree(argument)) {
+    if (SageInterface::isOverloadedArrowOperatorChain(argument)) {
         return false;
     }
     while ((isSgPointerDerefExp(argument) || isSgCastExp(argument) || isSgAddressOfOp(argument)))

@@ -1156,10 +1156,10 @@ Unparse_MOD_SAGE::isOverloadedArrowOperator(SgExpression* expr)
    }
 
 bool
-Unparse_MOD_SAGE::isUnaryOperatorArrowSubtree(SgExpression* expr)
+Unparse_MOD_SAGE::isOverloadedArrowOperatorChain(SgExpression* expr)
    {
   // DQ (12/11/2004): This function recognizes a subtree which represents the "S* T::operator->()" for some class type "T" and type "S"
-     return SageInterface::isUnaryOperatorArrowSubtree(expr);
+     return SageInterface::isOverloadedArrowOperatorChain(expr);
    }
 
 //-----------------------------------------------------------------------------------
