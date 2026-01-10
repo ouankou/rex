@@ -17,6 +17,22 @@ add_test(
     test1.passed
 )
 
+add_test(
+  NAME testSymbolTable_test1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:testSymbolTable>
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/input.C
+)
+set_tests_properties(testSymbolTable_test1 PROPERTIES DEPENDS astSymbolTable_test1)
+
+add_test(
+  NAME test1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:testSymbolTable>
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/input.C
+)
+set_tests_properties(test1 PROPERTIES DEPENDS astSymbolTable_test1)
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_astSymbolTableTests_check-local

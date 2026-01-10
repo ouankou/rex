@@ -4,8 +4,41 @@ include(ElsaTestCases_big_Testcodes_Disabled.cmake)
 set(ROSE_FLAGS -w)
 set(ROSE_DISABLED_TESTCODES ${ELSATEST_BIG_DISABLED_TESTCODES})
 
+function(rex_elsa_big_test input_file)
+  set(_test_key ${input_file})
+  string(REPLACE "/" "_" _test_key "${_test_key}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  set(test_id ELSATEST_${_test_key})
+
+  set(_input_path "${input_file}")
+  string(REGEX REPLACE "^c/" "ctests/" _input_path "${_input_path}")
+  set(_input_path "${CMAKE_CURRENT_SOURCE_DIR}/../${_input_path}")
+
+  add_test(
+    NAME ${test_id}
+    COMMAND ${translator}
+      ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
+      ${_input_path}
+  )
+
+  set(_labels ELSATEST)
+  set(_disable_test FALSE)
+  if(DEFINED ROSE_DISABLED_TESTCODES AND input_file IN_LIST ROSE_DISABLED_TESTCODES)
+    list(APPEND _labels disabled)
+    if(NOT REX_ENABLE_DISABLED_TESTS)
+      set(_disable_test TRUE)
+    endif()
+  endif()
+  list(REMOVE_DUPLICATES _labels)
+  set_tests_properties(${test_id} PROPERTIES LABELS "${_labels}")
+
+  if(_disable_test)
+    set_tests_properties(${test_id} PROPERTIES DISABLED TRUE)
+  endif()
+endfunction()
+
 foreach(file_to_test ${ELSATEST_BIG_TESTCODES} ${ELSATEST_BIG_DISABLED_TESTCODES})
-  compile_test(${file_to_test} ELSATEST)
+  rex_elsa_big_test(${file_to_test})
 endforeach()
 
 # Makefile check targets.

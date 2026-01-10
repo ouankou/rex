@@ -1120,6 +1120,16 @@ set_tests_properties(C_tests_unparse_includes_option_with_link
   PROPERTIES LABELS C_tests)
 
 add_test(
+  NAME CTEST_test2013_76
+  COMMAND testTranslator -rose:C89 --edg:no_warnings --edg:restrict -w
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2013_76.c
+)
+set_tests_properties(CTEST_test2013_76 PROPERTIES LABELS "CTEST;disabled")
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(CTEST_test2013_76 PROPERTIES DISABLED TRUE)
+endif()
+
+add_test(
   NAME C_tests_else_case_disambiguation
   WORKING_DIRECTORY ${_c_tests_special_dir}
   COMMAND ${BASH_EXECUTABLE} -c

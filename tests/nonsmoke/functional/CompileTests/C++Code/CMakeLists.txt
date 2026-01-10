@@ -60,6 +60,14 @@ add_test(
 )
 
 add_test(
+  NAME nonsmoke_functional_CompileTests_C++Code_test2005_64.C
+  COMMAND testTranslator ${ROSE_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_64.C
+)
+set_tests_properties(nonsmoke_functional_CompileTests_C++Code_test2005_64.C
+  PROPERTIES DEPENDS test2005_64)
+
+add_test(
   NAME gconv_info_Cpp
   COMMAND	testTranslator ${ROSE_FLAGS} -rose:verbose 0 -c
           -I${CMAKE_CURRENT_SOURCE_DIR}
@@ -116,6 +124,14 @@ add_test(
   COMMAND testTranslator ${ROSE_FLAGS}  
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_30.C
 )
+
+add_test(
+  NAME nonsmoke_functional_CompileTests_C++Code_test2004_30.C
+  COMMAND testTranslator ${ROSE_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_30.C
+)
+set_tests_properties(nonsmoke_functional_CompileTests_C++Code_test2004_30.C
+  PROPERTIES DEPENDS test2004_30)
 
 # Test of simple STL (list) example code
 add_test(

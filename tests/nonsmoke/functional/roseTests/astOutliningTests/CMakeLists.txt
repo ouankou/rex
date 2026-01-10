@@ -937,6 +937,18 @@ foreach(specimen IN LISTS OUTLINE_CXX4_TESTS)
   )
 endforeach()
 
+add_test(
+  NAME nonsmoke_functional_roseTests_astOutliningTests_ft_cfftz_omp.cpp
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:outline>
+    ${_outline_includes}
+    ${_dlopen4_flags}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/ft_cfftz_omp.cpp
+    -rose:output dlopen4_ft_cfftz_omp.cpp
+)
+set_tests_properties(nonsmoke_functional_roseTests_astOutliningTests_ft_cfftz_omp.cpp
+  PROPERTIES DEPENDS outline_dlopen4_ft_cfftz_omp_cpp)
+
 set(_dlopen5_flags
   -fpermissive
   ${_outline_dlopen_header_include}

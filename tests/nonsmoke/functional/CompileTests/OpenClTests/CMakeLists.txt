@@ -21,6 +21,16 @@ foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} OPENCLTEST TRUE)
 endforeach()
 
+add_test(
+  NAME OPENCLTEST_empty
+  COMMAND testTranslator ${ROSE_FLAGS}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/empty.cl
+)
+set_tests_properties(OPENCLTEST_empty PROPERTIES LABELS "OPENCLTEST;disabled")
+if(NOT REX_ENABLE_DISABLED_TESTS)
+  set_tests_properties(OPENCLTEST_empty PROPERTIES DISABLED TRUE)
+endif()
+
 # Makefile check targets.
 set(_opencl_group_tests)
 foreach(file_to_test ${files_to_test})

@@ -269,15 +269,7 @@ def _parse_ctest_testfiles(build_dir: Path) -> dict[str, dict[str, object]]:
 def _should_override_ctest_command(entry_cmd: list[str], data_cmd: list[str]) -> bool:
     if not data_cmd:
         return False
-    if not entry_cmd:
-        return True
-    if any(" " in tok for tok in data_cmd):
-        return True
-    if len(data_cmd) > len(entry_cmd):
-        return True
-    if entry_cmd and entry_cmd[0].startswith("-") and data_cmd and not data_cmd[0].startswith("-"):
-        return True
-    return False
+    return not entry_cmd or entry_cmd != data_cmd
 
 
 def _key_from_command(name: str, command: list[str], repo_root: Path) -> str:
@@ -285,32 +277,71 @@ def _key_from_command(name: str, command: list[str], repo_root: Path) -> str:
 
 
 def _parse_ctest_output(output: str, repo_root: Path, build_dir: Path) -> list[dict]:
-    entries = []
-    current = {}
-    test_re = re.compile(r"^\s*Test\s+#\d+\s*:")
+    entries: list[dict] = []
+    records: dict[int, dict] = {}
+    current_num: Optional[int] = None
+    header_re = re.compile(r"^Test\s+#(\d+)\s*:\s*(.+)$")
+    prefix_re = re.compile(r"^\s*(\d+):\s*(.+)$")
     for line in output.splitlines():
-        stripped = re.sub(r"^\d+:\s*", "", line.strip())
-        if test_re.match(stripped):
-            if current:
-                entries.append(_finalize_entry(current, repo_root, build_dir))
-                current = {}
-            raw_name = stripped.split(":", 1)[1].strip()
+        raw = line.rstrip()
+        num: Optional[int] = None
+        content = raw
+        prefix = prefix_re.match(raw)
+        if prefix:
+            num = int(prefix.group(1))
+            content = prefix.group(2)
+            current_num = num
+        stripped = content.strip()
+
+        header = header_re.match(stripped)
+        if header:
+            num = int(header.group(1))
+            raw_name = header.group(2).strip()
+            record = records.setdefault(num, {})
             if any(token in raw_name for token in ("(Disabled)", "(Not Run)", "(Skipped)")):
-                current["disabled"] = True
-            current["name"] = _strip_ctest_suffix(raw_name)
-        elif stripped.startswith("Test command:"):
+                record["disabled"] = True
+            record["name"] = _strip_ctest_suffix(raw_name)
+            current_num = num
+            continue
+
+        if stripped.startswith("Test command:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
             cmd = stripped.split("Test command:", 1)[1].strip()
-            current["command"] = _tokenize(cmd)
-        elif stripped.startswith("Working Directory:"):
-            current["workdir"] = stripped.split("Working Directory:", 1)[1].strip()
-        elif stripped.startswith("Labels:"):
+            records.setdefault(record_num, {})["command"] = _tokenize(cmd)
+            continue
+
+        if stripped.startswith("Working Directory:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
+            records.setdefault(record_num, {})["workdir"] = stripped.split(
+                "Working Directory:", 1
+            )[1].strip()
+            continue
+
+        if stripped.startswith("Labels:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
             labels = stripped.split("Labels:", 1)[1].strip()
-            current["labels"] = [l for l in re.split(r"[;\s]+", labels) if l]
-        elif stripped.startswith("Disabled:"):
+            records.setdefault(record_num, {})["labels"] = [
+                label for label in re.split(r"[;\s]+", labels) if label
+            ]
+            continue
+
+        if stripped.startswith("Disabled:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
             value = stripped.split("Disabled:", 1)[1].strip()
-            current["disabled"] = value.lower() == "true"
-    if current:
-        entries.append(_finalize_entry(current, repo_root, build_dir))
+            records.setdefault(record_num, {})["disabled"] = value.lower() == "true"
+            continue
+
+    for record in (records[key] for key in sorted(records)):
+        if record.get("name"):
+            entries.append(_finalize_entry(record, repo_root, build_dir))
     return entries
 
 

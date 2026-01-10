@@ -60,6 +60,22 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
   set_tests_properties(testStaticCFG_Cxx_failing_${file_to_test} PROPERTIES LABELS "${_labels}")
   set_tests_properties(testInterproceduralCFG_Cxx_failing_${file_to_test}
     PROPERTIES DEPENDS testStaticCFG_Cxx_failing_${file_to_test} LABELS "${_labels}")
+
+  if(file_to_test STREQUAL "test2005_42.C")
+    add_test(
+      NAME testStaticCFG_Cxx_test2005_42.C
+      COMMAND testStaticCFG ${ROSE_FLAGS}
+        -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
+        -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
+    rex_lock_test_for_input(testStaticCFG_Cxx_test2005_42.C ${file_to_test})
+    if(NOT REX_ENABLE_FAILING_TESTS)
+      set_tests_properties(testStaticCFG_Cxx_test2005_42.C PROPERTIES DISABLED TRUE)
+    endif()
+    set_tests_properties(testStaticCFG_Cxx_test2005_42.C
+      PROPERTIES DEPENDS testStaticCFG_Cxx_failing_${file_to_test}
+      LABELS "${_labels}")
+  endif()
 endforeach()
 
 foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
@@ -188,6 +204,19 @@ foreach(input_file ${C99_TESTCODES_REQUIRED_TO_PASS})
     PROPERTIES DEPENDS testStaticCFG_C99_${file_to_test} LABELS STATICCFGTEST)
 
 endforeach()
+
+set(_c99_int_file test2008_01.temp.int.c)
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../C99_tests/test2008_01.c
+  ${CMAKE_CURRENT_BINARY_DIR}/${_c99_int_file}
+  COPYONLY)
+add_test(
+  NAME test2008_01.C99-INT
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND testInterproceduralCFG ${ROSE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}/../C99_tests ${TESTCODE_INCLUDES}
+    -c ${_c99_int_file})
+set_tests_properties(test2008_01.C99-INT PROPERTIES LABELS STATICCFGTEST)
 
 
 if(ENABLE-FORTRAN)

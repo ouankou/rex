@@ -127,6 +127,28 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation2.C
 )
 
+add_test(
+  NAME cf_1
+  COMMAND constantFoldingTest
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation.C
+)
+set_tests_properties(cf_1 PROPERTIES DEPENDS constantFoldingTest_1)
+
+add_test(
+  NAME cf_2
+  COMMAND constantFoldingTest2
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation.C
+    -rose:output rose_inputCode_constantFoldingTransformation_1.C
+)
+set_tests_properties(cf_2 PROPERTIES DEPENDS constantFoldingTest_2)
+
+add_test(
+  NAME cf_3
+  COMMAND constantFoldingTest2
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_constantFoldingTransformation2.C
+)
+set_tests_properties(cf_3 PROPERTIES DEPENDS constantFoldingTest_3)
+
 #-------------------------------------------------------------------------------
 # implicitCodeGenerationTest
 

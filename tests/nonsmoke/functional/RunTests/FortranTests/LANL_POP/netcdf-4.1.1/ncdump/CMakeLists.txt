@@ -3,6 +3,9 @@
 rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest" COMMAND ctest)
 set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
+rex_add_disabled_test(NAME "ctest" COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ctest)
+set_tests_properties("ctest" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
 rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest64" COMMAND ctest64)
 set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncdump_ctest64" PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 

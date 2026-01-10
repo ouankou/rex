@@ -74,6 +74,14 @@ add_test(
   COMMAND transformVariable -rose:unparse_tokens -c ${CMAKE_CURRENT_SOURCE_DIR}/badInput2.c
 )
 
+add_test(
+  NAME nonsmoke_functional_CompileTests_UnparseHeadersUsingTokenStream_tests_badInput.c
+  COMMAND $<TARGET_FILE:transformVariable> -rose:unparse_tokens
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/badInput.c
+)
+set_tests_properties(nonsmoke_functional_CompileTests_UnparseHeadersUsingTokenStream_tests_badInput.c
+  PROPERTIES DEPENDS unparse_tokens_transformVariable)
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_CompileTests_UnparseHeadersUsingTokenStream_tests_check-local

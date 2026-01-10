@@ -447,6 +447,18 @@ foreach(specimen IN LISTS SAGE_ALIAS_ANALYSIS)
   endif()
 endforeach()
 
+foreach(specimen IN LISTS SAGE_ALIAS_ANALYSIS)
+  _sage_sanitize_name(${specimen} _name)
+  add_test(
+    NAME nonsmoke_unit_SageInterface_tests_${specimen}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND $<TARGET_FILE:performAliasAnalysis>
+      -c ${_alias_specimens_path}/${specimen}
+  )
+  set_tests_properties(nonsmoke_unit_SageInterface_tests_${specimen}
+    PROPERTIES DEPENDS sage_performAliasAnalysis_${_name})
+endforeach()
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_unit_SageInterface_check-local

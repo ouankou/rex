@@ -71,6 +71,19 @@ foreach(specimen IN LISTS _inline_everything_all_specimens)
     PROPERTIES DEPENDS inlineEverything_v1_${_inline_name})
 endforeach()
 
+foreach(specimen IN LISTS INLINE_EVERYTHING_SPECIMENS)
+  string(REPLACE "." "_" _inline_name ${specimen})
+  add_test(
+    NAME nonsmoke_functional_roseTests_astInliningTests_${specimen}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND inlineEverything -skip-postprocessing
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
+      -rose:output rose_v2_${specimen}
+  )
+  set_tests_properties(nonsmoke_functional_roseTests_astInliningTests_${specimen}
+    PROPERTIES DEPENDS inlineEverything_v2_${_inline_name})
+endforeach()
+
 foreach(specimen IN LISTS INLINE_EVERYTHING_DISABLED_SPECIMENS)
   string(REPLACE "." "_" _inline_name ${specimen})
   set_tests_properties(

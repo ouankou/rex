@@ -111,6 +111,12 @@ if(ENABLE-C)
     COMMAND testTranslator2010_01)
 
   add_test(
+    NAME testTranslator2010_01
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND $<TARGET_FILE:testTranslator2010_01>
+  )
+
+  add_test(
     NAME Translator_testTranslator2010_03
     COMMAND testTranslator2010_03 -c -rose:verbose 0 ${_translator_input_dir}/input_testTranslator2010_3.C)
 

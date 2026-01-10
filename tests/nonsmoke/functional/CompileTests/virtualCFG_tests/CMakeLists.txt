@@ -179,6 +179,13 @@ if(ENABLE-FORTRAN)
     set_tests_properties(testVirtualCFG_F90_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()
 
+  add_test(
+    NAME test2007_01.F90
+    COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:f90
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/test2007_01.f90)
+  set_tests_properties(test2007_01.F90 PROPERTIES DEPENDS testVirtualCFG_F90_test2007_01.f90)
+  rex_set_disabled_test(test2007_01.F90 VIRTUALCFGTEST)
+
   set(_f90_disabled_tests
     test2007_16.f90
     test2007_19.f90

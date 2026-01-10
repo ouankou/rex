@@ -30,6 +30,23 @@ foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} CUDA TRUE)
 endforeach()
 
+add_test(
+  NAME CUDA_test_2011_01
+  COMMAND testTranslator -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_01.cu
+)
+set_tests_properties(CUDA_test_2011_01 PROPERTIES LABELS CUDA)
+
+add_test(
+  NAME nonsmoke_functional_CompileTests_CudaTests_test_2011_01.cu
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ../../testTranslator
+    -DSKIP_ROSE_BUILTIN_DECLARATIONS
+    -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_01.cu
+)
+set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_test_2011_01.cu PROPERTIES LABELS CUDA)
+
 add_executable(deviceTranformation deviceTranformation.C)
 target_link_libraries(deviceTranformation ROSE_DLL ${link_with_libraries})
 

@@ -25,6 +25,13 @@ foreach(test_target IN LISTS SAGE_BUILDER_TESTS)
   set_tests_properties(nonsmoke_unittests_${test_target} PROPERTIES LABELS "nonsmoke;unittests")
 endforeach()
 
+add_test(
+  NAME CaseSensitivtyUnitTests.test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND $<TARGET_FILE:CaseSensitivtyUnitTests>
+)
+set_tests_properties(CaseSensitivtyUnitTests.test PROPERTIES LABELS "nonsmoke;unittests")
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_UnitTests_Rose_SageBuilder_check-local

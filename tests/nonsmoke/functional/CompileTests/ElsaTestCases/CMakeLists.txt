@@ -12,19 +12,28 @@ include(ElsaTestCases_Failing_Tests.cmake)
 set(ROSE_FLAGS  -w)
 
 set(ROSE_DISABLED_TESTCODES ${TESTCODES_DISABLED})
+set(_elsa_failing_tests
+  ${START_OF_FAILED_TESTS_USING_ROSE}
+  ${START_OF_FAILED_TESTS_USING_ROSE_WITH_GNU_VER_4_X}
+)
+list(REMOVE_DUPLICATES _elsa_failing_tests)
+set(ROSE_FAILING_TESTCODES ${_elsa_failing_tests})
 
 foreach(file_to_test ${TESTCODES})
   compile_test(${file_to_test} ELSATEST)
 endforeach()
 
-if(REX_ENABLE_FAILING_TESTS)
-  foreach(file_to_test ${START_OF_FAILED_TESTS_USING_ROSE})
-    compile_test(${file_to_test} "ElsaTestCases_failing")
-  endforeach()
-  foreach(file_to_test ${START_OF_FAILED_TESTS_USING_ROSE_WITH_GNU_VER_4_X})
-    compile_test(${file_to_test} "ElsaTestCases_failing")
-  endforeach()
-endif()
+add_test(
+  NAME nonsmoke_functional_CompileTests_ElsaTestCases_t0001.cc
+  COMMAND testTranslator ${ROSE_FLAGS}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/t0001.cc
+)
+set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_t0001.cc
+  PROPERTIES LABELS ELSATEST DEPENDS ELSATEST_t0001_cc)
+
+foreach(file_to_test ${_elsa_failing_tests})
+  compile_test(${file_to_test} "ElsaTestCases_failing")
+endforeach()
 
 # Makefile check targets.
 add_test(

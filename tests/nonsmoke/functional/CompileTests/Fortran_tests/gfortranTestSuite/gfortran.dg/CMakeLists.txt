@@ -485,6 +485,15 @@ foreach(file_to_test ${_gfortran_untested_tests})
     PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
 endforeach()
 
+add_test(
+  NAME nonsmoke_functional_CompileTests_Fortran_tests_gfortranTestSuite_gfortran.dg_bind_c_coms_driver.c
+  COMMAND $<TARGET_FILE:testTranslator> -rose:verbose 0 -rose:skip_syntax_check
+          -rose:skipfinalCompileStep -rose:detect_dangling_pointers 1 -c
+          ${CMAKE_CURRENT_SOURCE_DIR}/bind_c_coms_driver.c
+)
+set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_gfortranTestSuite_gfortran.dg_bind_c_coms_driver.c
+  PROPERTIES LABELS GFORTRANSUITE DEPENDS GFORTRANSUITE_bind_c_coms_driver.c)
+
 # Note: If using gfortran version greater then 4.1, we can't call it with Fortran 2003 code since it is so buggy.
 #       So we use -rose:skip_syntax_check to avoid the frontend syntax checking and -rose:skipfinalCompileStep
 #       to avoid processing the generated code (which would have the same problem).  It is easier to just use

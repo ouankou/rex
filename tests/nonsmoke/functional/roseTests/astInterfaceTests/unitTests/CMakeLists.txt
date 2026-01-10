@@ -40,6 +40,13 @@ add_test(
   COMMAND sageBuilderTest
 )
 
+add_test(
+  NAME check-local
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND sageInterfaceTest
+)
+set_tests_properties(check-local PROPERTIES DEPENDS astInterface_unit_sageInterfaceTest)
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_astInterfaceTests_unitTests_check-local

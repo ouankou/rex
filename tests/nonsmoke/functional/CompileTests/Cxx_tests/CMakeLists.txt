@@ -3578,6 +3578,22 @@ set_tests_properties(Cxx_tests_test_unparse_includes_option PROPERTIES LABELS Cx
 rex_lock_test_for_input(Cxx_tests_test_unparse_includes_option test2013_257.C)
 
 add_test(
+  NAME unparse_includes_option
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:${translator}>
+    --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
+    -rose:unparse_includes -rose:verbose 0
+    -I${CMAKE_BINARY_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2013_257.C
+    -o test2013_257_unparse_headers.o
+)
+set_tests_properties(unparse_includes_option
+  PROPERTIES LABELS Cxx_tests DEPENDS Cxx_tests_test_unparse_includes_option)
+rex_lock_test_for_input(unparse_includes_option test2013_257.C)
+
+add_test(
   NAME Cxx_tests_test_unparse_includes_option_with_link
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:${translator}>
@@ -3603,6 +3619,21 @@ add_test(
     -o conftest_configure_test_part_1
 )
 set_tests_properties(Cxx_tests_common_configure_test_with_link_part_1 PROPERTIES LABELS Cxx_tests RESOURCE_LOCK rose_output_conftest)
+
+add_test(
+  NAME common_configure_test_with_link_part_1
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:${translator}>
+    --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/conftest.C
+    -o conftest_configure_test_part_1
+)
+set_tests_properties(common_configure_test_with_link_part_1
+  PROPERTIES LABELS Cxx_tests RESOURCE_LOCK rose_output_conftest
+  DEPENDS Cxx_tests_common_configure_test_with_link_part_1)
 
 add_test(
   NAME Cxx_tests_common_configure_test_with_link_part_2
@@ -3788,6 +3819,17 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246b.C
 )
 set_tests_properties(Cxx_tests_test_multiple_files PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+
+add_test(
+  NAME CXXTEST_test2012_246a
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:${translator}>
+    --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246a.C
+)
+set_tests_properties(CXXTEST_test2012_246a PROPERTIES LABELS Cxx_tests)
 
 add_test(
   NAME Cxx_tests_test_multiple_files_2

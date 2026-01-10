@@ -29,6 +29,14 @@ add_test(
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+add_test(
+  NAME build
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/runVariableTypeTest.sh
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(build PROPERTIES DEPENDS typeEquivalence_variableTypeTest)
+
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_check-local

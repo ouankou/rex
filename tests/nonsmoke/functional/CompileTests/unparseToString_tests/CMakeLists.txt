@@ -19,6 +19,32 @@ set(CXX_TESTCODES_TO_UNPARSE ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(APPEND CXX_TESTCODES_TO_UNPARSE test2003_24.C test2004_82.C)
 list(REMOVE_DUPLICATES CXX_TESTCODES_TO_UNPARSE)
 list(REMOVE_ITEM CXX_TESTCODES_TO_UNPARSE ${TESTCODE_CURRENTLY_FAILING})
+set(REX_UNPARSE_ALIAS_FAILING
+  math.C
+  test2004_117.C
+  test2004_121.C
+  test2004_35.C
+  test2004_77.C
+  test2004_85.C
+  test2005_06.C
+  test2005_42.C
+  test2005_50.C
+  test2006_08.C
+  test2006_20.C
+  test2006_37.C
+  test2007_141.C
+  test2007_51.C
+  test2007_52.C
+  test2007_62.C
+  test2009_21.C
+  test2011_01.C
+  test2011_02.C
+  test2011_05.C
+  test2011_06.C
+  test2011_07.C
+  test2011_141.C
+  test2011_142.C
+)
 
 function(rex_lock_test_for_input test_name input_file)
   get_filename_component(lock_base ${input_file} NAME_WE)
@@ -49,6 +75,29 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
   set_tests_properties(ua_failing_${file_to_test}
     PROPERTIES DEPENDS ut_failing_${file_to_test}
     LABELS "${_labels}")
+
+  if(file_to_test IN_LIST REX_UNPARSE_ALIAS_FAILING)
+    add_test(
+      NAME ut_${file_to_test}
+      COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+              -c ${TESTCODE_DIR}/${file_to_test})
+    add_test(
+      NAME ua_${file_to_test}
+      COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+              -c ${TESTCODE_DIR}/${file_to_test})
+
+    rex_lock_test_for_input(ut_${file_to_test} ${file_to_test})
+    rex_lock_test_for_input(ua_${file_to_test} ${file_to_test})
+
+    if(NOT REX_ENABLE_FAILING_TESTS)
+      set_tests_properties(ut_${file_to_test} PROPERTIES DISABLED TRUE)
+      set_tests_properties(ua_${file_to_test} PROPERTIES DISABLED TRUE)
+    endif()
+    set_tests_properties(ut_${file_to_test} PROPERTIES LABELS "${_labels}")
+    set_tests_properties(ua_${file_to_test}
+      PROPERTIES DEPENDS ut_${file_to_test}
+      LABELS "${_labels}")
+  endif()
 endforeach()
 
 foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
@@ -143,4 +192,3 @@ set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_chec
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_CompileTests_unparseToString_tests_check-unparseType PROPERTIES DISABLED TRUE)
 endif()
-

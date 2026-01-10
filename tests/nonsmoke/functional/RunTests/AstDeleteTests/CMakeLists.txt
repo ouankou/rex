@@ -16,6 +16,13 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test1.C
 )
 
+add_test(
+  NAME nonsmoke_functional_RunTests_AstDeleteTests_test1.C
+  COMMAND testTranslator -c ${CMAKE_CURRENT_SOURCE_DIR}/test1.C
+)
+set_tests_properties(nonsmoke_functional_RunTests_AstDeleteTests_test1.C
+  PROPERTIES DEPENDS ast_delete_memory_translator)
+
 
 ########### install files ###############
 

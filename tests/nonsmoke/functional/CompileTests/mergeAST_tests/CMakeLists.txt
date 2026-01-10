@@ -45,6 +45,14 @@ foreach(file_to_test ${TESTCODES})
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(MERGEASTTEST_${file_to_test} PROPERTIES LABELS MERGEASTTEST)
 endforeach()
+
+add_test(
+  NAME nonsmoke_functional_CompileTests_mergeAST_tests_mergeTest_01.C
+  COMMAND testTranslator -w -rose:ast:merge
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/mergeTest_01.C
+)
+set_tests_properties(nonsmoke_functional_CompileTests_mergeAST_tests_mergeTest_01.C
+  PROPERTIES LABELS MERGEASTTEST DEPENDS MERGEASTTEST_mergeTest_01.C)
 set(_mergeast_disabled_tests
   mergeTest_45.C
   mergeTest_49.C

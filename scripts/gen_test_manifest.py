@@ -1694,7 +1694,10 @@ def _resolve_script_token(token: str, base_dir: Path) -> Optional[Path]:
         path = (base_dir / path).resolve()
     else:
         path = path.resolve()
-    if not path.exists() or not path.is_file():
+    try:
+        if not path.exists() or not path.is_file():
+            return None
+    except OSError:
         return None
     if path.suffix in SCRIPT_TEST_EXTS:
         return path
@@ -2726,6 +2729,14 @@ def _comment_only_text(text: str) -> str:
         else:
             lines.append("")
     return "\n".join(lines)
+
+
+_CMAKE_BRACKET_RE = re.compile(r"^\[(=*)\[(.*)\]\1\]$", re.DOTALL)
+
+
+def _strip_cmake_bracket(value: str) -> str:
+    match = _CMAKE_BRACKET_RE.match(value)
+    return match.group(2) if match else value
 
 
 def _tokenize_cmake_args(value: str) -> list[str]:
@@ -4089,6 +4100,10 @@ def _parse_ctest_testfiles(build_dir: Path) -> dict[str, dict[str, object]]:
                 name, command, workdir = _parse_add_test_tokens(cmd.args)
                 if not name:
                     continue
+                name = _strip_cmake_bracket(name)
+                command = [_strip_cmake_bracket(token) for token in command]
+                if workdir:
+                    workdir = _strip_cmake_bracket(workdir)
                 tests.setdefault(name, {})
                 tests[name]["command"] = command
                 if workdir:
@@ -4098,6 +4113,10 @@ def _parse_ctest_testfiles(build_dir: Path) -> dict[str, dict[str, object]]:
                     tests[name].setdefault("labels", [])
                     for item in _normalize_list_items(props.get("LABELS", [])):
                         tests[name]["labels"].append(item)
+                    if props.get("DEPENDS"):
+                        tests[name].setdefault("depends", [])
+                        for item in _normalize_list_items(props.get("DEPENDS", [])):
+                            tests[name]["depends"].append(item)
                     if props.get("DISABLED") and _truthy_value(props["DISABLED"][0]):
                         tests[name]["disabled"] = True
                     if props.get("_BACKTRACE_TRIPLES"):
@@ -4112,13 +4131,17 @@ def _parse_ctest_testfiles(build_dir: Path) -> dict[str, dict[str, object]]:
                 )
                 if idx is None:
                     continue
-                test_names = cmd.args[:idx]
+                test_names = [_strip_cmake_bracket(token) for token in cmd.args[:idx]]
                 props = _parse_properties(cmd.args[idx + 1 :])
                 for test_name in test_names:
                     if test_name in tests:
                         tests[test_name].setdefault("labels", [])
                         for item in _normalize_list_items(props.get("LABELS", [])):
                             tests[test_name]["labels"].append(item)
+                        if props.get("DEPENDS"):
+                            tests[test_name].setdefault("depends", [])
+                            for item in _normalize_list_items(props.get("DEPENDS", [])):
+                                tests[test_name]["depends"].append(item)
                         if props.get("DISABLED") and _truthy_value(props["DISABLED"][0]):
                             tests[test_name]["disabled"] = True
                         if props.get("_BACKTRACE_TRIPLES"):
@@ -4131,15 +4154,7 @@ def _parse_ctest_testfiles(build_dir: Path) -> dict[str, dict[str, object]]:
 def _should_override_ctest_command(entry_cmd: list[str], data_cmd: list[str]) -> bool:
     if not data_cmd:
         return False
-    if not entry_cmd:
-        return True
-    if any(" " in tok for tok in data_cmd):
-        return True
-    if len(data_cmd) > len(entry_cmd):
-        return True
-    if entry_cmd and entry_cmd[0].startswith("-") and data_cmd and not data_cmd[0].startswith("-"):
-        return True
-    return False
+    return not entry_cmd or entry_cmd != data_cmd
 
 
 def _extract_cmake_tests_from_ctest(
@@ -4155,32 +4170,69 @@ def _extract_cmake_tests_from_ctest(
 
     entries: list[TestEntry] = []
     testfile_data = _parse_ctest_testfiles(build_dir)
-    current: dict[str, object] = {}
-    test_re = re.compile(r"^\s*Test\s+#\d+\s*:")
+    records: dict[int, dict[str, object]] = {}
+    current_num: Optional[int] = None
+    header_re = re.compile(r"^Test\s+#(\d+)\s*:\s*(.+)$")
+    prefix_re = re.compile(r"^\s*(\d+):\s*(.+)$")
     for line in output.splitlines():
-        stripped = re.sub(r"^\d+:\s*", "", line.strip())
-        if test_re.match(stripped):
-            if current.get("name"):
-                entries.append(_ctest_entry(repo_label, current, repo_root))
-            current = {}
-            raw_name = stripped.split(":", 1)[1].strip()
+        raw = line.rstrip()
+        num: Optional[int] = None
+        content = raw
+        prefix = prefix_re.match(raw)
+        if prefix:
+            num = int(prefix.group(1))
+            content = prefix.group(2)
+            current_num = num
+        stripped = content.strip()
+
+        header = header_re.match(stripped)
+        if header:
+            num = int(header.group(1))
+            raw_name = header.group(2).strip()
+            record = records.setdefault(num, {})
             if any(token in raw_name for token in ("(Disabled)", "(Not Run)", "(Skipped)")):
-                current["disabled"] = True
-            current["name"] = _strip_ctest_suffix(raw_name)
-        elif stripped.startswith("Test command:"):
+                record["disabled"] = True
+            record["name"] = _strip_ctest_suffix(raw_name)
+            current_num = num
+            continue
+
+        if stripped.startswith("Test command:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
             cmd = stripped.split("Test command:", 1)[1].strip()
-            current["command"] = _tokenize(cmd)
-        elif stripped.startswith("Working Directory:"):
+            records.setdefault(record_num, {})["command"] = _tokenize(cmd)
+            continue
+
+        if stripped.startswith("Working Directory:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
             workdir = stripped.split("Working Directory:", 1)[1].strip()
-            current["workdir"] = workdir
-        elif stripped.startswith("Labels:"):
+            records.setdefault(record_num, {})["workdir"] = workdir
+            continue
+
+        if stripped.startswith("Labels:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
             labels = stripped.split("Labels:", 1)[1].strip()
-            current["labels"] = [l for l in re.split(r"[;\s]+", labels) if l]
-        elif stripped.startswith("Disabled:"):
+            records.setdefault(record_num, {})["labels"] = [
+                label for label in re.split(r"[;\s]+", labels) if label
+            ]
+            continue
+
+        if stripped.startswith("Disabled:"):
+            record_num = num if num is not None else current_num
+            if record_num is None:
+                continue
             value = stripped.split("Disabled:", 1)[1].strip()
-            current["disabled"] = value.lower() == "true"
-    if current.get("name"):
-        entries.append(_ctest_entry(repo_label, current, repo_root))
+            records.setdefault(record_num, {})["disabled"] = value.lower() == "true"
+            continue
+
+    for record in (records[key] for key in sorted(records)):
+        if record.get("name"):
+            entries.append(_ctest_entry(repo_label, record, repo_root))
     filtered: list[TestEntry] = []
     for entry in entries:
         data = testfile_data.get(entry.name)
@@ -4196,6 +4248,8 @@ def _extract_cmake_tests_from_ctest(
             entry.workdir = entry.workdir or data.get("workdir")
             if data.get("labels"):
                 entry.labels = sorted(set(entry.labels + data.get("labels", [])))
+            if data.get("depends"):
+                entry.depends = sorted(set(entry.depends + data.get("depends", [])))
             if data.get("disabled"):
                 entry.status = "disabled"
                 entry.disable_reason = entry.disable_reason or "ctest:disabled"
@@ -5083,6 +5137,24 @@ def _apply_unparse_to_string_failing(
     entry.disable_reason = entry.disable_reason or "autotools:TESTCODE_CURRENTLY_FAILING"
 
 
+def _command_input_path(entry: TestEntry) -> Optional[str]:
+    if not entry.command:
+        return None
+    for idx, token in enumerate(entry.command):
+        if token == "-c" and idx + 1 < len(entry.command):
+            return entry.command[idx + 1]
+    for token in reversed(entry.command):
+        path = Path(token)
+        if path.suffix in TEST_FILE_EXTS:
+            return token
+    return None
+
+
+def _command_input_name(entry: TestEntry) -> Optional[str]:
+    input_path = _command_input_path(entry)
+    return Path(input_path).name if input_path else None
+
+
 def _explicit_name_mapping(
     entry: TestEntry,
     repo_roots: dict[str, Path],
@@ -5097,6 +5169,62 @@ def _explicit_name_mapping(
         return None
     origin_path = str(entry.origin[0].get("path", ""))
     name = entry.name
+
+    if (
+        origin_path.endswith("CMakeLists.txt")
+        and "tests/nonsmoke/functional/CompileTests/" in origin_path
+        and any(
+            origin.get("repo") == "rose" and origin.get("buildsys") == "cmake"
+            for origin in entry.origin
+        )
+    ):
+        label = None
+        for candidate in entry.labels:
+            if candidate in _GENERIC_LABELS:
+                continue
+            if name.startswith(candidate + "_"):
+                label = candidate
+                break
+        if not label and "CompileTests/ElsaTestCases/" in origin_path:
+            label = "ELSATEST"
+        if label:
+            label_map = {
+                "CXXTEST": "Cxx_tests",
+                "CTEST": "C_tests",
+            }
+            label = label_map.get(label, label)
+            input_signature = _input_signature(entry, repo_roots)
+            input_name = None
+            input_path = None
+            if input_signature and "inputs=" in input_signature:
+                input_part = input_signature.split("inputs=", 1)[1]
+                input_path = input_part.split()[0]
+                input_name = Path(input_path).name
+            if not input_name:
+                input_path = _command_input_path(entry)
+                if input_path:
+                    input_name = Path(input_path).name
+            if input_name:
+                if "CompileTests/ElsaTestCases/" in origin_path or (
+                    input_path and "ElsaTestCases" in input_path
+                ):
+                    if input_path and "notCompilable" in input_path:
+                        label = "ELSATEST"
+                    elif input_path and "/std/" in input_path:
+                        label = "ELSATEST_std"
+                    elif input_path and "/gnu/" in input_path:
+                        label = "ELSATEST_gnu"
+                    elif input_path and "/kandr/" in input_path:
+                        label = "ELSATEST_kandr"
+                    elif input_path and "/ctests/" in input_path:
+                        label = "ELSATEST"
+                if label == "Cxx_tests" and input_name in cxx_failing:
+                    label = "Cxx_tests_failing"
+                if label == "C_tests" and input_name in c_tests_failing:
+                    label = "C_tests_failing"
+                mapped = f"{label}_{_compile_test_key(input_name)}"
+                if mapped != name:
+                    return mapped
 
     if origin_path.endswith("roseTests/astInterfaceTests/Makefile.am"):
         if "inputMovePreprocessingInfo" in name:
@@ -5475,6 +5603,68 @@ def _explicit_name_mapping(
         if name.startswith(prefix):
             suffix = name[len(prefix):]
             return f"CXXCODE_{_compile_test_key(suffix)}"
+
+    if "CompileTests/ElsaTestCases/" in origin_path and origin_path.endswith("Makefile.am"):
+        input_path = _command_input_path(entry)
+        input_name = None
+        if input_path:
+            normalized = input_path.replace("\\", "/")
+            if "notCompilable" not in normalized:
+                for marker in (
+                    "/ElsaTestCases/gnu/",
+                    "/ElsaTestCases/std/",
+                    "/ElsaTestCases/kandr/",
+                ):
+                    if marker in normalized:
+                        input_name = normalized.split(marker, 1)[1]
+                        break
+            if not input_name:
+                input_name = Path(input_path).name
+        if not input_name:
+            prefix = "nonsmoke_functional_CompileTests_ElsaTestCases_"
+            input_name = name[len(prefix):] if name.startswith(prefix) else name
+        if input_name and input_name.endswith((".c", ".C", ".cc", ".cpp", ".cxx")):
+            label = "ELSATEST"
+            if origin_path.endswith("CompileTests/ElsaTestCases/Makefile.am"):
+                failing = False
+                for origin in entry.origin:
+                    notes = origin.get("notes", "")
+                    if isinstance(notes, str) and "START_OF_FAILED_TESTS_USING_ROSE" in notes:
+                        failing = True
+                        break
+                label = "ElsaTestCases_failing" if failing else "ELSATEST"
+            else:
+                if input_path and "notCompilable" in input_path:
+                    label = "ELSATEST"
+                elif input_path and "/std/" in input_path:
+                    label = "ELSATEST_std"
+                elif input_path and "/gnu/" in input_path:
+                    label = "ELSATEST_gnu"
+                elif input_path and "/kandr/" in input_path:
+                    label = "ELSATEST_kandr"
+            return f"{label}_{_compile_test_key(input_name)}"
+
+    if "gfortranTestSuite/" in origin_path and origin_path.endswith("Makefile.am"):
+        input_path = _command_input_path(entry)
+        if input_path:
+            normalized = input_path.replace("\\", "/")
+            for marker in (
+                "/gfortranTestSuite/gfortran.dg/",
+                "/gfortranTestSuite/gfortran.fortran-torture/",
+            ):
+                if marker in normalized:
+                    rel = normalized.split(marker, 1)[1]
+                    if rel:
+                        return f"GFORTRANSUITE_{rel}"
+            origin_dir = Path(origin_path).parent
+            try:
+                rel = Path(input_path).resolve().relative_to(origin_dir.resolve())
+                return f"GFORTRANSUITE_{rel.as_posix()}"
+            except ValueError:
+                pass
+        input_name = _command_input_name(entry)
+        if input_name:
+            return f"GFORTRANSUITE_{input_name}"
 
     if origin_path.endswith("CompileTests/C_tests/Makefile.am"):
         if name == "multiple_file_test_01":
@@ -6086,9 +6276,12 @@ def _merge_entries(entries: list[TestEntry], repo_roots: dict[str, Path]) -> lis
                 combined.depends.extend(item.depends)
         if _is_make_target_entry(combined):
             preferred_depends: list[str] = []
-            for item in sorted(group, key=lambda entry: entry.priority):
-                if item.depends and _has_buildsys_origin(item, "cmake"):
-                    preferred_depends = list(item.depends)
+            for buildsys in ("ctest", "cmake"):
+                for item in sorted(group, key=lambda entry: entry.priority):
+                    if item.depends and _has_buildsys_origin(item, buildsys):
+                        preferred_depends = list(item.depends)
+                        break
+                if preferred_depends:
                     break
             if not preferred_depends:
                 for item in sorted(group, key=lambda entry: entry.priority):
