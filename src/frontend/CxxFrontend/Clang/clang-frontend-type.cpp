@@ -2133,7 +2133,13 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
           llvm::dyn_cast<clang::TemplateTypeParmType>(clang_type)) {
     std::string name_str;
     if (const clang::TemplateTypeParmDecl *decl = ttp->getDecl()) {
-      name_str = decl->getNameAsString();
+      if (decl->getDeclName().isIdentifier()) {
+        name_str = decl->getNameAsString();
+      }
+    }
+    if (name_str.empty()) {
+      name_str = "template_type_param_" + std::to_string(ttp->getDepth()) +
+                 "_" + std::to_string(ttp->getIndex());
     }
     ROSE_ASSERT(!name_str.empty());
 
@@ -2449,11 +2455,12 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   // ROOT CAUSE FIX: Insert symbol into the same scope as the declaration
   // (inst_scope) not getGlobalScope(). This fixes ROSETTA warnings:
   // "SgScopeStatement::insert_symbol(): class_declaration->get_scope() != this"
-  // The declaration's scope (set on line 1322) must match the scope where we
-  // insert the symbol. Use full mangled name for symbol table to avoid
-  // conflicts
-  SgClassSymbol *class_symbol = new SgClassSymbol(inst_decl);
-  inst_scope->insert_symbol(SgName(inst_name_full), class_symbol);
+  // Use the declaration name so symbol lookups/removals stay consistent.
+  SgName symbol_name = inst_decl->get_name();
+  if (!inst_scope->symbol_exists(symbol_name)) {
+    SgClassSymbol *class_symbol = new SgClassSymbol(inst_decl);
+    inst_scope->insert_symbol(symbol_name, class_symbol);
+  }
 
   // Cache it with full name
   p_template_inst_cache[inst_name_full] = inst_decl;

@@ -741,6 +741,19 @@ NameQualificationTraversal::associatedDeclaration(SgScopeStatement* scope)
                break;
              }
 
+       // DQ (9/20/2025): Added support for template function definitions.
+          case V_SgTemplateFunctionDefinition:
+             {
+               SgTemplateFunctionDefinition* definition = isSgTemplateFunctionDefinition(scope);
+               ASSERT_not_null(definition);
+
+               SgTemplateFunctionDeclaration* declaration = isSgTemplateFunctionDeclaration(definition->get_declaration());
+               ASSERT_not_null(declaration);
+
+               return_declaration = declaration;
+               break;
+             }
+
        // DQ (7/19/2017): Adding support for new SgDeclarationScope, though it might be that we want the parent defining or non-defining declaration.
           case V_SgDeclarationScope:
 

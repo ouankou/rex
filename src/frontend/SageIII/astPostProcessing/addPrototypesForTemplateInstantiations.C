@@ -70,8 +70,8 @@ CollectTemplateInstantiationsMarkedForOutput::visit ( SgNode* node )
 #if 0
                printf ("Found defining function declaration for template instantiation: definingFunctionDeclaration = %p = %s \n",definingFunctionDeclaration,definingFunctionDeclaration->get_name().str());
 #endif
-               ROSE_ASSERT(definingTemplateInstantiationSet.find(definingFunctionDeclaration) == definingTemplateInstantiationSet.end());
-
+            // Declarations can be reachable multiple times (e.g., re-entrant
+            // namespaces). The set handles de-duplication.
                definingTemplateInstantiationSet.insert(definingFunctionDeclaration);
              }
         }
@@ -164,5 +164,4 @@ AddPrototypesForTemplateInstantiations::evaluateInheritedAttribute (
 
      return inheritedAttribute;
    }
-
 

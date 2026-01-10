@@ -5439,7 +5439,36 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                      qualifier->getAsRecordDecl()) {
         if (SgClassDeclaration *classDecl =
                 isSgClassDeclaration(Traverse(cxxRecordDecl))) {
+          // Resolve the class definition for qualified lookup, translating
+          // on-demand if needed.
           SgClassDefinition *classDef = classDecl->get_definition();
+          if (classDef == NULL) {
+            if (SgClassDeclaration *def_decl = isSgClassDeclaration(
+                    classDecl->get_definingDeclaration())) {
+              classDef = def_decl->get_definition();
+            }
+          }
+          if (classDef == NULL) {
+            if (clang::CXXRecordDecl *definitionDecl =
+                    cxxRecordDecl->getDefinition()) {
+              SgNode *def_node = TraverseOnDemand(definitionDecl);
+              if (SgClassDeclaration *def_decl =
+                      isSgClassDeclaration(def_node)) {
+                classDef = def_decl->get_definition();
+                if (classDef == NULL) {
+                  if (SgClassDeclaration *defining_decl =
+                          isSgClassDeclaration(
+                              def_decl->get_definingDeclaration())) {
+                    classDef = defining_decl->get_definition();
+                  }
+                }
+              } else if (SgClassDefinition *def_def =
+                             isSgClassDefinition(def_node)) {
+                classDef = def_def;
+              }
+            }
+          }
+          ROSE_ASSERT(classDef != NULL);
           SageBuilder::pushScopeStack(classDef);
           sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
           SageBuilder::popScopeStack();
@@ -6808,12 +6837,15 @@ bool ClangToSageTranslator::VisitFloatingLiteral(
         floating_literal->getValue().convertToDouble());
   } else if (precision == 64) {
     // 80-bit long double
-    if (!spelling.empty()) {
-      *node = SageBuilder::buildLongDoubleVal(std::stold(spelling));
-    } else {
-      *node = SageBuilder::buildLongDoubleVal(
-          floating_literal->getValue().convertToDouble());
-    }
+    // Use APFloat conversion to avoid std::stold throwing on extreme literals.
+#if defined(HAS_IEE754_FLOAT128)
+    long double value =
+        static_cast<long double>(floating_literal->getValue().convertToQuad());
+#else
+    long double value = static_cast<long double>(
+        floating_literal->getValue().convertToDouble());
+#endif
+    *node = SageBuilder::buildLongDoubleVal(value);
   } else if (precision == 113) {
     // 128-bit long double - use double as approximation
     *node = SageBuilder::buildLongDoubleVal(
