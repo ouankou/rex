@@ -6567,7 +6567,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
   applySourceRange(expr_list_exp,
                    designated_init_expr->getDesignatorsSourceRange());
   designated_init = new SgDesignatedInitializer(expr_list_exp, base_init);
-  expr_list_exp->set_parent(base_init);
+  expr_list_exp->set_parent(designated_init);
   base_init->set_parent(designated_init);
 
   *node = designated_init;
