@@ -3878,20 +3878,18 @@ SageInterface::isOverloaded ( SgFunctionDeclaration* functionDeclaration )
 bool
 SageInterface::isOverloadedArrowOperator(SgExpression* expr)
    {
-     SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr);
-     SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr);
+     SgFunctionSymbol* func_symbol = nullptr;
 
-     if (func_ref == nullptr && mfunc_ref == nullptr) return false;
+     if (SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr))
+        func_symbol = func_ref->get_symbol();
+     else if (SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr))
+        func_symbol = mfunc_ref->get_symbol();
 
-     std::string func_name;
-     if (func_ref != nullptr)
-        func_name = func_ref->get_symbol()->get_name().str();
-     else
-        func_name = mfunc_ref->get_symbol()->get_name().str();
+     if (func_symbol == nullptr)
+        return false;
 
-     if (func_name == "operator->" || func_name == "operator->*")
-        return true;
-     return false;
+     const std::string func_name = func_symbol->get_name().str();
+     return (func_name == "operator->" || func_name == "operator->*");
    }
 
 bool
@@ -3911,7 +3909,8 @@ SageInterface::isOverloadedArrowOperatorChain(SgExpression* expr)
      if (binaryOperator == nullptr)
         return false;
 
-     if (isSgDotExp(binaryOperator) == nullptr && isSgArrowExp(binaryOperator) == nullptr)
+     const bool isDotOrArrow = (isSgDotExp(binaryOperator) != nullptr) || (isSgArrowExp(binaryOperator) != nullptr);
+     if (!isDotOrArrow)
         return false;
 
      return isOverloadedArrowOperator(binaryOperator->get_rhs_operand());
