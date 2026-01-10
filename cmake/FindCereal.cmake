@@ -35,8 +35,12 @@ macro(find_cereal)
       set(CEREAL_ROOT "")
 
     else()
-      # Assume Cereal is present at the specified installation prefix
-      set(CEREAL_FOUND TRUE)
+      # Require Cereal to be present at the specified installation prefix
+      if(EXISTS "${CEREAL_ROOT}/include/cereal/cereal.hpp")
+        set(CEREAL_FOUND TRUE)
+      else()
+        message(FATAL_ERROR "Cereal header 'cereal/cereal.hpp' not found in specified CEREAL_ROOT: ${CEREAL_ROOT}/include")
+      endif()
     endif()
   endif()
 
