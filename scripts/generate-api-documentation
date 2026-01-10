@@ -189,7 +189,7 @@ import sys
 
 try:
     import yaml
-except Exception:
+except ImportError:
     print("generate-api-documentation: error: PyYAML is required to parse mrdocs.yml", file=sys.stderr)
     raise SystemExit(1)
 
