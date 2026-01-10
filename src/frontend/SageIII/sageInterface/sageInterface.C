@@ -3883,7 +3883,7 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
 
      if (!func_ref && !mfunc_ref) return false;
 
-     string func_name;
+     std::string func_name;
      if (func_ref != NULL)
           func_name = func_ref->get_symbol()->get_name().str();
        else

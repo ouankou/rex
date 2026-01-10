@@ -6,21 +6,21 @@ using namespace std;
 
 namespace {
 bool isUnaryOperatorArrowSubtree(SgExpression* expr) {
-    if (expr == NULL) {
+    if (expr == nullptr) {
         return false;
     }
     if (SgPointerDerefExp* deref = isSgPointerDerefExp(expr)) {
         return isUnaryOperatorArrowSubtree(deref->get_operand());
     }
     SgFunctionCallExp* functionCall = isSgFunctionCallExp(expr);
-    if (functionCall == NULL) {
+    if (functionCall == nullptr) {
         return false;
     }
     SgBinaryOp* binaryOperator = isSgBinaryOp(functionCall->get_function());
-    if (binaryOperator == NULL) {
+    if (binaryOperator == nullptr) {
         return false;
     }
-    if (isSgDotExp(binaryOperator) == NULL && isSgArrowExp(binaryOperator) == NULL) {
+    if (isSgDotExp(binaryOperator) == nullptr && isSgArrowExp(binaryOperator) == nullptr) {
         return false;
     }
     return SageInterface::isOverloadedArrowOperator(binaryOperator->get_rhs_operand());
