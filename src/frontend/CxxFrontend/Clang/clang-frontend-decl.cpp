@@ -5558,9 +5558,14 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
           class_symbol = NULL;
         }
         instantiationDecl->set_name(name_with_template_args);
-        if (class_symbol != NULL &&
-            !decl_scope->symbol_exists(name_with_template_args)) {
-          decl_scope->insert_symbol(name_with_template_args, class_symbol);
+        if (class_symbol != NULL) {
+          SgClassSymbol *existing_sym =
+              decl_scope->lookup_class_symbol(name_with_template_args);
+          if (existing_sym != NULL) {
+            ROSE_ASSERT(existing_sym->get_declaration() == instantiationDecl);
+          } else {
+            decl_scope->insert_symbol(name_with_template_args, class_symbol);
+          }
         }
       } else {
         instantiationDecl->set_name(name_with_template_args);

@@ -786,6 +786,10 @@ BEGIN NORMAL;
           preproc_line_num += number_of_lines;
           preproc_column_num = getColumnNumberOfEndOfString(yytext);
         }
+     else
+        {
+          preproc_column_num += strlen(yytext);
+        }
 
      curr_brace_depth++; 
      pushbracestack(curr_brace_depth);
