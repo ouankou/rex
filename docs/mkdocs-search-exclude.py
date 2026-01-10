@@ -1,6 +1,6 @@
 import re
 
-_PRE_TAG_RE = re.compile(r"<pre(?![^>]*\\bdata-search-exclude\\b)([^>]*)>", re.IGNORECASE)
+_PRE_TAG_RE = re.compile(r"<pre(?![^>]*\bdata-search-exclude\b)([^>]*)>", re.IGNORECASE)
 
 
 def on_page_content(html, page, config, files):
