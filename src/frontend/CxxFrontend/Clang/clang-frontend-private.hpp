@@ -496,6 +496,11 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             clang::TemplateParameterList* param_list,
             SgDeclarationStatement* owning_template);
 
+        SgTemplateClassDeclaration *translateClassTemplateDecl(
+            clang::ClassTemplateDecl *class_template_decl,
+            SgScopeStatement *override_symbol_scope,
+            SgScopeStatement *override_lexical_parent);
+
         bool
         translateFunctionDeclCommon(clang::FunctionDecl *function_decl,
                                     clang::FunctionTemplateDecl *template_decl,

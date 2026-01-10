@@ -75,6 +75,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     bool enable_openmp_simd = false;
     bool disable_openmp_via_flag = false;
     bool continue_on_error = false;
+    enum class ExceptionMode { Unspecified, Enabled, Disabled };
+    ExceptionMode exception_mode = ExceptionMode::Unspecified;
 
     for (int i = 0; i < argc; i++) {
         std::string current_arg(argv[i]);
@@ -165,6 +167,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
           enable_openmp_simd = true;
           enable_openmp =
               true; // SIMD is a subset of OpenMP, enable full pragma capture
+        } else if (current_arg == "-fexceptions" ||
+                   current_arg == "-fcxx-exceptions") {
+          exception_mode = ExceptionMode::Enabled;
+          passthrough_args.push_back(current_arg);
+        } else if (current_arg == "-fno-exceptions" ||
+                   current_arg == "-fno-cxx-exceptions") {
+          exception_mode = ExceptionMode::Disabled;
+          passthrough_args.push_back(current_arg);
         } else if (current_arg == "-rex:clang:continue-on-error") {
           continue_on_error = true;
         } else if (!current_arg.empty() && current_arg[0] == '-') {
@@ -504,6 +514,17 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     if (language == ClangToSageTranslator::CPLUSPLUS) {
         ROSE_ASSERT(lang_opts.CPlusPlus && "Expected C++ mode after setting language defaults");
         lang_opts.Bool = 1;
+    }
+
+    if (language == ClangToSageTranslator::CPLUSPLUS ||
+        language == ClangToSageTranslator::CUDA) {
+        if (exception_mode == ExceptionMode::Disabled) {
+            lang_opts.CXXExceptions = 0;
+            lang_opts.Exceptions = 0;
+        } else {
+            lang_opts.CXXExceptions = 1;
+            lang_opts.Exceptions = 1;
+        }
     }
 
     if (enable_cuda) {
