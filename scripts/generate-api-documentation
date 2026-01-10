@@ -156,10 +156,12 @@ output-dir-from-config() {
     local value
     value="$(sed -n 's/^[[:space:]]*output:[[:space:]]*//p' "$config" | head -n 1)"
     value="${value%%#*}"
-    value="${value%\"}"
-    value="${value#\"}"
-    value="${value%\'}"
-    value="${value#\'}"
+    value="$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [[ "${value:0:1}" == '"' && "${value: -1}" == '"' ]]; then
+        value="${value:1:-1}"
+    elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
+        value="${value:1:-1}"
+    fi
     if [ -z "$value" ]; then
         return 0
     fi
@@ -979,10 +981,15 @@ check-prerequisites
 CONFIG="$(config-file "${1-$DEFAULT_CONFIG}")"
 output_dir="$(output-dir-from-config "$CONFIG")"
 if [ -n "$output_dir" ] && [ -d "$output_dir" ]; then
-    if [ "$output_dir" = "/" ]; then
+    rose_root="$(cd "$(rose-source)" && pwd -P)"
+    resolved_output_dir="$(cd "$output_dir" && pwd -P)" || die "unable to resolve output directory: $output_dir"
+    if [ "$resolved_output_dir" != "$rose_root" ] && [[ "$resolved_output_dir" != "$rose_root/"* ]]; then
+        die "refusing to remove output directory outside project root: $output_dir"
+    fi
+    if [ "$resolved_output_dir" = "/" ]; then
         die "refusing to remove output directory at /"
     fi
-    rm -rf "$output_dir"
+    rm -rf "$resolved_output_dir"
 fi
 
 compilation_db="$(compilation-db-from-config "$CONFIG")"
