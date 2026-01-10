@@ -2720,9 +2720,10 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
 
   // DQ (10/16/2016): Fix for test2016_84.C and test2016_85.C (simpler code).
      bool uses_operator_syntax = false;
+     SgFunctionCallExp* functionCallExp = NULL;
      if (possibleFunctionCall != NULL)
         {
-          SgFunctionCallExp* functionCallExp = isSgFunctionCallExp(possibleFunctionCall);
+          functionCallExp = isSgFunctionCallExp(possibleFunctionCall);
           if (functionCallExp != NULL)
              {
                uses_operator_syntax  = functionCallExp->get_uses_operator_syntax();
@@ -3780,6 +3781,71 @@ Unparse_ExprStmt::unparseFuncCall(SgExpression* expr, SgUnparse_Info& info)
   // required in places even though we have historically defaulted to the generation of the
   // operator syntax (e.g. "x+y"), see test2013_100.C for an example of where this is required.
      bool uses_operator_syntax = func_call->get_uses_operator_syntax();
+
+     class ScopedOperatorSyntaxSetting
+        {
+          public:
+               ScopedOperatorSyntaxSetting(SgFunctionCallExp* call, bool enable, bool new_value)
+                    : call_(call), old_value_(call->get_uses_operator_syntax()), enabled_(enable)
+                       {
+                         if (enabled_)
+                            {
+                              call_->set_uses_operator_syntax(new_value);
+                            }
+                       }
+               ~ScopedOperatorSyntaxSetting()
+                  {
+                    if (enabled_)
+                       {
+                         call_->set_uses_operator_syntax(old_value_);
+                       }
+                  }
+
+          private:
+               SgFunctionCallExp* call_;
+               bool old_value_;
+               bool enabled_;
+        };
+
+  // Operator-> calls require explicit syntax unless they are the direct base of an arrow expression.
+     bool force_call_syntax = false;
+     if (uses_operator_syntax == true)
+        {
+          SgBinaryOp* binary_op = isSgBinaryOp(func_call->get_function());
+          if (binary_op != NULL &&
+              ((isSgDotExp(binary_op) != NULL) || (isSgArrowExp(binary_op) != NULL)))
+             {
+               SgExpression* rhs = binary_op->get_rhs_operand();
+               SgFunctionSymbol* func_symbol = NULL;
+               if (SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(rhs))
+                  {
+                    func_symbol = mfunc_ref->get_symbol();
+                  }
+               else if (SgFunctionRefExp* func_ref = isSgFunctionRefExp(rhs))
+                  {
+                    func_symbol = func_ref->get_symbol();
+                  }
+
+               if (func_symbol != NULL)
+                  {
+                    const std::string func_name = func_symbol->get_name().str();
+                    if (func_name == "operator->")
+                       {
+                         SgArrowExp* arrow_parent = isSgArrowExp(func_call->get_parent());
+                         if (arrow_parent == NULL || arrow_parent->get_lhs_operand() != func_call)
+                            {
+                              force_call_syntax = true;
+                            }
+                       }
+                  }
+             }
+        }
+
+     ScopedOperatorSyntaxSetting operator_syntax_guard(func_call, force_call_syntax, false);
+     if (force_call_syntax == true)
+        {
+          uses_operator_syntax = false;
+        }
 
 #if DEBUG_FUNCTION_CALL
      printf ("In Unparse_ExprStmt::unparseFuncCall(): (before test for conversion operator) uses_operator_syntax = %s \n",uses_operator_syntax == true ? "true" : "false");
