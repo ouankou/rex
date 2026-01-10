@@ -46,39 +46,26 @@ def parse_ctest_output_records(
             current_num = num
             continue
 
-        if stripped.startswith("Test command:"):
+        if stripped.startswith(
+            ("Test command:", "Working Directory:", "Labels:", "Disabled:")
+        ):
             record_num = num if num is not None else current_num
             if record_num is None:
                 continue
-            cmd = stripped.split("Test command:", 1)[1].strip()
-            records.setdefault(record_num, {})["command"] = tokenize(cmd)
-            continue
-
-        if stripped.startswith("Working Directory:"):
-            record_num = num if num is not None else current_num
-            if record_num is None:
-                continue
-            records.setdefault(record_num, {})["workdir"] = stripped.split(
-                "Working Directory:", 1
-            )[1].strip()
-            continue
-
-        if stripped.startswith("Labels:"):
-            record_num = num if num is not None else current_num
-            if record_num is None:
-                continue
-            labels = stripped.split("Labels:", 1)[1].strip()
-            records.setdefault(record_num, {})["labels"] = [
-                label for label in re.split(r"[;\s]+", labels) if label
-            ]
-            continue
-
-        if stripped.startswith("Disabled:"):
-            record_num = num if num is not None else current_num
-            if record_num is None:
-                continue
-            value = stripped.split("Disabled:", 1)[1].strip()
-            records.setdefault(record_num, {})["disabled"] = value.lower() == "true"
+            record = records.setdefault(record_num, {})
+            if stripped.startswith("Test command:"):
+                cmd = stripped.split("Test command:", 1)[1].strip()
+                record["command"] = tokenize(cmd)
+            elif stripped.startswith("Working Directory:"):
+                record["workdir"] = stripped.split("Working Directory:", 1)[1].strip()
+            elif stripped.startswith("Labels:"):
+                labels = stripped.split("Labels:", 1)[1].strip()
+                record["labels"] = [
+                    label for label in re.split(r"[;\s]+", labels) if label
+                ]
+            elif stripped.startswith("Disabled:"):
+                value = stripped.split("Disabled:", 1)[1].strip()
+                record["disabled"] = value.lower() == "true"
             continue
 
     ordered: list[dict[str, object]] = []

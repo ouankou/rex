@@ -5097,6 +5097,81 @@ def _command_input_name(entry: TestEntry) -> Optional[str]:
     return Path(input_path).name if input_path else None
 
 
+def _map_cmake_compile_tests(
+    entry: TestEntry,
+    repo_roots: dict[str, Path],
+    cxx_failing: set[str],
+    c_tests_failing: set[str],
+    origin_path: str,
+    name: str,
+) -> Optional[str]:
+    if (
+        not origin_path.endswith("CMakeLists.txt")
+        or "tests/nonsmoke/functional/CompileTests/" not in origin_path
+    ):
+        return None
+    if not any(
+        origin.get("repo") == "rose" and origin.get("buildsys") == "cmake"
+        for origin in entry.origin
+    ):
+        return None
+
+    label = None
+    for candidate in entry.labels:
+        if candidate in _GENERIC_LABELS:
+            continue
+        if name.startswith(candidate + "_"):
+            label = candidate
+            break
+    if not label and "CompileTests/ElsaTestCases/" in origin_path:
+        label = "ELSATEST"
+    if not label:
+        return None
+
+    label_map = {
+        "CXXTEST": "Cxx_tests",
+        "CTEST": "C_tests",
+    }
+    label = label_map.get(label, label)
+    input_signature = _input_signature(entry, repo_roots)
+    input_name = None
+    input_path = None
+    if input_signature and "inputs=" in input_signature:
+        input_part = input_signature.split("inputs=", 1)[1]
+        input_tokens = input_part.split()
+        if input_tokens:
+            input_path = input_tokens[0]
+            input_name = Path(input_path).name
+    if not input_name:
+        input_path = _command_input_path(entry)
+        if input_path:
+            input_name = Path(input_path).name
+    if not input_name:
+        return None
+
+    if "CompileTests/ElsaTestCases/" in origin_path or (
+        input_path and "ElsaTestCases" in input_path
+    ):
+        if input_path and "notCompilable" in input_path:
+            label = "ELSATEST"
+        elif input_path and "/std/" in input_path:
+            label = "ELSATEST_std"
+        elif input_path and "/gnu/" in input_path:
+            label = "ELSATEST_gnu"
+        elif input_path and "/kandr/" in input_path:
+            label = "ELSATEST_kandr"
+        elif input_path and "/ctests/" in input_path:
+            label = "ELSATEST"
+    if label == "Cxx_tests" and input_name in cxx_failing:
+        label = "Cxx_tests_failing"
+    if label == "C_tests" and input_name in c_tests_failing:
+        label = "C_tests_failing"
+    mapped = f"{label}_{_compile_test_key(input_name)}"
+    if mapped != name:
+        return mapped
+    return None
+
+
 def _explicit_name_mapping(
     entry: TestEntry,
     repo_roots: dict[str, Path],
@@ -5112,63 +5187,16 @@ def _explicit_name_mapping(
     origin_path = str(entry.origin[0].get("path", ""))
     name = entry.name
 
-    if (
-        origin_path.endswith("CMakeLists.txt")
-        and "tests/nonsmoke/functional/CompileTests/" in origin_path
-        and any(
-            origin.get("repo") == "rose" and origin.get("buildsys") == "cmake"
-            for origin in entry.origin
-        )
-    ):
-        label = None
-        for candidate in entry.labels:
-            if candidate in _GENERIC_LABELS:
-                continue
-            if name.startswith(candidate + "_"):
-                label = candidate
-                break
-        if not label and "CompileTests/ElsaTestCases/" in origin_path:
-            label = "ELSATEST"
-        if label:
-            label_map = {
-                "CXXTEST": "Cxx_tests",
-                "CTEST": "C_tests",
-            }
-            label = label_map.get(label, label)
-            input_signature = _input_signature(entry, repo_roots)
-            input_name = None
-            input_path = None
-            if input_signature and "inputs=" in input_signature:
-                input_part = input_signature.split("inputs=", 1)[1]
-                input_tokens = input_part.split()
-                if input_tokens:
-                    input_path = input_tokens[0]
-                    input_name = Path(input_path).name
-            if not input_name:
-                input_path = _command_input_path(entry)
-                if input_path:
-                    input_name = Path(input_path).name
-            if input_name:
-                if "CompileTests/ElsaTestCases/" in origin_path or (
-                    input_path and "ElsaTestCases" in input_path
-                ):
-                    if input_path and "notCompilable" in input_path:
-                        label = "ELSATEST"
-                    elif input_path and "/std/" in input_path:
-                        label = "ELSATEST_std"
-                    elif input_path and "/gnu/" in input_path:
-                        label = "ELSATEST_gnu"
-                    elif input_path and "/kandr/" in input_path:
-                        label = "ELSATEST_kandr"
-                    elif input_path and "/ctests/" in input_path:
-                        label = "ELSATEST"
-                if label == "Cxx_tests" and input_name in cxx_failing:
-                    label = "Cxx_tests_failing"
-                if label == "C_tests" and input_name in c_tests_failing:
-                    label = "C_tests_failing"
-                mapped = f"{label}_{_compile_test_key(input_name)}"
-                if mapped != name:
-                    return mapped
+    mapped = _map_cmake_compile_tests(
+        entry,
+        repo_roots,
+        cxx_failing,
+        c_tests_failing,
+        origin_path,
+        name,
+    )
+    if mapped:
+        return mapped
 
     if origin_path.endswith("roseTests/astInterfaceTests/Makefile.am"):
         if "inputMovePreprocessingInfo" in name:
