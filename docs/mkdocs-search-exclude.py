@@ -17,7 +17,7 @@ def on_files(files, config):
         if not is_doc and not src_path.endswith((".md", ".adoc")):
             continue
         url = getattr(entry, "url", None)
-        if not url:
+        if url is None:
             continue
         urls.append(url)
 
@@ -80,7 +80,10 @@ def on_post_build(config):
             temp_path.replace(path)
         except Exception:
             if temp_path.exists():
-                temp_path.unlink()
+                try:
+                    temp_path.unlink()
+                except OSError:
+                    pass
             raise
 
 
