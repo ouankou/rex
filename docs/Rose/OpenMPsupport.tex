@@ -169,7 +169,7 @@ XOMP is a thin layer of runtime which is designed to accommodate minor differenc
 The motivation is to enable ROSE to support more than one runtime libraries, with minimum changes at the XOMP layer if all possible. 
 More details about the design and implementation of XOMP can be found in a paper~\cite{LiaoXOMP2010}.
 
-If the path to the underlying runtime, such as GOMP (preferably the one shipped with GCC 4.3 or above for OpenMP task support), is specified (using a configure option \textit{--with-gomp\_omp\_runtime\_library=/nfs/apps/gcc/4.4.1/lib64/}),
+If the path to the underlying runtime, such as GOMP (preferably the one shipped with GCC 4.3 or above for OpenMP task support), is specified (using a CMake option \textit{-DWITH-GOMP-OMP-RUNTIME-LIBRARY=/nfs/apps/gcc/4.4.1/lib64/}),
 the generated multithreaded code can be automatically linked to the specified library to generate final executables after compilation. 
 
 The major source file of the OpenMP translation is \textit{src/midend/ompLowering/omp\_lowering.cpp}. 

@@ -75,23 +75,29 @@
 /******************************************************************************************************************************
  *                            THIS CHECK SHOULD BE THE LAST THING IN THIS FILE!
  ******************************************************************************************************************************
- * 
- * Make sure that autoconf macros are not defined in user code.  This test is here because CPP symbols defining the presence or
- * absence of certain features detected by GNU autoconf (or cmake's cmake/ConfigureChecks.cmake) pollute the global name
- * space. This makes it impossible for a user to include both ROSE's configuration results in conjunction with the
- * configuration results of any other package.
  *
- * If a ROSE public header file truly needs to know a configuration result, then modify scripts/publicConfiguration.pl
- * to include the name of the symbol you need (e.g., HAVE_PTHREAD_H).   Then config.status (which is run as part of the
- * configuration process) will create a file named "rosePublicConfig.h" with properly scoped CPP symbols (e.g.,
+ * Make sure that configure-time macros are not defined in user code. This test
+ *is here because CPP symbols defining the presence or absence of certain
+ *features detected at configure time (CMake's ConfigureChecks.cmake) pollute
+ *the global name space. This makes it impossible for a user to include both
+ *ROSE's configuration results in conjunction with the configuration results of
+ *any other package.
+ *
+ * If a ROSE public header file truly needs to know a configuration result, then
+ *modify scripts/publicConfiguration.pl to include the name of the symbol you
+ *need (e.g., HAVE_PTHREAD_H). Then the configuration step will create a file
+ *named "rosePublicConfig.h" with properly scoped CPP symbols (e.g.,
  * "ROSE_HAVE_PTHREAD_H).
  *
- * For legacy code that includes "rose_config.h" followed by "rose.h", simply undefine CONFIG_ROSE between those two
- * includes. It is safe to do this because CONFIG_ROSE is not used for any other purpose.
+ * For legacy code that includes "rose_config.h" followed by "rose.h", simply
+ *undefine CONFIG_ROSE between those two includes. It is safe to do this because
+ *CONFIG_ROSE is not used for any other purpose.
  *
- * This test is here rather than in src/testRoseLib.C so that developers will get this error sooner rather than having to
- * wait until all of ROSE is compiled.  However, it does mean that developers will need to be a bit more careful about
- * including both the private (rose_config.h) and public (rosePublicConfig.h) files in tandem.
+ * This test is here rather than in src/testRoseLib.C so that developers will
+ *get this error sooner rather than having to wait until all of ROSE is
+ *compiled.  However, it does mean that developers will need to be a bit more
+ *careful about including both the private (rose_config.h) and public
+ *(rosePublicConfig.h) files in tandem.
  ******************************************************************************************************************************/
 #ifdef CONFIG_ROSE
 #  error "rose_config.h included in public header by mistake. Use rosePublicConfig.h instead."

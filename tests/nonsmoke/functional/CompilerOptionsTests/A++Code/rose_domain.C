@@ -687,14 +687,14 @@ void GlobalMemoryRelease()
      // function is called).  This mechanism needs to be optional.
      if (Diagnostic_Manager::getExitFromGlobalMemoryRelease() == 1)
         { 
-          printf(("NOTE: Exiting from GlobalMemoryRelease() as requested! \n")); 
+          printf(("NOTE: Exiting from GlobalMemoryRelease() as requested! \n"));
 
-          // Exit normally (it is assumed that the user will have specified the return statement
-          // in the main program to returna nonzero value).  So then this exit would be correct
-          // and if this function (GlobalMemoryRelease()) were not called it would be reported
-          // as an error in the $status (which testing programs like automake's "make check" 
-          // will look at).
-          // exit(0);
+          // Exit normally (it is assumed that the user will have specified the
+          // return statement in the main program to returna nonzero value).  So
+          // then this exit would be correct and if this function
+          // (GlobalMemoryRelease()) were not called it would be reported as an
+          // error in the $status (which testing programs like the test harness'
+          // "make check" will look at). exit(0);
 
           // A++ exit function (called purify if purify is used, etc.)
           APP_Exit(); 

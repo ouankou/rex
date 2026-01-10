@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(ELSATEST_BIG_TESTCODES
   t0001.cc
   t0002.cc

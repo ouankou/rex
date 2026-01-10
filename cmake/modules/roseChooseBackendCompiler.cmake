@@ -1,6 +1,6 @@
 # Check compilers and version number
 #  Liao 11/25/2009
-# This is translated from config/choose-backend-compiler.m4
+# Backend compiler selection and version metadata for CMake.
 #
 # use the results to setup rose_config.h later on
 # --------check C compiler -----------------------

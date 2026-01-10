@@ -32,8 +32,8 @@
       <!--DWLayoutTable-->
       <tr>
        <td width="567" height="450" class="plaintext14">
-        <p align="left"> <font size="3" color="#0000ff">I want to use MPI support with ROSE. I reconfigured it with ./configure --prefix=`pwd` --with-mpi</font> </p>
-	<p>ROSE handles MPI without any additional flag. If you configure ROSE with --with-mpi it will allow you to traverse the AST in parallel (using MPI). There are examples for this in the projects directory under DistributedMemoryAnalysisCompass.
+        <p align="left"> <font size="3" color="#0000ff">I want to use MPI support with ROSE. I configured it with CMake and MPI compiler wrappers.</font> </p>
+	<p>ROSE handles MPI without any additional flag. Configure with MPI wrappers (for example, set CMAKE_C_COMPILER=mpicc and CMAKE_CXX_COMPILER=mpicxx) to enable parallel AST traversal using MPI.
         </p>
         <p>
         <p> 

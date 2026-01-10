@@ -86,9 +86,11 @@ void graphNodesAfterCopy(const set<SgNode*>& oldNodes, string filename)
           fs << endl;
         }
 
-        std::string cmd = "tclsh " + std::string(ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR) +
-                          "/tests/nonsmoke/functional/CompileTests/copyAST_tests/make_copy_graph.tcl " +
-                          old_nodes_filename + " " + temp_filename + ".dot " + filename + ".dot";
+        std::string cmd = "tclsh " + std::string(ROSE_SOURCE_TREE) +
+                          "/tests/nonsmoke/functional/CompileTests/"
+                          "copyAST_tests/make_copy_graph.tcl " +
+                          old_nodes_filename + " " + temp_filename + ".dot " +
+                          filename + ".dot";
         if (system(cmd.c_str()))
             MLOG_ERROR_CXX("astDump") <<"command failed: \"" + Rose::StringUtility::cEscape(cmd) <<"\"\n";
   // system("rm temp.dot");

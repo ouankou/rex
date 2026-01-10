@@ -148,9 +148,7 @@ Commands required to install MySQL and set it up for use:
 % make install
 % cd ../mysql++-1.7.9
 
-% Rerun automake to rebuild Makefile.in files after runing patch (AM v1.4, AC v2.1 needed)
-% /usr/bin/automake -a
-% /usr/bin/autoconf
+% Regenerate build files if required by the MySQL++ instructions for your version.
 
 % ./configure --prefix=/nfs/casc/overture/MySQL/MySQL_Install
 %             --with-mysql=/nfs/casc/overture/MySQL/MySQL_Install
@@ -250,9 +248,7 @@ cd ~/local/share/mysql/
 patch -p1 < ../mysql++-gcc-3.0.patch
 patch -p1 < ../mysql++-gcc-3.2.patch
 patch -p1 < ../mysql++-gcc-3.2.2.patch
-# AM v1.4, AC v2.1 needed - AM v1.5, AC v2.5 as from overture bin's do not work...
-automake -a
-autoconf
+# Regenerate build files if required by the MySQL++ instructions for your version.
 # end 3.2.2
 
 ./configure --prefix=/home/thuerey1/local/ --with-mysql=/home/thuerey1/local/ --with-mysql-lib=/home/thuerey1/local/lib/mysql/
@@ -476,7 +472,6 @@ graph by adding three nodes and edges to them from a random node in the graph.
 The last database example tutorial will show how to use the database graph features
 explained in the previous example in combination with a AST-traversal to
 build a simple callgraph.  
-
 
 
 

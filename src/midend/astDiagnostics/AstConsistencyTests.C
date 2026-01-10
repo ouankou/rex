@@ -27,8 +27,9 @@
 // This controls output for debugging
 #define WARN_ABOUT_ATYPICAL_LVALUES 0
 
-// DQ (10/14/2010):  This should only be included by source files that require it.
-// This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
+// DQ (10/14/2010):  This should only be included by source files that require
+// it. This fixed a reported bug which caused conflicts with configure-time
+// macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
 
 // DQ (12/31/2005): This is OK if not declared in a header file

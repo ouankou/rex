@@ -1,14 +1,14 @@
-This test can be invoked with
+This test can be invoked with CTest:
 
-* make check: to perform several STL checks and remove all test output
+* ctest -R stl_eval_cpp11: perform several STL checks and remove all test output
   in case the tests all pass as expected
 
-* make check-no-cleanup: to perform several STL checks but do not remove
-  any output. 
+* ctest -R stl_eval_no_cleanup: perform several STL checks but do not remove
+  any output (requires enabling disabled tests)
 
 All operations are logged in a logfile called 'stl-eval.log'.
 
-The command 'make check' invokes the script stl-eval.sh. This script
+The CTest entries invoke the script stl-eval.sh. This script
 is a bash script that generates programs for each STL header and
 performs then tests on these programs.
 
@@ -114,7 +114,7 @@ remain in the directory.
 Restrictions: the tests are currently restricted to g++4.8 (or newer)
 using the legacy frontend front end. The tests will be extended to other compilers
 and clang in future. The compilers and the front end are restricted in
-Makefile.am.
+CMakeLists.txt.
 
 *****************
      NOTES
@@ -124,5 +124,4 @@ Notes on how to run the STL tests for debugging:
 
 1) In case of an detected error the command line that allows to reproduce the error is printed in brackes [...] on the same line as the error is reported.
 
-2) To see all generated files also in case no error occurs use 'make check-no-cleanup' (does not delete generated files)
-
+2) To see all generated files also in case no error occurs use 'ctest -R stl_eval_no_cleanup' (does not delete generated files)

@@ -2,7 +2,7 @@ include_directories( ${ROSE_INCLUDES} )
 
 ########### next target ###############
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -DROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR_DEFINED=\"${CMAKE_SOURCE_DIR}\"")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
 
 # Rasmussen (04/17/2019): Support for ATerms has been deprecated as it is no longer needed
 # and likely never fully implemented nor tested.  Files remain in the src tree but are no

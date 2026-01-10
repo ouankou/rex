@@ -59,8 +59,9 @@ found in the directory ROSE/TESTS/KnownBugs/AttachPreprocessingInfo.
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-// DQ (10/14/2010):  This should only be included by source files that require it.
-// This fixed a reported bug which caused conflicts with autoconf macros (e.g. PACKAGE_BUGREPORT).
+// DQ (10/14/2010):  This should only be included by source files that require
+// it. This fixed a reported bug which caused conflicts with configure-time
+// macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
 
 #include "attachPreprocessingInfo.h"

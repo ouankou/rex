@@ -1,5 +1,5 @@
 
-// This test code is representative of autoconf tests 
+// This test code is representative of configure-probe tests
 // the use of include of a local header file forces the local header file to
 // be regenerated (to form a "rose_confdefs.h file) if the header file is
 // in the local directory.

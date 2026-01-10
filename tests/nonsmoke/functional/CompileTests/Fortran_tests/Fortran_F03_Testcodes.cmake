@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(F03_TESTCODES
   test2007_30.f03
   test2007_31.f03

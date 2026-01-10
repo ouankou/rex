@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(F77_TESTCODES
   test2007_124.f
   test2007_125.f

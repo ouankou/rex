@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(OPENMP_FORTRAN_TESTCODES
   allocate_predefined_modifiers.f
   allocate_user_defined_modifiers.f

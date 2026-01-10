@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(F77_DISABLED_TESTCODES
   test2007_85.f
   test2007_146.f

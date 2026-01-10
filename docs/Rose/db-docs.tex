@@ -90,11 +90,7 @@ patch -p 1 < ../mysql++-gcc-3.0.patch
 patch -p 1 < ../mysql++-gcc-3.2.patch
 patch -p 1 < ../mysql++-gcc-3.2.2.patch
 
-# rerun automake to rebuild Makefile.in files after running patch
-# need to use automake version 1.4 
-# (download from ftp.gnu.org/gnu/automake)
-automake -a
-autoconf
+# Regenerate build files if required by the MySQL++ instructions for your version.
 
 # configure MySQL++
 ./configure --prefix=<CompileTree>/src/3rdPartyLibraries/MySQL_Install \
@@ -119,14 +115,11 @@ re-configured with these options after an initial reconfiguration.  In
 that case, it should be rebuilt.  Rebuilding will only build the
 database and anything dependent upon it.
 
-For example:
+For example (ensure MySQL++ is discoverable by CMake):
 
 \begin{verbatim}
-<SrcTree>/configure --with-MySQL=<CompileTree>/src/3rdPartyLibraries/MySQL_Install \
-                    --with-MySQL_username=joe \
-                    --with-MySQL_server=`hostname` \
-                    --with-MySQL_password=rosepwd \
-                    --with-MySQL_database_name=databasejoe
+cmake -S <SrcTree> -B <BuildTree> \
+  -DCMAKE_PREFIX_PATH=<CompileTree>/src/3rdPartyLibraries/MySQL_Install
 \end{verbatim}
 
 The previous configuration assumes that the developer will start a database

@@ -1,6 +1,6 @@
 # Non-recursive Makefile
 
-# avoid using libtool for outlining_lib.a since it will be directly linked to executables
+# avoid using a .la wrapper for outlining_lib.a since it will be directly linked to executables
 mptOutlining_lib_ltlibraries=\
         liboutlining.la
 
@@ -68,4 +68,3 @@ mptAstOutlining_cleanLocal = \
 		$(mptOutliningPath)/ii_files \
 		$(mptOutliningPath)/ti_files \
 		$(mptOutliningPath)/Templates.DB
-

@@ -1,4 +1,4 @@
-// This test code is representative of autoconf tests
+// This test code is representative of configure-probe tests
 // the use of #line 42 "filename" was a problem for rose preprocessors
 // because legacy frontend sets the internal filename pointers to NULL in this
 // case.

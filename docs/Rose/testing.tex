@@ -33,7 +33,7 @@ tools (Hudson: http://wiki.hudson-ci.org/display/HUDSON/Meet+Hudson).
 \begin{enumerate}
    \item Hudson test each "git" branch before it gets checked into the internal
      SVN repository. For this we use an internal compile farm of
-     about 7 machines and test different versions of configure options
+     about 7 machines and test different versions of CMake options
      (including different versions of compilers).
    \item Test the internal SVN repository on different architectures, and if it passes
      push it out to the external repository.
@@ -48,16 +48,9 @@ Our goal is to communicate honestly so that we can avoid any
 misunderstandings, it is in our best interest to have this
 policy.
 
-   ROSE uses {\tt autoconf}, {\tt automake}, and {\tt libtool}.
-As a result our generated {\em Makefiles} follow the GNU
-standards for makefiles and contain the associated makefile rules:
-\begin{itemize}
-   \item {\tt make }: used to compile all of ROSE.
-   \item {\tt make check}: used to run tests in each directory.
-   \item {\tt make distcheck}: used to build a GNU standard distribution and run {\tt check} on
-    on that distribution.
-\end{itemize}
-Additional stepts such a {\tt build} and {\tt configure} are covered in the
+   REX uses CMake and CTest. Builds are performed with
+{\tt cmake --build <build-dir>} (or {\tt build-rex.sh}), and tests are run with
+{\tt ctest --test-dir <build-dir>}. Additional steps are covered in the
 ROSE Installation guide.
 
 This chapter is organized by laying out the different

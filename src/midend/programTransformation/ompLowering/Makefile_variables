@@ -7,7 +7,7 @@ mptOmpLowering_la_sources=\
 	$(mptOmpLoweringPath)/intel_simd.cpp \
 	$(mptOmpLoweringPath)/arm_simd.cpp
 
-# avoid using libtool for libxomp.a since it will be directly linked to executable
+# avoid using a .la wrapper for libxomp.a since it will be directly linked to executable
 mptOmpLowering_lib_ltlibraries=\
 	libxomp.la
 

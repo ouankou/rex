@@ -19,30 +19,18 @@
 #include "rosedll.h"
 
 ROSE_UTIL_API extern const std::string ROSE_GFORTRAN_PATH;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_TOP_SRCDIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_TOP_BUILDDIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_PREFIX;
+ROSE_UTIL_API extern const std::string ROSE_SOURCE_TREE;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_TREE;
 ROSE_UTIL_API extern const std::string ROSE_INSTALL_PREFIX;
 ROSE_UTIL_API extern const std::string ROSE_INSTALL_INCLUDE_DIR;
 ROSE_UTIL_API extern const std::string ROSE_INSTALL_CLANG_INCLUDE_DIR;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_LIB_DIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_DATADIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_BINDIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_INCLUDEDIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_INFODIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_LIBDIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_LIBEXECDIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_LOCALSTATEDIR;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_MANDIR;
-
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_ABSOLUTE_PATH_TOP_SRCDIR;
 
 /* Additional interesting data to provide */
 ROSE_UTIL_API extern const std::string ROSE_CONFIGURE_DATE;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_BUILD_OS;
-ROSE_UTIL_API extern const std::string ROSE_AUTOMAKE_BUILD_CPU;
+ROSE_UTIL_API extern const std::string ROSE_BUILD_OS;
+ROSE_UTIL_API extern const std::string ROSE_BUILD_CPU;
 ROSE_UTIL_API extern const std::string ROSE_OFP_VERSION_STRING;
 
 /** Numeric form of ROSE version.

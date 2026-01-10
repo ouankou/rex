@@ -9,8 +9,8 @@
 
 #if 0
 // DQ (2/22/2014): These are required for RedHat 6, but are redundant for RedHat 5 and cause an error.
-// The solution has been to build a special RedHat 6 version of this test and to used an automake
-// conditional to include one or the other in the regression tests.  This will allow the Jenkins
+// The solution has been to build a special RedHat 6 version of this test and to use a
+// test list conditional to include one or the other in the regression tests.  This will allow the Jenkins
 // tests on RedHat 5 to pass, while defining a way for the newer RedHat 6 tests to pass (that are
 // not yet a part of Jenkins).  Where this file is used in other tests in ROSE it will have to be
 // modified when we move to RedHat 6 testing using Jenkins.

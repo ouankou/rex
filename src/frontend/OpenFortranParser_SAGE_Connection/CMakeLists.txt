@@ -23,8 +23,8 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   install(TARGETS fortran_ofp_parser_c_jni_FortranParserActionJNI DESTINATION ${ROSE_LIB_DIR_NAME})
 
   if(ENABLE-FORTRAN)
-    # Using FLEX_TARGET() would be cleaner, but the autoconf buildsystem
-    # requires outfile="lex.yy.c" in the .ll files.
+    # Using FLEX_TARGET() would be cleaner, but the lexer requires
+    # outfile="lex.yy.c" in the .ll files.
     #
     # FLEX_TARGET(Preproc preproc-fortran.ll
     #   ${CMAKE_CURRENT_BINARY_DIR}/preproc-fortran.cc)

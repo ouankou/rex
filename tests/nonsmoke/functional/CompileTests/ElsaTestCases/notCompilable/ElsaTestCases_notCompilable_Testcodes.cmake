@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(ELSATEST_NOTCOMPILABLE_TESTCODES
   t0147.cc
   t0148.cc

@@ -242,7 +242,7 @@ DONE (see below) * Need a way to display the AST (currently we can print out the
 
 
 * Things to remove in ROSE so that the development directory checked out from CVS is easy to understand
-  and so that the distributions build by autoconf/automake are clear.
+  and so that legacy distribution builds are clear.
      remove ROSE/ROSETTA/old_simpleGrammar
      remove ROSE/grammar.old_dir
      remove ROSE/src/SAGE
@@ -319,7 +319,7 @@ TODO: Retargetable Compiler Support (work by Bobby):
 
 * KCC currently fails to compile ROSE on both SUN and Linux (this used to work on the SUN so it should be to much work to fix).
   Both platforms have the same problem (an STL problem).  Also, Bobby reports that the configure scripts report the size
-  of float, int, double, etc are all ZERO.  So something about the autoconf test for size of primative types needs to be 
+  of float, int, double, etc are all ZERO.  So something about the configure-time test for size of primative types needs to be 
   looked checked.  LATER checks have confirmed that if KCC is used as the C compiler then the AC_SIZEOF_TYPE macro returns zero,
   but if the default C compiler is used then the size of all tyes appear to be correct.  So don't use KCC as the C compiler!
 
@@ -339,7 +339,7 @@ TODO: Retargetable Compiler Support (work by Bobby):
   only the compiler name is really needed.
 
 * ROSE/configure.in includes a line "rm -rf '$(CXX_TEMPLATE_REPOSITORY_PATH)'" to remove the template directory that is built
-  when the C++ autoconf test codes are compiled before $(CXX_TEMPLATE_REPOSITORY_PATH) is defined.  This avoids a directory
+  when the C++ configure-test codes are compiled before $(CXX_TEMPLATE_REPOSITORY_PATH) is defined.  This avoids a directory
   called "$(CXX_TEMPLATE_REPOSITORY_PATH)" in ROSE after configure has been run (which was always sort of ugly).  However,
   this only makes sense on the SUN using the sun C++ compiler.  The fix should likely envolve a test to see what compiler
   is being used so that the the "ti_files" directory can be removed when using the KCC compiler.  The current test which just
@@ -358,7 +358,7 @@ END of TODO section specific to Retargetable Compiler Support
 * Configuration TODO list:
 *************************************************************
 
-DONE * Put in the AC macro call to make sure that version 2.52 or higher of autoconf is used
+DONE * Ensure minimum configuration tool versions are enforced
 
 * Change config.h (all four of them) to frontend_config.h, sage_config.h, rosetta_config.h, and rose_config.h
 
@@ -366,7 +366,7 @@ DONE * Call AC_CONFIG_SUBDIR multiple times dependent upon conditionals instead 
 
 DONE * Remove references to: sla_PREFIX sla_INCLUDES sla_LIBS (now that we have removed sla as an option)
 
-DONE * Remove references to subdirectory's Makefiles within distclean-local rules (I think in ROSE/Makefile.am)
+DONE * Remove references to subdirectory build scripts within distclean-local rules
 
 * Need a way to make it clear when "make check" has passed all tests.
 
@@ -1104,7 +1104,6 @@ DONE: Specify where to get DOT (GraphViz) and API doc tooling used in ROSE
 developers (added where to find MySQL as well).
 
  
-
 
 
 

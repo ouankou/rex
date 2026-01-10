@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# See Makefile.am.
+# See CMakeLists.txt or the legacy test list.
 
 use strict;
 

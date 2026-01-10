@@ -52,10 +52,10 @@ typedef uint64_t rose_addr_t; /* address and size (file and memory) */
 //#include "rose_attributes_list.h"
 
 // DQ (10/14/2010): We don't want to include this into our header file system
-// since then users will see the defined macros in our autoconf generated 
+// since then users will see the defined macros in our configuration-generated
 // config.h (which we generate as rose_config.h to avoid filename conflicts).
-// This fixes the problem that causes macro names to conflict (e.g. PACKAGE_BUGREPORT).
-// #include "rose_config.h"
+// This fixes the problem that causes macro names to conflict (e.g.
+// PACKAGE_BUGREPORT). #include "rose_config.h"
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 #include "virtualCFG.h"

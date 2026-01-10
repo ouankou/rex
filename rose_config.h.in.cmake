@@ -311,10 +311,6 @@
 /* Define to 1 if you have the `opendir' function. */
 #cmakedefine HAVE_OPENDIR 1
 
-/* Define if libtool can extract symbol lists from object files. */
-//AS irrelevant as we are not using libtool
-//#cmakedefine HAVE_PRELOADED_SYMBOLS
-
 /* Define to 1 if you have the `readdir' function. */
 #cmakedefine HAVE_READDIR 1
 
@@ -427,20 +423,6 @@
 /* The archive extension */
 //AS Don't know what to do with this
 #undef LT_LIBEXT
-
-/* Define to the extension used for runtime loadable modules, say, ".so". */
-//AS Don't know what to do with this
-#undef LT_MODULE_EXT
-
-/* Define to the name of the environment variable that determines the run-time
-   module search path. */
-//AS Don't know what to do with this
-#undef LT_MODULE_PATH_VAR
-
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
-//AS Don't know what to do with this
-#undef LT_OBJDIR
 
 /* Define if dlsym() requires a leading underscore in symbol names. */
 //AS Don't know what to do with this

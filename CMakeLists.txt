@@ -225,7 +225,7 @@ set(ROSE_TOP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 ########################################################################################################################
 
 # The ROSE version string was already read from ROSE_VERSION file before the project() command.
-# The numerical version is encoded in SCM_DATE as ABBCCCDDDD (see configure.ac).
+# The numerical version is encoded in SCM_DATE as ABBCCCDDDD.
 set(ROSE_SCM_DATE_FILE "${PROJECT_SOURCE_DIR}/config/SCM_DATE")
 if(NOT EXISTS "${ROSE_SCM_DATE_FILE}")
   message(FATAL_ERROR "ROSE SCM Date file not found: ${ROSE_SCM_DATE_FILE}")
@@ -714,6 +714,12 @@ option(REX_ENABLE_TESTING "Enable REX tests (alias for ENABLE-TESTS-DIRECTORY)" 
 set(ENABLE-TESTS-DIRECTORY "${REX_ENABLE_TESTING}" CACHE BOOL "Enable compilation and testing of the ROSE/tests directory" FORCE)
 if(ENABLE-TESTS-DIRECTORY)
   enable_testing()
+  add_test(
+    NAME rex_no_autotools
+    COMMAND ${CMAKE_COMMAND}
+      -DREX_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -DREX_BUILD_DIR=${CMAKE_BINARY_DIR}
+      -P ${CMAKE_SOURCE_DIR}/cmake/check_no_autotools.cmake)
 endif()
 option(REX_ENABLE_DISABLED_TESTS "Enable tests marked disabled in CTest" OFF)
 option(ENABLE-TUTORIAL-DIRECTORY "Enable compilation and testing of the ROSE/tutorial directory" OFF)
@@ -1349,18 +1355,9 @@ if(ENABLE-C)
     endforeach()
     set(CXX_INCLUDE_STRING "${CXX_INCLUDE_STRING}, \"/usr/include\"")
 
-    # In the Autools build system, ROSE stores compiler specific headers in two distinct locations:
-    #    In the build tree, the directory is named $ROSE_BUILD/include-staging
-    #    In the installation tree, the directory is named $ROSE_INSTALL/include
-    # During make-install, the content of $ROSE_BUILD/include-staging is simply copied over into $ROSE_INSTALL/include.
-    #
-    # If a ROSE translator is detected as being run from the build tree, then the associated header file include paths
-    # are added to the translator's command line, e.g. <translator> -I$ROSE_BUILD/include-staging/<path>. Similarly, if
-    # the ROSE translator is detected as being run from the install tree, the command line will contain the associated
-    # paths in the installation location, e.g. -I$ROSE_INSTALL/include/<path>
-    #
-    # The setup of CMake for ROSE, on the other hand, does not make this distinction. Instead, the CMake system utilizes
-    # a single directory $ROSE_CMAKE_BIN/include for the same purpose.
+    # ROSE stages compiler-specific headers under include-staging in the build tree and installs them under
+    # <prefix>/include. Translators select include paths based on whether they run from the build or install tree,
+    # so keep a build-tree symlink to mirror the install layout.
   execute_process(
     COMMAND ${CMAKE_COMMAND} -E create_symlink
     ${CMAKE_BINARY_DIR}/include-staging ${CMAKE_BINARY_DIR}/include)

@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(OPENMP_FORTRAN_DISABLED_TESTCODES
   parallel-if.f
   parallel-if-numthreads.f

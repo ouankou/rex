@@ -1,5 +1,5 @@
-// This avoids requiring the user to use rose_config.h and follows 
-// the automake manual request that we use <> instead of ""
+// This avoids requiring the user to use rose_config.h and follows
+// project style guidance to use <> instead of "".
 #include <rose_config.h>
 #include <assert.h>
 

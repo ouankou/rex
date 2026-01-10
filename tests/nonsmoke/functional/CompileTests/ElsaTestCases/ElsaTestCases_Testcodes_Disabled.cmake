@@ -1,4 +1,4 @@
-# Generated from Makefile.am test lists.
+# Generated from legacy test lists test lists.
 set(TESTCODES_DISABLED
   t0071.cc
   t0075.cc

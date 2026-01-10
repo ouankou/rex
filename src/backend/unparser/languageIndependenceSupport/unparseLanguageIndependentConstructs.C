@@ -306,8 +306,8 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
 #if 0
 #error "DEAD CODE!"
 
-  // DQ (9/17/2013): Updated this test to handle C++ versions of autoconf tests.
-  // DQ (10/8/2012): We want to allow ROSE to work with autoconf tests.  The nature
+  // DQ (9/17/2013): Updated this test to handle C++ versions of configure-probe tests.
+  // DQ (10/8/2012): We want to allow ROSE to work with configure-probe tests. The nature
   // of these tests are that they have a #line directive "#line 1227 "configure""
   // and are in a file called: "conftest.c" and in some cases have a include file
   // named: "confdef.h".
@@ -504,15 +504,23 @@ UnparseLanguageIndependentConstructs::statementFromFile ( SgStatement* stmt, str
 #endif
                if (info.get_language() == SgFile::e_Fortran_language)
                   {
-                 // DQ (9/24/2013): In the case of Fortran we need to generate the preprocessor name (at least for file requireing CPP).
-                 // This was handled properly under the previous implementation using the logical source position, so for Fortran we
-                 // use the logical source position as a basis for knowing which statements to be output.  The case of C/C++ is
-                 // more sophisticated (test autoconf test codes) and so it requires the physical source position.  Ideally, the
-                 // fortran support would have the same implementation, but the handling of intermdiate preprocessed files makes
-                 // this more complex (and it should be a seperate fix to handle that).
-                 // statementfilename = SgFile::generate_C_preprocessor_intermediate_filename(stmt->get_file_info()->get_physical_filename());
-                 // statementfilename = SgFile::generate_C_preprocessor_intermediate_filename(sourceFilename);
-                    statementfilename = stmt->get_file_info()->get_filenameString();
+                 // DQ (9/24/2013): In the case of Fortran we need to generate
+                 // the preprocessor name (at least for file requireing CPP).
+                 // This was handled properly under the previous implementation
+                 // using the logical source position, so for Fortran we use the
+                 // logical source position as a basis for knowing which
+                 // statements to be output.  The case of C/C++ is more
+                 // sophisticated (test configure-probe codes) and so it
+                 // requires the physical source position. Ideally, the fortran
+                 // support would have the same implementation, but the handling
+                 // of intermdiate preprocessed files makes this more complex
+                 // (and it should be a seperate fix to handle that).
+                 // statementfilename =
+                 // SgFile::generate_C_preprocessor_intermediate_filename(stmt->get_file_info()->get_physical_filename());
+                 // statementfilename =
+                 // SgFile::generate_C_preprocessor_intermediate_filename(sourceFilename);
+                 statementfilename =
+                     stmt->get_file_info()->get_filenameString();
 
 #if DEBUG_STATEMENT_FROM_FILE
                     printf ("sourceFilename                                 = %s \n",sourceFilename.c_str());
