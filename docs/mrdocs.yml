@@ -28,7 +28,7 @@ file-patterns:
   - '*.ipp'
   - '*.tpp'
   - '*.tcc'
-generator: html
+generator: adoc
 output: reference
 multipage: true
 inherit-base-members: never
