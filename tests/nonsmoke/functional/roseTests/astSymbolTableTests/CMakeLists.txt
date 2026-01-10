@@ -23,7 +23,6 @@ add_test(
   COMMAND $<TARGET_FILE:testSymbolTable>
     -c ${CMAKE_CURRENT_SOURCE_DIR}/input.C
 )
-set_tests_properties(astSymbolTable_test1 PROPERTIES DEPENDS testSymbolTable_test1)
 
 add_test(
   NAME test1
@@ -35,7 +34,6 @@ add_test(
     ${_exit_status}
     test1.passed
 )
-set_tests_properties(test1 PROPERTIES DEPENDS testSymbolTable_test1)
 
 # Makefile check targets.
 add_test(
