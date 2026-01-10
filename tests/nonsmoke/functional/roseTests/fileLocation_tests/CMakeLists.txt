@@ -572,7 +572,6 @@ set(_filelocation_tests_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 set(_filelocation_test_flags
   -w -rose:verbose 0
-  -I${_filelocation_tests_dir}/../A++Code
   -I${_filelocation_tests_dir})
 
 foreach(specimen IN LISTS FILELOCATION_TEST_SOURCES)

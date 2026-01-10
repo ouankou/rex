@@ -20,9 +20,7 @@ set(PERFORMANCE_REPORT_OPTION -rose:compilationPerformanceFile
 set(ROSE_FLAGS  -w -rose:verbose 0
   ${PERFORMANCE_REPORT_OPTION})
 
-## Include the path to A++ and the transformation specification
 set(TESTCODE_INCLUDES
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code
   -I${CMAKE_CURRENT_SOURCE_DIR})
 
 foreach(file_to_test ${TESTCODES})

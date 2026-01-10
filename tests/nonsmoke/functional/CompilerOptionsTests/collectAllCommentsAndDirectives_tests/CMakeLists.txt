@@ -10,9 +10,6 @@ set(_collect_comments_flags
   -rose:compilationPerformanceFile ${_collect_comments_perf_file}
   -rose:collectAllCommentsAndDirectives)
 
-set(_collect_comments_include_flags
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
-
 set(_collect_comments_test_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 
@@ -23,7 +20,6 @@ foreach(testcode IN LISTS COLLECT_COMMENTS_TEST_SOURCES)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${ROSE_TEST_TRANSLATOR}
       ${_collect_comments_flags}
-      ${_collect_comments_include_flags}
       -I${_collect_comments_test_dir}
       -c ${_collect_comments_test_dir}/${testcode}
   )
@@ -36,7 +32,6 @@ foreach(testcode IN LISTS COLLECT_COMMENTS_DISABLED_TEST_SOURCES)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${ROSE_TEST_TRANSLATOR}
       ${_collect_comments_flags}
-      ${_collect_comments_include_flags}
       -I${_collect_comments_test_dir}
       -c ${_collect_comments_test_dir}/${testcode}
   )

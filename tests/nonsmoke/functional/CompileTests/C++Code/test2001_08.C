@@ -8,17 +8,9 @@
 Example Original code:
      APP_ASSERT (c != NULL);
 Example Unparsed code:
-     if (c != (const char * )0){ 0; } 
-     else { APP_Assertion_Support("/home/dquinlan/A++P++/A++P++Source/A++P++/A++/src/array_src/domain.C",
-     133); } 
+     if (c != (const char * )0){ 0; }
+     else { APP_Assertion_Support("/path/to/array_src/domain.C",
+     133); }
  */
 
-int
-main()
-   {
-     return 0;
-   }
-
-
-
-
+int main() { return 0; }

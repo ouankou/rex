@@ -16,8 +16,7 @@ set(_single_stmt_tests_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 set(_single_stmt_switches
   -w -rose:verbose 0
-  -I${_single_stmt_tests_dir}
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
+  -I${_single_stmt_tests_dir})
 
 set(_single_stmt_disabled
   test2013_242.C

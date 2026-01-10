@@ -38,8 +38,7 @@ endif()
 include(${CMAKE_CURRENT_SOURCE_DIR}/uninitializedField_tests_lists.cmake)
 
 set(_uninit_flags -w -rose:verbose 0)
-set(_uninit_includes
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code)
+set(_uninit_includes "")
 
 set(_uninit_cxx_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)

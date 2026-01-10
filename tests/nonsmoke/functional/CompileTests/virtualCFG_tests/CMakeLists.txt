@@ -5,10 +5,7 @@ install(TARGETS generateVirtualCFG DESTINATION bin)
 add_executable(testVirtualCFG testVirtualCFG.C)
 target_link_libraries(testVirtualCFG ROSE_DLL ${link_with_libraries})
 
-# Some of these test codes reference A++ header fiels as part of their tests
-# Include the path to A++ and the transformation specification
 set(TESTCODE_INCLUDES
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code
   -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
 set(rex_test2025_issue148_system_header_dir
   ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)

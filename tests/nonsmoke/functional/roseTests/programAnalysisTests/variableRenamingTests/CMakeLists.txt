@@ -25,7 +25,6 @@ list(REMOVE_DUPLICATES _variable_renaming_specimens)
 
 set(_variable_renaming_flags
   -w -rose:verbose
-  -I${_specimen_dir}/../A++Code
   -I${_specimen_dir}
 )
 string(JOIN " " _variable_renaming_flags_str ${_variable_renaming_flags})

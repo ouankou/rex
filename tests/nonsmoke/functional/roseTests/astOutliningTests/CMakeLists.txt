@@ -654,7 +654,6 @@ set(_outline_openmp_dir
 
 set(_outline_includes
   -I${_outline_external_dir}
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code
   -I${CMAKE_CURRENT_SOURCE_DIR})
 
 set(_outline_flags

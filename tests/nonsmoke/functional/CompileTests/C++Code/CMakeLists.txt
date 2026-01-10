@@ -134,10 +134,11 @@ add_test(
 )
 
 set(files_to_test
-  test2001_11.C test2001_12.C test2001_13.C test2001_16.C test2004_35.C
+  test2004_35.C
   test2004_65.C test2004_67.C test2001_01.C test2001_02.C test2001_04.C
   test2001_05.C test2001_06.C test2001_07.C test2001_08.C test2001_10.C
-  test2001_17.C test2001_18.C test2001_19.C test2001_20.C test2001_21.C
+  test2001_11.C test2001_12.C test2001_13.C test2001_16.C test2001_17.C
+  test2001_18.C test2001_19.C test2001_20.C test2001_21.C
   test2001_22.C test2001_23.C test2001_26.C test2001_28.C test2001_29.C
   test2003_02.C test2003_03.C test2003_04.C test2003_05.C test2003_06.C
   test2003_08.C test2003_09.C test2003_10.C test2003_11.C test2003_29.C
@@ -216,10 +217,7 @@ set(files_to_test
   test2006_77.C test2006_78.C test2006_79.C test2006_80.C test2006_81.C
   test2006_82.C test2006_83.C test2006_84.C lexPhase2003_01.C)
 
-list(APPEND ROSE_FLAGS
-  -I${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/A++Code
-  -I${CMAKE_CURRENT_SOURCE_DIR}
-)
+list(APPEND ROSE_FLAGS -I${CMAKE_CURRENT_SOURCE_DIR})
 
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} CXXCODE)

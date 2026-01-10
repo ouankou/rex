@@ -3396,6 +3396,10 @@ list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${REX_FRONTEND_ERROR_TESTS})
 # Custom test uses -isystem to force system-header classification.
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN
   rex_test2025_issue148_system_header_mutation.cpp)
+set(CXX_TESTCODES_ALWAYS_RUN
+  test2013_09.C)
+list(APPEND CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_ALWAYS_RUN})
+list(REMOVE_DUPLICATES CXX_TESTCODES_TO_RUN)
 
 set(ROSE_DISABLED_TESTCODES ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED})
 set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
@@ -3404,7 +3408,6 @@ set(ROSE_FLAGS
   -w -rose:verbose 0
   -rose:skip_unparse_asm_commands
   -rose:skip_unparse_cc_commands
-  -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
   )
 
 function(rex_lock_test_for_input test_name input_file)
@@ -3571,7 +3574,6 @@ add_test(
   COMMAND $<TARGET_FILE:${translator}>
     --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
     -I${CMAKE_CURRENT_SOURCE_DIR}
-    -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
     -rose:unparse_includes -rose:verbose 0
     -I${CMAKE_BINARY_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2013_257.C
@@ -3613,7 +3615,6 @@ add_test(
   COMMAND $<TARGET_FILE:${translator}>
     --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
     -I${CMAKE_CURRENT_SOURCE_DIR}
-    -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
     -I${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/conftest.C
     -o conftest_configure_test_part_1
@@ -3809,7 +3810,6 @@ add_test(
   COMMAND $<TARGET_FILE:${translator}>
     --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
     -I${CMAKE_CURRENT_SOURCE_DIR}
-    -I${CMAKE_CURRENT_SOURCE_DIR}/../A++Code
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246a.C
 )
 set_tests_properties(CXXTEST_test2012_246a PROPERTIES LABELS Cxx_tests)

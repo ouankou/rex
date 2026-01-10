@@ -1,17 +1,12 @@
-#include "A++.h"
+struct Pair {
+  int a;
+  int b;
+  Pair(int x, int y) : a(x), b(y) {}
+};
 
-int
-main ()
-   {
-  // Test 1
-     doubleArray* arrayPtr1 = new doubleArray(42);
+int sum(const Pair &p) { return p.a + p.b; }
 
-  // Test 2
-     doubleArray* arrayPtr2 = new doubleArray();
-
-  // Test 3
-     char* copyString = new char[1];
-
-     return 0;
-   }
-
+int main() {
+  Pair p(1, 2);
+  return sum(p) - 3;
+}

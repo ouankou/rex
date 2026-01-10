@@ -93,9 +93,6 @@ OpenMP_tests:
 OvertureCode:
    These are subsets of the Overture project which is a target for ROSE work.
 
-P++Tests:
-   These are subsets of the P++ project which is a target for ROSE work.
-
 RoseExample_tests:
    These are subset of the ROSE project that can be compiled using ROSE as a test for ROSE
    compiling itself.
@@ -127,21 +124,8 @@ virtualCFG_tests:
    This direcotry uses tests codes to test the virtual Control Flow Graph (CFG) 
    in ROSE.
 
-A++Tests: 
-    This directory contains the A++ source code with header files and is used
-    to test the parsing, construction of AST's, and unparsing.  If the tests pass
-    the we know that the ROSE preprocessor has correctly read, processed, and unparsed
-    the resulting files.  The test pass if ROSE generates good sufficient to compile
-    properly using the target C++ compiler (KCC for the moment).
-
-A++Code: I forget what these tests are (more A++ code tests similar to A++Tests).
-
 
 ************* OLDER INFO  ***************
-A++MDI:
-   This directory contains the C code used within A++ and represents a test of
-   the ROSE preprocessor to read C code, generate internal AST's, and unparse 
-   it correctly (so that it will compile properly).
 
 Instructions for building tests for Thrifty:
    You can run the a992-thrifty-mips-compiler tests using the following:

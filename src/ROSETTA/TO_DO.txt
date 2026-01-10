@@ -5,7 +5,7 @@ Task 1:      Defining grammars and the parsers that
 
 Milestone 1: Implementation of ROSE that can build program 
              trees for each grammar (one per grammar). Sufficient
-             for processing of A++ application code.
+             for processing of array application code.
 
 Task 2:      Specification of transformations
 
@@ -46,7 +46,7 @@ Milestone 4: Implementation of suplimentary mechanism to read class header files
    *2) Use existing ROSE to transform some existing application.
        The October deadline could be handle minimally by
        using any subset of these possible applications:
-      *a) Use an existing A++ code (or any subset).
+      *a) Use an existing array code (or any subset).
          *1. Jacobi relaxation
          *2. 1D Reimann Code
          *3. MG Solver
@@ -698,7 +698,6 @@ Code Generation Problems:
       might cause some free memory reads (purify: FMR) though where we have found 
       FMR they don't appear to be related to where the char* handiling is done poorly.
       (I'm still debugging these FRMs).
-
 
 
 
