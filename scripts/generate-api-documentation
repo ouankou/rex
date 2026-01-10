@@ -228,43 +228,59 @@ PY
 ####################################################################################################################################
 generate-reference-sections() {
     local out_dir="$1"
-    "$PYTHON_BIN" - "$out_dir" <<'PY'
+    local nav_config="$2"
+    "$PYTHON_BIN" - "$out_dir" "$nav_config" <<'PY'
 from pathlib import Path
 import shutil
 import sys
 
+try:
+    import yaml
+except ImportError:
+    print("generate-api-documentation: error: PyYAML is required to parse mkdocs-reference.yml", file=sys.stderr)
+    raise SystemExit(1)
+
 out_dir = Path(sys.argv[1]).resolve()
+nav_config = Path(sys.argv[2]).resolve()
 index_path = out_dir / "index.adoc"
 if not index_path.is_file():
     raise SystemExit(f"reference index not found: {index_path}")
+if not nav_config.is_file():
+    raise SystemExit(f"mkdocs reference config not found: {nav_config}")
+
+nav_data = yaml.safe_load(nav_config.read_text(encoding="utf-8")) or {}
+nav_items = nav_data.get("nav")
+if not isinstance(nav_items, list):
+    raise SystemExit(f"mkdocs nav list not found in {nav_config}")
+
+targets = []
+seen = set()
+for item in nav_items:
+    if not isinstance(item, dict) or len(item) != 1:
+        continue
+    title, path = next(iter(item.items()))
+    if not isinstance(title, str) or not isinstance(path, str):
+        continue
+    if not path.startswith("sections/") or not path.endswith(".adoc"):
+        continue
+    slug = path[len("sections/") : -len(".adoc")]
+    if not slug or "/" in slug or slug in seen:
+        continue
+    seen.add(slug)
+    targets.append((title, slug))
+
+if not targets:
+    raise SystemExit(f"no section entries found in mkdocs nav: {nav_config}")
 
 lines = index_path.read_text(encoding="utf-8").splitlines()
 sections = {}
-current_title = None
-current_lines = []
-
+current_lines = None
 for line in lines:
     if line.startswith("== "):
-        if current_title is not None:
-            sections[current_title] = current_lines
         current_title = line[3:].strip()
-        current_lines = []
-        continue
-    if current_title is not None:
+        current_lines = sections.setdefault(current_title, [])
+    elif current_lines is not None:
         current_lines.append(line)
-
-if current_title is not None:
-    sections[current_title] = current_lines
-
-targets = [
-    ("Namespaces", "namespaces"),
-    ("Types", "types"),
-    ("Enums", "enums"),
-    ("Functions", "functions"),
-    ("Variables", "variables"),
-    ("Using Declarations", "using-declarations"),
-    ("Using Namespace Directives", "using-namespace-directives"),
-]
 
 sections_dir = out_dir / "sections"
 if sections_dir.exists():
@@ -1086,7 +1102,7 @@ docs_db="$(filter-compilation-db "$CONFIG" "$compilation_db" "$docs_dir" "$inclu
     "${stdlib_args[@]}" \
     "${libc_args[@]}"
 if [ -n "$output_dir" ]; then
-    generate-reference-sections "$output_dir"
+    generate-reference-sections "$output_dir" "$(rose-source)/mkdocs-reference.yml"
 fi
 if [ -n "${MRDOCS_KEEP_TMP-}" ]; then
     echo "Keeping temporary documentation directory at $docs_dir"
