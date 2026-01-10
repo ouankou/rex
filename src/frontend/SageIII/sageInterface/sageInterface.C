@@ -3881,16 +3881,16 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
      SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr);
      SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr);
 
-     if (!func_ref && !mfunc_ref) return false;
+     if (func_ref == nullptr && mfunc_ref == nullptr) return false;
 
      std::string func_name;
-     if (func_ref != NULL)
-          func_name = func_ref->get_symbol()->get_name().str();
-       else
-          func_name = mfunc_ref->get_symbol()->get_name().str();
+     if (func_ref != nullptr)
+        func_name = func_ref->get_symbol()->get_name().str();
+     else
+        func_name = mfunc_ref->get_symbol()->get_name().str();
 
-     if ( func_name == "operator->" || func_name == "operator->*" )
-          return true;
+     if (func_name == "operator->" || func_name == "operator->*")
+        return true;
      return false;
    }
 
