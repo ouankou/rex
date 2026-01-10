@@ -204,7 +204,8 @@ except yaml.YAMLError as exc:
     raise SystemExit(1)
 
 if not isinstance(data, dict):
-    raise SystemExit(0)
+    print(f"generate-api-documentation: error: {path} root is not a dictionary", file=sys.stderr)
+    raise SystemExit(1)
 
 value = data.get("output")
 if value is None:
