@@ -1152,78 +1152,14 @@ bool Unparse_MOD_SAGE::printConstructorName(SgExpression* expr)
 bool
 Unparse_MOD_SAGE::isOverloadedArrowOperator(SgExpression* expr)
    {
-     SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr);
-     SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-     if (!func_ref && !mfunc_ref) return false;
-
-     string func_name;
-     if (func_ref != NULL)
-        {
-          func_name = func_ref->get_symbol()->get_name().str();
-        }
-       else
-        {
-       // [DT] 4/4/2000 -- Adding checks before trying to access
-       //      mfunc_ref->get_symbol()->get_name().str().
-       //
-       //    func_name = strdup(mfunc_ref->get_symbol()->get_name().str());
-       //
-       // (4/4,cont'd) Substituting the following code, because the call to
-       // strdup() gives rise to a core dump sometimes.  I don't know why.
-       //
-       // Unfortunately, this doesn't solve the problem anyway.
-       //
-       // strcmp(mfunc_ref->get_symbol()->get_name().str(), "operator->");
-       // strcmp(mfunc_ref->get_symbol()->get_name().str(), "operator->");
-          if ( ( mfunc_ref->get_symbol()->get_name().getString() == "operator->" ||
-                mfunc_ref->get_symbol()->get_name().getString() == "operator->*"   ) )
-               return true;
-            else
-               return false;
-        }
-
-  // [DT] 4/4/2000 -- Added check for func_name!=NULL.
-     if ( func_name == "operator->" || func_name == "operator->*" )
-          return true;
-     return false;
+     return SageInterface::isOverloadedArrowOperator(expr);
    }
 
 bool
-Unparse_MOD_SAGE::isUnaryOperatorArrowSubtree(SgExpression* expr)
+Unparse_MOD_SAGE::isOverloadedArrowOperatorChain(SgExpression* expr)
    {
   // DQ (12/11/2004): This function recognizes a subtree which represents the "S* T::operator->()" for some class type "T" and type "S"
-     bool returnValue = false;
-     SgPointerDerefExp *returnType = isSgPointerDerefExp(expr);
-     if (returnType != NULL)
-        {
-          SgFunctionCallExp* functionCall = isSgFunctionCallExp(returnType->get_operand());
-
-       // Note recurprintsive function call!
-          returnValue = isUnaryOperatorArrowSubtree(functionCall);
-        }
-       else
-        {
-          SgFunctionCallExp* functionCall = isSgFunctionCallExp(expr);
-          if (functionCall != NULL)
-             {
-               SgBinaryOp *binaryOperator = isSgBinaryOp(functionCall->get_function());
-               if (binaryOperator != NULL)
-                  {
-                 // Verify that this is either a SgDotExp or a SgArrowExp
-                    SgDotExp   *dotExpression   = isSgDotExp  (binaryOperator);
-                    SgArrowExp *arrowExpression = isSgArrowExp(binaryOperator);
-                    ROSE_ASSERT(dotExpression != NULL || arrowExpression != NULL);
-
-                    if (isOverloadedArrowOperator(binaryOperator->get_rhs_operand()) == true)
-                       {
-                         returnValue = true;
-                       }
-                  }
-             }
-        }
-
-     return returnValue;
+     return SageInterface::isOverloadedArrowOperatorChain(expr);
    }
 
 //-----------------------------------------------------------------------------------

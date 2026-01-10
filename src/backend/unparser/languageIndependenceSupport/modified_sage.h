@@ -74,7 +74,7 @@ class Unparse_MOD_SAGE
       //! than the test for a function name on the SgMemberFunctionRefExp node).
       //! This function is used to get for the combination of "operator->()->operator[](i)"
       //! since in this case the unparsed code can not be rediced to "->[i]".
-          bool isUnaryOperatorArrowSubtree(SgExpression* expr);
+          bool isOverloadedArrowOperatorChain(SgExpression* expr);
 
       //! auxiliary functions (some code from original modified_sage.C)
           bool NoDereference(SgExpression* expr);

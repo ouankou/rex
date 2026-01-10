@@ -565,7 +565,13 @@ while (@ARGV) {
   /^--no-output$/ and do {$no_stderr=$no_stdout=1; next};
   /^--quiet-failure$/ and do {$quiet_failure=1; next};
   /^-/ and die "$0: unknown command line switch: $_\n";
-  /^(\w+)=(.*)/ and do {$variables{$1} = $2; next};
+  /^(\w+)=(.*)/ and do {
+    my ($var, $val) = ($1, $2);
+    # Allow CMD="..."; strip one layer so the shell sees the full command.
+    $val =~ s/^(['"])(.*)\1$/$2/s;
+    $variables{$var} = $val;
+    next;
+  };
   /=/ and die "$0: malformed variable definition: $_\n";
   unless ($config_file) {
     $config_file=$_;

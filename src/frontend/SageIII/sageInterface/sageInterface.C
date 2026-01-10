@@ -3875,6 +3875,47 @@ SageInterface::isOverloaded ( SgFunctionDeclaration* functionDeclaration )
      return (counter > 1);
    }
 
+bool
+SageInterface::isOverloadedArrowOperator(SgExpression* expr)
+   {
+     SgFunctionSymbol* func_symbol = nullptr;
+
+     if (SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr))
+        func_symbol = func_ref->get_symbol();
+     else if (SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr))
+        func_symbol = mfunc_ref->get_symbol();
+
+     if (func_symbol == nullptr)
+        return false;
+
+     return (func_symbol->get_name().str() == "operator->" ||
+             func_symbol->get_name().str() == "operator->*");
+   }
+
+bool
+SageInterface::isOverloadedArrowOperatorChain(SgExpression* expr)
+   {
+     if (expr == nullptr)
+        return false;
+
+     if (SgPointerDerefExp* deref = isSgPointerDerefExp(expr))
+        return isOverloadedArrowOperatorChain(deref->get_operand());
+
+     SgFunctionCallExp* functionCall = isSgFunctionCallExp(expr);
+     if (functionCall == nullptr)
+        return false;
+
+     SgBinaryOp* binaryOperator = isSgBinaryOp(functionCall->get_function());
+     if (binaryOperator == nullptr)
+        return false;
+
+     const bool isDotOrArrow = (isSgDotExp(binaryOperator) != nullptr) || (isSgArrowExp(binaryOperator) != nullptr);
+     if (!isDotOrArrow)
+        return false;
+
+     return isOverloadedArrowOperator(binaryOperator->get_rhs_operand());
+   }
+
 
 
 

@@ -3025,7 +3025,7 @@ Unparse_ExprStmt::unparseMFuncRefSupport ( SgExpression* expr, SgUnparse_Info& i
 #endif
                if ( (functionCall != NULL) && (uses_operator_syntax == false) )
                   {
-                    if ( unp->u_sage->isUnaryOperatorArrowSubtree(functionCall) == true )
+                    if ( unp->u_sage->isOverloadedArrowOperatorChain(functionCall) == true )
                        {
                       // DQ (Dec, 2004): special (rare) case of .operator->() or ->operator->()
                       // decided to handle these cases because they are amusing (C++ Trivia) :-).
