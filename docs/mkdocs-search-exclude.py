@@ -78,7 +78,7 @@ def on_post_build(config):
         try:
             temp_path.write_text(json_str, encoding="utf-8")
             temp_path.replace(path)
-        except Exception:
+        except OSError:
             if temp_path.exists():
                 try:
                     temp_path.unlink()
