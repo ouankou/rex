@@ -70,10 +70,15 @@ fi
 "$venv_dir/bin/python" -m pip install --upgrade pip
 "$venv_dir/bin/python" -m pip install -r "$root/docs/requirements.txt"
 
+if ! command -v asciidoctor >/dev/null 2>&1; then
+    die "asciidoctor is required (install the asciidoctor package or gem)"
+fi
+
 MRDOCS_BIN="$(install_mrdocs)"
 export MRDOCS_BIN
 
 "$root/scripts/generate-api-documentation"
-"$venv_dir/bin/mkdocs" build
+"$venv_dir/bin/mkdocs" build -f "$root/mkdocs.yml"
+"$venv_dir/bin/mkdocs" build -f "$root/mkdocs-reference.yml"
 
 echo "Docs built in $root/_site"

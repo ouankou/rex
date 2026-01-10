@@ -151,6 +151,88 @@ compilation-db-from-config() {
 }
 
 ####################################################################################################################################
+output-dir-from-config() {
+    local config="$1"
+    local value
+    value="$(sed -n 's/^[[:space:]]*output:[[:space:]]*//p' "$config" | head -n 1)"
+    value="${value%%#*}"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    if [ -z "$value" ]; then
+        return 0
+    fi
+    if [[ "$value" = /* ]]; then
+        echo "$value"
+    else
+        echo "$(cd "$(dirname "$config")" && pwd)/$value"
+    fi
+}
+
+####################################################################################################################################
+generate-reference-sections() {
+    local out_dir="$1"
+    python3 - "$out_dir" <<'PY'
+from pathlib import Path
+import shutil
+import sys
+
+out_dir = Path(sys.argv[1]).resolve()
+index_path = out_dir / "index.adoc"
+if not index_path.is_file():
+    raise SystemExit(f"reference index not found: {index_path}")
+
+lines = index_path.read_text(encoding="utf-8").splitlines()
+sections = {}
+current_title = None
+current_lines = []
+
+for line in lines:
+    if line.startswith("== "):
+        if current_title is not None:
+            sections[current_title] = current_lines
+        current_title = line[3:].strip()
+        current_lines = []
+        continue
+    if current_title is not None:
+        current_lines.append(line)
+
+if current_title is not None:
+    sections[current_title] = current_lines
+
+targets = [
+    ("Namespaces", "namespaces"),
+    ("Types", "types"),
+    ("Enums", "enums"),
+    ("Functions", "functions"),
+    ("Variables", "variables"),
+    ("Using Declarations", "using-declarations"),
+    ("Using Namespace Directives", "using-namespace-directives"),
+]
+
+sections_dir = out_dir / "sections"
+if sections_dir.exists():
+    if sections_dir.is_dir():
+        shutil.rmtree(sections_dir)
+    else:
+        raise SystemExit(f"expected directory at {sections_dir}")
+sections_dir.mkdir(parents=True)
+
+header_template = "= {title}\n:relfileprefix: ../\n:mrdocs:\n\n"
+
+for title, slug in targets:
+    content = sections.get(title)
+    if content is None:
+        raise SystemExit(f"missing section '{title}' in {index_path}")
+    while content and not content[0].strip():
+        content = content[1:]
+    text = header_template.format(title=title) + "\n".join(content).rstrip() + "\n"
+    (sections_dir / f"{slug}.adoc").write_text(text, encoding="utf-8")
+PY
+}
+
+####################################################################################################################################
 config-bool() {
     local config="$1"
     local key="$2"
@@ -895,6 +977,13 @@ fi
 
 check-prerequisites
 CONFIG="$(config-file "${1-$DEFAULT_CONFIG}")"
+output_dir="$(output-dir-from-config "$CONFIG")"
+if [ -n "$output_dir" ] && [ -d "$output_dir" ]; then
+    if [ "$output_dir" = "/" ]; then
+        die "refusing to remove output directory at /"
+    fi
+    rm -rf "$output_dir"
+fi
 
 compilation_db="$(compilation-db-from-config "$CONFIG")"
 if [ -z "$compilation_db" ]; then
@@ -936,6 +1025,9 @@ docs_db="$(filter-compilation-db "$CONFIG" "$compilation_db" "$docs_dir" "$inclu
 "$MRDOCS_CMD" --config "$CONFIG" --compilation-database "$docs_db" \
     "${stdlib_args[@]}" \
     "${libc_args[@]}"
+if [ -n "$output_dir" ]; then
+    generate-reference-sections "$output_dir"
+fi
 if [ -n "${MRDOCS_KEEP_TMP-}" ]; then
     echo "Keeping temporary documentation directory at $docs_dir"
 else

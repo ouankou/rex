@@ -39,7 +39,8 @@ jobs:
             libantlr4-runtime-dev \
             llvm-20 \
             llvm-20-dev \
-            perl
+            perl \
+            asciidoctor
 
       - name: Install ANTLR4 tool (4.10.1)
         run: |
@@ -111,7 +112,9 @@ jobs:
         run: scripts/generate-api-documentation
 
       - name: Build MkDocs site
-        run: .venv-docs/bin/mkdocs build
+        run: |
+          .venv-docs/bin/mkdocs build -f mkdocs.yml
+          .venv-docs/bin/mkdocs build -f mkdocs-reference.yml
 
       - name: Deploy to GitHub Pages
         if: ${{ !env.ACT }}

@@ -1,1 +1,2 @@
-mkdocs-material
+mkdocs-material==9.7.1
+mkdocs-asciidoctor-backend==0.1.13

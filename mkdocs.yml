@@ -13,6 +13,9 @@ markdown_extensions:
   - toc:
       permalink: true
 
+plugins:
+  - search
+
 nav:
   - Home: index.md
   - Build: build.md

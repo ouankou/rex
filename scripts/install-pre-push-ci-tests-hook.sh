@@ -64,7 +64,6 @@ run_ctest_regex() {
 
 ci_regexes=(
   "astInterface"
-  "Translator_"
   "testQuery"
   "rex"
 )

@@ -1,0 +1,32 @@
+site_name: REX API Reference
+site_dir: _site/reference
+docs_dir: docs/reference
+nav:
+  - API Index: index.adoc
+  - Namespaces: sections/namespaces.adoc
+  - Types: sections/types.adoc
+  - Enums: sections/enums.adoc
+  - Functions: sections/functions.adoc
+  - Variables: sections/variables.adoc
+  - Using Declarations: sections/using-declarations.adoc
+  - Using Namespace Directives: sections/using-namespace-directives.adoc
+
+not_in_nav: |
+  **/*.adoc
+  !/index.adoc
+  !/sections/*.adoc
+
+theme:
+  name: material
+  features:
+    - navigation.top
+    - navigation.tabs
+
+hooks:
+  - docs/mkdocs-search-exclude.py
+
+plugins:
+  - material/search:
+      separator: "[\\s\\-_:]+"
+  - asciidoctor_backend:
+      max_workers: 32
