@@ -73,10 +73,15 @@ def on_post_build(config):
             doc["text"] = text[:_MAX_SEARCH_TEXT]
             changed = True
     if changed:
-        path.write_text(
-            json.dumps(data, separators=(",", ":"), ensure_ascii=False),
-            encoding="utf-8",
-        )
+        json_str = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+        temp_path = path.with_name(path.name + ".tmp")
+        try:
+            temp_path.write_text(json_str, encoding="utf-8")
+            temp_path.replace(path)
+        except Exception:
+            if temp_path.exists():
+                temp_path.unlink()
+            raise
 
 
 on_post_build.mkdocs_priority = -100
