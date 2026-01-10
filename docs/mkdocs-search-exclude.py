@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 
 _PRE_TAG_RE = re.compile(r"<pre(?![^>]*\bdata-search-exclude\b)([^>]*)>", re.IGNORECASE)
@@ -74,16 +76,20 @@ def on_post_build(config):
             changed = True
     if changed:
         json_str = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
-        temp_path = path.with_name(path.name + ".tmp")
+        fd, temp_path_str = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
         try:
-            temp_path.write_text(json_str, encoding="utf-8")
-            temp_path.replace(path)
+            with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
+                temp_file.write(json_str)
+            Path(temp_path_str).replace(path)
         except OSError:
-            if temp_path.exists():
-                try:
-                    temp_path.unlink()
-                except OSError:
-                    pass
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.unlink(temp_path_str)
+            except OSError:
+                pass
             raise
 
 
