@@ -61,23 +61,6 @@ jobs:
           openjdk-17-jdk \
           pkg-config
 
-    - name: Ensure libhpdf pkg-config file
-      run: |
-        sudo install -d /usr/local/lib/pkgconfig
-        version=$(awk -F'"' '/HPDF_VERSION_TEXT/ {print $2}' /usr/include/hpdf_version.h)
-        cat <<EOF | sudo tee /usr/local/lib/pkgconfig/libhpdf.pc >/dev/null
-        prefix=/usr
-        exec_prefix=/usr
-        libdir=/usr/lib/x86_64-linux-gnu
-        includedir=/usr/include
-
-        Name: libhpdf
-        Description: libharu PDF library
-        Version: ${version}
-        Libs: -L/usr/lib/x86_64-linux-gnu -lhpdf
-        Cflags: -I/usr/include
-        EOF
-
     # Simplified build using build-rex.sh script
     - name: Build and Install (Debug)
       env:
@@ -85,7 +68,6 @@ jobs:
         # Keep the JVM path available for the Fortran OFP frontend.
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
-        PKG_CONFIG_PATH: /usr/local/lib/pkgconfig
         CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
         LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
         CC: clang-${{ matrix.llvm }}
