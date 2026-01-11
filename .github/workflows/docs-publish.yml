@@ -37,6 +37,7 @@ jobs:
             flex \
             libclang-20-dev \
             libantlr4-runtime-dev \
+            libhpdf-dev \
             llvm-20 \
             llvm-20-dev \
             perl \

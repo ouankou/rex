@@ -629,23 +629,23 @@ add_test(
   NAME injectOutlinePragmas
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    DISABLED="not tested by the original makefile"
-    CMD=false
+    TITLE="inject outline pragmas [injectOutlinePragmas.passed]"
+    USE_SUBDIR=yes
+    CMD="$<TARGET_FILE:injectOutlinePragmas> -rose:num-outline 1 -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/moreTest8.c"
     ${_exit_status}
     injectOutlinePragmas.passed
 )
-set_tests_properties(injectOutlinePragmas PROPERTIES DISABLED TRUE)
 
 add_test(
   NAME outlineRandom
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    DISABLED="not tested by the original makefile"
-    CMD=false
+    TITLE="outline random [outlineRandom.passed]"
+    USE_SUBDIR=yes
+    CMD="$<TARGET_FILE:outlineRandom> -rose:outline:random 1 -rose:verbose 2 -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/moreTest8.c"
     ${_exit_status}
     outlineRandom.passed
 )
-set_tests_properties(outlineRandom PROPERTIES DISABLED TRUE)
 
 set(_outline_external_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)

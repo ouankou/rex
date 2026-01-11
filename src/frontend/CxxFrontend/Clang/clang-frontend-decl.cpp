@@ -493,7 +493,8 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
     break;
   }
   case clang::Decl::Var:
-  case clang::Decl::ParmVar: {
+  case clang::Decl::ParmVar:
+  case clang::Decl::Binding: {
     it = SageBuilder::ScopeStack.rbegin();
     while (it != SageBuilder::ScopeStack.rend() && sym == NULL) {
       sym = (*it)->lookup_variable_symbol(name);
@@ -7006,7 +7007,101 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgName name(binding_decl->getNameAsString());
+  SgType *type = buildTypeFromQualifiedType(binding_decl->getType());
+  ROSE_ASSERT(type != NULL);
+
+  // Build a variable declaration to represent the binding and provide a symbol
+  // for decl references.
+  SgVariableDeclaration *sg_var_decl =
+      SageBuilder::buildVariableDeclaration_nfi(name, type, NULL,
+                                                SageBuilder::topScopeStack());
+  sg_var_decl->set_isAssociatedWithDeclarationList(true);
+
+  clang::Expr *binding_expr = binding_decl->getBinding();
+  SgInitializer *init = NULL;
+  if (binding_expr != NULL) {
+    SgNode *tmp_init = Traverse(binding_expr);
+    if (SgInitializer *tmp_init_initializer = isSgInitializer(tmp_init)) {
+      init = tmp_init_initializer;
+    } else {
+      SgExpression *expr = isSgExpression(tmp_init);
+      if (tmp_init != NULL && expr == NULL) {
+        std::cerr << "Runtime error: not a SgInitializer..." << std::endl;
+        res = false;
+      } else if (expr != NULL) {
+        if (SgExprListExp *expr_list_expr = isSgExprListExp(expr)) {
+          init = SageBuilder::buildAggregateInitializer(expr_list_expr, type);
+        } else if (SgInitializer *existing_init = isSgInitializer(expr)) {
+          init = existing_init;
+        } else {
+          init =
+              SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
+        }
+      }
+    }
+  }
+
+  if (init != NULL) {
+    sg_var_decl->reset_initializer(init);
+  }
+  if (init != NULL && binding_expr != NULL) {
+    if (!llvm::isa<clang::CXXConstructExpr>(binding_expr)) {
+      applySourceRange(init, binding_expr->getSourceRange());
+    }
+  }
+
+  sg_var_decl->set_firstNondefiningDeclaration(sg_var_decl);
+  sg_var_decl->set_parent(SageBuilder::topScopeStack());
+
+  ROSE_ASSERT(sg_var_decl->get_variables().size() == 1);
+  SgInitializedName *init_name = sg_var_decl->get_variables()[0];
+  ROSE_ASSERT(init_name != NULL);
+  if (init_name->get_scope() == NULL) {
+    init_name->set_scope(SageBuilder::topScopeStack());
+  }
+  if (init != NULL) {
+    init->set_parent(init_name);
+  }
+
+  applySourceRange(init_name, binding_decl->getSourceRange());
+
+  SgVariableDefinition *var_def =
+      isSgVariableDefinition(init_name->get_declptr());
+  if (var_def == NULL) {
+    var_def = sg_var_decl->get_definition();
+    if (var_def != NULL) {
+      init_name->set_declptr(var_def);
+    }
+  }
+  ROSE_ASSERT(var_def != NULL);
+  applySourceRange(var_def, binding_decl->getSourceRange());
+
+  clang::AccessSpecifier access = binding_decl->getAccess();
+  if (access == clang::AS_public) {
+    sg_var_decl->get_declarationModifier().get_accessModifier().setPublic();
+  } else if (access == clang::AS_private) {
+    sg_var_decl->get_declarationModifier().get_accessModifier().setPrivate();
+  } else if (access == clang::AS_protected) {
+    sg_var_decl->get_declarationModifier().get_accessModifier().setProtected();
+  } else if (access == clang::AS_none) {
+    if (isSgClassDefinition(SageBuilder::topScopeStack())) {
+      SgClassDefinition *class_def =
+          isSgClassDefinition(SageBuilder::topScopeStack());
+      if (class_def->get_declaration()->get_class_type() ==
+          SgClassDeclaration::e_class) {
+        sg_var_decl->get_declarationModifier()
+            .get_accessModifier()
+            .setPrivate();
+      } else {
+        sg_var_decl->get_declarationModifier().get_accessModifier().setPublic();
+      }
+    } else {
+      sg_var_decl->get_declarationModifier().get_accessModifier().setPublic();
+    }
+  }
+
+  *node = sg_var_decl;
 
   return VisitValueDecl(binding_decl, node) && res;
 }

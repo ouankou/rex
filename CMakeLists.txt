@@ -773,7 +773,6 @@ endif()
 option(ENABLE-SMALLER-GENERATED-FILES "Build smaller generated Sage III IR files" OFF)
 set(enable-smaller-generated-files ${ENABLE-SMALLER-GENERATED-FILES})
 
-option(WITH-LIBHARU "Build bundled libharu PDF support" ON)
 set(WITH-VALGRIND "" CACHE PATH "Valgrind installation prefix (empty to disable)")
 set(WITH-VALGRIND-BIN "" CACHE PATH "Valgrind bin directory")
 set(WITH-VALGRIND-INCLUDE "" CACHE PATH "Valgrind include directory")
@@ -792,14 +791,9 @@ endif()
 include(FindBison)
 find_bison()
 
-# Zlib is required by libharu. To find it in a special place, set ZLIB_ROOT to its installation prefix.
+# Zlib may be required by libharu. To find it in a special place, set ZLIB_ROOT to its installation prefix.
 include(FindZlib)
-if(WITH-LIBHARU)
-  find_zlib()
-  set(ROSE_WITH_LIBHARU 1)
-else()
-  set(ZLIB_FOUND FALSE)
-endif()
+find_zlib()
 
 set(VALGRIND_INSTALL_PATH "")
 set(VALGRIND_BIN_PATH "")
@@ -875,6 +869,36 @@ if(WITH-LLVM-OMP-RUNTIME-LIBRARY)
   set(LLVM_OPENMP_LIB_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}")
 endif()
 
+set(LIBHARU_ROOT "" CACHE PATH "Optional libharu installation prefix")
+if(LIBHARU_ROOT)
+  list(APPEND CMAKE_PREFIX_PATH "${LIBHARU_ROOT}")
+endif()
+
+# libharu is required for PDF generation (system-provided).
+find_path(HPDF_INCLUDE_DIR NAMES hpdf.h PATH_SUFFIXES include)
+find_library(HPDF_LIBRARY NAMES hpdf PATH_SUFFIXES lib)
+if(NOT HPDF_INCLUDE_DIR OR NOT HPDF_LIBRARY)
+  message(FATAL_ERROR "libharu (hpdf) is required. Install the libharu development package and ensure hpdf.h and libhpdf are discoverable.")
+endif()
+set(HPDF_VERSION "")
+if(EXISTS "${HPDF_INCLUDE_DIR}/hpdf_version.h")
+  file(STRINGS "${HPDF_INCLUDE_DIR}/hpdf_version.h" _hpdf_version_line
+       REGEX "^#define[ \t]+HPDF_VERSION_TEXT[ \t]+\"")
+  if(_hpdf_version_line)
+    string(REGEX REPLACE ".*\"([^\"]+)\".*" "\\1" HPDF_VERSION
+                         "${_hpdf_version_line}")
+  endif()
+endif()
+if(HPDF_VERSION)
+  message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARY} (found version \"${HPDF_VERSION}\")")
+else()
+  message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARY}")
+endif()
+set(HPDF_INCLUDE_DIRS ${HPDF_INCLUDE_DIR})
+set(HPDF_LIBRARIES ${HPDF_LIBRARY})
+set(ROSE_WITH_LIBHARU 1)
+add_compile_definitions(ROSE_WITH_LIBHARU=1)
+
 set(ASSERTION_BEHAVIOR "exit" CACHE STRING "Default behavior of failed assertions. Can be 'abort', 'exit', or 'throw'.")
 if(ASSERTION_BEHAVIOR STREQUAL "abort")
   add_definitions("-DROSE_ASSERTION_BEHAVIOR=ROSE_ASSERTION_ABORT")
@@ -915,9 +939,6 @@ if(HAVE_DLFCN_H)
 else()
   set(use_rose_in_build_tree_var, FALSE)
 endif()
-
-set(LIBHARU_SOURCE_DIR ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-200910170404)
-set(LIBHARU_BINARY_DIR ${ROSE_TOP_BINARY_DIR}/src/3rdPartyLibraries/libharu-200910170404)
 
 ########################################################################################################################
 # Back-end compilers
@@ -1172,11 +1193,8 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/finiteDifferencing
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/functionCallNormalization
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/constantFolding
-  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration)
-
-if(WITH-LIBHARU)
-  list(APPEND ROSE_INCLUDES ${ROSE_TOP_SRC_DIR}/src/3rdPartyLibraries/libharu-2.1.0/include)
-endif()
+  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration
+  ${HPDF_INCLUDE_DIR})
 
 ########################################################################################################################
 # Set output directories
