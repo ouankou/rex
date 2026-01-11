@@ -1330,6 +1330,8 @@ ROSE__CXX_TESTS = \
 	X.C \
 	dynamic_cast.C \
 	fstream.C \
+	lulesh.C \
+	luleshTALC.C \
 	test2005_06.C \
 	test2005_08.C \
 	test2012_57.C \
