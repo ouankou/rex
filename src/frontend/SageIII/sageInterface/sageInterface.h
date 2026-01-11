@@ -436,12 +436,15 @@ ROSE_DLL_API std::string getTemplateParameterKeyword(SgTemplateParameter* param)
    // DQ (8/27/2005):
    bool isOverloaded (SgFunctionDeclaration * functionDeclaration);
    //! Return true if expr refers to an overloaded operator-> or operator->*.
-   bool isOverloadedArrowOperator(SgExpression* expr);
+   bool isOverloadedArrowOperator(SgExpression *expr);
+   //! Return true if symbol refers to an overloaded operator-> or operator->*.
+   bool isOverloadedArrowOperator(const SgFunctionSymbol *func_symbol);
    //! Return true if expr is part of an overloaded operator-> call chain.
-   bool isOverloadedArrowOperatorChain(SgExpression* expr);
+   bool isOverloadedArrowOperatorChain(SgExpression *expr);
 
-// DQ (2/14/2012): Added support function used for variable declarations in conditionals.
-//! Support function used for variable declarations in conditionals
+   // DQ (2/14/2012): Added support function used for variable declarations in
+   // conditionals.
+   //! Support function used for variable declarations in conditionals
    void initializeIfStmt(SgIfStmt *ifstmt, SgStatement* conditional, SgStatement * true_body, SgStatement * false_body);
 
 //! Support function used for variable declarations in conditionals

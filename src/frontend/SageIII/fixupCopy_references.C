@@ -1209,15 +1209,57 @@ SgDefaultOptionStmt::fixupCopy_references(SgNode* copy, SgCopyHelp & help) const
      this->get_body()->fixupCopy_references(defaultOptionStatement_copy->get_body(),help);
    }
 
-void
-SgTemplateArgument::fixupCopy_references(SgNode* copy, SgCopyHelp&) const
-   {
+   void SgTemplateArgument::fixupCopy_references(SgNode *copy,
+                                                 SgCopyHelp &help) const {
      SgTemplateArgument* templateArgument_copy = isSgTemplateArgument(copy);
      ROSE_ASSERT(templateArgument_copy != NULL);
 
 #if DEBUG_FIXUP_COPY
      printf ("\nIn SgTemplateArgument::fixupCopy_references(): this = %p = %s copy = %p \n",this,this->class_name().c_str(),copy);
 #endif
+
+     if (SgInitializedName *initializedName_original = get_initializedName()) {
+       SgCopyHelp::copiedNodeMapTypeIterator i =
+           help.get_copiedNodeMap().find(initializedName_original);
+       if (i != help.get_copiedNodeMap().end()) {
+         SgInitializedName *initializedName_copy =
+             isSgInitializedName(i->second);
+         ROSE_ASSERT(initializedName_copy != NULL);
+         templateArgument_copy->set_initializedName(initializedName_copy);
+       }
+     }
+
+     if (SgType *unparsable_type_alias_original = get_unparsable_type_alias()) {
+       SgCopyHelp::copiedNodeMapTypeIterator i =
+           help.get_copiedNodeMap().find(unparsable_type_alias_original);
+       if (i != help.get_copiedNodeMap().end()) {
+         SgType *unparsable_type_alias_copy = isSgType(i->second);
+         ROSE_ASSERT(unparsable_type_alias_copy != NULL);
+         templateArgument_copy->set_unparsable_type_alias(
+             unparsable_type_alias_copy);
+       }
+     }
+
+     if (SgTemplateArgument *previous_instance_original =
+             get_previous_instance()) {
+       SgCopyHelp::copiedNodeMapTypeIterator i =
+           help.get_copiedNodeMap().find(previous_instance_original);
+       if (i != help.get_copiedNodeMap().end()) {
+         SgTemplateArgument *previous_instance_copy =
+             isSgTemplateArgument(i->second);
+         ROSE_ASSERT(previous_instance_copy != NULL);
+         templateArgument_copy->set_previous_instance(previous_instance_copy);
+       }
+     }
+
+     if (SgTemplateArgument *next_instance_original = get_next_instance()) {
+       SgCopyHelp::copiedNodeMapTypeIterator i =
+           help.get_copiedNodeMap().find(next_instance_original);
+       if (i != help.get_copiedNodeMap().end()) {
+         SgTemplateArgument *next_instance_copy =
+             isSgTemplateArgument(i->second);
+         ROSE_ASSERT(next_instance_copy != NULL);
+         templateArgument_copy->set_next_instance(next_instance_copy);
+       }
+     }
    }
-
-

@@ -3809,12 +3809,52 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     }
   }
 
-  SgNode *tmp_expr = Traverse(call_expr->getCallee());
-  SgExpression *expr = isSgExpression(tmp_expr);
-  if (tmp_expr != NULL && expr == NULL) {
-    std::cerr << "Runtime error: tmp_expr != NULL && expr == NULLL"
-              << std::endl;
-    res = false;
+  SgExpression *expr = nullptr;
+  clang::Expr *callee_expr = call_expr->getCallee();
+  clang::Expr *callee_base =
+      callee_expr != nullptr ? callee_expr->IgnoreParenImpCasts() : nullptr;
+  if (clang::LambdaExpr *lambda_callee =
+          llvm::dyn_cast_or_null<clang::LambdaExpr>(callee_base)) {
+    SgNode *tmp_lambda = Traverse(lambda_callee);
+    SgLambdaExp *lambda_exp = isSgLambdaExp(tmp_lambda);
+    ROSE_ASSERT(lambda_exp != NULL);
+
+    SgFunctionDeclaration *lambda_func = lambda_exp->get_lambda_function();
+    ROSE_ASSERT(lambda_func != NULL);
+    SgMemberFunctionDeclaration *member_decl =
+        isSgMemberFunctionDeclaration(lambda_func);
+    ROSE_ASSERT(member_decl != NULL);
+
+    SgMemberFunctionSymbol *member_sym =
+        isSgMemberFunctionSymbol(member_decl->get_symbol_from_symbol_table());
+    if (member_sym == NULL) {
+      if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
+        member_sym =
+            isSgMemberFunctionSymbol(decl_scope->lookup_function_symbol(
+                member_decl->get_name(), member_decl->get_type()));
+      }
+    }
+    if (member_sym == NULL) {
+      member_sym = new SgMemberFunctionSymbol(member_decl);
+      if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
+        decl_scope->insert_symbol(member_decl->get_name(), member_sym);
+      } else {
+        member_sym->set_parent(member_decl);
+      }
+    }
+    ROSE_ASSERT(member_sym != NULL);
+
+    SgExpression *member_ref =
+        SageBuilder::buildMemberFunctionRefExp_nfi(member_sym, false, false);
+    expr = SageBuilder::buildDotExp(lambda_exp, member_ref);
+  } else {
+    SgNode *tmp_expr = Traverse(callee_expr);
+    expr = isSgExpression(tmp_expr);
+    if (tmp_expr != NULL && expr == NULL) {
+      std::cerr << "Runtime error: tmp_expr != NULL && expr == NULLL"
+                << std::endl;
+      res = false;
+    }
   }
 
   SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
@@ -4761,9 +4801,18 @@ bool ClangToSageTranslator::VisitCXXDefaultInitExpr(
 #endif
   bool res = true;
 
-  // TODO
+  clang::Expr *init_expr = cxx_default_init_expr->getExpr();
+  ROSE_ASSERT(init_expr != NULL);
 
-  return VisitExpr(cxx_default_init_expr, node) && res;
+  SgNode *tmp_expr = Traverse(init_expr);
+  SgExpression *expr = isSgExpression(tmp_expr);
+  ROSE_ASSERT(expr != NULL);
+
+  SgExpression *expr_copy = SageInterface::deepCopy(expr);
+  ROSE_ASSERT(expr_copy != NULL);
+  *node = expr_copy;
+
+  return res;
 }
 
 bool ClangToSageTranslator::VisitCXXDeleteExpr(

@@ -2091,15 +2091,64 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                          MLOG_WARN_C(MLOG_UNPARSER, "classDeclaration name = %s \n",classDeclaration->get_name().str());
 #endif
-                         SgClassSymbol* classSymbol = isSgClassSymbol(symbol);
-                      // ASSERT_not_null(classSymbol);
+                         SgClassSymbol *classSymbol = isSgClassSymbol(symbol);
+                         // ASSERT_not_null(classSymbol);
                          if (classSymbol == NULL)
                             {
+                           bool typedefAliasesClass = false;
+                           SgTypedefSymbol *typedefSymbol =
+                               isSgTypedefSymbol(symbol);
+                           if (typedefSymbol != NULL) {
+                             SgTypedefDeclaration *typedefDeclaration =
+                                 typedefSymbol->get_declaration();
+                             if (typedefDeclaration != NULL) {
+                               SgType *baseType =
+                                   typedefDeclaration->get_base_type();
+                               if (baseType != NULL) {
+                                 const int strip_bits =
+                                     SgType::STRIP_MODIFIER_TYPE |
+                                     SgType::STRIP_REFERENCE_TYPE |
+                                     SgType::STRIP_RVALUE_REFERENCE_TYPE |
+                                     SgType::STRIP_POINTER_TYPE |
+                                     SgType::STRIP_ARRAY_TYPE |
+                                     SgType::STRIP_TYPEDEF_TYPE;
+                                 baseType = baseType->stripType(strip_bits);
+                               }
+                               SgClassType *classType = isSgClassType(baseType);
+                               if (classType != NULL) {
+                                 SgDeclarationStatement
+                                     *typedefDeclarationStatement =
+                                         classType->get_declaration();
+                                 SgClassDeclaration *typedefClassDeclaration =
+                                     isSgClassDeclaration(
+                                         typedefDeclarationStatement);
+                                 if (typedefClassDeclaration != NULL) {
+                                   SgDeclarationStatement *typedefFirstDeclaration =
+                                       typedefClassDeclaration
+                                           ->get_firstNondefiningDeclaration();
+                                   if (typedefFirstDeclaration == NULL) {
+                                     typedefFirstDeclaration =
+                                         typedefClassDeclaration;
+                                   }
+                                   SgDeclarationStatement *classFirstDeclaration =
+                                       classDeclaration
+                                           ->get_firstNondefiningDeclaration();
+                                   if (classFirstDeclaration == NULL) {
+                                     classFirstDeclaration = classDeclaration;
+                                   }
+                                   typedefAliasesClass =
+                                       (typedefFirstDeclaration ==
+                                        classFirstDeclaration);
+                                 }
+                               }
+                             }
+                           }
+
                            // This is only type elaboration if it is a variable that is the conflict, if it is a typedef then more qualification is required. (see test2011_37.C).
                            // MLOG_WARN_C(MLOG_UNPARSER, "Type elaboration is required: declaration = %s symbol = %s \n",declaration->class_name().c_str(),symbol->class_name().c_str());
                            // typeElaborationIsRequired = true;
-                              if (requiresTypeElaboration(symbol) == true)
-                                 {
+                           if (typedefAliasesClass == false &&
+                               requiresTypeElaboration(symbol) == true) {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
                                    MLOG_WARN_C(MLOG_UNPARSER, "Type elaboration is required: declaration = %s symbol = %s \n",declaration->class_name().c_str(),symbol->class_name().c_str());
 #endif
@@ -2107,10 +2156,9 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
 
                                 // DQ (2/13/2019): Adding more name qualification (debugging test2011_33.C).
                                 // forceMoreNameQualification = true;
-                                 }
-                                else
-                                 {
-                                // I think we have to force an extra level of name qualification.
+                           } else if (typedefAliasesClass == false) {
+                             // I think we have to force an extra level of name
+                             // qualification.
 #if 1
                                 // DQ (2/13/2019): I think we need to check if a qualified nondefining declaration
                                 // has been made for this class, else no qualification should be output.
@@ -2151,7 +2199,7 @@ NameQualificationTraversal::nameQualificationDepth ( SgDeclarationStatement* dec
                                    MLOG_WARN_C(MLOG_UNPARSER, "I think we have to force an extra level of name qualification (not implemented) \n");
                                    ROSE_ABORT();
 #endif
-                                 }
+                           }
 
                            // DQ (8/16/2013): Modified API for symbol lookup.
                            // Reset the symbol to one that will match the declaration.

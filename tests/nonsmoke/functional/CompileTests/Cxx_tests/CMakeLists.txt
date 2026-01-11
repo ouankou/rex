@@ -2728,7 +2728,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2009_46.C
   test2009_47.C
   test2010_01.C
-  test2010_02.C
   test2010_07.C
   test2010_08.C
   test2010_09.C
@@ -2881,7 +2880,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2014_59.C
   test2014_63.C
   test2014_64.C
-  test2014_65.C
   test2014_66.C
   test2014_69.C
   test2015_105.C
@@ -2923,7 +2921,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2017_67.C
   test2017_85.C
   test2017_86.C
-  test2017_99.C
   test2018_22.C
   test2018_23.C
   test2018_25.C
@@ -3111,7 +3108,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2009_45.C
   test2009_46.C
   test2009_47.C
-  test2010_02.C
   test2010_07.C
   test2010_09.C
   test2010_10.C
@@ -3203,7 +3199,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2012_81.C
   test2012_86.C
   test2012_90.C
-  test2013_09.C
   test2013_13.C
   test2013_14.C
   test2013_15.C
@@ -3282,7 +3277,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_59.C
   test2014_63.C
   test2014_64.C
-  test2014_65.C
   test2014_66.C
   test2014_69.C
   test2014_99.C
@@ -3318,7 +3312,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2017_69.C
   test2017_85.C
   test2017_86.C
-  test2017_99.C
   test2018_01.C
   test2018_22.C
   test2018_23.C

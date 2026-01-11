@@ -3880,17 +3880,36 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
    {
      SgFunctionSymbol* func_symbol = nullptr;
 
-     if (SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr))
-        func_symbol = func_ref->get_symbol();
-     else if (SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr))
-        func_symbol = mfunc_ref->get_symbol();
+     if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr))
+       func_symbol = func_ref->get_symbol();
+     else if (SgMemberFunctionRefExp *mfunc_ref =
+                  isSgMemberFunctionRefExp(expr))
+       func_symbol = mfunc_ref->get_symbol();
+     else if (SgDotExp *dot_exp = isSgDotExp(expr)) {
+       if (SgMemberFunctionRefExp *mfunc_ref =
+               isSgMemberFunctionRefExp(dot_exp->get_rhs_operand()))
+         func_symbol = mfunc_ref->get_symbol();
+     } else if (SgArrowExp *arrow_exp = isSgArrowExp(expr)) {
+       if (SgMemberFunctionRefExp *mfunc_ref =
+               isSgMemberFunctionRefExp(arrow_exp->get_rhs_operand()))
+         func_symbol = mfunc_ref->get_symbol();
+     }
 
-     if (func_symbol == nullptr)
-        return false;
+     return SageInterface::isOverloadedArrowOperator(func_symbol);
+}
 
-     const SgName name = func_symbol->get_name();
-     return (name == "operator->" || name == "operator->*");
-   }
+bool SageInterface::isOverloadedArrowOperator(
+    const SgFunctionSymbol *func_symbol) {
+  if (func_symbol == nullptr)
+    return false;
+
+  const SgFunctionDeclaration *decl = func_symbol->get_declaration();
+  if (decl != nullptr && !decl->get_specialFunctionModifier().isOperator())
+    return false;
+
+  const std::string name = func_symbol->get_name().getString();
+  return (name == "operator->" || name == "operator->*");
+}
 
 bool
 SageInterface::isOverloadedArrowOperatorChain(SgExpression* expr)

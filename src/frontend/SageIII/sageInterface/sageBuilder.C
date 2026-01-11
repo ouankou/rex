@@ -5743,6 +5743,13 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   // SgSymbol* func_symbol = scope->find_symbol_by_type_of_function<actualFunction>(nameWithTemplateArguments,func_type);
   // SgSymbol* func_symbol = scope->find_symbol_by_type_of_function<actualFunction>(nameWithTemplateArguments,func_type,NULL,templateArgumentsList);
      SgSymbol* func_symbol = scope->find_symbol_by_type_of_function<actualFunction>(nameWithTemplateArguments,func_type,templateParameterList,templateArgumentsList);
+     if (func_symbol == NULL && first_nondefining_declaration != NULL) {
+       SgSymbol *nondef_symbol =
+           first_nondefining_declaration->get_symbol_from_symbol_table();
+       if (nondef_symbol != NULL) {
+         func_symbol = nondef_symbol;
+       }
+     }
 
 #if 0
      if (func_symbol == NULL)

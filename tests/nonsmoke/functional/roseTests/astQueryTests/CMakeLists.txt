@@ -77,6 +77,7 @@ foreach(entry IN LISTS ROSE_INCLUDES)
     list(APPEND _rose_include_flags -I${entry})
   endif()
 endforeach()
+string(JOIN " " _rose_include_flags_str ${_rose_include_flags})
 
 add_test(
   NAME astQuery_test3_cxx_grammar
@@ -84,11 +85,10 @@ add_test(
   COMMAND ${_rth}
     "TITLE=test3 Cxx_Grammar.C [test3.passed]"
     "USE_SUBDIR=yes"
-    "CMD=$<TARGET_FILE:testQuery3> -rose:verbose 0 -I${CMAKE_BINARY_DIR} ${_rose_include_flags} -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C"
+    "CMD=$<TARGET_FILE:testQuery3> -rose:verbose 0 -I${CMAKE_BINARY_DIR} ${_rose_include_flags_str} -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C"
     ${_exit_status}
     test3.passed
 )
-set_tests_properties(astQuery_test3_cxx_grammar PROPERTIES DISABLED TRUE)
 
 install(TARGETS testQuery testQuery2 testQuery3 DESTINATION bin)
 
