@@ -236,7 +236,7 @@ if(ZLIB_FOUND)
   add_library_dependency(${ZLIB_LIBRARY})
 endif()
 
-target_link_libraries(ROSE_DLL PRIVATE ${HPDF_LIBRARY})
+target_link_libraries(ROSE_DLL PRIVATE ${HPDF_LIBRARIES})
 add_library_dependency(${HPDF_LIBRARY})
 
 set(LINK_FILES

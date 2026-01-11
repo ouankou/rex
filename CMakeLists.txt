@@ -875,29 +875,63 @@ if(LIBHARU_ROOT)
 endif()
 
 # libharu is required for PDF generation (system-provided).
-find_path(HPDF_INCLUDE_DIR NAMES hpdf.h PATH_SUFFIXES include)
-find_library(HPDF_LIBRARY NAMES hpdf PATH_SUFFIXES lib)
-if(NOT HPDF_INCLUDE_DIR OR NOT HPDF_LIBRARY)
-  message(FATAL_ERROR "libharu (hpdf) is required. Install the libharu development package and ensure hpdf.h and libhpdf are discoverable.")
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+  pkg_check_modules(HPDF_PC QUIET libhpdf)
 endif()
+
+set(HPDF_INCLUDE_DIRS "")
+set(HPDF_LIBRARY "")
 set(HPDF_VERSION "")
-if(EXISTS "${HPDF_INCLUDE_DIR}/hpdf_version.h")
-  file(STRINGS "${HPDF_INCLUDE_DIR}/hpdf_version.h" _hpdf_version_line
-       REGEX "^#define[ \t]+HPDF_VERSION_TEXT[ \t]+\"")
-  if(_hpdf_version_line)
-    string(REGEX REPLACE ".*\"([^\"]+)\".*" "\\1" HPDF_VERSION
-                         "${_hpdf_version_line}")
+set(HPDF_FOUND FALSE)
+
+if(HPDF_PC_FOUND)
+  set(HPDF_FOUND TRUE)
+  set(HPDF_INCLUDE_DIRS ${HPDF_PC_INCLUDE_DIRS})
+  set(HPDF_VERSION ${HPDF_PC_VERSION})
+  find_library(HPDF_LIBRARY NAMES hpdf HINTS ${HPDF_PC_LIBRARY_DIRS})
+endif()
+
+if(NOT HPDF_LIBRARY)
+  find_path(HPDF_INCLUDE_DIR NAMES hpdf.h PATH_SUFFIXES include)
+  find_library(HPDF_LIBRARY NAMES hpdf PATH_SUFFIXES lib)
+  if(HPDF_INCLUDE_DIR AND HPDF_LIBRARY)
+    set(HPDF_FOUND TRUE)
+    set(HPDF_INCLUDE_DIRS ${HPDF_INCLUDE_DIR})
   endif()
 endif()
+
+if(NOT HPDF_FOUND OR NOT HPDF_LIBRARY)
+  message(FATAL_ERROR "libharu (hpdf) is required. Install the libharu development package and ensure hpdf.h and libhpdf are discoverable.")
+endif()
+
+if(NOT HPDF_VERSION)
+  set(HPDF_VERSION_HEADER "")
+  foreach(dir IN LISTS HPDF_INCLUDE_DIRS)
+    if(EXISTS "${dir}/hpdf_version.h")
+      set(HPDF_VERSION_HEADER "${dir}/hpdf_version.h")
+      break()
+    endif()
+  endforeach()
+  if(HPDF_VERSION_HEADER)
+    file(STRINGS "${HPDF_VERSION_HEADER}" _hpdf_version_line
+         REGEX "^#define[ \t]+HPDF_VERSION_TEXT[ \t]+\"")
+    if(_hpdf_version_line)
+      string(REGEX REPLACE ".*\"([^\"]+)\".*" "\\1" HPDF_VERSION
+                           "${_hpdf_version_line}")
+    endif()
+  endif()
+endif()
+
 if(HPDF_VERSION)
   message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARY} (found version \"${HPDF_VERSION}\")")
 else()
   message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARY}")
 endif()
-set(HPDF_INCLUDE_DIRS ${HPDF_INCLUDE_DIR})
+
 set(HPDF_LIBRARIES ${HPDF_LIBRARY})
 set(ROSE_WITH_LIBHARU 1)
-add_compile_definitions(ROSE_WITH_LIBHARU=1)
 
 set(ASSERTION_BEHAVIOR "exit" CACHE STRING "Default behavior of failed assertions. Can be 'abort', 'exit', or 'throw'.")
 if(ASSERTION_BEHAVIOR STREQUAL "abort")
@@ -1194,7 +1228,7 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/functionCallNormalization
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/constantFolding
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration
-  ${HPDF_INCLUDE_DIR})
+  ${HPDF_INCLUDE_DIRS})
 
 ########################################################################################################################
 # Set output directories
