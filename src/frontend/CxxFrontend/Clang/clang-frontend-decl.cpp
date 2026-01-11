@@ -8596,7 +8596,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             SgInitializedName *cloned_param =
                 SageBuilder::buildInitializedName_nfi(
                     init_name->get_name(), init_name->get_type(), cloned_init);
-            cloned_param->set_scope(SageBuilder::topScopeStack());
             cloned_param->set_parent(first_param_list);
             first_param_list->append_arg(cloned_param);
           }
@@ -8607,7 +8606,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             SgInitializedName *ellipses_param =
                 SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
                                                       NULL);
-            ellipses_param->set_scope(SageBuilder::topScopeStack());
             ellipses_param->set_parent(first_param_list);
             first_param_list->append_arg(ellipses_param);
           }
@@ -8648,6 +8646,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           for (SgInitializedName *param : first_param_list->get_args()) {
             if (param != NULL) {
               param->set_declptr(first_nondef);
+              param->set_scope(first_nondef);
             }
           }
         }
@@ -8728,7 +8727,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             SgInitializedName *cloned_param =
                 SageBuilder::buildInitializedName_nfi(
                     init_name->get_name(), init_name->get_type(), cloned_init);
-            cloned_param->set_scope(SageBuilder::topScopeStack());
             cloned_param->set_parent(first_param_list);
             first_param_list->append_arg(cloned_param);
           }
@@ -8739,7 +8737,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             SgInitializedName *ellipses_param =
                 SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
                                                       NULL);
-            ellipses_param->set_scope(SageBuilder::topScopeStack());
             ellipses_param->set_parent(first_param_list);
             first_param_list->append_arg(ellipses_param);
           }
@@ -8780,6 +8777,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           for (SgInitializedName *param : first_param_list->get_args()) {
             if (param != NULL) {
               param->set_declptr(first_nondef);
+              param->set_scope(first_nondef);
             }
           }
         }
@@ -8908,7 +8906,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           SgInitializedName *cloned_param =
               SageBuilder::buildInitializedName_nfi(
                   init_name->get_name(), init_name->get_type(), cloned_init);
-          cloned_param->set_scope(SageBuilder::topScopeStack());
           cloned_param->set_parent(first_param_list);
           first_param_list->append_arg(cloned_param);
         }
@@ -8918,7 +8915,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           SgType *ellipses_type = SgTypeEllipse::createType();
           SgInitializedName *ellipses_param =
               SageBuilder::buildInitializedName_nfi(empty, ellipses_type, NULL);
-          ellipses_param->set_scope(SageBuilder::topScopeStack());
           ellipses_param->set_parent(first_param_list);
           first_param_list->append_arg(ellipses_param);
         }
@@ -8956,6 +8952,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           for (SgInitializedName *param : first_param_list->get_args()) {
             if (param != NULL) {
               param->set_declptr(first_nondef_for_builder);
+              param->set_scope(first_nondef_for_builder);
             }
           }
         }
