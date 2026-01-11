@@ -1962,19 +1962,10 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
         enum_decl = isSgEnumDeclaration(init_name->get_parent());
       }
       if (enum_decl != nullptr) {
-        long long enum_value = 0;
-        if (init_name != nullptr) {
-          if (SgInitializer *initializer = init_name->get_initializer()) {
-            if (SgAssignInitializer *assign_init =
-                    isSgAssignInitializer(initializer)) {
-              if (SgValueExp *value_exp =
-                      isSgValueExp(assign_init->get_operand())) {
-                enum_value = static_cast<long long>(
-                    SageInterface::getIntegerConstantValue(value_exp));
-              }
-            }
-          }
-        }
+        const clang::EnumConstantDecl *enum_const_decl =
+            llvm::dyn_cast<clang::EnumConstantDecl>(decl);
+        ROSE_ASSERT(enum_const_decl != nullptr);
+        long long enum_value = enum_const_decl->getInitVal().getExtValue();
         return SageBuilder::buildEnumVal_nfi(enum_value, enum_decl,
                                              enum_sym->get_name());
       }
@@ -2040,9 +2031,6 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
     SgType *param_type = buildTypeFromQualifiedType(arg.getParamTypeForDecl());
     SgInitializedName *init_name = nullptr;
     SgExpression *decl_expr = build_decl_expr(decl, &init_name);
-    if (decl_expr != nullptr) {
-      init_name = nullptr;
-    }
     if (decl_expr != nullptr || init_name != nullptr) {
       sg_arg = new SgTemplateArgument(SgTemplateArgument::nontype_argument,
                                       /*isArrayBoundUnknownType=*/false,
