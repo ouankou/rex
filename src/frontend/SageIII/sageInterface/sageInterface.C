@@ -3880,10 +3880,20 @@ SageInterface::isOverloadedArrowOperator(SgExpression* expr)
    {
      SgFunctionSymbol* func_symbol = nullptr;
 
-     if (SgFunctionRefExp* func_ref = isSgFunctionRefExp(expr))
-        func_symbol = func_ref->get_symbol();
-     else if (SgMemberFunctionRefExp* mfunc_ref = isSgMemberFunctionRefExp(expr))
-        func_symbol = mfunc_ref->get_symbol();
+     if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr))
+       func_symbol = func_ref->get_symbol();
+     else if (SgMemberFunctionRefExp *mfunc_ref =
+                  isSgMemberFunctionRefExp(expr))
+       func_symbol = mfunc_ref->get_symbol();
+     else if (SgDotExp *dot_exp = isSgDotExp(expr)) {
+       if (SgMemberFunctionRefExp *mfunc_ref =
+               isSgMemberFunctionRefExp(dot_exp->get_rhs_operand()))
+         func_symbol = mfunc_ref->get_symbol();
+     } else if (SgArrowExp *arrow_exp = isSgArrowExp(expr)) {
+       if (SgMemberFunctionRefExp *mfunc_ref =
+               isSgMemberFunctionRefExp(arrow_exp->get_rhs_operand()))
+         func_symbol = mfunc_ref->get_symbol();
+     }
 
      return SageInterface::isOverloadedArrowOperator(func_symbol);
 }

@@ -8045,7 +8045,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       (isTemplateMemberFunction || isClassTemplateMemberFunction);
   const bool is_explicit_specialization =
       specialization_kind == clang::TSK_ExplicitSpecialization;
-  SgTemplateArgumentPtrList *explicit_specialization_args = NULL;
+  std::unique_ptr<SgTemplateArgumentPtrList> explicit_specialization_args;
   if (is_explicit_specialization && templateDecl == NULL) {
     size_t explicit_arg_count = 0;
     if (const clang::ASTTemplateArgumentListInfo *args_as_written =
@@ -8064,14 +8064,18 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         if (explicit_arg_count == 0) {
           explicit_arg_count = clang_args->size();
         }
-        explicit_specialization_args = new SgTemplateArgumentPtrList(
-            buildTemplateArguments(*clang_args, explicit_arg_count));
+        explicit_specialization_args =
+            std::make_unique<SgTemplateArgumentPtrList>(
+                buildTemplateArguments(*clang_args, explicit_arg_count));
       }
     }
-    if (explicit_specialization_args == NULL) {
-      explicit_specialization_args = new SgTemplateArgumentPtrList();
+    if (!explicit_specialization_args) {
+      explicit_specialization_args =
+          std::make_unique<SgTemplateArgumentPtrList>();
     }
   }
+  SgTemplateArgumentPtrList *args_for_builder =
+      explicit_specialization_args.get();
   unsigned int functionConstVolatileFlags = 0;
   if (isMethodDecl) {
     auto *method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
@@ -8818,7 +8822,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     } else {
       const bool build_explicit_specialization_instantiation =
-          explicit_specialization_args != NULL;
+          args_for_builder != NULL;
       SgFunctionDeclaration *first_nondef_for_builder = NULL;
       const bool expect_member =
           builder_force_free_scope == false &&
@@ -8886,9 +8890,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
       if (first_nondef_for_builder == NULL) {
         SgTemplateArgumentPtrList *specialization_args =
-            build_explicit_specialization_instantiation
-                ? explicit_specialization_args
-                : NULL;
+            build_explicit_specialization_instantiation ? args_for_builder
+                                                        : NULL;
         SgFunctionParameterList *first_param_list =
             SageBuilder::buildFunctionParameterList_nfi();
         applySourceRange(first_param_list, function_decl->getSourceRange());
@@ -8974,8 +8977,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         if (SgTemplateInstantiationFunctionDecl *inst_func =
                 isSgTemplateInstantiationFunctionDecl(decl)) {
           inst_func->set_template_argument_list_is_explicit(true);
-          SageBuilder::setTemplateArgumentsInDeclaration(
-              inst_func, explicit_specialization_args);
+          SageBuilder::setTemplateArgumentsInDeclaration(inst_func,
+                                                         args_for_builder);
           if (function_decl->getPrimaryTemplate() != NULL) {
             if (SgNode *tmpl_node =
                     Traverse(function_decl->getPrimaryTemplate())) {
@@ -8989,8 +8992,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
                        isSgTemplateInstantiationMemberFunctionDecl(decl)) {
           inst_member->set_template_argument_list_is_explicit(true);
-          SageBuilder::setTemplateArgumentsInDeclaration(
-              inst_member, explicit_specialization_args);
+          SageBuilder::setTemplateArgumentsInDeclaration(inst_member,
+                                                         args_for_builder);
           if (function_decl->getPrimaryTemplate() != NULL) {
             if (SgNode *tmpl_node =
                     Traverse(function_decl->getPrimaryTemplate())) {
@@ -9011,8 +9014,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           name, ret_type, param_list, builder_scope,
           /*buildTemplateInstantiation=*/
           build_explicit_specialization_instantiation, first_nondef_for_builder,
-          /*templateArgumentsList=*/explicit_specialization_args,
-          builder_force_free_scope);
+          /*templateArgumentsList=*/args_for_builder, builder_force_free_scope);
 
       sg_function_decl->set_definingDeclaration(sg_function_decl);
 

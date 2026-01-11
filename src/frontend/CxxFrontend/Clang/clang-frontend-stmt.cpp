@@ -4772,7 +4772,7 @@ bool ClangToSageTranslator::VisitCXXDefaultInitExpr(
   ROSE_ASSERT(expr_copy != NULL);
   *node = expr_copy;
 
-  return VisitExpr(cxx_default_init_expr, node) && res;
+  return res;
 }
 
 bool ClangToSageTranslator::VisitCXXDeleteExpr(
