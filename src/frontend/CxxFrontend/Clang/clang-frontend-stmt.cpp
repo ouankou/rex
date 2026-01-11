@@ -4761,7 +4761,16 @@ bool ClangToSageTranslator::VisitCXXDefaultInitExpr(
 #endif
   bool res = true;
 
-  // TODO
+  clang::Expr *init_expr = cxx_default_init_expr->getExpr();
+  ROSE_ASSERT(init_expr != NULL);
+
+  SgNode *tmp_expr = Traverse(init_expr);
+  SgExpression *expr = isSgExpression(tmp_expr);
+  ROSE_ASSERT(expr != NULL);
+
+  SgExpression *expr_copy = SageInterface::deepCopy(expr);
+  ROSE_ASSERT(expr_copy != NULL);
+  *node = expr_copy;
 
   return VisitExpr(cxx_default_init_expr, node) && res;
 }

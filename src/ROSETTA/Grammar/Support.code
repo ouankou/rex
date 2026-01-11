@@ -20951,6 +20951,11 @@ void SgTemplateArgument::post_construction_initialization()
      p_name_qualification_length     = 0;
      p_type_elaboration_required     = false;
      p_global_qualification_required = false;
+     p_initializedName               = NULL;
+     p_unparsable_type_alias         = NULL;
+     p_previous_instance             = NULL;
+     p_next_instance                 = NULL;
+     p_is_pack_element               = false;
    }
 
 // Different constructors for use in building the different types of arguments possible
