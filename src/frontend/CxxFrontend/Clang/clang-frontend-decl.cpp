@@ -8528,6 +8528,62 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   if (!handled_template_instantiation && isDefinition &&
       !is_explicitly_defaulted_or_deleted) {
+    auto clone_param_list = [&](SgFunctionParameterList *source_params)
+        -> SgFunctionParameterList * {
+      ROSE_ASSERT(source_params != NULL);
+      SgFunctionParameterList *cloned =
+          SageBuilder::buildFunctionParameterList_nfi();
+      applySourceRange(cloned, function_decl->getSourceRange());
+
+      for (SgInitializedName *init_name : source_params->get_args()) {
+        if (init_name == NULL) {
+          continue;
+        }
+
+        SgInitializer *cloned_init = NULL;
+        if (SgInitializer *init = init_name->get_initializer()) {
+          cloned_init = SageInterface::deepCopy(init);
+        }
+
+        SgInitializedName *cloned_param = SageBuilder::buildInitializedName_nfi(
+            init_name->get_name(), init_name->get_type(), cloned_init);
+        cloned_param->set_parent(cloned);
+        cloned->append_arg(cloned_param);
+      }
+
+      if (function_decl->isVariadic()) {
+        SgName empty = "";
+        SgType *ellipses_type = SgTypeEllipse::createType();
+        SgInitializedName *ellipses_param =
+            SageBuilder::buildInitializedName_nfi(empty, ellipses_type, NULL);
+        ellipses_param->set_parent(cloned);
+        cloned->append_arg(ellipses_param);
+      }
+
+      return cloned;
+    };
+
+    auto fixup_nondef_params = [&](SgFunctionDeclaration *decl) -> void {
+      if (decl == NULL) {
+        return;
+      }
+
+      if (SgFunctionParameterList *params = decl->get_parameterList()) {
+        SgScopeStatement *param_scope = decl->get_functionParameterScope();
+        if (param_scope == NULL) {
+          param_scope = decl->get_scope();
+        }
+        for (SgInitializedName *param : params->get_args()) {
+          if (param != NULL) {
+            param->set_declptr(decl);
+            if (param_scope != NULL) {
+              param->set_scope(param_scope);
+            }
+          }
+        }
+      }
+    };
+
     // Build friend free-function definitions as free functions regardless of
     // lexical class scope.
     bool builder_force_free_scope = isFriendFreeFunction;
@@ -8576,34 +8632,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         if (first_nondef == NULL) {
           SgFunctionParameterList *first_param_list =
-              SageBuilder::buildFunctionParameterList_nfi();
-          applySourceRange(first_param_list, function_decl->getSourceRange());
-
-          for (SgInitializedName *init_name : param_list->get_args()) {
-            if (init_name == NULL)
-              continue;
-
-            SgInitializer *cloned_init = NULL;
-            if (SgInitializer *init = init_name->get_initializer()) {
-              cloned_init = SageInterface::deepCopy(init);
-            }
-
-            SgInitializedName *cloned_param =
-                SageBuilder::buildInitializedName_nfi(
-                    init_name->get_name(), init_name->get_type(), cloned_init);
-            cloned_param->set_parent(first_param_list);
-            first_param_list->append_arg(cloned_param);
-          }
-
-          if (function_decl->isVariadic()) {
-            SgName empty = "";
-            SgType *ellipses_type = SgTypeEllipse::createType();
-            SgInitializedName *ellipses_param =
-                SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
-                                                      NULL);
-            ellipses_param->set_parent(first_param_list);
-            first_param_list->append_arg(ellipses_param);
-          }
+              clone_param_list(param_list);
 
           first_nondef =
               SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
@@ -8636,22 +8665,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         first_nondef->set_firstNondefiningDeclaration(first_nondef);
 
-        if (SgFunctionParameterList *first_param_list =
-                first_nondef->get_parameterList()) {
-          SgScopeStatement *param_scope =
-              first_nondef->get_functionParameterScope();
-          if (param_scope == NULL) {
-            param_scope = first_nondef->get_scope();
-          }
-          for (SgInitializedName *param : first_param_list->get_args()) {
-            if (param != NULL) {
-              param->set_declptr(first_nondef);
-              if (param_scope != NULL) {
-                param->set_scope(param_scope);
-              }
-            }
-          }
-        }
+        fixup_nondef_params(first_nondef);
 
         SgScopeStatement *target_scope = builder_scope;
         if (builder_force_free_scope &&
@@ -8714,34 +8728,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         if (first_nondef == NULL) {
           SgFunctionParameterList *first_param_list =
-              SageBuilder::buildFunctionParameterList_nfi();
-          applySourceRange(first_param_list, function_decl->getSourceRange());
-
-          for (SgInitializedName *init_name : param_list->get_args()) {
-            if (init_name == NULL)
-              continue;
-
-            SgInitializer *cloned_init = NULL;
-            if (SgInitializer *init = init_name->get_initializer()) {
-              cloned_init = SageInterface::deepCopy(init);
-            }
-
-            SgInitializedName *cloned_param =
-                SageBuilder::buildInitializedName_nfi(
-                    init_name->get_name(), init_name->get_type(), cloned_init);
-            cloned_param->set_parent(first_param_list);
-            first_param_list->append_arg(cloned_param);
-          }
-
-          if (function_decl->isVariadic()) {
-            SgName empty = "";
-            SgType *ellipses_type = SgTypeEllipse::createType();
-            SgInitializedName *ellipses_param =
-                SageBuilder::buildInitializedName_nfi(empty, ellipses_type,
-                                                      NULL);
-            ellipses_param->set_parent(first_param_list);
-            first_param_list->append_arg(ellipses_param);
-          }
+              clone_param_list(param_list);
 
           first_nondef =
               SageBuilder::buildNondefiningTemplateFunctionDeclaration(
@@ -8774,22 +8761,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         first_nondef->set_firstNondefiningDeclaration(first_nondef);
 
-        if (SgFunctionParameterList *first_param_list =
-                first_nondef->get_parameterList()) {
-          SgScopeStatement *param_scope =
-              first_nondef->get_functionParameterScope();
-          if (param_scope == NULL) {
-            param_scope = first_nondef->get_scope();
-          }
-          for (SgInitializedName *param : first_param_list->get_args()) {
-            if (param != NULL) {
-              param->set_declptr(first_nondef);
-              if (param_scope != NULL) {
-                param->set_scope(param_scope);
-              }
-            }
-          }
-        }
+        fixup_nondef_params(first_nondef);
 
         // Fix for Issue 84: Friend template definitions inside a class should
         // be in the enclosing scope
@@ -8900,33 +8872,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             build_explicit_specialization_instantiation ? args_for_builder
                                                         : NULL;
         SgFunctionParameterList *first_param_list =
-            SageBuilder::buildFunctionParameterList_nfi();
-        applySourceRange(first_param_list, function_decl->getSourceRange());
-
-        for (SgInitializedName *init_name : param_list->get_args()) {
-          if (init_name == NULL)
-            continue;
-
-          SgInitializer *cloned_init = NULL;
-          if (SgInitializer *init = init_name->get_initializer()) {
-            cloned_init = SageInterface::deepCopy(init);
-          }
-
-          SgInitializedName *cloned_param =
-              SageBuilder::buildInitializedName_nfi(
-                  init_name->get_name(), init_name->get_type(), cloned_init);
-          cloned_param->set_parent(first_param_list);
-          first_param_list->append_arg(cloned_param);
-        }
-
-        if (function_decl->isVariadic()) {
-          SgName empty = "";
-          SgType *ellipses_type = SgTypeEllipse::createType();
-          SgInitializedName *ellipses_param =
-              SageBuilder::buildInitializedName_nfi(empty, ellipses_type, NULL);
-          ellipses_param->set_parent(first_param_list);
-          first_param_list->append_arg(ellipses_param);
-        }
+            clone_param_list(param_list);
 
         if (expect_member) {
           first_nondef_for_builder =
@@ -8956,22 +8902,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         first_nondef_for_builder->set_firstNondefiningDeclaration(
             first_nondef_for_builder);
 
-        if (SgFunctionParameterList *first_param_list =
-                first_nondef_for_builder->get_parameterList()) {
-          SgScopeStatement *param_scope =
-              first_nondef_for_builder->get_functionParameterScope();
-          if (param_scope == NULL) {
-            param_scope = first_nondef_for_builder->get_scope();
-          }
-          for (SgInitializedName *param : first_param_list->get_args()) {
-            if (param != NULL) {
-              param->set_declptr(first_nondef_for_builder);
-              if (param_scope != NULL) {
-                param->set_scope(param_scope);
-              }
-            }
-          }
-        }
+        fixup_nondef_params(first_nondef_for_builder);
 
         suppress_unparse_output(first_nondef_for_builder);
         suppress_unparse_output(first_param_list);

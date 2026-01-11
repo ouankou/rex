@@ -1014,10 +1014,8 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttribu
                     case V_SgArrowExp:
                     case V_SgArrowStarOp:
                     case V_SgPointerDerefExp:
-                    case V_SgLambdaExp: {
                       // these are the acceptable cases
-                         break;
-                    }
+                      break;
 
                     case V_SgFunctionRefExp:
                        {
