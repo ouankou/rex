@@ -3836,7 +3836,11 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     }
     if (member_sym == NULL) {
       member_sym = new SgMemberFunctionSymbol(member_decl);
-      member_sym->set_parent(member_decl);
+      if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
+        decl_scope->insert_symbol(member_decl->get_name(), member_sym);
+      } else {
+        member_sym->set_parent(member_decl);
+      }
     }
     ROSE_ASSERT(member_sym != NULL);
 
