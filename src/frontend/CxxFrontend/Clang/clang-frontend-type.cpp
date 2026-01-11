@@ -1997,6 +1997,10 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
               base.dyn_cast<const clang::ValueDecl *>()) {
         return build_decl_expr(const_cast<clang::ValueDecl *>(decl), nullptr);
       }
+      if (const clang::Expr *expr = base.dyn_cast<const clang::Expr *>()) {
+        SgNode *sg_node = Traverse(const_cast<clang::Expr *>(expr));
+        return isSgExpression(sg_node);
+      }
     }
     return nullptr;
   };

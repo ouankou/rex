@@ -8045,7 +8045,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       (isTemplateMemberFunction || isClassTemplateMemberFunction);
   const bool is_explicit_specialization =
       specialization_kind == clang::TSK_ExplicitSpecialization;
-  std::unique_ptr<SgTemplateArgumentPtrList> explicit_specialization_args;
+  SgTemplateArgumentPtrList explicit_specialization_args;
+  SgTemplateArgumentPtrList *args_for_builder = NULL;
   if (is_explicit_specialization && templateDecl == NULL) {
     size_t explicit_arg_count = 0;
     if (const clang::ASTTemplateArgumentListInfo *args_as_written =
@@ -8065,17 +8066,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           explicit_arg_count = clang_args->size();
         }
         explicit_specialization_args =
-            std::make_unique<SgTemplateArgumentPtrList>(
-                buildTemplateArguments(*clang_args, explicit_arg_count));
+            buildTemplateArguments(*clang_args, explicit_arg_count);
       }
     }
-    if (!explicit_specialization_args) {
-      explicit_specialization_args =
-          std::make_unique<SgTemplateArgumentPtrList>();
-    }
+    args_for_builder = &explicit_specialization_args;
   }
-  SgTemplateArgumentPtrList *args_for_builder =
-      explicit_specialization_args.get();
   unsigned int functionConstVolatileFlags = 0;
   if (isMethodDecl) {
     auto *method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
@@ -8643,10 +8638,17 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         if (SgFunctionParameterList *first_param_list =
                 first_nondef->get_parameterList()) {
+          SgScopeStatement *param_scope =
+              first_nondef->get_functionParameterScope();
+          if (param_scope == NULL) {
+            param_scope = first_nondef->get_scope();
+          }
           for (SgInitializedName *param : first_param_list->get_args()) {
             if (param != NULL) {
               param->set_declptr(first_nondef);
-              param->set_scope(first_nondef);
+              if (param_scope != NULL) {
+                param->set_scope(param_scope);
+              }
             }
           }
         }
@@ -8774,10 +8776,17 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         if (SgFunctionParameterList *first_param_list =
                 first_nondef->get_parameterList()) {
+          SgScopeStatement *param_scope =
+              first_nondef->get_functionParameterScope();
+          if (param_scope == NULL) {
+            param_scope = first_nondef->get_scope();
+          }
           for (SgInitializedName *param : first_param_list->get_args()) {
             if (param != NULL) {
               param->set_declptr(first_nondef);
-              param->set_scope(first_nondef);
+              if (param_scope != NULL) {
+                param->set_scope(param_scope);
+              }
             }
           }
         }
@@ -8949,10 +8958,17 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         if (SgFunctionParameterList *first_param_list =
                 first_nondef_for_builder->get_parameterList()) {
+          SgScopeStatement *param_scope =
+              first_nondef_for_builder->get_functionParameterScope();
+          if (param_scope == NULL) {
+            param_scope = first_nondef_for_builder->get_scope();
+          }
           for (SgInitializedName *param : first_param_list->get_args()) {
             if (param != NULL) {
               param->set_declptr(first_nondef_for_builder);
-              param->set_scope(first_nondef_for_builder);
+              if (param_scope != NULL) {
+                param->set_scope(param_scope);
+              }
             }
           }
         }
