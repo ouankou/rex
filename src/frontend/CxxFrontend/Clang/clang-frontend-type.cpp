@@ -2033,6 +2033,9 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
   case clang::TemplateArgument::Declaration: {
     clang::ValueDecl *decl = arg.getAsDecl();
     SgType *param_type = buildTypeFromQualifiedType(arg.getParamTypeForDecl());
+    if (param_type == nullptr) {
+      param_type = SageBuilder::buildIntType();
+    }
     SgInitializedName *init_name = nullptr;
     SgExpression *decl_expr = build_decl_expr(decl, &init_name);
     if (decl_expr != nullptr || init_name != nullptr) {
