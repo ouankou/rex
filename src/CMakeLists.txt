@@ -236,10 +236,13 @@ if(ZLIB_FOUND)
   add_library_dependency(${ZLIB_LIBRARY})
 endif()
 
-set(LINK_FILES ${CMAKE_DL_LIBS})
-if(WITH-LIBHARU)
-  list(APPEND LINK_FILES libhpdf)
+target_link_libraries(ROSE_DLL PRIVATE ${HPDF_LIBRARIES})
+if(HPDF_LIBRARY_DIRS)
+  list(APPEND rose_library_dir_list ${HPDF_LIBRARY_DIRS})
 endif()
+
+set(LINK_FILES
+  ${CMAKE_DL_LIBS})
 
 # Depending on which language analysis (frontend) features are enabled in ROSE, we may need some additional libraries.
 if(ENABLE-FORTRAN)
@@ -270,11 +273,7 @@ endif()
 
 # If the C preprocessor is enabled, ROSE has some additional depenendencies
 if(ENABLE-CPP)
-  set(_rose_preprocessor_deps ROSE_PREPROCESSOR generate_rosePublicConfig)
-  if(WITH-LIBHARU)
-    list(APPEND _rose_preprocessor_deps libhpdf)
-  endif()
-  add_dependencies(ROSE_DLL ${_rose_preprocessor_deps})
+  add_dependencies(ROSE_DLL ROSE_PREPROCESSOR generate_rosePublicConfig)
 endif()
 
 ########################################################################################################################

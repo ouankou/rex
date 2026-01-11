@@ -37,10 +37,12 @@ jobs:
             flex \
             libclang-20-dev \
             libantlr4-runtime-dev \
+            libhpdf-dev \
             llvm-20 \
             llvm-20-dev \
             perl \
-            asciidoctor
+            asciidoctor \
+            pkg-config
 
       - name: Install ANTLR4 tool (4.10.1)
         run: |

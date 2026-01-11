@@ -57,7 +57,7 @@
 /* Define if libreadline is available. */
 #cmakedefine ROSE_HAVE_LIBREADLINE
 
-/* Define if libharu is enabled. */
+/* Define if libharu (hpdf) is available. */
 #cmakedefine ROSE_WITH_LIBHARU 1
 
 /* Define to 1 if you have the <byteswap.h> header file. */

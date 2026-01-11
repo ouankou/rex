@@ -8,11 +8,9 @@ set(astDumpSources
   includeGraph.C
   AstDOTGeneration.C
   DOTGraphInterface.C
-  AstTerm.C)
-
-if(WITH-LIBHARU)
-  list(APPEND astDumpSources AstPDFGeneration.C PDFGeneration.C)
-endif()
+  AstTerm.C
+  AstPDFGeneration.C
+  PDFGeneration.C)
 
 add_library(astDump OBJECT ${astDumpSources})
 add_dependencies(astDump rosetta_generated)
@@ -29,10 +27,8 @@ set(astDumpHeaders
   DOTGeneration.h DOTGenerationImpl.h DOTGraphInterface.h
   DOTRepresentation.h DOTRepresentationImpl.h DOTSubgraphRepresentation.h
   DOTSubgraphRepresentationImpl.h
-  AstTerm.h)
-
-if(WITH-LIBHARU)
-  list(APPEND astDumpHeaders AstPDFGeneration.h PDFGeneration.h)
-endif()
+  AstTerm.h
+  AstPDFGeneration.h
+  PDFGeneration.h)
 
 install(FILES ${astDumpHeaders} DESTINATION ${INCLUDE_INSTALL_DIR})

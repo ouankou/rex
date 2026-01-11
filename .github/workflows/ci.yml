@@ -54,10 +54,12 @@ jobs:
           graphviz \
           libantlr4-runtime-dev \
           libclang-${{ matrix.llvm }}-dev \
+          libhpdf-dev \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
-          openjdk-17-jdk
+          openjdk-17-jdk \
+          pkg-config
 
     # Simplified build using build-rex.sh script
     - name: Build and Install (Debug)

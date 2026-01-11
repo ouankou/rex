@@ -37,8 +37,9 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---------------------------------------------------------------------------
 
-ROSE also contains a copy (with some modifications) of the Haru Free PDF
-Library (http://libharu.org), which is subject to the following license:
+ROSE can be built against the Haru Free PDF Library (libharu) for PDF generation.
+libharu is not bundled and must be provided by the system. The library is subject
+to the following license:
 
 Copyright (C) 1999-2006 Takeshi Kanno
 Copyright (C) 2007-2008 Antony Dovgal
