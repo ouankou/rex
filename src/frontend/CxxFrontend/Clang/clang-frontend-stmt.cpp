@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
-#include <sstream>
 #include <regex>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -2051,8 +2051,7 @@ bool ClangToSageTranslator::VisitCXXCatchStmt(
 #endif
   bool res = true;
 
-  SgCatchOptionStmt *catch_stmt =
-      SageBuilder::buildCatchOptionStmt(NULL, NULL);
+  SgCatchOptionStmt *catch_stmt = SageBuilder::buildCatchOptionStmt(NULL, NULL);
 
   SgScopeStatement *catch_scope = isSgScopeStatement(catch_stmt);
   ROSE_ASSERT(catch_scope != NULL);
@@ -3556,7 +3555,8 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
   ROSE_ASSERT(queried_type != NULL);
   args.push_back(queried_type);
 
-  if (clang::Expr *dimension = array_type_trait_expr->getDimensionExpression()) {
+  if (clang::Expr *dimension =
+          array_type_trait_expr->getDimensionExpression()) {
     SgNode *tmp_dim = Traverse(dimension);
     SgExpression *dim_expr = isSgExpression(tmp_dim);
     ROSE_ASSERT(dim_expr != NULL);
@@ -4666,8 +4666,7 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
     SgClassDeclaration *enclosingClassDecl = nullptr;
     if (ctor_decl != nullptr) {
       if (clang::CXXRecordDecl *parent_record = ctor_decl->getParent()) {
-        enclosingClassDecl =
-            isSgClassDeclaration(Traverse(parent_record));
+        enclosingClassDecl = isSgClassDeclaration(Traverse(parent_record));
       }
     }
 #if DEBUG_VISIT_STMT
@@ -4761,7 +4760,16 @@ bool ClangToSageTranslator::VisitCXXDefaultInitExpr(
 #endif
   bool res = true;
 
-  // TODO
+  clang::Expr *init_expr = cxx_default_init_expr->getExpr();
+  ROSE_ASSERT(init_expr != NULL);
+
+  SgNode *tmp_expr = Traverse(init_expr);
+  SgExpression *expr = isSgExpression(tmp_expr);
+  ROSE_ASSERT(expr != NULL);
+
+  SgExpression *expr_copy = SageInterface::deepCopy(expr);
+  ROSE_ASSERT(expr_copy != NULL);
+  *node = expr_copy;
 
   return VisitExpr(cxx_default_init_expr, node) && res;
 }
@@ -4928,7 +4936,8 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
     // (4/28/23 Pei-Hung) The type name is given through sg_type,
     // SgConstructorInitializer doesn't seem to provide name for unparsing.
     constructor_args->set_need_name(false);
-    clangFuncDecl = Traverse(cxx_new_expr->getConstructExpr()->getConstructor());
+    clangFuncDecl =
+        Traverse(cxx_new_expr->getConstructExpr()->getConstructor());
   }
   SgFunctionDeclaration *sgFuncDecl = isSgFunctionDeclaration(clangFuncDecl);
 
@@ -4939,9 +4948,9 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   SgExpression *builtin_args = NULL;
   short int need_global_specifier = (short int)cxx_new_expr->isGlobalNew();
 
-  SgNewExp *newExp = SageBuilder::buildNewExp(
-      sg_type, placementArgs, constructor_args, builtin_args,
-      need_global_specifier, sgFuncDecl);
+  SgNewExp *newExp =
+      SageBuilder::buildNewExp(sg_type, placementArgs, constructor_args,
+                               builtin_args, need_global_specifier, sgFuncDecl);
   *node = newExp;
 
   return VisitExpr(cxx_new_expr, node) && res;
@@ -5249,8 +5258,8 @@ bool ClangToSageTranslator::VisitCXXTypeidExpr(
   if (cxx_typeid_expr->isTypeOperand()) {
     SgType *type = NULL;
     if (p_compiler_instance != nullptr) {
-      type = buildTypeFromQualifiedType(
-          cxx_typeid_expr->getTypeOperand(p_compiler_instance->getASTContext()));
+      type = buildTypeFromQualifiedType(cxx_typeid_expr->getTypeOperand(
+          p_compiler_instance->getASTContext()));
     }
     if (type == NULL) {
       type = SageBuilder::buildUnknownType();
@@ -5456,9 +5465,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                       isSgClassDeclaration(def_node)) {
                 classDef = def_decl->get_definition();
                 if (classDef == NULL) {
-                  if (SgClassDeclaration *defining_decl =
-                          isSgClassDeclaration(
-                              def_decl->get_definingDeclaration())) {
+                  if (SgClassDeclaration *defining_decl = isSgClassDeclaration(
+                          def_decl->get_definingDeclaration())) {
                     classDef = defining_decl->get_definition();
                   }
                 }
@@ -5487,8 +5495,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
           SageBuilder::popScopeStack();
         }
-      } else if (qualifier->getKind() ==
-                 clang::NestedNameSpecifier::Global) {
+      } else if (qualifier->getKind() == clang::NestedNameSpecifier::Global) {
         SgGlobal *globalScope =
             SageInterface::getGlobalScope(SageBuilder::topScopeStack());
         std::string declName = decl_ref_expr->getDecl()->getNameAsString();
@@ -8450,8 +8457,8 @@ bool ClangToSageTranslator::VisitStringLiteral(
       */
       bool passUCharRule = false;
       passUCharRule =
-          !((contentVal < 0xA0 &&
-             (contentVal != 0x24 || contentVal != 0x40 || contentVal != 0x60)) ||
+          !((contentVal < 0xA0 && (contentVal != 0x24 || contentVal != 0x40 ||
+                                   contentVal != 0x60)) ||
             (contentVal >= 0xD800 && contentVal <= 0xDFFF));
       if (passUCharRule) {
         ss << std::setfill('0') << std::setw(4) << std::uppercase << std::hex
