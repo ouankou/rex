@@ -875,34 +875,11 @@ if(LIBHARU_ROOT)
 endif()
 
 # libharu is required for PDF generation (system-provided).
-find_package(PkgConfig QUIET)
-if(PKG_CONFIG_FOUND)
-  set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
-  pkg_check_modules(HPDF_PC QUIET libhpdf)
-endif()
+find_package(PkgConfig REQUIRED)
+set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+pkg_check_modules(HPDF REQUIRED libhpdf)
 
-set(HPDF_INCLUDE_DIRS "")
-set(HPDF_LIBRARY "")
-set(HPDF_VERSION "")
-set(HPDF_FOUND FALSE)
-
-if(HPDF_PC_FOUND)
-  set(HPDF_FOUND TRUE)
-  set(HPDF_INCLUDE_DIRS ${HPDF_PC_INCLUDE_DIRS})
-  set(HPDF_VERSION ${HPDF_PC_VERSION})
-  find_library(HPDF_LIBRARY NAMES hpdf HINTS ${HPDF_PC_LIBRARY_DIRS})
-endif()
-
-if(NOT HPDF_LIBRARY)
-  find_path(HPDF_INCLUDE_DIR NAMES hpdf.h PATH_SUFFIXES include)
-  find_library(HPDF_LIBRARY NAMES hpdf PATH_SUFFIXES lib)
-  if(HPDF_INCLUDE_DIR AND HPDF_LIBRARY)
-    set(HPDF_FOUND TRUE)
-    set(HPDF_INCLUDE_DIRS ${HPDF_INCLUDE_DIR})
-  endif()
-endif()
-
-if(NOT HPDF_FOUND OR NOT HPDF_LIBRARY)
+if(NOT HPDF_FOUND OR NOT HPDF_LIBRARIES OR NOT HPDF_INCLUDE_DIRS)
   message(FATAL_ERROR "libharu (hpdf) is required. Install the libharu development package and ensure hpdf.h and libhpdf are discoverable.")
 endif()
 
@@ -925,12 +902,11 @@ if(NOT HPDF_VERSION)
 endif()
 
 if(HPDF_VERSION)
-  message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARY} (found version \"${HPDF_VERSION}\")")
+  message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARIES} (found version \"${HPDF_VERSION}\")")
 else()
-  message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARY}")
+  message(STATUS "Found libharu (hpdf): ${HPDF_LIBRARIES}")
 endif()
 
-set(HPDF_LIBRARIES ${HPDF_LIBRARY})
 set(ROSE_WITH_LIBHARU 1)
 
 set(ASSERTION_BEHAVIOR "exit" CACHE STRING "Default behavior of failed assertions. Can be 'abort', 'exit', or 'throw'.")

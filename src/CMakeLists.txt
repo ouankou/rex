@@ -237,7 +237,9 @@ if(ZLIB_FOUND)
 endif()
 
 target_link_libraries(ROSE_DLL PRIVATE ${HPDF_LIBRARIES})
-add_library_dependency(${HPDF_LIBRARY})
+if(HPDF_LIBRARY_DIRS)
+  list(APPEND rose_library_dir_list ${HPDF_LIBRARY_DIRS})
+endif()
 
 set(LINK_FILES
   ${CMAKE_DL_LIBS})
