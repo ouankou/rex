@@ -24,13 +24,24 @@ std::list<SgInterfaceStatement*> astInterfaceStack;
 #include "token.h"
 
 namespace {
-std::unordered_set<Token_t *> &synthetic_tokens() {
-  static std::unordered_set<Token_t *> instance;
-  return instance;
-}
+struct SyntheticTokenManager {
+  std::unordered_set<Token_t *> tokens;
+  std::mutex mtx;
 
-std::mutex &synthetic_tokens_mutex() {
-  static std::mutex instance;
+  ~SyntheticTokenManager() {
+    for (auto *token : tokens) {
+      if (token != nullptr) {
+        if (token->text != nullptr) {
+          free(token->text);
+        }
+        free(token);
+      }
+    }
+  }
+};
+
+SyntheticTokenManager &manager() {
+  static SyntheticTokenManager instance;
   return instance;
 }
 
@@ -38,8 +49,8 @@ void releaseSyntheticToken(Token_t *token) {
   if (token == NULL) {
     return;
   }
-  std::lock_guard<std::mutex> lock(synthetic_tokens_mutex());
-  if (synthetic_tokens().erase(token) > 0) {
+  std::lock_guard<std::mutex> lock(manager().mtx);
+  if (manager().tokens.erase(token) > 0) {
     if (token->text != NULL) {
       free(token->text);
     }
@@ -72,8 +83,8 @@ Token_t *create_token(int line, int col, int type, const char *text)
          tmp_token->text = NULL;
 
          {
-           std::lock_guard<std::mutex> lock(synthetic_tokens_mutex());
-           synthetic_tokens().insert(tmp_token);
+           std::lock_guard<std::mutex> lock(manager().mtx);
+           manager().tokens.insert(tmp_token);
          }
          return tmp_token;
   }
