@@ -8,6 +8,7 @@
 
 #include "fortran_support.h"
 
+#include <mutex>
 #include <unordered_set>
 
 // FMZ: Location of global variables
@@ -24,16 +25,20 @@ std::list<SgInterfaceStatement*> astInterfaceStack;
 
 namespace {
 std::unordered_set<Token_t *> synthetic_tokens;
+std::mutex synthetic_tokens_mutex;
 
 void releaseSyntheticToken(Token_t *token) {
   if (token == NULL) {
     return;
   }
-  auto it = synthetic_tokens.find(token);
-  if (it == synthetic_tokens.end()) {
-    return;
+  {
+    std::lock_guard<std::mutex> lock(synthetic_tokens_mutex);
+    auto it = synthetic_tokens.find(token);
+    if (it == synthetic_tokens.end()) {
+      return;
+    }
+    synthetic_tokens.erase(it);
   }
-  synthetic_tokens.erase(it);
   if (token->text != NULL) {
     free(token->text);
   }
@@ -64,7 +69,10 @@ Token_t *create_token(int line, int col, int type, const char *text)
       else
          tmp_token->text = NULL;
 
-         synthetic_tokens.insert(tmp_token);
+         {
+           std::lock_guard<std::mutex> lock(synthetic_tokens_mutex);
+           synthetic_tokens.insert(tmp_token);
+         }
          return tmp_token;
   }
 
