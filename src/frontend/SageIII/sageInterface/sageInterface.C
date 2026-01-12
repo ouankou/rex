@@ -208,6 +208,15 @@ namespace SageInterface
      vector<SgBasicBlock*> addedBasicBlockNodes;
    }
 
+SageInterface::DeclarationSets::~DeclarationSets()
+   {
+     for (auto &entry : declarationMap)
+        {
+          delete entry.second;
+        }
+     declarationMap.clear();
+   }
+
 void
 SageInterface::DeclarationSets::addDeclaration(SgDeclarationStatement* decl)
    {

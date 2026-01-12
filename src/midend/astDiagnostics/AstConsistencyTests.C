@@ -4951,7 +4951,7 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
      SgNode *parent = node->get_parent();
 
 #if ROSE_USE_VALGRIND
-     VALGRIND_CHECK_DEFINED(parent);
+     VALGRIND_CHECK_VALUE_IS_DEFINED(parent);
 #endif
 
      if (parent != NULL)
@@ -4991,7 +4991,7 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
                 // This style is quite inefficient since we are not making use of
                 // the string type date in the pair<SgNode*,string>
 #if ROSE_USE_VALGRIND
-                   if (VALGRIND_CHECK_WRITABLE(parent, sizeof(SgNode))) {
+                   if (VALGRIND_CHECK_MEM_IS_ADDRESSABLE(parent, sizeof(SgNode))) {
                      fprintf(stderr, "Parent %p of child %p (a %s) has been deleted.\n", parent, node, node->class_name().c_str());
                    }
 #endif

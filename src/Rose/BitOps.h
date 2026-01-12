@@ -70,7 +70,13 @@ inline Unsigned allLsb(Unsigned src, size_t w, bool b = true) {
  * @return Mask value with high bits set. */
 template<typename Unsigned>
 inline Unsigned highMask(size_t n) {
-    return n >= nBits<Unsigned>() ? all<Unsigned>(true) : lowMask<Unsigned>(n) << (nBits<Unsigned>() - n);
+    if (n == 0) {
+        return Unsigned(0);
+    }
+    if (n >= nBits<Unsigned>()) {
+        return all<Unsigned>(true);
+    }
+    return lowMask<Unsigned>(n) << (nBits<Unsigned>() - n);
 }
 
 /** Combine two values based on a bit mask.

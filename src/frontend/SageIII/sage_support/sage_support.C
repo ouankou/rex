@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <memory>
 
 // DQ (12/22/2019): I don't need this now, and it is an issue for some compilers (e.g. GNU 4.9.4).
 // DQ (12/21/2019): Require hash table support for determining the shared nodes in the ASTs.
@@ -613,24 +614,24 @@ bool roseInstallPrefix(std::string& result) {
  // but I think it is always non-NULL (added assertion and put back the original code).
  // char* libroseName = (info.dli_fname == NULL) ? NULL : strdup(info.dli_fname);
     ASSERT_not_null(info.dli_fname);
-    char* libroseName = strdup(info.dli_fname);
+    if (info.dli_fname[0] == '\0') goto default_check;
+    auto free_cstr = [](char* ptr) { free(ptr); };
+    std::unique_ptr<char, decltype(free_cstr)> libroseName(strdup(info.dli_fname), free_cstr);
 #if __INSURE__
     _Insure_checking_enable(1); // re-enable Insure++ checking
 #endif
     if (libroseName == nullptr) goto default_check;
-    char* libdir = dirname(libroseName);
-    if (libdir == nullptr) {free(libroseName); goto default_check;}
-    char* libdirCopy1 = strdup(libdir);
-    char* libdirCopy2 = strdup(libdir);
-    if (libdirCopy1 == nullptr || libdirCopy2 == nullptr) { free(libroseName); free(libdirCopy1); free(libdirCopy2); goto default_check;}
-    char* libdirBasenameCS = basename(libdirCopy1);
-    if (libdirBasenameCS == nullptr) {free(libroseName); free(libdirCopy1); free(libdirCopy2); goto default_check;}
+    char* libdir = dirname(libroseName.get());
+    if (libdir == nullptr) goto default_check;
+    std::unique_ptr<char, decltype(free_cstr)> libdirCopy1(strdup(libdir), free_cstr);
+    std::unique_ptr<char, decltype(free_cstr)> libdirCopy2(strdup(libdir), free_cstr);
+    if (libdirCopy1 == nullptr || libdirCopy2 == nullptr) goto default_check;
+    char* libdirBasenameCS = basename(libdirCopy1.get());
+    if (libdirBasenameCS == nullptr) goto default_check;
     string libdirBasename = libdirBasenameCS;
-    free(libdirCopy1);
-    char* prefixCS = dirname(libdirCopy2);
-    if (prefixCS == nullptr) {free(libroseName); goto default_check;}
+    char* prefixCS = dirname(libdirCopy2.get());
+    if (prefixCS == nullptr) goto default_check;
     string prefix = prefixCS;
-    free(libdirCopy2);
 
 // Zack Galbreath, June 2013
 // Detect the build directory by searching for CMakeCache.txt in the
@@ -646,7 +647,6 @@ bool roseInstallPrefix(std::string& result) {
     }
 #endif
 
-    free(libroseName);
     // Check the librose parent directory name to tell if it is within a build
     // or installation tree. With CMake, librose is created under build/src.
     if (libdirBasename == "src") {
@@ -2565,6 +2565,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
        ROSE_ASSERT(! "[FATAL] [ROSE] [frontend] [Fortran] "
                      "error: ROSE was not configured to support the Fortran Flang frontend.");
 #endif
+       CommandlineProcessing::deleteArgcArgv(flangArgc, flangArgv);
        return status;
   }
 
@@ -3100,6 +3101,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
           char** openFortranParser_only_argv = nullptr;
           CommandlineProcessing::generateArgcArgvFromList(OFPCommandLine,openFortranParser_only_argc,openFortranParser_only_argv);
           errorCode = openFortranParser_main (openFortranParser_only_argc, openFortranParser_only_argv);
+          CommandlineProcessing::deleteArgcArgv(openFortranParser_only_argc, openFortranParser_only_argv);
 
 #endif
           printf ("Skipping all processing after parsing fortran (OFP) ... (get_exit_after_parser() == true) errorCode = %d \n",errorCode);
@@ -3262,6 +3264,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                                                           fortranSourceFile);
           printf ("ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION is not defined \n");
 #endif
+          CommandlineProcessing::deleteArgcArgv(experimental_FortranParser_argc, experimental_FortranParser_argv);
 
           if (frontendErrorLevel == 0)
              {
@@ -3278,6 +3281,7 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
         {
           frontendErrorLevel = openFortranParser_main (openFortranParser_argc, openFortranParser_argv);
         }
+     CommandlineProcessing::deleteArgcArgv(openFortranParser_argc, openFortranParser_argv);
 
 
   // DQ (11/11/2010): There should be no include files left in the stack, see test2010_78.C and test2010_79.C when
@@ -3633,6 +3637,7 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
      const char *driver_argv0 = argv.empty() ? nullptr : argv[0].c_str();
      int frontendErrorLevel =
          clang_main(c_cxx_argc, c_cxx_argv, *this, driver_argv0);
+     CommandlineProcessing::deleteArgcArgv(c_cxx_argc, c_cxx_argv);
 
 #else
   // DQ (2/21/2016): Added "error: " to allow this to be caught by the ROSE Matrix Testing.

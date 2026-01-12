@@ -446,6 +446,9 @@ class Unparse_ExprStmt : public UnparseLanguageIndependentConstructs
 
        // DQ (9/23/2020): Output the SgPragma when it is associated with a SgScopeStatement.
           void unparsePragmaAttribute(SgScopeStatement* scope_stmt);
+
+       private:
+          void unparseFunctionTryBlock(SgTryStmt* try_stmt, SgUnparse_Info& ninfo);
    };
 
 // Helpers

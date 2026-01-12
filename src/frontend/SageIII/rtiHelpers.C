@@ -5,6 +5,7 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
+#include "rtiHelpers.h"
 
 using namespace std;
 
@@ -44,10 +45,16 @@ std::ostream& operator<<(std::ostream& os, const SgFormatItemPtrList&)
       return os;
    }
 
-void doRTI(const char* /*fieldNameBase*/, void* /*fieldPtr*/, size_t /*fieldSize*/, void* /*thisPtr*/, const char* /*className*/,
+void doRTI(const char* fieldNameBase, void* fieldPtr, size_t fieldSize, void* thisPtr, const char* className,
            const char* typeString, const char* fieldName, const std::string& fieldContents, RTIMemberData& memberData) {
 #if ROSE_USE_VALGRIND
   doUninitializedFieldCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr, className);
+#else
+  (void)fieldNameBase;
+  (void)fieldPtr;
+  (void)fieldSize;
+  (void)thisPtr;
+  (void)className;
 #endif
   memberData = RTIMemberData(typeString, fieldName, fieldContents);
 }

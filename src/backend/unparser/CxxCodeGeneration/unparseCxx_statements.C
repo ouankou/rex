@@ -53,6 +53,32 @@ using namespace Rose;
 
 #define ENABLE_unparsedPartiallyUsingTokenStream 1
 
+namespace {
+constexpr char kFunctionTryBlockAttributeName[] = "rose.function_try_block";
+
+SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
+  if (definition == NULL) {
+    return NULL;
+  }
+  SgBasicBlock *body = definition->get_body();
+  if (body == NULL) {
+    return NULL;
+  }
+  const SgStatementPtrList &statements = body->get_statements();
+  if (statements.size() != 1) {
+    return NULL;
+  }
+  SgTryStmt *try_stmt = isSgTryStmt(statements.front());
+  if (try_stmt == NULL) {
+    return NULL;
+  }
+  if (try_stmt->getAttribute(kFunctionTryBlockAttributeName) == NULL) {
+    return NULL;
+  }
+  return try_stmt;
+}
+} // namespace
+
 Unparse_ExprStmt::Unparse_ExprStmt(Unparser *unp, std::string fname)
     : UnparseLanguageIndependentConstructs(unp, fname) {
   // Nothing to do here!
@@ -60,6 +86,21 @@ Unparse_ExprStmt::Unparse_ExprStmt(Unparser *unp, std::string fname)
 
 Unparse_ExprStmt::~Unparse_ExprStmt() {
   // Nothing to do here!
+}
+
+void Unparse_ExprStmt::unparseFunctionTryBlock(SgTryStmt *try_stmt,
+                                               SgUnparse_Info &ninfo) {
+  ASSERT_not_null(try_stmt);
+  SgStatement *try_body = try_stmt->get_body();
+  ASSERT_not_null(try_body);
+
+  unp->cur.format(try_body, ninfo, FORMAT_BEFORE_NESTED_STATEMENT);
+  unparseStatement(try_body, ninfo);
+  unp->cur.format(try_body, ninfo, FORMAT_AFTER_NESTED_STATEMENT);
+
+  for (SgStatement *catch_stmt : try_stmt->get_catch_statement_seq()) {
+    unparseStatement(catch_stmt, ninfo);
+  }
 }
 
 string UnparseLanguageIndependentConstructs::token_sequence_position_name(
@@ -5642,6 +5683,13 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
       curprint(string("\")"));
     }
 
+    const bool is_function_try_block =
+        info.SkipFunctionDefinition() && !funcdecl_stmt->isForward() &&
+        getFunctionTryStmt(funcdecl_stmt->get_definition()) != NULL;
+    if (is_function_try_block) {
+      curprint(" try");
+    }
+
     if (funcdecl_stmt->isForward() && !ninfo.SkipSemiColon()) {
       unp->u_sage->printAttributes(funcdecl_stmt, info);
       unp->u_sage->printAttributesForType(funcdecl_stmt, info);
@@ -5833,7 +5881,11 @@ void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
 
     // now the body of the function
     if (funcdefn_stmt->get_body()) {
-      unparseStatement(funcdefn_stmt->get_body(), ninfo);
+      if (SgTryStmt *try_stmt = getFunctionTryStmt(funcdefn_stmt)) {
+        unparseFunctionTryBlock(try_stmt, ninfo);
+      } else {
+        unparseStatement(funcdefn_stmt->get_body(), ninfo);
+      }
     } else {
       curprint("{}");
 
@@ -6008,7 +6060,11 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
 
   // now the body of the function
   if (funcdefn_stmt->get_body()) {
-    unparseStatement(funcdefn_stmt->get_body(), ninfo);
+    if (SgTryStmt *try_stmt = getFunctionTryStmt(funcdefn_stmt)) {
+      unparseFunctionTryBlock(try_stmt, ninfo);
+    } else {
+      unparseStatement(funcdefn_stmt->get_body(), ninfo);
+    }
   } else {
     curprint("{}");
 
@@ -6511,6 +6567,13 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     }
 
     unparseTrailingFunctionModifiers(mfuncdecl_stmt, info);
+
+    const bool is_function_try_block =
+        info.SkipFunctionDefinition() && !mfuncdecl_stmt->isForward() &&
+        getFunctionTryStmt(mfuncdecl_stmt->get_definition()) != NULL;
+    if (is_function_try_block) {
+      curprint(" try");
+    }
 
     auto &ctor_inits = mfuncdecl_stmt->get_ctors();
     if ((mfuncdecl_stmt->isForward() && !info.SkipSemiColon()) ||

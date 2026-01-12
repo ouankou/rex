@@ -7,6 +7,7 @@
 #include "AstNodeClass.h"
 #include "grammarString.h"
 #include <cstring>
+#include <memory>
 
 using namespace std;
 using namespace Rose;
@@ -36,8 +37,26 @@ AstNodeClass::isLeafNode() {
   return subclasses.size()==0;
 }
 
+namespace {
+void clearGrammarStringList(std::vector<GrammarString *> &list) {
+  for (GrammarString *entry : list) {
+    delete entry;
+  }
+  list.clear();
+}
+} // namespace
+
 AstNodeClass::~AstNodeClass()
    {
+     for (int i = 0; i < 2; ++i) {
+       for (int j = 0; j < 2; ++j) {
+         clearGrammarStringList(memberFunctionPrototypeList[i][j]);
+         clearGrammarStringList(memberDataPrototypeList[i][j]);
+         clearGrammarStringList(memberFunctionSourceList[i][j]);
+         clearGrammarStringList(editSubstituteTargetList[i][j]);
+         clearGrammarStringList(editSubstituteSourceList[i][j]);
+       }
+     }
    }
 
 AstNodeClass::AstNodeClass(const string& lexemeString , Grammar & X , const string& stringVar, const string& tagString,
@@ -775,12 +794,12 @@ AstNodeClass::setFunctionPrototype ( const GrammarString & inputMemberFunction )
        fprintf(stderr, "%s\n", errorMessage.c_str());                          \
        ROSE_ABORT();                                                     \
      }                                                                         \
-     GrammarString *codeString = new GrammarString(functionString);            \
+     auto codeString = std::make_unique<GrammarString>(functionString);        \
      codeString->setVirtual(pureVirtual);
 
-   GrammarString *AstNodeClass::setupMarkerStrings(string markerString,
-                                                   string filename,
-                                                   bool pureVirtual) {
+   std::unique_ptr<GrammarString> AstNodeClass::setupMarkerStrings(string markerString,
+                                                                   string filename,
+                                                                   bool pureVirtual) {
      SETUP_MARKER_STRINGS_MACRO;
      return codeString;
    }
@@ -901,8 +920,7 @@ AstNodeClass::setDataPrototype ( const GrammarString & inputMemberData)
   bool pureVirtual = false;
   
   string accessFunctionString = buildDataAccessFunctions (inputMemberData);
-  GrammarString* sourceCodeString = new GrammarString(accessFunctionString);
-  ROSE_ASSERT(sourceCodeString != NULL);
+  auto sourceCodeString = std::make_unique<GrammarString>(accessFunctionString);
   sourceCodeString->setVirtual(pureVirtual);
 
   vector<GrammarString*>& l = getMemberFunctionSourceList(AstNodeClass::LOCAL_LIST,AstNodeClass::INCLUDE_LIST);
@@ -1003,8 +1021,6 @@ AstNodeClass::buildDataAccessFunctions ( const GrammarString & inputMemberData)
           printf ("functionString = %s \n",functionString.c_str());
 #endif
 
-  // BP : 10/18/2001, delete unwanted memory
-     delete codeString;
      return functionString;
    }
 
@@ -1019,17 +1035,11 @@ AstNodeClass::setDataPrototype (
      const DeleteEnum& delete_flag,
      const CopyConfigEnum& toBeCopied)
    {
-     GrammarString *temp = 
-          new GrammarString (inputTypeNameString,
-                             inputVariableNameString, 
-                             inputDefaultInitializer,
-                             constructorParameter,
-                             buildAccessDataFunctions,
-                             toBeTraversedDuringTreeTraversal,
-                             delete_flag,
-                             toBeCopied);
-     ROSE_ASSERT(temp != NULL);
-     setDataPrototype (*temp);
+     GrammarString temp(inputTypeNameString, inputVariableNameString,
+                        inputDefaultInitializer, constructorParameter,
+                        buildAccessDataFunctions, toBeTraversedDuringTreeTraversal,
+                        delete_flag, toBeCopied);
+     setDataPrototype(temp);
    }
 
 // Mechanism for excluding code from specific node or subtrees
@@ -1081,14 +1091,11 @@ AstNodeClass::excludeSubTreeDataPrototype (
      const string& inputVariableNameString, 
      const string& inputDefaultInitializer )
    {
-     GrammarString *temp = 
-          new GrammarString (inputTypeNameString,
-                             inputVariableNameString, 
-                             inputDefaultInitializer,
-                             CONSTRUCTOR_PARAMETER,
-                             BUILD_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-     excludeSubTreeDataPrototype (*temp);
+     GrammarString temp(inputTypeNameString, inputVariableNameString,
+                        inputDefaultInitializer, CONSTRUCTOR_PARAMETER,
+                        BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+                        NO_COPY_DATA);
+     excludeSubTreeDataPrototype(temp);
    }
 
 void 

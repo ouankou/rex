@@ -37,6 +37,19 @@ vector<GrammarFile*> Grammar::fileList;
 
 Grammar::~Grammar ()
 {
+  for (AstNodeClass *node : terminalList) {
+    delete node;
+  }
+  terminalList.clear();
+  astVariantToTerminalMap.clear();
+  astNodeToVariantMap.clear();
+  astVariantToNodeMap.clear();
+  if (isRootGrammar()) {
+    for (GrammarFile *file : fileList) {
+      delete file;
+    }
+    fileList.clear();
+  }
 }
 
 Grammar::Grammar ( const string& inputGrammarName,
@@ -359,12 +372,12 @@ Grammar::generateStringListsFromSubtreeLists ( AstNodeClass & node,
   for( grammarStringIterator = listOfIncludes.begin();
        grammarStringIterator != listOfIncludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (includeList, **grammarStringIterator );
+    includeList.push_back(*grammarStringIterator);
 
   for( grammarStringIterator = listOfExcludes.begin();
        grammarStringIterator != listOfExcludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (excludeList, **grammarStringIterator );
+    excludeList.push_back(*grammarStringIterator);
 
 #if CHECK_LISTS
   checkListOfGrammarStrings(includeList);
@@ -390,12 +403,12 @@ Grammar::generateStringListsFromSubtreeLists ( AstNodeClass & node,
   for( grammarStringIterator = listOfIncludes.begin();
        grammarStringIterator != listOfIncludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (includeList, **grammarStringIterator );
+    includeList.push_back(*grammarStringIterator);
 
   for( grammarStringIterator = listOfExcludes.begin();
        grammarStringIterator != listOfExcludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (excludeList, **grammarStringIterator );
+    excludeList.push_back(*grammarStringIterator);
 
 #if CHECK_LISTS
   checkListOfGrammarStrings(includeList);
@@ -428,12 +441,12 @@ Grammar::generateStringListsFromLocalLists ( AstNodeClass & node,
   for( grammarStringIterator = listOfIncludes.begin();
        grammarStringIterator != listOfIncludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (includeList, **grammarStringIterator );
+    includeList.push_back(*grammarStringIterator);
 
   for( grammarStringIterator = listOfExcludes.begin();
        grammarStringIterator != listOfExcludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (excludeList, **grammarStringIterator );
+    excludeList.push_back(*grammarStringIterator);
 
 #if CHECK_LISTS
   checkListOfGrammarStrings(includeList);
@@ -457,12 +470,12 @@ Grammar::generateStringListsFromLocalLists ( AstNodeClass & node,
   for( grammarStringIterator = listOfIncludes.begin();
        grammarStringIterator != listOfIncludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (includeList, **grammarStringIterator );
+    includeList.push_back(*grammarStringIterator);
 
   for( grammarStringIterator = listOfExcludes.begin();
        grammarStringIterator != listOfExcludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (excludeList, **grammarStringIterator );
+    excludeList.push_back(*grammarStringIterator);
 
 #if CHECK_LISTS
   checkListOfGrammarStrings(includeList);
@@ -510,22 +523,22 @@ Grammar::generateStringListsFromAllLists ( AstNodeClass & node,
   for( grammarStringIterator = listOfSubTreeIncludes.begin();
        grammarStringIterator != listOfSubTreeIncludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (includeList, **grammarStringIterator );
+    includeList.push_back(*grammarStringIterator);
 
   for( grammarStringIterator = listOfSubTreeExcludes.begin();
        grammarStringIterator != listOfSubTreeExcludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (excludeList, **grammarStringIterator );
+    excludeList.push_back(*grammarStringIterator);
 
   for( grammarStringIterator = listOfLocalIncludes.begin();
        grammarStringIterator != listOfLocalIncludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (includeList, **grammarStringIterator );
+    includeList.push_back(*grammarStringIterator);
 
   for( grammarStringIterator = listOfLocalExcludes.begin();
        grammarStringIterator != listOfLocalExcludes.end();
        grammarStringIterator++)
-    AstNodeClass::addElementToList (excludeList, **grammarStringIterator );
+    excludeList.push_back(*grammarStringIterator);
 
 #if CHECK_LISTS
   checkListOfGrammarStrings(includeList);

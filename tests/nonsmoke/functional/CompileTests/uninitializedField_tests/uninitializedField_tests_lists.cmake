@@ -50,7 +50,6 @@ set(UNINIT_CXX_TEST_SOURCES
   rex_test2025_issue160_extern_class_instantiation.cpp
   rex_test2025_issue160_system_header_instantiation.cpp
   rex_test2025_issue160_system_header_class_instantiation.cpp
-  rex_test2025_cfe_error_exit_code.cpp
   rex_test2025_issue124_system_header_specialization_args.cpp
   rex_test2025_issue125_fixup_child_list_warning.cpp
   rex_test2025_issue126_default_template_args.cpp
@@ -2088,7 +2087,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test_simple_int.C
   test_wchars.C
   unparse-typedef-ctor.C
-  rex_test2025_issue99.cpp
   rex_test2025_issue99_recursive.cpp
   rex_test2025_issue99_uaf.cpp
   test2025_issue84_friend_template_in_class.cpp

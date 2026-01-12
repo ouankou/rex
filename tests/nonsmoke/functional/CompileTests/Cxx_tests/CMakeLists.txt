@@ -4697,16 +4697,16 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2025_template_argument_pack_unparse
   rex_test2025_template_argument_pack.cpp)
 
-# REX: This test intentionally fails (it contains a function-try-block which is currently
-# not fully supported and triggers an assertion failure or error). We want to ensure
-# it continues to fail (failure propagation) until properly supported.
+# REX: Function-try-blocks should translate and unparse cleanly (including constructor init lists).
 # We add it manually here (not in Cxx_Testcodes.cmake) to avoid breaking downstream tests.
-# REX: This test intentionally fails. We verify it fails (including crashes) by wrapping in shell.
-# We use "$@" to pass all arguments safely to the translator command, preserving quoting.
-# If "$@" returns 0 (success), we exit 1 (fail). If it returns non-zero (fail), we exit 0 (pass).
 add_test(
   NAME Cxx_tests_rex_test2025_issue99_failure_propagation
-  COMMAND sh -c "\"$@\" && exit 1 || exit 0" dummy $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp
+  COMMAND sh -c "\"$@\" && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_issue99_failure_propagation.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99_failure_propagation.cpp
 )
 rex_lock_test_for_input(
   Cxx_tests_rex_test2025_issue99_failure_propagation
