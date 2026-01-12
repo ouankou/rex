@@ -88,6 +88,21 @@ Unparse_ExprStmt::~Unparse_ExprStmt() {
   // Nothing to do here!
 }
 
+void Unparse_ExprStmt::unparseFunctionTryBlock(SgTryStmt *try_stmt,
+                                               SgUnparse_Info &ninfo) {
+  ASSERT_not_null(try_stmt);
+  SgStatement *try_body = try_stmt->get_body();
+  ASSERT_not_null(try_body);
+
+  unp->cur.format(try_body, ninfo, FORMAT_BEFORE_NESTED_STATEMENT);
+  unparseStatement(try_body, ninfo);
+  unp->cur.format(try_body, ninfo, FORMAT_AFTER_NESTED_STATEMENT);
+
+  for (SgStatement *catch_stmt : try_stmt->get_catch_statement_seq()) {
+    unparseStatement(catch_stmt, ninfo);
+  }
+}
+
 string UnparseLanguageIndependentConstructs::token_sequence_position_name(
     UnparseLanguageIndependentConstructs::token_sequence_position_enum_type e) {
   string s;
@@ -5866,22 +5881,8 @@ void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
 
     // now the body of the function
     if (funcdefn_stmt->get_body()) {
-      auto unparse_function_try_block = [&](SgTryStmt *try_stmt) {
-        ASSERT_not_null(try_stmt);
-        SgStatement *try_body = try_stmt->get_body();
-        ASSERT_not_null(try_body);
-
-        unp->cur.format(try_body, ninfo, FORMAT_BEFORE_NESTED_STATEMENT);
-        unparseStatement(try_body, ninfo);
-        unp->cur.format(try_body, ninfo, FORMAT_AFTER_NESTED_STATEMENT);
-
-        for (SgStatement *catch_stmt : try_stmt->get_catch_statement_seq()) {
-          unparseStatement(catch_stmt, ninfo);
-        }
-      };
-
       if (SgTryStmt *try_stmt = getFunctionTryStmt(funcdefn_stmt)) {
-        unparse_function_try_block(try_stmt);
+        unparseFunctionTryBlock(try_stmt, ninfo);
       } else {
         unparseStatement(funcdefn_stmt->get_body(), ninfo);
       }
@@ -6059,22 +6060,8 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
 
   // now the body of the function
   if (funcdefn_stmt->get_body()) {
-    auto unparse_function_try_block = [&](SgTryStmt *try_stmt) {
-      ASSERT_not_null(try_stmt);
-      SgStatement *try_body = try_stmt->get_body();
-      ASSERT_not_null(try_body);
-
-      unp->cur.format(try_body, ninfo, FORMAT_BEFORE_NESTED_STATEMENT);
-      unparseStatement(try_body, ninfo);
-      unp->cur.format(try_body, ninfo, FORMAT_AFTER_NESTED_STATEMENT);
-
-      for (SgStatement *catch_stmt : try_stmt->get_catch_statement_seq()) {
-        unparseStatement(catch_stmt, ninfo);
-      }
-    };
-
     if (SgTryStmt *try_stmt = getFunctionTryStmt(funcdefn_stmt)) {
-      unparse_function_try_block(try_stmt);
+      unparseFunctionTryBlock(try_stmt, ninfo);
     } else {
       unparseStatement(funcdefn_stmt->get_body(), ninfo);
     }

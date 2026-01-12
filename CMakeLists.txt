@@ -985,7 +985,7 @@ endif()
 find_package(PkgConfig)
 if(PKG_CONFIG_FOUND)
   set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
-  pkg_check_modules(HPDF libhpdf)
+  pkg_check_modules(HPDF QUIET libhpdf)
 endif()
 
 if(NOT HPDF_FOUND)
