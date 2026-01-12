@@ -151,6 +151,19 @@ CommandlineProcessing::generateArgcArgvFromList ( Rose_STL_Container<string> arg
    }
 
 void
+CommandlineProcessing::deleteArgcArgv ( int argc, char** argv )
+   {
+     if (argv == nullptr)
+        return;
+
+     for (int i = 0; i < argc; i++)
+        {
+          free(argv[i]);
+        }
+     free(argv);
+   }
+
+void
 CommandlineProcessing::removeArgs ( vector<string> & argv, string prefix )
    {
      int prefixLength = prefix.length();

@@ -350,67 +350,38 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                            openmp_define_list.end());
     }
 
-    unsigned cnt = 1 + define_list.size() + inc_dirs_list.size() +
-                   sys_dirs_list.size() + inc_list.size() +
-                   passthrough_args.size();
-    char ** args = new char*[cnt];
-    std::vector<std::string>::iterator it_str;
-    unsigned i = 0;
+    const size_t estimated_argc = 1 + define_list.size() + inc_dirs_list.size() +
+                                  sys_dirs_list.size() + inc_list.size() +
+                                  passthrough_args.size();
+    std::vector<std::string> args_storage;
+    args_storage.reserve(estimated_argc);
+    args_storage.push_back(language_arg);
+    for (const auto &define : define_list) {
+        args_storage.push_back("-D" + define);
+    }
+    for (const auto &inc_dir : inc_dirs_list) {
+        args_storage.push_back("-I" + inc_dir);
+    }
+    for (const auto &sys_dir : sys_dirs_list) {
+        args_storage.push_back("-isystem" + sys_dir);
+    }
+    for (const auto &inc : inc_list) {
+        args_storage.push_back("-include" + inc);
+    }
+    for (const auto &pass : passthrough_args) {
+        args_storage.push_back(pass);
+    }
 
-    args[i] = new char[language_arg.size() + 1];
-    strcpy(args[i], language_arg.c_str());
-#if DEBUG_ARGS
-    std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-    i++;
-    for (it_str = define_list.begin(); it_str != define_list.end(); it_str++) {
-        args[i] = new char[it_str->size() + 3];
-        args[i][0] = '-';
-        args[i][1] = 'D';
-        strcpy(&(args[i][2]), it_str->c_str());
-#if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-        i++;
+    std::vector<const char *> args;
+    args.reserve(args_storage.size());
+    for (const auto &arg : args_storage) {
+        args.push_back(arg.c_str());
     }
-    for (it_str = inc_dirs_list.begin(); it_str != inc_dirs_list.end(); it_str++) {
-        args[i] = new char[it_str->size() + 3];
-        args[i][0] = '-';
-        args[i][1] = 'I';
-        strcpy(&(args[i][2]), it_str->c_str());
 #if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-        i++;
+    for (size_t index = 0; index < args.size(); ++index) {
+        std::cerr << "args[" << index << "] = " << args[index] << std::endl;
     }
-    for (it_str = sys_dirs_list.begin(); it_str != sys_dirs_list.end(); it_str++) {
-        args[i] = new char[it_str->size() + 9];
-        args[i][0] = '-'; args[i][1] = 'i'; args[i][2] = 's'; args[i][3] = 'y';
-        args[i][4] = 's'; args[i][5] = 't'; args[i][6] = 'e'; args[i][7] = 'm';
-        strcpy(&(args[i][8]), it_str->c_str());
-#if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
 #endif
-        i++;
-    }
-    for (it_str = inc_list.begin(); it_str != inc_list.end(); it_str++) {
-        args[i] = new char[it_str->size() + 9];
-        args[i][0] = '-'; args[i][1] = 'i'; args[i][2] = 'n'; args[i][3] = 'c';
-        args[i][4] = 'l'; args[i][5] = 'u'; args[i][6] = 'd'; args[i][7] = 'e';
-        strcpy(&(args[i][8]), it_str->c_str());
-#if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-        i++;
-    }
-    for (it_str = passthrough_args.begin(); it_str != passthrough_args.end(); ++it_str) {
-        args[i] = new char[it_str->size() + 1];
-        strcpy(args[i], it_str->c_str());
-#if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-        ++i;
-    }
 
 
   // 2 - Create a compiler instance
@@ -440,7 +411,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     const llvm::Triple target_triple(llvm::sys::getDefaultTargetTriple());
 
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
-    llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
+    llvm::ArrayRef<const char *> argsArrayRef(args.data(), args.size());
     clang::CompilerInvocation::CreateFromArgs(invocation, argsArrayRef, compiler_instance->getDiagnostics());
 
     // CLANG FRONTEND FIX: Configure header search paths properly
@@ -535,7 +506,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     }
 
     // Now create file manager with FileSystemOptions from the parsed invocation
-    compiler_instance->createFileManager();
+    compiler_instance->createFileManager(vfs);
 
     clang::PreprocessorOptions &pp_opts = compiler_instance->getInvocation().getPreprocessorOpts();
     if (!lang_specific_includes.empty()) {

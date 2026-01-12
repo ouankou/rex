@@ -720,7 +720,7 @@ CustomMemoryPoolDOTGenerationData::visit(SgNode* node)
 #endif
 
 #if 0
-               if ( VALGRIND_CHECK_DEFINED(n) )
+               if ( VALGRIND_CHECK_VALUE_IS_DEFINED(n) )
                   {
                     fprintf(stderr, "Found uninitialized value of i %u of node %p (%s) \n", (unsigned int)(i-listOfIRnodes.begin()),node,node->class_name().c_str());
                   }

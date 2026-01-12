@@ -680,6 +680,27 @@ if(CLANG_VERSION_MAJOR GREATER_EQUAL 18)
   list(APPEND CLANG_LIBS clangAPINotes clangTooling)
 endif()
 
+set(_rose_clang_cpp_candidates
+  clang-cpp
+  clang-cpp${CLANG_VERSION_MAJOR}
+  clang-cpp20)
+find_library(CLANG_CPP_LIBRARY
+  NAMES ${_rose_clang_cpp_candidates}
+  PATHS ${LLVM_LIBRARY_DIRS} ${CLANG_LIBRARY_DIRS}
+  NO_DEFAULT_PATH)
+if(NOT CLANG_CPP_LIBRARY)
+  find_library(CLANG_CPP_LIBRARY NAMES ${_rose_clang_cpp_candidates})
+endif()
+if(CLANG_CPP_LIBRARY)
+  if(ENABLE-SANITIZER)
+    set(CLANG_LIBS ${CLANG_CPP_LIBRARY})
+    message(STATUS "Using shared libclang-cpp for sanitizer build: ${CLANG_CPP_LIBRARY}")
+  endif()
+elseif(ENABLE-SANITIZER)
+  message(FATAL_ERROR "ENABLE-SANITIZER requires libclang-cpp to avoid ODR mismatches with static Clang libraries. Install libclang-cpp or disable ENABLE-SANITIZER.")
+endif()
+unset(_rose_clang_cpp_candidates)
+
 endif() # ENABLE-C
 
 ########################################################################################################################
@@ -712,6 +733,7 @@ option(ENABLE-TESTS-DIRECTORY "Enable compilation and testing of the ROSE/tests 
 set(_rex_enable_testing_default "${ENABLE-TESTS-DIRECTORY}")
 option(REX_ENABLE_TESTING "Enable REX tests (alias for ENABLE-TESTS-DIRECTORY)" ${_rex_enable_testing_default})
 set(ENABLE-TESTS-DIRECTORY "${REX_ENABLE_TESTING}" CACHE BOOL "Enable compilation and testing of the ROSE/tests directory" FORCE)
+set(BUILD_TESTING "${ENABLE-TESTS-DIRECTORY}" CACHE BOOL "Build the testing tree." FORCE)
 if(ENABLE-TESTS-DIRECTORY)
   enable_testing()
   add_test(
@@ -730,19 +752,52 @@ if(ENABLE-ADVANCED-WARNINGS)
   set(ROSE_USE_UNIFORM_ADVANCED_WARNINGS_SUPPORT 1)
 endif()
 
-option(ENABLE-SANITIZER "Support address sanitizer and related sanitizer tools for ROSE development" OFF)
+set(ROSE_SANITIZERS "" CACHE STRING "Semicolon-separated list of sanitizers to enable (address;leak;undefined)")
+option(ENABLE-SANITIZER "Enable sanitizer instrumentation for ROSE development" OFF)
+set(_rose_requested_sanitizers "")
 if(ENABLE-SANITIZER)
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    set(_rose_sanitizer_flags "-fsanitize=address" "-fsanitize-recover=address")
-    add_compile_options(
-      $<$<COMPILE_LANGUAGE:C>:${_rose_sanitizer_flags}>
-      $<$<COMPILE_LANGUAGE:CXX>:${_rose_sanitizer_flags}>)
-    add_link_options(${_rose_sanitizer_flags})
-    set(ROSE_USE_SANITIZER 1)
-  else()
-    message(WARNING "ENABLE-SANITIZER requested but compiler does not support sanitizer flags")
+  set(_rose_requested_sanitizers "${ROSE_SANITIZERS}")
+  if(NOT _rose_requested_sanitizers)
+    set(_rose_requested_sanitizers "address;leak")
+    set(ROSE_SANITIZERS "${_rose_requested_sanitizers}" CACHE STRING
+        "Semicolon-separated list of sanitizers to enable (address;leak;undefined)" FORCE)
   endif()
 endif()
+if(_rose_requested_sanitizers)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    list(REMOVE_DUPLICATES _rose_requested_sanitizers)
+    list(JOIN _rose_requested_sanitizers "," _rose_sanitizer_list)
+    set(_rose_sanitizer_link_flags "-fsanitize=${_rose_sanitizer_list}")
+    set(_rose_sanitizer_compile_flags
+        "${_rose_sanitizer_link_flags}"
+        "-fno-omit-frame-pointer"
+        "-fno-optimize-sibling-calls")
+    include(CheckCSourceCompiles)
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_FLAGS "${_rose_sanitizer_link_flags}")
+    set(CMAKE_REQUIRED_LINK_OPTIONS "${_rose_sanitizer_link_flags}")
+    check_c_source_compiles("int main(void) { return 0; }" ROSE_C_SUPPORTS_SANITIZERS)
+    check_cxx_source_compiles("int main() { return 0; }" ROSE_CXX_SUPPORTS_SANITIZERS)
+    unset(CMAKE_REQUIRED_FLAGS)
+    unset(CMAKE_REQUIRED_LINK_OPTIONS)
+    if(NOT ROSE_C_SUPPORTS_SANITIZERS OR NOT ROSE_CXX_SUPPORTS_SANITIZERS)
+      message(FATAL_ERROR "Sanitizers requested but compiler does not support ${_rose_sanitizer_link_flags}")
+    endif()
+    foreach(_rose_sanitizer_flag IN LISTS _rose_sanitizer_compile_flags)
+      add_compile_options(
+        $<$<COMPILE_LANGUAGE:C>:${_rose_sanitizer_flag}>
+        $<$<COMPILE_LANGUAGE:CXX>:${_rose_sanitizer_flag}>)
+    endforeach()
+    add_link_options(${_rose_sanitizer_link_flags})
+    set(ROSE_USE_SANITIZER 1)
+  else()
+    message(FATAL_ERROR "Sanitizers requested but compiler does not support sanitizer flags")
+  endif()
+endif()
+unset(_rose_requested_sanitizers)
+unset(_rose_sanitizer_list)
+unset(_rose_sanitizer_compile_flags)
+unset(_rose_sanitizer_link_flags)
 
 option(ENABLE-LCOV "Support lcov coverage instrumentation for ROSE development" OFF)
 if(ENABLE-LCOV)
@@ -833,11 +888,24 @@ if(WITH-VALGRIND-LIB)
   set(VALGRIND_LIBRARY_PATH "${WITH-VALGRIND-LIB}")
 endif()
 
-if(VALGRIND_BIN_PATH)
-  find_program(VALGRIND_BINARY valgrind PATHS "${VALGRIND_BIN_PATH}" NO_DEFAULT_PATH)
-  if(NOT VALGRIND_BINARY)
-    message(FATAL_ERROR "Valgrind binary is missing, can't configure with Valgrind")
+set(ROSE_VALGRIND_REQUESTED OFF)
+if(WITH-VALGRIND OR WITH-VALGRIND-BIN OR WITH-VALGRIND-INCLUDE OR WITH-VALGRIND-LIB)
+  set(ROSE_VALGRIND_REQUESTED ON)
+endif()
+
+if(ROSE_VALGRIND_REQUESTED)
+  set(_rose_valgrind_candidate "${VALGRIND_BIN_PATH}/valgrind")
+  if(VALGRIND_BIN_PATH AND EXISTS "${_rose_valgrind_candidate}")
+    set(VALGRIND_BINARY "${_rose_valgrind_candidate}")
+  elseif(VALGRIND_BIN_PATH)
+    find_program(VALGRIND_BINARY valgrind PATHS "${VALGRIND_BIN_PATH}")
+  else()
+    find_program(VALGRIND_BINARY valgrind)
   endif()
+  if(NOT VALGRIND_BINARY)
+    message(FATAL_ERROR "Valgrind binary is missing, can't configure with Valgrind. Set WITH-VALGRIND or WITH-VALGRIND-BIN.")
+  endif()
+  unset(_rose_valgrind_candidate)
   execute_process(
     COMMAND "${VALGRIND_BINARY}" --version
     RESULT_VARIABLE _rose_valgrind_status
@@ -851,9 +919,48 @@ if(VALGRIND_BIN_PATH)
   endif()
   set(ROSE_USE_VALGRIND 1)
 endif()
+if(ROSE_USE_VALGRIND AND NOT VALGRIND_INCLUDE_PATH)
+  find_path(VALGRIND_INCLUDE_PATH valgrind/valgrind.h)
+endif()
+if(ROSE_USE_VALGRIND AND NOT VALGRIND_INCLUDE_PATH)
+  message(FATAL_ERROR "Valgrind headers not found. Set WITH-VALGRIND or WITH-VALGRIND-INCLUDE.")
+endif()
 if(VALGRIND_INCLUDE_PATH AND NOT EXISTS "${VALGRIND_INCLUDE_PATH}/valgrind/valgrind.h")
   message(FATAL_ERROR "valgrind.h is missing, can't compile with Valgrind")
 endif()
+
+set(ROSE_CTEST_MEMCHECK_COMMAND "")
+set(ROSE_CTEST_MEMCHECK_OPTIONS "")
+set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
+if(ROSE_USE_VALGRIND)
+  set(ROSE_CTEST_MEMCHECK_COMMAND "${VALGRIND_BINARY}")
+  set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "${CMAKE_SOURCE_DIR}/scripts/rose-suppressions-for-valgrind")
+  if(EXISTS "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
+    set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1")
+  else()
+    message(WARNING "Valgrind suppressions file not found: ${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
+    set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
+  endif()
+endif()
+set(CTEST_MEMORYCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_COMMAND}")
+set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "${ROSE_CTEST_MEMCHECK_OPTIONS}")
+set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
+if(ROSE_USE_VALGRIND)
+  set(MEMORYCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_COMMAND}" CACHE FILEPATH
+      "Path to the memory checking command used by CTest" FORCE)
+  set(MEMORYCHECK_COMMAND_OPTIONS "${ROSE_CTEST_MEMCHECK_OPTIONS}" CACHE STRING
+      "Command line options for the CTest memory checker" FORCE)
+  set(MEMORYCHECK_SUPPRESSIONS_FILE "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}" CACHE FILEPATH
+      "Suppressions file used by the CTest memory checker" FORCE)
+else()
+  set(MEMORYCHECK_COMMAND "" CACHE FILEPATH
+      "Path to the memory checking command used by CTest" FORCE)
+  set(MEMORYCHECK_COMMAND_OPTIONS "" CACHE STRING
+      "Command line options for the CTest memory checker" FORCE)
+  set(MEMORYCHECK_SUPPRESSIONS_FILE "" CACHE FILEPATH
+      "Suppressions file used by the CTest memory checker" FORCE)
+endif()
+include(CTest)
 
 if(WITH-GOMP-OMP-RUNTIME-LIBRARY)
   set(USE_ROSE_GOMP_OPENMP_LIBRARY 1)
@@ -1233,6 +1340,7 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/functionCallNormalization
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/constantFolding
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration
+  ${VALGRIND_INCLUDE_PATH}
   ${HPDF_INCLUDE_DIRS})
 
 ########################################################################################################################
@@ -1326,6 +1434,8 @@ add_subdirectory(scripts)
 # Copy CTestCustom.cmake into the binary directory.  This file tells CTest to ignore some output that it otherwise
 # considers compilation errors.
 configure_file(cmake/CTestCustom.cmake.in ${CMAKE_BINARY_DIR}/CTestCustom.cmake @ONLY)
+# Configure CTest settings (including memcheck) for the build tree.
+configure_file(cmake/CTestConfig.cmake.in ${CMAKE_BINARY_DIR}/CTestConfig.cmake @ONLY)
 
 # Create include-staging directory for compiler headers (used by multiple language frontends)
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include-staging")

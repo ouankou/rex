@@ -3,6 +3,7 @@
 
 #include "ROSETTA_macros.h"
 
+#include <memory>
 #include <string>
 #include "FileUtility.h"
 
@@ -197,7 +198,7 @@ class AstNodeClass
 
  protected:
   AstNodeClass ();
-  GrammarString* setupMarkerStrings(std::string markerString, std::string fileName, bool pureVirtual);
+  std::unique_ptr<GrammarString> setupMarkerStrings(std::string markerString, std::string fileName, bool pureVirtual);
  public:
   AstNodeClass ( const std::string& lexeme, Grammar & X, const std::string& stringVar, const std::string& tagString, bool canHaveInstances = true, const SubclassListBuilder & childList = SubclassListBuilder() );
 

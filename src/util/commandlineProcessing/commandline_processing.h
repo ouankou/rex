@@ -41,6 +41,9 @@ namespace CommandlineProcessing
            * @param argv Receives argument vector. */
           ROSE_UTIL_API void generateArgcArgvFromList ( Rose_STL_Container<std::string> argList, int & argc, char** & argv );
 
+          /** Release argv allocated by generateArgcArgvFromList. */
+          ROSE_UTIL_API void deleteArgcArgv ( int argc, char** argv );
+
           /** Looks for inputPrefix prefixed options.
            *
            * Warning: As opposed to what the former documentation was saying this function doesn't modify argList.

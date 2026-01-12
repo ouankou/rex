@@ -87,6 +87,7 @@ namespace SageInterface
                std::map<SgDeclarationStatement*,std::set<SgDeclarationStatement*>* > declarationMap;
 
           public:
+               ~DeclarationSets();
                void addDeclaration(SgDeclarationStatement* decl);
                const std::set<SgDeclarationStatement*>* getDeclarations(SgDeclarationStatement* decl);
 

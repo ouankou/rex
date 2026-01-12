@@ -16174,26 +16174,7 @@ SgFile::get_project()
 string
 SgFile::getWorkingDirectory ()
    {
-     int i = 0;  // index variable declaration
-
-     const int maxPathNameLength = 1024;
-     char* currentDirectory = new char [maxPathNameLength];
-     for (i=0; i < maxPathNameLength; i++)
-          currentDirectory[i] = '\0';  // set to NULL string
-
-     char* returnString = getcwd(currentDirectory,maxPathNameLength - 1);
-     assert (returnString != NULL);
-     currentDirectory[maxPathNameLength - 1] = 0; // Just in case
-
-  // The semantics of the getcwd is that these shuld be the same (see if they are)
-  // MLOG_INFO_C("ROSETTA", "In Rose::getWorkingDirectory: Current directory = %s \n",currentDirectory);
-  // MLOG_INFO_C("ROSETTA", "In Rose::getWorkingDirectory: Current directory = %s \n",returnString);
-
-  // live with the possible memory leak for now
-  // delete currentDirectory;
-     currentDirectory = NULL;
-
-     return returnString;
+     return Rose::getWorkingDirectory();
    }
 
  //! get the source directory

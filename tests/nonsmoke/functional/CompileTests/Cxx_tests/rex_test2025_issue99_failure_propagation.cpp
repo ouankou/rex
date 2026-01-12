@@ -1,9 +1,16 @@
-// Function Try Block
-// This construct creates a function body that is a try-block.
-// If ROSE traversal returns SgTryStmt instead of SgBasicBlock,
-// this should trigger the failure propagation logic in VisitFunctionDecl.
+// Function-try-block coverage for constructors and free functions.
+struct Widget {
+  int value;
+  Widget() try : value(0) {
+    int x = value;
+    (void)x;
+  } catch (...) {
+    value = -1;
+  }
+};
+
 void func() try {
   int x = 0;
-} catch(...) {
-  int y = 0;
+  (void)x;
+} catch (...) {
 }

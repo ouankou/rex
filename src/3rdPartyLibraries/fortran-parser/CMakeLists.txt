@@ -20,7 +20,7 @@ install(
     FILES
       iso_c_binding.rmod
       openacc.rmod
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/share/rose/)
+    DESTINATION share/rose)
 
   # this file also needs to be in the binary directory for
   # related tests to pass

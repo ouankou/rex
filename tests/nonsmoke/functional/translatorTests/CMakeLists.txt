@@ -98,6 +98,12 @@ if(ENABLE-C)
     NAME Translator_querySubTree
     COMMAND querySubTree -c ${_translator_input_dir}/input_querySubTree.C)
 
+  set_tests_properties(
+    Translator_testPragmaInBody
+    Translator_rex_genericPragma
+    Translator_querySubTree
+    PROPERTIES LABELS "sanitizer")
+
   add_test(
     NAME Translator_ompVariableCollecting
     COMMAND ompVariableCollecting -I${ROSE_TOP_SRC_DIR}/src/frontend/SageIII -rose:OpenMP:ast_only -c ${_translator_input_dir}/input_ompVariableCollecting.C)

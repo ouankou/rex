@@ -71,7 +71,8 @@ add_test(
     ${_exit_status}
     testToNumber.passed)
 
-set_tests_properties(smoke_attributeTests smoke_testMLog smoke_testStringUtility smoke_testSourceLocation smoke_testBitOps smoke_testToNumber PROPERTIES LABELS "smoke;utility")
+set_tests_properties(smoke_attributeTests smoke_testStringUtility smoke_testSourceLocation smoke_testBitOps smoke_testToNumber PROPERTIES LABELS "smoke;utility;sanitizer")
+set_tests_properties(smoke_testMLog PROPERTIES LABELS "smoke;utility")
 foreach(test_target IN LISTS SMOKE_UTILITY_TESTS)
   list(APPEND _smoke_utility_tests "smoke_${test_target}")
 endforeach()

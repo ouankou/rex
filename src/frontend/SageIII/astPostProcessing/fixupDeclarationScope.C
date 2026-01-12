@@ -136,6 +136,12 @@ void fixupAstDeclarationScope(SgNode* /*node*/)
           i++;
         }
 
+     for (auto &entry : mapOfSets)
+        {
+          delete entry.second;
+        }
+     mapOfSets.clear();
+
 #if 0
      printf ("Leaving fixupAstDeclarationScope() node = %p = %s \n",node,node->class_name().c_str());
 #endif

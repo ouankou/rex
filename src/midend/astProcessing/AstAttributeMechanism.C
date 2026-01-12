@@ -72,10 +72,10 @@ AstAttributeMechanism::operator=(const AstAttributeMechanism &other) {
 }
 
 AstAttributeMechanism::~AstAttributeMechanism() {
-    for(auto it=attributes_.begin(); it!=attributes_.end(); it++) {
-        deleteAttributeValue(it->first, it->second);
-		attributes_.erase(it);
+    for (const auto &entry : attributes_) {
+        deleteAttributeValue(entry.first, entry.second);
     }
+    attributes_.clear();
 }
 
 bool
@@ -103,8 +103,10 @@ AstAttributeMechanism::set(const std::string &name, AstAttribute *newValue) {
 bool
 AstAttributeMechanism::add(const std::string &name, AstAttribute *value) {
 	auto it = attributes_.find(name);
-	if (it != attributes_.end()) { return false; }
-	else if (value != NULL) {
+	if (it != attributes_.end()) {
+        deleteAttributeValue(name, value);
+        return false;
+    } else if (value != NULL) {
         attributes_.insert(std::make_pair(name, value));
         return true;
     } return false;
@@ -121,6 +123,7 @@ AstAttributeMechanism::replace(const std::string &name, AstAttribute *value) {
         else attributes_.erase(it);
         return true;
     }
+    deleteAttributeValue(name, value);
     return false;
 }
 
@@ -163,8 +166,8 @@ void
 AstAttributeMechanism::assignFrom(const AstAttributeMechanism &other) {
     if (this == &other) return;
     AstAttributeMechanism tmp;                          // for exception safety
-    for(auto it=attributes_.begin(); it!=attributes_.end(); it++) {
-        /*!const*/ AstAttribute *attr = other[it->first];
+    for (auto it = other.attributes_.begin(); it != other.attributes_.end(); ++it) {
+        /*!const*/ AstAttribute *attr = it->second;
         ASSERT_not_null(attr);
 
         // Copy the attribute. This might throw, which is why we're using "tmp". If it throws, then we don't ever make it to

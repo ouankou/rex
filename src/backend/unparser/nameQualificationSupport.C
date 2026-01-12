@@ -317,6 +317,8 @@ generateNameQualificationSupport(SgNode* node,
           t.traverse(node,ih);
         }
 
+     delete t.declarationSet;
+     t.declarationSet = nullptr;
 
 #if 0
      printf("Exiting as a test! \n");

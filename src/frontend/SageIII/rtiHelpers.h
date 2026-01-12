@@ -18,7 +18,7 @@
 #include <valgrind/memcheck.h>
 #include <stdio.h>
 static void doUninitializedFieldCheck(const char* fieldName, void* fieldPointer, size_t fieldSize, void* wholeObject, const char* className) {
-  if (VALGRIND_CHECK_READABLE(fieldPointer, fieldSize)) {
+  if (VALGRIND_CHECK_MEM_IS_DEFINED(fieldPointer, fieldSize)) {
     fprintf(stderr, "Warning: uninitialized field p_%s of object %p of class %s\n", fieldName, wholeObject, className);
   }
 }
