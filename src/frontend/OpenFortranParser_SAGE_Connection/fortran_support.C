@@ -2632,19 +2632,6 @@ trace_back_through_parent_scopes_lookup_member_variable_symbol(const std::vector
 void
 buildImplicitVariableDeclaration( const SgName & variableName )
    {
-     Token_t token;
-     token.line = 1;
-     token.col  = 1;
-     token.type = 0;
-     token.text = strdup(variableName.str());
-
-  // Push the name onto the stack
-     if ( SgProject::get_verbose() > DEBUG_COMMENT_LEVEL )
-          printf ("Push the name onto the astNameStack \n");
-
-     astNameStack.push_front(&token);
-     ROSE_ASSERT(astNameStack.empty() == false);
-
   // DQ (12/20/2007): The type here must be determined using implicit type rules.
      SgType* intrinsicType = generateImplicitType(variableName.str());
      ROSE_ASSERT(intrinsicType != NULL);
@@ -2665,9 +2652,6 @@ buildImplicitVariableDeclaration( const SgName & variableName )
   // DQ (12/14/2007): This will be set in buildVariableDeclaration()
   // initializedName->set_scope(currentScope);
 
-     astNameStack.pop_front();
-     free(token.text);
-     token.text = NULL;
      astNodeStack.push_front(initializedName);
 #if 0
   // Output debugging information about saved state (stack) information.
