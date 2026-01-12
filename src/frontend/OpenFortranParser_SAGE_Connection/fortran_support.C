@@ -29,6 +29,7 @@ struct SyntheticTokenManager {
   std::mutex mtx;
 
   ~SyntheticTokenManager() {
+    std::lock_guard<std::mutex> lock(mtx);
     for (auto *token : tokens) {
       if (token != nullptr) {
         if (token->text != nullptr) {
