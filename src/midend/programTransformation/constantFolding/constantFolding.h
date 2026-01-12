@@ -10,6 +10,7 @@
 #define ROSE_CONSTANT_FOLDING_H
 
 #include <cmath>
+#include <vector>
 
 namespace ConstantFolding {
 
@@ -58,6 +59,14 @@ class ConstantFoldingTraversal
              SgNode* n,
              ConstantFoldingInheritedAttribute inheritedAttribute,
              SubTreeSynthesizedAttributes synthesizedAttributeList );
+
+          ~ConstantFoldingTraversal();
+
+     private:
+          void replaceExpressionWithDeferredDelete(SgExpression* oldExp,
+                                                   SgExpression* newExp);
+
+          std::vector<SgExpression*> deferred_deletes_;
    };
    //! This is the external interface of constant folding:
    // It relies on the legacy frontend frontend to do constant folding by

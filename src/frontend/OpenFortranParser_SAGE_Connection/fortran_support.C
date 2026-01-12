@@ -83,11 +83,22 @@ Token_t *create_token(int line, int col, int type, const char *text)
       else
          tmp_token->text = NULL;
 
-         {
-           std::lock_guard<std::mutex> lock(manager().mtx);
-           manager().tokens.insert(tmp_token);
-         }
          return tmp_token;
+  }
+
+Token_t *createSyntheticToken(int line, int col, int type, const char *text)
+  {
+    Token_t *tmp_token = create_token(line, col, type, text);
+    if (tmp_token == NULL)
+       {
+         return NULL;
+       }
+
+    {
+      std::lock_guard<std::mutex> lock(manager().mtx);
+      manager().tokens.insert(tmp_token);
+    }
+    return tmp_token;
   }
 
 
@@ -1488,7 +1499,7 @@ buildLabelRefExp(SgExpression* expression)
        // If this is an integer, then generate a SgLabelRefExp.
           SgName name = StringUtility::numberToString(integerValue->get_value());
 
-          Token_t* format_label = create_token(1,0,0,name.str());
+          Token_t* format_label = createSyntheticToken(1, 0, 0, name.str());
           SgLabelSymbol* labelSymbol = buildNumericLabelSymbol(format_label);
 
        // DQ (11/5/2016): The token support is using C style malloc, so we need to use C style free to be consistant.
@@ -4528,7 +4539,8 @@ convertExpressionOnStackToFunctionCallExp()
           SgName name = variableSymbol->get_name();
           Sg_File_Info* filePosition = varRefExp->get_file_info();
           ROSE_ASSERT(filePosition != NULL);
-          Token_t* nameToken = create_token(filePosition->get_line(),filePosition->get_col(),0,name.str());
+          Token_t* nameToken = createSyntheticToken(
+              filePosition->get_line(), filePosition->get_col(), 0, name.str());
 
           convertVariableSymbolToFunctionCallExp(variableSymbol,nameToken);
           releaseSyntheticToken(nameToken);
@@ -6127,7 +6139,7 @@ push_token(string s)
   // This is the case of an option not being specified, as in "read(1)" instead of "read(UNIT=1)"
   // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
   // Token_t* defaultToken = create_token(0,0,0,"fmt");
-     Token_t* defaultToken = create_token(0,0,0,s.c_str());
+     Token_t* defaultToken = createSyntheticToken(0,0,0,s.c_str());
      ROSE_ASSERT(defaultToken != NULL);
      astNameStack.push_front(defaultToken);
    }

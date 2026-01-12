@@ -13410,7 +13410,8 @@ void c_action_case_value()
         {
             // This is the case of an option not being specified, as in "open(1)" instead of "open(UNIT=1)"
             // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
-            Token_t* defaultToken = create_token(0, 0, 0, "defaultString");
+            Token_t* defaultToken =
+                createSyntheticToken(0, 0, 0, "defaultString");
             ROSE_ASSERT(defaultToken != NULL);
             astNameStack.push_front(defaultToken);
         }
@@ -13538,7 +13539,8 @@ void c_action_case_value()
         {
             // This is the case of an option not being specified, as in "close(1)" instead of "close(UNIT=1)"
             // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
-            Token_t* defaultToken = create_token(0, 0, 0, "defaultString");
+            Token_t* defaultToken =
+                createSyntheticToken(0, 0, 0, "defaultString");
             ROSE_ASSERT(defaultToken != NULL);
             astNameStack.push_front(defaultToken);
         }
@@ -13645,7 +13647,7 @@ void c_action_read_stmt(Token_t* label, Token_t* readKeyword, Token_t* /*eos*/, 
 
             // This is the case of an option not being specified, as in "read(1)" instead of "read(UNIT=1)"
             // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
-            Token_t* defaultToken = create_token(0, 0, 0, "fmt");
+            Token_t* defaultToken = createSyntheticToken(0, 0, 0, "fmt");
             ROSE_ASSERT(defaultToken != NULL);
             astNameStack.push_front(defaultToken);
         }
@@ -14265,7 +14267,8 @@ void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/
         // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
         if (keyword == NULL)
         {
-            Token_t* defaultToken = create_token(0, 0, 0, "defaultString");
+            Token_t* defaultToken =
+                createSyntheticToken(0, 0, 0, "defaultString");
             ROSE_ASSERT(defaultToken != NULL);
             astNameStack.push_front(defaultToken);
         }
@@ -14921,7 +14924,8 @@ void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/
         {
             // This is the case of an option not being specified, as in "wait(1)" instead of "wait(UNIT=1)"
             // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
-            Token_t* defaultToken = create_token(0, 0, 0, "defaultString");
+            Token_t* defaultToken =
+                createSyntheticToken(0, 0, 0, "defaultString");
             ROSE_ASSERT(defaultToken != NULL);
             astNameStack.push_front(defaultToken);
         }
@@ -15207,7 +15211,8 @@ void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/
         {
             // This is the case of an option not being specified, as in "flush(1)" instead of "flush(UNIT=1)"
             // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
-            Token_t* defaultToken = create_token(0, 0, 0, "defaultString");
+            Token_t* defaultToken =
+                createSyntheticToken(0, 0, 0, "defaultString");
             ROSE_ASSERT(defaultToken != NULL);
             astNameStack.push_front(defaultToken);
         }
@@ -15324,7 +15329,8 @@ void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/
         {
             // This is the case of an option not being specified, as in "flush(1)" instead of "flush(UNIT=1)"
             // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
-            Token_t* defaultToken = create_token(0, 0, 0, "defaultString");
+            Token_t* defaultToken =
+                createSyntheticToken(0, 0, 0, "defaultString");
             ROSE_ASSERT(defaultToken != NULL);
             astNameStack.push_front(defaultToken);
         }
@@ -19914,7 +19920,8 @@ void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/
         ROSE_ASSERT(teamToken == NULL || teamToken->text != NULL);
 
         // add translation to current scope
-        Token * caf_finish = create_token(eos->line, eos->col, 0, FINISH_SUBR_NAME);
+        Token * caf_finish =
+            createSyntheticToken(eos->line, eos->col, 0, FINISH_SUBR_NAME);
         c_action_section_subscript_list__begin();// R619
         if (teamToken != NULL)
         {
@@ -19981,7 +19988,8 @@ void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/
         }
 
         // add translation to current scope
-        Token * caf_end_finish = create_token(eos->line, eos->col, 0, ENDFINISH_SUBR_NAME);
+        Token * caf_end_finish =
+            createSyntheticToken(eos->line, eos->col, 0, ENDFINISH_SUBR_NAME);
         c_action_section_subscript_list__begin();// R619
         c_action_section_subscript_list(0);// R619
         c_action_part_ref(caf_end_finish, true, false);// R613
@@ -20087,8 +20095,8 @@ void c_action_print_stmt(Token_t* label, Token_t* printKeyword, Token_t* /*eos*/
         c_action_section_subscript_list(num + 4);// R619
 
         // function call
-        Token * caf_spawn_subr = create_token(spawn->line, spawn->col, 0,
-                SPAWN_SUBR_NAME);
+        Token * caf_spawn_subr =
+            createSyntheticToken(spawn->line, spawn->col, 0, SPAWN_SUBR_NAME);
         c_action_part_ref(caf_spawn_subr, true, false);// R613
         c_action_data_ref(1);// R612
         c_action_procedure_designator();// R1219
