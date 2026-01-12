@@ -706,10 +706,14 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
 
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
                  // Note that this overwrites the existing pointer and is likely a memory leak!
-                 if (lhsSynthesizedValue != NULL)
-                   binaryOperator->set_lhs_operand(lhsSynthesizedValue);
-                 if (rhsSynthesizedValue != NULL)
-                   binaryOperator->set_rhs_operand(rhsSynthesizedValue);
+                 if (lhsSynthesizedValue != NULL) {
+                   SageInterface::replaceExpression(
+                       binaryOperator->get_lhs_operand(), lhsSynthesizedValue);
+                 }
+                 if (rhsSynthesizedValue != NULL) {
+                   SageInterface::replaceExpression(
+                       binaryOperator->get_rhs_operand(), rhsSynthesizedValue);
+                 }
 
                  // step 2: calculate the current node 's synthesized attribute value
                  //
@@ -725,8 +729,10 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  SgExpression* synthesizedValue = synthesizedAttributeList[SgUnaryOp_operand_i].newValueExp;
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
                  // Note that this overwrites the existing pointer and is likely a memory leak!
-                 if (synthesizedValue != NULL)
-                   unaryOperator->set_operand(synthesizedValue);
+                 if (synthesizedValue != NULL) {
+                   SageInterface::replaceExpression(unaryOperator->get_operand(),
+                                                    synthesizedValue);
+                 }
                  SgExpression* operand = unaryOperator->get_operand();
                  SgValueExp* value = isSgValueExp(operand);
 

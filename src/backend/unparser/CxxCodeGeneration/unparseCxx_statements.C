@@ -54,8 +54,6 @@ using namespace Rose;
 #define ENABLE_unparsedPartiallyUsingTokenStream 1
 
 namespace {
-constexpr char kFunctionTryBlockAttributeName[] = "rose.function_try_block";
-
 SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   if (definition == NULL) {
     return NULL;
@@ -72,7 +70,7 @@ SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   if (try_stmt == NULL) {
     return NULL;
   }
-  if (try_stmt->getAttribute(kFunctionTryBlockAttributeName) == NULL) {
+  if (try_stmt->get_is_function_try_block() == false) {
     return NULL;
   }
   return try_stmt;

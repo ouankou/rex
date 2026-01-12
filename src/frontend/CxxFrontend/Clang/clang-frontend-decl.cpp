@@ -12,8 +12,6 @@
 #include <unordered_set>
 
 namespace {
-constexpr char kFunctionTryBlockAttributeName[] = "rose.function_try_block";
-
 static std::string trimWhitespace(std::string s) {
   size_t first = 0;
   while (first < s.size() &&
@@ -8285,8 +8283,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       SgBasicBlock *body = isSgBasicBlock(tmp_body);
       if (body == NULL) {
         if (SgTryStmt *try_stmt = isSgTryStmt(tmp_body)) {
-          try_stmt->addNewAttribute(kFunctionTryBlockAttributeName,
-                                    new AstIntAttribute(1));
+          try_stmt->set_is_function_try_block(true);
           SgBasicBlock *wrapper = SageBuilder::buildBasicBlock_nfi();
           SageInterface::appendStatement(try_stmt, wrapper);
           applySourceRange(wrapper, function_decl->getBody()->getSourceRange());

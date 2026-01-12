@@ -219,11 +219,8 @@ convertJumpsToGotos (SgVariableSymbol* jump_var,
                                                            local_target);
       ROSE_ASSERT (new_block);
 
-      SgStatement* jump_par = isSgStatement (jump_stmt->get_parent ());
-      ROSE_ASSERT (jump_par);
-
-      // \todo Is the original 'jump_stmt' leaked at this point?
-      jump_par->replace_statement (jump_stmt, new_block);
+      SageInterface::replaceStatement(jump_stmt, new_block);
+      SageInterface::deleteAST(jump_stmt);
     }
 }
 /*
