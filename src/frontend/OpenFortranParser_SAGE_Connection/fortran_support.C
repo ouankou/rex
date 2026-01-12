@@ -38,18 +38,13 @@ void releaseSyntheticToken(Token_t *token) {
   if (token == NULL) {
     return;
   }
-  {
-    std::lock_guard<std::mutex> lock(synthetic_tokens_mutex());
-    auto it = synthetic_tokens().find(token);
-    if (it == synthetic_tokens().end()) {
-      return;
+  std::lock_guard<std::mutex> lock(synthetic_tokens_mutex());
+  if (synthetic_tokens().erase(token) > 0) {
+    if (token->text != NULL) {
+      free(token->text);
     }
-    synthetic_tokens().erase(it);
+    free(token);
   }
-  if (token->text != NULL) {
-    free(token->text);
-  }
-  free(token);
 }
 } // namespace
 
