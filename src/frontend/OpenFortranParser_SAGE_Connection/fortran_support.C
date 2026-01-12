@@ -24,20 +24,27 @@ std::list<SgInterfaceStatement*> astInterfaceStack;
 #include "token.h"
 
 namespace {
-std::unordered_set<Token_t *> synthetic_tokens;
-std::mutex synthetic_tokens_mutex;
+std::unordered_set<Token_t *> &synthetic_tokens() {
+  static std::unordered_set<Token_t *> instance;
+  return instance;
+}
+
+std::mutex &synthetic_tokens_mutex() {
+  static std::mutex instance;
+  return instance;
+}
 
 void releaseSyntheticToken(Token_t *token) {
   if (token == NULL) {
     return;
   }
   {
-    std::lock_guard<std::mutex> lock(synthetic_tokens_mutex);
-    auto it = synthetic_tokens.find(token);
-    if (it == synthetic_tokens.end()) {
+    std::lock_guard<std::mutex> lock(synthetic_tokens_mutex());
+    auto it = synthetic_tokens().find(token);
+    if (it == synthetic_tokens().end()) {
       return;
     }
-    synthetic_tokens.erase(it);
+    synthetic_tokens().erase(it);
   }
   if (token->text != NULL) {
     free(token->text);
@@ -70,8 +77,8 @@ Token_t *create_token(int line, int col, int type, const char *text)
          tmp_token->text = NULL;
 
          {
-           std::lock_guard<std::mutex> lock(synthetic_tokens_mutex);
-           synthetic_tokens.insert(tmp_token);
+           std::lock_guard<std::mutex> lock(synthetic_tokens_mutex());
+           synthetic_tokens().insert(tmp_token);
          }
          return tmp_token;
   }
