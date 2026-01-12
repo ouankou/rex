@@ -7320,26 +7320,26 @@ SageInterface::setSourcePositionPointersToNull(SgNode *node)
   // if ( (locatedNode != NULL) && (locatedNode->get_startOfConstruct() == NULL) )
      if (locatedNode != NULL)
         {
-          if (locatedNode->get_startOfConstruct() != NULL)
-               printf ("WARNING: In SageInterface::setSourcePositionPointersToNull(): Memory leak of startOfConstruct Sg_File_Info object (setting Sg_File_Info pointers to NULL) \n");
-
+          if (locatedNode->get_startOfConstruct() != NULL) {
+               delete locatedNode->get_startOfConstruct();
+          }
           locatedNode->set_startOfConstruct(NULL);
 
        // Note that SgGlobal should have NULL endOfConstruct()
           if (global == NULL)
              {
-               if (locatedNode->get_endOfConstruct() != NULL)
-                    printf ("WARNING: In SageInterface::setSourcePositionPointersToNull(): Memory leak of endOfConstruct Sg_File_Info object (setting Sg_File_Info pointers to NULL) \n");
-
+               if (locatedNode->get_endOfConstruct() != NULL) {
+                    delete locatedNode->get_endOfConstruct();
+               }
                locatedNode->set_endOfConstruct(NULL);
              }
 
        // Only SgExpression IR nodes have a 3rd source position data structure.
           if (expression != NULL)
              {
-               if (expression->get_operatorPosition() != NULL)
-                    printf ("WARNING: In SageInterface::setSourcePositionPointersToNull(): Memory leak of operatorPosition Sg_File_Info object (setting Sg_File_Info pointers to NULL) \n");
-
+               if (expression->get_operatorPosition() != NULL) {
+                    delete expression->get_operatorPosition();
+               }
                expression->set_operatorPosition(NULL);
              }
         }

@@ -131,8 +131,13 @@ Outliner::Preprocess::normalizeVarDecl (SgVariableDeclaration* s)
 
   do
     {
-      if (appendAssignment (*i, s_scope, assigns_new))
-        (*i)->set_initializer (0); // \todo Fix this memory leak!
+      if (appendAssignment(*i, s_scope, assigns_new)) {
+        SgInitializer *initializer = (*i)->get_initializer();
+        (*i)->set_initializer(NULL);
+        if (initializer != NULL) {
+          SageInterface::deleteAST(initializer);
+        }
+      }
       ++i;
     }
   while (i != vars_orig.end ());

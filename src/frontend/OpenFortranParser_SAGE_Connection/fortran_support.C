@@ -8,6 +8,9 @@
 
 #include "fortran_support.h"
 
+#include <mutex>
+#include <unordered_set>
+
 // FMZ: Location of global variables
 #include "FortranParserState.h"
 
@@ -19,6 +22,43 @@ using namespace Rose;
 std::list<SgInterfaceStatement*> astInterfaceStack;
 
 #include "token.h"
+
+namespace {
+struct SyntheticTokenManager {
+  std::unordered_set<Token_t *> tokens;
+  std::mutex mtx;
+
+  ~SyntheticTokenManager() {
+    std::lock_guard<std::mutex> lock(mtx);
+    for (auto *token : tokens) {
+      if (token != nullptr) {
+        if (token->text != nullptr) {
+          free(token->text);
+        }
+        free(token);
+      }
+    }
+  }
+};
+
+SyntheticTokenManager &manager() {
+  static SyntheticTokenManager instance;
+  return instance;
+}
+
+void releaseSyntheticToken(Token_t *token) {
+  if (token == NULL) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(manager().mtx);
+  if (manager().tokens.erase(token) > 0) {
+    if (token->text != NULL) {
+      free(token->text);
+    }
+    free(token);
+  }
+}
+} // namespace
 
 Token_t *create_token(int line, int col, int type, const char *text)
   {
@@ -44,6 +84,21 @@ Token_t *create_token(int line, int col, int type, const char *text)
          tmp_token->text = NULL;
 
          return tmp_token;
+  }
+
+Token_t *createSyntheticToken(int line, int col, int type, const char *text)
+  {
+    Token_t *tmp_token = create_token(line, col, type, text);
+    if (tmp_token == NULL)
+       {
+         return NULL;
+       }
+
+    {
+      std::lock_guard<std::mutex> lock(manager().mtx);
+      manager().tokens.insert(tmp_token);
+    }
+    return tmp_token;
   }
 
 
@@ -1444,12 +1499,12 @@ buildLabelRefExp(SgExpression* expression)
        // If this is an integer, then generate a SgLabelRefExp.
           SgName name = StringUtility::numberToString(integerValue->get_value());
 
-          Token_t* format_label = create_token(1,0,0,name.str());
+          Token_t* format_label = createSyntheticToken(1, 0, 0, name.str());
           SgLabelSymbol* labelSymbol = buildNumericLabelSymbol(format_label);
 
        // DQ (11/5/2016): The token support is using C style malloc, so we need to use C style free to be consistant.
        // delete format_label;
-          free(format_label);
+          releaseSyntheticToken(format_label);
 
           format_label = NULL;
 
@@ -2588,19 +2643,6 @@ trace_back_through_parent_scopes_lookup_member_variable_symbol(const std::vector
 void
 buildImplicitVariableDeclaration( const SgName & variableName )
    {
-     Token_t token;
-     token.line = 1;
-     token.col  = 1;
-     token.type = 0;
-     token.text = strdup(variableName.str());
-
-  // Push the name onto the stack
-     if ( SgProject::get_verbose() > DEBUG_COMMENT_LEVEL )
-          printf ("Push the name onto the astNameStack \n");
-
-     astNameStack.push_front(&token);
-     ROSE_ASSERT(astNameStack.empty() == false);
-
   // DQ (12/20/2007): The type here must be determined using implicit type rules.
      SgType* intrinsicType = generateImplicitType(variableName.str());
      ROSE_ASSERT(intrinsicType != NULL);
@@ -2621,7 +2663,6 @@ buildImplicitVariableDeclaration( const SgName & variableName )
   // DQ (12/14/2007): This will be set in buildVariableDeclaration()
   // initializedName->set_scope(currentScope);
 
-     astNameStack.pop_front();
      astNodeStack.push_front(initializedName);
 #if 0
   // Output debugging information about saved state (stack) information.
@@ -2929,9 +2970,11 @@ buildDerivedTypeStatementAndDefinition (string name, SgScopeStatement* scope)
             // printf ("astNameStack.size() = %" PRIuPTR " \n",astNameStack.size());
                if (astNameStack.empty() == false)
                   {
-                    string type_attribute_string = astNameStack.front()->text;
+                    Token_t* type_attribute_token = astNameStack.front();
+                    string type_attribute_string = type_attribute_token->text;
                  // printf ("type_attribute_string = %s \n",type_attribute_string.c_str());
                     astNameStack.pop_front();
+                    releaseSyntheticToken(type_attribute_token);
                   }
              }
 
@@ -3218,9 +3261,11 @@ buildVariableDeclaration (Token_t * label, bool buildingImplicitVariable )
             // printf ("astNameStack.size() = %" PRIuPTR " \n",astNameStack.size());
                if (astNameStack.empty() == false)
                   {
-                    string type_attribute_string = astNameStack.front()->text;
+                    Token_t* type_attribute_token = astNameStack.front();
+                    string type_attribute_string = type_attribute_token->text;
                  // printf ("type_attribute_string = %s \n",type_attribute_string.c_str());
                     astNameStack.pop_front();
+                    releaseSyntheticToken(type_attribute_token);
                   }
              }
 
@@ -4083,13 +4128,15 @@ buildAttributeSpecificationStatement ( SgAttributeSpecificationStatement::attrib
        // This handling of the astNameStack, does not apply to the dimension statement
           while (astNameStack.empty() == false)
              {
-               string name = astNameStack.front()->text;
+               Token_t* name_token = astNameStack.front();
+               string name = name_token->text;
             // printf ("Push %s onto attributeSpecificationStatement name_list \n",name.c_str());
                attributeSpecificationStatement->get_name_list().push_back(name);
 
             // printf ("In loop: attributeSpecificationStatement->get_name_list().size() = %" PRIuPTR " \n",attributeSpecificationStatement->get_name_list().size());
 
                astNameStack.pop_front();
+               releaseSyntheticToken(name_token);
              }
 
        // There should at most be a single intent on the stack (I think)
@@ -4396,9 +4443,11 @@ processBindingAttribute( SgDeclarationStatement* declaration)
   // Output debugging information about saved state (stack) information.
   // outputState("Process binding spec in R1232 c_action_subroutine_stmt()");
 
-     string targetLanguage = astNameStack.front()->text;
+     Token_t* target_language_token = astNameStack.front();
+     string targetLanguage = target_language_token->text;
   // printf ("targetLanguage = %s \n",targetLanguage.c_str());
      astNameStack.pop_front();
+     releaseSyntheticToken(target_language_token);
 
   // I think it is always "C", we use the linkage string in ROSE to hold this information
   // (used for C/C++ and now Fortran).
@@ -4414,9 +4463,11 @@ processBindingAttribute( SgDeclarationStatement* declaration)
      if (astNameStack.empty() == false && astExpressionStack.empty() == false)
         {
        // There is a "NAME" = string_literal to be processed.
-          string optionString = astNameStack.front()->text;
+          Token_t* option_token = astNameStack.front();
+          string optionString = option_token->text;
        // printf ("optionString = %s \n",optionString.c_str());
           astNameStack.pop_front();
+          releaseSyntheticToken(option_token);
 
        // SgExpression* stringLiteralExp = isSgStringVal(astExpressionStack.front());
           SgStringVal* stringLiteralExp = isSgStringVal(astExpressionStack.front());
@@ -4488,9 +4539,11 @@ convertExpressionOnStackToFunctionCallExp()
           SgName name = variableSymbol->get_name();
           Sg_File_Info* filePosition = varRefExp->get_file_info();
           ROSE_ASSERT(filePosition != NULL);
-          Token_t* nameToken = create_token(filePosition->get_line(),filePosition->get_col(),0,name.str());
+          Token_t* nameToken = createSyntheticToken(
+              filePosition->get_line(), filePosition->get_col(), 0, name.str());
 
           convertVariableSymbolToFunctionCallExp(variableSymbol,nameToken);
+          releaseSyntheticToken(nameToken);
         }
        else
         {
@@ -5139,7 +5192,9 @@ buildProcedureSupport(SgProcedureHeaderStatement* procedureDeclaration, bool has
                setSourcePosition(initializedName,astNameStack.front());
 
                ROSE_ASSERT(astNameStack.empty() == false);
+               Token_t* argument_token = astNameStack.front();
                astNameStack.pop_front();
+               releaseSyntheticToken(argument_token);
 
                if (isAnAlternativeReturnParameter == true)
                   {
@@ -6084,7 +6139,7 @@ push_token(string s)
   // This is the case of an option not being specified, as in "read(1)" instead of "read(UNIT=1)"
   // To make the astExpressionStack match the astNameStack we have to push a default token onto the astNameStack.
   // Token_t* defaultToken = create_token(0,0,0,"fmt");
-     Token_t* defaultToken = create_token(0,0,0,s.c_str());
+     Token_t* defaultToken = createSyntheticToken(0,0,0,s.c_str());
      ROSE_ASSERT(defaultToken != NULL);
      astNameStack.push_front(defaultToken);
    }

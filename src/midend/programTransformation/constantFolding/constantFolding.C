@@ -19,9 +19,38 @@
 #include "sageBuilder.h"
 #include "constantFolding.h"
 #include <string>
+#include <unordered_set>
 
 using namespace ConstantFolding;
 using namespace std;
+
+namespace {
+class NestedDeleteCollector : public AstSimpleProcessing {
+ public:
+  NestedDeleteCollector(const std::unordered_set<SgNode*>& roots,
+                        std::unordered_set<SgNode*>& nested_roots)
+      : roots_(roots), nested_roots_(nested_roots), current_root_(NULL) {}
+
+  void collect(SgNode* root) {
+    current_root_ = root;
+    traverse(root, postorder);
+  }
+
+  void visit(SgNode* node) override {
+    if (node == current_root_) {
+      return;
+    }
+    if (roots_.count(node) > 0) {
+      nested_roots_.insert(node);
+    }
+  }
+
+ private:
+  const std::unordered_set<SgNode*>& roots_;
+  std::unordered_set<SgNode*>& nested_roots_;
+  SgNode* current_root_;
+};
+}  // namespace
 
 
 void
@@ -153,6 +182,47 @@ ConstantFoldingTraversal::evaluateInheritedAttribute ( SgNode* astNode, Constant
         }
 
      return inheritedAttribute;
+   }
+
+ConstantFoldingTraversal::~ConstantFoldingTraversal()
+   {
+     std::unordered_set<SgNode*> root_set;
+     std::vector<SgNode*> roots;
+     for (SgExpression* old_exp : deferred_deletes_)
+        {
+          if (old_exp != NULL && root_set.insert(old_exp).second)
+             {
+               roots.push_back(old_exp);
+             }
+        }
+
+     std::unordered_set<SgNode*> nested_roots;
+     NestedDeleteCollector collector(root_set, nested_roots);
+     for (SgNode* root : roots)
+        {
+          collector.collect(root);
+        }
+
+     for (SgNode* root : roots)
+        {
+          if (nested_roots.count(root) == 0)
+             {
+               SageInterface::deepDelete(root);
+             }
+        }
+   }
+
+void
+ConstantFoldingTraversal::replaceExpressionWithDeferredDelete(SgExpression* oldExp,
+                                                              SgExpression* newExp)
+   {
+     if (oldExp == NULL || newExp == NULL || oldExp == newExp)
+        {
+          return;
+        }
+
+     SageInterface::replaceExpression(oldExp, newExp, /*keepOldExp=*/true);
+     deferred_deletes_.push_back(oldExp);
    }
 
 // Macro to permit use of shorter name
@@ -542,6 +612,15 @@ static SgValueExp* evaluateUnaryOp(SgUnaryOp* unaryOperator){
 static SgValueExp* evaluateConditionalExp(SgConditionalExp * cond_exp)
 {
   SgValueExp* result = NULL;
+  auto copy_value_exp = [](SgValueExp* value_exp) -> SgValueExp* {
+    if (value_exp == NULL) {
+      return NULL;
+    }
+    SgExpression* copied = SageInterface::copyExpression(value_exp);
+    SgValueExp* copied_value = isSgValueExp(copied);
+    ROSE_ASSERT(copied_value != NULL);
+    return copied_value;
+  };
 
   // Calculate the current node's synthesized attribute value
   SgExpression* c_exp_value = cond_exp->get_conditional_exp();
@@ -582,10 +661,10 @@ static SgValueExp* evaluateConditionalExp(SgConditionalExp * cond_exp)
         int v = cf_get_int_value(value_exp);
         if (v) {
           if (value_exp_t) // set the value only if the true exp is a constant
-            result = value_exp_t;
+            result = copy_value_exp(value_exp_t);
         } else {
           if (value_exp_f)
-            result = value_exp_f;
+            result = copy_value_exp(value_exp_f);
         }
         break;
       }
@@ -706,10 +785,14 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
 
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
                  // Note that this overwrites the existing pointer and is likely a memory leak!
-                 if (lhsSynthesizedValue != NULL)
-                   binaryOperator->set_lhs_operand(lhsSynthesizedValue);
-                 if (rhsSynthesizedValue != NULL)
-                   binaryOperator->set_rhs_operand(rhsSynthesizedValue);
+                 if (lhsSynthesizedValue != NULL) {
+                   replaceExpressionWithDeferredDelete(
+                       binaryOperator->get_lhs_operand(), lhsSynthesizedValue);
+                 }
+                 if (rhsSynthesizedValue != NULL) {
+                   replaceExpressionWithDeferredDelete(
+                       binaryOperator->get_rhs_operand(), rhsSynthesizedValue);
+                 }
 
                  // step 2: calculate the current node 's synthesized attribute value
                  //
@@ -725,8 +808,10 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  SgExpression* synthesizedValue = synthesizedAttributeList[SgUnaryOp_operand_i].newValueExp;
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
                  // Note that this overwrites the existing pointer and is likely a memory leak!
-                 if (synthesizedValue != NULL)
-                   unaryOperator->set_operand(synthesizedValue);
+                 if (synthesizedValue != NULL) {
+                   replaceExpressionWithDeferredDelete(unaryOperator->get_operand(),
+                                                       synthesizedValue);
+                 }
                  SgExpression* operand = unaryOperator->get_operand();
                  SgValueExp* value = isSgValueExp(operand);
 
@@ -761,8 +846,10 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  SgExpression* synthesizedValue = synthesizedAttributeList[SgAssignInitializer_operand_i].newValueExp;
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
                  // Note that this overwrites the existing pointer and is likely a memory leak!
-                 if (synthesizedValue != NULL)
-                   assignInit->set_operand(synthesizedValue);
+                 if (synthesizedValue != NULL) {
+                   replaceExpressionWithDeferredDelete(assignInit->get_operand(),
+                                                       synthesizedValue);
+                 }
                }
                else if (isSgExprListExp(expr))
                {
@@ -771,8 +858,10 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  ROSE_ASSERT(synthesizedAttributeList.size() == exprList->get_expressions().size());
                  for (size_t i = 0; i < exprList->get_expressions().size(); ++i) {
                    SgExpression* synthesizedValue = synthesizedAttributeList[i].newValueExp;
-                   if (synthesizedValue != NULL)
-                     exprList->get_expressions()[i] = synthesizedValue;
+                   if (synthesizedValue != NULL) {
+                     replaceExpressionWithDeferredDelete(
+                         exprList->get_expressions()[i], synthesizedValue);
+                   }
                  }
                }
                else if (isSgConditionalExp(expr)) // a ? b: c
@@ -787,11 +876,14 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  SgExpression* t_exp_value = synthesizedAttributeList[SgConditionalExp_true_exp].newValueExp; 
                  SgExpression* f_exp_value = synthesizedAttributeList[SgConditionalExp_false_exp].newValueExp; 
                  if (c_exp_value!= NULL)
-                   cond_exp->set_conditional_exp(c_exp_value);
+                   replaceExpressionWithDeferredDelete(
+                       cond_exp->get_conditional_exp(), c_exp_value);
                  if (t_exp_value!= NULL)
-                   cond_exp->set_true_exp(t_exp_value);
+                   replaceExpressionWithDeferredDelete(cond_exp->get_true_exp(),
+                                                       t_exp_value);
                  if (f_exp_value!= NULL)
-                   cond_exp->set_false_exp(f_exp_value);
+                   replaceExpressionWithDeferredDelete(cond_exp->get_false_exp(),
+                                                       f_exp_value);
 
                  // step 2. calculate the current node's synthesized attribute value
                  returnAttribute.newValueExp = evaluateConditionalExp(cond_exp);
@@ -807,13 +899,16 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  SgExpression* stride_exp_value= synthesizedAttributeList[SgRangeExp_stride].newValueExp; 
 
                  if (start_exp_value!= NULL)
-                   r_exp->set_start(start_exp_value);
+                   replaceExpressionWithDeferredDelete(r_exp->get_start(),
+                                                       start_exp_value);
 
                  if (end_exp_value!= NULL)
-                   r_exp->set_end(end_exp_value);
+                   replaceExpressionWithDeferredDelete(r_exp->get_end(),
+                                                       end_exp_value);
 
                  if (stride_exp_value!= NULL)
-                   r_exp->set_stride(stride_exp_value);
+                   replaceExpressionWithDeferredDelete(r_exp->get_stride(),
+                                                       stride_exp_value);
 
                  // step 2. calculate the current node's synthesized attribute value
                  // SgRangeExp cannot be evaluated further

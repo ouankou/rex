@@ -51,6 +51,8 @@ extern std::list<SgExpression*> astExpressionStack;
 // typedef std::vector<SgToken*> TokenListType;
 typedef std::vector<Token_t*> TokenListType;
 
+Token_t *createSyntheticToken(int line, int col, int type, const char *text);
+
 // Global stack of IR nodes
 // extern std::vector<SgNode*> astNodeStack;
 extern std::list<SgNode*> astNodeStack;
@@ -386,5 +388,3 @@ SgInitializedName* buildInitializedNameAndPutOntoStack(const SgName & name, SgTy
 
 // endif for ROSE_FORTRAN_SUPPORT
 #endif
-
-
