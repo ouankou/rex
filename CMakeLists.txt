@@ -683,11 +683,27 @@ endif()
 set(_rose_clang_cpp_candidates
   clang-cpp
   clang-cpp${CLANG_VERSION_MAJOR}
+  clang-cpp${LLVM_PACKAGE_VERSION}
   clang-cpp20)
+set(_rose_clang_cpp_search_dirs
+  ${LLVM_LIBRARY_DIRS}
+  ${CLANG_LIBRARY_DIRS})
+if(LLVM_DIR)
+  get_filename_component(_rose_llvm_prefix "${LLVM_DIR}/../.." ABSOLUTE)
+  list(APPEND _rose_clang_cpp_search_dirs
+    "${_rose_llvm_prefix}/lib"
+    "${_rose_llvm_prefix}/lib64")
+endif()
+list(REMOVE_DUPLICATES _rose_clang_cpp_search_dirs)
+set(_rose_saved_library_suffixes "${CMAKE_FIND_LIBRARY_SUFFIXES}")
+if(UNIX AND NOT APPLE AND CLANG_VERSION_MAJOR)
+  list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".so.${CLANG_VERSION_MAJOR}")
+endif()
 find_library(CLANG_CPP_LIBRARY
   NAMES ${_rose_clang_cpp_candidates}
-  PATHS ${LLVM_LIBRARY_DIRS} ${CLANG_LIBRARY_DIRS}
+  PATHS ${_rose_clang_cpp_search_dirs}
   NO_DEFAULT_PATH)
+set(CMAKE_FIND_LIBRARY_SUFFIXES "${_rose_saved_library_suffixes}")
 if(NOT CLANG_CPP_LIBRARY)
   find_library(CLANG_CPP_LIBRARY NAMES ${_rose_clang_cpp_candidates})
 endif()
@@ -700,6 +716,9 @@ elseif(ENABLE-SANITIZER)
   message(FATAL_ERROR "ENABLE-SANITIZER requires libclang-cpp to avoid ODR mismatches with static Clang libraries. Install libclang-cpp or disable ENABLE-SANITIZER.")
 endif()
 unset(_rose_clang_cpp_candidates)
+unset(_rose_clang_cpp_search_dirs)
+unset(_rose_llvm_prefix)
+unset(_rose_saved_library_suffixes)
 
 endif() # ENABLE-C
 
