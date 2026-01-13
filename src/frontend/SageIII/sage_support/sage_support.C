@@ -2545,15 +2545,14 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
   // The Flang parser doesn't require the JVM.
   if (get_experimental_flang_frontend() == true) {
     int status{-1};
-    int flangArgc{0};
-    char **flangArgv{nullptr};
 
     vector<string> flangCommandLine;
     flangCommandLine.push_back("f18-parse-demo");
     flangCommandLine.push_back("-fexternal-builder");
     flangCommandLine.push_back(get_sourceFileNameWithPath());
-    CommandlineProcessing::generateArgcArgvFromList(flangCommandLine, flangArgc,
-                                                    flangArgv);
+    CommandlineProcessing::ArgvStorage flangArgvStorage(flangCommandLine);
+    int flangArgc = flangArgvStorage.argc();
+    char **flangArgv = flangArgvStorage.argv();
 
     // SG (7/9/2015) In case of a mixed language project, force case sensitivity here.
        SageBuilder::symbol_table_case_insensitive_semantics = true;
@@ -2565,7 +2564,6 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
        ROSE_ASSERT(! "[FATAL] [ROSE] [frontend] [Fortran] "
                      "error: ROSE was not configured to support the Fortran Flang frontend.");
 #endif
-       CommandlineProcessing::deleteArgcArgv(flangArgc, flangArgv);
        return status;
   }
 
@@ -3097,11 +3095,10 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 // #error "REMOVE THIS CODE"
 
        // This fails, I think because we can't call the openFortranParser_main twice.
-          int openFortranParser_only_argc    = 0;
-          char** openFortranParser_only_argv = nullptr;
-          CommandlineProcessing::generateArgcArgvFromList(OFPCommandLine,openFortranParser_only_argc,openFortranParser_only_argv);
+          CommandlineProcessing::ArgvStorage ofpArgvStorage(OFPCommandLine);
+          int openFortranParser_only_argc = ofpArgvStorage.argc();
+          char **openFortranParser_only_argv = ofpArgvStorage.argv();
           errorCode = openFortranParser_main (openFortranParser_only_argc, openFortranParser_only_argv);
-          CommandlineProcessing::deleteArgcArgv(openFortranParser_only_argc, openFortranParser_only_argv);
 
 #endif
           printf ("Skipping all processing after parsing fortran (OFP) ... (get_exit_after_parser() == true) errorCode = %d \n",errorCode);
@@ -3178,9 +3175,9 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
           frontEndCommandLine.push_back("--tokens");
         }
 
-     int openFortranParser_argc    = 0;
-     char** openFortranParser_argv = nullptr;
-     CommandlineProcessing::generateArgcArgvFromList(frontEndCommandLine,openFortranParser_argc,openFortranParser_argv);
+     CommandlineProcessing::ArgvStorage openFortranArgvStorage(frontEndCommandLine);
+     int openFortranParser_argc = openFortranArgvStorage.argc();
+     char **openFortranParser_argv = openFortranArgvStorage.argv();
 
      // DQ (8/19/2007): Setup the global pointer used to pass the SgFile to
      // which the Open Fortran Parser should attach the AST.  This is a bit
@@ -3247,9 +3244,9 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
 
           experimentalFrontEndCommandLine.push_back(get_sourceFileNameWithPath());
 
-          int experimental_FortranParser_argc    = 0;
-          char** experimental_FortranParser_argv = nullptr;
-          CommandlineProcessing::generateArgcArgvFromList(experimentalFrontEndCommandLine,experimental_FortranParser_argc,experimental_FortranParser_argv);
+          CommandlineProcessing::ArgvStorage experimentalArgvStorage(experimentalFrontEndCommandLine);
+          int experimental_FortranParser_argc = experimentalArgvStorage.argc();
+          char **experimental_FortranParser_argv = experimentalArgvStorage.argv();
 
           if (SgProject::get_verbose() > 1) {
                 MLOG_INFO_CXX(MLOG_FRONTEND) << "Calling the experimental fortran frontend (this work is incomplete)\n";
@@ -3264,7 +3261,6 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
                                                           fortranSourceFile);
           printf ("ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION is not defined \n");
 #endif
-          CommandlineProcessing::deleteArgcArgv(experimental_FortranParser_argc, experimental_FortranParser_argv);
 
           if (frontendErrorLevel == 0)
              {
@@ -3281,7 +3277,6 @@ SgSourceFile::build_Fortran_AST( vector<string> argv, vector<string> inputComman
         {
           frontendErrorLevel = openFortranParser_main (openFortranParser_argc, openFortranParser_argv);
         }
-     CommandlineProcessing::deleteArgcArgv(openFortranParser_argc, openFortranParser_argv);
 
 
   // DQ (11/11/2010): There should be no include files left in the stack, see test2010_78.C and test2010_79.C when
@@ -3622,9 +3617,9 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
            frontEndCommandLineString.c_str());
   }
 
-     int c_cxx_argc = 0;
-     char **c_cxx_argv = nullptr;
-     CommandlineProcessing::generateArgcArgvFromList(inputCommandLine, c_cxx_argc, c_cxx_argv);
+     CommandlineProcessing::ArgvStorage cCxxArgvStorage(inputCommandLine);
+     int c_cxx_argc = cCxxArgvStorage.argc();
+     char **c_cxx_argv = cCxxArgvStorage.argv();
 
 #ifdef ROSE_BUILD_CXX_LANGUAGE_SUPPORT
      // This is the function call to the legacy frontend front-end (modified in
@@ -3637,7 +3632,6 @@ SgSourceFile::build_C_and_Cxx_AST( vector<string> argv, vector<string> inputComm
      const char *driver_argv0 = argv.empty() ? nullptr : argv[0].c_str();
      int frontendErrorLevel =
          clang_main(c_cxx_argc, c_cxx_argv, *this, driver_argv0);
-     CommandlineProcessing::deleteArgcArgv(c_cxx_argc, c_cxx_argv);
 
 #else
   // DQ (2/21/2016): Added "error: " to allow this to be caught by the ROSE Matrix Testing.

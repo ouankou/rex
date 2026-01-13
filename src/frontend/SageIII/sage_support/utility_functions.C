@@ -419,6 +419,7 @@ frontend (const std::vector<std::string>& argv, bool frontendConstantFolding )
      Rose::obtainAndExecuteActions(project);
 
      SageInterface::ensureSymbolParentPointers(project);
+     SageInterface::registerAstTeardownAtExit();
      return project;
    }
 
@@ -631,12 +632,15 @@ frontendShell (const std::vector<std::string> &argv)
 
   // Set the final error code to be returned to the user.
      project->set_backendErrorCode(finalCombinedExitStatus);
+     int backendStatus = project->get_backendErrorCode();
 
 #if 0
      printf ("Leaving backend(SgProject*) (from utility_functions.C) \n");
 #endif
 
-     return project->get_backendErrorCode();
+  // Backend is a terminal phase; teardown releases AST resources and invalidates project.
+     SageInterface::tearDownAst(project);
+     return backendStatus;
    }
 
 int
@@ -761,7 +765,10 @@ backendCompilesUsingOriginalInputFile ( SgProject* project, bool compile_with_US
             finalCombinedExitStatus = project->link(commandLineToGenerateObjectFile[0]);
         }
 
-     return finalCombinedExitStatus;
+     int backendStatus = finalCombinedExitStatus;
+  // Backend is a terminal phase; teardown releases AST resources and invalidates project.
+     SageInterface::tearDownAst(project);
+     return backendStatus;
    }
 
 

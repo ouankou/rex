@@ -1598,6 +1598,7 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
                  // The accumulator list should now be empty
                     assert (preprocessorList.getLength() == 0);
                     fclose(fp);  
+                    Rose_C_Cxx_lex_destroy();
                   }
                  else
                   {

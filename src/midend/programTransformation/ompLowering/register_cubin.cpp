@@ -1,6 +1,43 @@
 #include "rex_kmp.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <memory>
+#include <vector>
+
+namespace {
+struct CubinStorage {
+  std::vector<unsigned char> image;
+  __tgt_device_image device_image{};
+  __tgt_bin_desc bin_desc{};
+};
+
+std::unique_ptr<CubinStorage> cubin_storage;
+
+bool readFile(const char *filename, std::vector<unsigned char> &buffer) {
+  FILE *file = fopen(filename, "rb");
+  if (file == NULL) {
+    return false;
+  }
+  if (fseek(file, 0, SEEK_END) != 0) {
+    fclose(file);
+    return false;
+  }
+  long int size = ftell(file);
+  if (size < 0) {
+    fclose(file);
+    return false;
+  }
+  if (fseek(file, 0, SEEK_SET) != 0) {
+    fclose(file);
+    return false;
+  }
+
+  buffer.resize(static_cast<size_t>(size));
+  size_t bytes_read = fread(buffer.data(), 1, buffer.size(), file);
+  fclose(file);
+  return bytes_read == buffer.size();
+}
+} // namespace
 
 // clang++ -g -c register_cubin.cpp -o register_cubin.o
 
@@ -11,7 +48,11 @@ extern "C" {
 struct __tgt_bin_desc *__cubin_desc = 0;
 
 void __attribute__((destructor)) unregister_kernel_entries() {
-  __tgt_unregister_lib(__cubin_desc);
+  if (__cubin_desc != nullptr) {
+    __tgt_unregister_lib(__cubin_desc);
+  }
+  cubin_storage.reset();
+  __cubin_desc = nullptr;
 }
 
 extern struct __tgt_offload_entry __start_omp_offloading_entries;
@@ -19,38 +60,32 @@ extern struct __tgt_offload_entry __stop_omp_offloading_entries;
 
 struct __tgt_bin_desc *register_cubin(const char *filename) {
 
-  // read cuda object file to char array
-  FILE *file = fopen(filename, "r+");
-  if (file == NULL) {
+  if (cubin_storage) {
+    return &cubin_storage->bin_desc;
+  }
+  if (filename == nullptr) {
     return NULL;
-  };
-  fseek(file, 0, SEEK_END);
-  long int size = ftell(file);
-  fclose(file);
-  // Reading data to array of unsigned chars
-  file = fopen(filename, "r+");
-  unsigned char *image = (unsigned char *)malloc(size);
-  int bytes_read = fread(image, sizeof(unsigned char), size, file);
-  fclose(file);
+  }
 
-  /* init struct __tgt_device_image */
-  struct __tgt_device_image *device_image =
-      (struct __tgt_device_image *)malloc(sizeof(struct __tgt_device_image));
-  device_image->ImageStart = image;
-  device_image->ImageEnd = image + size;
-  device_image->EntriesBegin = &__start_omp_offloading_entries;
-  device_image->EntriesEnd = &__stop_omp_offloading_entries;
+  auto storage = std::make_unique<CubinStorage>();
+  if (!readFile(filename, storage->image)) {
+    return NULL;
+  }
 
-  struct __tgt_bin_desc *bin_desc =
-      (struct __tgt_bin_desc *)malloc(sizeof(struct __tgt_bin_desc));
+  storage->device_image.ImageStart = storage->image.data();
+  storage->device_image.ImageEnd = storage->image.data() + storage->image.size();
+  storage->device_image.EntriesBegin = &__start_omp_offloading_entries;
+  storage->device_image.EntriesEnd = &__stop_omp_offloading_entries;
 
-  bin_desc->NumDeviceImages = 1;
-  bin_desc->DeviceImages = device_image;
-  bin_desc->HostEntriesBegin = &__start_omp_offloading_entries;
-  bin_desc->HostEntriesEnd = &__stop_omp_offloading_entries;
+  storage->bin_desc.NumDeviceImages = 1;
+  storage->bin_desc.DeviceImages = &storage->device_image;
+  storage->bin_desc.HostEntriesBegin = &__start_omp_offloading_entries;
+  storage->bin_desc.HostEntriesEnd = &__stop_omp_offloading_entries;
 
-  __tgt_register_lib(bin_desc);
-  return bin_desc;
+  __tgt_register_lib(&storage->bin_desc);
+  __cubin_desc = &storage->bin_desc;
+  cubin_storage = std::move(storage);
+  return __cubin_desc;
 }
 
 void __attribute__((constructor)) register_kernel_entries() {

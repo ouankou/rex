@@ -267,7 +267,11 @@ Pattern* p_int(int x) {
   return new ConstantPattern<SgIntVal, int>(x);
 }
 
-Pattern* p_wildcard = new NullPattern();
+namespace {
+NullPattern p_wildcard_instance;
+}
+
+Pattern* p_wildcard = &p_wildcard_instance;
 
 class AddIntsPattern: public Pattern {
   string a, b;

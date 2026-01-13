@@ -1,0 +1,104 @@
+# REX Memory Tooling (Sanitizers, Valgrind, Memcheck)
+
+This document is the single source of guidance for using sanitizers and Valgrind memcheck in REX. It covers how to configure, run, and interpret results, plus what to keep in mind when developing or triaging memory issues.
+
+## When to use which tool
+
+- Sanitizers (ASan/LSan/UBSan): Fast feedback during development, great for catching UAF, OOB, and UB.
+- Valgrind memcheck: Slower but precise leak reporting and call stacks; good for leak triage and hard-to-repro bugs.
+
+Use separate build directories for normal, sanitizer, and Valgrind builds to avoid flag conflicts.
+
+## Build and configure
+
+### Normal build (no memory instrumentation)
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build -j"$(nproc)"
+```
+
+### Sanitizer build
+Sanitizers require `libclang-cpp` (LLVM 20). If `ROSE_SANITIZERS` is empty, the build defaults to `address;leak`.
+```bash
+cmake -S . -B build-sanitizer -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DENABLE-SANITIZER=ON -DROSE_SANITIZERS="address;leak;undefined"
+cmake --build build-sanitizer -j"$(nproc)"
+```
+
+### Valgrind/memcheck build
+Configure with Valgrind paths so CTest can drive memcheck.
+```bash
+cmake -S . -B build-valgrind -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH-VALGRIND=/usr
+cmake --build build-valgrind -j"$(nproc)"
+```
+
+If Valgrind lives elsewhere, use:
+- `-DWITH-VALGRIND=/path/to/prefix` or
+- `-DWITH-VALGRIND-BIN=/path/to/bin -DWITH-VALGRIND-INCLUDE=/path/to/include -DWITH-VALGRIND-LIB=/path/to/lib`
+
+## Running tests
+
+### Standard tests
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+### Sanitizer-labeled tests
+```bash
+ctest --test-dir build-sanitizer -L sanitizer -j"$(nproc)" --output-on-failure
+```
+
+### Valgrind memcheck (recommended subset first)
+```bash
+ctest --test-dir build-valgrind -T memcheck -R "<regex>" -j"$(nproc)" --output-on-failure
+```
+
+Use `ctest -N -R "<regex>"` to list tests before running memcheck.
+
+## How memcheck works in REX
+
+When configured with Valgrind, CTest uses the build’s memcheck settings:
+- `CTEST_MEMORYCHECK_COMMAND` is set to the Valgrind binary.
+- Options include leak checking, all leak kinds, `--error-exitcode=1`, and `--trace-children=yes`.
+- Suppressions live in `scripts/rose-suppressions-for-valgrind`.
+
+Because child tracing is enabled, helper processes (Perl, Python, shell scripts) can be checked too. This can surface non-ROSE leaks; those should be handled via suppressions when they are clearly external and process-lifetime only.
+
+## Interpreting memcheck results
+
+Memcheck failures can be either memory issues or functional failures:
+
+- Functional failure: The test exits non-zero or hits `ROSE_ASSERT`, but Valgrind shows `ERROR SUMMARY: 0 errors`.
+- Memory defect: Valgrind reports errors or leaks and CTest lists “defects.”
+
+Always inspect `build-valgrind/Testing/Temporary/MemoryChecker.<#>.log` for the exact cause.
+
+### Leak kinds in Valgrind
+
+- `definite`, `indirect`, `possible`: Almost always real leaks and must be fixed in ROSE code.
+- `reachable` (aka “still reachable”): Memory that is still referenced at exit. This can be:
+  - A real issue in ROSE (e.g., pools or caches not released after AST teardown).
+  - External/runtime process-lifetime allocations (e.g., `/usr/bin/perl`, JVM, LLVM managed statics).
+
+If “still reachable” comes from ROSE-owned structures, treat it as a real issue. If it is from external runtimes and cannot be cleaned up safely, suppress it explicitly in `scripts/rose-suppressions-for-valgrind`.
+
+## Triage workflow in an actively developed tree
+
+1. Run the tests normally (no memcheck). Fix functional failures first.
+2. Run memcheck only on known-passing tests with `-R "<regex>"`.
+3. Inspect memcheck logs to distinguish memory defects from functional failures.
+4. Fix ROSE leaks at the root cause (prefer CFE fixes when the bug originates there).
+5. Only add suppressions for third-party or process-lifetime allocations outside ROSE.
+
+## Development guidelines for memory correctness
+
+- Keep ownership explicit and use RAII (`std::unique_ptr`, `std::vector`, `std::string`) for non-AST objects.
+- Avoid long-lived caches that survive AST teardown unless you also provide explicit cleanup.
+- Do not hide memory issues by “fixing” tests or weakening assertions.
+- Use sanitizers for rapid feedback during development and memcheck for leak triage.
+
+## Common pitfalls
+
+- Running memcheck in a non-Valgrind build does nothing (CTEST memorycheck is disabled).
+- Mixing Valgrind and sanitizers in the same build is not supported; use separate build directories.
+- Memcheck is slow; reduce the test set or run smaller subsets during iteration.

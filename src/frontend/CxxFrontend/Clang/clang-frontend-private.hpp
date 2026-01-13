@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 #include <set>
+#include <memory>
 
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTContext.h"
@@ -400,7 +401,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             p_pending_implicit_function_instantiations_set;
 
         clang::CompilerInstance  * p_compiler_instance;
-        SagePreprocessorRecord   * p_sage_preprocessor_recorder;
+        std::unique_ptr<SagePreprocessorRecord> p_sage_preprocessor_recorder;
         SgSourceFile             * p_sage_source_file; // Parent file for connecting global scope
 
         Language language;
@@ -1045,6 +1046,8 @@ struct NextPreprocessorToInsert {
 class PreprocessorInserter : public AstTopDownProcessing<NextPreprocessorToInsert *> {
   public:
     NextPreprocessorToInsert * evaluateInheritedAttribute(SgNode * astNode, NextPreprocessorToInsert * inheritedValue);
+  private:
+    std::vector<std::unique_ptr<NextPreprocessorToInsert>> owned_inherited_;
 };
 
 #endif /* _CLANG_FRONTEND_PRIVATE_HPP_ */

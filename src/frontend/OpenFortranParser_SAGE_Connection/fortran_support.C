@@ -8,8 +8,9 @@
 
 #include "fortran_support.h"
 
+#include <memory>
 #include <mutex>
-#include <unordered_set>
+#include <unordered_map>
 
 // FMZ: Location of global variables
 #include "FortranParserState.h"
@@ -24,20 +25,27 @@ std::list<SgInterfaceStatement*> astInterfaceStack;
 #include "token.h"
 
 namespace {
+struct TokenDeleter {
+  void operator()(Token_t *token) const {
+    if (token == nullptr) {
+      return;
+    }
+    if (token->text != nullptr) {
+      free(token->text);
+    }
+    free(token);
+  }
+};
+
+using TokenPtr = std::unique_ptr<Token_t, TokenDeleter>;
+
 struct SyntheticTokenManager {
-  std::unordered_set<Token_t *> tokens;
+  std::unordered_map<Token_t *, TokenPtr> tokens;
   std::mutex mtx;
 
   ~SyntheticTokenManager() {
     std::lock_guard<std::mutex> lock(mtx);
-    for (auto *token : tokens) {
-      if (token != nullptr) {
-        if (token->text != nullptr) {
-          free(token->text);
-        }
-        free(token);
-      }
-    }
+    tokens.clear();
   }
 };
 
@@ -46,24 +54,27 @@ SyntheticTokenManager &manager() {
   return instance;
 }
 
+TokenPtr makeToken(int line, int col, int type, const char *text) {
+  Token_t *token = static_cast<Token_t *>(malloc(sizeof(Token_t)));
+  ROSE_ASSERT(token != NULL);
+  token->line = line;
+  token->col = col;
+  token->type = type;
+  token->text = text != NULL ? strdup(text) : NULL;
+  return TokenPtr(token);
+}
+
 void releaseSyntheticToken(Token_t *token) {
   if (token == NULL) {
     return;
   }
   std::lock_guard<std::mutex> lock(manager().mtx);
-  if (manager().tokens.erase(token) > 0) {
-    if (token->text != NULL) {
-      free(token->text);
-    }
-    free(token);
-  }
+  manager().tokens.erase(token);
 }
 } // namespace
 
 Token_t *create_token(int line, int col, int type, const char *text)
   {
-         Token_t *tmp_token = NULL;
-
       // DQ (11/5/2016): Can't use C++ "delete" in token.c file from OFP jar file since it is compiled using a C compiler (so use malloc here).
       // DQ (11/5/2016): Updated the token.c file in the OFP jar file to fix this bug and make the new (here) consistant with the delete (there).
       // DQ (11/4/2016): Since in the OFP this is deleted using free (token.c in the build tree), we want 
@@ -72,33 +83,20 @@ Token_t *create_token(int line, int col, int type, const char *text)
       // and not mix C's malloc/free with C++'s new/delete mechanisms.
       // tmp_token = (Token_t*) malloc(sizeof(Token_t));
       // tmp_token = new Token_t();
-         tmp_token = (Token_t*) malloc(sizeof(Token_t));
-         ROSE_ASSERT(tmp_token != NULL);
-         tmp_token->line = line;
-         tmp_token->col = col;
-         tmp_token->type = type;
- /* Make a copy of our own to make sure it isn't freed on us.  */
-    if (text != NULL)
-         tmp_token->text = strdup(text);
-      else
-         tmp_token->text = NULL;
-
-         return tmp_token;
+         TokenPtr tmp_token = makeToken(line, col, type, text);
+         return tmp_token.release();
   }
 
 Token_t *createSyntheticToken(int line, int col, int type, const char *text)
   {
-    Token_t *tmp_token = create_token(line, col, type, text);
-    if (tmp_token == NULL)
-       {
-         return NULL;
-       }
-
-    {
-      std::lock_guard<std::mutex> lock(manager().mtx);
-      manager().tokens.insert(tmp_token);
+    TokenPtr token = makeToken(line, col, type, text);
+    Token_t *raw_token = token.get();
+    if (raw_token == NULL) {
+      return NULL;
     }
-    return tmp_token;
+    std::lock_guard<std::mutex> lock(manager().mtx);
+    manager().tokens.emplace(raw_token, std::move(token));
+    return raw_token;
   }
 
 

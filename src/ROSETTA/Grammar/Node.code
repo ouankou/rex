@@ -1336,8 +1336,25 @@ HEADER_START
        //! Access function for symbol table specific to non-function types.
           static void set_globalTypeTable(SgTypeTable* globalTypeTable);
 
+     public:
+          struct PoolEntry {
+            unsigned char* base;
+            unsigned size;
+            VariantT variant;
+            void (*reset)();
+          };
+
+          template <typename NodeT>
+          struct PoolResetter {
+            static void reset() {
+              NodeT::pools.clear();
+              NodeT::next_node = nullptr;
+            }
+          };
+
      protected:
-          static std::vector<std::tuple<unsigned char*, unsigned, VariantT>> all_pools;
+          static std::vector<PoolEntry>& allPools();
+          static void releaseAllPools();
      public:
           static VariantT variantFromPool(SgNode const * n);
 
@@ -2233,12 +2250,26 @@ SgNode::cfgForEnd()
      return VirtualCFG::CFGNode(this, this->cfgIndexForEnd());
    }
 
+static std::vector<SgNode::PoolEntry>* sg_node_all_pools = nullptr;
+
+std::vector<SgNode::PoolEntry>& SgNode::allPools() {
+  if (sg_node_all_pools == nullptr) {
+    sg_node_all_pools = new std::vector<SgNode::PoolEntry>();
+  }
+  return *sg_node_all_pools;
+}
+
+void SgNode::releaseAllPools() {
+  delete sg_node_all_pools;
+  sg_node_all_pools = nullptr;
+}
+
 VariantT SgNode::variantFromPool(SgNode const * n) {
-  for (std::tuple<unsigned char*, unsigned, VariantT> const & pool: all_pools) {
-    auto & base = std::get<0>(pool);
-    auto & size = std::get<1>(pool);
+  for (SgNode::PoolEntry const & pool: allPools()) {
+    auto & base = pool.base;
+    auto & size = pool.size;
     auto offset = ((unsigned char*)n - base);
-    if ( offset >= 0 && offset < size ) return std::get<2>(pool);
+    if ( offset >= 0 && offset < size ) return pool.variant;
   }
   return (VariantT)0;
 }

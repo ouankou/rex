@@ -1,7 +1,11 @@
 #include "sage3basic.h"
 #include "FortranParserState.h"
 
-AttributeRec* FortranParserState::DeclAttrSpec = new AttributeRec();
+namespace {
+AttributeRec declAttrSpecInstance;
+}
+
+AttributeRec* FortranParserState::DeclAttrSpec = &declAttrSpecInstance;
 stack<FortranParserState*>  FortranParserState::statesStack;
 
 // Constructor:
@@ -321,4 +325,3 @@ SgExprListExp* AttributeRec::buildDimensionInfo()
     astExpressionStack.pop_front();
     return dimInfo;
 }
-

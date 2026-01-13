@@ -100,12 +100,8 @@ bool UseOmega(void)
 }
 
 char *StringToChar(const std::string& str) {
-   int i;
-   std::string::size_type j;
-   char *temp = (char *) calloc(str.size() + 1,sizeof(char));
-   for (i=j=0;i<str.size();i++,j++)
-      temp[i] = str[j];
-   temp[str.size()] = '\0';
+   char *temp = strdup(str.c_str());
+   assert(temp != NULL);
    return temp;
 }
 

@@ -3,6 +3,31 @@
 // #include "clang-frontend-private.hpp"
 #include "clang-to-dot-private.hpp"
 
+static std::string escapeDotString(const std::string &input) {
+  std::string escaped;
+  escaped.reserve(input.size());
+  for (char ch : input) {
+    switch (ch) {
+      case '\\':
+        escaped += "\\\\";
+        break;
+      case '\n':
+        escaped += "\\n";
+        break;
+      case '\r':
+        escaped += "\\r";
+        break;
+      case '"':
+        escaped += "\\\"";
+        break;
+      default:
+        escaped += ch;
+        break;
+    }
+  }
+  return escaped;
+}
+
 // SgNode * ClangToDotTranslator::Traverse(clang::Stmt * stmt) 
 std::string ClangToDotTranslator::Traverse(clang::Stmt * stmt) 
    {
@@ -6569,63 +6594,12 @@ bool ClangToDotTranslator::VisitStringLiteral(clang::StringLiteral * string_lite
     std::cerr << "ClangToDotTranslator::VisitStringLiteral" << std::endl;
 #endif
 
-    std::string tmp = string_literal->getString().str();
-    const char * raw_str = tmp.c_str();
-
-    unsigned i = 0;
-    unsigned l = 0;
-    while (raw_str[i] != '\0') {
-        if (
-            raw_str[i] == '\\' ||
-            raw_str[i] == '\n' ||
-            raw_str[i] == '\r' ||
-            raw_str[i] == '"')
-        {
-            l++;
-        }
-        l++;
-        i++;
-    }
-    l++;
-
-    char * str = (char *)malloc(l * sizeof(char));
-    i = 0;
-    unsigned cnt = 0;
-
-    while (raw_str[i] != '\0') {
-        switch (raw_str[i]) {
-            case '\\':
-                str[cnt++] = '\\';
-                str[cnt++] = '\\';
-                break;
-            case '\n':
-                str[cnt++] = '\\';
-                str[cnt++] = 'n';
-                break;
-            case '\r':
-                str[cnt++] = '\\';
-                str[cnt++] = 'r';
-                break;
-            case '"':
-                str[cnt++] = '\\';
-                str[cnt++] = '"';
-                break;
-            default:
-                str[cnt++] = raw_str[i];
-        }
-        i++;
-    }
-    str[cnt] = '\0';
-
-    ROSE_ASSERT(l==cnt+1);
-
-#if 0
-    *node = SageBuilder::buildStringVal(str);
-#endif
+    const std::string raw = string_literal->getString().str();
+    const std::string escaped = escapeDotString(raw);
 
      node_desc.kind_hierarchy.push_back("StringLiteral");
 
-     node_desc.attributes.push_back(std::pair<std::string, std::string>("string", string_literal->getString().str()));
+     node_desc.attributes.push_back(std::pair<std::string, std::string>("string", escaped));
 
     return VisitExpr(string_literal, node_desc);
 }

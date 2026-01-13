@@ -5651,7 +5651,9 @@ SgSymbol * SgScopeStatement::find_symbol_from_declaration(const T* node) const {
   if (symbol == NULL && namespaceDefinitionStatement != NULL) {
     const SgNamespaceDefinitionStatement* globalNamespaceDefinitionStatement = namespaceDefinitionStatement->get_global_definition();
     ROSE_ASSERT(globalNamespaceDefinitionStatement != nullptr);
-    symbol = globalNamespaceDefinitionStatement->get_symbol_table()->find(node);
+    if (SgSymbolTable* table = globalNamespaceDefinitionStatement->get_symbol_table()) {
+      symbol = table->find(node);
+    }
   }
 
   const SgGlobal * global_scope = isSgGlobal(this);
@@ -5660,7 +5662,9 @@ SgSymbol * SgScopeStatement::find_symbol_from_declaration(const T* node) const {
     if (project != NULL) {
       SgGlobal * globalScopeAcrossFiles = project->get_globalScopeAcrossFiles();
       assert(globalScopeAcrossFiles != NULL);
-      symbol = globalScopeAcrossFiles->get_symbol_table()->find(node);
+      if (SgSymbolTable* table = globalScopeAcrossFiles->get_symbol_table()) {
+        symbol = table->find(node);
+      }
     }
   }
 

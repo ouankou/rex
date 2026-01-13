@@ -49,7 +49,6 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   endif()
 
   add_library(roseFortran ${libroseFortran_SOURCES})
-  target_link_libraries(roseFortran ${JAVA_JVM_LIBRARY})
   if(JAVA_JVM_LIBRARY)
     get_filename_component(ROSE_JVM_LIBRARY_DIR "${JAVA_JVM_LIBRARY}" DIRECTORY)
     if(ROSE_JVM_LIBRARY_DIR)

@@ -30,7 +30,7 @@ int systemFromVector(const vector<string>& argv)
 
      if (pid == 0)
         { // Child
-          vector<const char*> argvC(argv.size() + 1);
+          vector<char*> argvC(argv.size() + 1);
           size_t length = argv.size();
 
        // DQ (6/22/2020): Truncate as a test!
@@ -39,7 +39,7 @@ int systemFromVector(const vector<string>& argv)
        // for (size_t i = 0; i < argv.size(); ++i)
           for (size_t i = 0; i < length; ++i)
              {
-               argvC[i] = strdup(argv[i].c_str());
+               argvC[i] = const_cast<char*>(argv[i].c_str());
 #if 0
                printf ("In systemFromVector(): loop: argvC[%zu] = %s \n",i,argvC[i]);
 #endif
@@ -74,9 +74,9 @@ FILE* popenReadFromVector(const vector<string>& argv) {
   pid_t pid = fork();
   if (pid == -1) {perror("fork"); abort();}
   if (pid == 0) { // Child
-    vector<const char*> argvC(argv.size() + 1);
+    vector<char*> argvC(argv.size() + 1);
     for (size_t i = 0; i < argv.size(); ++i) {
-      argvC[i] = strdup(argv[i].c_str());
+      argvC[i] = const_cast<char*>(argv[i].c_str());
     }
     argvC.back() = NULL;
     int closeErr = close(pipeDescriptors[0]);

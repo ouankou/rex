@@ -44,6 +44,26 @@ namespace CommandlineProcessing
           /** Release argv allocated by generateArgcArgvFromList. */
           ROSE_UTIL_API void deleteArgcArgv ( int argc, char** argv );
 
+          /** RAII storage for argv-style arguments without heap allocation. */
+          class ArgvStorage {
+            public:
+              explicit ArgvStorage(const Rose_STL_Container<std::string> &args)
+                  : storage_(args) {
+                argv_.reserve(storage_.size() + 1);
+                for (auto &arg : storage_) {
+                  argv_.push_back(arg.data());
+                }
+                argv_.push_back(nullptr);
+              }
+
+              int argc() const { return static_cast<int>(storage_.size()); }
+              char **argv() { return argv_.data(); }
+
+            private:
+              Rose_STL_Container<std::string> storage_;
+              std::vector<char*> argv_;
+          };
+
           /** Looks for inputPrefix prefixed options.
            *
            * Warning: As opposed to what the former documentation was saying this function doesn't modify argList.

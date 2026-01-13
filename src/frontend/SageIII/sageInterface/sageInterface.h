@@ -2000,6 +2000,12 @@ struct DeferredTransformation
 //! Function to delete AST subtree's nodes only, users must take care of any dangling pointers, symbols or types that result.
 ROSE_DLL_API void deleteAST(SgNode* node);
 
+//! Explicitly tear down an AST and release global caches and memory pools. AST pointers are invalid after this call.
+ROSE_DLL_API void tearDownAst(SgProject* project);
+
+//! Register an AST teardown handler to run at process exit if cleanup was not invoked.
+ROSE_DLL_API void registerAstTeardownAtExit();
+
 // DQ (3/5/2022): Adding support to check AST for invalid poionters.
 ROSE_DLL_API void checkSgNodePointers();
 

@@ -249,8 +249,11 @@ if(ENABLE-FORTRAN)
   list(APPEND LINK_FILES roseFortran)
 endif()
 
-if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
-  set(ROSE_JVM_LIBRARY ${JAVA_JVM_LIBRARY})
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP AND JAVA_JVM_LIBRARY)
+  get_filename_component(ROSE_JVM_LIBRARY_DIR "${JAVA_JVM_LIBRARY}" DIRECTORY)
+  if(ROSE_JVM_LIBRARY_DIR)
+    set_property(TARGET ROSE_DLL APPEND PROPERTY INSTALL_RPATH "${ROSE_JVM_LIBRARY_DIR}")
+  endif()
 endif()
 
 # link ANTLR 4 C++ runtime
@@ -263,14 +266,6 @@ target_link_libraries(ROSE_DLL PRIVATE ${ROSE_TARGET_LINK})
 if(TARGET rose_clang_libstdcxx_headers)
   target_link_libraries(ROSE_DLL PUBLIC rose_clang_libstdcxx_headers)
 endif()
-if(ROSE_JVM_LIBRARY)
-  target_link_libraries(ROSE_DLL PUBLIC ${ROSE_JVM_LIBRARY})
-  get_filename_component(ROSE_JVM_LIBRARY_DIR "${ROSE_JVM_LIBRARY}" DIRECTORY)
-  if(ROSE_JVM_LIBRARY_DIR)
-    set_property(TARGET ROSE_DLL APPEND PROPERTY INSTALL_RPATH "${ROSE_JVM_LIBRARY_DIR}")
-  endif()
-endif()
-
 # If the C preprocessor is enabled, ROSE has some additional depenendencies
 if(ENABLE-CPP)
   add_dependencies(ROSE_DLL ROSE_PREPROCESSOR generate_rosePublicConfig)

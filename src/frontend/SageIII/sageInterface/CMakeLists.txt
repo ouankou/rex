@@ -10,6 +10,10 @@ add_library(sageInterface OBJECT
 
 add_dependencies(sageInterface rosetta_generated)
 
+if(LLVM_INCLUDE_DIRS)
+  target_include_directories(sageInterface SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+endif()
+
 install(
   FILES  sageInterface.h sageBuilder.h abiStuff.h
          sageFunctors.h sageGeneric.h

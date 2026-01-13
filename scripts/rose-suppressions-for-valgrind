@@ -10,3 +10,38 @@
    fun:_Z24alloc_shareable_constantP10a_constant
 }
 
+{
+   perl_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:/usr/bin/perl
+}
+
+{
+   perl_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:/usr/bin/perl
+}
+
+{
+   perl_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:/usr/bin/perl
+}
+
+{
+   perl_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:/usr/bin/perl
+}
