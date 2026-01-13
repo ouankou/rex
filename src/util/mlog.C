@@ -35,15 +35,18 @@ const char * mlogLevelToString_C[] = {
 char * getDateTime() {
 	static thread_local std::array<char, 22> buffer{};
 	time_t curtime;
-	struct tm *loctime;
+	struct tm timeinfo;
 
 	curtime = time(NULL);
-	loctime = localtime(&curtime);
-	if (loctime == nullptr) {
+#ifdef _WIN32
+	if (localtime_s(&timeinfo, &curtime) != 0) {
+#else
+	if (localtime_r(&curtime, &timeinfo) == nullptr) {
+#endif
 		return buffer.data();
 	}
 
-	strftime(buffer.data(), buffer.size(), "%F,%H:%M:%S", loctime);
+	strftime(buffer.data(), buffer.size(), "%F,%H:%M:%S", &timeinfo);
 	return buffer.data();
 }
 
