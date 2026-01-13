@@ -2250,18 +2250,13 @@ SgNode::cfgForEnd()
      return VirtualCFG::CFGNode(this, this->cfgIndexForEnd());
    }
 
-static std::vector<SgNode::PoolEntry>* sg_node_all_pools = nullptr;
-
 std::vector<SgNode::PoolEntry>& SgNode::allPools() {
-  if (sg_node_all_pools == nullptr) {
-    sg_node_all_pools = new std::vector<SgNode::PoolEntry>();
-  }
-  return *sg_node_all_pools;
+  static std::vector<SgNode::PoolEntry> pools;
+  return pools;
 }
 
 void SgNode::releaseAllPools() {
-  delete sg_node_all_pools;
-  sg_node_all_pools = nullptr;
+  std::vector<SgNode::PoolEntry>().swap(allPools());
 }
 
 VariantT SgNode::variantFromPool(SgNode const * n) {

@@ -270,7 +270,7 @@ jserver_start(JvmT* je)
   options.reserve(option_storage.size());
   for (auto &option : option_storage) {
     JavaVMOption jvm_option;
-    jvm_option.optionString = option.data();
+    jvm_option.optionString = const_cast<char*>(option.data());
     jvm_option.extraInfo = nullptr;
     options.push_back(jvm_option);
   }
