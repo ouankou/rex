@@ -215,6 +215,7 @@ jobs:
           graphviz \
           libantlr4-runtime-dev \
           libclang-${{ matrix.llvm }}-dev \
+          libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
           libtool \
           llvm-${{ matrix.llvm }} \
