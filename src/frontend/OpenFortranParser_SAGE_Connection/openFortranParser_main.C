@@ -37,6 +37,7 @@
 #include "assert.h"
 #include "fortran_error_handler.h"
 #include "ofp.h"
+#include "jserver.h"
 
 /* This is defined if ROSE is configured to use the JVM-based Open Fortran
  * Parser. */
@@ -182,6 +183,8 @@ int openFortranParser_main(int argc, char **argv) {
        {
          printf ("JVM processing done.\n\n");
        }
+
+    Rose::Frontend::Fortran::Ofp::jserver_finish();
 
  /* Reset to the saved value */
 #if OVERWRITE_LD_LIBRARY_PATH

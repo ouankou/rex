@@ -11718,6 +11718,7 @@ SgInitializedName::SgInitializedName() ROSE_DEPRECATED_FUNCTION
      p_auto_decltype(NULL),
      p_using_device_keyword(false),
      p_is_braced_initialized(false),
+     p_is_constexpr_const_implicit(false),
      p_using_assignment_copy_constructor_syntax(false),
      p_needs_definitions(false),
      p_is_parameter_pack(false),
@@ -11888,6 +11889,14 @@ SgInitializedName::post_construction_initialization()
   // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
      p_using_device_keyword = false;
 
+  // DQ (9/13/2025): Initialize flags added after the original constructor.
+     p_is_braced_initialized = false;
+     p_is_constexpr_const_implicit = false;
+     p_using_assignment_copy_constructor_syntax = false;
+     p_needs_definitions = false;
+     p_is_parameter_pack = false;
+     p_is_pack_element = false;
+
   // DQ (6/10/2012): Testing for test2012_102.C.
   // MLOG_INFO_C("ROSETTA", "In SgInitializedName::post_construction_initialization(): this = %p \n",this);
    }
@@ -11936,6 +11945,7 @@ SgInitializedName::SgInitializedName (
      p_auto_decltype(NULL),
      p_using_device_keyword(false),
      p_is_braced_initialized(false),
+     p_is_constexpr_const_implicit(false),
      p_using_assignment_copy_constructor_syntax(false),
      p_needs_definitions(false),
      p_is_parameter_pack(false),
@@ -11986,6 +11996,7 @@ SgInitializedName::SgInitializedName(
      p_auto_decltype(NULL),
      p_using_device_keyword(false),
      p_is_braced_initialized(false),
+     p_is_constexpr_const_implicit(false),
      p_using_assignment_copy_constructor_syntax(false),
      p_needs_definitions(false),
      p_is_parameter_pack(false),
@@ -11998,6 +12009,7 @@ SgInitializedName::SgInitializedName(
 SgInitializedName::SgInitializedName (const SgInitializedName& ptr)
    {
      p_name           = ptr.p_name;
+     p_microsoft_uuid_string = ptr.p_microsoft_uuid_string;
 
      p_typeptr        = ptr.p_typeptr;
      p_initptr        = ptr.p_initptr;
@@ -12059,6 +12071,10 @@ SgInitializedName::SgInitializedName (const SgInitializedName& ptr)
   // DQ (1/3/2009): Added support for GNU variable attribues
      p_gnu_attribute_modifierVector          = ptr.p_gnu_attribute_modifierVector;
      p_gnu_attribute_initialization_priority = ptr.p_gnu_attribute_initialization_priority;
+     p_gnu_attribute_named_weak_reference    = ptr.p_gnu_attribute_named_weak_reference;
+     p_gnu_attribute_named_alias             = ptr.p_gnu_attribute_named_alias;
+     p_gnu_attribute_cleanup_function        = ptr.p_gnu_attribute_cleanup_function;
+     p_gnu_attribute_section_name            = ptr.p_gnu_attribute_section_name;
      p_gnu_attribute_alignment               = ptr.p_gnu_attribute_alignment;
      p_gnu_attribute_visability              = ptr.p_gnu_attribute_visability;
      p_isCoArray                             = ptr.p_isCoArray;
@@ -12087,6 +12103,14 @@ SgInitializedName::SgInitializedName (const SgInitializedName& ptr)
 
   // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
      p_using_device_keyword                   = ptr.p_using_device_keyword;
+
+  // DQ (9/13/2025): Copy initialization state flags added after the original constructor.
+     p_is_braced_initialized                  = ptr.p_is_braced_initialized;
+     p_is_constexpr_const_implicit            = ptr.p_is_constexpr_const_implicit;
+     p_using_assignment_copy_constructor_syntax = ptr.p_using_assignment_copy_constructor_syntax;
+     p_needs_definitions                      = ptr.p_needs_definitions;
+     p_is_parameter_pack                      = ptr.p_is_parameter_pack;
+     p_is_pack_element                        = ptr.p_is_pack_element;
    }
 
 SgInitializedName&
@@ -12099,6 +12123,7 @@ SgInitializedName::operator= (const SgInitializedName& ptr)
      if (this != &ptr)
         {
           p_name = ptr.p_name;
+          p_microsoft_uuid_string = ptr.p_microsoft_uuid_string;
 
           p_typeptr        = ptr.p_typeptr;
           p_initptr        = ptr.p_initptr;
@@ -12170,6 +12195,10 @@ SgInitializedName::operator= (const SgInitializedName& ptr)
        // DQ (1/3/2009): Added support for GNU variable attribues
           p_gnu_attribute_modifierVector          = ptr.p_gnu_attribute_modifierVector;
           p_gnu_attribute_initialization_priority = ptr.p_gnu_attribute_initialization_priority;
+          p_gnu_attribute_named_weak_reference    = ptr.p_gnu_attribute_named_weak_reference;
+          p_gnu_attribute_named_alias             = ptr.p_gnu_attribute_named_alias;
+          p_gnu_attribute_cleanup_function        = ptr.p_gnu_attribute_cleanup_function;
+          p_gnu_attribute_section_name            = ptr.p_gnu_attribute_section_name;
           p_gnu_attribute_alignment               = ptr.p_gnu_attribute_alignment;
           p_gnu_attribute_visability              = ptr.p_gnu_attribute_visability;
           p_isCoArray                             = ptr.p_isCoArray;
@@ -12188,9 +12217,18 @@ SgInitializedName::operator= (const SgInitializedName& ptr)
 
        // DQ (8/2/2014): Adding support for C++11 auto keyword.
           p_using_auto_keyword                     = ptr.p_using_auto_keyword;
+          p_auto_decltype                          = ptr.p_auto_decltype;
 
        // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
           p_using_device_keyword                   = ptr.p_using_device_keyword;
+
+       // DQ (9/13/2025): Copy initialization state flags added after the original constructor.
+          p_is_braced_initialized                  = ptr.p_is_braced_initialized;
+          p_is_constexpr_const_implicit            = ptr.p_is_constexpr_const_implicit;
+          p_using_assignment_copy_constructor_syntax = ptr.p_using_assignment_copy_constructor_syntax;
+          p_needs_definitions                      = ptr.p_needs_definitions;
+          p_is_parameter_pack                      = ptr.p_is_parameter_pack;
+          p_is_pack_element                        = ptr.p_is_pack_element;
         }
        else
         {
@@ -17861,9 +17899,14 @@ SgProject::initialization()
      p_compileOnly                         = false;
 
      p_prelink                             = false;
+     p_wave                                = false;
      p_template_instantiation_mode         = e_unknown;
+     p_ast_merge                           = false;
      p_compilationPerformanceFile          = "";
      p_C_PreprocessorOnly                  = false;
+     p_skip_post_processing                = false;
+     p_suppressNameQualificationAcrossWholeTranslationUnit = false;
+     p_binary_only                          = false;
 
   // DQ (5/2/2006): Added initialization to prevent valgrind warning.
      p_attributeMechanism                  = NULL;
@@ -20932,6 +20975,10 @@ void SgTemplateArgument::post_construction_initialization()
      p_name_qualification_length     = 0;
      p_type_elaboration_required     = false;
      p_global_qualification_required = false;
+     p_requiresGlobalNameQualificationOnType = false;
+     p_name_qualification_length_for_type    = 0;
+     p_type_elaboration_required_for_type    = false;
+     p_global_qualification_required_for_type = false;
      p_initializedName               = nullptr;
      p_unparsable_type_alias         = nullptr;
      p_previous_instance             = nullptr;

@@ -9,6 +9,21 @@ OperatorInlineAnnotation *OperatorInlineAnnotation::inst = 0;
 OperatorSideEffectAnnotation *OperatorSideEffectAnnotation::inst = 0;
 OperatorAliasAnnotation *OperatorAliasAnnotation::inst = 0;
 
+void OperatorInlineAnnotation::release_inst() {
+  delete inst;
+  inst = nullptr;
+}
+
+void OperatorSideEffectAnnotation::release_inst() {
+  delete inst;
+  inst = nullptr;
+}
+
+void OperatorAliasAnnotation::release_inst() {
+  delete inst;
+  inst = nullptr;
+}
+
 bool OperatorInlineAnnotation::known_operator(AstInterface &fa,
                                               const AstNodePtr &arrayExp,
                                               SymbolicVal *val) {

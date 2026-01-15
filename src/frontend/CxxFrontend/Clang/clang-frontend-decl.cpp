@@ -1077,11 +1077,11 @@ ClangToSageTranslator::resolveScopeFromDeclContext(clang::DeclContext *context,
   return fallback;
 }
 
-SgTemplateParameterPtrList *
+std::unique_ptr<SgTemplateParameterPtrList>
 ClangToSageTranslator::translateTemplateParameterList(
     clang::TemplateParameterList *param_list,
     SgDeclarationStatement *owning_template) {
-  SgTemplateParameterPtrList *sg_params = new SgTemplateParameterPtrList();
+  auto sg_params = std::make_unique<SgTemplateParameterPtrList>();
   if (param_list == NULL) {
     return sg_params;
   }
@@ -1979,7 +1979,7 @@ SgTemplateParameter *ClangToSageTranslator::translateTemplateParameter(
         template_template_param->getTemplateParameters();
     if (child_params) {
       // Pass nrdecl as the owning template for these parameters
-      SgTemplateParameterPtrList *sg_child_params =
+      auto sg_child_params =
           translateTemplateParameterList(child_params, nrdecl);
       // SgNonrealDecl::get_tpl_params() returns a reference to the list
       nrdecl->get_tpl_params() = *sg_child_params;
@@ -2674,7 +2674,8 @@ bool ClangToSageTranslator::TraverseForDeclContext(
   }
 
   if (namespace_scope != NULL) {
-    SgScopeStatement *canonical_scope = normalizeNamespaceScope(namespace_scope);
+    SgScopeStatement *canonical_scope =
+        normalizeNamespaceScope(namespace_scope);
     if (canonical_scope != NULL && canonical_scope != namespace_scope) {
       for (SgDeclarationStatement *decl_stmt :
            namespace_scope->get_declarations()) {
@@ -4025,10 +4026,10 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
   // symbol lookup matches template-parameter lists by pointer identity, so for
   // redeclarations we must reuse the existing template-parameter nodes instead
   // of re-translating a fresh list from Clang.
-  SgTemplateArgumentPtrList *empty_args = new SgTemplateArgumentPtrList();
-  SgTemplateParameterPtrList *params = nullptr;
+  SgTemplateArgumentPtrList empty_args;
+  std::unique_ptr<SgTemplateParameterPtrList> params;
   if (existing_nondefining_decl != nullptr) {
-    params = new SgTemplateParameterPtrList();
+    params = std::make_unique<SgTemplateParameterPtrList>();
     const SgTemplateParameterPtrList &existing_params =
         existing_nondefining_decl->get_templateParameters();
     params->insert(params->end(), existing_params.begin(),
@@ -4055,7 +4056,8 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
     } else {
       nondefining_decl =
           SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
-              template_name, class_kind, symbol_scope, params, empty_args);
+              template_name, class_kind, symbol_scope, params.get(),
+              &empty_args);
       ROSE_ASSERT(nondefining_decl != nullptr);
       nondefining_decl->setForward();
     }
@@ -4063,7 +4065,7 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
   } else {
     template_decl = SageBuilder::buildTemplateClassDeclaration_nfi(
         template_name, class_kind, symbol_scope, existing_nondefining_decl,
-        params, empty_args);
+        params.get(), &empty_args);
     nondefining_decl = isSgTemplateClassDeclaration(
         template_decl->get_firstNondefiningDeclaration());
     ROSE_ASSERT(nondefining_decl != nullptr);
@@ -4374,14 +4376,13 @@ bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(
   // Handle template parameters
   clang::TemplateParameterList *param_list =
       type_alias_template_decl->getTemplateParameters();
-  SgTemplateParameterPtrList *template_params = NULL;
+  std::unique_ptr<SgTemplateParameterPtrList> template_params;
   if (param_list != NULL) {
     // REX FIX: Pass template_typedef as owning template
     template_params = translateTemplateParameterList(
         type_alias_template_decl->getTemplateParameters(), template_typedef);
   } else {
-    template_params =
-        new SgTemplateParameterPtrList(); // Empty list if no parameters
+    template_params = std::make_unique<SgTemplateParameterPtrList>();
   }
 
   // REX FIX: Set template parameters on the declaration!
@@ -5287,13 +5288,14 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
           base_name = template_name_str;
         }
 
-        SgTemplateParameterPtrList *params = translateTemplateParameterList(
+        auto params = translateTemplateParameterList(
             class_template->getTemplateParameters(), NULL);
-        SgTemplateArgumentPtrList *empty_args = new SgTemplateArgumentPtrList();
+        SgTemplateArgumentPtrList empty_args;
 
         SgTemplateClassDeclaration *stub_decl =
             SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
-                SgName(base_name), class_kind, tmpl_scope, params, empty_args);
+                SgName(base_name), class_kind, tmpl_scope, params.get(),
+                &empty_args);
         if (stub_decl != NULL) {
           stub_decl->setForward();
           stub_decl->set_firstNondefiningDeclaration(stub_decl);
@@ -5551,8 +5553,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       SgScopeStatement *decl_scope = instantiationDecl->get_scope();
       if (decl_scope != NULL) {
         SgName old_name = instantiationDecl->get_name();
-        SgClassSymbol *class_symbol =
-            decl_scope->lookup_class_symbol(old_name);
+        SgClassSymbol *class_symbol = decl_scope->lookup_class_symbol(old_name);
         if (class_symbol != NULL &&
             class_symbol->get_declaration() == instantiationDecl) {
           decl_scope->remove_symbol(class_symbol);
@@ -6005,12 +6006,12 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
       specialization_args.push_back(sg_arg);
   }
   // They are attached to the declaration later.
-  SgTemplateParameterPtrList *template_params = translateTemplateParameterList(
+  auto template_params = translateTemplateParameterList(
       class_tpl_part_spec_decl->getTemplateParameters(), NULL);
 
   SgTemplateClassDeclaration *nonDefiningDecl =
       SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
-          name, class_kind, scope, template_params, &specialization_args);
+          name, class_kind, scope, template_params.get(), &specialization_args);
   ROSE_ASSERT(nonDefiningDecl);
 
   // Ensure self-reference for non-defining (invariant)
@@ -6022,7 +6023,7 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
     // non-defining declaration has already claimed ownership (parent pointers
     // set). Reusing them would detach them from the non-defining declaration,
     // violating AST invariants.
-    auto *specialization_args_for_def = new SgTemplateArgumentPtrList();
+    SgTemplateArgumentPtrList specialization_args_for_def;
 
     // Re-iterate over Clang arguments to build new ROSE arguments
     const clang::TemplateArgumentList &args_for_def =
@@ -6156,14 +6157,14 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
         break;
       }
       if (sg_arg)
-        specialization_args_for_def->push_back(sg_arg);
+        specialization_args_for_def.push_back(sg_arg);
     }
 
     // Create proper defining declaration
     SgTemplateClassDeclaration *definingDecl =
         SageBuilder::buildTemplateClassDeclaration_nfi(
-            name, class_kind, scope, nonDefiningDecl, template_params,
-            specialization_args_for_def);
+            name, class_kind, scope, nonDefiningDecl, template_params.get(),
+            &specialization_args_for_def);
 
     *node = definingDecl;
     p_decl_translation_map[class_tpl_part_spec_decl] = definingDecl;
@@ -8106,7 +8107,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   clang::FunctionTemplateDecl *templateDecl =
       template_decl != NULL ? template_decl
                             : function_decl->getDescribedFunctionTemplate();
-  SgTemplateParameterPtrList *templateParams = NULL;
+  std::unique_ptr<SgTemplateParameterPtrList> templateParams;
   if (templateDecl) {
     // Translate template parameters
     // Pass NULL as owning template for now, we'll set it later if needed,
@@ -8274,8 +8275,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         recursive_invalidate_stmt(body_stmt);
       }
 
-      if (function_definition->get_body() != NULL)
-        SageInterface::deleteAST(function_definition->get_body());
+      if (SgBasicBlock *old_body = function_definition->get_body()) {
+        function_definition->set_body(nullptr);
+        old_body->set_parent(nullptr);
+        SageInterface::deleteAST(
+            old_body, SageInterface::DeleteAstMode::kSkipExternalReferences);
+      }
 
       SageBuilder::pushScopeStack(function_definition);
 
@@ -8374,7 +8379,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
       SgTemplateArgumentPtrList template_args =
           buildTemplateArguments(*clang_args, explicit_arg_count);
-      auto *template_args_ptr = new SgTemplateArgumentPtrList(template_args);
+      SgTemplateArgumentPtrList *template_args_ptr = &template_args;
 
       const bool needs_defining_instantiation =
           function_decl->isThisDeclarationADefinition() &&
@@ -8694,14 +8699,16 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     SgScopeStatement *builder_scope = scope_for_symbol_table;
 
     if (templateDecl != NULL || isClassTemplateMemberFunction) {
+      SgTemplateParameterPtrList empty_template_params;
       // Template definitions require a prior non-defining declaration for
       // SageBuilder. Reuse an existing one when a forward declaration was
       // already seen to keep declaration/definition chains consistent.
       if (isTemplateLikeMemberFunction) {
-        SgTemplateParameterPtrList *effective_template_params = templateParams;
+        SgTemplateParameterPtrList *effective_template_params =
+            templateParams.get();
         if (effective_template_params == NULL) {
           ROSE_ASSERT(isClassTemplateMemberFunction);
-          effective_template_params = new SgTemplateParameterPtrList();
+          effective_template_params = &empty_template_params;
         }
 
         SgTemplateMemberFunctionDeclaration *first_nondef = NULL;
@@ -8837,7 +8844,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           first_nondef =
               SageBuilder::buildNondefiningTemplateFunctionDeclaration(
                   name, ret_type, first_param_list, builder_scope,
-                  templateParams);
+                  templateParams.get());
           ROSE_ASSERT(first_nondef != NULL);
 
           applySourceRange(first_nondef, function_decl->getSourceRange());
@@ -9138,14 +9145,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         sg_function_decl =
             SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
                 name, ret_type, param_list, scope_for_symbol_table,
-                functionConstVolatileFlags, templateParams);
+                functionConstVolatileFlags, templateParams.get());
         param_list->set_parent(sg_function_decl);
         sg_function_decl->set_parameterList(param_list);
       } else {
         sg_function_decl =
             SageBuilder::buildNondefiningTemplateFunctionDeclaration(
                 name, ret_type, param_list, scope_for_symbol_table,
-                templateParams);
+                templateParams.get());
 
         // Set parameter list parent
         param_list->set_parent(sg_function_decl);
@@ -9163,11 +9170,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           if (parent_record->getDescribedClassTemplate() != nullptr &&
               function_decl->getTemplateSpecializationKind() ==
                   clang::TSK_Undeclared) {
-            auto *empty_template_params = new SgTemplateParameterPtrList();
+            SgTemplateParameterPtrList empty_template_params;
             sg_function_decl =
                 SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
                     name, ret_type, param_list, scope_for_symbol_table,
-                    functionConstVolatileFlags, empty_template_params);
+                    functionConstVolatileFlags, &empty_template_params);
 
             param_list->set_parent(sg_function_decl);
             sg_function_decl->set_parameterList(param_list);
@@ -9179,17 +9186,17 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (!built_template_member_pattern &&
           function_decl->getTemplateSpecializationKind() ==
               clang::TSK_ExplicitSpecialization) {
-        auto *empty_template_args = new SgTemplateArgumentPtrList();
+        SgTemplateArgumentPtrList empty_template_args;
         if (llvm::isa<clang::CXXMethodDecl>(function_decl)) {
           sg_function_decl =
               SageBuilder::buildNondefiningMemberFunctionDeclaration(
                   name, ret_type, param_list, scope_for_symbol_table,
                   functionConstVolatileFlags,
-                  /*buildTemplateInstantiation=*/true, empty_template_args);
+                  /*buildTemplateInstantiation=*/true, &empty_template_args);
         } else {
           sg_function_decl = SageBuilder::buildNondefiningFunctionDeclaration(
               name, ret_type, param_list, scope_for_symbol_table,
-              /*buildTemplateInstantiation=*/true, empty_template_args,
+              /*buildTemplateInstantiation=*/true, &empty_template_args,
               SgStorageModifier::e_default, isFriendFreeFunction);
         }
 
@@ -9197,7 +9204,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 isSgTemplateInstantiationFunctionDecl(sg_function_decl)) {
           inst_func->set_template_argument_list_is_explicit(true);
           SageBuilder::setTemplateArgumentsInDeclaration(inst_func,
-                                                         empty_template_args);
+                                                         &empty_template_args);
           if (function_decl->getPrimaryTemplate() != NULL) {
             if (SgNode *tmpl_node =
                     Traverse(function_decl->getPrimaryTemplate())) {
@@ -9213,7 +9220,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                            sg_function_decl)) {
           inst_member->set_template_argument_list_is_explicit(true);
           SageBuilder::setTemplateArgumentsInDeclaration(inst_member,
-                                                         empty_template_args);
+                                                         &empty_template_args);
           if (function_decl->getPrimaryTemplate() != NULL) {
             if (SgNode *tmpl_node =
                     Traverse(function_decl->getPrimaryTemplate())) {
@@ -9740,8 +9747,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     enforce_symbol_scope(isSgFunctionDeclaration(sg_function_decl));
     enforce_symbol_scope(isSgFunctionDeclaration(
         sg_function_decl->get_firstNondefiningDeclaration()));
-    enforce_symbol_scope(isSgFunctionDeclaration(
-        sg_function_decl->get_definingDeclaration()));
+    enforce_symbol_scope(
+        isSgFunctionDeclaration(sg_function_decl->get_definingDeclaration()));
   }
 
   // Re-evaluate suppression after any lexical reattachment, since friend

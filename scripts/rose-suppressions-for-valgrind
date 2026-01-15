@@ -45,3 +45,118 @@
    ...
    obj:/usr/bin/perl
 }
+
+{
+   jvm_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/libjvm.so
+}
+
+{
+   jvm_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/libjvm.so
+}
+
+{
+   jvm_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/libjvm.so
+}
+
+{
+   jvm_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/libjvm.so
+}
+
+{
+   jvm_invalid_write
+   Memcheck:Addr4
+   ...
+   obj:*/libjvm.so
+}
+
+{
+   jvm_cond_uninit
+   Memcheck:Cond
+   ...
+   obj:*/libjvm.so
+}
+
+{
+   jvm_libjimage_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   ...
+   obj:*/libjimage.so
+}
+
+{
+   jvm_libjimage_leak_any
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   ...
+   obj:*/libjimage.so
+}
+
+{
+   ld_open_path_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   fun:open_path
+   ...
+}
+
+{
+   ld_new_object_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   ...
+   fun:_dl_new_object
+   ...
+}
+
+{
+   ld_add_to_global_resize_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   fun:add_to_global_resize
+   ...
+}
+
+{
+   ld_check_map_versions_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   fun:_dl_check_map_versions
+   ...
+}
+
+{
+   ld_new_object_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   fun:_dl_new_object
+   ...
+}

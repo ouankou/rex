@@ -81,6 +81,11 @@ public:
         return newName;
     }
 
+    AstAttribute::OwnershipPolicy getOwnershipPolicy() const override
+    {
+        return CONTAINER_OWNERSHIP;
+    }
+
     /** Get a constant reference to the name.
      *
      * @return Constant Reference to the name.

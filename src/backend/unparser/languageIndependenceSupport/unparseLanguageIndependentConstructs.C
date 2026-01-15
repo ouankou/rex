@@ -205,7 +205,8 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
   ASSERT_not_null(stmt);
 
   bool statementInFile = false;
-#define DEBUG_STATEMENT_FROM_FILE 1
+// Debug prints in statementFromFile are extremely verbose and slow; keep off by default.
+#define DEBUG_STATEMENT_FROM_FILE 0
 
   // DQ (5/19/2020): Debugging new support for include directives.
   SgIncludeDirectiveStatement *includeDirectiveStatement =

@@ -762,13 +762,11 @@ LivenessAnalysis::fixupStatementsINOUT(SgFunctionDefinition* funcDecl) {
 
         SgNode* root = source.getNode();
         ROSE_ASSERT(root);
-        BottomUpTraversalLivenessIN* bottomUpIN = new BottomUpTraversalLivenessIN(
-                        this);
-        bottomUpIN->traverse(root);
+        BottomUpTraversalLivenessIN bottomUpIN(this);
+        bottomUpIN.traverse(root);
 
-        BottomUpTraversalLivenessOUT* bottomUpOUT =
-        new BottomUpTraversalLivenessOUT(this);
-        bottomUpOUT->traverse(root);
+        BottomUpTraversalLivenessOUT bottomUpOUT(this);
+        bottomUpOUT.traverse(root);
 
 }
 
@@ -815,4 +813,3 @@ Support::getFullName(SgFunctionDefinition* functionDef)
     fullName = fullName+getAppName(functionDeclaration);
     return fullName;
   }
-

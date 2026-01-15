@@ -23,6 +23,7 @@ add_test(
   COMMAND nodeHierarchyTest
 )
 set_tests_properties(rosetta_nodeHierarchyTest PROPERTIES DISABLED TRUE)
+set_tests_properties(rosetta_nodeHierarchyTest PROPERTIES LABELS death)
 
 # Makefile check targets.
 add_test(
@@ -35,3 +36,4 @@ add_test(
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(nonsmoke_functional_roseTests_ROSETTA_check-local PROPERTIES DEPENDS rosetta_nodeHierarchyTest )
+set_tests_properties(nonsmoke_functional_roseTests_ROSETTA_check-local PROPERTIES LABELS death)

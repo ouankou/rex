@@ -22,6 +22,7 @@ class ROSE_UTIL_API CmdOptions
   std::vector<std::string>::const_iterator begin() { return opts.begin(); }
   std::vector<std::string>::const_iterator end() { return opts.end(); }
   static CmdOptions* GetInstance();
+  static void ReleaseInstance();
 };
 
 class DebugLog {

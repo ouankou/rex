@@ -27,7 +27,7 @@
 
 static void deleteExpressionAndOriginalExpressionTree(SgNode * node) {
   // Skip node that have already been deleted
-  if (node->get_freepointer() != AST_FileIO::IS_VALID_POINTER()) return;
+  if (!SgNode::isLiveNode(node)) return;
 
   // If it is an expression delete the associated original expression tree
   SgExpression * exp = isSgExpression(node);

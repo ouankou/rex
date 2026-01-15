@@ -370,8 +370,7 @@ SgType *getTypeFromTraversedRecordDecl(ClangToSageTranslator *translator,
 }
 } // anonymous namespace
 
-SgScopeStatement *
-ClangToSageTranslator::getOpaqueTypeInsertionScope(
+SgScopeStatement *ClangToSageTranslator::getOpaqueTypeInsertionScope(
     SgScopeStatement *scope) const {
   while (scope != nullptr) {
     if (scope->containsOnlyDeclarations() || isSgBasicBlock(scope)) {
@@ -1294,10 +1293,9 @@ bool ClangToSageTranslator::VisitMemberPointerType(
 
   clang::QualType classQualType(member_pointer_type->getClass(), 0);
   SgType *classType = buildTypeFromQualifiedType(classQualType);
-  if (classType == NULL)
-    {
-      classType = SageBuilder::buildUnknownType();
-    }
+  if (classType == NULL) {
+    classType = SageBuilder::buildUnknownType();
+  }
   SgType *classTypeStripped =
       classType != NULL ? classType->stripTypedefsAndModifiers() : NULL;
   if (classTypeStripped == NULL ||
@@ -1316,14 +1314,13 @@ bool ClangToSageTranslator::VisitMemberPointerType(
   ROSE_ASSERT(baseType);
   if (member_pointer_type->isMemberFunctionPointer()) {
     SgFunctionType *functionType = isSgFunctionType(baseType);
-    if (functionType != NULL)
-      {
-        SgMemberFunctionType *memFuncType = SageBuilder::buildMemberFunctionType(
-            functionType->get_return_type(), functionType->get_argument_list(),
-            classType, 0);
-        baseType = memFuncType;
-        ROSE_ASSERT(baseType);
-      }
+    if (functionType != NULL) {
+      SgMemberFunctionType *memFuncType = SageBuilder::buildMemberFunctionType(
+          functionType->get_return_type(), functionType->get_argument_list(),
+          classType, 0);
+      baseType = memFuncType;
+      ROSE_ASSERT(baseType);
+    }
   }
 
   SgPointerMemberType *pointerToMemberType =
@@ -1604,14 +1601,15 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
 }
 
 // Build template parameters by inferring from instantiation arguments
-SgTemplateParameterPtrList *ClangToSageTranslator::buildTemplateParameters(
+std::unique_ptr<SgTemplateParameterPtrList>
+ClangToSageTranslator::buildTemplateParameters(
     const clang::TemplateSpecializationType *clang_type) {
 
   // For Clang frontend, we don't have access to the original template parameter
   // declarations since they're in standard library headers. We need to infer
   // parameters from the instantiation arguments.
 
-  SgTemplateParameterPtrList *param_list = new SgTemplateParameterPtrList();
+  auto param_list = std::make_unique<SgTemplateParameterPtrList>();
 
   auto args = clang_type->template_arguments();
   int param_position = 0;
@@ -1665,13 +1663,9 @@ SgTemplateParameterPtrList *ClangToSageTranslator::buildTemplateParameters(
       clang::TemplateDecl *tdecl = tname.getAsTemplateDecl();
 
       if (tdecl) {
-        SgTemplateParameterPtrList *inner_params =
-            translateTemplateParameterList(tdecl->getTemplateParameters(),
-                                           nrdecl);
-        if (inner_params) {
-          nrdecl->get_tpl_params() = *inner_params;
-          delete inner_params;
-        }
+        auto inner_params = translateTemplateParameterList(
+            tdecl->getTemplateParameters(), nrdecl);
+        nrdecl->get_tpl_params() = *inner_params;
       }
 
       SgTemplateParameter *param = SageBuilder::buildTemplateParameter(
@@ -1826,18 +1820,18 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
   }
 
   // Build template parameters
-  SgTemplateParameterPtrList *params = buildTemplateParameters(clang_type);
+  auto params = buildTemplateParameters(clang_type);
 
   // Create empty template argument list for primary template
-  SgTemplateArgumentPtrList *empty_args = new SgTemplateArgumentPtrList();
+  SgTemplateArgumentPtrList empty_args;
 
   // Create template class declaration
   SgTemplateClassDeclaration *template_decl =
       SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
           SgName(base_name),
           SgClassDeclaration::e_class, // Assume class (could be struct)
-          scope, params,
-          empty_args // No specialization arguments for primary template
+          scope, params.get(),
+          &empty_args // No specialization arguments for primary template
       );
 
   // REX FIX: Ensure firstNondefiningDeclaration is set to avoid unparser

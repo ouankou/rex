@@ -33,12 +33,19 @@ HEADER_START
      // ******************************************
 
      public:
-          /// \private
+      /// \private
           static const unsigned pool_size; //
-          /// \private
+      /// \private
           static std::vector<unsigned char *> pools; //
-          /// \private
-          static $CLASSNAME * next_node; // 
+      /// \private
+          struct PoolFreeNode {
+            size_t pool_index;
+            size_t slot_index;
+            PoolFreeNode* next;
+          };
+          static PoolFreeNode * next_node; //
+          static std::vector<std::vector<PoolFreeNode>> pool_free_nodes; //
+          static std::vector<std::vector<unsigned char>> pool_live_flags; //
 
           /// \private
           static void clearMemoryPool(); //

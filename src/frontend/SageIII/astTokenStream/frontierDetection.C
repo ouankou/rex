@@ -417,6 +417,21 @@ FrontierDetectionForTokenStreamMapping( SgSourceFile* sourceFile)
      numberOfNodes = numberOfNodesInSubtree(sourceFile);
    }
 
+FrontierDetectionForTokenStreamMapping::
+~FrontierDetectionForTokenStreamMapping()
+   {
+     for (auto &entry : frontierNodes)
+        {
+          std::map<SgStatement*,FrontierNode*>* frontierMap = entry.second;
+          if (frontierMap == nullptr)
+             {
+               continue;
+             }
+          delete frontierMap;
+        }
+     frontierNodes.clear();
+   }
+
 int
 generate_physical_file_id(SgStatement* statement)
    {
@@ -1099,7 +1114,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute (SgNode* n,
                               bool childNodeIsFromSameFileAsCurrentNode = isChildNodeFromSameFileAsCurrentNode (statement, child_synthesized_attribute_statement);
                            // DQ (5/18/2021): New version of code to address how a node from a header file can  
                            // not effect the decision to unparse from the token stream or AST in the parent file.
-                              FrontierNode* frontierNode = nullptr;
                               if (childNodeIsFromSameFileAsCurrentNode == false)
                                  {
                                 // Can we set these? Yes, the child synthesizedAttributeList array can be modified.  This is useful in
@@ -1110,16 +1124,7 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute (SgNode* n,
                                    bool local_unparseFromTheAST       = false;
                                    bool local_unparseUsingTokenStream = true;
 
-                                   frontierNode = new FrontierNode(child_synthesized_attribute_statement,local_unparseUsingTokenStream,local_unparseFromTheAST);
-                                   ASSERT_not_null(frontierNode);
                                  }
-                                else
-                                 {
-                                   frontierNode = new FrontierNode(child_synthesized_attribute_statement,synthesizedAttributeList[i].unparseUsingTokenStream,synthesizedAttributeList[i].unparseFromTheAST);
-                                   ASSERT_not_null(frontierNode);
-                                 }
-
-                              ASSERT_not_null(frontierNode);
 
 #if DEBUG_SYNTH
                               printf ("synthesizedAttributeList[i].unparseUsingTokenStream = %s \n",synthesizedAttributeList[i].unparseUsingTokenStream ? "true" : "false");
@@ -1131,6 +1136,11 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute (SgNode* n,
                                    printf ("synthesizedAttributeList[i].unparseUsingTokenStream == true \n");
                                    printf ("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN \n");
 #endif
+                                   FrontierNode* frontierNode =
+                                      new FrontierNode(child_synthesized_attribute_statement,
+                                                       synthesizedAttributeList[i].unparseUsingTokenStream,
+                                                       synthesizedAttributeList[i].unparseFromTheAST);
+                                   ASSERT_not_null(frontierNode);
                                    addFrontierNode (synthesizedAttributeList[i].node, frontierNode);
 
                                    returnAttribute.containsNodesToBeUnparsedFromTheTokenStream = true;
@@ -1147,6 +1157,11 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute (SgNode* n,
                                         printf ("synthesizedAttributeList[i].unparseFromTheAST == true \n");
                                         printf ("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN \n");
 #endif
+                                        FrontierNode* frontierNode =
+                                           new FrontierNode(child_synthesized_attribute_statement,
+                                                            synthesizedAttributeList[i].unparseUsingTokenStream,
+                                                            synthesizedAttributeList[i].unparseFromTheAST);
+                                        ASSERT_not_null(frontierNode);
                                         addFrontierNode (synthesizedAttributeList[i].node, frontierNode);
                                         returnAttribute.containsNodesToBeUnparsedFromTheAST = true;
                                       }
@@ -1556,10 +1571,15 @@ FrontierDetectionForTokenStreamMapping::addFrontierNode (SgStatement* statement,
 
      ASSERT_require(frontierNodes.find(physical_file_id) != frontierNodes.end());
 
-     if (frontierNodes[physical_file_id]->find(statement) == frontierNodes[physical_file_id]->end())
+     std::map<SgStatement*,FrontierNode*>* frontierMap = frontierNodes[physical_file_id];
+     ASSERT_not_null(frontierMap);
+     if (frontierMap->find(statement) == frontierMap->end())
         {
-          std::map<SgStatement*,FrontierNode*>* frontierMap = frontierNodes[physical_file_id];
           frontierMap->insert(std::pair<SgStatement*,FrontierNode*>(statement,frontierNode));
+        }
+       else
+        {
+          delete frontierNode;
         }
 
      ASSERT_require(frontierNodes[physical_file_id]->find(statement) != frontierNodes[physical_file_id]->end());

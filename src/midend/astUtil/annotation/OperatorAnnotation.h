@@ -104,6 +104,7 @@ class OperatorInlineAnnotation
   static OperatorInlineAnnotation* get_inst() 
     { if (inst == 0) inst = new OperatorInlineAnnotation();
       return inst; }
+  static void release_inst();
   void Dump() const
     {
       std::cerr << "inline: \n";
@@ -184,6 +185,7 @@ class OperatorSideEffectAnnotation : public FunctionSideEffectInterface
   static OperatorSideEffectAnnotation* get_inst() 
     { if (inst == 0) inst = new OperatorSideEffectAnnotation();
       return inst; }
+  static void release_inst();
   void register_annot()
     {
       ReadAnnotation* op = ReadAnnotation::get_inst();
@@ -273,6 +275,7 @@ class OperatorAliasAnnotation : public FunctionAliasInterface
   static OperatorAliasAnnotation* get_inst() 
     { if (inst == 0) inst = new OperatorAliasAnnotation();
       return inst; }
+  static void release_inst();
   //! Inherited from FunctionAliasInterface    
   bool may_alias(AstInterface& fa, const AstNodePtr& fc, const AstNodePtr& result, 
                CollectObject<std::pair<AstNodePtr,int> >& collectalias);

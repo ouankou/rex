@@ -50,6 +50,16 @@ JvmLibrary& getJvmLibrary() {
   return library;
 }
 
+void unloadJvmLibrary() {
+  JvmLibrary& lib = getJvmLibrary();
+  if (lib.handle == nullptr) {
+    return;
+  }
+  dlclose(lib.handle);
+  lib.handle = nullptr;
+  lib.create_vm = nullptr;
+}
+
 void* tryOpenJvmLibrary(const char* path) {
   dlerror();
   return dlopen(path, RTLD_NOW | RTLD_GLOBAL);
@@ -259,6 +269,11 @@ jserver_start(JvmT* je)
   // Rasmussen (6/28/2017): Increasing stacksize fixes crashes on some rhel7 systems
   std::string stack_option = "-Xss2m";
   jvm_options.push_back(stack_option);
+  std::string interpreter_option = "-Xint";
+  jvm_options.push_back(interpreter_option);
+  jvm_options.push_back("-Xshare:off");
+  jvm_options.push_back("-XX:-UsePerfData");
+  jvm_options.push_back("-XX:+DisableAttachMechanism");
 
   std::vector<std::string> option_storage;
   option_storage.reserve(jvm_options.size());
@@ -304,7 +319,29 @@ void
 jserver_destroy()
 {
     if( je.jvm != NULL  ){
+         if (je.env != NULL) {
+           jclass system_class = je.env->FindClass("java/lang/System");
+           if (system_class != NULL) {
+             jmethodID gc_method =
+                 je.env->GetStaticMethodID(system_class, "gc", "()V");
+             if (gc_method != NULL) {
+               je.env->CallStaticVoidMethod(system_class, gc_method);
+             }
+             jmethodID finalize_method =
+                 je.env->GetStaticMethodID(system_class, "runFinalization",
+                                            "()V");
+             if (finalize_method != NULL) {
+               je.env->CallStaticVoidMethod(system_class, finalize_method);
+             }
+             je.env->DeleteLocalRef(system_class);
+           } else {
+             je.env->ExceptionClear();
+           }
+         }
          je.jvm->DestroyJavaVM();
+         je.jvm = NULL;
+         je.env = NULL;
+         unloadJvmLibrary();
     }
 }
 
@@ -361,9 +398,13 @@ jserver_getJavaStringArray(int argc, char **argv)
          /* Put all args from argv, after the first (which is this program's
                  name) into the array of Strings for FortranMain.  The args array
                  for Java does not include the program name.  */
-         for(i = 1; i < argc; i++)
-           env->SetObjectArrayElement(argsStringArray, (jsize)i-1,
-                                                jserver_getJavaString(argv[i]));
+         for(i = 1; i < argc; i++) {
+           jstring arg_string = jserver_getJavaString(argv[i]);
+           env->SetObjectArrayElement(argsStringArray, (jsize)i-1, arg_string);
+           env->DeleteLocalRef(arg_string);
+         }
+
+         env->DeleteLocalRef(stringClass);
 
          return argsStringArray;
 }

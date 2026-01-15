@@ -985,9 +985,8 @@ void generateAstGraph ( const SgProject* project, int maxSize, std::string filen
        // Added support to handle options to control filtering of Whole AST graphs.
        // std::vector<std::string>  argvList (argv, argv+ argc);
           std::vector<std::string>  argvList = project->get_originalCommandLineArgumentList();
-          CustomMemoryPoolDOTGeneration::s_Filter_Flags* filter_flags = new CustomMemoryPoolDOTGeneration::s_Filter_Flags(argvList);
-
-          generateWholeGraphOfAST(filename,filter_flags);
+          CustomMemoryPoolDOTGeneration::s_Filter_Flags filter_flags(argvList);
+          generateWholeGraphOfAST(filename, &filter_flags);
         }
        else
         {

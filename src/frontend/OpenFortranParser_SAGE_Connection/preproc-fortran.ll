@@ -489,6 +489,7 @@ getFortranFreeFormatPreprocessorDirectives( std::string fileName )
             // exit(0);
                yyin = fp; 
                yylex(); 
+               Rose_Fortran_free_format_lex_destroy();
                fclose(fp);  
              }
             else 

@@ -1340,6 +1340,8 @@ HEADER_START
           struct PoolEntry {
             unsigned char* base;
             unsigned size;
+            size_t slot_size;
+            unsigned char* live_flags;
             VariantT variant;
             void (*reset)();
           };
@@ -1348,6 +1350,8 @@ HEADER_START
           struct PoolResetter {
             static void reset() {
               NodeT::pools.clear();
+              NodeT::pool_free_nodes.clear();
+              NodeT::pool_live_flags.clear();
               NodeT::next_node = nullptr;
             }
           };
@@ -1355,8 +1359,10 @@ HEADER_START
      protected:
           static std::vector<PoolEntry>& allPools();
           static void releaseAllPools();
+          static const PoolEntry* findPoolEntry(const unsigned char* ptr);
      public:
           static VariantT variantFromPool(SgNode const * n);
+          static bool isLiveNode(const SgNode* node);
 
       /* \brief Mangled name cache for improved performance of mangled name generation
           This mangle name caching is implemented to support better performance.
@@ -2259,14 +2265,52 @@ void SgNode::releaseAllPools() {
   std::vector<SgNode::PoolEntry>().swap(allPools());
 }
 
-VariantT SgNode::variantFromPool(SgNode const * n) {
-  for (SgNode::PoolEntry const & pool: allPools()) {
-    auto & base = pool.base;
-    auto & size = pool.size;
-    auto offset = ((unsigned char*)n - base);
-    if ( offset >= 0 && offset < size ) return pool.variant;
+const SgNode::PoolEntry* SgNode::findPoolEntry(const unsigned char* ptr) {
+  auto &pools = allPools();
+  size_t lo = 0;
+  size_t hi = pools.size();
+  while (lo < hi) {
+    size_t mid = lo + (hi - lo) / 2;
+    const SgNode::PoolEntry &pool = pools[mid];
+    const unsigned char* base = pool.base;
+    const unsigned char* end = base + pool.size;
+    if (ptr < base) {
+      hi = mid;
+    } else if (ptr >= end) {
+      lo = mid + 1;
+    } else {
+      return &pool;
+    }
   }
-  return (VariantT)0;
+  return nullptr;
+}
+
+VariantT SgNode::variantFromPool(SgNode const * n) {
+  if (n == nullptr) {
+    return (VariantT)0;
+  }
+  const unsigned char* ptr = reinterpret_cast<const unsigned char*>(n);
+  const SgNode::PoolEntry* pool = findPoolEntry(ptr);
+  return pool ? pool->variant : (VariantT)0;
+}
+
+bool SgNode::isLiveNode(const SgNode* node) {
+  if (node == nullptr) {
+    return false;
+  }
+  const unsigned char* ptr =
+      reinterpret_cast<const unsigned char*>(const_cast<SgNode*>(node));
+  const SgNode::PoolEntry* pool = findPoolEntry(ptr);
+  if (pool == nullptr) {
+    return true;
+  }
+  if (pool->base == nullptr || pool->size == 0 || pool->slot_size == 0 ||
+      pool->live_flags == nullptr) {
+    return true;
+  }
+  size_t offset = static_cast<size_t>(ptr - pool->base);
+  size_t slot_index = offset / pool->slot_size;
+  return pool->live_flags[slot_index] != 0;
 }
 
 SOURCE_END

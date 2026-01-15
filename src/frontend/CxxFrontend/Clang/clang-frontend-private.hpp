@@ -468,7 +468,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
                                   bool explicitlySpecified = false);
 
         // Helper: Build template parameters (inferred from arguments)
-        SgTemplateParameterPtrList* buildTemplateParameters(
+        std::unique_ptr<SgTemplateParameterPtrList> buildTemplateParameters(
             const clang::TemplateSpecializationType* clang_type);
 
         // Helper: Get qualified name for a template declaration (e.g.,
@@ -493,9 +493,9 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             SgDeclarationStatement* owning_template,
             unsigned position);
 
-        SgTemplateParameterPtrList* translateTemplateParameterList(
-            clang::TemplateParameterList* param_list,
-            SgDeclarationStatement* owning_template);
+        std::unique_ptr<SgTemplateParameterPtrList>
+        translateTemplateParameterList(clang::TemplateParameterList* param_list,
+                                       SgDeclarationStatement* owning_template);
 
         SgTemplateClassDeclaration *translateClassTemplateDecl(
             clang::ClassTemplateDecl *class_template_decl,

@@ -1016,9 +1016,7 @@ VariableRenaming::VarRefSynthAttr VariableRenaming::UniqueNameTraversal::evaluat
                     //If the RHS is a varRef and has the naming attribute set, remove it
                     if (varRef->attributeExists(VariableRenaming::varKeyTag))
                     {
-                        VarUniqueName* name = dynamic_cast<VarUniqueName*> (varRef->getAttribute(VariableRenaming::varKeyTag));
                         varRef->removeAttribute(VariableRenaming::varKeyTag);
-                        delete name;
                     }
                 }
             }
@@ -1119,9 +1117,7 @@ VariableRenaming::VarRefSynthAttr VariableRenaming::UniqueNameTraversal::evaluat
                     //If the RHS is a varRef and has the naming attribute set, remove it
                     if (varRef->attributeExists(VariableRenaming::varKeyTag))
                     {
-                        VarUniqueName* name = dynamic_cast<VarUniqueName*> (varRef->getAttribute(VariableRenaming::varKeyTag));
                         varRef->removeAttribute(VariableRenaming::varKeyTag);
-                        delete name;
                     }
                 }
             }

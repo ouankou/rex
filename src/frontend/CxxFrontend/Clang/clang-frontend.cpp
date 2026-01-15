@@ -625,7 +625,10 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // 4 - Attach to the file
 
     if (sageFile.get_globalScope() != NULL) {
-      SageInterface::deleteAST(sageFile.get_globalScope());
+      SgGlobal *old_global_scope = sageFile.get_globalScope();
+      sageFile.set_globalScope(nullptr);
+      old_global_scope->set_parent(nullptr);
+      SageInterface::deleteAST(old_global_scope);
       auto map_it = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(&sageFile);
       if (map_it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() &&
           map_it->second != NULL) {

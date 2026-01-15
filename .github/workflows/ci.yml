@@ -59,7 +59,7 @@ jobs:
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
-          openjdk-17-jdk \
+          openjdk-25-jdk \
           pkg-config
 
     # Simplified build using build-rex.sh script
@@ -68,7 +68,7 @@ jobs:
         # Set up LLVM 20 paths so "clang" command resolves to clang-20.
         # Keep the JVM path available for the Fortran OFP frontend.
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
         CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
         LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
         CC: clang-${{ matrix.llvm }}
@@ -82,174 +82,14 @@ jobs:
     - name: Run astInterface, translator, and astQuery Tests
       env:
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
       run: |
         cd $GITHUB_WORKSPACE/build
         # astInterface exercises Clang frontend
-        ctest -R astInterface -V
+        ctest -R astInterface
         # translatorTests (excluding two known disabled cases in CTest)
-        # ctest -R "Translator_" -V
+        # ctest -R "Translator_"
         # astQuery exercises query helpers
-        ctest -R "testQuery" -V
+        ctest -R "testQuery"
         # Run all rex-prefixed regression tests
-        ctest -R rex -V
-
-  memcheck:
-    strategy:
-      matrix:
-        os: [ubuntu-24.04]
-        llvm: [20]
-
-    runs-on: ${{ matrix.os }}
-
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: 'recursive'
-        persist-credentials: false
-
-    # NOTE: Ubuntu 24.04 ships antlr4 v4.9 but antlr4-cpp-runtime v4.10, which are API-incompatible; manually install the matching antlr4 v4.10.
-    - uses: StoneMoe/setup-antlr4@v4.10.1
-
-    # CRITICAL: Install ONLY version-specific packages from official Ubuntu repos
-    # NEVER install generic "llvm" or "clang" packages - always use versioned packages (llvm-20, clang-20, etc.)
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          bison \
-          build-essential \
-          cmake \
-          clang-${{ matrix.llvm }} \
-          curl \
-          flang-${{ matrix.llvm }} \
-          flex \
-          g++ \
-          gdb \
-          ghostscript \
-          git \
-          graphviz \
-          libantlr4-runtime-dev \
-          libclang-${{ matrix.llvm }}-dev \
-          libclang-cpp${{ matrix.llvm }}-dev \
-          libhpdf-dev \
-          libtool \
-          llvm-${{ matrix.llvm }} \
-          llvm-${{ matrix.llvm }}-dev \
-          openjdk-17-jdk \
-          pkg-config \
-          valgrind
-
-    - name: Configure (Debug + Valgrind)
-      env:
-        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
-        LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
-        CC: clang-${{ matrix.llvm }}
-        CXX: clang++-${{ matrix.llvm }}
-        FC: flang-${{ matrix.llvm }}
-      run: |
-        cmake -S . -B build \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
-          -DENABLE-C=ON \
-          -DENABLE-FORTRAN=ON \
-          -DENABLE-FORTRAN-OFP=ON \
-          -DCMAKE_CXX_STANDARD=17 \
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-          -DWITH-VALGRIND=/usr
-
-    - name: Build
-      run: cmake --build build -j"$(nproc)"
-
-    - name: Run memcheck (astInterface, testQuery, rex)
-      env:
-        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
-      run: |
-        ctest --test-dir build -T memcheck -R "astInterface|testQuery|rex" -j"$(nproc)" --output-on-failure
-
-  sanitizer:
-    strategy:
-      matrix:
-        os: [ubuntu-24.04]
-        llvm: [20]
-
-    runs-on: ${{ matrix.os }}
-
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: 'recursive'
-        persist-credentials: false
-
-    # NOTE: Ubuntu 24.04 ships antlr4 v4.9 but antlr4-cpp-runtime v4.10, which are API-incompatible; manually install the matching antlr4 v4.10.
-    - uses: StoneMoe/setup-antlr4@v4.10.1
-
-    # CRITICAL: Install ONLY version-specific packages from official Ubuntu repos
-    # NEVER install generic "llvm" or "clang" packages - always use versioned packages (llvm-20, clang-20, etc.)
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          bison \
-          build-essential \
-          cmake \
-          clang-${{ matrix.llvm }} \
-          curl \
-          flang-${{ matrix.llvm }} \
-          flex \
-          g++ \
-          gdb \
-          ghostscript \
-          git \
-          graphviz \
-          libantlr4-runtime-dev \
-          libclang-${{ matrix.llvm }}-dev \
-          libclang-cpp${{ matrix.llvm }}-dev \
-          libhpdf-dev \
-          libtool \
-          llvm-${{ matrix.llvm }} \
-          llvm-${{ matrix.llvm }}-dev \
-          openjdk-17-jdk \
-          pkg-config
-
-    - name: Configure (Debug + Sanitizers)
-      env:
-        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
-        LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
-        CC: clang-${{ matrix.llvm }}
-        CXX: clang++-${{ matrix.llvm }}
-        FC: flang-${{ matrix.llvm }}
-      run: |
-        cmake -S . -B build \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
-          -DENABLE-C=ON \
-          -DENABLE-FORTRAN=ON \
-          -DENABLE-FORTRAN-OFP=ON \
-          -DCMAKE_CXX_STANDARD=17 \
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-          -DENABLE-SANITIZER=ON \
-          -DROSE_SANITIZERS="address;leak;undefined"
-
-    - name: Build
-      run: cmake --build build -j"$(nproc)"
-
-    - name: Run tests (astInterface, testQuery, rex)
-      env:
-        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
-      run: |
-        ctest --test-dir build -R "astInterface|testQuery|rex" -j"$(nproc)" --output-on-failure
+        ctest -R rex

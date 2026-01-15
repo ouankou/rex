@@ -39,6 +39,7 @@ add_test(
   NAME astInterface_unit_sageBuilderTest
   COMMAND sageBuilderTest
 )
+set_tests_properties(astInterface_unit_sageBuilderTest PROPERTIES LABELS death)
 
 add_test(
   NAME nonsmoke_functional_roseTests_astInterfaceTests_unitTests_check-local
@@ -50,5 +51,6 @@ add_test(
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_unitTests_check-local PROPERTIES DEPENDS "astInterface_unit_sageInterfaceTest;astInterface_unit_sageBuilderTest" )
+set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_unitTests_check-local PROPERTIES LABELS death)
 
 # Makefile check targets.

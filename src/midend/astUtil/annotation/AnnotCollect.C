@@ -12,6 +12,11 @@ ReadAnnotation *ReadAnnotation::get_inst() {
     inst = new ReadAnnotation();
   return inst;
 }
+
+void ReadAnnotation::release_inst() {
+  delete inst;
+  inst = nullptr;
+}
 //! Process command line and call read(istream & in)
 void ReadAnnotation::read() {
   CmdOptions *inst = CmdOptions::GetInstance();

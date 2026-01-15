@@ -115,6 +115,9 @@ ROSE_DLL_API extern int gensym_counter;
      std::string name;
     public:
      UniqueNameAttribute(std::string n="") {name =n; };
+     AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
+       return CONTAINER_OWNERSHIP;
+     }
      void set_name (std::string n) {name = n;};
      std::string get_name () {return name;};
   };
@@ -1998,176 +2001,280 @@ struct DeferredTransformation
 
 // DQ (2/24/2009): Simple function to delete an AST subtree (used in outlining).
 //! Function to delete AST subtree's nodes only, users must take care of any dangling pointers, symbols or types that result.
-ROSE_DLL_API void deleteAST(SgNode* node);
+   enum class DeleteAstMode {
+     kConservative, // Preserve nodes referenced from outside the subtree.
+     kSkipExternalReferences // Assume subtree is isolated; skip global
+                             // reference scan.
+   };
 
-//! Explicitly tear down an AST and release global caches and memory pools. AST pointers are invalid after this call.
-ROSE_DLL_API void tearDownAst(SgProject* project);
+   ROSE_DLL_API void deleteAST(SgNode *node);
+   ROSE_DLL_API void deleteAST(SgNode *node, DeleteAstMode mode);
 
-//! Register an AST teardown handler to run at process exit if cleanup was not invoked.
-ROSE_DLL_API void registerAstTeardownAtExit();
+   //! Explicitly tear down an AST and release global caches and memory pools.
+   //! AST pointers are invalid after this call.
+   ROSE_DLL_API void tearDownAst(SgProject *project);
 
-// DQ (3/5/2022): Adding support to check AST for invalid poionters.
-ROSE_DLL_API void checkSgNodePointers();
+   //! Register an AST teardown handler to run at process exit if cleanup was
+   //! not invoked.
+   ROSE_DLL_API void registerAstTeardownAtExit();
 
-//! Special purpose function for deleting AST expression tress containing valid original expression trees in constant folded expressions (for internal use only).
-ROSE_DLL_API void deleteExpressionTreeWithOriginalExpressionSubtrees(SgNode* root);
+   // DQ (3/5/2022): Adding support to check AST for invalid poionters.
+   ROSE_DLL_API void checkSgNodePointers();
 
-// DQ (2/25/2009): Added new function to support outliner.
-//! Move statements in first block to the second block (preserves order and rebuilds the symbol table).
-ROSE_DLL_API void moveStatementsBetweenBlocks ( SgBasicBlock* sourceBlock, SgBasicBlock* targetBlock );
+   //! Special purpose function for deleting AST expression tress containing
+   //! valid original expression trees in constant folded expressions (for
+   //! internal use only).
+   ROSE_DLL_API void
+   deleteExpressionTreeWithOriginalExpressionSubtrees(SgNode *root);
 
-//! Move statements between C++ namespace's definitions
-ROSE_DLL_API void moveStatementsBetweenBlocks ( SgNamespaceDefinitionStatement* sourceBlock, SgNamespaceDefinitionStatement* targetBlock );
+   // DQ (2/25/2009): Added new function to support outliner.
+   //! Move statements in first block to the second block (preserves order and
+   //! rebuilds the symbol table).
+   ROSE_DLL_API void moveStatementsBetweenBlocks(SgBasicBlock *sourceBlock,
+                                                 SgBasicBlock *targetBlock);
 
-//!  Check if a function declaration is a C++11 lambda function
-ROSE_DLL_API bool isLambdaFunction (SgFunctionDeclaration* func);
+   //! Move statements between C++ namespace's definitions
+   ROSE_DLL_API void
+   moveStatementsBetweenBlocks(SgNamespaceDefinitionStatement *sourceBlock,
+                               SgNamespaceDefinitionStatement *targetBlock);
 
-//! check if a variable reference is this->a[i] inside of a lambda function
-ROSE_DLL_API bool isLambdaCapturedVariable (SgVarRefExp* varRef);
+   //!  Check if a function declaration is a C++11 lambda function
+   ROSE_DLL_API bool isLambdaFunction(SgFunctionDeclaration *func);
 
-//! Move a variable declaration to a new scope, handle symbol, special scopes like For loop, etc.
-ROSE_DLL_API void moveVariableDeclaration(SgVariableDeclaration* decl, SgScopeStatement* target_scope);
-//! Append a statement to the end of the current scope, handle side effect of appending statements, e.g. preprocessing info, defining/nondefining pointers etc.
-ROSE_DLL_API void appendStatement(SgStatement *stmt, SgScopeStatement* scope=NULL);
+   //! check if a variable reference is this->a[i] inside of a lambda function
+   ROSE_DLL_API bool isLambdaCapturedVariable(SgVarRefExp *varRef);
 
-//! Append a statement to the end of SgForInitStatement
-ROSE_DLL_API void appendStatement(SgStatement *stmt, SgForInitStatement* for_init_stmt);
+   //! Move a variable declaration to a new scope, handle symbol, special scopes
+   //! like For loop, etc.
+   ROSE_DLL_API void moveVariableDeclaration(SgVariableDeclaration *decl,
+                                             SgScopeStatement *target_scope);
+   //! Append a statement to the end of the current scope, handle side effect of
+   //! appending statements, e.g. preprocessing info, defining/nondefining
+   //! pointers etc.
+   ROSE_DLL_API void appendStatement(SgStatement *stmt,
+                                     SgScopeStatement *scope = NULL);
 
-//! Append a list of statements to the end of the current scope, handle side effect of appending statements, e.g. preprocessing info, defining/nondefining pointers etc.
-ROSE_DLL_API void appendStatementList(const std::vector<SgStatement*>& stmt, SgScopeStatement* scope=NULL);
+   //! Append a statement to the end of SgForInitStatement
+   ROSE_DLL_API void appendStatement(SgStatement *stmt,
+                                     SgForInitStatement *for_init_stmt);
 
-// DQ (2/6/2009): Added function to support outlining into separate file.
-//! Append a copy ('decl') of a function ('original_statement') into a 'scope', include any referenced declarations required if the scope is within a compiler generated file. All referenced declarations, including those from headers, are inserted if excludeHeaderFiles is set to true (the new file will not have any headers).
-ROSE_DLL_API void appendStatementWithDependentDeclaration( SgDeclarationStatement* decl, SgGlobal* scope, SgStatement* original_statement, bool excludeHeaderFiles );
+   //! Append a list of statements to the end of the current scope, handle side
+   //! effect of appending statements, e.g. preprocessing info,
+   //! defining/nondefining pointers etc.
+   ROSE_DLL_API void appendStatementList(const std::vector<SgStatement *> &stmt,
+                                         SgScopeStatement *scope = NULL);
 
-//! Prepend a statement to the beginning of the current scope, handling side
-//! effects as appropriate
-ROSE_DLL_API void prependStatement(SgStatement *stmt, SgScopeStatement* scope=NULL);
+   // DQ (2/6/2009): Added function to support outlining into separate file.
+   //! Append a copy ('decl') of a function ('original_statement') into a
+   //! 'scope', include any referenced declarations required if the scope is
+   //! within a compiler generated file. All referenced declarations, including
+   //! those from headers, are inserted if excludeHeaderFiles is set to true
+   //! (the new file will not have any headers).
+   ROSE_DLL_API void appendStatementWithDependentDeclaration(
+       SgDeclarationStatement *decl, SgGlobal *scope,
+       SgStatement *original_statement, bool excludeHeaderFiles);
 
-//! Prepend a statement to the beginning of SgForInitStatement
-ROSE_DLL_API void prependStatement(SgStatement *stmt, SgForInitStatement* for_init_stmt);
+   //! Prepend a statement to the beginning of the current scope, handling side
+   //! effects as appropriate
+   ROSE_DLL_API void prependStatement(SgStatement *stmt,
+                                      SgScopeStatement *scope = NULL);
 
-//! prepend a list of statements to the beginning of the current scope,
-//! handling side effects as appropriate
-ROSE_DLL_API void prependStatementList(const std::vector<SgStatement*>& stmt, SgScopeStatement* scope=NULL);
+   //! Prepend a statement to the beginning of SgForInitStatement
+   ROSE_DLL_API void prependStatement(SgStatement *stmt,
+                                      SgForInitStatement *for_init_stmt);
 
-//! Check if a scope statement has a simple children statement list
-//! so insert additional statements under the scope is straightforward and unambiguous .
-//! for example, SgBasicBlock has a simple statement list while IfStmt does not.
-ROSE_DLL_API bool  hasSimpleChildrenList (SgScopeStatement* scope);
+   //! prepend a list of statements to the beginning of the current scope,
+   //! handling side effects as appropriate
+   ROSE_DLL_API void
+   prependStatementList(const std::vector<SgStatement *> &stmt,
+                        SgScopeStatement *scope = NULL);
 
-//! Insert a statement before or after the target statement within the target's scope. Move around preprocessing info automatically
-ROSE_DLL_API void insertStatement(SgStatement *targetStmt, SgStatement* newStmt, bool insertBefore= true, bool autoMovePreprocessingInfo = true);
+   //! Check if a scope statement has a simple children statement list
+   //! so insert additional statements under the scope is straightforward and
+   //! unambiguous . for example, SgBasicBlock has a simple statement list while
+   //! IfStmt does not.
+   ROSE_DLL_API bool hasSimpleChildrenList(SgScopeStatement *scope);
 
-//! Insert a list of statements before or after the target statement within the
-//target's scope
-ROSE_DLL_API void insertStatementList(SgStatement *targetStmt, const std::vector<SgStatement*>& newStmts, bool insertBefore= true);
+   //! Insert a statement before or after the target statement within the
+   //! target's scope. Move around preprocessing info automatically
+   ROSE_DLL_API void insertStatement(SgStatement *targetStmt,
+                                     SgStatement *newStmt,
+                                     bool insertBefore = true,
+                                     bool autoMovePreprocessingInfo = true);
 
-//! Insert a statement before a target statement
-ROSE_DLL_API void insertStatementBefore(SgStatement *targetStmt, SgStatement* newStmt, bool autoMovePreprocessingInfo = true);
+   //! Insert a list of statements before or after the target statement within
+   //! the
+   // target's scope
+   ROSE_DLL_API void
+   insertStatementList(SgStatement *targetStmt,
+                       const std::vector<SgStatement *> &newStmts,
+                       bool insertBefore = true);
 
-//! Insert a list of statements before a target statement
-ROSE_DLL_API void insertStatementListBefore(SgStatement *targetStmt, const std::vector<SgStatement*>& newStmts);
+   //! Insert a statement before a target statement
+   ROSE_DLL_API void
+   insertStatementBefore(SgStatement *targetStmt, SgStatement *newStmt,
+                         bool autoMovePreprocessingInfo = true);
 
-//! Insert a statement after a target statement, Move around preprocessing info automatically by default
-ROSE_DLL_API void insertStatementAfter(SgStatement *targetStmt, SgStatement* newStmt, bool autoMovePreprocessingInfo = true);
+   //! Insert a list of statements before a target statement
+   ROSE_DLL_API void
+   insertStatementListBefore(SgStatement *targetStmt,
+                             const std::vector<SgStatement *> &newStmts);
 
-//! Insert a list of statements after a target statement
-ROSE_DLL_API void insertStatementListAfter(SgStatement *targetStmt, const std::vector<SgStatement*>& newStmt);
+   //! Insert a statement after a target statement, Move around preprocessing
+   //! info automatically by default
+   ROSE_DLL_API void
+   insertStatementAfter(SgStatement *targetStmt, SgStatement *newStmt,
+                        bool autoMovePreprocessingInfo = true);
 
-//! Insert a statement after the last declaration within a scope. The statement will be prepended to the scope if there is no declaration statement found
-ROSE_DLL_API void insertStatementAfterLastDeclaration(SgStatement* stmt, SgScopeStatement* scope);
+   //! Insert a list of statements after a target statement
+   ROSE_DLL_API void
+   insertStatementListAfter(SgStatement *targetStmt,
+                            const std::vector<SgStatement *> &newStmt);
 
-//! Insert a list of statements after the last declaration within a scope. The statement will be prepended to the scope if there is no declaration statement found
-ROSE_DLL_API void insertStatementAfterLastDeclaration(std::vector<SgStatement*> stmt_list, SgScopeStatement* scope);
+   //! Insert a statement after the last declaration within a scope. The
+   //! statement will be prepended to the scope if there is no declaration
+   //! statement found
+   ROSE_DLL_API void
+   insertStatementAfterLastDeclaration(SgStatement *stmt,
+                                       SgScopeStatement *scope);
 
-//! Insert a statement before the first non-declaration statement in a scope.  If the scope has no non-declaration statements
-//  then the statement is inserted at the end of the scope.
-ROSE_DLL_API void insertStatementBeforeFirstNonDeclaration(SgStatement *newStmt, SgScopeStatement *scope,
-                                                           bool movePreprocessingInfo=true);
+   //! Insert a list of statements after the last declaration within a scope.
+   //! The statement will be prepended to the scope if there is no declaration
+   //! statement found
+   ROSE_DLL_API void
+   insertStatementAfterLastDeclaration(std::vector<SgStatement *> stmt_list,
+                                       SgScopeStatement *scope);
 
-//! Insert statements before the first non-declaration statement in a scope.  If the scope has no non-declaration statements
-//then the new statements are inserted at the end of the scope.
-ROSE_DLL_API void insertStatementListBeforeFirstNonDeclaration(const std::vector<SgStatement*> &newStmts, SgScopeStatement *scope);
+   //! Insert a statement before the first non-declaration statement in a scope.
+   //! If the scope has no non-declaration statements
+   //  then the statement is inserted at the end of the scope.
+   ROSE_DLL_API void
+   insertStatementBeforeFirstNonDeclaration(SgStatement *newStmt,
+                                            SgScopeStatement *scope,
+                                            bool movePreprocessingInfo = true);
 
-// DQ (11/21/2018): We need to sometimes insert something after the last
-// statement of the collection from rose_required_macros_and_functions.h.
-ROSE_DLL_API SgStatement* lastFrontEndSpecificStatement( SgGlobal* globalScope );
+   //! Insert statements before the first non-declaration statement in a scope.
+   //! If the scope has no non-declaration statements
+   // then the new statements are inserted at the end of the scope.
+   ROSE_DLL_API void insertStatementListBeforeFirstNonDeclaration(
+       const std::vector<SgStatement *> &newStmts, SgScopeStatement *scope);
 
-ROSE_DLL_API bool isRemovableStatement ( SgStatement* s );
+   // DQ (11/21/2018): We need to sometimes insert something after the last
+   // statement of the collection from rose_required_macros_and_functions.h.
+   ROSE_DLL_API SgStatement *
+   lastFrontEndSpecificStatement(SgGlobal *globalScope);
 
-//! Remove a statement from its attach point of the AST. Automatically keep its associated preprocessing information at the original place after the removal. The statement is still in memory and it is up to the users to decide if the removed one will be inserted somewhere else or released from memory (deleteAST()).
-ROSE_DLL_API void removeStatement(SgStatement* stmt, bool autoRelocatePreprocessingInfo = true);
+   ROSE_DLL_API bool isRemovableStatement(SgStatement *s);
 
-//! Deep delete a sub AST tree. It uses postorder traversal to delete each child node. Users must take care of any dangling pointers, symbols or types that result. This is identical to deleteAST()
-ROSE_DLL_API void deepDelete(SgNode* root);
+   //! Remove a statement from its attach point of the AST. Automatically keep
+   //! its associated preprocessing information at the original place after the
+   //! removal. The statement is still in memory and it is up to the users to
+   //! decide if the removed one will be inserted somewhere else or released
+   //! from memory (deleteAST()).
+   ROSE_DLL_API void removeStatement(SgStatement *stmt,
+                                     bool autoRelocatePreprocessingInfo = true);
 
-//! Replace a statement with another. Move preprocessing information from oldStmt to newStmt if requested.
-ROSE_DLL_API void replaceStatement(SgStatement* oldStmt, SgStatement* newStmt, bool movePreprocessinInfo = false);
+   //! Deep delete a sub AST tree. It uses postorder traversal to delete each
+   //! child node. Users must take care of any dangling pointers, symbols or
+   //! types that result. This is identical to deleteAST()
+   ROSE_DLL_API void deepDelete(SgNode *root);
 
-//! Replace an anchor node with a specified pattern subtree with optional SgVariantExpression. All SgVariantExpression in the pattern will be replaced with copies of the anchor node.
-ROSE_DLL_API SgNode* replaceWithPattern (SgNode * anchor, SgNode* new_pattern);
+   //! Replace a statement with another. Move preprocessing information from
+   //! oldStmt to newStmt if requested.
+   ROSE_DLL_API void replaceStatement(SgStatement *oldStmt,
+                                      SgStatement *newStmt,
+                                      bool movePreprocessinInfo = false);
 
-//! Replace all variable references to an old symbol in a scope to being references to a new symbol.
-// Essentially replace variable a with b.
-ROSE_DLL_API void replaceVariableReferences(SgVariableSymbol* old_sym, SgVariableSymbol* new_sym, SgScopeStatement * scope );
+   //! Replace an anchor node with a specified pattern subtree with optional
+   //! SgVariantExpression. All SgVariantExpression in the pattern will be
+   //! replaced with copies of the anchor node.
+   ROSE_DLL_API SgNode *replaceWithPattern(SgNode *anchor, SgNode *new_pattern);
 
-// DQ (11/12/2018): Adding test to avoid issues that we can't test for in the unparsing of header files using the token based unparsing.
-//! If header file unparsing and token-based unparsing are used, then some statements in header files
-//! used with the same name and different include syntax can't be transformed. This is currently because
-//! there is no way to generally test the resulting transformed code generated by ROSE.
-ROSE_DLL_API bool statementCanBeTransformed(SgStatement *stmt);
+   //! Replace all variable references to an old symbol in a scope to being
+   //! references to a new symbol.
+   // Essentially replace variable a with b.
+   ROSE_DLL_API void replaceVariableReferences(SgVariableSymbol *old_sym,
+                                               SgVariableSymbol *new_sym,
+                                               SgScopeStatement *scope);
 
-/** Given an expression, generates a temporary variable whose initializer optionally evaluates
-* that expression. Then, the var reference expression returned can be used instead of the original
-* expression. The temporary variable created can be reassigned to the expression by the returned SgAssignOp;
-* this can be used when the expression the variable represents needs to be evaluated. NOTE: This handles
-* reference types correctly by using pointer types for the temporary.
-* @param expression Expression which will be replaced by a variable
-* @param scope scope in which the temporary variable will be generated
-* @param reEvaluate an assignment op to reevaluate the expression. Leave NULL if not needed
-* @return declaration of the temporary variable, and a a variable reference expression to use instead of
-* the original expression. */
-std::pair<SgVariableDeclaration*, SgExpression* > createTempVariableForExpression(SgExpression* expression,
-        SgScopeStatement* scope, bool initializeInDeclaration, SgAssignOp** reEvaluate = NULL);
+   // DQ (11/12/2018): Adding test to avoid issues that we can't test for in the
+   // unparsing of header files using the token based unparsing.
+   //! If header file unparsing and token-based unparsing are used, then some
+   //! statements in header files used with the same name and different include
+   //! syntax can't be transformed. This is currently because there is no way to
+   //! generally test the resulting transformed code generated by ROSE.
+   ROSE_DLL_API bool statementCanBeTransformed(SgStatement *stmt);
 
-/*  This function creates a temporary variable for a given expression in the given scope
-   This is different from SageInterface::createTempVariableForExpression in that it does not
-   try to be smart to create pointers to reference types and so on. The tempt is initialized to expression.
-   The caller is responsible for setting the parent of SgVariableDeclaration since buildVariableDeclaration
-   may not set_parent() when the scope stack is empty. See programTransformation/extractFunctionArgumentsNormalization/ExtractFunctionArguments.C for sample usage.
-   @param expression Expression which will be replaced by a variable
-   @param scope scope in which the temporary variable will be generated
-*/
+   /** Given an expression, generates a temporary variable whose initializer
+    * optionally evaluates that expression. Then, the var reference expression
+    * returned can be used instead of the original expression. The temporary
+    * variable created can be reassigned to the expression by the returned
+    * SgAssignOp; this can be used when the expression the variable represents
+    * needs to be evaluated. NOTE: This handles reference types correctly by
+    * using pointer types for the temporary.
+    * @param expression Expression which will be replaced by a variable
+    * @param scope scope in which the temporary variable will be generated
+    * @param reEvaluate an assignment op to reevaluate the expression. Leave
+    * NULL if not needed
+    * @return declaration of the temporary variable, and a a variable reference
+    * expression to use instead of the original expression. */
+   std::pair<SgVariableDeclaration *, SgExpression *>
+   createTempVariableForExpression(SgExpression *expression,
+                                   SgScopeStatement *scope,
+                                   bool initializeInDeclaration,
+                                   SgAssignOp **reEvaluate = NULL);
 
-std::pair<SgVariableDeclaration*, SgExpression*> createTempVariableAndReferenceForExpression
-    (SgExpression* expression, SgScopeStatement* scope);
+   /*  This function creates a temporary variable for a given expression in the
+      given scope This is different from
+      SageInterface::createTempVariableForExpression in that it does not try to
+      be smart to create pointers to reference types and so on. The tempt is
+      initialized to expression. The caller is responsible for setting the
+      parent of SgVariableDeclaration since buildVariableDeclaration may not
+      set_parent() when the scope stack is empty. See
+      programTransformation/extractFunctionArgumentsNormalization/ExtractFunctionArguments.C
+      for sample usage.
+      @param expression Expression which will be replaced by a variable
+      @param scope scope in which the temporary variable will be generated
+   */
 
-//! Append an argument to SgFunctionParameterList, transparently set parent,scope, and symbols for arguments when possible
-/*! We recommend to build SgFunctionParameterList before building a function declaration
- However, it is still allowed to append new arguments for existing function declarations.
- \todo function type , function symbol also need attention.
-*/
-ROSE_DLL_API SgVariableSymbol* appendArg(SgFunctionParameterList *, SgInitializedName*);
-//!Prepend an argument to SgFunctionParameterList
-ROSE_DLL_API SgVariableSymbol* prependArg(SgFunctionParameterList *, SgInitializedName*);
+   std::pair<SgVariableDeclaration *, SgExpression *>
+   createTempVariableAndReferenceForExpression(SgExpression *expression,
+                                               SgScopeStatement *scope);
 
-//! Append an expression to a SgExprListExp, set the parent pointer also
-ROSE_DLL_API void appendExpression(SgExprListExp *, SgExpression*);
+   //! Append an argument to SgFunctionParameterList, transparently set
+   //! parent,scope, and symbols for arguments when possible
+   /*! We recommend to build SgFunctionParameterList before building a function
+    declaration However, it is still allowed to append new arguments for
+    existing function declarations.
+    \todo function type , function symbol also need attention.
+   */
+   ROSE_DLL_API SgVariableSymbol *appendArg(SgFunctionParameterList *,
+                                            SgInitializedName *);
+   //! Prepend an argument to SgFunctionParameterList
+   ROSE_DLL_API SgVariableSymbol *prependArg(SgFunctionParameterList *,
+                                             SgInitializedName *);
 
-//! Append an expression list to a SgExprListExp, set the parent pointers also
-ROSE_DLL_API void appendExpressionList(SgExprListExp *, const std::vector<SgExpression*>&);
+   //! Append an expression to a SgExprListExp, set the parent pointer also
+   ROSE_DLL_API void appendExpression(SgExprListExp *, SgExpression *);
 
-//! Set parameter list for a function declaration, considering existing parameter list etc.
-template <class actualFunction>
-void setParameterList(actualFunction *func,SgFunctionParameterList *paralist) {
+   //! Append an expression list to a SgExprListExp, set the parent pointers
+   //! also
+   ROSE_DLL_API void appendExpressionList(SgExprListExp *,
+                                          const std::vector<SgExpression *> &);
 
-  // TODO consider the difference between C++ and Fortran
-  // fixup the scope of arguments,no symbols for nondefining function declaration's arguments
+   //! Set parameter list for a function declaration, considering existing
+   //! parameter list etc.
+   template <class actualFunction>
+   void setParameterList(actualFunction *func,
+                         SgFunctionParameterList *paralist) {
 
-  // DQ (11/25/2011): templated function so that we can handle both
-  // SgFunctionDeclaration and SgTemplateFunctionDeclaration (and their associated member
-  // function derived classes).
+     // TODO consider the difference between C++ and Fortran
+     // fixup the scope of arguments,no symbols for nondefining function
+     // declaration's arguments
+
+     // DQ (11/25/2011): templated function so that we can handle both
+     // SgFunctionDeclaration and SgTemplateFunctionDeclaration (and their
+     // associated member function derived classes).
 
      ROSE_ASSERT(func != NULL);
      ROSE_ASSERT(paralist != NULL);

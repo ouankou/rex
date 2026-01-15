@@ -16,7 +16,7 @@ Preferred (default build type is RelWithDebInfo):
 Manual:
 ```bash
 mkdir -p build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/rex-install
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=$HOME/rex-install
 cmake --build build -j"$(nproc)"
 cmake --install build
 ```
@@ -53,7 +53,7 @@ and build the site.
 
 ```bash
 # Ensure a build tree exists with compile_commands.json
-./build-rex.sh $HOME/rex-install Release
+./build-rex.sh $HOME/rex-install RelWithDebInfo
 
 # Build the docs site (API reference + MkDocs)
 scripts/build-docs

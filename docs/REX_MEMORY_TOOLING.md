@@ -45,15 +45,23 @@ ctest --test-dir build --output-on-failure
 
 ### Sanitizer-labeled tests
 ```bash
-ctest --test-dir build-sanitizer -L sanitizer -j"$(nproc)" --output-on-failure
+ctest --test-dir build-sanitizer -L sanitizer -LE death -j"$(nproc)" --output-on-failure
 ```
 
 ### Valgrind memcheck (recommended subset first)
 ```bash
-ctest --test-dir build-valgrind -T memcheck -R "<regex>" -j"$(nproc)" --output-on-failure
+ctest --test-dir build-valgrind -T memcheck -R "<regex>" -LE death -j"$(nproc)" --output-on-failure
 ```
 
 Use `ctest -N -R "<regex>"` to list tests before running memcheck.
+
+## LSan and the embedded JVM (OFP)
+
+When Fortran OFP support is enabled, the embedded JVM allocates process-lifetime
+memory that LSan cannot attribute correctly. To keep sanitizer runs actionable,
+REX ships `scripts/rose-suppressions-for-lsan` and CTest applies it automatically
+when `ENABLE-SANITIZER` includes `leak`. If you run tests manually, set:
+`LSAN_OPTIONS=suppressions=<path-to>/scripts/rose-suppressions-for-lsan`.
 
 ## How memcheck works in REX
 
@@ -72,6 +80,8 @@ Memcheck failures can be either memory issues or functional failures:
 - Memory defect: Valgrind reports errors or leaks and CTest lists “defects.”
 
 Always inspect `build-valgrind/Testing/Temporary/MemoryChecker.<#>.log` for the exact cause.
+
+Death tests intentionally abort to validate hard invariants, which leaves “still reachable” memory behind. To keep memcheck and sanitizer runs actionable, exclude them with `-LE death` and keep them in the normal (non-memcheck) test suite.
 
 ### Leak kinds in Valgrind
 

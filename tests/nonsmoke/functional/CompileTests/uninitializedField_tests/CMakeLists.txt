@@ -71,6 +71,10 @@ foreach(testcode IN LISTS UNINIT_CXX_TEST_SOURCES)
       ${_uninit_includes}
       -c ${_uninit_cxx_dir}/${testcode}
   )
+  if(testcode MATCHES "axpy")
+    # Valgrind amplifies Clang frontend cost for heavy STL inputs; allow enough time.
+    set_tests_properties(uninit_fields_cxx_${_uninit_name} PROPERTIES TIMEOUT 7200)
+  endif()
   rex_mark_uninit_disabled(uninit_fields_cxx_${_uninit_name})
 endforeach()
 

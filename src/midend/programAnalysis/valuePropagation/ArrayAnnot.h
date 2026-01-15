@@ -246,9 +246,10 @@ class ArrayAnnotation
                                CollectObject<AstNodePtr>* collect = 0);
   virtual bool get_read(AstInterface& fa, const AstNodePtr& fc,
                                CollectObject<AstNodePtr>* collect = 0);
-  ArrayAnnotation() {}
+ ArrayAnnotation() {}
  public:
   static ArrayAnnotation* get_inst();
+  static void release_inst();
 
   void register_annot(); 
   void Dump() const;
@@ -289,4 +290,3 @@ class ArrayAnnotation
 };
 
 #endif
-

@@ -44,6 +44,10 @@ protected:
 public:
     CFG() : graph_(NULL), start_(NULL), entry_(NULL), exit_(NULL) {}
 
+protected:
+    CFG(SgNode* node, bool is_filtered, bool build_now);
+
+public:
     //! Turn a graph node into a CFGNode which is defined in VirtualCFG namespace.
     CFGNode toCFGNode(SgGraphNode* node);
     
@@ -145,6 +149,9 @@ public:
     CFGNodeAttribute(int idx = 0, SgIncidenceDirectedGraph* graph = NULL) 
         : index_(idx), graph_(graph) {}
 
+    AstAttribute::OwnershipPolicy getOwnershipPolicy() const override
+    { return CONTAINER_OWNERSHIP; }
+
     int getIndex() const { return index_; }
 
     void setIndex(int idx) { index_ = idx; }
@@ -162,6 +169,9 @@ class CFGEdgeAttribute : public AstAttribute
     EdgeT edge_;
 public:
     CFGEdgeAttribute(const EdgeT& e) : edge_(e) {}
+
+    AstAttribute::OwnershipPolicy getOwnershipPolicy() const override
+    { return CONTAINER_OWNERSHIP; }
 
     void setEdge(const EdgeT& e)
     { edge_ = e; }

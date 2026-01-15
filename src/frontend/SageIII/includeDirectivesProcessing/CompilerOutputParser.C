@@ -220,7 +220,8 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
 
   // Collect include trees and search paths from compiler output (-H/-v).
      vector<string> compilerNameString = inputFile -> buildCompilerCommandLineOptions(argv, 0, compilerName);
-     compilerOutputReader = new CompilerOutputReader(getCompilerOutput(compilerNameString, isVerbose));
+     compilerOutputReader = std::make_unique<CompilerOutputReader>(
+         getCompilerOutput(compilerNameString, isVerbose));
      workingDirectory = inputFile -> getWorkingDirectory();
      if (isVerbose)
         {
@@ -240,6 +241,7 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
   // Restore back original settings
      inputFile -> set_skip_unparse(originalSkipUnparse);
      inputFile -> set_unparse_output_filename(originalUnparseOutputFileName);
+     compilerOutputReader.reset();
   // inputFile -> compileOutput(0);
    }
 

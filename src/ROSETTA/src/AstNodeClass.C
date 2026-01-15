@@ -207,7 +207,7 @@ AstNodeClass::buildDestructorBody ()
                tempString = "[] ";
 
           if ( typeName.find("Sg") == 0 ) {
-            tempString  = "    if (p_$DATA && p_$DATA->get_freepointer() == AST_FileIO::IS_VALID_POINTER()) { delete " + tempString + "p_$DATA; }\n";
+            tempString  = "    if (SgNode::isLiveNode(p_$DATA)) { delete " + tempString + "p_$DATA; }\n";
 #if DEBUG_double_delete
             tempString += "    else if (p_$DATA) { ROSE_ABORT(); }";
 #endif
@@ -232,7 +232,7 @@ AstNodeClass::buildDestructorBody ()
           string typeString = (*stringListIterator)->getTypeNameString();
           string variableNameString = (*stringListIterator)->getVariableNameString();
           string initializerString  = (*stringListIterator)->getDefaultInitializerString();
-       // DQ (5/24/2006): The SgNode::operator delete() will set the p_freepointer so don't fool with it in the descructor!
+       // DQ (5/24/2006): Memory pool liveness is tracked out-of-band; avoid touching freepointer in the destructor.
           if (typeString.find("static ") == string::npos && (initializerString.empty() == false) && (variableNameString != "freepointer") )
              {
             // string tempString = "     p_$DATA $DEFAULT_VALUE;\n";
@@ -246,6 +246,11 @@ AstNodeClass::buildDestructorBody ()
         }
 
      ROSE_ASSERT (localExcludeList.size() == 0);
+
+  // Ensure deleted nodes no longer look live when stale pointers are inspected.
+     if (getName() == "SgNode") {
+       returnString += "  p_freepointer = nullptr;\n";
+     }
 
    returnString = "  if (p_freepointer == AST_FileIO::IS_VALID_POINTER()) {\n" + returnString + "\n  }";
 #if DEBUG_double_delete
@@ -1481,7 +1486,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                        {
                          s += "          if ( p_" + varNameString + " != NULL )\n" ;
                          s += "             { \n" ;
-                         s += "                 if ( p_" + varNameString + "->get_freepointer() == AST_FileIO::IS_VALID_POINTER() )\n" ;
+                         s += "                 if ( SgNode::isLiveNode(p_" + varNameString + ") )\n" ;
                          s += "                    { \n" ;
                          // s += "                       std::cout << \"" + varTypeString + " p_" + varNameString + " --> \" << std::flush;\n" ;
                          s += "                       if ( p_" + varNameString + "->isInMemoryPool() == false ) \n" ;
@@ -1511,7 +1516,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "        {\n";
                          s += "          if ( (*i_" + varNameString + ") != NULL )\n" ;
                          s += "             { \n" ;
-                         s += "                 if ( (*i_" + varNameString + ")->get_freepointer() == AST_FileIO::IS_VALID_POINTER() )\n" ;
+                         s += "                 if ( SgNode::isLiveNode(*i_" + varNameString + ") )\n" ;
                          s += "                    { \n" ;
                          s += "                       if ( (*i_" + varNameString + ")->isInMemoryPool() == false ) \n" ;
                          s += "                         { \n" ;
@@ -1547,7 +1552,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "        {\n";
                          s += "          if ( (*i_" + varNameString + ") != NULL )\n" ;
                          s += "             { \n" ;
-                         s += "                 if ( (*i_" + varNameString + ")->get_freepointer() == AST_FileIO::IS_VALID_POINTER() )\n" ;
+                         s += "                 if ( SgNode::isLiveNode(*i_" + varNameString + ") )\n" ;
                          s += "                    { \n" ;
                          s += "                       if ( (*i_" + varNameString + ")->isInMemoryPool() == false ) \n" ;
                          s += "                         { \n" ;
@@ -1586,7 +1591,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "             {\n";
                          s += "               if ( (*i_" + varNameString + ") != NULL )\n" ;
                          s += "                  { \n" ;
-                         s += "                      if ( (*i_" + varNameString + ")->get_freepointer() == AST_FileIO::IS_VALID_POINTER() )\n" ;
+                         s += "                      if ( SgNode::isLiveNode(*i_" + varNameString + ") )\n" ;
                          s += "                         { \n" ;
                          s += "                            if ( (*i_" + varNameString + ")->isInMemoryPool() == false ) \n" ;
                          s += "                              { \n" ;
@@ -1630,7 +1635,7 @@ AstNodeClass::buildPointerInMemoryPoolCheck ()
                          s += "             {\n";
                          s += "               if ( it->second != NULL )\n" ;
                          s += "                  { \n" ;
-                         s += "                      if ( it->second->get_freepointer() == AST_FileIO::IS_VALID_POINTER() )\n" ;
+                         s += "                      if ( SgNode::isLiveNode(it->second) )\n" ;
                          s += "                         { \n" ;
                          s += "                            if ( it->second->isInMemoryPool() == false ) \n" ;
                          s += "                              { \n" ;

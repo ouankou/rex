@@ -14173,6 +14173,7 @@ SgTemplateInstantiationFunctionDecl::SgTemplateInstantiationFunctionDecl ( SgNam
 
      p_templateArguments = templateArguments;
      p_nameResetFromMangledForm = false;
+     p_template_argument_list_is_explicit = false;
 
   // Test the variant virtual function
      assert(TEMPLATE_INST_FUNCTION_DECL_STMT == variant());
@@ -14278,6 +14279,7 @@ SgTemplateInstantiationMemberFunctionDecl::SgTemplateInstantiationMemberFunction
      p_templateDeclaration = NULL;
      p_templateArguments = templateArguments;
      p_nameResetFromMangledForm = false;
+     p_template_argument_list_is_explicit = false;
 
   // Test the variant virtual function
      assert(TEMPLATE_INST_MEMBER_FUNCTION_DECL_STMT == variant());
@@ -14393,6 +14395,9 @@ SgClassDefinition::post_construction_initialization()
    {
   // DQ (9/5/2006): I don't think that this is called, but if it is then packingAlignment initialization is required.
      p_packingAlignment = 0;
+     p_isSequence = false;
+     p_isPrivate = false;
+     p_isAbstract = false;
 
 #if 0
   // DQ (1/12/13): This is code that can be helpful in debubbing subtle problems in astCopy and astDelete.
@@ -14430,6 +14435,7 @@ SgClassDefinition::SgClassDefinition( Sg_File_Info *f, SgClassDeclaration *decl)
 
   // DQ (9/5/2006): Added initialization of packingAlignment (required to be explicit in this constructor)
      p_packingAlignment = 0;
+     post_construction_initialization();
    }
 
 SgClassDefinition::SgClassDefinition( SgClassDeclaration *decl)
@@ -14440,6 +14446,7 @@ SgClassDefinition::SgClassDefinition( SgClassDeclaration *decl)
 
   // DQ (9/5/2006): Added initialization of packingAlignment (required to be explicit in this constructor)
      p_packingAlignment = 0;
+     post_construction_initialization();
    }
 
 #if 0

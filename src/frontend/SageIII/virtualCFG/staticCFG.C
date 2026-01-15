@@ -6,41 +6,66 @@
 namespace StaticCFG
 {
 
+namespace {
+template <typename NodeT>
+void clearAttributeMechanism(NodeT* node) {
+    if (node == nullptr) {
+        return;
+    }
+    AstAttributeMechanism* attributes = node->get_attributeMechanism();
+    if (attributes != nullptr) {
+        delete attributes;
+        node->set_attributeMechanism(nullptr);
+    }
+}
+}  // namespace
+
   // DQ (1/8/2018): Moved here from header file.
   // CFG(SgNode* node, bool is_filtered = false)
-CFG::CFG(SgNode* node, bool is_filtered)
+CFG::CFG(SgNode* node, bool is_filtered, bool build_now)
    : graph_(NULL), start_(node), entry_(NULL), exit_(NULL), is_filtered_(is_filtered)
-   { 
+   {
 #if 0
      printf ("Inside of CFG(SgNode.bool) constructor \n");
 #endif
 
-     buildCFG();
+     if (build_now)
+        {
+          buildCFG();
+        }
 
 #if 0
      printf ("Leaving CFG(SgNode.bool) constructor \n");
 #endif
    }
 
+CFG::CFG(SgNode* node, bool is_filtered)
+   : CFG(node, is_filtered, true)
+   {
+   }
+
 void CFG::clearNodesAndEdges()
 {
     if (graph_ != NULL)
     {
-        for (SgGraphNode* node: graph_->computeNodeSet())
+        std::set<SgGraphNode*> nodes = graph_->computeNodeSet();
+        std::set<SgDirectedGraphEdge*> edges;
+        for (SgGraphNode* node: nodes)
         {
-            for (SgDirectedGraphEdge* edge: graph_->computeEdgeSetOut(node))
-            {
-                // This would be so much simpler if the attribute used container-owns-attribute paradigm. In any case, we
-                // cannot delete the attribute without first removing it from the container because the container needs to be
-                // able to figure out how the attribute wants to have its memory managed, and it does so by asking it.
-                AstAttribute *edgeAttr = edge->getAttribute("info");
-                delete edge;
-                delete edgeAttr;
-            }
-            AstAttribute *nodeAttr = node->getAttribute("info");
-            delete node;
-            delete nodeAttr;
+            std::set<SgDirectedGraphEdge*> out_edges = graph_->computeEdgeSetOut(node);
+            edges.insert(out_edges.begin(), out_edges.end());
         }
+        for (SgDirectedGraphEdge* edge: edges)
+        {
+            clearAttributeMechanism(edge);
+            delete edge;
+        }
+        for (SgGraphNode* node: nodes)
+        {
+            clearAttributeMechanism(node);
+            delete node;
+        }
+        clearAttributeMechanism(graph_);
         delete graph_;
     }
     graph_ = NULL;

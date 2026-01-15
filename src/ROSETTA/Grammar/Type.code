@@ -2234,7 +2234,7 @@ SgType::getAssociatedDeclaration() const
        // printf ("In HiddenListTraversal::getDeclarationAssociatedWithType(): declaration = %p = %s \n",declaration,declaration->class_name().c_str());
 
        // DQ (5/25/2013): Check if the declaration might have been deleted.
-          if (declaration->get_freepointer() != AST_FileIO::IS_VALID_POINTER()) {
+          if (!SgNode::isLiveNode(declaration)) {
          // The associated declaration was already deleted (e.g., after deepDelete on a copy).
          // Treat this as "no associated declaration" instead of asserting.
             return NULL;

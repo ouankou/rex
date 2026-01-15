@@ -48,7 +48,38 @@ std::ostream& operator<<(std::ostream& os, const SgFormatItemPtrList&)
 void doRTI(const char* fieldNameBase, void* fieldPtr, size_t fieldSize, void* thisPtr, const char* className,
            const char* typeString, const char* fieldName, const std::string& fieldContents, RTIMemberData& memberData) {
 #if ROSE_USE_VALGRIND
-  doUninitializedFieldCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr, className);
+  auto shouldCheckDefinedForType = [](const char *typeName) {
+    if (typeName == nullptr) {
+      return false;
+    }
+    const std::string type(typeName);
+    if (type.find('<') != std::string::npos ||
+        type.find("std::") != std::string::npos ||
+        type.find("Rose_STL_Container") != std::string::npos ||
+        type.find("List") != std::string::npos ||
+        type.find("Set") != std::string::npos ||
+        type.find("Map") != std::string::npos ||
+        type.find("SgName") != std::string::npos) {
+      return false;
+    }
+    if (type.find('*') != std::string::npos) {
+      return true;
+    }
+    if (type.find("enum") != std::string::npos) {
+      return true;
+    }
+    return type == "bool" || type == "char" || type == "signed char" ||
+           type == "unsigned char" || type == "short" ||
+           type == "unsigned short" || type == "int" ||
+           type == "unsigned int" || type == "long" ||
+           type == "unsigned long" || type == "long long" ||
+           type == "unsigned long long" || type == "size_t";
+  };
+
+  if (shouldCheckDefinedForType(typeString)) {
+    doUninitializedFieldCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr,
+                              className);
+  }
 #else
   (void)fieldNameBase;
   (void)fieldPtr;

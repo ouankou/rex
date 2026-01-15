@@ -322,13 +322,6 @@ void IntraProcAliasAnalysis::buildCFG() {
         printf ("In IntraProcAliasAnalysis::buildCFG(): StaticCFG::CustomFilteredCFG constructor \n");
 #endif
         cfg = new StaticCFG::CustomFilteredCFG<AliasCfgFilter>(defn);
-#if 0
-        printf ("In IntraProcAliasAnalysis::buildCFG(): calling buildFilteredCFG() \n");
-#endif
-        cfg->buildFilteredCFG();
-#if 0
-        printf ("In IntraProcAliasAnalysis::buildCFG(): done calling buildFilteredCFG() \n");
-#endif
         // run a bfs and list the nodes
         cfgNodes.clear();
         std::queue<SgGraphNode *> workQ;
@@ -380,11 +373,11 @@ IntraProcAliasAnalysis::IntraProcAliasAnalysis(SgNode *head, ClassHierarchyWrapp
 #if 0
         printf ("In IntraProcAliasAnalysis constructor: done calling CollectAliasRelations constructor \n");
 #endif
-        CollectAliasRelations *car = new CollectAliasRelations(cfg, gen);
+        CollectAliasRelations car(cfg, gen);
 #if 0
         printf ("In IntraProcAliasAnalysis constructor: done calling buildCFG() \n");
 #endif
-        car->run();
+        car.run();
 #if 0
         printf ("Leaving IntraProcAliasAnalysis constructor \n");
 #endif
@@ -1101,14 +1094,20 @@ void CollectAliasRelations::processNode(SgGraphNode* g_node){
 
 
     AliasRelationNode leftARNode, rightARNode;
-    SgExpression *lhs = NULL;
-    SgExpression *rhs = NULL;
+    SgNode *lhs = NULL;
+    SgNode *rhs = NULL;
 
     switch(node->variantT()) {
         case V_SgAssignOp:
         {
-            if(!SageInterface::isAssignmentStatement(node,&lhs, &rhs))
+            SgExpression *lhs_expr = NULL;
+            SgExpression *rhs_expr = NULL;
+            if (!SageInterface::isAssignmentStatement(node, &lhs_expr, &rhs_expr)) {
                 lhs = rhs = NULL;
+            } else {
+                lhs = lhs_expr;
+                rhs = rhs_expr;
+            }
         }
         break;
 
@@ -1117,7 +1116,11 @@ void CollectAliasRelations::processNode(SgGraphNode* g_node){
               SgAssignInitializer *assgn_i = isSgAssignInitializer(node);
               ASSERT_not_null(assgn_i);
 
-            lhs = static_cast<SgExpression *> (assgn_i->get_parent());
+            if (SgInitializedName *init_name = isSgInitializedName(assgn_i->get_parent())) {
+                lhs = init_name;
+            } else {
+                lhs = isSgExpression(assgn_i->get_parent());
+            }
             rhs = assgn_i->get_operand();
 
         }

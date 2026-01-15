@@ -4942,7 +4942,7 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
 
      ROSE_ASSERT(node != NULL);
 
-     if (node->get_freepointer() != AST_FileIO::IS_VALID_POINTER() )
+     if (!SgNode::isLiveNode(node))
      {
           printf ("Error: In TestChildPointersInMemoryPool::visit() for node = %s at %p \n",node->class_name().c_str(),node);
                   ROSE_ABORT();
@@ -4974,13 +4974,13 @@ TestChildPointersInMemoryPool::visit( SgNode *node )
             // which generated a symbol is not in the previously defined static childMap.
             // So the test above fails and we need to use the more expensive dynamic test.
                // George Vulov (4/22/2011): Restrict this test to only memory pool entries that are valid
-               if (nodeFound == false && parent->get_freepointer() == AST_FileIO::IS_VALID_POINTER())
+               if (nodeFound == false && SgNode::isLiveNode(parent))
                     nodeFound = parent->isChild(node);
              }
             else
              {
             // DQ (6/6/2010): Restrict this test to only memory pool entries that are valid
-               if (parent->get_freepointer() == AST_FileIO::IS_VALID_POINTER() )
+               if (SgNode::isLiveNode(parent))
                {
                 // build the set (and do the test)
                    childMap[parent] = std::set<SgNode*>();
@@ -6469,7 +6469,7 @@ TestNodes::visit ( SgNode* node )
        // node->get_parent();
        // if (node->p_freepointer == IS_VALID_POINTER)
        // if (AST_FileIO::IS_VALID_POINTER() == true)
-          if (node->get_freepointer() == AST_FileIO::IS_VALID_POINTER())
+          if (SgNode::isLiveNode(node))
              {
                node->variantT();
              }

@@ -521,6 +521,7 @@ getFortranFixedFormatPreprocessorDirectives( std::string fileName )
             // exit(0);
                yyin = fp; 
                yylex(); 
+               Rose_Fortran_fixed_format_lex_destroy();
 
             /*
                char s[100];

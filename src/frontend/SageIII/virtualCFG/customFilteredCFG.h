@@ -20,8 +20,7 @@ template <typename _Filter>
 class ROSE_DLL_API CustomFilteredCFG : public CFG {
     
 public:
-        CustomFilteredCFG(SgNode *node) : CFG(node, true) {
-        }
+        CustomFilteredCFG(SgNode *node) : CFG(node, true, false) { buildFilteredCFG(); }
         ~CustomFilteredCFG() {
         }
         void buildFilteredCFG() override;
