@@ -10,6 +10,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace {
 static std::string trimWhitespace(std::string s) {
@@ -8275,12 +8276,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         recursive_invalidate_stmt(body_stmt);
       }
 
-      if (SgBasicBlock *old_body = function_definition->get_body()) {
-        function_definition->set_body(nullptr);
-        old_body->set_parent(nullptr);
-        SageInterface::deleteAST(
-            old_body, SageInterface::DeleteAstMode::kSkipExternalReferences);
-      }
+      SgBasicBlock *old_body = function_definition->get_body();
 
       SageBuilder::pushScopeStack(function_definition);
 
@@ -8324,6 +8320,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
       defining_decl->set_definition(function_definition);
       function_definition->set_parent(defining_decl);
+
+      if (old_body != NULL && old_body != body) {
+        old_body->set_parent(nullptr);
+        SageInterface::deleteAST(
+            old_body, SageInterface::DeleteAstMode::kSkipExternalReferences);
+      }
     }
 
     return body_res;
