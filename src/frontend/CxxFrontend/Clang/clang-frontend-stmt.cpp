@@ -8621,7 +8621,7 @@ bool ClangToSageTranslator::VisitStringLiteral(
       */
       bool passUCharRule = false;
       passUCharRule =
-          !((contentVal < 0xA0 && (contentVal != 0x24 || contentVal != 0x40 ||
+          !((contentVal < 0xA0 && (contentVal != 0x24 && contentVal != 0x40 &&
                                    contentVal != 0x60)) ||
             (contentVal >= 0xD800 && contentVal <= 0xDFFF));
       if (passUCharRule) {

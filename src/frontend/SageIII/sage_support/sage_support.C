@@ -1501,6 +1501,10 @@ SgProject::parse()
 
 
      errorCode = this->RunFrontend();
+     if (!Rose::KeepGoing::g_keep_going && errorCode != 0)
+        {
+          return errorCode;
+        }
      if (errorCode > 3)
         {
           return errorCode;
