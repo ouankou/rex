@@ -20,7 +20,7 @@ target_link_libraries(nodeHierarchyTest
 
 add_test(
   NAME rosetta_nodeHierarchyTest
-  COMMAND nodeHierarchyTest
+  COMMAND $<TARGET_FILE:nodeHierarchyTest>
 )
 set_tests_properties(rosetta_nodeHierarchyTest PROPERTIES DISABLED TRUE)
 set_tests_properties(rosetta_nodeHierarchyTest PROPERTIES LABELS death)

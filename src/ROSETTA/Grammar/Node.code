@@ -1361,6 +1361,7 @@ HEADER_START
           static void releaseAllPools();
           static const PoolEntry* findPoolEntry(const unsigned char* ptr);
      public:
+          static void initializeAstTeardown();
           static VariantT variantFromPool(SgNode const * n);
           static bool isLiveNode(const SgNode* node);
 
@@ -2256,8 +2257,21 @@ SgNode::cfgForEnd()
      return VirtualCFG::CFGNode(this, this->cfgIndexForEnd());
    }
 
+namespace SageInterface {
+void registerAstTeardownAtExit();
+}
+
+void SgNode::initializeAstTeardown() {
+  (void)allPools();
+}
+
 std::vector<SgNode::PoolEntry>& SgNode::allPools() {
   static std::vector<SgNode::PoolEntry> pools;
+  static bool registered = false;
+  if (!registered) {
+    registered = true;
+    SageInterface::registerAstTeardownAtExit();
+  }
   return pools;
 }
 

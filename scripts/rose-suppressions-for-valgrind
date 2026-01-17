@@ -47,6 +47,294 @@
 }
 
 {
+   bash_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/bash
+}
+
+{
+   bash_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/bash
+}
+
+{
+   bash_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/bash
+}
+
+{
+   bash_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/bash
+}
+
+{
+   dash_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/dash
+}
+
+{
+   dash_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/dash
+}
+
+{
+   dash_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/dash
+}
+
+{
+   dash_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/dash
+}
+
+{
+   grep_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/grep
+}
+
+{
+   grep_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/grep
+}
+
+{
+   grep_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/grep
+}
+
+{
+   grep_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/grep
+}
+
+{
+   cmp_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/cmp
+}
+
+{
+   cmp_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/cmp
+}
+
+{
+   cmp_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/cmp
+}
+
+{
+   cmp_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/cmp
+}
+
+{
+   mktemp_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/mktemp
+}
+
+{
+   mktemp_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/mktemp
+}
+
+{
+   mktemp_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/mktemp
+}
+
+{
+   mktemp_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/mktemp
+}
+
+{
+   awk_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/awk
+}
+
+{
+   awk_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/awk
+}
+
+{
+   awk_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/awk
+}
+
+{
+   awk_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/awk
+}
+
+{
+   gawk_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/gawk
+}
+
+{
+   gawk_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/gawk
+}
+
+{
+   gawk_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/gawk
+}
+
+{
+   gawk_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/gawk
+}
+
+{
+   find_malloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:malloc
+   ...
+   obj:*/find
+}
+
+{
+   find_realloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:realloc
+   ...
+   obj:*/find
+}
+
+{
+   find_calloc_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:calloc
+   ...
+   obj:*/find
+}
+
+{
+   find_new_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:operator new*
+   ...
+   obj:*/find
+}
+
+{
    jvm_malloc_leak
    Memcheck:Leak
    match-leak-kinds: definite,indirect,possible,reachable

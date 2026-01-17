@@ -37,7 +37,7 @@ add_test(
 
 add_test(
   NAME astInterface_unit_sageBuilderTest
-  COMMAND sageBuilderTest
+  COMMAND $<TARGET_FILE:sageBuilderTest>
 )
 set_tests_properties(astInterface_unit_sageBuilderTest PROPERTIES LABELS death)
 

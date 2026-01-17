@@ -1,4 +1,5 @@
 #include "sage3basic.h"
+#include "rose_config.h"
 #include "FileUtility.h"
 #include "detectMacroOrIncludeFileExpansions.h"
 #include "fixupNames.h"
@@ -6,6 +7,8 @@
 #include "markLhsValues.h"
 #include "previousAndNextNode.h"
 #include "tokenStreamMapping.h"
+
+#include <cstdlib>
 
 #if ROSE_WITH_LIBHARU
 #include "AstPDFGeneration.h"
@@ -5116,6 +5119,13 @@ void fixSymbolTableEntries(SgScopeStatement* scope)
      if (entries == NULL)
         return;
 
+     struct PendingRehome
+        {
+          SgSymbol* symbol;
+          SgScopeStatement* owner;
+        };
+     std::vector<PendingRehome> pending_rehomes;
+
      for (SgSymbolTable::BaseHashType::iterator it = entries->begin(); it != entries->end(); /**/)
         {
           SgSymbol* symbol = it->second;
@@ -5125,9 +5135,23 @@ void fixSymbolTableEntries(SgScopeStatement* scope)
                continue;
              }
 
+          if (isSgAliasSymbol(symbol) != NULL)
+             {
+               if (symbol->get_parent() == NULL)
+                  {
+                    symbol->set_parent(table);
+                  }
+               ++it;
+               continue;
+             }
+
           SgScopeStatement* owner = symbol->get_scope();
           if (owner == NULL || owner != scope)
              {
+               if (owner != NULL)
+                  {
+                    pending_rehomes.push_back({symbol, owner});
+                  }
                it = entries->erase(it);
                continue;
              }
@@ -5136,6 +5160,27 @@ void fixSymbolTableEntries(SgScopeStatement* scope)
                symbol->set_parent(table);
 
           ++it;
+        }
+
+     for (const PendingRehome& rehome : pending_rehomes)
+        {
+          if (rehome.symbol == NULL || rehome.owner == NULL)
+             {
+               continue;
+             }
+          SgSymbolTable* owner_table = rehome.owner->get_symbol_table();
+          if (owner_table == NULL)
+             {
+               continue;
+             }
+          if (!rehome.owner->symbol_exists(rehome.symbol))
+             {
+               rehome.owner->insert_symbol(rehome.symbol->get_name(), rehome.symbol);
+             }
+          else if (rehome.symbol->get_parent() != owner_table)
+             {
+               rehome.symbol->set_parent(owner_table);
+             }
         }
    }
 }
@@ -5159,7 +5204,15 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
                                  {
                                    if (SgSymbolTable* ownerTable = owner->get_symbol_table())
                                       {
-                                        sym->set_parent(ownerTable);
+                                        if (ownerTable->exists(sym))
+                                           {
+                                             sym->set_parent(ownerTable);
+                                           }
+                                        else
+                                           {
+                                             owner->insert_symbol(sym->get_name(), sym);
+                                             sym->set_parent(ownerTable);
+                                           }
                                       }
                                  }
                             }
@@ -5185,10 +5238,71 @@ SageInterface::ensureSymbolParentPointers(SgNode* root)
                        {
                          if (sym->get_parent() == NULL)
                             {
+                              if (SgAliasSymbol* alias = isSgAliasSymbol(sym))
+                                 {
+                                   SgSymbol* base = alias->get_alias();
+                                   if (base != NULL)
+                                      {
+                                        SgScopeStatement* base_scope = base->get_scope();
+                                        SgSymbolTable* target_table = NULL;
+                                        if (SgNamespaceDefinitionStatement* ns =
+                                                isSgNamespaceDefinitionStatement(base_scope))
+                                           {
+                                             SgNamespaceDefinitionStatement* global_def =
+                                                 ns->get_global_definition();
+                                             if (global_def != NULL)
+                                                target_table = global_def->get_symbol_table();
+                                           }
+                                        else if (SgGlobal* global_scope = isSgGlobal(base_scope))
+                                           {
+                                             if (SgProject* project =
+                                                     SageInterface::getProject(global_scope))
+                                                {
+                                                  SgGlobal* global_across =
+                                                      project->get_globalScopeAcrossFiles();
+                                                  if (global_across != NULL)
+                                                     target_table =
+                                                         global_across->get_symbol_table();
+                                                }
+                                           }
+                                        else if (base_scope != NULL)
+                                           {
+                                             target_table = base_scope->get_symbol_table();
+                                           }
+
+                                        if (target_table != NULL)
+                                           {
+                                             SgSymbol* existing_alias =
+                                                 target_table->find_aliased_symbol(
+                                                     alias->get_name(), base);
+                                             if (existing_alias == NULL)
+                                                {
+                                                  target_table->insert(alias->get_name(), alias);
+                                                  alias->set_parent(target_table);
+                                                }
+                                             else
+                                                {
+                                                  delete alias;
+                                                }
+                                           }
+                                      }
+                                   return;
+                                 }
+
                               if (SgScopeStatement* owner = sym->get_scope())
                                  {
                                    if (SgSymbolTable* table = owner->get_symbol_table())
-                                      sym->set_parent(table);
+                                      {
+                                        if (table->exists(sym))
+                                           {
+                                             sym->set_parent(table);
+                                           }
+                                        else
+                                           {
+                                             owner->insert_symbol(sym->get_name(), sym);
+                                             sym->set_parent(table);
+                                           }
+                                      }
                                   }
                              }
                         }
@@ -20780,6 +20894,9 @@ namespace {
 bool g_skipSymbolTableLookupsForDeleteAst = false;
 bool g_astTeardownComplete = false;
 bool g_llvmShutdownComplete = false;
+SgProject *g_astTeardownProject = nullptr;
+bool g_astTeardownEnabledCached = false;
+bool g_astTeardownEnabledCachedValid = false;
 
 class DeleteAstSymbolTableLookupGuard {
  public:
@@ -20800,6 +20917,28 @@ bool skipSymbolTableLookupsForDeleteAst() {
   return g_skipSymbolTableLookupsForDeleteAst;
 }
 
+bool isAstTeardownEnabledInternal() {
+  if (g_astTeardownEnabledCachedValid) {
+    return g_astTeardownEnabledCached;
+  }
+
+  bool enabled = false;
+  if (const char *env = std::getenv("ROSE_AST_TEARDOWN")) {
+    enabled = !(env[0] == '0' && env[1] == '\0');
+  } else {
+#if ROSE_USE_VALGRIND
+    enabled = true;
+#endif
+#if ROSE_USE_SANITIZER
+    enabled = true;
+#endif
+  }
+
+  g_astTeardownEnabledCached = enabled;
+  g_astTeardownEnabledCachedValid = true;
+  return enabled;
+}
+
 void llvmShutdownAtExit() {
   if (g_llvmShutdownComplete) {
     return;
@@ -20807,7 +20946,18 @@ void llvmShutdownAtExit() {
   g_llvmShutdownComplete = true;
   llvm::llvm_shutdown();
 }
+
+class AstTeardownRegistrar {
+ public:
+  AstTeardownRegistrar() { SageInterface::registerAstTeardownAtExit(); }
+};
+
+AstTeardownRegistrar astTeardownRegistrar;
 }  // namespace
+
+bool SageInterface::isAstTeardownEnabled() {
+  return isAstTeardownEnabledInternal();
+}
 
 void SageInterface::deleteAST(SgNode *n) {
   deleteAST(n, DeleteAstMode::kConservative);
@@ -21589,22 +21739,42 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
 
                         void deleteDeferredSymbols()
                            {
-                             auto removeSymbolFromParent = [](SgSymbol* symbol) {
+                            auto removeSymbolFromParent = [](SgSymbol* symbol) {
+                               if (symbol == nullptr) {
+                                 return;
+                               }
                                SgNode* parent = symbol->get_parent();
-                               if (SgNode::isLiveNode(parent)) {
-                                 if (SgSymbolTable *table =
-                                         isSgSymbolTable(parent)) {
-                                   rose_hash_multimap *map = table->get_table();
-                                   if (map != nullptr) {
-                                     for (auto it = map->begin();
-                                          it != map->end();) {
-                                       if (it->second == symbol) {
-                                         it = map->erase(it);
-                                       } else {
-                                         ++it;
-                                       }
+                               if (!SgNode::isLiveNode(parent)) {
+                                 symbol->set_parent(nullptr);
+                                 return;
+                               }
+
+                               if (SgSymbolTable *table =
+                                       isSgSymbolTable(parent)) {
+                                 if (table->exists(symbol)) {
+                                   if (SgScopeStatement *scope =
+                                           isSgScopeStatement(
+                                               table->get_parent())) {
+                                     if (scope->get_symbol_table() == table) {
+                                       scope->remove_symbol(symbol);
+                                       return;
                                      }
                                    }
+                                   table->remove(symbol);
+                                   return;
+                                 }
+                                 symbol->set_parent(nullptr);
+                                 return;
+                               }
+
+                               if (SgScopeStatement *scope =
+                                       isSgScopeStatement(parent)) {
+                                 if (scope->get_symbol_table() != nullptr &&
+                                     scope->get_symbol_table()->exists(
+                                         symbol)) {
+                                   scope->remove_symbol(symbol);
+                                 } else {
+                                   symbol->set_parent(nullptr);
                                  }
                                }
                              };
@@ -21746,7 +21916,7 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
                                                      protected_nodes->end());
                            }
 
-                        void visit (SgNode* node)
+                        void visit(SgNode* node) override
                         {
                         //These nodes are manually deleted because they cannot be visited by the traversal
                                 ////////////////////////////////////////////////
@@ -22473,7 +22643,10 @@ void tearDownAstAtExit() {
 #endif
     return;
   }
-  SgProject *project = findAnyLiveProject();
+  SgProject *project = g_astTeardownProject;
+  if (project == nullptr) {
+    project = findAnyLiveProject();
+  }
   SageInterface::tearDownAst(project);
 }
 
@@ -22522,6 +22695,7 @@ void SageInterface::tearDownAst(SgProject *project) {
     return;
   }
   g_astTeardownComplete = true;
+  g_astTeardownProject = nullptr;
 
   SymbolTableClearVisitor symbolTableClear;
   traverseMemoryPoolVisitorPattern(symbolTableClear);
@@ -22574,14 +22748,26 @@ void SageInterface::tearDownAst(SgProject *project) {
 
 void SageInterface::registerAstTeardownAtExit()
    {
+     if (!isAstTeardownEnabledInternal()) {
+       return;
+     }
      static bool registered = false;
      if (registered)
         {
           return;
         }
      registered = true;
+     SgNode::initializeAstTeardown();
      std::atexit(llvmShutdownAtExit);
      std::atexit(tearDownAstAtExit);
+   }
+
+void SageInterface::registerAstTeardownProject(SgProject *project)
+   {
+     if (project == nullptr) {
+       return;
+     }
+     g_astTeardownProject = project;
    }
 
 

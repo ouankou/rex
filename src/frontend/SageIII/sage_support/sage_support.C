@@ -3426,6 +3426,9 @@ Rose::Frontend::RunSerial(SgProject* project)
                   int save_volatile_variable = status_of_function;
                   file->runFrontend(status_of_file); // status_of_file is modified as a side effect
                   status_of_function = max(status_of_file, save_volatile_variable);
+                  if (status_of_file != 0) {
+                    break;
+                  }
               }
           }
       }
@@ -3702,7 +3705,6 @@ SgSourceFile::buildAST( vector<string> argv, vector<string> inputCommandLine )
                     printf ("(evaluation of frontend results) This is a negative tests, so an error in compilation is a PASS but a successful \n");
                     printf ("compilation is not a FAIL since the failure might happen in the compilation of the generated code by the vendor compiler. \n");
                   }
-               exit(0);
              }
             else
              {
@@ -3713,12 +3715,11 @@ SgSourceFile::buildAST( vector<string> argv, vector<string> inputCommandLine )
             // ROSE_ABORT("Errors in Processing: (frontend_failed)");
             // printf ("Errors in Processing Input File: (throwing an instance of \"frontend_failed\" exception due to errors detected in the input code), have a nice day! \n");
                printf ("Errors in Processing Input File: throwing an instance of \"frontend_failed\" exception due to syntax errors detected in the input code \n");
-               if (Rose::KeepGoing::g_keep_going) {
-                 raise(SIGABRT); // raise a signal to be handled by the keep going support , instead of exit. Liao 4/25/2017
-               }
-               else
-                  exit(1);
              }
+          if (Rose::KeepGoing::g_keep_going) {
+            raise(SIGABRT); // raise a signal to be handled by the keep going support , instead of exit. Liao 4/25/2017
+          }
+          return frontendErrorLevel;
         }
 
      return frontendErrorLevel;

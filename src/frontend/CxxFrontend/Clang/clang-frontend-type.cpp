@@ -197,6 +197,63 @@ std::string trimWhitespace(std::string s) {
   return s;
 }
 
+std::vector<std::string>
+splitQualifiedNameOutsideTemplates(const std::string &name) {
+  std::vector<std::string> components;
+  size_t start = 0;
+  int depth = 0;
+  for (size_t i = 0; i < name.size(); ++i) {
+    char c = name[i];
+    if (c == '<') {
+      ++depth;
+    } else if (c == '>') {
+      if (depth > 0) {
+        --depth;
+      }
+    } else if (c == ':' && depth == 0 && i + 1 < name.size() &&
+               name[i + 1] == ':') {
+      components.push_back(name.substr(start, i - start));
+      ++i;
+      start = i + 1;
+    }
+  }
+  components.push_back(name.substr(start));
+  return components;
+}
+
+bool hasTemplateSyntaxComponent(const std::string &name) {
+  return name.find('<') != std::string::npos && name.find('>') != std::string::npos;
+}
+
+std::string stripTemplateArgs(const std::string &name) {
+  std::string trimmed = trimWhitespace(name);
+  size_t lt = trimmed.find('<');
+  if (lt == std::string::npos) {
+    return trimmed;
+  }
+  return trimWhitespace(trimmed.substr(0, lt));
+}
+
+std::string normalizeTemplateDeclCacheKey(const std::string &name) {
+  std::vector<std::string> components =
+      splitQualifiedNameOutsideTemplates(name);
+  if (components.empty()) {
+    return name;
+  }
+  std::string result;
+  for (size_t i = 0; i < components.size(); ++i) {
+    std::string clean = stripTemplateArgs(components[i]);
+    if (clean.empty()) {
+      continue;
+    }
+    if (!result.empty()) {
+      result += "::";
+    }
+    result += clean;
+  }
+  return result.empty() ? name : result;
+}
+
 void appendTemplateInstantiationArg(std::string &result, bool &need_separator,
                                     const clang::TemplateArgument &arg) {
   if (arg.getKind() == clang::TemplateArgument::Pack) {
@@ -1776,46 +1833,57 @@ ClangToSageTranslator::buildTemplateParameters(
   return param_list;
 }
 
-SgTemplateClassDeclaration *
-ClangToSageTranslator::getOrCreateTemplateDeclaration(
+SgTemplateClassDeclaration *ClangToSageTranslator::getOrCreateTemplateDeclaration(
     const std::string &template_name,
-    const clang::TemplateSpecializationType *clang_type) {
+    const clang::TemplateSpecializationType *clang_type,
+    SgScopeStatement *scope_override) {
 
-  // Check cache first
-  auto it = p_template_decl_cache.find(template_name);
+  std::string cache_key = normalizeTemplateDeclCacheKey(template_name);
+  auto it = p_template_decl_cache.find(cache_key);
   if (it != p_template_decl_cache.end()) {
     return it->second;
   }
 
-  // Extract just the base name (e.g., "array" from "std::array")
-  size_t last_colon = template_name.find_last_of(':');
-  std::string base_name = (last_colon != std::string::npos)
-                              ? template_name.substr(last_colon + 1)
-                              : template_name;
+  std::vector<std::string> components =
+      splitQualifiedNameOutsideTemplates(template_name);
+  std::string base_name =
+      components.empty() ? template_name : components.back();
+  base_name = stripTemplateArgs(base_name);
 
-  // Resolve scope (handle namespaces like std::)
-  SgScopeStatement *scope = getGlobalScope();
-  if (last_colon != std::string::npos) {
-    size_t pos = 0;
-    while (pos < last_colon) {
-      size_t next_colon = template_name.find("::", pos);
-      if (next_colon == std::string::npos || next_colon > last_colon) {
-        break;
+  SgScopeStatement *scope = scope_override;
+  if (scope == nullptr) {
+    scope = getGlobalScope();
+    if (components.size() > 1) {
+      for (size_t i = 0; i + 1 < components.size(); ++i) {
+        std::string component = trimWhitespace(components[i]);
+        if (component.empty()) {
+          continue;
+        }
+        bool has_template = hasTemplateSyntaxComponent(component);
+        std::string name = stripTemplateArgs(component);
+        if (name.empty()) {
+          continue;
+        }
+
+        if (has_template) {
+          SgNonrealType *nr_type = SageBuilder::buildNonrealType(
+              SgName(name), scope, nullptr);
+          SgNonrealDecl *nr_decl = isSgNonrealDecl(nr_type->get_declaration());
+          ROSE_ASSERT(nr_decl != nullptr);
+          scope = nr_decl->get_nonreal_decl_scope();
+          continue;
+        }
+
+        SgNamespaceSymbol *ns_sym =
+            scope->lookup_namespace_symbol(SgName(name));
+        if (ns_sym) {
+          scope = ns_sym->get_declaration()->get_definition();
+        } else {
+          SgNamespaceDeclarationStatement *ns_decl =
+              SageBuilder::buildNamespaceDeclaration(SgName(name), scope);
+          scope = ns_decl->get_definition();
+        }
       }
-      std::string ns_name = template_name.substr(pos, next_colon - pos);
-
-      // Find or create namespace
-      SgNamespaceSymbol *ns_sym =
-          scope->lookup_namespace_symbol(SgName(ns_name));
-      if (ns_sym) {
-        scope = ns_sym->get_declaration()->get_definition();
-      } else {
-        SgNamespaceDeclarationStatement *ns_decl =
-            SageBuilder::buildNamespaceDeclaration(SgName(ns_name), scope);
-        scope = ns_decl->get_definition();
-      }
-
-      pos = next_colon + 2;
     }
   }
 
@@ -1851,7 +1919,7 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
   // AstConsistencyTests assertions.
 
   // Cache it
-  p_template_decl_cache[template_name] = template_decl;
+  p_template_decl_cache[cache_key] = template_decl;
 
   return template_decl;
 }
@@ -2527,6 +2595,86 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
   return nrtype;
 }
 
+SgScopeStatement *ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
+    clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope) {
+  if (qualifier == nullptr) {
+    return scope;
+  }
+
+  std::vector<clang::NestedNameSpecifier *> segments;
+  for (clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
+       nns = nns->getPrefix()) {
+    segments.push_back(nns);
+  }
+
+  SgScopeStatement *current_scope = scope;
+  for (auto it = segments.rbegin(); it != segments.rend(); ++it) {
+    clang::NestedNameSpecifier *nns = *it;
+    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
+      current_scope = getGlobalScope();
+      continue;
+    }
+
+    SgNonrealType *segment_type = nullptr;
+    switch (nns->getKind()) {
+    case clang::NestedNameSpecifier::Identifier: {
+      const clang::IdentifierInfo *id = nns->getAsIdentifier();
+      std::string name_str = id ? id->getName().str() : "";
+      ROSE_ASSERT(!name_str.empty());
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+    case clang::NestedNameSpecifier::Namespace: {
+      clang::NamespaceDecl *ns = nns->getAsNamespace();
+      std::string name_str = ns ? ns->getNameAsString() : "";
+      ROSE_ASSERT(!name_str.empty());
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+    case clang::NestedNameSpecifier::NamespaceAlias: {
+      clang::NamespaceAliasDecl *ns = nns->getAsNamespaceAlias();
+      std::string name_str = ns ? ns->getNameAsString() : "";
+      ROSE_ASSERT(!name_str.empty());
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+    case clang::NestedNameSpecifier::TypeSpec:
+    case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+      segment_type = buildNonrealTypeForNestedNameSpecifierType(
+          nns->getAsType(), current_scope);
+      break;
+    }
+    case clang::NestedNameSpecifier::Super: {
+      clang::CXXRecordDecl *record = nns->getAsRecordDecl();
+      std::string name_str = record ? record->getNameAsString() : "";
+      if (name_str.empty()) {
+        name_str = "__super";
+      }
+      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
+                                                   current_scope, nullptr);
+      break;
+    }
+    case clang::NestedNameSpecifier::Global:
+      break;
+    }
+
+    if (segment_type != nullptr) {
+      SgNonrealDecl *segment_decl =
+          isSgNonrealDecl(segment_type->get_declaration());
+      ROSE_ASSERT(segment_decl != nullptr);
+      if (nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+        segment_decl->set_has_template_keyword(true);
+      }
+      current_scope = segment_decl->get_nonreal_decl_scope();
+    }
+  }
+
+  return current_scope;
+}
+
 SgTemplateInstantiationDecl *
 ClangToSageTranslator::getOrCreateTemplateInstantiation(
     SgTemplateClassDeclaration *template_decl,
@@ -2547,7 +2695,6 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
       mangleTemplateInstantiation(template_qualified_name, clang_type);
   std::string inst_display_name = buildTemplateInstantiationName(
       template_base_name, clang_type->template_arguments());
-
   auto ensure_file_info = [this](SgTemplateInstantiationDecl *decl) {
     if (decl == nullptr) {
       return;
@@ -2628,55 +2775,11 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     inst_decl->set_templateDeclaration(template_decl);
   }
 
-  // FIX P1: Handle nested namespaces correctly (e.g., "std::chrono::duration")
-  // Split the qualified name by "::" and create/find nested namespace scopes
-  SgScopeStatement *inst_scope = getGlobalScope();
-
-  // Split qualified name into components
-  std::vector<std::string> components;
-  size_t start = 0;
-  size_t colon_pos = template_qualified_name.find("::");
-  while (colon_pos != std::string::npos) {
-    components.push_back(
-        template_qualified_name.substr(start, colon_pos - start));
-    start = colon_pos + 2; // Skip "::"
-    colon_pos = template_qualified_name.find("::", start);
-  }
-  components.push_back(
-      template_qualified_name.substr(start)); // Last component (class name)
-
-  // Iterate through all namespace components (all except the last, which is the
-  // class name) For "std::chrono::duration", iterate through ["std", "chrono"],
-  // not "duration"
-  for (size_t i = 0; i + 1 < components.size(); ++i) {
-    const std::string &ns_name = components[i];
-
-    // Find or create namespace in current scope
-    SgNamespaceDefinitionStatement *ns_def = nullptr;
-    SgDeclarationStatementPtrList &decls = inst_scope->getDeclarationList();
-    for (SgDeclarationStatement *decl : decls) {
-      if (SgNamespaceDeclarationStatement *ns_decl =
-              isSgNamespaceDeclarationStatement(decl)) {
-        if (ns_decl->get_name().getString() == ns_name) {
-          ns_def = ns_decl->get_definition();
-          break;
-        }
-      }
-    }
-
-    if (ns_def == nullptr) {
-      // Create namespace in current scope
-      // buildNamespaceDeclaration automatically inserts the declaration into
-      // inst_scope
-      SgNamespaceDeclarationStatement *ns_decl =
-          SageBuilder::buildNamespaceDeclaration(SgName(ns_name), inst_scope);
-      ns_decl->get_file_info()->setCompilerGenerated();
-      ns_def = ns_decl->get_definition();
-      ns_def->get_file_info()->setCompilerGenerated();
-    }
-
-    // Move into nested namespace for next iteration
-    inst_scope = ns_def;
+  // Use the template declaration scope as the instantiation scope so we
+  // stay consistent with later declaration-based instantiation handling.
+  SgScopeStatement *inst_scope = template_decl->get_scope();
+  if (inst_scope == nullptr) {
+    inst_scope = getGlobalScope();
   }
 
   inst_decl->set_scope(inst_scope);
@@ -2815,10 +2918,37 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
   }
 
   if (template_decl == NULL) {
+    SgScopeStatement *template_scope = nullptr;
+    if (clang_template_decl != nullptr) {
+      clang::DeclContext *decl_context = clang_template_decl->getDeclContext();
+      template_scope =
+          resolveScopeFromDeclContext(decl_context, SageBuilder::topScopeStack());
+    }
+
+    if (template_scope == nullptr) {
+      clang::NestedNameSpecifier *qualifier = nullptr;
+      if (const clang::QualifiedTemplateName *qtn =
+              tname.getAsQualifiedTemplateName()) {
+        qualifier = qtn->getQualifier();
+      } else if (const clang::DependentTemplateName *dtn =
+                     tname.getAsDependentTemplateName()) {
+        qualifier = dtn->getQualifier();
+      }
+
+      if (qualifier != nullptr) {
+        SgScopeStatement *base_scope = SageBuilder::topScopeStack();
+        if (nestedNameSpecifierHasGlobal(qualifier)) {
+          base_scope = getGlobalScope();
+        }
+        template_scope =
+            buildNonrealScopeFromNestedNameSpecifier(qualifier, base_scope);
+      }
+    }
+
     // std::cerr << "DEBUG: Creating new template declaration for " <<
     // template_name << std::endl;
     template_decl = getOrCreateTemplateDeclaration(
-        template_name, template_specialization_type);
+        template_name, template_specialization_type, template_scope);
   }
 
   if (template_decl == NULL) {

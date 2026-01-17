@@ -8320,12 +8320,9 @@ SgSymbolTable::find( const SgStatement* statement)
 #endif
                     return returnSymbol;
                   }
-                 else
-                  {
 #if DEBUG_FIND_SYMBOL_FROM_STATEMENT
-                    MLOG_INFO_C("ROSETTA", "returnSymbol->get_symbol_basis() != statement (returnSymbol->get_symbol_basis() = %p statement = %p) \n",returnSymbol->get_symbol_basis(),statement);
+               MLOG_INFO_C("ROSETTA", "returnSymbol->get_symbol_basis() != statement (returnSymbol->get_symbol_basis() = %p statement = %p) \n",returnSymbol->get_symbol_basis(),statement);
 #endif
-                  }
              }
             else
              {

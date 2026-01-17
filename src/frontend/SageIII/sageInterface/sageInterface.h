@@ -2014,9 +2014,15 @@ struct DeferredTransformation
    //! AST pointers are invalid after this call.
    ROSE_DLL_API void tearDownAst(SgProject *project);
 
+   //! Returns true if AST teardown is enabled for this process.
+   ROSE_DLL_API bool isAstTeardownEnabled();
+
    //! Register an AST teardown handler to run at process exit if cleanup was
    //! not invoked.
    ROSE_DLL_API void registerAstTeardownAtExit();
+
+   //! Record a project for teardown when running exit handlers.
+   ROSE_DLL_API void registerAstTeardownProject(SgProject *project);
 
    // DQ (3/5/2022): Adding support to check AST for invalid poionters.
    ROSE_DLL_API void checkSgNodePointers();

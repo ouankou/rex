@@ -186,7 +186,7 @@ namespace NodeQuery
 
   // Functions supporting the query of variants
   void pushNewNode ( NodeQuerySynthesizedAttributeType* nodeList, const VariantVector & targetVariantVector, SgNode * astNode);
-  void* querySolverGrammarElementFromVariantVector ( SgNode * astNode, VariantVector targetVariantVector,  NodeQuerySynthesizedAttributeType* returnNodeList );
+  void* querySolverGrammarElementFromVariantVector ( SgNode * astNode, const VariantVector &targetVariantVector,  NodeQuerySynthesizedAttributeType* returnNodeList );
 
    /********************************************************************************************
    *
@@ -284,7 +284,7 @@ namespace NodeQuery
   // Liao, 8/27/2009, a more generic nodeList query, not just for nodes of type SgNode*
   template <typename T>
   Rose_STL_Container <T*>
-  queryNodeList ( Rose_STL_Container <T*> queryList, VariantVector targetVector)
+  queryNodeList ( Rose_STL_Container <T*> queryList, const VariantVector &targetVector)
      {
        Rose_STL_Container <T*> result;
     // Rose_STL_Container <T*>::iterator iter; // not recognized ??
@@ -341,10 +341,10 @@ namespace NodeQuery
    * variants in VariantVector.
    *********************************************************************************************/
   ROSE_DLL_API NodeQuerySynthesizedAttributeType
-  querySubTree (SgNode * subTree, VariantVector targetVariantVector, AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes);
+  querySubTree (SgNode * subTree, const VariantVector &targetVariantVector, AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes);
 
   // DQ (3/25/2004): Added to support more general form of query based on variant value
-  ROSE_DLL_API NodeQuerySynthesizedAttributeType queryNodeList ( NodeQuerySynthesizedAttributeType, VariantVector);
+  ROSE_DLL_API NodeQuerySynthesizedAttributeType queryNodeList ( NodeQuerySynthesizedAttributeType, const VariantVector &);
 
   void
   mergeList (Rose_STL_Container<SgNode*> & nodeList, const Rose_STL_Container<SgNode*> & localList);

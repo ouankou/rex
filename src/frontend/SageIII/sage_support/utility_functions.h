@@ -24,6 +24,7 @@ void outputPredefinedMacros();
 // tps : Need to make this function (DLL) public 
 ROSE_DLL_API SgProject* frontend ( int argc, char** argv, bool frontendConstantFolding = false );
 ROSE_DLL_API SgProject* frontend ( const std::vector<std::string>& argv, bool frontendConstantFolding = false );
+ROSE_DLL_API int frontendExitStatus ( const SgProject* project );
 
 // DQ (4/17/2015): After discussion with Liao, Markus, and Pei-Hung, we have agreed that
 // we want to support multiple SgProject IR nodes.  So in addition to the SgProject* frontend()

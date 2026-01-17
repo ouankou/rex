@@ -356,6 +356,8 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         std::map<clang::Stmt *, SgNode *> p_stmt_translation_map;
         std::map<const clang::Type *, SgNode *> p_type_translation_map;
         std::map<clang::DeclContext *, SgScopeStatement *> p_decl_context_map;
+        std::map<SgFunctionDefinition *, const clang::Stmt *>
+            p_function_body_map;
         SgGlobal * p_global_scope;
 
         std::map<SgClassType *, bool> p_class_type_decl_first_see_in_type;
@@ -390,6 +392,9 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // symbol lookup) so we can repair scope attachments without duplicating
         // normal traversal insertions.
         std::set<clang::Decl *> p_decl_translation_on_demand;
+        // Track class definitions already populated to avoid duplicate member
+        // insertion during on-demand/re-entrant translation.
+        std::set<const SgClassDefinition *> p_record_definitions_populated;
 
         // Deferred translation queue for implicit function template
         // instantiations. These instantiations are discovered while traversing
@@ -432,9 +437,14 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         // Template helper methods
         // Helper: Get or create template class declaration
-        SgTemplateClassDeclaration* getOrCreateTemplateDeclaration(
-            const std::string& template_name,
-            const clang::TemplateSpecializationType* clang_type);
+        SgTemplateClassDeclaration *getOrCreateTemplateDeclaration(
+            const std::string &template_name,
+            const clang::TemplateSpecializationType *clang_type,
+            SgScopeStatement *scope_override = nullptr);
+
+        // Helper: Build a nonreal scope chain for a nested name qualifier.
+        SgScopeStatement *buildNonrealScopeFromNestedNameSpecifier(
+            clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope);
 
         // Helper: Get or create template instantiation
         SgTemplateInstantiationDecl* getOrCreateTemplateInstantiation(

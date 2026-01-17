@@ -4835,11 +4835,11 @@ SgScopeStatement::insert_symbol ( const SgName& n, SgSymbol* s )
      const SgNamespaceDefinitionStatement * namespaceDefinitionStatement = isSgNamespaceDefinitionStatement(this);
      if (namespaceDefinitionStatement != NULL && !is_static_decl)
         {
-          SgAliasSymbol* aliasSymbol = new SgAliasSymbol(s);
-
           SgNamespaceDefinitionStatement * gnds = namespaceDefinitionStatement->get_global_definition();
           if (gnds != NULL && namespaceDefinitionStatement != gnds) {
+            SgAliasSymbol* aliasSymbol = new SgAliasSymbol(s);
             gnds->get_symbol_table()->insert(n,aliasSymbol);
+            aliasSymbol->set_parent(gnds->get_symbol_table());
           }
         }
 
@@ -4867,6 +4867,7 @@ SgScopeStatement::insert_symbol ( const SgName& n, SgSymbol* s )
              printf(" -- asym = %p (%s)\n", asym, asym->class_name().c_str());
 #endif
              globalScopeAcrossFiles->get_symbol_table()->insert(n, asym);
+             asym->set_parent(symtab);
            }
          } else {
            MLOG_WARN_C("ROSETTA", "Warning: In SgScopeStatement::insert_symbol(): global_scope == globalScopeAcrossFiles: skip insertion of redundant SgAliasSymbol \n");
@@ -4968,18 +4969,19 @@ SgScopeStatement::remove_symbol ( SgSymbol* s )
 
      const SgNamespaceDefinitionStatement* namespaceDefinitionStatement = isSgNamespaceDefinitionStatement(this);
      if (namespaceDefinitionStatement != NULL) {
-       ROSE_ASSERT(namespaceDefinitionStatement->get_global_definition() != NULL);
-       const SgNamespaceDefinitionStatement* globalNamespaceDefinitionStatement = namespaceDefinitionStatement->get_global_definition();
-       ROSE_ASSERT(globalNamespaceDefinitionStatement != NULL);
-       ROSE_ASSERT(namespaceDefinitionStatement != globalNamespaceDefinitionStatement);
+      ROSE_ASSERT(namespaceDefinitionStatement->get_global_definition() != NULL);
+      const SgNamespaceDefinitionStatement* globalNamespaceDefinitionStatement = namespaceDefinitionStatement->get_global_definition();
+      ROSE_ASSERT(globalNamespaceDefinitionStatement != NULL);
+      if (namespaceDefinitionStatement != globalNamespaceDefinitionStatement) {
+        SgName n = s->get_name();
 
-       SgName n = s->get_name();
-
-       SgSymbol* aliasSymbol = globalNamespaceDefinitionStatement->get_symbol_table()->find_aliased_symbol(n,s);
-       if (aliasSymbol != NULL) {
-         globalNamespaceDefinitionStatement->get_symbol_table()->remove(aliasSymbol);
-       }
-     }
+        SgSymbol* aliasSymbol = globalNamespaceDefinitionStatement->get_symbol_table()->find_aliased_symbol(n,s);
+        if (aliasSymbol != NULL) {
+          globalNamespaceDefinitionStatement->get_symbol_table()->remove(aliasSymbol);
+          delete aliasSymbol;
+        }
+      }
+    }
 
      const SgGlobal * global_scope = isSgGlobal(this);
      if (global_scope != NULL) {
@@ -4992,11 +4994,15 @@ SgScopeStatement::remove_symbol ( SgSymbol* s )
 
          SgSymbol * aliasSymbol = globalScopeAcrossFiles->get_symbol_table()->find_aliased_symbol(n,s);
          if (aliasSymbol != NULL)
-           globalScopeAcrossFiles->get_symbol_table()->remove(aliasSymbol);
+           {
+             globalScopeAcrossFiles->get_symbol_table()->remove(aliasSymbol);
+             delete aliasSymbol;
+           }
        }
      }
 
      p_symbol_table->remove(s);
+     s->set_parent(NULL);
    }
 
 int SgScopeStatement::lookup_symbol(const SgName& n, SgSymbol *s) const

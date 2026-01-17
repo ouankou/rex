@@ -4644,7 +4644,8 @@ TestParentPointersInMemoryPool::visit(SgNode* node)
      if (symbol != NULL)
         {
           if (symbol->get_parent() == NULL)
-            printf("Error: symbol named %s has no parent set\n",symbol->get_name().getString().c_str());
+            printf("Error: symbol named %s has no parent set\n",
+                   symbol->get_name().getString().c_str());
           ROSE_ASSERT(symbol->get_parent() != NULL);
         }
 #if 0

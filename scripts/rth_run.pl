@@ -404,6 +404,19 @@ sub load_config {
       die "$0: invalid timeout specification: $conf{timeout}\n";
     }
   }
+  if ($conf{timeout} > 0) {
+    my $scale;
+    if (defined $ENV{ROSE_TEST_TIMEOUT_SCALE} &&
+        $ENV{ROSE_TEST_TIMEOUT_SCALE} =~ /^\d+(?:\.\d+)?$/) {
+      $scale = $ENV{ROSE_TEST_TIMEOUT_SCALE};
+    } elsif (defined $ENV{LD_PRELOAD} &&
+             $ENV{LD_PRELOAD} =~ /vgpreload/) {
+      $scale = 2;
+    }
+    if (defined $scale) {
+      $conf{timeout} = int($conf{timeout} * $scale + 0.5);
+    }
+  }
 
   # Convert memory size to MB
   if (my($n,$units) = $conf{require_memory} =~ /^(\d+)\s*(\S+)?\s*$/) {

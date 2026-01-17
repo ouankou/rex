@@ -53,7 +53,7 @@ jobs:
           openjdk-25-jdk \
           pkg-config
 
-    - name: Configure (RelWithDebInfo)
+    - name: Configure (Debug)
       env:
         PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
@@ -64,7 +64,7 @@ jobs:
         FC: flang-20
       run: |
         cmake -S . -B build \
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
@@ -138,7 +138,7 @@ jobs:
           pkg-config \
           valgrind
 
-    - name: Configure (RelWithDebInfo + Valgrind)
+    - name: Configure (Debug + Valgrind)
       env:
         PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
@@ -149,7 +149,7 @@ jobs:
         FC: flang-20
       run: |
         cmake -S . -B build \
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
@@ -219,7 +219,7 @@ jobs:
           openjdk-25-jdk \
           pkg-config
 
-    - name: Configure (RelWithDebInfo + Sanitizers)
+    - name: Configure (Debug + Sanitizers)
       env:
         PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
@@ -230,7 +230,7 @@ jobs:
         FC: flang-20
       run: |
         cmake -S . -B build \
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \

@@ -5683,8 +5683,20 @@ sharesSameStatement(SgExpression*, SgType* expressionType)
           bool isDeclarationPartOfVariableDeclaration = false;
           if (classDeclaration != NULL)
              {
-               isDeclarationPartOfVariableDeclaration = isSgVariableDeclaration(classDeclaration->get_parent());
-               isDeclarationPartOfTypedefDeclaration  = isSgTypedefDeclaration(classDeclaration->get_parent());
+               SgNode* decl_parent = classDeclaration->get_parent();
+               SgVariableDeclaration* parent_var = isSgVariableDeclaration(decl_parent);
+               if (parent_var != NULL)
+                  {
+                    Sg_File_Info* parent_fi = parent_var->get_file_info();
+                    if (parent_fi != NULL && parent_fi->isCompilerGenerated() &&
+                        parent_fi->isOutputInCodeGeneration() == false)
+                       {
+                      // Hidden compiler-generated decls shouldn't suppress inline definitions.
+                         parent_var = NULL;
+                       }
+                  }
+               isDeclarationPartOfVariableDeclaration = (parent_var != NULL);
+               isDeclarationPartOfTypedefDeclaration  = isSgTypedefDeclaration(decl_parent);
              }
 
           if (classDeclaration != NULL && classDeclaration->get_isAutonomousDeclaration() == false && isDeclarationPartOfVariableDeclaration == false && isDeclarationPartOfTypedefDeclaration == false)
