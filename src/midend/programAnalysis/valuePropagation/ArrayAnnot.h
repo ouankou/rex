@@ -1,11 +1,16 @@
 #ifndef ARRAY_ANNOT_H
 #define ARRAY_ANNOT_H
 
-#include <AnnotCollect.h>
-#include <AnnotExpr.h>
-#include <CPPAnnotation.h>
-#include <OperatorDescriptors.h>
-#include <ValuePropagate.h>
+#include "AnnotCollect.h"
+
+#include "AnnotExpr.h"
+
+#include "CPPAnnotation.h"
+
+#include "OperatorDescriptors.h"
+
+#include "ValuePropagate.h"
+
 #include <list>
 
 class ArrayShapeDescriptor {

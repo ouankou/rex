@@ -3,9 +3,11 @@
 #ifndef DEP_INFO_LIST_H
 #define DEP_INFO_LIST_H
 
-#include <CountRefHandle.h>
-#include <DepInfo.h>
-#include <LatticeElemList.h>
+#include "CountRefHandle.h"
+
+#include "DepInfo.h"
+
+#include "LatticeElemList.h"
 
 class DepInfoSetImpl : public LatticeElemList<DepInfo> {
   void operator=(const DepInfoSetImpl &that) {}

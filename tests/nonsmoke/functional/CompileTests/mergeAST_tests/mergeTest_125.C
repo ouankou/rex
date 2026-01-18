@@ -1,4 +1,5 @@
 #include <vector>
+
 #include <string>
 
 class SgNode;
@@ -7,11 +8,11 @@ class SgExpression;
 
 // namespace VirtualCFG {
 
-  class CFGEdge;
+class CFGEdge;
 
-  class CFGNode {
-    SgNode* node;
-    unsigned int index;
+class CFGNode {
+  SgNode *node;
+  unsigned int index;
 #if 0
     public:
     CFGNode(SgNode* node, unsigned int index = 0): node(node), index(index) {
@@ -29,25 +30,26 @@ class SgExpression;
     static CFGNode endOfProcedure() {return CFGNode(__null, 0);}
     static unsigned int childCount(SgNode* n);
 #endif
-  };
+};
 
 #if 1
-  class CFGEdge {
-    CFGNode src, tgt;
-    public:
-    CFGEdge(CFGNode src, CFGNode tgt): src(src), tgt(tgt) {}
-    std::string toString() const;
-    std::string id() const;
-    CFGNode source() const {return src;}
-    CFGNode target() const {return tgt;}
+class CFGEdge {
+  CFGNode src, tgt;
 
-    SgExpression* optionKey() const;
-    std::vector<SgInitializedName*> scopesBeingExited() const;
-    std::vector<SgInitializedName*> scopesBeingEntered() const;
-    bool operator==(const CFGEdge& o) const {return id() == o.id();}
-    bool operator!=(const CFGEdge& o) const {return id() != o.id();}
-    bool operator<(const CFGEdge& o) const {return id() < o.id();}
-  };
+public:
+  CFGEdge(CFGNode src, CFGNode tgt) : src(src), tgt(tgt) {}
+  std::string toString() const;
+  std::string id() const;
+  CFGNode source() const { return src; }
+  CFGNode target() const { return tgt; }
+
+  SgExpression *optionKey() const;
+  std::vector<SgInitializedName *> scopesBeingExited() const;
+  std::vector<SgInitializedName *> scopesBeingEntered() const;
+  bool operator==(const CFGEdge &o) const { return id() == o.id(); }
+  bool operator!=(const CFGEdge &o) const { return id() != o.id(); }
+  bool operator<(const CFGEdge &o) const { return id() < o.id(); }
+};
 #endif
 
 #if 0
@@ -182,4 +184,3 @@ class SgExpression;
   }
 
 #endif
-

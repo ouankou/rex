@@ -48,30 +48,30 @@ THE POSSIBILITY OF SUCH DAMAGE.
 Two tasks with a lock synchronization to ensure execution order.
 */
 
+#include <assert.h>
+
 #include <omp.h>
-#include <assert.h> 
-int main()
-{
+int main() {
   omp_lock_t lck;
-  int i=0;
+  int i = 0;
   omp_init_lock(&lck);
 #pragma omp parallel sections
   {
 #pragma omp section
     {
       omp_set_lock(&lck);
-      i += 1;    
+      i += 1;
       omp_unset_lock(&lck);
     }
 #pragma omp section
     {
       omp_set_lock(&lck);
-      i += 2;    
+      i += 2;
       omp_unset_lock(&lck);
     }
   }
 
   omp_destroy_lock(&lck);
-  assert (i==3);
+  assert(i == 3);
   return 0;
-} 
+}

@@ -1,20 +1,30 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 // DQ (10/5/2014): This is more strict now that we include rose_config.h in the
 // sage3basic.h. NOTE: This fails if we only include sage3basic.h. #include
-// "rose.h" #include "sage3basic.h"
+// "rose.h"
+
+#include "sage3basic.h"
+
 #include "rose.h"
 
 #include "patternRewrite.h"
+
 #include <algorithm>
+
 #include <functional>
+
 #include <iomanip>
+
 #include <sstream>
+
 #include <stdint.h>
+
 #include <utility>
 
 #include "CFGRewrite.h"
+
 #include "rwAccessLabeler.h"
 
 using namespace std;

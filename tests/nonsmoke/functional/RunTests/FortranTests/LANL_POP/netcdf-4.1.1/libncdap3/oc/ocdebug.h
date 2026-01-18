@@ -4,8 +4,9 @@
 #ifndef OCDEBUG_H
 #define OCDEBUG_H
 
-#include <stdarg.h>
 #include "ocdump.h"
+
+#include <stdarg.h>
 
 /* OCCATCHERROR is used to detect errors as close
    to their point of origin as possible. When
@@ -16,18 +17,42 @@
 #undef OCCATCHERROR
 
 #define OCPANIC(msg) assert(ocpanic(msg))
-#define OCPANIC1(msg,arg) assert(ocpanic(msg,arg))
-#define OCPANIC2(msg,arg1,arg2) assert(ocpanic(msg,arg1,arg2))
+#define OCPANIC1(msg, arg) assert(ocpanic(msg, arg))
+#define OCPANIC2(msg, arg1, arg2) assert(ocpanic(msg, arg1, arg2))
 
 /* Make it possible to catch assertion failures by breakpointing ocpanic*/
-#define OCASSERT(expr) if(!(expr)) {OCPANIC((#expr));} else {}
+#define OCASSERT(expr)                                                         \
+  if (!(expr)) {                                                               \
+    OCPANIC((#expr));                                                          \
+  } else {                                                                     \
+  }
 
 /* Need some syntactic trickery to make these macros work*/
-#define DEBUG(l,msg) if(ocdebug >= l) {oc_log(LOGDBG,msg);} else {}
-#define DEBUG1(l,msg,arg) if(ocdebug >= l) {oc_log(LOGDBG,msg,arg1);} else {}
-#define DEBUG2(l,msg,arg1,arg2) if(ocdebug >= l) {oc_log(LOGDBG,msg,arg1,arg2);} else {}
-#define DEBUGTEXT(l,text) if(ocdebug >= l) {oc_logtext(LOGNOTE,text);} else {}
-#define DEBUGCODE(l,code) if(ocdebug >= l) {code;} else {}
+#define DEBUG(l, msg)                                                          \
+  if (ocdebug >= l) {                                                          \
+    oc_log(LOGDBG, msg);                                                       \
+  } else {                                                                     \
+  }
+#define DEBUG1(l, msg, arg)                                                    \
+  if (ocdebug >= l) {                                                          \
+    oc_log(LOGDBG, msg, arg1);                                                 \
+  } else {                                                                     \
+  }
+#define DEBUG2(l, msg, arg1, arg2)                                             \
+  if (ocdebug >= l) {                                                          \
+    oc_log(LOGDBG, msg, arg1, arg2);                                           \
+  } else {                                                                     \
+  }
+#define DEBUGTEXT(l, text)                                                     \
+  if (ocdebug >= l) {                                                          \
+    oc_logtext(LOGNOTE, text);                                                 \
+  } else {                                                                     \
+  }
+#define DEBUGCODE(l, code)                                                     \
+  if (ocdebug >= l) {                                                          \
+    code;                                                                      \
+  } else {                                                                     \
+  }
 
 /*
 OCPROGRESS attempts to provide some info
@@ -40,7 +65,7 @@ extern int cedebug;
 
 /*extern char* dent2(int n);*/
 /*/extern char* dent(int n);*/
-extern int ocpanic(const char* fmt, ...);
+extern int ocpanic(const char *fmt, ...);
 
 extern int xdrerror(void);
 
@@ -51,11 +76,15 @@ is exhausted.  It also guarantees that the
 memory has been zero'd.
 */
 
-extern void* occalloc(size_t size, size_t nelems);
-extern void* ocmalloc(size_t size);
-extern void  ocfree(void*);
+extern void *occalloc(size_t size, size_t nelems);
+extern void *ocmalloc(size_t size);
+extern void ocfree(void *);
 
-#define MEMCHECK(var,throw) {if((var)==NULL) return (throw);}
+#define MEMCHECK(var, throw)                                                   \
+  {                                                                            \
+    if ((var) == NULL)                                                         \
+      return (throw);                                                          \
+  }
 
 #ifdef OCCATCHERROR
 /* Place breakpoint on ocbreakpoint to catch errors close to where they occur*/
@@ -68,6 +97,4 @@ extern int octhrow(int err);
 #define THROWCHK(e)
 #endif
 
-
 #endif /*OCDEBUG_H*/
-

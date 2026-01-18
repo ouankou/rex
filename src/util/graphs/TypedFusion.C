@@ -1,7 +1,8 @@
-#include <PtrMap.h>
-#include <SinglyLinkedList.h>
+#include "PtrMap.h"
 
-#include <TypedFusion.h>
+#include "SinglyLinkedList.h"
+
+#include "TypedFusion.h"
 
 #define BADFUSE NEG_INFTY + 1
 

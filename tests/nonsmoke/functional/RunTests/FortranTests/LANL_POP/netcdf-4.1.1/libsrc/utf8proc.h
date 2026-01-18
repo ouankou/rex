@@ -20,7 +20,6 @@
  *  DEALINGS IN THE SOFTWARE.
  */
 
-
 /*
  *  File name:    utf8proc.h
  *  Version:      1.1.1
@@ -52,10 +51,8 @@
  *  Unicode Version 5.0.0 is supported.
  */
 
-
 #ifndef UTF8PROC_H
 #define UTF8PROC_H
-
 
 #include "config.h"
 
@@ -63,20 +60,22 @@
 #ifdef HAVE_STDBOOL_H
 #include <stdbool.h>
 #else
-# if ! HAVE__BOOL
-#  ifdef __cplusplus
+#if !HAVE__BOOL
+#ifdef __cplusplus
 typedef bool _Bool;
-#  else
+#else
 typedef unsigned char _Bool;
-#  endif
-# endif
-# define bool _Bool
-# define false 0
-# define true 1
-# define __bool_true_false_are_defined 1
+#endif
+#endif
+#define bool _Bool
+#define false 0
+#define true 1
+#define __bool_true_false_are_defined 1
 #endif
 #include <sys/types.h>
+
 #include <inttypes.h>
+
 #include <limits.h>
 
 #ifndef HAVE_SSIZE_T
@@ -84,24 +83,24 @@ typedef unsigned char _Bool;
 #endif
 
 #ifndef SSIZE_MAX
-#define SSIZE_MAX (SIZE_MAX/2)
+#define SSIZE_MAX (SIZE_MAX / 2)
 #endif
 
-#define UTF8PROC_NULLTERM  (1<<0)
-#define UTF8PROC_STABLE    (1<<1)
-#define UTF8PROC_COMPAT    (1<<2)
-#define UTF8PROC_COMPOSE   (1<<3)
-#define UTF8PROC_DECOMPOSE (1<<4)
-#define UTF8PROC_IGNORE    (1<<5)
-#define UTF8PROC_REJECTNA  (1<<6)
-#define UTF8PROC_NLF2LS    (1<<7)
-#define UTF8PROC_NLF2PS    (1<<8)
-#define UTF8PROC_NLF2LF    (UTF8PROC_NLF2LS | UTF8PROC_NLF2PS)
-#define UTF8PROC_STRIPCC   (1<<9)
-#define UTF8PROC_CASEFOLD  (1<<10)
-#define UTF8PROC_CHARBOUND (1<<11)
-#define UTF8PROC_LUMP      (1<<12)
-#define UTF8PROC_STRIPMARK (1<<13)
+#define UTF8PROC_NULLTERM (1 << 0)
+#define UTF8PROC_STABLE (1 << 1)
+#define UTF8PROC_COMPAT (1 << 2)
+#define UTF8PROC_COMPOSE (1 << 3)
+#define UTF8PROC_DECOMPOSE (1 << 4)
+#define UTF8PROC_IGNORE (1 << 5)
+#define UTF8PROC_REJECTNA (1 << 6)
+#define UTF8PROC_NLF2LS (1 << 7)
+#define UTF8PROC_NLF2PS (1 << 8)
+#define UTF8PROC_NLF2LF (UTF8PROC_NLF2LS | UTF8PROC_NLF2PS)
+#define UTF8PROC_STRIPCC (1 << 9)
+#define UTF8PROC_CASEFOLD (1 << 10)
+#define UTF8PROC_CHARBOUND (1 << 11)
+#define UTF8PROC_LUMP (1 << 12)
+#define UTF8PROC_STRIPMARK (1 << 13)
 /*
  *  Flags being regarded by several functions in the library:
  *  NULLTERM:  The given UTF-8 input is NULL terminated.
@@ -162,28 +161,28 @@ typedef struct utf8proc_property_struct {
   utf8proc_propval_t bidi_class;
   utf8proc_propval_t decomp_type;
   const int32_t *decomp_mapping;
-  unsigned bidi_mirrored:1;
+  unsigned bidi_mirrored : 1;
   int32_t uppercase_mapping;
   int32_t lowercase_mapping;
   int32_t titlecase_mapping;
   int32_t comb1st_index;
   int32_t comb2nd_index;
-  unsigned comp_exclusion:1;
-  unsigned ignorable:1;
-  unsigned control_boundary:1;
-  unsigned extend:1;
+  unsigned comp_exclusion : 1;
+  unsigned ignorable : 1;
+  unsigned control_boundary : 1;
+  unsigned extend : 1;
   const int32_t *casefold_mapping;
 } utf8proc_property_t;
 
-#define UTF8PROC_CATEGORY_LU  1
-#define UTF8PROC_CATEGORY_LL  2
-#define UTF8PROC_CATEGORY_LT  3
-#define UTF8PROC_CATEGORY_LM  4
-#define UTF8PROC_CATEGORY_LO  5
-#define UTF8PROC_CATEGORY_MN  6
-#define UTF8PROC_CATEGORY_MC  7
-#define UTF8PROC_CATEGORY_ME  8
-#define UTF8PROC_CATEGORY_ND  9
+#define UTF8PROC_CATEGORY_LU 1
+#define UTF8PROC_CATEGORY_LL 2
+#define UTF8PROC_CATEGORY_LT 3
+#define UTF8PROC_CATEGORY_LM 4
+#define UTF8PROC_CATEGORY_LO 5
+#define UTF8PROC_CATEGORY_MN 6
+#define UTF8PROC_CATEGORY_MC 7
+#define UTF8PROC_CATEGORY_ME 8
+#define UTF8PROC_CATEGORY_ND 9
 #define UTF8PROC_CATEGORY_NL 10
 #define UTF8PROC_CATEGORY_NO 11
 #define UTF8PROC_CATEGORY_PC 12
@@ -205,41 +204,41 @@ typedef struct utf8proc_property_struct {
 #define UTF8PROC_CATEGORY_CS 28
 #define UTF8PROC_CATEGORY_CO 29
 #define UTF8PROC_CATEGORY_CN 30
-#define UTF8PROC_BIDI_CLASS_L    1
-#define UTF8PROC_BIDI_CLASS_LRE  2
-#define UTF8PROC_BIDI_CLASS_LRO  3
-#define UTF8PROC_BIDI_CLASS_R    4
-#define UTF8PROC_BIDI_CLASS_AL   5
-#define UTF8PROC_BIDI_CLASS_RLE  6
-#define UTF8PROC_BIDI_CLASS_RLO  7
-#define UTF8PROC_BIDI_CLASS_PDF  8
-#define UTF8PROC_BIDI_CLASS_EN   9
-#define UTF8PROC_BIDI_CLASS_ES  10
-#define UTF8PROC_BIDI_CLASS_ET  11
-#define UTF8PROC_BIDI_CLASS_AN  12
-#define UTF8PROC_BIDI_CLASS_CS  13
+#define UTF8PROC_BIDI_CLASS_L 1
+#define UTF8PROC_BIDI_CLASS_LRE 2
+#define UTF8PROC_BIDI_CLASS_LRO 3
+#define UTF8PROC_BIDI_CLASS_R 4
+#define UTF8PROC_BIDI_CLASS_AL 5
+#define UTF8PROC_BIDI_CLASS_RLE 6
+#define UTF8PROC_BIDI_CLASS_RLO 7
+#define UTF8PROC_BIDI_CLASS_PDF 8
+#define UTF8PROC_BIDI_CLASS_EN 9
+#define UTF8PROC_BIDI_CLASS_ES 10
+#define UTF8PROC_BIDI_CLASS_ET 11
+#define UTF8PROC_BIDI_CLASS_AN 12
+#define UTF8PROC_BIDI_CLASS_CS 13
 #define UTF8PROC_BIDI_CLASS_NSM 14
-#define UTF8PROC_BIDI_CLASS_BN  15
-#define UTF8PROC_BIDI_CLASS_B   16
-#define UTF8PROC_BIDI_CLASS_S   17
-#define UTF8PROC_BIDI_CLASS_WS  18
-#define UTF8PROC_BIDI_CLASS_ON  19
-#define UTF8PROC_DECOMP_TYPE_FONT      1
-#define UTF8PROC_DECOMP_TYPE_NOBREAK   2
-#define UTF8PROC_DECOMP_TYPE_INITIAL   3
-#define UTF8PROC_DECOMP_TYPE_MEDIAL    4
-#define UTF8PROC_DECOMP_TYPE_FINAL     5
-#define UTF8PROC_DECOMP_TYPE_ISOLATED  6
-#define UTF8PROC_DECOMP_TYPE_CIRCLE    7
-#define UTF8PROC_DECOMP_TYPE_SUPER     8
-#define UTF8PROC_DECOMP_TYPE_SUB       9
+#define UTF8PROC_BIDI_CLASS_BN 15
+#define UTF8PROC_BIDI_CLASS_B 16
+#define UTF8PROC_BIDI_CLASS_S 17
+#define UTF8PROC_BIDI_CLASS_WS 18
+#define UTF8PROC_BIDI_CLASS_ON 19
+#define UTF8PROC_DECOMP_TYPE_FONT 1
+#define UTF8PROC_DECOMP_TYPE_NOBREAK 2
+#define UTF8PROC_DECOMP_TYPE_INITIAL 3
+#define UTF8PROC_DECOMP_TYPE_MEDIAL 4
+#define UTF8PROC_DECOMP_TYPE_FINAL 5
+#define UTF8PROC_DECOMP_TYPE_ISOLATED 6
+#define UTF8PROC_DECOMP_TYPE_CIRCLE 7
+#define UTF8PROC_DECOMP_TYPE_SUPER 8
+#define UTF8PROC_DECOMP_TYPE_SUB 9
 #define UTF8PROC_DECOMP_TYPE_VERTICAL 10
-#define UTF8PROC_DECOMP_TYPE_WIDE     11
-#define UTF8PROC_DECOMP_TYPE_NARROW   12
-#define UTF8PROC_DECOMP_TYPE_SMALL    13
-#define UTF8PROC_DECOMP_TYPE_SQUARE   14
+#define UTF8PROC_DECOMP_TYPE_WIDE 11
+#define UTF8PROC_DECOMP_TYPE_NARROW 12
+#define UTF8PROC_DECOMP_TYPE_SMALL 13
+#define UTF8PROC_DECOMP_TYPE_SQUARE 14
 #define UTF8PROC_DECOMP_TYPE_FRACTION 15
-#define UTF8PROC_DECOMP_TYPE_COMPAT   16
+#define UTF8PROC_DECOMP_TYPE_COMPAT 16
 
 extern const int8_t utf8proc_utf8class[256];
 
@@ -284,10 +283,8 @@ const utf8proc_property_t *utf8proc_get_property(int32_t uc);
  *           0x10FFFF, otherwise the program might crash!
  */
 
-ssize_t utf8proc_decompose_char(
-  int32_t uc, int32_t *dst, ssize_t bufsize,
-  int options, int *last_boundclass
-);
+ssize_t utf8proc_decompose_char(int32_t uc, int32_t *dst, ssize_t bufsize,
+                                int options, int *last_boundclass);
 /*
  *  Writes a decomposition of the unicode char 'uc' into the array being
  *  pointed to by 'dst'.
@@ -312,10 +309,8 @@ ssize_t utf8proc_decompose_char(
  *           0x10FFFF, otherwise the program might crash!
  */
 
-ssize_t utf8proc_decompose(
-  const uint8_t *str, ssize_t strlen,
-  int32_t *buffer, ssize_t bufsize, int options
-);
+ssize_t utf8proc_decompose(const uint8_t *str, ssize_t strlen, int32_t *buffer,
+                           ssize_t bufsize, int options);
 /*
  *  Does the same as 'utf8proc_decompose_char', but acts on a whole UTF-8
  *  string, and orders the decomposed sequences correctly.
@@ -353,9 +348,8 @@ ssize_t utf8proc_reencode(int32_t *buffer, ssize_t length, int options);
  *           crash!
  */
 
-ssize_t utf8proc_map(
-  const uint8_t *str, ssize_t strlen, uint8_t **dstptr, int options
-);
+ssize_t utf8proc_map(const uint8_t *str, ssize_t strlen, uint8_t **dstptr,
+                     int options);
 /*
  *  Maps the given UTF-8 string being pointed to by 'str' to a new UTF-8
  *  string, which is allocated dynamically, and afterwards pointed to by
@@ -390,4 +384,3 @@ ssize_t utf8proc_check(const uint8_t *str);
  */
 
 #endif
-

@@ -1,7 +1,9 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
+#include "analysisUtils.h"
+
 #include "sage3basic.h"
-#include <analysisUtils.h>
-#include <shortCircuitingTransformation.h>
+
+#include "shortCircuitingTransformation.h"
 
 using namespace std;
 

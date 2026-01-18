@@ -4,13 +4,12 @@
 // #pragma GCC system_header
 
 #if defined(_GLIBCXX_INCLUDE_AS_CXX11)
-#  error TR1 header cannot be included from C++11 header
+#error TR1 header cannot be included from C++11 header
 #endif
 
 // #include <memory>
 // #include <exception>        	// std::exception
 // #include <typeinfo>         	// std::type_info in get_deleter
-
 
 // #include <bits/stl_algobase.h>  // std::swap
 
@@ -19,9 +18,13 @@
 
 #if 0
 #include <bits/c++config.h>
+
 #include <bits/functexcept.h>
+
 #include <bits/cpp_type_traits.h>
+
 #include <ext/type_traits.h>
+
 #include <ext/numeric_traits.h>
 #endif
 
@@ -38,7 +41,6 @@
 
 #endif
 
-
 // #include <bits/stl_iterator_base_types.h>
 // #include <bits/stl_iterator_base_funcs.h>
 // #include <bits/stl_iterator.h>
@@ -50,13 +52,19 @@
 #endif
 
 #if 0
-#include <iosfwd>           	// std::basic_ostream
 #include <ext/atomicity.h>
+
+#include <iosfwd> // std::basic_ostream
+
 #include <ext/concurrence.h>
+
 #include <bits/functexcept.h>
-#include <bits/stl_function.h> 	// std::less
+
+#include <bits/stl_function.h> // std::less
 #include <debug/debug.h>
+
 #include <tr1/type_traits>
+
 #include <tr1/shared_ptr.h>
 #endif
 

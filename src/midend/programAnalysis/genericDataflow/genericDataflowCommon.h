@@ -1,16 +1,23 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef ROSE_GENERIC_DATAFLOW_COMMON_H
 #define ROSE_GENERIC_DATAFLOW_COMMON_H
 
+#include "sage3basic.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <map>
-#include <sage3basic.h>
+
 #include <set>
+
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 
 #include "AnalysisDebuggingUtils.h"

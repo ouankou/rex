@@ -4,22 +4,33 @@
 #define LP 1
 #define PERFDEBUG 0
 #ifdef _OPENMP
+#include "mlog.h"
+
+#include <algorithm>
+
+#include <cassert>
+
+#include <fstream>
+
+#include <map>
+
 #include <omp.h>
 #endif
-#include <algorithm>
-#include <cassert>
-#include <fstream>
-#include <map>
-#include <mlog.h>
 #include <set>
+
 #include <sstream>
+
 #include <string>
+
 #include <tuple>
+
 #include <unordered_set>
+
 #include <utility>
+
 #include <vector>
 
-#include <staticCFG.h>
+#include "staticCFG.h"
 
 /**
 *@file graphProcessing.h
@@ -53,6 +64,7 @@ though response is not guaranteed
 *@author Michael Hoffman
 */
 #include <sys/resource.h>
+
 #include <sys/time.h>
 
 template <class CFG> inline auto vertices(const CFG &g) { return g.vertices(); }

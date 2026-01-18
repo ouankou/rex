@@ -1,6 +1,8 @@
 
-#include <DOTGraphInterface.h>
-#include <DOTSubgraphRepresentationImpl.h>
+#include "DOTGraphInterface.h"
+
+#include "DOTSubgraphRepresentationImpl.h"
+
 #include <assert.h>
 
 // Note that the DOTSubgraphRepresentationImpl.h contains

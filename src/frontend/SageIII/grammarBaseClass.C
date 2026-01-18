@@ -14,6 +14,7 @@ typedef int bool;
 #endif
 
 #include "grammarBaseClass.h"
+
 #include "rose.h"
 
 ROSE_BaseGrammar::ROSE_BaseGrammar() {}

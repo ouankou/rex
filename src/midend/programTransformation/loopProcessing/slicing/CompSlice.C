@@ -1,14 +1,19 @@
 
 #include <set>
 
-#include <ObserveObject.h>
-#include <SymbolicVal.h>
-#include <const.h>
+#include "ObserveObject.h"
 
-#include <CompSlice.h>
-#include <CompSliceImpl.h>
-#include <CompSliceObserver.h>
-#include <LoopInfoInterface.h>
+#include "SymbolicVal.h"
+
+#include "const.h"
+
+#include "CompSlice.h"
+
+#include "CompSliceImpl.h"
+
+#include "CompSliceObserver.h"
+
+#include "LoopInfoInterface.h"
 
 class CompSlice::ObserveImpl : public ObserveObject<CompSliceObserver> {};
 

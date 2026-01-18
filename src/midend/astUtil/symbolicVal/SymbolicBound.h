@@ -2,6 +2,7 @@
 #define SYMBOLIC_BOUND_H
 
 #include "SymbolicVal.h"
+
 #include <map>
 
 class SingleValBound : public MapObject<SymbolicVal, SymbolicBound> {

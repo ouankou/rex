@@ -1,10 +1,12 @@
 #ifndef ROSE_StringUtility_Convert_H
 #define ROSE_StringUtility_Convert_H
 
-#include <rosedll.h>
+#include "rosedll.h"
 
 #include <cstdint>
+
 #include <string>
+
 #include <vector>
 
 namespace Rose {

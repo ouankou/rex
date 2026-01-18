@@ -44,14 +44,19 @@ static const char *description =
     "subdirectories (among others) where the ROSE library and its headers are "
     "installed.}";
 
-#include <rose.h> // POLICY_OK -- this is not a ROSE library source file
-#include <rose_getline.h>
+#include "rose.h" // POLICY_OK -- this is not a ROSE library source file
+#include "rose_getline.h"
 
 #include <filesystem>
+
 #include <map>
+
 #include <regex>
+
 #include <string>
+
 #include <system_error>
+
 #include <vector>
 
 using namespace Rose;

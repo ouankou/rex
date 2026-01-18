@@ -1,15 +1,21 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef LATTICE_FULL_H
 #define LATTICE_FULL_H
 
 #include "cfgUtils.h"
+
 #include "lattice.h"
+
 #include "nodeState.h"
+
 #include "variables.h"
+
 #include <map>
+
 #include <string>
+
 #include <vector>
 
 /******************************

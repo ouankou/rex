@@ -2,7 +2,9 @@
 // DQ (4/7/2018): This is a C++11 test, moved to the Cxx11_tests directory.
 
 #include <iostream>
+
 #include <vector>
+
 #include <algorithm>
  
 struct Printer 

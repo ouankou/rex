@@ -2,6 +2,7 @@
 #define WHOLE_AST_API_H
 
 #include <string>
+
 #include <vector>
 // external API for generation of graphs of AST
 

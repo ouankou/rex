@@ -5,6 +5,14 @@
 // included in librose header files. [Robb P. Matzke 2014-10-15] #include
 // "sage3basic.h"
 
+#include "AstProcessing.h"
+
+#include <cstddef>
+
+#include <utility>
+
+#include <vector>
+
 struct FunctionCallInheritedAttribute {
   /** The innermost scope inside of which this AST node resides. It is either a
      for-loop, a do-loop,  a while-loop or a conditioanl expression. */

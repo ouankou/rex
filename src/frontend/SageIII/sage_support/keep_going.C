@@ -6,21 +6,32 @@
 #include "sage3basic.h"
 
 #include <fcntl.h>
+
 #include <filesystem>
+
 #include <iostream>
 
 #include "keep_going.h"
+
 #include "processSupport.h" // ROSE_ASSERT in ROSE/src/util
 
 #include <chrono>
+
 #include <cstring>
+
 #include <ctime>
+
 #include <fstream>
+
 #include <iomanip>
+
 #include <map>
+
 #include <signal.h> // For signal constants like SIGSEGV, SIGINT, etc.
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 #ifdef __linux__
 #include <utime.h>

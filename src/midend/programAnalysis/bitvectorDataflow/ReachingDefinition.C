@@ -1,9 +1,14 @@
 #include "CommandOptions.h"
+
 #include "GraphIO.h"
+
 #include "GraphUtils.h"
+
+#include "ROSE_ASSERT.h"
+
 #include "ReachingDefinition.h"
+
 #include "StmtInfoCollect.h"
-#include <ROSE_ASSERT.h>
 
 bool DebugReachingDef() {
   static int r = 0;
@@ -262,5 +267,5 @@ void ReachingDefinitionAnalysis::collect_ast(
 }
 
 #define TEMPLATE_ONLY
-#include <DataFlowAnalysis.C>
+#include "DataFlowAnalysis.C"
 template class DataFlowAnalysis<ReachingDefNode, ReachingDefinitions>;

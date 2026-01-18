@@ -17,9 +17,13 @@
 // using namespace std;
 
 #include <iostream>
+
 #include <iterator>
+
 #include <map>
+
 #include <stack>
+
 #include <string>
 
 #include "DOTSubgraphRepresentation.h"

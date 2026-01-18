@@ -7,6 +7,7 @@
 // include "query.h"
 
 #include "booleanQuery.h"
+
 #include "booleanQueryInheritedAttribute.h"
 
 BooleanQueryInheritedAttributeType::~BooleanQueryInheritedAttributeType() {

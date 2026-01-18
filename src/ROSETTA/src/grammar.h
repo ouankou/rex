@@ -4,20 +4,29 @@
 // DQ (3/12/2006): We want to remove config.h from being placed in every source
 // file
 #include "rose_paths.h"
-#include <rose_config.h>
+
+#include "rose_config.h"
 
 #include <stdio.h>
+
 #include <stdlib.h>
 
 #include <assert.h>
 
 #include "FileUtility.h"
+
 #include "GrammarFile.h"
+
 #include "ROSETTA_macros.h"
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 
 #define COMPLETERTI 1

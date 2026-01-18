@@ -50,10 +50,12 @@ using ::std::ostream;
 
 // STL headers
 #include <list>
+
 #include <set>
 
 // Mint headers
 #include "Exception.h"
+
 #include "Iterator.h"
 
 namespace std {

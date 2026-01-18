@@ -3,6 +3,7 @@
 #define ___OPERATION_DESCRIPTORS_H
 
 #include "AnnotExpr.h"
+
 #include "FunctionObject.h"
 //! Paramter names
 typedef ContainerDescriptor<std::vector<NameDescriptor>, NameDescriptor, ',',

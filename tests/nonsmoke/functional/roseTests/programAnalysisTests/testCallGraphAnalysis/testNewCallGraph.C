@@ -6,12 +6,10 @@
 
 // using namespace NewCallGraph;
 
-int
-main ( int argc, char* argv[] )
-   {
+int main(int argc, char *argv[]) {
   // This builds the AST.
-     SgProject* project = frontend(argc,argv);
-     ROSE_ASSERT (project != NULL);
+  SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != NULL);
 
 #if 0
   // Output an optional graph of the AST (just the tree, when active)
@@ -25,20 +23,19 @@ main ( int argc, char* argv[] )
 
 #if 1
   // Call function representing the Call Graph API.
-     int status = NewCallGraph::buildCallGraph(project);
+  int status = NewCallGraph::buildCallGraph(project);
 #else
   // Put analysis traversal here!
-     int status = 0;
-     CallGraph treeTraversal;
+  int status = 0;
+  CallGraph treeTraversal;
 #if 0
      treeTraversal.traverseInputFiles ( project, preorder );
 #else
-     treeTraversal.traverse ( project, preorder );
+  treeTraversal.traverse(project, preorder);
 #endif
 #endif
 
-     printf ("Program Terminated Normally! \n");
+  printf("Program Terminated Normally! \n");
 
-     return status;
-   }
-
+  return status;
+}

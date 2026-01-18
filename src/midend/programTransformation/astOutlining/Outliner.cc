@@ -4,15 +4,22 @@
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
+
 #include <filesystem>
+
 #include <iostream>
+
 #include <sstream>
+
 #include <string>
 
 #include "NameGenerator.hh"
+
 #include "Outliner.hh"
+
 #include "Preprocess.hh"
 // #include "Transform.hh"
+
 #include "commandline_processing.h"
 
 namespace bfs = std::filesystem;

@@ -1,8 +1,13 @@
 #include "AstInterface_ROSE.h"
+
 #include "AstUtilInterface.h"
+
 #include "OperatorAnnotation.h"
+
 #include "OperatorDescriptors.h"
+
 #include "dependence_table.h"
+
 #include <list>
 
 namespace {

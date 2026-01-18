@@ -1,5 +1,7 @@
 #include "AstNodeClass.h"
+
 #include "ROSETTA_macros.h"
+
 #include "grammar.h"
 
 // DQ (3/22/2018): Revert back to the previous implementation and pursue
@@ -2389,11 +2391,11 @@ void Grammar::setUpExpressions() {
   //   stringDelimiter (char)
   //~   StringVal.setDataPrototype ( "bool", "usesSingleQuotes", "= false",
   //~            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //NO_DELETE); ~ // DQ (12/23/2007): Added support for distinguishing double
-  //quotes (permits use of sing, double, or un-quoted strings in the
-  //SgFormatItem object). ~   StringVal.setDataPrototype ( "bool",
+  // NO_DELETE); ~ // DQ (12/23/2007): Added support for distinguishing double
+  // quotes (permits use of sing, double, or un-quoted strings in the
+  // SgFormatItem object). ~   StringVal.setDataPrototype ( "bool",
   //"usesDoubleQuotes", "= false", ~            NO_CONSTRUCTOR_PARAMETER,
-  //BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   StringVal.setDataPrototype("char", "stringDelimiter", "= 0",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);

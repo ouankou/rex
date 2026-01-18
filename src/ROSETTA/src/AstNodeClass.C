@@ -3,10 +3,15 @@
 // ################################################################
 
 #include "AstNodeClass.h"
+
 #include "ROSETTA_macros.h"
+
 #include "grammar.h"
+
 #include "grammarString.h"
+
 #include <cstring>
+
 #include <memory>
 
 using namespace std;
@@ -1879,7 +1884,7 @@ string AstNodeClass::buildReturnDataMemberPointers() {
         // and will later be replaced with e.g SgTypeInt etc.
         // 'varTypeString.substr(0,15) == "$GRAMMAR_PREFIX"' checks to see if it
         // is part of the grammar. 'varTypeString.substr(0,2) == "Sg" ' and to
-        //see if it is a Sg node of some type.
+        // see if it is a Sg node of some type.
         s += buildListIteratorString(varTypeString, varNameString,
                                      classNameString);
 

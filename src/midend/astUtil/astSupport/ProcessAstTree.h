@@ -3,6 +3,7 @@
 #define PROCESS_AST_TREE
 
 #include "AstInterface.h"
+
 #include "SinglyLinkedList.h"
 
 template <class AstNodePtr>

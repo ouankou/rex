@@ -18,16 +18,23 @@
 
 // DQ (2/11/2010): Added so that we can detect what compiler is being used to
 // compile this file.
-#include "rose_config.h"
-
 #include "FileUtility.h"
+
+#include "Rose/StringUtility.h"
+
 #include "mlog.h"
-#include <Rose/StringUtility.h>
+
 #include <algorithm>
+
 #include <cassert>
+
 #include <cstdlib>
+
 #include <filesystem>
+
 #include <map>
+
+#include "rose_config.h"
 
 #include <sys/utsname.h>
 

@@ -4,15 +4,15 @@ vector<string> split(const string &s) {
 
   vector<string> ret;
   typedef string::size_type string_type;
-  string_size i = 0;
+  string_type i = 0;
   // invariant: we have processed characters[original value ofi,i)
-  while (i != size()) {
+  while (i != s.size()) {
     // ignore blanks
     // invariant: characters in range [original i, current i] are all spaces
     while (i != s.size() && isspace(s[i]))
       ++i;
     // find end of next word
-    string_size j = i;
+    string_type j = i;
     // invariant: none of the characters in range [original j, current j] is a
     // space
     while (j != s.size() && !isspace(s[j]))
@@ -20,8 +20,8 @@ vector<string> split(const string &s) {
 
     // if we found some nonwhite space characters
     if (i != j) {
-      // copy from s starting at i and taking j-1 chars
-      ret.push_back(s.substr(i, j - 1));
+      // copy from s starting at i and taking j - i chars
+      ret.push_back(s.substr(i, j - i));
       i = j;
     }
   }

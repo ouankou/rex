@@ -1,4 +1,5 @@
 #include "PosInfo.h"
+
 #include "sage3basic.h"
 
 namespace Rose {

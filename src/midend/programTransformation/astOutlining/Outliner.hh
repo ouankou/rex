@@ -17,12 +17,18 @@
 #if !defined(INC_LIAOUTLINER_HH)
 #define INC_LIAOUTLINER_HH
 
+#include "ASTtools.hh"
+
+#include "VarSym.hh"
+
 #include "sageInterface.h"
-#include <ASTtools.hh>
-#include <VarSym.hh>
+
 #include <cstdlib>
+
 #include <set>
+
 #include <string>
+
 #include <vector>
 //! \name Forward declarations to relevant Sage classes.
 //@{

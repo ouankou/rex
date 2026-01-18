@@ -1,8 +1,11 @@
 
-#include <CommandOptions.h>
-#include <CompSliceDepGraph.h>
-#include <CompSliceLocality.h>
-#include <FusionAnal.h>
+#include "CommandOptions.h"
+
+#include "CompSliceDepGraph.h"
+
+#include "CompSliceLocality.h"
+
+#include "FusionAnal.h"
 
 // #define DEBUG 1
 

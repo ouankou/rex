@@ -1,22 +1,35 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef SEQUENCE_STRUCT_ANALYSIS_H
 #define SEQUENCE_STRUCT_ANALYSIS_H
 
 #include "CallGraphTraverse.h"
+
 #include "ConstrGraph.h"
+
 #include "ConstrGraphAnalysis.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "divAnalysis.h"
+
 #include "dominatorAnalysis.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "liveDeadVarAnalysis.h"
+
 #include "printAnalysisStates.h"
 
 extern int sequenceStructAnalysisDebugLevel;

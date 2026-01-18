@@ -3,10 +3,15 @@
  * The mlogging facilities
  */
 #include "mlog.h"
+
 #include <array>
+
 #include <cstring>
+
 #include <stdarg.h>
+
 #include <stdio.h>
+
 #include <time.h>
 
 int mlogLevel = DEFAULT_MLOG_LEVEL;

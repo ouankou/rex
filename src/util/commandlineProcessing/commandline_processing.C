@@ -1,13 +1,21 @@
-#include <rosePublicConfig.h>
-#include <rose_config.h>
+#include "rosePublicConfig.h"
+
+#include "rose_config.h"
 
 #include "commandline_processing.h"
+
 #include "mlog.h"
+
+#include "rose_paths.h"
+
 #include <algorithm>
+
 #include <filesystem>
+
 #include <iostream>
-#include <rose_paths.h>
+
 #include <string.h>
+
 #include <vector>
 
 // Use Brian Gunney's String List Assignent (SLA) library

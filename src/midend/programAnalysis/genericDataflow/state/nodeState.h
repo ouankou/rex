@@ -1,4 +1,4 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef NODE_STATE_H
@@ -9,15 +9,21 @@ class NodeFact;
 class NodeState;
 
 #include "analysis.h"
+
 #include "lattice.h"
+
 #include <map>
+
 #include <set>
+
 #include <string>
+
 #include <vector>
 
 #ifdef THREADED
-#include "tbb/atomic.h"
-#include "tbb/concurrent_hash_map.h"
+#include <tbb/atomic.h>
+
+#include <tbb/concurrent_hash_map.h>
 #endif
 
 // template<class factType>

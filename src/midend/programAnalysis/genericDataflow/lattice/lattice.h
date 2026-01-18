@@ -1,12 +1,15 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef LATTICE_H
 #define LATTICE_H
 
 #include "CallGraphTraverse.h"
+
 #include "variables.h"
+
 #include <map>
+
 #include <string>
 
 class Lattice : public printable {

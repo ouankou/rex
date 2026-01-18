@@ -1,8 +1,9 @@
 #ifndef INLINERSUPPORT_H
 #define INLINERSUPPORT_H
 
-#include "Cxx_Grammar.h"
 #include "rosedll.h"
+
+#include "Cxx_Grammar.h"
 
 #include <set>
 

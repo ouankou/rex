@@ -1,10 +1,13 @@
 
 #include <stdlib.h>
 
-#include <DepInfoAnal.h>
-#include <ROSE_ABORT.h>
-#include <ROSE_ASSERT.h>
-#include <ReuseAnalysis.h>
+#include "DepInfoAnal.h"
+
+#include "ROSE_ABORT.h"
+
+#include "ROSE_ASSERT.h"
+
+#include "ReuseAnalysis.h"
 
 int GetConstArrayBound(const AstNodePtr &array, int dim, unsigned defaultSize) {
   int lb, ub;

@@ -1,8 +1,13 @@
 #include "rose_getline.h"
+
 #include <algorithm>
+
 #include <cassert>
+
 #include <cerrno>
+
 #include <cstdio>
+
 #include <cstdlib>
 
 static int get_next_char(FILE *stream) { return fgetc(stream); }

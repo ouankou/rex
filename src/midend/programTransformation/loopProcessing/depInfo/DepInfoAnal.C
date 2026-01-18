@@ -1,23 +1,35 @@
-#include <DepInfo.h>
-#include <DepInfoAnal.h>
-#include <DomainInfo.h>
-#include <DoublyLinkedList.h>
-#include <LoopInfoInterface.h>
-#include <LoopTransformInterface.h>
-#include <StmtDepAnal.h>
-#include <StmtInfoCollect.h>
-#include <SymbolicVal.h>
+#include "DepInfo.h"
+
+#include "DepInfoAnal.h"
+
+#include "DomainInfo.h"
+
+#include "DoublyLinkedList.h"
+
+#include "LoopInfoInterface.h"
+
+#include "LoopTransformInterface.h"
+
+#include "StmtDepAnal.h"
+
+#include "StmtInfoCollect.h"
+
+#include "SymbolicVal.h"
+
 #include <sstream>
 
-#include <CommandOptions.h>
+#include "CommandOptions.h"
+
 #include <fstream>
+
 #include <iostream>
 
-#include <ROSE_ASSERT.h>
+#include "ROSE_ASSERT.h"
 
 #ifdef BD_OMEGA
-#include <DepTestStatistics.h>
-#include <PlatoOmegaInterface.h>
+#include "DepTestStatistics.h"
+
+#include "PlatoOmegaInterface.h"
 
 extern DepTestStatistics DepStats;
 #endif

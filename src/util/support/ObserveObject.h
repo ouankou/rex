@@ -2,8 +2,10 @@
 #ifndef OBSERVE_OBJECT
 #define OBSERVE_OBJECT
 
-#include <PtrSet.h>
+#include "PtrSet.h"
+
 #include <assert.h>
+
 #include <string>
 
 template <class Observer> class ObserveInfo {

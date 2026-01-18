@@ -1,4 +1,5 @@
 #include "nameQualificationSupport.h"
+
 #include "sage3basic.h"
 
 #include "sageGeneric.h"

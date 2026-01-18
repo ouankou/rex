@@ -1,21 +1,34 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "AnalysisDebuggingUtils.h"
+
 #include <fstream>
+
 #include <iostream>
+
 #include <sstream>
+
 #include <stdlib.h>
+
 #include <unistd.h>
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "liveDeadVarAnalysis.h"
+
 #include "printAnalysisStates.h"
 
 using namespace std;

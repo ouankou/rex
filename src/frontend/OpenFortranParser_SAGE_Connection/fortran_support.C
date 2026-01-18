@@ -4,12 +4,14 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
-#include "rose_config.h"
-
 #include "fortran_support.h"
 
+#include "rose_config.h"
+
 #include <memory>
+
 #include <mutex>
+
 #include <unordered_map>
 
 // FMZ: Location of global variables
@@ -22,8 +24,7 @@ using namespace Rose;
 
 std::list<SgInterfaceStatement *> astInterfaceStack;
 
-#include "token.h"
-
+#include <token.h>
 namespace {
 struct TokenDeleter {
   void operator()(Token_t *token) const {
@@ -100,7 +101,7 @@ Token_t *createSyntheticToken(int line, int col, int type, const char *text) {
 }
 
 string getCurrentFilename() {
-  // DQ (12/18/2008): Added comment:  This function supports the Fortran
+  // DQ (12/18/2008): Added comment: This function supports the Fortran
   // "include" mechanism and is independent of the CPP specific "#include"
   // mechanism.
 

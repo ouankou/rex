@@ -1,7 +1,7 @@
 #ifndef GRAPH_UPDATE_H
 #define GRAPH_UPDATE_H
 
-#include <GraphAccess.h>
+#include "GraphAccess.h"
 
 template <class Graph> class SelectSingleNode {
   Graph *g;

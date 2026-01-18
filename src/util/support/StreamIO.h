@@ -2,7 +2,9 @@
 #define STREAM_IO_H
 
 #include <assert.h>
+
 #include <iostream>
+
 #include <string>
 
 inline bool is_space(char c) { return c == ' ' || c == '\t' || c == '\n'; }

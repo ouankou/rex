@@ -1,8 +1,11 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "AstDOTGeneration.h"
+
+#include "Rose/StringUtility.h"
+
 #include "sage3basic.h"
+
 #include "wholeAST_API.h"
-#include <Rose/StringUtility.h>
 // #include "copyGraph.h"
 // #include "astGraph.h"
 // #include <fstream>

@@ -2,9 +2,11 @@
 #ifndef TREE_IMPL_H
 #define TREE_IMPL_H
 
-#include <DoublyLinkedList.h>
+#include "DoublyLinkedList.h"
+
+#include "mlog.h"
+
 #include <iostream>
-#include <mlog.h>
 
 template <class T> class TreeNodeImpl {
   T *parent;

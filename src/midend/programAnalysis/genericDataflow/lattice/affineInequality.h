@@ -1,24 +1,37 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef AFFINE_INEQUALITY_H
 #define AFFINE_INEQUALITY_H
 
 #include "CallGraphTraverse.h"
+
 #include "LogicalCond.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "cfgUtils.h"
+
 #include "divAnalysis.h"
+
 #include "genericDataflowCommon.h"
+
 #include "printAnalysisStates.h"
 
 #include <functional>
+
 #include <iostream>
+
 #include <list>
+
 #include <queue>
+
 #include <set>
+
 #include <sstream>
+
 #include <string>
 
 // represents the constraint on variables x and y: x*a <= y*b + c

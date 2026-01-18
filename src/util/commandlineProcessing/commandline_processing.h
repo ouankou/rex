@@ -1,11 +1,17 @@
 #ifndef ROSE_COMMANDLINE_UTILITY_H
 #define ROSE_COMMANDLINE_UTILITY_H
 // #include "rosedefs.h"
+
 #include "rosedll.h"
+
 #include <list>
+
 #include <map>
+
 #include <stack>
+
 #include <string>
+
 #include <vector>
 #define Rose_STL_Container std::vector
 

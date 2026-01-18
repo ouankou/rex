@@ -5,10 +5,11 @@
  *****************************************************************************/
 
 #include <assert.h>
+
 #include <iostream>
 
 // use and define table objects
-#include "TableDefinitions.h"
+#include <TableDefinitions.h>
 DEFINE_TABLE_PROJECTS();
 DEFINE_TABLE_FILES();
 DEFINE_TABLE_FUNCTIONS();
@@ -21,10 +22,11 @@ DEFINE_TABLE_TYPES();
 #define TABLES_DEFINED
 
 // include the other header files
-#include "Callgraph.h"
-#include "Classhierarchy.h"
-#include "GlobalDatabaseConnection.h"
+#include <Callgraph.h>
 
+#include <Classhierarchy.h>
+
+#include <GlobalDatabaseConnection.h>
 //-----------------------------------------------------------------------------
 // main - create test instances
 int main(int argc, char *argv[]) {

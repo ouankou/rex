@@ -1,9 +1,13 @@
 #include "AstAttributeMechanism.h"
+
 #include "sage3basic.h"
 
 #include "roseInternal.h"
+
 #include <cstddef>
+
 #include <cstring>
+
 #include <sstream>
 
 using namespace Rose;

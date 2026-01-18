@@ -1,10 +1,12 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "latticeFull.h"
 
 #include <fstream>
+
 #include <iostream>
+
 #include <sstream>
 using namespace std;
 #include <map>

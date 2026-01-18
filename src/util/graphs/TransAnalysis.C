@@ -1,13 +1,16 @@
 #include <iostream>
+
 #include <stdlib.h>
 
 #include <vector>
 
-#include <SCCAnalysis.h>
-#include <TransAnalysis.h>
+#include "SCCAnalysis.h"
 
-#include <DGBaseGraphImpl.h>
-#include <GraphScope.h>
+#include "TransAnalysis.h"
+
+#include "DGBaseGraphImpl.h"
+
+#include "GraphScope.h"
 
 #include <assert.h>
 

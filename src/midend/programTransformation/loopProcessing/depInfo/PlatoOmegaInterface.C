@@ -11,21 +11,34 @@
 // #include <rose.h>
 // #include <general.h>
 
-#include <AstInterface.h>
-#include <LoopInfoInterface.h>
-#include <StmtInfoCollect.h>
-#include <iostream>
-#include <string.h>
+#include "AstInterface.h"
+
+#include "CommandOptions.h"
+
+#include "LoopInfoInterface.h"
 
 #include "PlatoOmegaInterface.h"
-#include <CommandOptions.h>
+
+#include "StmtDepAnal.h"
+
+#include "StmtInfoCollect.h"
+
 #include <DDTypes.h>
+
 #include <MathUtils.h>
-#include <StmtDepAnal.h>
+
 #include <fcntl.h>
+
+#include <iostream>
+
 #include <sstream>
+
 #include <stdio.h>
+
+#include <string.h>
+
 #include <sys/resource.h>
+
 #include <sys/time.h>
 
 DebugLog DebugOmegaDep("-debugomegadep");

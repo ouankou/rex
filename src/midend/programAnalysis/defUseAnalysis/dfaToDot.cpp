@@ -2,8 +2,11 @@
 // 8,1MB
 
 #include "dfaToDot.h"
+
 #include "DFAFilter.h"
+
 #include "LivenessAnalysis.h"
+
 #include "sage3basic.h"
 
 using namespace std;

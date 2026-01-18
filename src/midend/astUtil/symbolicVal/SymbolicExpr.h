@@ -2,8 +2,11 @@
 #define SYMBOLIC_EXPR
 
 #include "LatticeElemList.h"
+
 #include "SymbolicVal.h"
+
 #include <assert.h>
+
 #include <iostream>
 
 SymbolicVal ApplyBinOP(SymOpType t, const SymbolicVal &v1,

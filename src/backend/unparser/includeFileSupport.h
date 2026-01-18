@@ -1,6 +1,12 @@
 
 // New file for include file support code
 
+#include "AstProcessing.h"
+
+#include <set>
+
+#include <string>
+
 namespace IncludeFileSupport {
 
 class InheritedAttribute {

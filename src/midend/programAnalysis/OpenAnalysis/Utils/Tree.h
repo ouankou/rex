@@ -46,10 +46,12 @@
 
 // STL headers
 #include <deque>
+
 #include <set>
 
 // Mint headers
 #include "Exception.h"
+
 #include "Iterator.h"
 
 //--------------------------------------------------------------------------------------------------------------------

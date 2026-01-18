@@ -1,12 +1,20 @@
 #include "FileUtility.h"
+
 #include "detectMacroOrIncludeFileExpansions.h"
+
 #include "fixupNames.h"
+
 #include "frontierDetection.h"
+
 #include "markLhsValues.h"
+
 #include "previousAndNextNode.h"
-#include "rose_config.h"
-#include "sage3basic.h"
+
 #include "tokenStreamMapping.h"
+
+#include "sage3basic.h"
+
+#include "rose_config.h"
 
 #include <cstdlib>
 
@@ -44,14 +52,20 @@
 // For reusing some code from Qing's loop optimizer
 // Liao, 2/26/2009
 #include "AstInterface_ROSE.h"
+
 #include "LoopTransformInterface.h"
 
 #include "AnnotCollect.h"
+
 #include "ArrayAnnot.h"
+
 #include "ArrayInterface.h"
+
 #include "CommandOptions.h"
+
 #include "DepInfoAnal.h" // for AnalyzeStmtRefs()
 #include "OperatorAnnotation.h"
+
 #include "ValueAnnot.h"
 
 #include "LoopUnroll.h"
@@ -59,12 +73,18 @@
 
 #include <algorithm> // for set operations
 #include <cstring>
+
 #include <iostream>
+
 #include <llvm/Support/ManagedStatic.h>
+
 #include <map>
+
 #include <numeric> // for std::accumulate
 #include <sstream>
+
 #include <unordered_map>
+
 #include <unordered_set>
 
 namespace sg {
@@ -114,9 +134,10 @@ template <class T> void setSourcePositionToDefault(T *node);
 }
 
 // We need this so that USE_CMAKE will be seen (set via configure).
+#include "jserver.h"
+
 #include "rose_config.h"
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-#include "jserver.h"
 #endif
 
 // DQ (3/4/2014): We need this feature to support the function:
@@ -18399,12 +18420,13 @@ void SageInterface::appendStatementWithDependentDeclaration(
   addMessageStatement(firstStatmentInFile,
                       "/* REQUIRED DEPENDENT DECLARATIONS */");
 
-  // DQ (3/6/2009): Added support to permit exclusion of "#include<header.h>"
-  // files since they can make it much more difficult for external tools. Later
-  // we will check if there are remaining unsatisfied dependent declarations
-  // (which must be in the header file) so we can automate this step.
+  // DQ (3/6/2009): Added support to permit exclusion of "#include <header.h>"
+  // files since they can make it much more difficult for external tools.
+  // Later we will check if there are remaining unsatisfied dependent
+  // declarations (which must be in the header file) so we can automate this
+  // step.
   if (excludeHeaderFiles == false) {
-    // Include all the "#include<header.h>" cpp directives obtained from the
+    // Include all the "#include <header.h>" cpp directives obtained from the
     // original file.
     vector<PreprocessingInfo *>::reverse_iterator j =
         requiredDirectivesList.rbegin();
@@ -21625,7 +21647,7 @@ void SageInterface::ReductionRecognition(
     // referenced twice within a same statement
     else if (var_references[initname].size() == 2) {
       MLOG_DEBUG_CXX("sageInterface")
-          "A candidate used twice:" << initname->get_name().getString() << endl;
+      "A candidate used twice:" << initname->get_name().getString() << endl;
       SgVarRefExp *ref_exp1 = *(var_references[initname].begin());
       SgVarRefExp *ref_exp2 = *(++var_references[initname].begin());
       // TODO: recognize  maxV = array[i]>maxV? array[i]:maxV // this can be

@@ -1,15 +1,18 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef VIRTUAL_CFG_ITERATOR
 #define VIRTUAL_CFG_ITERATOR
 
 #include "DataflowCFG.h"
+
 #include "virtualCFG.h"
 // #include "baseCFGIterator.h"
 
 #include <list>
+
 #include <set>
+
 #include <string>
 
 namespace VirtualCFG {

@@ -1,10 +1,13 @@
 
 #include <iostream>
+
 #include <sstream>
 
-#include <CommandOptions.h>
-#include <PtrAnal.h>
-#include <ROSE_ASSERT.h>
+#include "CommandOptions.h"
+
+#include "PtrAnal.h"
+
+#include "ROSE_ASSERT.h"
 
 using namespace std;
 

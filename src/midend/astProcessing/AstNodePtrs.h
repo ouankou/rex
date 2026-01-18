@@ -5,7 +5,9 @@
 #define ASTNODEPTRS_H
 
 #include "AstProcessing.h"
+
 #include <iomanip>
+
 #include <string>
 
 // DQ (8/10/2004):

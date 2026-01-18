@@ -1,16 +1,19 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef CFGUTILS_H
 #define CFGUTILS_H
 
 #include "DataflowCFG.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "genericDataflowCommon.h" // for quad typedefs
 #include "variables.h"
 // #include "DataflowCFG.cfgToDot.h"
 
 #include <set>
+
 #include <string>
 
 namespace cfgUtils {

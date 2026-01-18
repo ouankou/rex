@@ -1,8 +1,12 @@
 
 #include "AnnotExpr.h"
+
+#include "ROSE_ASSERT.h"
+
 #include "TypeAnnotation.h"
-#include <ROSE_ASSERT.h>
+
 #include <list>
+
 #include <sstream>
 
 // DQ (12/31/2005): This is OK if not declared in a header file
@@ -125,6 +129,6 @@ void TypeAnnotCollection<Descriptor>::read_descriptor(
 
 #ifndef TEMPLATE_ONLY
 #define TEMPLATE_ONLY
-#include <AnnotDescriptors.h>
+#include "AnnotDescriptors.h"
 template class ReadAnnotCollection<TypeDescriptor, '{', ';', '}'>;
 #endif

@@ -1,4 +1,4 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef ROSE_TaintAnalysis_H
@@ -27,7 +27,9 @@
 // Lattice class, but "ConstrGraph.h" that defines "ConstrGraph" (and apparently
 // no documentation as to what "Constr" means).
 #include "dataflow.h"
+
 #include "lattice.h"
+
 #include "liveDeadVarAnalysis.h" // misspelled? Shouldn't it be liveDeadVarsAnalysis or LiveDeadVarsAnalysis?
 
 // USABILITY: The abundant use of dynamic_cast makes it seem like something's

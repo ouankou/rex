@@ -2,17 +2,24 @@
 #ifndef CALL_GRAPH_H
 #define CALL_GRAPH_H
 
-#include <GraphDotOutput.h>
-#include <VirtualGraphCreate.h>
-#include <nodeQuery.h>
+#include "GraphDotOutput.h"
+
+#include "VirtualGraphCreate.h"
+
+#include "nodeQuery.h"
 
 #include "AstDiagnostics.h"
 
 #include <functional>
+
 #include <iostream>
+
 #include <queue>
+
 #include <sstream>
+
 #include <string>
+
 #include <unordered_map>
 
 class FunctionData;

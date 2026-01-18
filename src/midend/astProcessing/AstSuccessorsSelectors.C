@@ -4,13 +4,16 @@
 // $Id: AstSuccessorsSelectors.C,v 1.4 2008/01/08 02:56:39 dquinlan Exp $
 
 #include "roseInternal.h"
+
 #include "sage3basic.h"
+
 #include <algorithm>
+
 #include <typeinfo>
 
 #include "AstSuccessorsSelectors.h"
-#include "Cxx_GrammarTreeTraversalAccessEnums.h"
 
+#include <Cxx_GrammarTreeTraversalAccessEnums.h>
 // MS: 2003
 void AstSuccessorsSelectors::selectDefaultSuccessors(
     SgNode *node, SuccessorsContainer &succContainer) {

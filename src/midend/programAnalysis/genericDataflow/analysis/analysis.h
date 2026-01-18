@@ -1,22 +1,31 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef ANALYSIS_H
 #define ANALYSIS_H
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
 
 class Analysis;
 
 #include "lattice.h"
+
 #include "nodeState.h"
+
 #include "varSets.h"
+
 #include "variables.h"
+
 #include <map>
+
 #include <set>
+
 #include <vector>
 
 extern int analysisDebugLevel;

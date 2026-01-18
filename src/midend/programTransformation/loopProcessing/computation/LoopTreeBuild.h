@@ -2,8 +2,9 @@
 #ifndef BUILD_LOOP_TREE
 #define BUILD_LOOP_TREE
 
-#include <LoopTree.h>
-#include <ProcessAstTree.h>
+#include "LoopTree.h"
+
+#include "ProcessAstTree.h"
 
 class LoopTreeBuild : public ProcessAstTree<AstNodePtr> {
   LoopTreeCreate *lt;

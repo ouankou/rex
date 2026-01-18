@@ -1,7 +1,7 @@
 #ifndef TRANSFORM_ASTTREE_H
 #define TRANSFORM_ASTTREE_H
 
-#include <LoopTransformInterface.h>
+#include "LoopTransformInterface.h"
 
 class BreakupStatement : public TransformAstTree {
   int breaksize;

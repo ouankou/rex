@@ -5,6 +5,7 @@
  *****************************************/
 // tps : Switching from rose.h to sage3 changed size from 18,6 MB to 8,3MB
 #include "DefUseAnalysis_perFunction.h"
+
 #include "sage3basic.h"
 
 #if ROSE_WITH_LIBHARU

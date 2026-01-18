@@ -1,9 +1,12 @@
 #ifndef VALUE_ANNOT_H
 #define VALUE_ANNOT_H
 
-#include <AnnotExpr.h>
-#include <CPPAstInterface.h>
-#include <OperatorAnnotation.h>
+#include "AnnotExpr.h"
+
+#include "CPPAstInterface.h"
+
+#include "OperatorAnnotation.h"
+
 #include <list>
 
 class HasValueDescriptor

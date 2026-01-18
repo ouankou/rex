@@ -1,15 +1,23 @@
 #include "SymbolicVal.h"
-#include <mlog.h>
+
+#include "mlog.h"
 
 #include "BooleanOperators.h"
+
 #include "CommandOptions.h"
+
 #include "SymbolicMultiply.h"
+
 #include "SymbolicPlus.h"
+
 #include "SymbolicSelect.h"
+
 #include "UnaryOperators.h"
 
 #include <list>
+
 #include <sstream>
+
 #include <stdio.h>
 using namespace std;
 void SymbolicValImpl ::Dump() const { std::cerr << toString(); }

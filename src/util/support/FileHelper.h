@@ -5,10 +5,12 @@
 // uses a proper path type and supports both version 2 and version 3 of
 // std::filesystem.
 
-#include <Rose/FileSystem.h>
+#include "Rose/FileSystem.h"
 
 #include <filesystem>
+
 #include <list>
+
 #include <string>
 
 class PreprocessingInfo;

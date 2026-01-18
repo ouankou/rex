@@ -1,10 +1,11 @@
 
-#include <general.h>
+#include "general.h"
 
 #include <assert.h>
+
 #include <stdlib.h>
 
-#include <DepEDD.h>
+#include "DepEDD.h"
 
 inline void CopyVec(DepRel *vec1, DepRel *vec2, unsigned num) {
   for (unsigned i = 0; i < num; i++)

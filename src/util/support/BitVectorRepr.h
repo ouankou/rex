@@ -1,13 +1,19 @@
 #ifndef BITVECTOR_DATA_REPR_H
 #define BITVECTOR_DATA_REPR_H
 
+#include "CountRefHandle.h"
+
+#include "DoublyLinkedList.h"
+
+#include "FunctionObject.h"
+
 #include "rosedll.h"
-#include <CountRefHandle.h>
-#include <DoublyLinkedList.h>
-#include <FunctionObject.h>
+
+#include "util/mlog.h"
+
 #include <map>
+
 #include <sstream>
-#include <util/mlog.h>
 
 class BitVectorReprImpl {
   unsigned *impl;

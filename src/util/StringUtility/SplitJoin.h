@@ -1,12 +1,16 @@
 #ifndef ROSE_StringUtility_SplitJoin_H
 #define ROSE_StringUtility_SplitJoin_H
 
-#include <Rose/Constants.h>
-#include <rosedll.h>
+#include "Rose/Constants.h"
+
+#include "rosedll.h"
 
 #include <list>
+
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 
 namespace Rose {

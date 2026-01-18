@@ -1,7 +1,10 @@
-#include <CompSliceLocality.h>
-#include <CompSliceRegistry.h>
-#include <LoopTreeDepComp.h>
-#include <ReuseAnalysis.h>
+#include "CompSliceLocality.h"
+
+#include "CompSliceRegistry.h"
+
+#include "LoopTreeDepComp.h"
+
+#include "ReuseAnalysis.h"
 
 // not precise since inter-statement spatial reuses not considered
 float CompSliceLocalityAnal::SpatialReuses(const CompSlice *slice) {

@@ -1,11 +1,14 @@
-#include <Convert.h>
+#include "Convert.h"
 
-#include <IntegerOps.h> // rose
-#include <Predicate.h>
-#include <SplitJoin.h>
+#include "IntegerOps.h" // rose
+#include "Predicate.h"
+
+#include "SplitJoin.h"
 
 #include <cassert>
+
 #include <list>
+
 #include <regex>
 
 namespace Rose {

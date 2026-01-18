@@ -1,10 +1,16 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "ompSupport.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <algorithm>
+
 #include <iostream>
+
 #include <sstream>
+
 #include <string>
 
 using namespace std;

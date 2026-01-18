@@ -1,6 +1,8 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "astPostProcessing/fixupTemplateInstantiations.h"
+
 #include "markCompilerGenerated.h"
+
 #include "sage3basic.h"
 void fixupTemplateInstantiations(SgNode *node) {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.

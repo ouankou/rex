@@ -11,7 +11,9 @@
 // #include "fortran_support.h"
 
 #include <map>
+
 #include <string>
+
 #include <vector>
 
 #define SKIP_SYNTAX_CHECK "-rose:skip_syntax_check"

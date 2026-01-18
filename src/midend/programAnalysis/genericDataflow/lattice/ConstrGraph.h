@@ -1,4 +1,4 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef CONSTR_GRAPH_H
@@ -7,23 +7,38 @@
 #include "genericDataflowCommon.h"
 
 #include <functional>
+
 #include <iostream>
+
 #include <map>
+
 #include <queue>
+
 #include <set>
+
 #include <sstream>
+
 #include <string>
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "affineInequality.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "divAnalysis.h"
+
 #include "latticeFull.h"
 // GB : 2011-03-05 (Removing Sign Lattice Dependence)#include "sgnAnalysis.h"
+
 #include "liveDeadVarAnalysis.h"
 
 extern int CGDebugLevel;

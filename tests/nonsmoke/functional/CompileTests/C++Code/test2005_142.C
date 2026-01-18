@@ -5,39 +5,40 @@
 // where "fid" is of integer type
 
 #include <vector>
+
 #include <list>
+
 #include <map>
+
 #include <string>
 
 using namespace std;
 
-vector<int>::iterator getIterator( const vector<int> & X );
+vector<int>::iterator getIterator(const vector<int> &X);
 
+class myVector {
+public:
+  const myVector &operator*() const;
 
-class myVector
-   {
-     public:
-          const myVector & operator*() const;
+  myVector();
 
-          myVector();
+  // Presence of explicit copy constructor causes code generation to be "value =
+  // b-c.norm();"
+  myVector(const class myVector &x);
 
-       // Presence of explicit copy constructor causes code generation to be "value = b-c.norm();"
-          myVector (const class myVector &x);
+  // An explicit operator= appears to have no effect!
+  // myVector operator= (const class vector &x) const;
+};
 
-       // An explicit operator= appears to have no effect!
-       // myVector operator= (const class vector &x) const;
-   };
+double min(double x, double y);
 
-double min (double x, double y);
-
-void foo()
-   {
-     myVector *a = NULL;
+void foo() {
+  myVector *a = NULL;
 
   // Problem code
-     myVector & b = *(a + 1);
+  myVector &b = *(a + 1);
 
-     int offset;
+  int offset;
 
 #if 0
      vector<int> x;
@@ -62,5 +63,4 @@ void foo()
   // pair<int,string> & value_z = *(z.begin() + offset);
      const pair<int,string> & value_z = *(z.begin());
 #endif
-   }
-
+}

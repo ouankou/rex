@@ -1,5 +1,6 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "fixupNullPointers.h"
+
 #include "sage3basic.h"
 // This file supports functionality to fixup NULL pointers in
 // the AST that we would like to not be NULL in a valid AST.

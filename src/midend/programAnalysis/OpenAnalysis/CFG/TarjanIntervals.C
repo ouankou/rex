@@ -77,14 +77,18 @@
 using std::cout;
 #include <algorithm> // for max
 #include <list>
+
 #include <map>
 
 #ifdef NO_STD_CHEADERS
+#include <cstdio>
+
+#include <cstring>
+
 #include <stdio.h>
+
 #include <string.h>
 #else
-#include <cstdio>
-#include <cstring>
 using namespace std; // For compatibility with non-std C headers
 #endif
 

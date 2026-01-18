@@ -7,9 +7,11 @@
 // DQ (10/11/2007): Make it an error to compile this file!
 // #include <copy_unparser.h>
 
+#include "support/CommandOptions.h"
+
 #include <list>
+
 #include <string>
-#include <support/CommandOptions.h>
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;

@@ -45,6 +45,7 @@ $Header:
 
 #ifdef __cplusplus
 #include <string>
+
 #include <vector>
 #endif
 

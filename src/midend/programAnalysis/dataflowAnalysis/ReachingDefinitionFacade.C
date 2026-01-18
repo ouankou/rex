@@ -1,5 +1,7 @@
 #include "DefUseChain.h"
+
 #include "GraphDotOutput.h"
+
 #include "ReachingDefinitionFacade.h"
 
 ReachingDefinitionFacade::ReachingDefinitionFacade(SgNode *head) {

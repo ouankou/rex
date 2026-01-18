@@ -1,4 +1,5 @@
 #include "fixupUseAndUsingDeclarations.h"
+
 #include "sage3basic.h"
 
 void fixupFortranUseDeclarations(SgNode * /*node*/) {

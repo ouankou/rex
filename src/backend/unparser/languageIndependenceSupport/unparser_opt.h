@@ -22,6 +22,8 @@ information
 !*/
 #include <stdio.h>
 
+#include <string>
+
 class Unparser_Opt {
   //! This class controls the final unparsing of the AST
 public:

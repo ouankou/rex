@@ -58,8 +58,9 @@
 //*************************** User Include Files ****************************
 
 // OpenAnalysis headers.
+#include "OpenAnalysis/Utils/UnionFindUniverse.h"
+
 #include "RIFG.h"
-#include <OpenAnalysis/Utils/UnionFindUniverse.h>
 
 enum RITarjType {
   RI_TARJ_NOTHING,

@@ -2,10 +2,13 @@
 #ifndef DEP_COMP_TRANSFORM_H
 #define DEP_COMP_TRANSFORM_H
 
-#include <DoublyLinkedList.h>
-#include <GraphScope.h>
-#include <LoopTreeLocality.h>
-#include <LoopTreeTransform.h>
+#include "DoublyLinkedList.h"
+
+#include "GraphScope.h"
+
+#include "LoopTreeLocality.h"
+
+#include "LoopTreeTransform.h"
 
 class DepCompDistributeLoop {
 public:

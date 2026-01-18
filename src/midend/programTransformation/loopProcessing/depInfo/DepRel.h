@@ -2,9 +2,12 @@
 #ifndef DEP_REL_INFO
 #define DEP_REL_INFO
 
-#include <const.h>
+#include "const.h"
+
 #include <iostream>
+
 #include <stdlib.h>
+
 #include <string>
 
 typedef enum {

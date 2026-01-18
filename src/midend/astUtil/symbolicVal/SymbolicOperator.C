@@ -1,12 +1,20 @@
 #include "BooleanOperators.h"
+
 #include "CommandOptions.h"
+
 #include "Matrix.h"
+
 #include "SymbolicExpr.h"
+
 #include "SymbolicMultiply.h"
+
 #include "SymbolicPlus.h"
+
 #include "SymbolicSelect.h"
+
 #include "UnaryOperators.h"
-#include <mlog.h>
+
+#include "mlog.h"
 
 #define COMPARE_MAX 10
 static int comparetime = 0;

@@ -3,6 +3,7 @@
  *  \brief Class to generate numbered names.
  */
 #include "NameGenerator.hh"
+
 #include <sstream>
 
 using namespace std;

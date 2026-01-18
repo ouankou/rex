@@ -5,12 +5,14 @@
 #define ASTTEXTATTRIBUTEHANDLING_H
 
 #include <iomanip>
+
 #include <sstream>
+
 #include <string>
 
 #include "AstProcessing.h"
-#include "Cxx_Grammar.h"
 
+#include "Cxx_Grammar.h"
 class AstTextAttribute : public AstAttribute {
 public:
   AstTextAttribute(std::string s) : source(s) {}

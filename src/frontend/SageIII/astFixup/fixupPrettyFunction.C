@@ -1,4 +1,5 @@
 #include "fixupPrettyFunction.h"
+
 #include "sage3basic.h"
 
 void fixupPrettyFunctionVariables(SgNode *node) {

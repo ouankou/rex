@@ -1,10 +1,16 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "omp_lowering.h"
+
 #include "Outliner.hh"
+
 #include "RoseAst.h"
+
 #include "rex_llvm.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <sstream>
 
 using namespace std;
@@ -2398,7 +2404,10 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
  *
  *
 #include "libgomp_g.h"
-#include "omp.h"
+
+
+#include <omp.h>
+
 #include <stdio.h>
 
 //void main_omp_fn_0 (struct _omp_data_s_0* _omp_data_i);

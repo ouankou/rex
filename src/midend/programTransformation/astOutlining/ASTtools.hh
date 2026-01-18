@@ -10,13 +10,18 @@
 #if !defined(INC_ASTTOOLS_HH)
 #define INC_ASTTOOLS_HH //! ASTtools.hh included.
 
-#include "Cxx_Grammar.h"
 #include "rosedll.h"
 
+#include "Cxx_Grammar.h"
+
 #include <cstddef>
+
 #include <map>
+
 #include <ostream>
+
 #include <set>
+
 #include <string>
 
 namespace ASTtools {

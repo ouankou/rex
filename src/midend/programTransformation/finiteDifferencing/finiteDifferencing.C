@@ -1,16 +1,25 @@
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "AstConsistencyTests.h"
+
 #include "sage3basic.h"
+
 #include "unparser.h"
 
 #include "expressionTreeEqual.h"
+
 #include "inlinerSupport.h"
+
 #include "patternRewrite.h"
+
 #include "pre.h"
+
 #include "replaceExpressionWithStatement.h"
+
 #include <iomanip>
+
 #include <iostream>
+
 #include <vector>
 
 #include "finiteDifferencing.h"

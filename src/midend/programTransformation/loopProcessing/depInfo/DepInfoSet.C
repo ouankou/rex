@@ -1,7 +1,8 @@
 #include <stdlib.h>
 
-#include <DepInfoSet.h>
-#include <DepRel.h>
+#include "DepInfoSet.h"
+
+#include "DepRel.h"
 
 typedef LatticeElemList<DepInfo>::iterator DepInfoSetIterator;
 

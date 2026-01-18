@@ -1,6 +1,9 @@
 #include "DefUseChain.h"
+
 #include "GraphDotOutput.h"
+
 #include "ReachingDefinitionFacade.h"
+
 #include "sage3basic.h"
 
 ReachingDefinitionFacade::ReachingDefinitionFacade(SgNode *head) {

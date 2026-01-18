@@ -171,6 +171,7 @@ public:
 // stream and parts from the AST; because there representation in the
 // token stream is only as the unexpanded macro).
 #include "detectMacroExpansionsToBeUnparsedAsAstTransformations.h"
+
 #include "detectMacroOrIncludeFileExpansions.h"
 
 // DQ (1/7/2021): Adding function to header so that I can call it elsewhere for

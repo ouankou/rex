@@ -2,8 +2,11 @@
 #define VIRTUAL_CFG_H
 
 #include "rosedll.h"
+
 #include <assert.h>
+
 #include <string>
+
 #include <vector>
 
 //! FIXME: The CFG support for Fortran is still buggy -- if Fortran is

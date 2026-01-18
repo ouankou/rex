@@ -8,16 +8,17 @@
 
 /*LINTLIBRARY*/
 
-#ifndef	_XOPEN_SOURCE
-#   define _XOPEN_SOURCE 500
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 500
 #endif
 
 #include "udunits2.h"
+
 #include "idToUnitMap.h"
+
 #include "unitToIdMap.h"
 
-extern void coreFreeSystem(ut_system* system);
-
+extern void coreFreeSystem(ut_system *system);
 
 /*
  * Frees a unit-system.  All unit-to-identifier and identifier-to-unit mappings
@@ -27,13 +28,10 @@ extern void coreFreeSystem(ut_system* system);
  *	system		Pointer to the unit-system to be freed.  Use of "system"
  *			upon return results in undefined behavior.
  */
-void
-ut_free_system(
-    ut_system*	system)
-{
-    if (system != NULL) {
-	itumFreeSystem(system);
-	utimFreeSystem(system);
-	coreFreeSystem(system);
-    }
+void ut_free_system(ut_system *system) {
+  if (system != NULL) {
+    itumFreeSystem(system);
+    utimFreeSystem(system);
+    coreFreeSystem(system);
+  }
 }

@@ -1,5 +1,6 @@
 
 #include "edge_ptr_repl.h"
+
 #include "sage3basic.h"
 
 template <typename HandlerT, typename TraveralT>

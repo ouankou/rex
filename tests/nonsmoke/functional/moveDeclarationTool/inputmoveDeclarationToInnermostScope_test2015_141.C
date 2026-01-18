@@ -1,21 +1,21 @@
 #include <list>
+
 #include <memory>
+
 #include <string>
 
 namespace XXX {
-  namespace YYY {
-    class ZZZ
-       {
-         public: 
-              bool foo(int var) const;
-       };
-  }
-}
+namespace YYY {
+class ZZZ {
+public:
+  bool foo(int var) const;
+};
+} // namespace YYY
+} // namespace XXX
 
 namespace Ares {
 
-void foobar()
-   {
+void foobar() {
   const std::shared_ptr<XXX::YYY::ZZZ> var_0;
 
   std::list<std::string> var_1;
@@ -36,6 +36,6 @@ void foobar()
       }
     }
   }
-   }
+}
 
-   } // namespace Ares
+} // namespace Ares

@@ -1,10 +1,14 @@
 #ifndef AST_GRAPH_H
 #define AST_GRAPH_H
 
-#include "Cxx_Grammar.h"
 #include "DOTRepresentation.h"
+
+#include "Cxx_Grammar.h"
+
 #include <string>
+
 #include <utility>
+
 #include <vector>
 // AST Graph support developed by Andreas
 

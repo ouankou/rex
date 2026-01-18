@@ -1,7 +1,11 @@
 #include "outlining_lib.h"
+
 #include <assert.h>
+
 #include <stdarg.h>
+
 #include <stdio.h>
+
 #include <stdlib.h>
 
 static void *functionLib = 0;

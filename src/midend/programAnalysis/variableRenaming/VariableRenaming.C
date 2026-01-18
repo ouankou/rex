@@ -1,17 +1,29 @@
 /** Author: Justin Frye */
 
 #include "VariableRenaming.h"
+
 #include "sage3basic.h"
+
 #include "sageInterface.h"
+
 #include <algorithm>
+
 #include <fstream>
+
 #include <map>
+
 #include <queue>
+
 #include <sstream>
+
 #include <stack>
+
 #include <string>
+
 #include <unordered_map>
+
 #include <unordered_set>
+
 #include <vector>
 
 using namespace std;

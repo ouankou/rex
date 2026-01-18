@@ -13,15 +13,14 @@
           (std::find_if <> ((this) -> mValidTransportZAs.begin(),(this) -> mValidTransportZAs.end(),std::bind2nd <> (std::greater <int>*()* ,nextLowestZA)));
 #endif
 
-#include<functional>
-#include<algorithm>
-#include<vector>
+#include <functional>
 
-void foo()
-   {
-     std::greater<int> X();
+#include <algorithm>
 
-     std::bind2nd(std::greater<int>(), 42);
-   }
+#include <vector>
 
+void foo() {
+  std::greater<int> X();
 
+  std::bind2nd(std::greater<int>(), 42);
+}

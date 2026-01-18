@@ -1,11 +1,16 @@
-#include <CommandOptions.h>
-#include <DepTestStatistics.h>
-#include <PlatoOmegaInterface.h>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string.h>
+#include "CommandOptions.h"
 
+#include "DepTestStatistics.h"
+
+#include "PlatoOmegaInterface.h"
+
+#include <fstream>
+
+#include <iostream>
+
+#include <sstream>
+
+#include <string.h>
 DepTestStatistics DepStats;
 
 using namespace PlatoOmegaInterface;

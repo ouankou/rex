@@ -1,8 +1,9 @@
 #ifndef ARRAY_REWRITE_H
 #define ARRAY_REWRITE_H
 
-#include <ArrayInterface.h>
-#include <AstInterface.h>
+#include "ArrayInterface.h"
+
+#include "AstInterface.h"
 
 class CreateTmpArray {
   std::map<std::string, AstNodePtr> &varmap;

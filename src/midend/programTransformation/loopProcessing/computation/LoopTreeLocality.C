@@ -1,13 +1,20 @@
 #include <sstream>
+
 #include <stdlib.h>
 
-#include <CommandOptions.h>
-#include <DepGraphTransform.h>
-#include <LoopTransformInterface.h>
-#include <LoopTreeLocality.h>
-#include <ReuseAnalysis.h>
-#include <StmtDepAnal.h>
-#include <StmtInfoCollect.h>
+#include "CommandOptions.h"
+
+#include "DepGraphTransform.h"
+
+#include "LoopTransformInterface.h"
+
+#include "LoopTreeLocality.h"
+
+#include "ReuseAnalysis.h"
+
+#include "StmtDepAnal.h"
+
+#include "StmtInfoCollect.h"
 
 bool DebugRefGraph() {
   static int r = 0;

@@ -1,29 +1,48 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "sage3basic.h"
+
 #include <fstream>
+
 #include <iostream>
+
 #include <list>
+
 #include <sstream>
+
 #include <string.h>
 using namespace std;
 
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "divAnalysis.h"
+
 #include "functionState.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "liveDeadVarAnalysis.h"
+
 #include "variables.h"
 // GB : 2011-03-05 (Removing Sign Lattice Dependence) #include "sgnAnalysis.h"
+
 #include "ConstrGraph.h"
+
 #include "ConstrGraphAnalysis.h"
+
 #include "affineInequality.h"
+
 #include "nodeConstAnalysis.h"
+
 #include "saveDotAnalysis.h"
 
 /*******************************************************************************************
@@ -236,7 +255,7 @@ bool ConstrGraphAnalysis::transfer(const Function &func, const DataflowNode &n,
 
     varID res = SgExpr2Var(isSgExpression(n.getNode()));
     //??? ConstrGraph* resLat =
-    //dynamic_cast<ConstrGraph*>(prodLat->getVarLattice(res));
+    // dynamic_cast<ConstrGraph*>(prodLat->getVarLattice(res));
 
     // If the result expression is live
     // ??? if(resLat) {

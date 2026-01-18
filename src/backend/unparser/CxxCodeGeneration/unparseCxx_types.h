@@ -12,6 +12,7 @@
 
 class SgType;
 class SgDeclarationStatement;
+class SgTemplateInstantiationTypedefDeclaration;
 // class Unparser;
 
 class Unparse_Type {

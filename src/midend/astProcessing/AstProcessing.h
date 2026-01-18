@@ -8,16 +8,21 @@
 #define ROSE_BOTH 2
 
 #include "featureTests.h"
+
 #include "mlog.h"
 
 #include <algorithm>
+
 #include <iostream>
 
-#include "Cxx_Grammar.h"
-#include "rose_attributes_list.h"
 #include "rosedefs.h"
 
+#include "rose_attributes_list.h"
+
+#include "Cxx_Grammar.h"
+
 #include <utility>
+
 #include <vector>
 
 // bool end = false;
@@ -66,6 +71,7 @@ ROSE_DLL_API bool SgTreeTraversal_inFileToTraverse(SgNode *node,
  */
 
 #include "AstSuccessorsSelectors.h"
+
 #include "StackFrameVector.h"
 
 // This type is used as a dummy template parameter for those traversals
@@ -127,8 +133,7 @@ public:
   friend class SgCombinedTreeTraversal<InheritedAttributeType,
                                        SynthesizedAttributeType>;
 
-#include "Cxx_GrammarTreeTraversalAccessEnums.h"
-
+#include <Cxx_GrammarTreeTraversalAccessEnums.h>
 protected:
   virtual InheritedAttributeType
   evaluateInheritedAttribute(SgNode *astNode,

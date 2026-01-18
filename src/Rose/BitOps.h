@@ -1,7 +1,9 @@
 #ifndef ROSE_BitOps_H
 #define ROSE_BitOps_H
 #include "mlog.h"
+
 #include <cstddef>
+
 #include <cstdint>
 
 namespace Rose {

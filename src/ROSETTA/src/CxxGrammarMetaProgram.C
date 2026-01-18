@@ -17,8 +17,11 @@ static const char *description =
 #include "grammar.h"
 
 #include <iostream>
-#include <rose_config.h>
+
+#include "rose_config.h"
+
 #include <string>
+
 #include <vector>
 
 bool verbose = false;

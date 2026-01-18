@@ -1,4 +1,5 @@
 #include "clang-to-dot-private.hpp"
+
 #include "sage3basic.h"
 
 std::string ClangToDotTranslator::Traverse(clang::Decl *decl) {
@@ -316,7 +317,7 @@ bool ClangToDotTranslator::VisitDecl(clang::Decl *decl,
     node_desc.attributes.push_back(                                            \
         std::pair<std::string, std::string>(oss.str(), "X"));                  \
     break;
-#include "clang/Basic/AttrList.inc"
+#include <clang/Basic/AttrList.inc>
     }
   }
 
@@ -585,7 +586,8 @@ bool ClangToDotTranslator::VisitNamespaceDecl(
 
   node_desc.kind_hierarchy.push_back("NamespaceDecl");
 
-  // In LLVM 20, getOriginalNamespace() was removed, use getFirstDecl() instead
+  // In LLVM 20, getOriginalNamespace() was removed, use getFirstDecl()
+  // instead
   node_desc.successors.push_back(std::pair<std::string, std::string>(
       "original_namespace", Traverse(namespace_decl->getFirstDecl())));
 
@@ -871,8 +873,8 @@ bool ClangToDotTranslator::VisitCXXRecordDecl(
       "(CXXRecordecl) definition", Traverse(cxx_record_decl->getDefinition())));
 
   // Pei-Hung: skipping the remaining processes when there is no definition
-  // found.  This should avoid issues when retriving bases, vbases, decls, ctors
-  // and friends.
+  // found.  This should avoid issues when retriving bases, vbases, decls,
+  // ctors and friends.
   if (!cxx_record_decl->hasDefinition())
     return res;
 
@@ -1038,8 +1040,8 @@ bool ClangToDotTranslator::VisitTemplateTypeParmDecl(
 
   if (template_type_parm_decl->hasDefaultArgument())
     node_desc.successors.push_back(
-        // In LLVM 20, getDefaultArgument() returns TemplateArgumentLoc, need to
-        // extract Type*
+        // In LLVM 20, getDefaultArgument() returns TemplateArgumentLoc, need
+        // to extract Type*
         std::pair<std::string, std::string>(
             "default_argument",
             Traverse(template_type_parm_decl->getDefaultArgument()

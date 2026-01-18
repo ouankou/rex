@@ -1,16 +1,23 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef VARIABLES_H
 #define VARIABLES_H
 
 #include "genericDataflowCommon.h"
+
 #include <iosfwd>
+
 #include <list>
+
 #include <map>
+
 #include <set>
+
 #include <string>
+
 #include <utility>
+
 #include <vector>
 
 class varID;

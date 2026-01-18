@@ -2,13 +2,21 @@
 #define ROSE_FileSystem_H
 
 #include "mlog.h"
+
 #include "rosedll.h"
+
 #include <filesystem>
+
 #include <fstream>
+
 #include <iterator>
+
 #include <regex>
+
 #include <streambuf>
+
 #include <string>
+
 #include <vector>
 
 namespace Rose {

@@ -1,9 +1,13 @@
 // Put here code used to construct SgOmp* nodes
 // Liao 10/8/2010
 #include "ompAstConstruction.h"
+
 #include "astPostProcessing.h"
+
 #include "rose_paths.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
 
 #include <tuple>

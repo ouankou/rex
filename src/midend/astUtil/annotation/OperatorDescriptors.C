@@ -1,9 +1,14 @@
 
 #include "AstInterface.h"
+
 #include "CommandOptions.h"
+
 #include "OperatorDescriptors.h"
+
 #include <cctype>
+
 #include <cstring>
+
 #include <string>
 
 using namespace std;

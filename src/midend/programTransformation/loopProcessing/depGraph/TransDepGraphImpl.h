@@ -1,7 +1,7 @@
 #ifndef ROSE_TRANSDEPGRAPHIMPL_H
 #define ROSE_TRANSDEPGRAPHIMPL_H
 
-#include <TransDepGraph.h>
+#include "TransDepGraph.h"
 
 template <class Node> class TransDepAnalImpl : public TransInfoOP<DepInfoSet> {
 public:

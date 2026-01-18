@@ -1,5 +1,5 @@
 // These functions were introduced in GCC 3.3
-// You need to add -mmmx and -msse to the compiler 
+// You need to add -mmmx and -msse to the compiler
 // configuration (for gcc to enable these).
 
 #if 0
@@ -25,11 +25,9 @@ int __builtin_ia32_psrlqi(long long,int);
 #endif
 
 #ifdef __MMX__
-//#error "Note: __MMX__ is defined"
-  #include<emmintrin.h>
+// #error "Note: __MMX__ is defined"
+
+#include <emmintrin.h>
 #endif
 
-int main()
-   {
-     return 0;
-   }
+int main() { return 0; }

@@ -1,22 +1,20 @@
 #include "ncUbyte.h"
+
 #include "netcdf.h"
 using namespace netCDF;
 
 // create an instance of NcUbyte  called netCDF::ncUbyte
 namespace netCDF {
-  NcUbyte ncUbyte;
+NcUbyte ncUbyte;
 }
 
 // constructor
-NcUbyte::NcUbyte() : NcType(NC_UBYTE){
-}
+NcUbyte::NcUbyte() : NcType(NC_UBYTE) {}
 
-NcUbyte::~NcUbyte() {
-}
-
+NcUbyte::~NcUbyte() {}
 
 // equivalence operator
-bool NcUbyte::operator==(const NcUbyte & rhs)    {
+bool NcUbyte::operator==(const NcUbyte &rhs) {
   // simply check the netCDF id.
   return myId == rhs.myId;
-}  
+}

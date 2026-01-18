@@ -4,8 +4,6 @@
 
 #include <ext/alloc_traits.h>
 
- 
-
 namespace std
 
 {
@@ -14,126 +12,111 @@ namespace __detail
 
 {
 
-  template<typename _Value>
+template <typename _Value>
 
-    struct _Hash_node
+struct _Hash_node
 
-    {
+{
 
-      typedef _Value value_type;
+  typedef _Value value_type;
+};
 
-    };
+template <typename _NodeAlloc>
 
- 
+struct _Hashtable_alloc
 
-  template<typename _NodeAlloc>
+{
 
-    struct _Hashtable_alloc
+public:
+  // Use __gnu_cxx for S_nothrow_move et al.
 
-    {
+  using __node_alloc_traits = __gnu_cxx::__alloc_traits<_NodeAlloc>;
 
-    public:
+  using __value_alloc_type =
 
-      // Use __gnu_cxx for S_nothrow_move et al.
+      typename __alloctr_rebind<
 
-      using __node_alloc_traits = __gnu_cxx::__alloc_traits<_NodeAlloc>;
-
- 
-
-      using __value_alloc_type =
-
-    typename __alloctr_rebind<
-
-         _NodeAlloc,
+          _NodeAlloc,
 
           typename _NodeAlloc::value_type::value_type>::__type;
 
-      using __value_alloc_traits = std::allocator_traits<__value_alloc_type>;
-
-    };
+  using __value_alloc_traits = std::allocator_traits<__value_alloc_type>;
+};
 
 } // namespace __detail
 
- 
+template <
 
-  template<
+    typename _Value,
 
-typename _Value,
+    typename _Alloc>
 
-typename _Alloc>
+class _Hashtable
 
-    class _Hashtable
+{
 
-    {
+  using __node_alloc_type =
 
-      using __node_alloc_type =
-
-    typename __alloctr_rebind<
+      typename __alloctr_rebind<
 
           _Alloc,
 
           __detail::_Hash_node<_Value>>::__type;
 
-    public:
+public:
+  // NEEDED (with __value_alloc_traits and not __node_alloc_traits):
 
-      // NEEDED (with __value_alloc_traits and not __node_alloc_traits):
+  typedef typename std::allocator_traits<__node_alloc_type>::pointer pointer;
 
-      typedef typename std::allocator_traits<__node_alloc_type>::pointer  pointer;
+  //      typedef typename
+  //      __detail::_Hashtable_alloc<__node_alloc_type>::__value_alloc_traits::pointer
+  //      pointer;
 
-//      typedef typename __detail::_Hashtable_alloc<__node_alloc_type>::__value_alloc_traits::pointer  pointer;
+public:
+  using const_iterator = int;
 
-    public:
+  // NEEDED:
 
-      using const_iterator = int;
+  _Hashtable &
 
-      // NEEDED:
-
-     _Hashtable&
-
-      operator=(_Hashtable&& __ht)
+  operator=(_Hashtable &&__ht)
 
       noexcept
 
       // NEEDED:
 
-      (__detail::_Hashtable_alloc<__node_alloc_type>::__node_alloc_traits::_S_nothrow_move())
+      (__detail::_Hashtable_alloc<
+          __node_alloc_type>::__node_alloc_traits::_S_nothrow_move())
 
-      {}
-
-    };
+  {}
+};
 
 } // namespace std
 
- 
+template <class _Key>
 
-  template<class _Key>
+class unordered_map
 
-    class unordered_map
+{
 
-    {
+  // NEEDED:
 
-     // NEEDED:
+  std::_Hashtable<_Key, std::allocator<_Key>> _M_h;
 
-      std::_Hashtable<_Key, std::allocator<_Key>>  _M_h;
+public:
+  typedef typename std::_Hashtable<_Key, std::allocator<_Key>>::const_iterator
+      const_iterator;
 
-    public:
+  // NEEDED:
 
-      typedef typename std::_Hashtable<_Key, std::allocator<_Key>>::const_iterator    const_iterator;
+  unordered_map &
 
-      // NEEDED:
-
-      unordered_map&
-
-      operator=(unordered_map&&) = default;
-
-    };
-
- 
+  operator=(unordered_map &&) = default;
+};
 
 // NEEDED:
 
 namespace namespace_1 {
 
-  typedef unordered_map<int>::const_iterator typedef_1;
-
+typedef unordered_map<int>::const_iterator typedef_1;
 }

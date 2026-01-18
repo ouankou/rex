@@ -7,6 +7,7 @@
 // #include "rose_config.h"
 
 #include <sstream>
+
 #include <string>
 
 // DQ (12/30/2005): This is a Bad Bad thing to do (I can explain)

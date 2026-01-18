@@ -37,6 +37,7 @@
 #define STACKFRAMEVECTOR_H
 
 #include <ostream>
+
 #include <vector>
 
 template <class T> class StackFrameVector {

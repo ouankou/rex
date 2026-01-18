@@ -3,10 +3,15 @@
 #define OPERATOR_ANNOTATION_H
 
 #include "AnalysisInterface.h"
+
 #include "AnnotCollect.h"
+
 #include "AstInterface.h"
+
 #include "CommandOptions.h"
+
 #include <iostream>
+
 #include <list>
 
 template <class Descriptor>

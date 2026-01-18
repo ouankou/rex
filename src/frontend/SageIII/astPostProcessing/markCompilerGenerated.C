@@ -1,9 +1,9 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-#include "rose_config.h"
-
 #include "markCompilerGenerated.h"
+
+#include "rose_config.h"
 
 void markAsCompilerGenerated(SgNode *node) {
   // This simplifies how the traversal is called!

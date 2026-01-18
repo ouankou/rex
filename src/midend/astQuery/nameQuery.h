@@ -2,6 +2,7 @@
 #define ROSE_NAME_QUERY
 
 #include "AstProcessing.h"
+
 #include <functional>
 
 typedef Rose_STL_Container<std::string> NameQuerySynthesizedAttributeType;

@@ -6,36 +6,58 @@
 #include "AstFixup.h"
 
 #include "fixupSymbolTables.h"
+
 #include "processTemplateHandlingOptions.h"
+
 #include "resetParentPointers.h"
 
 // DQ (12/29/2011): This header file requires rose_config.h and we don't want
 // all of ROSE to require this. #include "markCompilerGenerated.h"
 
 #include "checkIsCompilerGeneratedFlag.h"
+
 #include "checkIsFrontendSpecificFlag.h"
+
 #include "checkIsModifiedFlag.h"
+
 #include "fixupConstructorPreinitializationLists.h"
+
 #include "fixupDeclarations.h"
+
 #include "fixupDefiningAndNondefiningDeclarations.h"
+
 #include "fixupNames.h"
+
 #include "fixupNullPointers.h"
+
 #include "fixupTemplateInstantiations.h"
+
 #include "fixupTypes.h"
+
 #include "initializeExplicitScopeData.h"
+
 #include "markBackendCompilerSpecificFunctions.h"
+
 #include "markForOutputInCodeGeneration.h"
+
 #include "markLhsValues.h"
+
 #include "markOverloadedTemplateInstantiations.h"
+
 #include "markTemplateInstantiationsForOutput.h"
+
 #include "markTemplateSpecializationsForOutput.h"
+
 #include "markTransformationsForOutput.h"
+
 #include "propagateHiddenListData.h"
+
 #include "resetTemplateNames.h"
 
 // DQ (11/24/2007): Fortran support to resolution of array references vs.
 // function references.
 #include "insertFortranContainsStatement.h"
+
 #include "resolveFortranReferences.h"
 
 // DQ (9/28/2008): This is for Fortran and eventually maybe C++ support.

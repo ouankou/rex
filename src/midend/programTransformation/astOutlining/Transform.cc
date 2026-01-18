@@ -5,15 +5,23 @@
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "astPostProcessing.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <string>
 
 #include "ASTtools.hh"
+
 #include "Outliner.hh"
+
 #include "PreprocessingInfo.hh"
+
 #include "StmtRewrite.hh"
 // =====================================================================
 
@@ -98,13 +106,14 @@ SgClassDeclaration *Outliner::generateParameterStructureDeclaration(
         } else { // Otherwise, all dimensions remain
           member_type = buildPointerType(member_type);
         }
-      } else if (isSgArrayType(non_typef_type->stripType(
-                     SgType::STRIP_POINTER_TYPE))) { // Shared array which first
-                                                     // dimension is expressed
-                                                     // as a
-                                                     // pointerbuildPointerType(
-                                                     // non_typef_type->get_base_type(
-                                                     // ) )
+      } else if (
+          isSgArrayType(non_typef_type->stripType(
+              SgType::STRIP_POINTER_TYPE))) { // Shared array which first
+                                              // dimension is expressed
+                                              // as a
+                                              // pointerbuildPointerType(
+                                              // non_typef_type->get_base_type(
+                                              // ) )
         // int (*c1)[10] = calloc(sizeof(int), 10 * 10);
         // #pragma omp task shared(c1)
         member_type = buildPointerType(non_typef_type);
@@ -322,7 +331,7 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   }
 
   //-------Step 2. Generate outlined
-  //function------------------------------------
+  // function------------------------------------
   // Generate a structure declaration if useStructureWrapper is set
   // A variable of the struct type will later used to wrap function parameters
   SgClassDeclaration *struct_decl = NULL;
@@ -414,7 +423,7 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
 #endif
 
   //-----------Step 4. Replace the outlining target with a function
-  //call-------------
+  // call-------------
 
   // Prepare the parameter of the function call,
   // Generate packing statements, insert them into the beginning of the target s
@@ -560,7 +569,7 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
 
   // ROSE_ASSERT (wrapper_exp->get_symbol()->get_declaration() != NULL);
   //-----------handle dependent declarations, headers if new file is
-  //generated-------------
+  // generated-------------
   if (new_file) {
     // Liao, 2019/8/14. We disable unused symbol clean up for now.
     // Searching for all symbols then check if they are used within a new file.

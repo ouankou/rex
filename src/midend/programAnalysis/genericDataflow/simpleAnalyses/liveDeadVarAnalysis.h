@@ -1,24 +1,37 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef LIVE_DEAD_VAR_ANALYSIS_H
 #define LIVE_DEAD_VAR_ANALYSIS_H
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "printAnalysisStates.h"
 
 #include <iostream>
+
 #include <map>
+
 #include <memory>
+
 #include <set>
+
 #include <string>
+
 #include <vector>
 
 extern int liveDeadAnalysisDebugLevel;
@@ -337,7 +350,7 @@ public:
   // func - the function that the copy Lattice will now be associated with
 
   ///*Lattice**/void remapVars(const std::map<varID, varID>& varNameMap, const
-  ///Function& newFunc, bool (*f)(CFGNode));
+  /// Function& newFunc, bool (*f)(CFGNode));
   /*Lattice**/ void remapVars(const std::map<varID, varID> &varNameMap,
                               const Function &newFunc);
 

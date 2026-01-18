@@ -1,7 +1,10 @@
-#include <CommandOptions.h>
-#include <DefUseChain.h>
-#include <LoopInfoInterface.h>
-#include <PrivatizeScalar.h>
+#include "CommandOptions.h"
+
+#include "DefUseChain.h"
+
+#include "LoopInfoInterface.h"
+
+#include "PrivatizeScalar.h"
 
 std::string PrivatizeScalar::cmdline_help() {
   return "-pv : move scalar-assignments to innermost privatizable loops before "

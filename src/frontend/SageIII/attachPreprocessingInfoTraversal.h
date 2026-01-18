@@ -4,7 +4,9 @@
 #include "AstProcessing.h"
 
 #include <list>
+
 #include <string>
+
 #include <utility>
 
 // DQ (4/5/2006): Andreas has removed this code!

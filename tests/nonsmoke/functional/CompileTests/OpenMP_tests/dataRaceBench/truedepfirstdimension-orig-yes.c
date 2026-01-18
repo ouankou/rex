@@ -44,27 +44,27 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/* 
+/*
 There is a loop-carried true dependence within the outer level loop.
 Data race pair: b[i][j]@66:7 vs. b[i-1][j-1]@66:15
  */
 #include <stdlib.h>
+
 #include <stdio.h>
-int main(int argc, char* argv[])
-{
-  int i,j;
-  int n=1000, m=1000;
+int main(int argc, char *argv[]) {
+  int i, j;
+  int n = 1000, m = 1000;
   double b[1000][1000];
 
-  for (i=0; i<n; i++)
-    for (j=0; j<m; j++)
-      b[i][j] = 0.5; 
+  for (i = 0; i < n; i++)
+    for (j = 0; j < m; j++)
+      b[i][j] = 0.5;
 
 #pragma omp parallel for private(j)
-  for (i=1;i<n;i++)
-    for (j=1;j<m;j++)
-      b[i][j]=b[i-1][j-1];
+  for (i = 1; i < n; i++)
+    for (j = 1; j < m; j++)
+      b[i][j] = b[i - 1][j - 1];
 
-  printf("b[500][500]=%f\n", b[500][500]);  
+  printf("b[500][500]=%f\n", b[500][500]);
   return 0;
 }

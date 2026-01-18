@@ -2,7 +2,7 @@
 #ifndef LOOP_TREE_LOCALITY
 #define LOOP_TREE_LOCALITY
 
-#include <LoopTreeDepComp.h>
+#include "LoopTreeDepComp.h"
 
 struct DepCompAstRef {
   AstNodePtr orig;

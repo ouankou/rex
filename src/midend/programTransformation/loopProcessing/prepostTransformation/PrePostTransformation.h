@@ -1,7 +1,7 @@
 #ifndef PRE_POST_TRANSFORMATION_H
 #define PRE_POST_TRANSFORMATION_H
 
-#include <LoopTransformInterface.h>
+#include "LoopTransformInterface.h"
 
 class PrePostTransformation : public TransformAstTree {
 protected:

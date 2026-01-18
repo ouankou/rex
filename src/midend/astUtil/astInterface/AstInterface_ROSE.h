@@ -2,11 +2,17 @@
 #define AST_INTERFACE_IMPL_H
 
 #include "AstInterface.h"
+
 #include "ObserveObject.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <map>
+
 #include <stdexcept>
+
 #include <string>
 
 class SgNode;

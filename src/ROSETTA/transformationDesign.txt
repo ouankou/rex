@@ -73,8 +73,7 @@
           }
 
 // Example of specification of for the Transformation Specificiation Grammar
-#include "C++_Grammar.include"
-
+#include <C++_Grammar.include>
 // Build the grammar object
 Grammar transformSpecification;
 

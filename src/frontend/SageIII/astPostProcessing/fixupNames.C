@@ -1,6 +1,8 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "fixupNames.h"
+
 #include "fixupTypes.h"
+
 #include "sage3basic.h"
 
 // DQ (12/31/2005): This is OK if not declared in a header file

@@ -1,5 +1,5 @@
-#ifndef	_ROSE_SPECIFIC_COMPLEX_H
-#define	_ROSE_SPECIFIC_COMPLEX_H	1
+#ifndef _ROSE_SPECIFIC_COMPLEX_H
+#define _ROSE_SPECIFIC_COMPLEX_H 1
 
 /*
 Pei-Hung (03/08/2021) This file is no longer needed as legacy frontend can
@@ -14,8 +14,7 @@ default.
    specific.
  */
 
-#include "/usr/include/complex.h"
-
+#include </usr/include/complex.h>
 /* redefine _Complex_I to be what legacy frontend defines as __I__ */
 #undef _Complex_I
 #define _Complex_I __I__

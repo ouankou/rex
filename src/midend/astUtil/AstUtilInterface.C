@@ -1,13 +1,23 @@
 #include "AstInterface.h"
+
 #include "AstInterface_ROSE.h"
+
 #include "AstUtilInterface.h"
+
 #include "CommandOptions.h"
+
 #include "StmtInfoCollect.h"
+
 #include "SymbolicVal.h"
+
 #include "annotation/OperatorAnnotation.h"
+
 #include "dependenceTracking/dependence_analysis.h"
+
 #include "sage3basic.h"
+
 #include <map>
+
 #include <sstream>
 
 DebugLog DebugAstUtil("-debugastutil");

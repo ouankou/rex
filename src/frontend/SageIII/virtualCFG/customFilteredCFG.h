@@ -8,10 +8,13 @@
 #ifndef CUSTOMFILTEREDCFG_H
 #define CUSTOMFILTEREDCFG_H
 
-#include "Cxx_Grammar.h"
-#include "Escape.h"
 #include "filteredCFG.h"
+
 #include "staticCFG.h"
+
+#include "Escape.h"
+
+#include "Cxx_Grammar.h"
 
 namespace StaticCFG {
 //! A CFG implementation with Custom filters

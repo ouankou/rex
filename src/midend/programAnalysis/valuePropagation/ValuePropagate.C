@@ -1,8 +1,12 @@
-#include <CommandOptions.h>
-#include <GraphIO.h>
-#include <GraphUtils.h>
-#include <SinglyLinkedList.h>
-#include <ValuePropagate.h>
+#include "CommandOptions.h"
+
+#include "GraphIO.h"
+
+#include "GraphUtils.h"
+
+#include "SinglyLinkedList.h"
+
+#include "ValuePropagate.h"
 
 bool DebugValuePropogate() {
   static int r = 0;

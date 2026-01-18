@@ -5,13 +5,19 @@
 #include "rose.h"
 
 #include "DependenceGraph.h"
+
 #include "DominatorTree.h"
+
 #include <iostream>
+
 #include <set>
+
 #include <stack>
 
 #include "DominanceFrontier.h"
+
 #include "DominatorTree.h"
+
 #include "filteredCFG.h"
 
 using namespace DominatorTreesAndDominanceFrontiers;

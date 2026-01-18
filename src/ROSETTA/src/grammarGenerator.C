@@ -1,10 +1,15 @@
+#include "AstNodeClass.h"
+
+#include "grammar.h"
+
+#include "grammarString.h"
+
+#include <fstream>
+
+#include <map>
+
 #include "rose_config.h"
 
-#include "AstNodeClass.h"
-#include "grammar.h"
-#include "grammarString.h"
-#include <fstream>
-#include <map>
 #include <sstream>
 
 using namespace std;

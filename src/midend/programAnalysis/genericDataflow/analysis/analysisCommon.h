@@ -1,11 +1,13 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef ANALYSIS_COMMON
 #define ANALYSIS_COMMON
 
 #include "CallGraphTraverse.h"
+
 #include "cfgUtils.h"
+
 #include "genericDataflowCommon.h"
 
 // initializes the compiler analysis framework

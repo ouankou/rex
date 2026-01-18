@@ -1,8 +1,13 @@
 #include "CommandOptions.h"
+
 #include "SymbolicExpr.h"
+
+#include "mlog.h"
+
 #include <iostream>
-#include <mlog.h>
+
 #include <sstream>
+
 #include <stdio.h>
 
 bool SymbolicTerm::CombineWith(const SymbolicTerm &that) {

@@ -4,8 +4,11 @@
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 #include "Outliner.hh"
+
 #include "markLhsValues.h"
+
 #include "sageBuilder.h"
+
 #include <fstream>
 #endif
 

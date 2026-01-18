@@ -1,4 +1,4 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 // WE ASSUME THAT EACH CFG NODE CONTAINS ONLY ONE NODE STATE.
@@ -8,9 +8,13 @@
 
 #include "partitionedAnalysis.h"
 // #include "ConstrGraph.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <set>
+
 #include <vector>
 
 using std::cout;

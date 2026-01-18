@@ -4,8 +4,11 @@
 // #include "config.h"
 
 #include "expressionTreeEqual.h"
+
 #include "inlinerSupport.h"
+
 #include "patternRewrite.h"
+
 #include "replaceExpressionWithStatement.h"
 
 //! Do finite differencing on one expression within one context.  The expression

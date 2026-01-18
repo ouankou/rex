@@ -1,4 +1,4 @@
-#include <Predicate.h>
+#include "Predicate.h"
 
 namespace Rose {
 namespace StringUtility {

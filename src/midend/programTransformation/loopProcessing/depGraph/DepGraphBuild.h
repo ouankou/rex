@@ -2,10 +2,13 @@
 #ifndef BUILD_DEPGRAPH
 #define BUILD_DEPGRAPH
 
-#include <DepGraph.h>
-#include <DepInfoAnal.h>
-#include <ProcessAstTree.h>
-#include <SinglyLinkedList.h>
+#include "DepGraph.h"
+
+#include "DepInfoAnal.h"
+
+#include "ProcessAstTree.h"
+
+#include "SinglyLinkedList.h"
 
 class AstTreeDepGraphBuildImpl {
 public:

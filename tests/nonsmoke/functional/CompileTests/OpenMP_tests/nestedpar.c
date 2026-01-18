@@ -1,14 +1,13 @@
-#include<omp.h>
+#include <omp.h>
+
 #include <stdio.h>
 
-void paroutput(char* s)
-{
+void paroutput(char *s) {
 #pragma omp parallel
-printf("%s\n",s);
+  printf("%s\n", s);
 }
 
-int main(void)
-{
+int main(void) {
 #pragma omp parallel
   {
     paroutput("before single");
@@ -22,5 +21,3 @@ int main(void)
   }
   return 0;
 }
-
-

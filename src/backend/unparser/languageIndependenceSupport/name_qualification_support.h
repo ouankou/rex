@@ -8,6 +8,8 @@
 #ifndef UNPARSER_NAME_QUALIFICATION
 #define UNPARSER_NAME_QUALIFICATION
 
+#include "Cxx_Grammar.h"
+
 class SgType;
 class SgDeclarationStatement;
 class SgName;

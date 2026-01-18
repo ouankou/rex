@@ -43,26 +43,25 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
 IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
-/* 
+/*
 tmp should be annotated as private to avoid race condition.
 Data race pair: tmp@65:5 vs. tmp@66:12
 */
 #include <stdlib.h>
+
 #include <stdio.h>
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
   int i;
   int tmp;
-  int len=100;
+  int len = 100;
   int a[100];
 
-  for (i=0;i<len;i++)
-    a[i]=i;
+  for (i = 0; i < len; i++)
+    a[i] = i;
 
 #pragma omp parallel for
-  for (i=0;i<len;i++)
-  {
-    tmp =a[i]+i;
+  for (i = 0; i < len; i++) {
+    tmp = a[i] + i;
     a[i] = tmp;
   }
 

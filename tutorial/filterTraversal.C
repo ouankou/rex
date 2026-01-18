@@ -10,87 +10,79 @@
  * is to traverse both.
  *************************************************************/
 #include "rose.h"
-#include <time.h>
-//Include the header file for the filtering traversal
-#include <AstTraversal.h>
-using namespace std;
 
+#include <time.h>
+// Include the header file for the filtering traversal
+#include "AstTraversal.h"
+using namespace std;
 
 /**********************************************************
  * This is a class implementing the methods specifying how to fitler on
  * nodes and subtrees. The AstPreOrderTraversal implements the
  * traversal itself.
  **********************************************************/
-class TestTrav : public AstPreOrderTraversal
-   {
-     public:
-       // Enum for the different ways to traverse constant folded expressions
-          enum ConstantFolding
-             {
-               TraverseOriginalExpressionTree,
-               TraverseConstantFoldedExpression,
-               TraverseBoth
-             };
+class TestTrav : public AstPreOrderTraversal {
+public:
+  // Enum for the different ways to traverse constant folded expressions
+  enum ConstantFolding {
+    TraverseOriginalExpressionTree,
+    TraverseConstantFoldedExpression,
+    TraverseBoth
+  };
 
-     private:
-       // Variable determining which subtree to traverse
-          ConstantFolding constFoldTraverse;
+private:
+  // Variable determining which subtree to traverse
+  ConstantFolding constFoldTraverse;
 
-     public:
-          TestTrav(ConstantFolding c)
-             {
-               constFoldTraverse = c;
-             }
+public:
+  TestTrav(ConstantFolding c) { constFoldTraverse = c; }
 
-       // A function called on each node in the traversal
-          void preOrderVisit(SgNode* node)
-             {
-               std::cout << node->class_name() << " " << node << std::endl;
-             }
+  // A function called on each node in the traversal
+  void preOrderVisit(SgNode *node) {
+    std::cout << node->class_name() << " " << node << std::endl;
+  }
 
-       // Return true if a node is to be filtered out, but the subtree will be traversed.
-          bool skipNode(SgNode* node)
-             {  
-               bool skip = false;
-               SgValueExp* valExp = isSgValueExp(node);
-               if( ( valExp != NULL ) && ( valExp->get_originalExpressionTree() != NULL ))
-                  {
-                    if ( constFoldTraverse == TraverseOriginalExpressionTree )
-                         skip=true;
-                  }
-               return skip; 
-             }
+  // Return true if a node is to be filtered out, but the subtree will be
+  // traversed.
+  bool skipNode(SgNode *node) {
+    bool skip = false;
+    SgValueExp *valExp = isSgValueExp(node);
+    if ((valExp != NULL) && (valExp->get_originalExpressionTree() != NULL)) {
+      if (constFoldTraverse == TraverseOriginalExpressionTree)
+        skip = true;
+    }
+    return skip;
+  }
 
-       // Returns true if the subtree of the node should not be traversed, but the node itself will be traversed.
-          bool skipSubTreeOfNode(SgNode* node)
-             { 
-               bool skip =false;
-               SgValueExp* valExp = isSgValueExp(node);
-               if( ( valExp != NULL ) && ( valExp->get_originalExpressionTree() != NULL ))
-                  {
-                    if( constFoldTraverse == TraverseConstantFoldedExpression )
-                         skip=true;
-                  }
-               return skip; 
-             }
-   };
+  // Returns true if the subtree of the node should not be traversed, but the
+  // node itself will be traversed.
+  bool skipSubTreeOfNode(SgNode *node) {
+    bool skip = false;
+    SgValueExp *valExp = isSgValueExp(node);
+    if ((valExp != NULL) && (valExp->get_originalExpressionTree() != NULL)) {
+      if (constFoldTraverse == TraverseConstantFoldedExpression)
+        skip = true;
+    }
+    return skip;
+  }
+};
 
-int main( int argc, char * argv[] ) 
-   {
-     SgProject* project = frontend(argc,argv);
+int main(int argc, char *argv[]) {
+  SgProject *project = frontend(argc, argv);
 
-  // Variable determining which part of a constant folded expression should be traversed
-     TestTrav::ConstantFolding c;
-     c = TestTrav::TraverseOriginalExpressionTree;
+  // Variable determining which part of a constant folded expression should be
+  // traversed
+  TestTrav::ConstantFolding c;
+  c = TestTrav::TraverseOriginalExpressionTree;
 
-     TestTrav* testTrav = new TestTrav(c);
+  TestTrav *testTrav = new TestTrav(c);
 
   // Find the subtree of the AST that we want to traverse
-     list<SgNode*> functionDeclarationList = NodeQuery::querySubTree (project,V_SgAssignInitializer);
+  list<SgNode *> functionDeclarationList =
+      NodeQuery::querySubTree(project, V_SgAssignInitializer);
 
   // Initiate the traversal
-     testTrav->traverse(*functionDeclarationList.begin()); 
+  testTrav->traverse(*functionDeclarationList.begin());
 
-     return backend(project);
-   }
-
+  return backend(project);
+}

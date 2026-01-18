@@ -1,8 +1,13 @@
 #include "sage3basic.h"
+
 #include "sageInterface.h"
+
 #include <iostream>
+
 #include <map>
+
 #include <sstream>
+
 #include <unordered_map>
 
 using namespace std;
@@ -270,7 +275,7 @@ SgType *getBoolType(SgNode *n) {
 //! int, long, long long.
 ////!
 ////! There is another similar function named SgType::isIntegerType(), which
-///allows additional types char, wchar, and bool.
+/// allows additional types char, wchar, and bool.
 bool isStrictIntegerType(SgType *t) {
   ROSE_ASSERT(t != NULL);
 
@@ -1242,7 +1247,7 @@ string mangleScalarType(SgType *type) {
     result += "G";
     break;
   case V_SgTypeString: //? TODO Not for char*: array of char ? or pointer to
-                       //char ?
+                       // char ?
     // only for SgStringVal
     result = ".unhandledSgTypeString.";
     break;

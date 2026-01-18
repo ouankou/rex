@@ -1,12 +1,15 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef DATAFLOW_CFG_H
 #define DATAFLOW_CFG_H
 
 #include "genericDataflowCommon.h"
+
 #include <map>
+
 #include <string>
+
 #include <vector>
 
 namespace VirtualCFG {

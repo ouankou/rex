@@ -1,7 +1,10 @@
-#include <CFG.h>
-#include <CommandOptions.h>
-#include <ProcessAstTree.h>
-#include <PtrMap.h>
+#include "CFG.h"
+
+#include "CommandOptions.h"
+
+#include "ProcessAstTree.h"
+
+#include "PtrMap.h"
 
 bool debug_cfg() {
   static int r = 0;

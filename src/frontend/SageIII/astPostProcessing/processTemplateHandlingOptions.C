@@ -1,6 +1,8 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "markTemplateInstantiationsForOutput.h"
+
 #include "processTemplateHandlingOptions.h"
+
 #include "sage3basic.h"
 // #include "Cxx_Grammar.h"
 // #include "AstNodePtrs.h"

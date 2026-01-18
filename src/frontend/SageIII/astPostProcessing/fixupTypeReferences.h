@@ -2,7 +2,6 @@
 #define FIXUP_TYPE_REFERENCES_H
 
 #include "Cxx_Grammar.h"
-
 // This post-processing pass fixes up reference to types that didn't exist
 // as parts of the AST were being constructed and so we built type
 // wrappers (reusing a SgModifierType IR node to hold the reference.

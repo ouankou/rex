@@ -2,9 +2,13 @@
 #define ANNOT_EXPR_H
 
 #include "AnnotDescriptors.h"
+
 #include "FunctionObject.h"
+
 #include "SymbolicVal.h"
+
 #include <list>
+
 #include <vector>
 //! SymbolicVal with I/O interface
 class SymbolicValDescriptor {

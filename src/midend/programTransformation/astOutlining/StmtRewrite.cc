@@ -13,9 +13,13 @@
  */
 
 #include "StmtRewrite.hh"
+
 #include "ASTtools.hh"
+
 #include "Copy.hh"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
 
 // ========================================================================
@@ -82,7 +86,7 @@ void ASTtools::replaceStatement(SgStatement * /*s_cur*/,
 void // move statements from src block to dest block // same semantics to
      // SageInterface::moveStatementsBetweenBlocks(), which is a better
      // implementation
-     ASTtools::moveStatements(SgBasicBlock *src, SgBasicBlock *dest) {
+ASTtools::moveStatements(SgBasicBlock *src, SgBasicBlock *dest) {
   cerr << "ASTtools::moveStatements(SgBasicBlock*src, SgBasicBlock* dest) is "
           "used. Please use "
           "SageInterface::moveStatementsBetweenBlocks(SgBasicBlock* src, "

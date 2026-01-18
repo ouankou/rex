@@ -6,9 +6,13 @@
 // tps : Switching from rose.h to sage3 changed size from 18,5 MB to 8,2MB
 
 #include "DefUseAnalysis.h"
+
 #include "DefUseAnalysis_perFunction.h"
+
 #include "GlobalVarAnalysis.h"
+
 #include "sage3basic.h"
+
 #include <functional>
 
 using namespace std;

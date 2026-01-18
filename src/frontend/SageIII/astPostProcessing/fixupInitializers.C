@@ -1,8 +1,8 @@
 #include "fixupInitializers.h"
+
 #include "sage3basic.h"
 
 #include "rose_config.h"
-
 using namespace std;
 
 void fixupInitializersUsingIncludeFiles(SgProject *node) {

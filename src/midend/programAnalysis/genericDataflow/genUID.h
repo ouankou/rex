@@ -1,11 +1,11 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef GEN_UID_H
 #define GEN_UID_H
 
 #ifdef THREADED
-#include "tbb/mutex.h"
+#include <tbb/mutex.h>
 #endif
 
 // Generates unique unsigned long ids, with a user-specified minimum id

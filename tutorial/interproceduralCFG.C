@@ -1,24 +1,28 @@
-// Example translator to generate dot files of virtual, interprocedural control flow graphs
+// Example translator to generate dot files of virtual, interprocedural control
+// flow graphs
 #include "rose.h"
+
 #include "interproceduralCFG.h"
+
 #include <string>
 using namespace std;
 using namespace Rose;
 
-int main(int argc, char *argv[]) 
-{
+int main(int argc, char *argv[]) {
   // Build the AST used by ROSE
-  SgProject* proj = frontend(argc,argv);
-  ROSE_ASSERT (proj != NULL); 
+  SgProject *proj = frontend(argc, argv);
+  ROSE_ASSERT(proj != NULL);
 
-  SgFunctionDeclaration* mainDefDecl = SageInterface::findMain(proj);
-  ROSE_ASSERT (mainDefDecl != NULL); 
+  SgFunctionDeclaration *mainDefDecl = SageInterface::findMain(proj);
+  ROSE_ASSERT(mainDefDecl != NULL);
 
-  SgFunctionDefinition* mainDef = mainDefDecl->get_definition();
-  ROSE_ASSERT (mainDef != NULL); 
+  SgFunctionDefinition *mainDef = mainDefDecl->get_definition();
+  ROSE_ASSERT(mainDef != NULL);
 
-  string fileName= StringUtility::stripPathFromFileName(mainDef->get_file_info()->get_filenameString());
-  string dotFileName1=fileName+"."+ mainDef->get_declaration()->get_name() +".IPCFG.dot";
+  string fileName = StringUtility::stripPathFromFileName(
+      mainDef->get_file_info()->get_filenameString());
+  string dotFileName1 =
+      fileName + "." + mainDef->get_declaration()->get_name() + ".IPCFG.dot";
 
   StaticCFG::InterproceduralCFG cfg(mainDef);
 

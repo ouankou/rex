@@ -2,8 +2,9 @@
 #ifndef SHADOW_LOOP_TREE
 #define SHADOW_LOOP_TREE
 
-#include <LoopTree.h>
-#include <PtrMap.h>
+#include "LoopTree.h"
+
+#include "PtrMap.h"
 
 class LoopTreeShadowCreate;
 class LoopTreeShadowNode : public LoopTreeNode {

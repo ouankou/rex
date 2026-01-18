@@ -5,7 +5,7 @@
 #ifndef GRAPH_ACCESS_H
 #define GRAPH_ACCESS_H
 
-#include <IteratorTmpl.h>
+#include "IteratorTmpl.h"
 
 class GraphAccess {
 public:

@@ -1,14 +1,21 @@
-#include <sage3basic.h>
+#include "sage3basic.h"
 
 #include <iostream>
+
 #include <sstream>
 
 #include "AnalysisInterface.h"
+
 #include "AstInterface_ROSE.h"
+
 #include "CommandOptions.h"
+
+#include "ROSE_ABORT.h"
+
+#include "ROSE_ASSERT.h"
+
 #include "StmtInfoCollect.h"
-#include <ROSE_ABORT.h>
-#include <ROSE_ASSERT.h>
+
 #include <assert.h>
 
 DebugLog DebugLocalInfoCollect("-debuglocalinfocollect");

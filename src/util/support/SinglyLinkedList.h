@@ -2,7 +2,7 @@
 #ifndef SINGLY_LINKED_LIST_H
 #define SINGLY_LINKED_LIST_H
 
-#include <FunctionObject.h>
+#include "FunctionObject.h"
 
 template <class T> class SinglyLinkedListWrap;
 template <class T> class SinglyLinkedEntryWrap {

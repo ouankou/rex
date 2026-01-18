@@ -44,36 +44,35 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/* 
+/*
 The -- operation on numNodes2 is not protected, causing data race.
 Data race pair: numNodes2@74:7 vs. numNodes2@74:7
 */
 
-#include <stdlib.h>  
-#include <stdio.h>
-int main(int argc, char* argv[])  
-{
-  int i;
-  int len=100;
+#include <stdlib.h>
 
-  int numNodes=len, numNodes2=0; 
-  int x[100]; 
+#include <stdio.h>
+int main(int argc, char *argv[]) {
+  int i;
+  int len = 100;
+
+  int numNodes = len, numNodes2 = 0;
+  int x[100];
 
   // initialize x[]
-  for (i=0; i< len; i++)
-  {
-    if (i%2==0)
-      x[i]=5;
+  for (i = 0; i < len; i++) {
+    if (i % 2 == 0)
+      x[i] = 5;
     else
-      x[i]= -5;
+      x[i] = -5;
   }
 
 #pragma omp parallel for
-  for (i=numNodes-1 ; i>-1 ; --i) {
-    if (x[i]<=0) {
-      numNodes2-- ;
+  for (i = numNodes - 1; i > -1; --i) {
+    if (x[i] <= 0) {
+      numNodes2--;
     }
   }
-  printf ("numNodes2 = %d\n", numNodes2);
+  printf("numNodes2 = %d\n", numNodes2);
   return 0;
-} 
+}

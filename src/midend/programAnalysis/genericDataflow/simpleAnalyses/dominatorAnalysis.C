@@ -1,8 +1,10 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "dominatorAnalysis.h"
+
 #include <algorithm>
+
 #include <assert.h>
 
 int dominatorAnalysisDebugLevel = 0;

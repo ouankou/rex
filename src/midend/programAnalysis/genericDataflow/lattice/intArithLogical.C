@@ -1,8 +1,10 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "intArithLogical.h"
+
 #include <list>
+
 #include <math.h>
 using std::list;
 #include <string>
@@ -1979,7 +1981,7 @@ bool IntArithLogical::orUpd(LogicalCond &that_arg) {
 // Sets this expression to True, returning true if this causes
 // the expression to be modified and false otherwise.
 ////// If onlyIfNotInit=true, this is only done if the expression is currently
-///uninitialized
+/// uninitialized
 bool IntArithLogical::setToTrue(/*bool onlyIfNotInit*/) {
   /*if(!onlyIfNotInit || level==uninitialized)
   {
@@ -1993,7 +1995,7 @@ bool IntArithLogical::setToTrue(/*bool onlyIfNotInit*/) {
 // Sets this expression to False, returning true if this causes
 // the expression to be modified and false otherwise.
 ////// If onlyIfNotInit=true, this is only done if the expression is currently
-///uninitialized
+/// uninitialized
 bool IntArithLogical::setToFalse(/*bool onlyIfNotInit*/) {
   /*if(!onlyIfNotInit || level==uninitialized)
   {

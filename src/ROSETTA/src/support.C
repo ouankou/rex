@@ -1,13 +1,14 @@
-#include <featureTests.h>
+#include "featureTests.h"
 
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
-#include "rose_config.h"
-
 #include "grammar.h"
 
+#include "rose_config.h"
+
 #include "AstNodeClass.h"
+
 #include "ROSETTA_macros.h"
 // #include "OmpAttribute.h"
 
@@ -280,11 +281,10 @@ void Grammar::setUpSupport() {
           FunctionParameterTypeList | QualifiedName | TemplateArgumentList |
           TemplateParameterList | /* RenamePair                | InterfaceBody
                                      |*/
-          Graph |
-          GraphNode | GraphEdge | GraphNodeList | GraphEdgeList | TypeTable |
-          NameGroup | DimensionObject | FormatItem | FormatItemList |
-          DataStatementGroup | DataStatementObject | IncludeFile |
-          DataStatementValue | HeaderFileReport,
+          Graph | GraphNode | GraphEdge | GraphNodeList | GraphEdgeList |
+          TypeTable | NameGroup | DimensionObject | FormatItem |
+          FormatItemList | DataStatementGroup | DataStatementObject |
+          IncludeFile | DataStatementValue | HeaderFileReport,
       "Support", "SupportTag", false);
 
   // ***********************************************************************

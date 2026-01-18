@@ -1,9 +1,15 @@
-#include <AnnotExpr.h>
-#include <CPPAstInterface.h>
-#include <ValueAnnot.h>
+#include "AnnotExpr.h"
+
+#include "CPPAstInterface.h"
+
+#include "ValueAnnot.h"
+
+#include "mlog.h"
+
 #include <fstream>
+
 #include <iostream>
-#include <mlog.h>
+
 #include <sstream>
 
 bool DebugValuePropogate();
@@ -229,8 +235,9 @@ bool ValueAnnotation::is_access_value(CPPAstInterface &fa,
 
 #ifndef TEMPLATE_ONLY
 #define TEMPLATE_ONLY
-#include <AnnotDescriptors.C>
-#include <TypeAnnotation.C>
+#include "AnnotDescriptors.C"
+
+#include "TypeAnnotation.C"
 template class TypeAnnotCollection<HasValueDescriptor>;
 template class TypeCollection<HasValueDescriptor>;
 #endif

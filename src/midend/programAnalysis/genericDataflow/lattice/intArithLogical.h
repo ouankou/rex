@@ -1,20 +1,29 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef INT_ARITH_LOGICAL
 #define INT_ARITH_LOGICAL
 
 #include "cfgUtils.h"
+
 #include "common.h"
+
 #include "lattice.h"
-#include "logical.h"
-#include "nodeState.h"
+
 #include "printAnalysisStates.h"
-#include "spearWrap.h"
+
+#include "nodeState.h"
+
+#include <logical.h>
+
 #include "variables.h"
 
+#include <spearWrap.h>
+
 #include <fstream>
+
 #include <list>
+
 #include <string>
 
 // Represents an expression that uses arithmetic and logical operators
@@ -433,13 +442,13 @@ public:
   // Sets this expression to True, returning true if this causes
   // the expression to be modified and false otherwise.
   ////// If onlyIfNotInit=true, this is only done if the expression is currently
-  ///uninitialized
+  /// uninitialized
   bool setToTrue(/*bool onlyIfNotInit=false*/);
 
   // Sets this expression to False, returning true if this causes
   // the expression to be modified and false otherwise.
   ////// If onlyIfNotInit=true, this is only done if the expression is currently
-  ///uninitialized
+  /// uninitialized
   bool setToFalse(/*bool onlyIfNotInit=false*/);
 
   // Removes all facts that relate to the given variable, possibly replacing

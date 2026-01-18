@@ -1,8 +1,9 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "arrIndexLabeler.h"
-#include <sage3.h>
+
+#include "sage3.h"
 
 using namespace std;
 

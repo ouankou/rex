@@ -44,25 +44,24 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/* 
+/*
 Only the outmost loop can be parallelized in this program.
 The inner loop has true dependence.
 Data race pair: b[i][j]@63:7 vs. b[i][j-1]@63:15
 */
 #include <stdlib.h>
+
 #include <stdio.h>
 double b[1000][1000];
 
-int main(int argc, char* argv[]) 
-{
-  int i,j;
-  int n=1000, m=1000;
-  for (i=0;i<n;i++)
+int main(int argc, char *argv[]) {
+  int i, j;
+  int n = 1000, m = 1000;
+  for (i = 0; i < n; i++)
 #pragma omp parallel for
-    for (j=1;j<m;j++)
-      b[i][j]=b[i][j-1];
+    for (j = 1; j < m; j++)
+      b[i][j] = b[i][j - 1];
 
   printf("b[500][500]=%f\n", b[500][500]);
   return 0;
 }
-

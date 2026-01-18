@@ -7,6 +7,7 @@
 #include <set>
 
 #include "AstProcessing.h"
+
 #include "DOTRepresentation.h"
 
 class DOTInheritedAttribute : public SgInheritedAttribute {

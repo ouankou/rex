@@ -1,13 +1,20 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "pre.h"
+
 #include "sage3basic.h"
 
 #include "expressionTreeEqual.h"
+
 #include "inlinerSupport.h"
+
 #include "preControlFlowGraph.h"
+
 #include "replaceExpressionWithStatement.h"
+
 #include <fstream>
+
 #include <queue>
+
 #include <stdint.h>
 
 #include "constantFolding.h"

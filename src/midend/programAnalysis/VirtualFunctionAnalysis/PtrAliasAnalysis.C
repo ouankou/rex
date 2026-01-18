@@ -1,7 +1,10 @@
 #include "AstDOTGeneration.h"
+
+#include "CallGraph.h"
+
 #include "PtrAliasAnalysis.h"
+
 #include "sage3basic.h"
-#include <CallGraph.h>
 
 namespace {
 template <typename NodeT> void clearAttributeMechanism(NodeT *node) {

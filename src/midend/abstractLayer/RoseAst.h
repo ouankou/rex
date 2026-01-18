@@ -6,11 +6,16 @@
  * Author   : Markus Schordan                                *
  *************************************************************/
 
-#include "Cxx_GrammarVariants.h"
 #include "roseInternal.h"
+
+#include <Cxx_GrammarVariants.h>
+
 #include <cstddef>
+
 #include <list>
+
 #include <stack>
+
 #include <string>
 
 class SgFunctionDeclaration;

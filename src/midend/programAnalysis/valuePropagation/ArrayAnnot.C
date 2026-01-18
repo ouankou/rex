@@ -1,6 +1,9 @@
-#include <ArrayAnnot.h>
-#include <CommandOptions.h>
+#include "ArrayAnnot.h"
+
+#include "CommandOptions.h"
+
 #include <fstream>
+
 #include <iostream>
 
 bool DebugArrayAnnot() {
@@ -488,13 +491,14 @@ bool ArrayAnnotation ::get_read(AstInterface &_fa, const AstNodePtr &fc,
 }
 
 #define TEMPLATE_ONLY
-#include <OperatorDescriptors.h>
-#include <TypeAnnotation.C>
+#include "OperatorDescriptors.h"
+
+#include "TypeAnnotation.C"
 template class TypeCollection<ArrayModifyDescriptor>;
 template class TypeCollection<ArrayConstructDescriptor>;
 template class OperatorAnnotCollection<ArrayModifyDescriptor>;
 template class OperatorAnnotCollection<ArrayConstructDescriptor>;
 template class TypeAnnotCollection<ArrayDefineDescriptor>;
 template class TypeAnnotCollection<ArrayOptDescriptor>;
-#include <AnnotDescriptors.C>
+#include "AnnotDescriptors.C"
 template struct CollectPair<TypeDescriptor, ArrayDescriptor, 0>;

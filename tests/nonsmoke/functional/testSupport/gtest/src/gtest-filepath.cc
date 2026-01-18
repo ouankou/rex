@@ -30,7 +30,9 @@
 // Authors: keith.ray@gmail.com (Keith Ray)
 
 #include "gtest/gtest-message.h"
+
 #include "gtest/internal/gtest-filepath.h"
+
 #include "gtest/internal/gtest-port.h"
 
 #include <stdlib.h>
@@ -39,11 +41,11 @@
 #include <limits.h>
 
 #if defined(PATH_MAX)
-# define GTEST_PATH_MAX_ PATH_MAX
+#define GTEST_PATH_MAX_ PATH_MAX
 #elif defined(_XOPEN_PATH_MAX)
-# define GTEST_PATH_MAX_ _XOPEN_PATH_MAX
+#define GTEST_PATH_MAX_ _XOPEN_PATH_MAX
 #else
-# define GTEST_PATH_MAX_ _POSIX_PATH_MAX
+#define GTEST_PATH_MAX_ _POSIX_PATH_MAX
 #endif
 
 #include "gtest/internal/gtest-string.h"
@@ -60,7 +62,7 @@ static bool IsPathSeparator(char c) { return c == kPathSeparator; }
 
 // Returns the current working directory, or "" if unsuccessful.
 FilePath FilePath::GetCurrentDir() {
-  char cwd[GTEST_PATH_MAX_ + 1] = { '\0' };
+  char cwd[GTEST_PATH_MAX_ + 1] = {'\0'};
   return FilePath(getcwd(cwd, sizeof(cwd)) == NULL ? "" : cwd);
 }
 
@@ -68,18 +70,18 @@ FilePath FilePath::GetCurrentDir() {
 // Example: FilePath("dir/file.exe").RemoveExtension("EXE") returns
 // FilePath("dir/file"). If a case-insensitive extension is not
 // found, returns a copy of the original FilePath.
-FilePath FilePath::RemoveExtension(const char* extension) const {
+FilePath FilePath::RemoveExtension(const char *extension) const {
   const std::string dot_extension = std::string(".") + extension;
   if (String::EndsWithCaseInsensitive(pathname_, dot_extension)) {
-    return FilePath(pathname_.substr(
-        0, pathname_.length() - dot_extension.length()));
+    return FilePath(
+        pathname_.substr(0, pathname_.length() - dot_extension.length()));
   }
   return *this;
 }
 
 // Returns a pointer to the last occurrence of a valid path separator in
 // the FilePath. Returns NULL if no path separator was found.
-const char* FilePath::FindLastPathSeparator() const {
+const char *FilePath::FindLastPathSeparator() const {
   const char *const last_sep = strrchr(c_str(), kPathSeparator);
   return last_sep;
 }
@@ -90,7 +92,7 @@ const char* FilePath::FindLastPathSeparator() const {
 // the FilePath unmodified. If there is no file part ("just_a_dir/") it
 // returns an empty FilePath ("").
 FilePath FilePath::RemoveDirectoryName() const {
-  const char* const last_sep = FindLastPathSeparator();
+  const char *const last_sep = FindLastPathSeparator();
   return last_sep ? FilePath(last_sep + 1) : *this;
 }
 
@@ -100,7 +102,7 @@ FilePath FilePath::RemoveDirectoryName() const {
 // FilePath("./"). If the filepath does not have a file, like "just/a/dir/",
 // it returns the FilePath unmodified.
 FilePath FilePath::RemoveFileName() const {
-  const char* const last_sep = FindLastPathSeparator();
+  const char *const last_sep = FindLastPathSeparator();
   std::string dir;
   if (last_sep) {
     dir = std::string(c_str(), last_sep + 1 - c_str());
@@ -115,23 +117,22 @@ FilePath FilePath::RemoveFileName() const {
 // Given directory = "dir", base_name = "test", number = 0,
 // extension = "xml", returns "dir/test.xml". If number is greater
 // than zero (e.g., 12), returns "dir/test_12.xml".
-FilePath FilePath::MakeFileName(const FilePath& directory,
-                                const FilePath& base_name,
-                                int number,
-                                const char* extension) {
+FilePath FilePath::MakeFileName(const FilePath &directory,
+                                const FilePath &base_name, int number,
+                                const char *extension) {
   std::string file;
   if (number == 0) {
     file = base_name.string() + "." + extension;
   } else {
-    file = base_name.string() + "_" + StreamableToString(number)
-        + "." + extension;
+    file =
+        base_name.string() + "_" + StreamableToString(number) + "." + extension;
   }
   return ConcatPaths(directory, FilePath(file));
 }
 
 // Given directory = "dir", relative_path = "test.xml", returns "dir/test.xml".
-FilePath FilePath::ConcatPaths(const FilePath& directory,
-                               const FilePath& relative_path) {
+FilePath FilePath::ConcatPaths(const FilePath &directory,
+                               const FilePath &relative_path) {
   if (directory.IsEmpty())
     return relative_path;
   const FilePath dir(directory.RemoveTrailingPathSeparator());
@@ -177,9 +178,9 @@ bool FilePath::IsAbsolutePath() const {
 // Examples: 'dir/foo_test.xml' or 'dir/foo_test_1.xml'.
 // There could be a race condition if two or more processes are calling this
 // function at the same time -- they could both pick the same filename.
-FilePath FilePath::GenerateUniqueFileName(const FilePath& directory,
-                                          const FilePath& base_name,
-                                          const char* extension) {
+FilePath FilePath::GenerateUniqueFileName(const FilePath &directory,
+                                          const FilePath &base_name,
+                                          const char *extension) {
   FilePath full_pathname;
   int number = 0;
   do {
@@ -220,17 +221,16 @@ bool FilePath::CreateFolder() const {
   int result = mkdir(pathname_.c_str(), 0777);
 
   if (result == -1) {
-    return this->DirectoryExists();  // An error is OK if the directory exists.
+    return this->DirectoryExists(); // An error is OK if the directory exists.
   }
-  return true;  // No error.
+  return true; // No error.
 }
 
 // If input name has a trailing separator character, remove it and return the
 // name, otherwise return the name string unmodified.
 FilePath FilePath::RemoveTrailingPathSeparator() const {
-  return IsDirectory()
-      ? FilePath(pathname_.substr(0, pathname_.length() - 1))
-      : *this;
+  return IsDirectory() ? FilePath(pathname_.substr(0, pathname_.length() - 1))
+                       : *this;
 }
 
 // Removes any redundant separators that might be in the pathname.
@@ -241,9 +241,9 @@ void FilePath::Normalize() {
     pathname_ = "";
     return;
   }
-  const char* src = pathname_.c_str();
-  char* const dest = new char[pathname_.length() + 1];
-  char* dest_ptr = dest;
+  const char *src = pathname_.c_str();
+  char *const dest = new char[pathname_.length() + 1];
+  char *dest_ptr = dest;
   memset(dest_ptr, 0, pathname_.length() + 1);
 
   while (*src != '\0') {
@@ -261,5 +261,5 @@ void FilePath::Normalize() {
   delete[] dest;
 }
 
-}  // namespace internal
-}  // namespace testing
+} // namespace internal
+} // namespace testing

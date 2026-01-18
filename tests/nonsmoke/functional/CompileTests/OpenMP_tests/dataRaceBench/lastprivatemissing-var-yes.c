@@ -50,18 +50,17 @@ The problem can be solved by using lastprivate(x) .
 Data race pair: x@63:5 vs. x@63:5
 */
 #include <stdio.h>
+
 #include <stdlib.h>
-int main(int argc, char* argv[])
-{
-  int i,x;
+int main(int argc, char *argv[]) {
+  int i, x;
   int len = 10000;
-  if (argc>1)
+  if (argc > 1)
     len = atoi(argv[1]);
 
-#pragma omp parallel for private (i) 
-  for (i=0;i<len;i++)
-    x=i;
-  printf("x=%d",x);
+#pragma omp parallel for private(i)
+  for (i = 0; i < len; i++)
+    x = i;
+  printf("x=%d", x);
   return 0;
 }
-

@@ -2,9 +2,11 @@
 #ifndef COMPSLICE
 #define COMPSLICE
 
-#include <LoopTree.h>
-#include <LoopTreeDepComp.h>
-#include <LoopTreeObserver.h>
+#include "LoopTree.h"
+
+#include "LoopTreeDepComp.h"
+
+#include "LoopTreeObserver.h"
 
 class CompSliceObserver;
 class CompSliceObserveInfo;

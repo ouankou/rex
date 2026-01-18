@@ -9,8 +9,11 @@
 #include <string>
 
 #include "DFAFilter.h"
+
 #include "DFAnalysis.h"
+
 #include "filteredCFG.h"
+
 #include "support.h"
 
 #include <iostream>

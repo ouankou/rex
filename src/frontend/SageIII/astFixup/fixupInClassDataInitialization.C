@@ -1,6 +1,7 @@
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "fixupInClassDataInitialization.h"
+
 #include "sage3basic.h"
 
 void fixupInClassDataInitialization(SgNode *node) {

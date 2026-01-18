@@ -1,9 +1,12 @@
 #ifndef GRAPH_DOT_H
 #define GRAPH_DOT_H
 
-#include <GraphAccess.h>
+#include "GraphAccess.h"
+
 #include <fstream>
+
 #include <iostream>
+
 #include <string>
 
 template <class Graph> class GraphDotOutput {

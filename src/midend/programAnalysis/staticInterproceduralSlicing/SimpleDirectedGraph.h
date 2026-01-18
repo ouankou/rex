@@ -2,9 +2,13 @@
 #define _SIMPLE_DIRECTED_GRAPH_H_
 
 #include <fstream>
+
 #include <iostream>
+
 #include <map>
+
 #include <set>
+
 #include <stack>
 
 // DQ (12/30/2005): This is a Bad Bad thing to do (I can explain)

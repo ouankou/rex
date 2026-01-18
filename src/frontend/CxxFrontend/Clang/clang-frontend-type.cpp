@@ -1,11 +1,17 @@
 #include "clang-frontend-private.hpp"
+
 #include "sage3basic.h"
+
 #include "sageInterface.h"
 
-#include "clang/AST/APValue.h"
-#include "clang/Basic/OperatorKinds.h"
-#include "llvm/ADT/SmallString.h"
 #include <cctype>
+
+#include <clang/AST/APValue.h>
+
+#include <clang/Basic/OperatorKinds.h>
+
+#include <llvm/ADT/SmallString.h>
+
 #include <functional>
 
 namespace {

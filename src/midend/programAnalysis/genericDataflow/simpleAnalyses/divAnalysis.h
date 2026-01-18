@@ -1,24 +1,37 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef DIV_ANALYSIS_H
 #define DIV_ANALYSIS_H
 
 #include "CallGraphTraverse.h"
+
 #include "VariableStateTransfer.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "liveDeadVarAnalysis.h"
+
 #include "printAnalysisStates.h"
 
 #include <map>
+
 #include <memory>
+
 #include <string>
+
 #include <vector>
 
 extern int divAnalysisDebugLevel;

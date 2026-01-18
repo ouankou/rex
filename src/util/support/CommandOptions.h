@@ -1,10 +1,15 @@
 #ifndef COMMAND_OPTIONS_H
 #define COMMAND_OPTIONS_H
 #include "rosedll.h"
+
 #include <assert.h>
+
 #include <functional>
+
 #include <iostream>
+
 #include <string>
+
 #include <vector>
 
 class ROSE_UTIL_API CmdOptions {

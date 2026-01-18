@@ -8,8 +8,7 @@
  * global name space.  All the names start with "ROSE_". */
 #include "rosePublicConfig.h"
 
-#include "sage3basic.hhh"
-// DQ (4/21/2009): Andreas needs to add a comment about what this is for...
+#include "sage3basic.hhh" // DQ (4/21/2009): Andreas needs to add a comment about what this is for...
 
 #include "rosedefs.h"
 
@@ -35,10 +34,15 @@
 // Place this at the end (since it is dependent upon ROSE classes.)
 // added here to avoid placing it in each header file using the AstProcessingLib
 #include "AstDOTGeneration.h"
+
 #include "AstDiagnostics.h"
+
 #include "AstPDFGeneration.h"
+
 #include "AstProcessing.h"
+
 #include "AstReverseProcessing.h"
+
 #include <typeinfo>
 // #include "AstStatistics.h"
 
@@ -90,7 +94,9 @@
 // name qualification. It is also an error for ROSE compiling ROSE which perhaps
 // shuld be invistigated further. DQ (5/8/2007): Added Robert Preissl's support
 // for hidden type and declartion lists. #include "HiddenList.h" #include
-// "HiddenList_Output.h" #include "HiddenList_Intersection.h"
+// "HiddenList_Output.h"
+
+#include "HiddenList_Intersection.h"
 
 // DQ (1/25/2008): Added cfgToDot.h as suggested by Jeremiah
 #include "cfgToDot.h"
@@ -108,6 +114,7 @@
 // DQ (6/25/2011): Commented out so that I could debug name qualification
 // without function definitions in header files.
 #include "AstDOTGenerationImpl.C"
+
 #include "utility_functionsImpl.C"
 #undef TEMPLATE_IMPLEMENTATIONS
 

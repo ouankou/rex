@@ -1,7 +1,9 @@
 
-#include "rose_config.h"
-#include "sage3basic.h"
 #include "unparser.h"
+
+#include "sage3basic.h"
+
+#include "rose_config.h"
 
 #define DEBUG__isAssociatedWithCxx11_initializationList 0
 #define DEBUG__trimCtorNameQual 0

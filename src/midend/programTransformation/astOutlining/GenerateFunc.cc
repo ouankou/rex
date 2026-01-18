@@ -14,21 +14,32 @@
 
 // DQ (8/28/2012): Added this so that we can see where the macros
 // are used to control the use of new vs. old template support.
-#include <rose_config.h>
+#include "rose_config.h"
 
 #include "sageBuilder.h"
+
 #include <iostream>
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
 #include <string>
+
 #include <unordered_map>
 
 #include "ASTtools.hh"
+
 #include "Copy.hh"
+
 #include "Outliner.hh"
+
 #include "RoseAst.h"
+
 #include "StmtRewrite.hh"
+
 #include "VarSym.hh"
 
 //! Stores a variable symbol remapping.

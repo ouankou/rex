@@ -8,8 +8,37 @@
 #ifndef UNPARSER_LANGUAGE_INDEPENDENT_SUPPORT
 #define UNPARSER_LANGUAGE_INDEPENDENT_SUPPORT
 
+#include <iomanip>
+
+#include <sstream>
+
+#include <string>
+
+#include "rose_attributes_list.h"
+
 #include "modified_sage.h"
+
 #include "unparser.h"
+
+class SgBasicBlock;
+class SgBinaryOp;
+class SgClassDefinition;
+class SgConstructorInitializer;
+class SgDeclarationStatement;
+class SgDotExp;
+class SgExpression;
+class SgFile;
+class SgIfStmt;
+class SgInitializedName;
+class SgLocatedNode;
+class SgNamespaceDefinitionStatement;
+class SgNode;
+class SgOmpClause;
+class SgSourceFile;
+class SgStatement;
+class SgThisExp;
+class SgUnparse_Info;
+class SgValue;
 
 /* support for handling precedence and associativity */
 typedef int PrecedenceSpecifier;

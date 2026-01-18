@@ -3,12 +3,16 @@
 #ifndef DEP_INFO_H
 #define DEP_INFO_H
 
-#include <AstInterface.h>
-#include <CountRefHandle.h>
-#include <IteratorTmpl.h>
+#include "AstInterface.h"
 
-#include <DepRel.h>
-#include <Matrix.h>
+#include "CountRefHandle.h"
+
+#include "IteratorTmpl.h"
+
+#include "DepRel.h"
+
+#include "Matrix.h"
+
 #include <iostream>
 
 typedef enum {

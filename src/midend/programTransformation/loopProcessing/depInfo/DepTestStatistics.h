@@ -1,10 +1,14 @@
 #ifndef DEP_TEST_STATISTICS_H
 #define DEP_TEST_STATISTICS_H
 
+#include "DepInfo.h"
+
+#include "DepRel.h"
+
 #include <DDTypes.h>
-#include <DepInfo.h>
-#include <DepRel.h>
+
 #include <sys/resource.h>
+
 #include <sys/time.h>
 
 class DepTestStatistics {

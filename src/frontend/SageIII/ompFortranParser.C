@@ -7,12 +7,18 @@
 // only) Liao, 5/24/2009
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
-#include "OpenMPIR.h"
-#include "sage3basic.h"
 #include "sageBuilder.h"
+
+#include "sage3basic.h"
+
+#include "OpenMPIR.h"
+
 #include <cstdio>
+
 #include <cstdlib>
+
 #include <cstring>
+
 #include <string>
 
 using namespace std;

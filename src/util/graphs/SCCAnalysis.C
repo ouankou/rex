@@ -1,11 +1,15 @@
 
 #include <assert.h>
+
 #include <map>
+
 #include <stdlib.h>
 
-#include <DGBaseGraphImpl.h>
-#include <SCCAnalysis.h>
-#include <SinglyLinkedList.h>
+#include "DGBaseGraphImpl.h"
+
+#include "SCCAnalysis.h"
+
+#include "SinglyLinkedList.h"
 
 class LowLinkState {
 private:

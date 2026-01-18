@@ -2,7 +2,8 @@
 #include "sage3basic.h"
 
 #include "CreateSlice.h"
-#include "iostream"
+
+#include <iostream>
 using namespace std;
 
 void printSgNode(SgNode *node) {

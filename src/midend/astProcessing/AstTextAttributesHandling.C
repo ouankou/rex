@@ -7,6 +7,7 @@
 #ifndef ASTTEXTATTRIBUTEHANDLING_C
 #define ASTTEXTATTRIBUTEHANDLING_C
 #include "AstTextAttributesHandling.h"
+
 #include <string>
 
 // DQ (12/31/2005): This is OK if not declared in a header file

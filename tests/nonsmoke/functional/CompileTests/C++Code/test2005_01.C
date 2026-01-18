@@ -10,15 +10,15 @@
 #include <iostream>
 #else
 #include <stdio.h>
+
 #include <stdlib.h>
 #endif
 
 // This does not appear to be required
 // using namespace std;
 
-int main()
-   {
-     int a = 42;
-     printf("%d",a);
-     return 0;
-   }
+int main() {
+  int a = 42;
+  printf("%d", a);
+  return 0;
+}

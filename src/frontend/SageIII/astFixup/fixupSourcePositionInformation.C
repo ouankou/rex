@@ -1,5 +1,6 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "fixupSourcePositionInformation.h"
+
 #include "sage3basic.h"
 /*
    This file constains the code to fixup the source position information in the

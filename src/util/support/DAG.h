@@ -3,9 +3,11 @@
 
 #include <stdlib.h>
 
+#include "DirectedGraph.h"
+
+#include "PtrSet.h"
+
 #include "rosedll.h"
-#include <DirectedGraph.h>
-#include <PtrSet.h>
 
 template <class Node, class Edge> class DAG;
 template <class Node, class Edge>

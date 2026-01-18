@@ -6,6 +6,7 @@
 // #include "config.h"
 
 #include "inlinerSupport.h"
+
 #include "replaceExpressionWithStatement.h"
 
 //! Main inliner code.  Accepts a function call as a parameter, and inlines

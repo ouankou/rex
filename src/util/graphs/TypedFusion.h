@@ -1,8 +1,9 @@
 #ifndef TYPED_FUSION
 #define TYPED_FUSION
 
+#include "GraphAccess.h"
+
 #include "rosedll.h"
-#include <GraphAccess.h>
 
 class TypedFusionOperator {
 public:

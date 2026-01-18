@@ -1,9 +1,11 @@
 #ifndef SCC_ANALYSIS_H
 #define SCC_ANALYSIS_H
 
+#include "GraphAccess.h"
+
+#include "GraphGroup.h"
+
 #include "rosedll.h"
-#include <GraphAccess.h>
-#include <GraphGroup.h>
 
 class SCCAnalOperator {
 public:

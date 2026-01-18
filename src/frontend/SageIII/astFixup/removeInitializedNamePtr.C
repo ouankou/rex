@@ -1,6 +1,8 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "AstFixup.h"
+
 #include "removeInitializedNamePtr.h"
+
 #include "sage3basic.h"
 
 // tps : Added this as it is defined somewhere in rose.h

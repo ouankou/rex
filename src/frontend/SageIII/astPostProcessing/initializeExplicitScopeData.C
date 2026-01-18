@@ -1,5 +1,6 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "initializeExplicitScopeData.h"
+
 #include "sage3basic.h"
 
 // DQ (11/29/2004): initialize any uninitialized explicitly stored scope data.

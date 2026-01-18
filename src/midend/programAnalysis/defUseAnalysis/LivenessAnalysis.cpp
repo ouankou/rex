@@ -19,9 +19,13 @@
 // 8,8MB
 
 #include "LivenessAnalysis.h"
+
 #include "BottomUpTraversalLiveness.h"
+
 #include "DefUseAnalysis_perFunction.h"
+
 #include "GlobalVarAnalysis.h"
+
 #include "sage3basic.h"
 using namespace std;
 

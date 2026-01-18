@@ -7,7 +7,9 @@
 #include "sage3.h"
 
 #include "AstInterface_ROSE.h"
+
 #include "CPPAstInterface.h"
+
 #include <cstring>
 using namespace std;
 //! Check if a node is a data member access function for an object,

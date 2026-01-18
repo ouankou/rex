@@ -13,9 +13,13 @@
 #define DOTSUBGRAPHREPRESENTATION_H
 
 #include "DOTRepresentation.h"
+
 #include <map>
+
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 
 // DQ (12/30/2005): This is a Bad Bad thing to do (I can explain)

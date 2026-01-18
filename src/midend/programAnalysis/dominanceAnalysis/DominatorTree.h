@@ -1,8 +1,10 @@
 #ifndef _DOMINATORTREE_H_
 #define _DOMINATORTREE_H_
 
+#include "GraphDotOutput.h"
+
 #include "filteredCFG.h"
-#include <GraphDotOutput.h>
+
 #include <map>
 // #include "rose.h"
 namespace DominatorTreesAndDominanceFrontiers {

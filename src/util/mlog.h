@@ -1,8 +1,11 @@
 #ifndef __MLOG_H__
 #define __MLOG_H__
 #include <iostream>
+
 #include <stddef.h>
+
 #include <stdlib.h>
+
 #include <string>
 
 /**
@@ -156,7 +159,7 @@ extern std::string mlogLevelToString_CXX(MLOG_LEVEL_t level);
   (level > mlogLevel) ? std::cerr : MLOG_LEVEL_HEADER_CXX(level, subject)
 
 //*__MORE_CXX API is used to add more lines for the mlog msg that is already
-//started by MLOG_*_CXX
+// started by MLOG_*_CXX
 #define MLOG_MORE_CXX() std::cerr << "\t"
 #define MLOG_LEVEL_MORE_CXX(level)                                             \
   (level > mlogLevel) ? std::cerr : std::cerr << "\t"

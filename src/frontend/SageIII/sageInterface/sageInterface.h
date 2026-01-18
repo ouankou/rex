@@ -2,14 +2,18 @@
 #define ROSE_SAGE_INTERFACE
 
 #include "sage3basic.hhh"
+
 #include <stdint.h>
+
 #include <utility>
 
 #include "nodeQuery.h" //for querySubTree
+#include <iostream>
+
 #include "rosePublicConfig.h"
 
-#include <iostream>
 #include <sstream>
+
 #include <string>
 
 SgFile *determineFileType(std::vector<std::string> argv, int &nextErrorCode,
@@ -17,10 +21,12 @@ SgFile *determineFileType(std::vector<std::string> argv, int &nextErrorCode,
 
 // DQ (7/20/2008): Added support for unparsing abitrary strings in the unparser.
 #include "astUnparseAttribute.h"
+
 #include <set>
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 #include "ClassHierarchyGraph.h"
+
 #include "LivenessAnalysis.h"
 #endif
 
@@ -1135,7 +1141,7 @@ ROSE_DLL_API SgType *getBoolType(SgNode *n);
 //! int, long, long long.
 ////!
 ////! There is another similar function named SgType::isIntegerType(), which
-///allows additional types char, wchar, and bool to be treated as integer types
+/// allows additional types char, wchar, and bool to be treated as integer types
 ROSE_DLL_API bool isStrictIntegerType(SgType *t);
 //! Get the data type of the first initialized name of a declaration statement
 ROSE_DLL_API SgType *getFirstVarType(SgVariableDeclaration *decl);

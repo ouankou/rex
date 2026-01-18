@@ -5,7 +5,9 @@
 #define ASTNODEVISITMAPPING_H
 
 #include "AstProcessing.h"
+
 #include <map>
+
 #include <string>
 
 class AstNodeVisitMapping : public SgSimpleProcessing {

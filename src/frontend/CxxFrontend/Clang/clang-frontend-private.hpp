@@ -3,84 +3,132 @@
 #define _CLANG_FRONTEND_PRIVATE_HPP_
 
 #include "clang-frontend.hpp"
+
 #include "sage3basic.h"
 
 #include <iostream>
+
 #include <memory>
+
 #include <set>
+
 #include <vector>
 
-#include "clang/AST/AST.h"
-#include "clang/AST/ASTConsumer.h"
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/DeclCXX.h"
-#include "clang/AST/DeclFriend.h"
-#include "clang/AST/DeclGroup.h"
-#include "clang/AST/DeclObjC.h"
-#include "clang/AST/DeclTemplate.h"
-#include "clang/AST/DeclVisitor.h"
-#include "clang/AST/DeclarationName.h"
-#include "clang/AST/Expr.h"
-#include "clang/AST/ExprCXX.h"
-#include "clang/AST/ExprObjC.h"
-#include "clang/AST/NestedNameSpecifier.h"
-#include "clang/AST/ParentMap.h"
-#include "clang/AST/RecursiveASTVisitor.h"
-#include "clang/AST/Stmt.h"
-#include "clang/AST/StmtCXX.h"
-#include "clang/AST/StmtObjC.h"
-#include "clang/AST/StmtVisitor.h"
-#include "clang/AST/TemplateBase.h"
-#include "clang/AST/TemplateName.h"
-#include "clang/AST/Type.h"
-#include "clang/AST/TypeLoc.h"
-#include "clang/AST/TypeLocVisitor.h"
+#include <clang/AST/AST.h>
 
-#include "clang/Basic/Builtins.h"
-#include "clang/Basic/Diagnostic.h"
-#include "clang/Basic/FileManager.h"
-#include "clang/Basic/IdentifierTable.h"
-#include "clang/Basic/LangOptions.h"
-#include "clang/Basic/LangStandard.h"
-#include "clang/Basic/SourceLocation.h"
-#include "clang/Basic/SourceManager.h"
-#include "clang/Basic/TargetInfo.h"
-#include "clang/Basic/TargetOptions.h"
+#include <clang/AST/ASTConsumer.h>
 
-#include "clang/FrontendTool/Utils.h"
+#include <clang/AST/ASTContext.h>
 
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/Frontend/CompilerInvocation.h"
-#include "clang/Frontend/FrontendOptions.h"
-#include "clang/Lex/PreprocessorOptions.h"
+#include <clang/AST/Decl.h>
 
-#include "clang/Basic/DiagnosticOptions.h"
+#include <clang/AST/DeclCXX.h>
 
-#include "clang/Frontend/TextDiagnosticBuffer.h"
-#include "clang/Frontend/TextDiagnosticPrinter.h"
+#include <clang/AST/DeclFriend.h>
 
-#include "clang/Lex/HeaderSearch.h"
-#include "clang/Lex/PPCallbacks.h"
-#include "clang/Lex/Pragma.h"
-#include "clang/Lex/Preprocessor.h"
+#include <clang/AST/DeclGroup.h>
 
-#include "clang/Parse/ParseAST.h"
+#include <clang/AST/DeclObjC.h>
 
-#include "clang/Sema/Sema.h"
+#include <clang/AST/DeclTemplate.h>
 
-#include "llvm/ADT/IntrusiveRefCntPtr.h"
-#include "llvm/ADT/StringRef.h"
+#include <clang/AST/DeclVisitor.h>
 
-#include "llvm/Config/llvm-config.h"
+#include <clang/AST/DeclarationName.h>
 
-#include "llvm/Support/raw_os_ostream.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/TargetParser/Host.h"
-#include "llvm/TargetParser/Triple.h"
+#include <clang/AST/Expr.h>
 
-#include "llvm/Frontend/OpenMP/OMPIRBuilder.h"
+#include <clang/AST/ExprCXX.h>
 
+#include <clang/AST/ExprObjC.h>
+
+#include <clang/AST/NestedNameSpecifier.h>
+
+#include <clang/AST/ParentMap.h>
+
+#include <clang/AST/RecursiveASTVisitor.h>
+
+#include <clang/AST/Stmt.h>
+
+#include <clang/AST/StmtCXX.h>
+
+#include <clang/AST/StmtObjC.h>
+
+#include <clang/AST/StmtVisitor.h>
+
+#include <clang/AST/TemplateBase.h>
+
+#include <clang/AST/TemplateName.h>
+
+#include <clang/AST/Type.h>
+
+#include <clang/AST/TypeLoc.h>
+
+#include <clang/AST/TypeLocVisitor.h>
+
+#include <clang/Basic/Builtins.h>
+
+#include <clang/Basic/Diagnostic.h>
+
+#include <clang/Basic/FileManager.h>
+
+#include <clang/Basic/IdentifierTable.h>
+
+#include <clang/Basic/LangOptions.h>
+
+#include <clang/Basic/LangStandard.h>
+
+#include <clang/Basic/SourceLocation.h>
+
+#include <clang/Basic/SourceManager.h>
+
+#include <clang/Basic/TargetInfo.h>
+
+#include <clang/Basic/TargetOptions.h>
+
+#include <clang/Basic/DiagnosticOptions.h>
+
+#include <clang/Frontend/CompilerInstance.h>
+
+#include <clang/Frontend/CompilerInvocation.h>
+
+#include <clang/Frontend/FrontendOptions.h>
+
+#include <clang/Lex/PreprocessorOptions.h>
+
+#include <clang/Frontend/TextDiagnosticBuffer.h>
+
+#include <clang/Frontend/TextDiagnosticPrinter.h>
+
+#include <clang/FrontendTool/Utils.h>
+
+#include <clang/Lex/HeaderSearch.h>
+
+#include <clang/Lex/PPCallbacks.h>
+
+#include <clang/Lex/Pragma.h>
+
+#include <clang/Lex/Preprocessor.h>
+
+#include <clang/Parse/ParseAST.h>
+
+#include <clang/Sema/Sema.h>
+
+#include <llvm/ADT/IntrusiveRefCntPtr.h>
+
+#include <llvm/ADT/StringRef.h>
+
+#include <llvm/Config/llvm-config.h>
+
+#include <llvm/Frontend/OpenMP/OMPIRBuilder.h>
+
+#include <llvm/Support/raw_os_ostream.h>
+
+#include <llvm/Support/raw_ostream.h>
+
+#include <llvm/TargetParser/Host.h>
+
+#include <llvm/TargetParser/Triple.h>
 // DQ (11/27/2020): Turn on/off the debugging information as we visit clang IR
 // nodes.
 #define DEBUG_VISITOR 0

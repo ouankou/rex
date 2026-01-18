@@ -15,6 +15,7 @@
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
+
 #include "unparser.h"
 
 // DQ (8/31/2013):  This should only be included by source files that require
@@ -22,7 +23,6 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 // DQ (12/6/2014): Adding support for unparsing from the token stream.
 #include "tokenStreamMapping.h"
 

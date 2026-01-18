@@ -10,12 +10,19 @@
 // $Id: DOTSubgraphRepresentation.C,v 1.6 2008/01/08 02:56:19 dquinlan Exp $
 
 #include "DOTSubgraphRepresentation.h"
+
 #include "sage3basic.h"
+
 #include <assert.h>
+
 #include <fstream>
+
 #include <inttypes.h>
+
 #include <iostream>
+
 #include <sstream>
+
 #include <typeinfo>
 
 // DQ (12/31/2005): This is OK if not declared in a header file

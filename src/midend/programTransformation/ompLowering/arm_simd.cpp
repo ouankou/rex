@@ -1,10 +1,15 @@
 #include <iostream>
+
 #include <string>
+
 #include <vector>
 
 #include "omp_lowering.h"
+
 #include "omp_simd.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
 
 using namespace Rose;

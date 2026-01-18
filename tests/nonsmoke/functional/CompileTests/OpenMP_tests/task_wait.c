@@ -2,29 +2,27 @@
  * Liao, 9/15/2008
  */
 #include <stdio.h>
+
 #include <assert.h>
 unsigned long int input = 40;
-unsigned long int fib(unsigned long int n) 
-{
+unsigned long int fib(unsigned long int n) {
   unsigned long int i, j;
-  if (n<2)
+  if (n < 2)
     return n;
-  else 
-  {
+  else {
 #pragma omp task shared(i)
-    i=fib(n-1);
+    i = fib(n - 1);
 #pragma omp task shared(j)
-    j=fib(n-2);
+    j = fib(n - 2);
 #pragma omp taskwait
-    return i+j;
+    return i + j;
   }
 }
-int main()
-{
+int main() {
   unsigned long int result = 0;
 #pragma omp parallel
   {
-   #pragma omp single
+#pragma omp single
     {
       result = fib(input);
     }

@@ -20,10 +20,13 @@
    $Id: simple_xy_nc4_rd.c,v 1.2 2007/06/05 21:47:50 ed Exp $
 */
 
-#include <config.h>
-#include <stdlib.h>
+#include "config.h"
+
+#include < stdlib.h>
+
+#include "netcdf.h"
+
 #include <stdio.h>
-#include <netcdf.h>
 
 /* This is the name of the data file we will read. */
 #define FILE_NAME "simple_xy_nc4.nc"
@@ -35,42 +38,44 @@
 /* Handle errors by printing an error message and exiting with a
  * non-zero status. */
 #define ERRCODE 2
-#define ERR(e) {printf("Error: %s\n", nc_strerror(e)); exit(ERRCODE);}
+#define ERR(e)                                                                 \
+  {                                                                            \
+    printf("Error: %s\n", nc_strerror(e));                                     \
+    exit(ERRCODE);                                                             \
+  }
 
-int
-main()
-{
-   /* This will be the netCDF ID for the file and data variable. */
-   int ncid, varid;
+int main() {
+  /* This will be the netCDF ID for the file and data variable. */
+  int ncid, varid;
 
-   int data_in[NX][NY];
+  int data_in[NX][NY];
 
-   /* Loop indexes, and error handling. */
-   int x, y, retval;
+  /* Loop indexes, and error handling. */
+  int x, y, retval;
 
-   /* Open the file. NC_NOWRITE tells netCDF we want read-only access
-    * to the file.*/
-   if ((retval = nc_open(FILE_NAME, NC_NOWRITE, &ncid)))
-      ERR(retval);
+  /* Open the file. NC_NOWRITE tells netCDF we want read-only access
+   * to the file.*/
+  if ((retval = nc_open(FILE_NAME, NC_NOWRITE, &ncid)))
+    ERR(retval);
 
-   /* Get the varid of the data variable, based on its name. */
-   if ((retval = nc_inq_varid(ncid, "data", &varid)))
-      ERR(retval);
+  /* Get the varid of the data variable, based on its name. */
+  if ((retval = nc_inq_varid(ncid, "data", &varid)))
+    ERR(retval);
 
-   /* Read the data. */
-   if ((retval = nc_get_var_int(ncid, varid, &data_in[0][0])))
-      ERR(retval);
+  /* Read the data. */
+  if ((retval = nc_get_var_int(ncid, varid, &data_in[0][0])))
+    ERR(retval);
 
-   /* Check the data. */
-   for (x = 0; x < NX; x++)
-      for (y = 0; y < NY; y++)
-	 if (data_in[x][y] != x * NY + y)
-	    return ERRCODE;
+  /* Check the data. */
+  for (x = 0; x < NX; x++)
+    for (y = 0; y < NY; y++)
+      if (data_in[x][y] != x * NY + y)
+        return ERRCODE;
 
-   /* Close the file, freeing all resources. */
-   if ((retval = nc_close(ncid)))
-      ERR(retval);
+  /* Close the file, freeing all resources. */
+  if ((retval = nc_close(ncid)))
+    ERR(retval);
 
-   printf("*** SUCCESS reading example file %s!\n", FILE_NAME);
-   return 0;
+  printf("*** SUCCESS reading example file %s!\n", FILE_NAME);
+  return 0;
 }

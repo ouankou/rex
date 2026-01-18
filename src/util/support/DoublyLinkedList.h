@@ -2,9 +2,12 @@
 #ifndef DOUBLYLINKEDLIST_H
 #define DOUBLYLINKEDLIST_H
 
-#include <FunctionObject.h>
+#include "FunctionObject.h"
+
 #include <assert.h>
+
 #include <iostream>
+
 #include <stdlib.h>
 
 template <class T> class DoublyLinkedListWrap;

@@ -1,4 +1,5 @@
 #include "checkIsCompilerGeneratedFlag.h"
+
 #include "sage3basic.h"
 
 using namespace Rose;

@@ -1,8 +1,10 @@
 #include "Utf8.h"
-#include <iostream>
-#include <sstream>
-#include <string.h>
 
+#include <iostream>
+
+#include <sstream>
+
+#include <string.h>
 // Define static member variables
 Utf8::BadUnicodeException Utf8::bad_unicode_exception;
 Utf8::BadUtf8CodeException Utf8::bad_utf8_code_exception;

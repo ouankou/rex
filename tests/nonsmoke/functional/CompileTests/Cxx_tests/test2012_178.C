@@ -26,24 +26,19 @@ class vector : protected _Vector_base<_Tp>
 #endif
 
 #if 1
-#include<test2012_178.h>
+#include "test2012_178.h"
 #else
 template <bool T> struct X {};
 
-template<>
-struct X<true>
-   {
+template <> struct X<true> {
   // template <typename T1, typename T2 > static void test_me(T1 x, T2 y) {};
-     template <typename T1, typename T2 > static void test_me(T1 x, T2 y);
-   };
+  template <typename T1, typename T2> static void test_me(T1 x, T2 y);
+};
 
-template <typename T1, typename T2 > 
-void X<true>::test_me(T1 x, T2 y) {}
+template <typename T1, typename T2> void X<true>::test_me(T1 x, T2 y) {}
 #endif
 
-
-int main()
-   {
+int main() {
 #if 0
      int size = 2;
 
@@ -53,9 +48,8 @@ int main()
   // integerVector = vector<int>(size);
 #endif
 
-     X<true>  abc_true;
-     X<false> abc_false;
+  X<true> abc_true;
+  X<false> abc_false;
 
-     return 0;
-   }
-
+  return 0;
+}

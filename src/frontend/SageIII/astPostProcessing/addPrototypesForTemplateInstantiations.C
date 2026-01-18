@@ -1,4 +1,5 @@
 #include "addPrototypesForTemplateInstantiations.h"
+
 #include "sage3basic.h"
 
 void addPrototypesForTemplateInstantiations(SgNode *node) {

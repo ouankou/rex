@@ -9,11 +9,14 @@
 #define UNPARSER_FHELP
 
 // #include "rose.h"
+
+#include "Rose/FileSystem.h"
+
 #include "unparser.h"
-#include <Rose/FileSystem.h>
 
 class SgUnparse_Info;
 class SgLocatedNode;
+class SgFile;
 class Unparser;
 
 class ROSE_DLL_API UnparseFormatHelp {

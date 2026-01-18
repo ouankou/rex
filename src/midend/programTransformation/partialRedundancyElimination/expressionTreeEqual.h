@@ -2,7 +2,6 @@
 #define EXPRESSIONTREEEQUAL_H
 
 #include "Cxx_Grammar.h"
-
 //~ namespace legacy
 //~ {
 

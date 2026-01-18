@@ -54,7 +54,7 @@
 //   OA_IRHANDLETYPE_SZ64: Maximum size for cross-platform handles
 //-----------------------------------------------------------------------------
 
-#include "inttypes.h"
+#include <inttypes.h>
 
 #include <iosfwd>
 

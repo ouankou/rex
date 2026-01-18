@@ -7,7 +7,9 @@
  *********************************/
 
 #include "RoseAst.h"
+
 #include <typeinfo>
+
 #include <unordered_set>
 
 class AstTerm {

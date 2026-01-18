@@ -7,23 +7,34 @@
 /*-----------------------------------------------------------------------------
  *  Dependencies
  *---------------------------------------------------------------------------*/
+#include "ROSE_UNUSED.h"
+
+#include "Rose/FileSystem.h"
+
 #include "Unique.h"
+
 #include "cmdline.h"
+
 #include "keep_going.h"
+
 #include "processSupport.h"
+
 #include "sage3basic.h"
+
 #include "sage_support.h"
-#include <ROSE_UNUSED.h>
-#include <Rose/FileSystem.h>
 
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 #include "FortranModuleInfo.h"
+
 #include "FortranParserState.h"
+
 #include "unparseFortran_modfile.h"
 #endif
 
 #include <algorithm>
+
 #include <filesystem>
+
 #include <memory>
 
 // DQ (12/22/2019): I don't need this now, and it is an issue for some compilers
@@ -48,6 +59,7 @@ std::ostream &operator<<(std::basic_ostream<char, std::char_traits<char>> &os,
 // DQ (9/26/2018): Added so that we can call the display function for
 // TokenStreamSequenceToNodeMapping (for debugging).
 #include "attachPreprocessingInfo.h"
+
 #include "tokenStreamMapping.h"
 
 using namespace std;

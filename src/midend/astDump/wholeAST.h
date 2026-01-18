@@ -2,7 +2,9 @@
 #define WHOLE_AST_H
 
 #include "AstDOTGeneration.h"
+
 #include <string>
+
 #include <vector>
 
 class CustomAstDOTGenerationEdgeType {

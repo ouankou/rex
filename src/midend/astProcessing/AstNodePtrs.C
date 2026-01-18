@@ -5,9 +5,11 @@
 // DQ (3/6/2003): added from AstProcessing.h to avoid referencing
 // the traversal classes in AstFixes.h before they are defined.
 #include "roseInternal.h"
+
 #include "sage3basic.h"
 
 #include "AstNodePtrs.h"
+
 #include <sstream>
 
 // DQ (12/31/2005): This is OK if not declared in a header file

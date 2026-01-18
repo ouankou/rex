@@ -7,6 +7,7 @@
 //         function calls
 
 // #include "rose.h"
+
 #include "sage3basic.h"
 
 #include "newCallGraph.h"
@@ -15,10 +16,15 @@
 
 // file locking support
 #include <cstring>
+
 #include <errno.h>
+
 #include <fcntl.h>
+
 #include <stdio.h>
+
 #include <sys/resource.h>
+
 #include <unistd.h>
 
 #define DEBUG_CALLGRAPH 0

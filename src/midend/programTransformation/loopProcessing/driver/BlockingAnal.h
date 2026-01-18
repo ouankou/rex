@@ -2,9 +2,12 @@
 #ifndef BLOCKING_ANALYSIS
 #define BLOCKING_ANALYSIS
 
-#include <CompSliceDepGraph.h>
-#include <CompSliceLocality.h>
-#include <LoopTransformOptions.h>
+#include "CompSliceDepGraph.h"
+
+#include "CompSliceLocality.h"
+
+#include "LoopTransformOptions.h"
+
 #include <vector>
 
 class LoopBlocking {

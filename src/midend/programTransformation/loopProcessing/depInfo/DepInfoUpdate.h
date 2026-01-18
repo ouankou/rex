@@ -1,8 +1,9 @@
 #ifndef UPDATE_DEPINFO
 #define UPDATE_DEPINFO
 
-#include <DepInfoSet.h>
-#include <DomainInfo.h>
+#include "DepInfoSet.h"
+
+#include "DomainInfo.h"
 
 template <class Update> class UpdateDepInfo {
   Update T;

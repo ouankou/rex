@@ -13,8 +13,11 @@ extern "C" {
 #endif
 
 #include <assert.h>
+
 #include <stdbool.h>
+
 #include <stdio.h>
+
 #include <stdlib.h> // for abort()
 #include <sys/time.h>
 
@@ -166,7 +169,7 @@ extern void XOMP_ordered_start(void);
 extern void XOMP_ordered_end(void);
 
 //--------------------- extensions to support OpenMP accelerator model
-//experimental implementation------
+// experimental implementation------
 // We only include
 
 // Set the device id to be used by the current task
@@ -196,7 +199,7 @@ extern size_t xomp_get_maxSegmentsPerDimensionOf2DBlock(int devID,
                                                         size_t dimension_size);
 
 //------------------memory
-//allocation/copy/free---------------------------------- Allocate device memory
+// allocation/copy/free---------------------------------- Allocate device memory
 // and return the pointer
 // This should be a better interface than cudaMalloc()
 // since it mimics malloc() closely
@@ -314,9 +317,9 @@ struct XOMP_accelerator_thread {
   int loop_chunk_size;  //*************  this is the chunk size
   int loop_end;         //*************  equivalent to upper limit, up
   int loop_sched_index; //*************  lb+chunk_size*tp->num  (num is the
-                        //thread number of this thread in team)
+                        // thread number of this thread in team)
   int loop_stride; //*************   chunk_size * nthds     /* used for static
-                   //scheduling */
+                   // scheduling */
 
   /* for 'lastprivate' */
   int is_last;

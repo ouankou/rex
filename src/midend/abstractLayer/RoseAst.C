@@ -3,6 +3,7 @@
  *************************************************************/
 
 #include "RoseAst.h"
+
 #include "sage3basic.h"
 
 /* AST functions */

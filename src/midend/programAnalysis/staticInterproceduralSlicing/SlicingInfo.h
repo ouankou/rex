@@ -2,7 +2,9 @@
 #define _SLICING_INFO_H_
 
 #include <list>
+
 #include <set>
+
 #include <string>
 /* ! \class SlicingInfo
 

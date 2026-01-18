@@ -1,7 +1,9 @@
 
 #include "CommandOptions.h"
+
 #include "OperatorAnnotation.h"
-#include <ROSE_ASSERT.h>
+
+#include "ROSE_ASSERT.h"
 
 DebugLog DebugOperatorAnnotation("-debugopa");
 
@@ -92,7 +94,7 @@ bool OperatorAliasAnnotation::allow_alias(
 }
 
 #define TEMPLATE_ONLY
-#include <TypeAnnotation.C>
+#include "TypeAnnotation.C"
 template class ReadAnnotCollection<OperatorDeclaration, '{', ';', '}'>;
 template class TypeCollection<BoolDescriptor>;
 template class TypeAnnotCollection<BoolDescriptor>;
@@ -103,7 +105,7 @@ template class OperatorAnnotCollection<OperatorSideEffectDescriptor>;
 template class OperatorAnnotCollection<OperatorAliasDescriptor>;
 template class OperatorAnnotCollection<OperatorInlineDescriptor>;
 
-#include <AnnotDescriptors.C>
+#include "AnnotDescriptors.C"
 template class WriteContainer<set<NameDescriptor>, ',', '(', ')'>;
 template class WriteContainer<vector<NameDescriptor>, ',', '(', ')'>;
 template class ReadContainer<SetDescriptor<NameDescriptor, ',', '{', '}'>,

@@ -8,16 +8,25 @@
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <algorithm>
+
 #include <iostream>
+
 #include <list>
+
 #include <string>
 
 #include "ASTtools.hh"
+
 #include "If.hh"
+
 #include "Preprocess.hh"
+
 #include "PreprocessingInfo.hh"
+
 #include "StmtRewrite.hh"
 
 //! Relative positions at which '#if' cases may be inserted.

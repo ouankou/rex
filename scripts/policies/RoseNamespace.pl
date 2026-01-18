@@ -206,7 +206,9 @@ my @policies = (
 
 	By the way, it is fine for header files in two different directories to
   	have the same name because all headers under the "Rose" namespace are
-  	included with their directory, as in "#include <Rose/...>".'
+  	included with their directory, as in "
+
+#include <Rose/...>".'
     },
 );
 
@@ -563,7 +565,9 @@ while (my $filename = $files->next_file) {
 	    $parentHeaderExists = 1;
 	}
 
-        # There must be a "#include <" . $nsFile . ".h>" in the parent
+        # There must be a "
+
+#include <" . $nsFile . ".h>" in the parent
 	if ($parentHeaderExists) {
 	    my $foundInclude = 0;
 	    open PARENT, "<$parentHeader";

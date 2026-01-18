@@ -7,15 +7,21 @@
 #define ASTPDFGENERATION_C
 
 #include "AstNodeVisitMapping.h"
+
 #include "roseInternal.h"
+
 #include "sage3basic.h"
+
 #include <assert.h>
+
 #include <iostream>
 
 #include <cstring>
+
 #include <sstream>
 
 #include "AstPDFGeneration.h"
+
 #include "PDFGeneration.h"
 
 // DQ (12/31/2005): This is OK if not declared in a header file

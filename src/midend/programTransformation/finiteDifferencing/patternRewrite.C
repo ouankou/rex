@@ -1,8 +1,12 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "expressionTreeEqual.h"
+
 #include "patternRewrite.h"
+
 #include "sage3basic.h"
+
 #include <iostream>
+
 #include <vector>
 
 // DQ (8/1/2005): test use of new static function to create

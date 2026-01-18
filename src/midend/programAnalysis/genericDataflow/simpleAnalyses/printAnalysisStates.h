@@ -1,20 +1,29 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef PRINT_ANALYSIS_STATES_H
 #define PRINT_ANALYSIS_STATES_H
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "genericDataflowCommon.h"
+
 #include "lattice.h"
+
 #include "latticeFull.h"
 
 #include <string>
+
 #include <vector>
 
 class printAnalysisStates : public UnstructuredPassIntraAnalysis {

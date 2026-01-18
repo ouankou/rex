@@ -2,6 +2,7 @@
 #define _DOMINANCEFRONTIER_H_
 
 #include "DominatorTree.h"
+
 #include <algorithm>
 using std::set_difference;
 

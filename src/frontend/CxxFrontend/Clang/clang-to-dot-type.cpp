@@ -1,4 +1,5 @@
 #include "clang-to-dot-private.hpp"
+
 #include "sage3basic.h"
 
 std::string ClangToDotTranslator::Traverse(const clang::Type *type) {

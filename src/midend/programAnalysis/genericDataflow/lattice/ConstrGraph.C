@@ -1,4 +1,4 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 // #################################################
@@ -9,7 +9,9 @@ using std::map;
 using std::pair;
 using std::string;
 #include <algorithm>
+
 #include <set>
+
 #include <sys/time.h>
 using std::set;
 #include <sstream>
@@ -17,6 +19,7 @@ using std::ostringstream;
 #include <iostream>
 using std::endl;
 #include <assert.h>
+
 #include <utility>
 
 using namespace cfgUtils;
@@ -641,7 +644,7 @@ bool ConstrGraph::copyConstraints(ConstrGraph &that, string indent) {
   // Copy the portions of that.vars2Value that mention variables in vars and
   // divVars or the
   //!!!   // divisibility variables of the variables in vars that are not in
-  //!divVars
+  //! divVars
   for (map<varID, map<varID, affineInequality>>::iterator iterX =
            that.vars2Value.begin();
        iterX != that.vars2Value.end(); iterX++) {
@@ -3315,8 +3318,9 @@ bool ConstrGraph::OrAndWidenUpdate(ConstrGraph *that, bool meet, bool OR,
               //     because the lattice is infinite and if we consistently
               //     choose to widen to the constraint to a looser one, we may
               //     end up doing this infinitely many times.
-              if ((/*l.second==conj*/ OR && /*itThisY->second.semLessThan(itThatY->second,
-                                               isEqZero(x), isEqZero(y))*/
+              if ((      /*l.second==conj*/
+                   OR && /*itThisY->second.semLessThan(itThatY->second,
+                            isEqZero(x), isEqZero(y))*/
                    itThisY->second != itThatY->second &&
                    itThisY->second.semLessThan(
                        itThatY->second,
@@ -5511,8 +5515,9 @@ bool ConstrGraph::operator<<=(ConstrGraph &that) {
           // and
           //      record if the <x->y> constraint in that has more information
           //      than the one in this
-          if ((l.second == conj && /*itThatY->second.semLessThan(itThisY->second,
-                                      isEqZero(x), isEqZero(y))*/
+          if ((l.second ==
+                   conj && /*itThatY->second.semLessThan(itThisY->second,
+                              isEqZero(x), isEqZero(y))*/
                itThatY->second != itThisY->second &&
                itThatY->second.semLessThan(
                    itThisY->second, x == zeroVar ? NULL : getVal(x, zeroVar),

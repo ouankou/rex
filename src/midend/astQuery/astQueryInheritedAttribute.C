@@ -3,6 +3,7 @@
 #include "sage3basic.h"
 
 #include "astQuery.h"
+
 #include "astQueryInheritedAttribute.h"
 
 AstQueryNamespace::AstQueryInheritedAttributeType::

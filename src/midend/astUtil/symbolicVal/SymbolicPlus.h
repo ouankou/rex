@@ -2,7 +2,8 @@
 #define SYMBOLIC_PLUS_H
 
 #include "SymbolicExpr.h"
-#include <mlog.h>
+
+#include "mlog.h"
 
 class SymbolicPlus : public SymbolicExpr {
   std::string GetOPName() const { return "+"; }

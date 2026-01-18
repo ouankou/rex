@@ -1,11 +1,12 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef ARR_INDEX_LABELER_H
 #define ARR_INDEX_LABELER_H
 
+#include "sage3.h"
+
 #include <list>
-#include <sage3.h>
 
 namespace arrIndexLabeler {
 

@@ -1,18 +1,22 @@
 // tps : Switching from rose.h to sage3 changed size from 22 MB to 12,4MB
 #include "sage3basic.h"
 
-#include <AstInterface_ROSE.h>
+#include "AstInterface_ROSE.h"
 
 #include "DependenceGraph.h"
 
 #include "DefUseAnalysis.h"
+
 #include "DefUseExtension.h"
+
 #include "EDefUse.h"
 
 #include <list>
 using namespace std;
 #include "DebugTool.h"
+
 #include <assert.h>
+
 #include <iostream>
 using namespace DUVariableAnalysisExt;
 // this function returns true if the variable defined by SgNode is defined

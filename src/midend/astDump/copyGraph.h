@@ -2,7 +2,9 @@
 #define COPYGRAPH_H
 
 // #include "rose.h"
+
 #include <set>
+
 #include <string>
 
 // Run this before copy

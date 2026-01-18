@@ -1,17 +1,22 @@
 // DQ (10/5/2014): This is more strict now that we include rose_config.h in the
 // sage3basic.h. #include "rose.h"
+
 #include "sage3basic.h"
 
 // DQ (10/5/2014): Moved these to be after sage3basic.h.
 #include <signal.h>
+
 #include <stdio.h>
+
 #include <stdlib.h>
 
 #include "FortranParserState.h"
-#include "fortran_error_handler.h"
-#include "fortran_support.h"
-#include "token.h"
 
+#include "fortran_error_handler.h"
+
+#include "fortran_support.h"
+
+#include <token.h>
 #define FEH_DEBUG 0
 
 /**

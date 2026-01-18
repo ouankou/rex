@@ -8,8 +8,11 @@
 #endif
 
 #include "AstDOTGeneration.h"
+
 #include "keep_going.h"
+
 #include "processSupport.h"
+
 #include "sageInterface/sageInterface.h"
 
 #include "wholeAST_API.h"
@@ -26,7 +29,6 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 // DQ (9/8/2017): Debugging ROSE_ASSERT. Call sighandler_t signal(int signum,
 // sighandler_t handler);
 #include <signal.h>
@@ -1284,7 +1286,7 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
         MLOG_FATAL_CXX("sageSupport") << "current statement is "
                                       << currentStatement->class_name() << endl;
         //~ MLOG_FATAL_CXX("sageSupport") <<"code: " <<
-        //currentStatement->unparseToString()<<endl;
+        // currentStatement->unparseToString()<<endl;
         MLOG_FATAL_CXX("sageSupport")
             << currentStatement->get_file_info()->displayString() << endl;
         MLOG_FATAL_CXX("sageSupport")

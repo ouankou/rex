@@ -1,10 +1,14 @@
 #ifndef TRANSFORM_DEPGRAPH
 #define TRANSFORM_DEPGRAPH
 
-#include <DepGraph.h>
-#include <DepInfoUpdate.h>
-#include <DomainInfo.h>
-#include <GraphUpdate.h>
+#include "DepGraph.h"
+
+#include "DepInfoUpdate.h"
+
+#include "DomainInfo.h"
+
+#include "GraphUpdate.h"
+
 #include <assert.h>
 
 inline DepDirection EdgeDir2DepDir(GraphAccess::EdgeDirection dir) {

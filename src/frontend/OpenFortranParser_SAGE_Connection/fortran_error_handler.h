@@ -5,8 +5,7 @@
 extern "C" {
 #endif
 
-#include "token.h"
-
+#include <token.h>
 void set_current_token(Token_t *token);
 
 void fortran_error_handler_end();

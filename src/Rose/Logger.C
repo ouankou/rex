@@ -6,9 +6,13 @@
 #include <cassert>
 
 #include <stdarg.h>
+
 #include <stdio.h>
+
 #include <stdlib.h>
+
 #include <strings.h>
+
 #include <vector>
 
 namespace Rose {

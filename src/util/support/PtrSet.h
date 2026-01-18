@@ -1,7 +1,8 @@
 #ifndef PTRSET_H
 #define PTRSET_H
 
-#include <FunctionObject.h>
+#include "FunctionObject.h"
+
 #include <set>
 
 class VoidPtrSet : public std::set<void *, std::less<void *>> {};

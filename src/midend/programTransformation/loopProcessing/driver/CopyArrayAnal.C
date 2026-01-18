@@ -1,10 +1,14 @@
-#include <AutoTuningInterface.h>
-#include <CommandOptions.h>
-#include <CopyArrayAnal.h>
-#include <LoopInfoInterface.h>
-#include <ReuseAnalysis.h>
+#include "AutoTuningInterface.h"
 
-#include <GraphIO.h>
+#include "CommandOptions.h"
+
+#include "CopyArrayAnal.h"
+
+#include "LoopInfoInterface.h"
+
+#include "ReuseAnalysis.h"
+
+#include "GraphIO.h"
 
 extern bool DebugCopySplit();
 

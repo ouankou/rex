@@ -1,6 +1,9 @@
 #include <array>
+
 #include <cmath>
+
 #include <cstddef>
+
 #include <numeric>
 
 static constexpr std::size_t kElements = 1u << 10;

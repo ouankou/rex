@@ -23,14 +23,16 @@
 
 //----------------------------------------------------------------------------//
 
-//TODO: This should be an command line option
+// TODO: This should be an command line option
 #define DUMP_PARSE_TREE 0
 
 // Fortran front end driver main program for ROSE scaffolding.
 
 #include "sage3basic.h"
-#include "../../frontend/Experimental_Flang_ROSE_Connection/sage-build.h"
+
 #include "FlangParseArgs.hh"
+
+#include <../../frontend/Experimental_Flang_ROSE_Connection/sage-build.h>
 
 std::vector<std::string> filesToDelete;
 
@@ -43,7 +45,7 @@ static void CleanUpAtExit() {
 }
 
 // Turn on CPU timing
-#if _POSIX_C_SOURCE >= 199309L && _POSIX_TIMERS > 0 && _POSIX_CPUTIME && \
+#if _POSIX_C_SOURCE >= 199309L && _POSIX_TIMERS > 0 && _POSIX_CPUTIME &&       \
     defined CLOCK_PROCESS_CPUTIME_ID
 static constexpr bool canTime{true};
 double CPUseconds() {
@@ -64,16 +66,16 @@ void Exec(std::vector<llvm::StringRef> &argv, bool verbose = false) {
     llvm::errs() << "\n";
   }
   std::string ErrMsg;
-  int status = llvm::sys::ExecuteAndWait(argv[0], argv, std::nullopt, {},
-      0, 0, &ErrMsg);
+  int status =
+      llvm::sys::ExecuteAndWait(argv[0], argv, std::nullopt, {}, 0, 0, &ErrMsg);
   if (status != 0) {
     llvm::errs() << ErrMsg << "\n";
     std::exit(EXIT_FAILURE);
   }
 }
 
-std::string CompileOtherLanguage(
-    const std::string &path, const DriverOptions &driver) {
+std::string CompileOtherLanguage(const std::string &path,
+                                 const DriverOptions &driver) {
   if (driver.verbose) {
     llvm::errs() << "f18-parse-demo: not compiling \"" << path
                  << "\" because it's not a Fortran source file\n";
@@ -81,9 +83,9 @@ std::string CompileOtherLanguage(
   return {};
 }
 
-std::string CompileFortran(
-    const std::string &path, const Fortran::parser::Options &options,
-    const DriverOptions &driver) {
+std::string CompileFortran(const std::string &path,
+                           const Fortran::parser::Options &options,
+                           const DriverOptions &driver) {
   // TODO: should be able to use -o to set object file name
   // TODO: support Unicode names in filesystem?
   if (driver.verbose) {
@@ -121,14 +123,14 @@ std::string CompileFortran(
 
   Fortran::parser::AllCookedSources allCookedSources;
   Fortran::parser::Parsing parsing{allCookedSources, driver.encoding};
-  parsing.Prescan(
-      cookedPath, driver.searchDirectories, driver.lineDirectives, cooked);
+  parsing.Prescan(cookedPath, driver.searchDirectories, driver.lineDirectives,
+                  cooked);
   parsing.Parse(options);
 
   int exitStatus{EXIT_SUCCESS};
   if (auto msgs{parsing.messages()}) {
-    Fortran::parser::ShowMessages(
-        llvm::errs(), *msgs, parsing.allCookedSources());
+    Fortran::parser::ShowMessages(llvm::errs(), *msgs,
+                                  parsing.allCookedSources());
     if (msgs->AnyFatalError()) {
       exitStatus = EXIT_FAILURE;
       return {};
@@ -157,9 +159,9 @@ std::string CompileFortran(
   }
   if (driver.dumpUnparse) {
     Unparse(llvm::outs(), parseTree, driver.langOpts, driver.encoding,
-        true /*capitalize*/,
-        options.features.IsEnabled(
-            Fortran::common::LanguageFeature::BackslashEscapes));
+            true /*capitalize*/,
+            options.features.IsEnabled(
+                Fortran::common::LanguageFeature::BackslashEscapes));
     return {};
   }
   if (driver.syntaxOnly) {
@@ -182,9 +184,9 @@ std::string CompileFortran(
     filesToDelete.push_back(tmpPath);
     llvm::raw_fd_ostream tmpSource(fd, /*shouldClose*/ true);
     Unparse(tmpSource, parseTree, driver.langOpts, driver.encoding,
-        true /*capitalize*/,
-        options.features.IsEnabled(
-            Fortran::common::LanguageFeature::BackslashEscapes));
+            true /*capitalize*/,
+            options.features.IsEnabled(
+                Fortran::common::LanguageFeature::BackslashEscapes));
     unparsedPath = tmpPath;
   }
 
@@ -241,17 +243,20 @@ void Link(const std::vector<std::string> &relocatables,
   Exec(argv, driver.verbose);
 }
 
-int flang_external_builder_main(int argc, char *const argv[], SgSourceFile* roseSourceFile)
-{
+int flang_external_builder_main(int argc, char *const argv[],
+                                SgSourceFile *roseSourceFile) {
   atexit(CleanUpAtExit);
 
-  // The SageTreeBuilder must be initialized before using it via getSageTreeBuilder()
-  initSageTreeBuilder(roseSourceFile, Rose::builder::SageTreeBuilder::LanguageEnum::Fortran);
+  // The SageTreeBuilder must be initialized before using it via
+  // getSageTreeBuilder()
+  initSageTreeBuilder(roseSourceFile,
+                      Rose::builder::SageTreeBuilder::LanguageEnum::Fortran);
 
   // Initialize Flang command-line arguments
   DriverContext ctx{};
   int exitStatus = ParseFlangArgs(argc, argv, ctx);
-  if (exitStatus != EXIT_SUCCESS) return exitStatus;
+  if (exitStatus != EXIT_SUCCESS)
+    return exitStatus;
 
   if (!ctx.anyFiles) {
     ctx.driver.dumpUnparse = true;

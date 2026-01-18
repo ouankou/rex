@@ -1,6 +1,8 @@
 
 #include "AstNodeClass.h"
+
 #include "ROSETTA_macros.h"
+
 #include "grammar.h"
 
 /*

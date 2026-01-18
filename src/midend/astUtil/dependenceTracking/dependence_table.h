@@ -2,12 +2,19 @@
 #define SELECTIVE_TESTING_DEPENDENCE_TABLE
 
 #include "AstUtilInterface.h"
+
 #include "CommandOptions.h"
+
 #include <fstream>
+
 #include <functional>
+
 #include <map>
+
 #include <set>
+
 #include <string>
+
 #include <vector>
 
 class SgNode;

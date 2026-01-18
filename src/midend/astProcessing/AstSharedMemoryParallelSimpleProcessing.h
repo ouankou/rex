@@ -9,7 +9,9 @@
 #define ASTSHAREDMEMORYPARALLELSIMPLEPROCESSING_H
 
 #include "AstCombinedSimpleProcessing.h"
+
 #include "AstSharedMemoryParallelProcessing.h"
+
 #include "AstSimpleProcessing.h"
 
 // parallel SIMPLE processing class

@@ -10,7 +10,6 @@
  */
 
 #include "Cxx_Grammar.h"
-
 class FixupFriendTemplateDeclarations : public ROSE_VisitTraversal {
 public:
   virtual ~FixupFriendTemplateDeclarations() {};

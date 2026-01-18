@@ -44,26 +44,25 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/* 
+/*
 A linear expression is used as array subscription.
 Data race pair: a[2*i+1]@64:5 vs. a[i]@64:14
 */
 #include <stdlib.h>
+
 #include <stdio.h>
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
   int i;
 
   int a[2000];
 
-  for (i=0; i<2000; i++)
-    a[i]=i; 
+  for (i = 0; i < 2000; i++)
+    a[i] = i;
 
 #pragma omp parallel for
-  for (i=0;i<1000;i++)
-    a[2*i+1]=a[i]+1;
+  for (i = 0; i < 1000; i++)
+    a[2 * i + 1] = a[i] + 1;
 
-  printf("a[1001]=%d\n", a[1001]);  
+  printf("a[1001]=%d\n", a[1001]);
   return 0;
 }
-

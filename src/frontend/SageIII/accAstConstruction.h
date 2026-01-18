@@ -1,5 +1,6 @@
-#include "OpenACCIR.h"
 #include "sage3basic.h"
+
+#include "OpenACCIR.h"
 
 bool checkOpenACCIR(OpenACCDirective *);
 SgStatement *convertOpenACCDirective(

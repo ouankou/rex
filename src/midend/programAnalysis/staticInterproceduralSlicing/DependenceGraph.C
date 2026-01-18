@@ -5,6 +5,7 @@
 #define SIMPLE_FILTER
 
 #include "DependenceGraph.h"
+
 #include <iostream>
 using namespace std;
 const char *DependenceNode::typeNames[DependenceNode::NUM_NODE_TYPES] = {

@@ -1,12 +1,16 @@
 #ifndef ROSE_StringUtility_StringToNumber_H
 #define ROSE_StringUtility_StringToNumber_H
 
-#include <rosedll.h>
+#include "rosedll.h"
 
 #include <cctype>
+
 #include <limits>
+
 #include <optional>
+
 #include <string>
+
 #include <type_traits>
 namespace Rose {
 namespace StringUtility {

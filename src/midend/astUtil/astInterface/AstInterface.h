@@ -3,11 +3,17 @@
 #define AST_TREE_INTERFACE_H
 
 #include "ObserveObject.h"
+
+#include "rosedll.h"
+
 #include <functional>
+
 #include <iostream>
-#include <rosedll.h>
+
 #include <string>
+
 #include <typeinfo>
+
 #include <vector>
 
 class SgNode;

@@ -3,11 +3,13 @@
 #ifndef _SAGE2OA_H
 #define _SAGE2OA_H
 
-#include "Cxx_Grammar.h"
 #include "ROSE_ABORT.h"
 
-#include <OAWrap/OAConfig.h>
-#include <OpenAnalysis/Interface/IRInterface.h>
+#include "Cxx_Grammar.h"
+
+#include "OAWrap/OAConfig.h"
+
+#include "OpenAnalysis/Interface/IRInterface.h"
 
 namespace OpenAnalysis {
 class SageIRStmtIterator : public IRStmtIterator {

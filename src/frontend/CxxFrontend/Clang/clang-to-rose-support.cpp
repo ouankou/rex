@@ -1,4 +1,5 @@
 #include "clang-to-rose-support.hpp"
+
 #include "sage3basic.h"
 
 SgAsmOp::asm_operand_modifier_enum

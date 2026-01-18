@@ -9,7 +9,9 @@
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "PreprocessingInfo.hh"
+
 #include "ASTtools.hh"
+
 #include "sage3basic.h"
 
 // =====================================================================

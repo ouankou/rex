@@ -1,11 +1,11 @@
 #include "fixupSelfReferentialMacros.h"
+
 #include "sage3basic.h"
 
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
-
 /*
 There are a collection of self referential macros in C, all
 related to signal handling. we have to detect variables of

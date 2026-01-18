@@ -1,4 +1,4 @@
-#include <DGBaseGraphImpl.h>
+#include "DGBaseGraphImpl.h"
 
 template class DirectedGraphEdge<DGBaseNodeImpl, DGBaseEdgeImpl>;
 template class DirectedGraphEdge<DAGBaseNodeImpl, DAGBaseEdgeImpl>;

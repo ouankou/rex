@@ -6,8 +6,11 @@
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "IfDirectiveExtractor.hh"
+
 #include "ASTtools.hh"
+
 #include "PreprocessingInfo.hh"
+
 #include "sage3basic.h"
 
 // ========================================================================

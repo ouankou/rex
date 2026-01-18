@@ -1,3 +1,5 @@
+#include "AstProcessing.h"
+
 class SingleStatementToBlockNormalizer : public AstSimpleProcessing {
 private:
   ROSE_VisitorPatternDefaultBase *singleStatementToBlock;

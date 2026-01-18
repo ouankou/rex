@@ -2,8 +2,9 @@
 #ifndef COMPSLICE_OBSERVER
 #define COMPSLICE_OBSERVER
 
-#include <CompSlice.h>
-#include <ObserveObject.h>
+#include "CompSlice.h"
+
+#include "ObserveObject.h"
 
 class CompSliceFuseInfo;
 class CompSliceDeleteInfo;

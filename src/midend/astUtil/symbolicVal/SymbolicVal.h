@@ -3,11 +3,17 @@
 #define SYMBOLIC_VAL
 
 #include "AstInterface.h"
+
 #include "CountRefHandle.h"
+
 #include "FunctionObject.h"
+
 #include <assert.h>
+
 #include <ostream>
+
 #include <string>
+
 #include <vector>
 
 class SymbolicValImpl;

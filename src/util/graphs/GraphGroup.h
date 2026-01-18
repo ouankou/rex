@@ -2,9 +2,11 @@
 #ifndef GROUP_GRAPH_H
 #define GROUP_GRAPH_H
 
-#include <GraphScope.h>
-#include <PtrSet.h>
-#include <VirtualGraphCreate.h>
+#include "GraphScope.h"
+
+#include "PtrSet.h"
+
+#include "VirtualGraphCreate.h"
 
 class GroupGraphNode : public MultiGraphElem {
 public:

@@ -3,19 +3,19 @@
 // because legacy frontend sets the internal filename pointers to NULL in this
 // case.
 
-// Because the line numbers will be wrong the unparsed file will not have 
+// Because the line numbers will be wrong the unparsed file will not have
 // code and comments in the correct order!
 // #line 1680 "configure"
 // #line 8 "configure"
 // #line 9 "configure"
 #line 10 "conftest.C"
 
-#include <confdefs.h>
+#include "confdefs.h"
 
 bool b = true;
 
 int main() {
-/* empty */
-; 
-return 0; }
-
+  /* empty */
+  ;
+  return 0;
+}

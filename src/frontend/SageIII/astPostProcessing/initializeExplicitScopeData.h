@@ -2,7 +2,6 @@
 #define INITIALIZE_EXPLICIT_SCOPE_DATA_H
 
 #include "Cxx_Grammar.h"
-
 // DQ (11/29/2004): Added support for the initialization of explicitly stored
 // scope information.
 

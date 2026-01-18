@@ -47,9 +47,11 @@ generated
 
 // DQ (10/5/2014): This is more strict now that we include rose_config.h in the
 // sage3basic.h. #include "rose.h"
+
 #include "sage3basic.h"
 
 #include "FileUtility.h"
+
 #include "general_token_defs.h"
 
 // DQ (10/9/2013): Required mods:
@@ -5897,18 +5899,19 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
             //      tokenStream[start_of_token_subsequence]->ending_fpi.column_num
             //      < starting_column))
             //         && start_of_token_subsequence < end_of_token_subsequence)
-            while ((start_of_token_subsequence >= 0) &&
-                   (tokenStream[start_of_token_subsequence]
-                            ->beginning_fpi.line_num < starting_line ||
-                    (tokenStream[start_of_token_subsequence]
-                             ->beginning_fpi.line_num == starting_line &&
-                     tokenStream[start_of_token_subsequence]
-                             ->beginning_fpi.column_num < starting_column))
-                   // (tokenStream[start_of_token_subsequence]->beginning_fpi.line_num
-                   // == starting_line &&
-                   // tokenStream[start_of_token_subsequence]->ending_fpi.column_num
-                   // < starting_column))
-                   && start_of_token_subsequence < end_of_token_subsequence) {
+            while (
+                (start_of_token_subsequence >= 0) &&
+                (tokenStream[start_of_token_subsequence]
+                         ->beginning_fpi.line_num < starting_line ||
+                 (tokenStream[start_of_token_subsequence]
+                          ->beginning_fpi.line_num == starting_line &&
+                  tokenStream[start_of_token_subsequence]
+                          ->beginning_fpi.column_num < starting_column))
+                // (tokenStream[start_of_token_subsequence]->beginning_fpi.line_num
+                // == starting_line &&
+                // tokenStream[start_of_token_subsequence]->ending_fpi.column_num
+                // < starting_column))
+                && start_of_token_subsequence < end_of_token_subsequence) {
 #if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE && 0
               printf(
                   "TOP OF BEGIN LOOP:    "

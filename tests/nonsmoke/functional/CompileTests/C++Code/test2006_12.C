@@ -1,7 +1,6 @@
 #if 0
 Compiling the following code:
 #include <stddef.h>
-
 struct foo {
      char a[13];
      long b;
@@ -28,26 +27,21 @@ gives the follolwing error from ROSE:
 
 #endif
 
-
 #include <stddef.h>
+struct foo {
+  char a[13];
+  long b;
+  char c[7];
+  short d;
+  char e[3];
+};
 
-struct foo
-   {
-     char a[13];
-     long b;
-     char c[7];
-     short d;
-     char e[3];
-   };
+main() {
+  int A, B, C, D, E;
 
-main ()
-   {
-     int A, B, C, D, E;
-
-     A = offsetof(struct foo, a[0]);
-     B = offsetof(struct foo, b);
-     C = offsetof(struct foo, c[0]);
-     D = offsetof(struct foo, d);
-     E = offsetof(struct foo, e[0]);
-   }
-
+  A = offsetof(struct foo, a[0]);
+  B = offsetof(struct foo, b);
+  C = offsetof(struct foo, c[0]);
+  D = offsetof(struct foo, d);
+  E = offsetof(struct foo, e[0]);
+}

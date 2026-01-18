@@ -1,8 +1,11 @@
 #line 1680 "configure"
-#include <confdefs.h>
+
+#include "confdefs.h"
 
 bool b = true;
-         
+
 int main() {
-/* empty */
-; return 0; }
+  /* empty */
+  ;
+  return 0;
+}

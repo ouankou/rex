@@ -1,8 +1,9 @@
 // Simple traversal + postprocessing to fix the ASTs for broken switch
 // statements due to case/default statements in nested scopes.
 
+#include "rose.h"
+
 #include <functional>
-#include <rose.h>
 
 class DDFix : public std::binary_function<SgNode *, std::set<SgBasicBlock *> *,
                                           void *> {

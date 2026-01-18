@@ -1,13 +1,11 @@
-#include "boost/bind.hpp"
+#include <boost/bind.hpp>
 
 #include <vector>
 
-class foobar{};
+class foobar {};
 
 namespace {
 
-typedef std::vector<foobar*> DomainVector;
+typedef std::vector<foobar *> DomainVector;
 
 } // unnamed namespace
-
-

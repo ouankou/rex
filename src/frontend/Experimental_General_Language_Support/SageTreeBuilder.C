@@ -1,7 +1,9 @@
-#include "rose_config.h"
 #include "sage3basic.h"
 
+#include "rose_config.h"
+
 #include "ModuleBuilder.h"
+
 #include "SageTreeBuilder.h"
 
 #include <iostream>

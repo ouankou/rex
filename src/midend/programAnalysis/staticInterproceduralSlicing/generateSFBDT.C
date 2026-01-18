@@ -1,12 +1,20 @@
 #include "DependenceGraph.h"
+
 #include "DominanceFrontier.h"
+
 #include "DominatorTree.h"
+
+#include "cfgToDot.h"
+
 #include "filteredCFG.h"
+
 #include "rose.h"
-#include <cfgToDot.h>
+
+#include "virtualCFG.h"
+
 #include <list>
+
 #include <string>
-#include <virtualCFG.h>
 
 using namespace std;
 using namespace VirtualCFG;

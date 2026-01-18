@@ -1,8 +1,10 @@
 #ifndef STEEENSGAARD_PTR_ANAL_H
 #define STEEENSGAARD_PTR_ANAL_H
-#include <IteratorTmpl.h>
-#include <PtrAnal.h>
-#include <steensgaard.h>
+#include "IteratorTmpl.h"
+
+#include "PtrAnal.h"
+
+#include "steensgaard.h"
 
 class SteensgaardPtrAnal : public PtrAnal, private ECRmap {
 private:

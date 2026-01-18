@@ -1,8 +1,9 @@
 // tps : Switching from rose.h to sage3 changed size from 19,4 MB to 8,8MB
 #include "sage3basic.h"
 
+#include "AstInterface_ROSE.h"
+
 #include "ControlFlowGraph.h"
-#include <AstInterface_ROSE.h>
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;

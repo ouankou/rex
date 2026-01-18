@@ -4,12 +4,18 @@
 
 #include <map>
 // #include <vector>
-#include <DepInfo.h>
-#include <DomainInfo.h>
-#include <FunctionObject.h>
-#include <LoopTransformInterface.h>
-#include <StmtInfoCollect.h>
-#include <SymbolicBound.h>
+
+#include "DepInfo.h"
+
+#include "DomainInfo.h"
+
+#include "FunctionObject.h"
+
+#include "LoopTransformInterface.h"
+
+#include "StmtInfoCollect.h"
+
+#include "SymbolicBound.h"
 
 class DependenceTesting;
 class DepInfoAnal {

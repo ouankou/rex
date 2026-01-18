@@ -8,8 +8,9 @@
 #ifndef ROSE_Constants_H
 #define ROSE_Constants_H
 
+#include "rosedll.h"
+
 #include <cstddef>
-#include <rosedll.h>
 
 namespace Rose {
 

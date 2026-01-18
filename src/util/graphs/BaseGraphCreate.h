@@ -2,9 +2,11 @@
 #ifndef BASE_GRAPH_CREATE
 #define BASE_GRAPH_CREATE
 
+#include "GraphAccess.h"
+
+#include "MultiGraphCreate.h"
+
 #include "mlog.h"
-#include <GraphAccess.h>
-#include <MultiGraphCreate.h>
 
 typedef MultiGraphElemTemplate<void *> BaseGraphNode;
 typedef MultiGraphElemTemplate<void *> BaseGraphEdge;

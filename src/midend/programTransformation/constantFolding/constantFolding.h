@@ -11,10 +11,13 @@
 #define ROSE_CONSTANT_FOLDING_H
 
 #include "AstProcessing.h"
+
 #include "sageInterface.h"
 
 #include <cmath>
+
 #include <iostream>
+
 #include <vector>
 
 namespace ConstantFolding {

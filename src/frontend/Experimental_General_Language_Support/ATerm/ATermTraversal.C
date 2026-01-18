@@ -1,5 +1,7 @@
 #include "ATermTraversal.h"
+
 #include "SageTreeBuilder.h"
+
 #include "sage3basic.h"
 
 #define PRINT_ATERM_TRAVERSAL 0

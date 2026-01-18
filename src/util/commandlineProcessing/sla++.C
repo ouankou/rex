@@ -1,7 +1,8 @@
 // This avoids requiring the user to use rose_config.h and follows
 // project style guidance to use <> instead of "".
 #include <assert.h>
-#include <rose_config.h>
+
+#include "rose_config.h"
 
 /*
 String list assignment (sla) functions to process assignment instructions and
@@ -72,11 +73,14 @@ Return: The number of value found.  If pname is not a list, the number of
 
 // DQ (1/15/2007): Modern C++ compiler can handle these directly!
 #include <iomanip>
+
 #include <iostream>
+
 #include <stdio.h>
 
 // These are C language specific files
 #include <strings.h>
+
 #include <unistd.h>
 
 // DQ (12/11/2007): Some versions of gnu require this (for example, gnu 4.1.2).
@@ -85,8 +89,8 @@ Return: The number of value found.  If pname is not a list, the number of
 // DQ (1/15/2007): This is no longer required for modern C++ compilers!
 
 #include <regex.h>
-#include <string.h>
 
+#include <string.h>
 // DQ (11/4/2009): This is no longer required for modern C++ compilers!
 
 #include "sla.h"

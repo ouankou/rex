@@ -1,15 +1,24 @@
 #include <sstream>
+
 #include <stdlib.h>
 
-#include <CommandOptions.h>
-#include <DepCompTransform.h>
-#include <GraphIO.h>
-#include <GraphScope.h>
-#include <LoopInfoInterface.h>
-#include <LoopTreeTransform.h>
-#include <SCCAnalysis.h>
-#include <TypedFusion.h>
-#include <union_find.h>
+#include "CommandOptions.h"
+
+#include "DepCompTransform.h"
+
+#include "GraphIO.h"
+
+#include "GraphScope.h"
+
+#include "LoopInfoInterface.h"
+
+#include "LoopTreeTransform.h"
+
+#include "SCCAnalysis.h"
+
+#include "TypedFusion.h"
+
+#include "union_find.h"
 
 bool DebugRefFuse() {
   static int r = 0;

@@ -6,6 +6,7 @@
 // used for testing ROSE infrastructure
 
 // #include "rose.h"
+
 #include <stack>
 
 class LinearizeInheritedAttribute {

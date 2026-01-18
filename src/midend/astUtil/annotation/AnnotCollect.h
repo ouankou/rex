@@ -3,6 +3,7 @@
 #define __ANNOT_COLLECT_H
 
 #include "OperatorDescriptors.h"
+
 #include "TypeAnnotation.h"
 
 typedef AnnotCollectionBase<OperatorDeclaration> OperatorCollectionBase;

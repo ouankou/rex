@@ -1,15 +1,27 @@
 #include "clang-frontend-private.hpp"
+
 #include "sage3basic.h"
-#include "clang/Lex/Lexer.h"
-#include "llvm/ADT/SmallString.h"
-#include "llvm/Support/raw_ostream.h"
-#include <algorithm>
+
 #include <cctype>
+
+#include <algorithm>
+
+#include <clang/Lex/Lexer.h>
+
+#include <llvm/ADT/SmallString.h>
+
+#include <llvm/Support/raw_ostream.h>
+
 #include <functional>
+
 #include <memory>
+
 #include <set>
+
 #include <unordered_map>
+
 #include <unordered_set>
+
 #include <vector>
 
 static void suppress_unparse_output(SgLocatedNode *n) {

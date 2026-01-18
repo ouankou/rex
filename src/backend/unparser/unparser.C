@@ -9,21 +9,25 @@
 // #include "HiddenList.h"
 
 // include "array_class_interface.h"
+
 #include "keep_going.h"
+
 #include "nameQualificationSupport.h"
+
 #include "unparser.h"
 
 // DQ (10/21/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
+#include <filesystem>
+
 #include "rose_config.h"
 
-#include <filesystem>
 #include <string.h>
-
 // DQ (8/1/2018): This is the suppport for unparsing of header files.
 #include "FileHelper.h"
+
 #include "IncludedFilesUnparser.h"
 
 // DQ (9/26/2018): Added so that we can call the display function for

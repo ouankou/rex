@@ -2,9 +2,13 @@
 #define AST_UTIL_INTERFACE
 
 #include <assert.h>
+
 #include <fstream>
+
 #include <functional>
+
 #include <iostream>
+
 #include <vector>
 
 #include "AstInterface.h"

@@ -1,6 +1,2 @@
-#include "QtCore"
-
-int main()
-   {
-     return 0;
-   }
+#include <QtCore>
+int main() { return 0; }

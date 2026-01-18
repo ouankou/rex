@@ -20,7 +20,6 @@ using namespace std;
 using namespace AstQueryNamespace;
 
 #include "queryVariant.C"
-
 std::function<Rose_STL_Container<SgNode *>(SgNode *)>
 NodeQuery::getFunction(TypeOfQueryTypeOneParameter oneParam) {
   Rose_STL_Container<SgNode *> (*__x)(SgNode *);

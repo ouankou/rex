@@ -1,6 +1,7 @@
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "attachPreprocessingInfo.h"
+
 #include "sage3basic.h"
 
 // DQ (1/7/2021): Added to support testing of the token stream availability.
@@ -10,7 +11,6 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
-
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 

@@ -13,16 +13,14 @@ By C. Liao
 #include <omp.h>
 #endif
 
-int main(void)
-{
-  int i=0, j=0;
+int main(void) {
+  int i = 0, j = 0;
 #pragma omp parallel default(shared) private(i)
   {
 #ifdef _OPENMP
-    i=omp_get_thread_num()+j;
+    i = omp_get_thread_num() + j;
 #endif
-    printf("Hello,world! I am thread %d\n",i);
+    printf("Hello,world! I am thread %d\n", i);
   }
   return 0;
 }
-

@@ -19,8 +19,7 @@ Dan,
                    include.
 
 /*****fileThatIncludesHeap.c*********/
-#include "heap.h"
-                   /************************************/
+#include <heap.h> /************************************/
                    /*****************heap.h*************/
                    int x;
 /************************************/
@@ -35,8 +34,7 @@ causes problems if those header files are included by a C file.
 This is a problem I noticed with stddef.h
 
 /*****fileThatIncludesStddef.c*********/
-#include <stddef.h>
-/************************************/
+#include <stddef.h>/************************************/
 
 mytool -c -rose:C fileThatIncludesStddef.c
 

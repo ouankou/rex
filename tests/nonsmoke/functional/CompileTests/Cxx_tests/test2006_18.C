@@ -13,6 +13,7 @@ Compiling the following code using ROSE:
 */
 #if 0
 #include <fstream>
+
 #include <math.h>
 
 #ifdef isfinite
@@ -20,7 +21,7 @@ Compiling the following code using ROSE:
 #define is_finite(x) (isfinite(x))
 #else /* !defined(isfinite) */
 #warning isndef isfinite
-#define is_finite(x) (long_double_is_finite(x))  /* See definition below. */
+#define is_finite(x) (long_double_is_finite(x)) /* See definition below. */
 #define NEED_LONG_DOUBLE_IS_FINITE 1
 #endif /* ifdef isfinite */
 
@@ -48,13 +49,14 @@ only once for each function it appears in.)
 
 and produces the following code:
 include <fstream>
+
 #include <math.h>
 #ifdef isfinite
 // (previously processed: ignored) #warning isdef isfinite
 #define is_finite(x) (isfinite(x))
-#else /* !defined(isfinite) */
+#else                                           /* !defined(isfinite) */
 // (previously processed: ignored) #warning isndef isfinite
-#define is_finite(x) (long_double_is_finite(x))  /* See definition below. */
+#define is_finite(x) (long_double_is_finite(x)) /* See definition below. */
 #define NEED_LONG_DOUBLE_IS_FINITE 1
 #endif /* ifdef isfinite */
 #ifdef NEED_LONG_DOUBLE_IS_FINITE
@@ -79,43 +81,41 @@ static void conv_host_fp_to_float()
 
 // Skip version 4.x gnu compilers
 // #if ( __GNUC__ == 3 )
-#if ( defined(__clang__) == 0 && __GNUC__ == 3 )
+#if (defined(__clang__) == 0 && __GNUC__ == 3)
 
 #include <fstream>
+
 #include <math.h>
 
 // #if ( (__GNUC__ == 3) && (__GNUC_MINOR__ < 4) )
-#if ( defined(__clang__) == 0 && __GNUC__ == 3  && __GNUC_MINOR__ < 4 )
+#if (defined(__clang__) == 0 && __GNUC__ == 3 && __GNUC_MINOR__ < 4)
 
 #ifdef isfinite
-  #warning isdef isfinite
-  #define is_finite(x) (isfinite(x))
+#warning isdef isfinite
+#define is_finite(x) (isfinite(x))
 #else /* !defined(isfinite) */
-  #warning isndef isfinite
-  #define is_finite(x) (long_double_is_finite(x))  /* See definition below. */
-  #define NEED_LONG_DOUBLE_IS_FINITE 1
+#warning isndef isfinite
+#define is_finite(x) (long_double_is_finite(x)) /* See definition below. */
+#define NEED_LONG_DOUBLE_IS_FINITE 1
 #endif /* ifdef isfinite */
 
 #ifdef NEED_LONG_DOUBLE_IS_FINITE
 
-static bool long_double_is_finite(long double value)
-   {
-     return 1;
-   }  /* long_double_is_finite */
+static bool long_double_is_finite(long double value) {
+  return 1;
+} /* long_double_is_finite */
 
 #endif /* ifdef NEED_LONG_DOUBLE_IS_FINITE */
 
-static void conv_host_fp_to_float()
-   {
-     if ( is_finite(1.0) ) {}
-   }  /* conv_host_fp_to_float */
+static void conv_host_fp_to_float() {
+  if (is_finite(1.0)) {
+  }
+} /* conv_host_fp_to_float */
 
 #else
-  #warning "Case not tested for version 3.4 and higher."
+#warning "Case not tested for version 3.4 and higher."
 #endif
 
 #else
-  #warning "Not tested on gnu 4.0 or greater versions"
+#warning "Not tested on gnu 4.0 or greater versions"
 #endif
-
-

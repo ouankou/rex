@@ -4,8 +4,11 @@
 #include "rosedll.h"
 
 #include <cstddef>
+
 #include <iosfwd>
+
 #include <string>
+
 #include <vector>
 
 class SgNode;

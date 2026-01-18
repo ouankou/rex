@@ -3,8 +3,9 @@
 #ifndef __DFAFilter_HXX_LOADED__
 #define __DFAFilter_HXX_LOADED__
 
-#include "Cxx_Grammar.h"
 #include "virtualCFG.h"
+
+#include "Cxx_Grammar.h"
 
 using namespace VirtualCFG;
 

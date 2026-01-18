@@ -2,10 +2,15 @@
 #define ROSE_SAGE_TREE_BUILDER_H_
 
 #include "PosInfo.h"
+
 #include "Tokens.h"
+
 #include "general_language_translation.h"
+
 #include <optional>
+
 #include <sstream>
+
 #include <tuple>
 
 // WARNING: This file has been designed to compile with -std=c++17

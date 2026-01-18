@@ -8,8 +8,11 @@
 #include "AstAttributeMechanism.h"
 
 #include <list>
+
 #include <string>
+
 #include <utility>
+
 #include <vector>
 
 // DQ (3/19/2017): These functions do not appear to ever be called (experiment

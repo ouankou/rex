@@ -1,7 +1,7 @@
 #ifndef TRANSFORM_ANALYSIS
 #define TRANSFORM_ANALYSIS
 
-#include <TransDepGraph.h>
+#include "TransDepGraph.h"
 
 template <class Node> struct LoopAnalInfo {
   Node *n;

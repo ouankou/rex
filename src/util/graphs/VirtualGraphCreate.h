@@ -2,9 +2,11 @@
 #ifndef VIRTUAL_GRAPH_CREATE
 #define VIRTUAL_GRAPH_CREATE
 
-#include <BaseGraphCreate.h>
-#include <GraphUtils.h>
-#include <PtrMap.h>
+#include "BaseGraphCreate.h"
+
+#include "GraphUtils.h"
+
+#include "PtrMap.h"
 
 template <class NodeImpl, class EdgeImpl>
 class VirtualGraphCreateTemplate
@@ -114,9 +116,9 @@ public:
   }
 };
 
-#include <SinglyLinkedList.h>
+#include "SinglyLinkedList.h"
 
-#include <DGBaseGraphImpl.h>
+#include "DGBaseGraphImpl.h"
 
 template <class NodeImpl, class EdgeImpl>
 NodeImpl *VirtualGraphCreateTemplate<NodeImpl, EdgeImpl>::GetVirtualNode(

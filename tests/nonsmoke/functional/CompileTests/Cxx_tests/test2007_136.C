@@ -12,16 +12,15 @@ E-mail subject: more SPEC 2006 bugs
 Occurs in:      SPEC CPU 2006   483.xalancbmk/src/LinuxPlatformUtils.cpp
 
 Brief description:      A #include within the context of a namespace
-                        is emitted outside that namespace if 
-                        the namespace (of the same name) 
+                        is emitted outside that namespace if
+                        the namespace (of the same name)
                         had been previously opened and closed, as in:
-                        
+
                         namespace XERCES_CPP_NAMESPACE { }
 
                         namespace XERCES_CPP_NAMESPACE {
 
                           #include "bar.c"
-
                         }
 
 
@@ -39,10 +38,9 @@ rose_bug.cc     The output from the backend for bug.cc.  In it, we can
                 {
                 }
                 #include "bar.c"
-
 */
 
-namespace XERCES_CPP_NAMESPACE { }
+namespace XERCES_CPP_NAMESPACE {}
 
 namespace XERCES_CPP_NAMESPACE {
 

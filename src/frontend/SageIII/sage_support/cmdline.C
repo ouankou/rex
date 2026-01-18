@@ -10,10 +10,15 @@
 #include <filesystem>
 
 #include "FileUtility.h"
+
 #include "Replace.h"
+
 #include "cmdline.h"
+
 #include "keep_going.h"
+
 #include "omp_simd.h"
+
 #include "sage3basic.h"
 
 #include "Outliner.hh"
@@ -23,7 +28,7 @@ using namespace Rose; // temporary, until this file lives in namespace Rose
 #include <inttypes.h> /* for %" PRIuPTR " vs. %Iu handling */
 
 const char *licenseText =
-#include "license_string.h"
+#include <license_string.h>
     ;
 
 /*-----------------------------------------------------------------------------

@@ -1,11 +1,11 @@
-#include <sage3basic.h>
+#include "sage3basic.h"
 
 // This fixed a reported bug which caused conflicts with configure-time macros
 // (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the list of
 // include files.
-#include "rose_config.h"
-
 #include "CallGraph.h"
+
+#include "rose_config.h"
 
 #include "sageGeneric.h"
 

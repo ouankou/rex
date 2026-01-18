@@ -1,6 +1,6 @@
 #include <algorithm>
 
-#include <astGraph.h>
+#include "astGraph.h"
 
 namespace AST_Graph {
 

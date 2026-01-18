@@ -1,4 +1,5 @@
 #include "sage3basic.h"
+
 #include "sageInterface.h" // for isConstType
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT

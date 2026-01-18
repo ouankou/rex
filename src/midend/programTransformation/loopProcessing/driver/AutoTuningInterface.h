@@ -1,11 +1,16 @@
 #ifndef TUNING_H
 #define TUNING_H
 
-#include <AstInterface.h>
-#include <LoopTree.h>
-#include <LoopTreeTransform.h>
+#include "AstInterface.h"
+
+#include "LoopTree.h"
+
+#include "LoopTreeTransform.h"
+
 #include <list>
+
 #include <map>
+
 #include <string>
 class POETProgram;
 class XformVar;

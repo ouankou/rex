@@ -1,12 +1,21 @@
 // #include <rose.h>
+
 #include "Escape.h"
+
 #include "filteredCFG.h"
+
 #include "mlog.h"
+
 #include <functional>
+
 #include <iomanip>
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
 #include <stdint.h>
 
 #define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()

@@ -18,6 +18,7 @@
 #endif
 
 #include "rosedll.h"
+
 #include <string>
 
 ROSE_UTIL_API extern const std::string ROSE_GFORTRAN_PATH;

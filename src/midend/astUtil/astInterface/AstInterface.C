@@ -1,18 +1,28 @@
 #include "sage3basic.h"
 
 #include "AstInterface.h"
+
 #include "AstInterface_ROSE.h"
-#include "OperatorAnnotation.h"
-#include "unparser.h"
-#include "unparser_opt.h"
-#include <CommandOptions.h>
-#include <iostream>
-#include <stdexcept>
-#include <stdlib.h>
-#include <string.h>
 
 #include "AstTraversal.h"
+
+#include "CommandOptions.h"
+
+#include "OperatorAnnotation.h"
+
 #include "astPostProcessing.h"
+
+#include "unparser.h"
+
+#include "unparser_opt.h"
+
+#include <iostream>
+
+#include <stdexcept>
+
+#include <stdlib.h>
+
+#include <string.h>
 
 // jichi (9/29/2009): Add test for Fortran language
 #define IS_FORTRAN_LANGUAGE() SageInterface::is_Fortran_language()

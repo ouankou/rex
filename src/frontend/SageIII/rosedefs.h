@@ -1,16 +1,26 @@
 #ifndef __rosedefs
 #define __rosedefs
 
-#include "stdio.h"
-#include <cassert>
 #include <cstdio>
+
 #include <list>
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
+#include <cassert>
+
+#include <stdio.h>
+
 #include <string>
+
 #include <unordered_map>
+
 #include <unordered_set>
+
 #include <vector>
 
 // DQ (10/21/2004): See comments in sage3basic.h; this must be consistent
@@ -39,13 +49,13 @@
 #define Rose_STL_Container std::vector
 
 // DQ (2/5/2010): include stdint.h always.
-#include "stdint.h"
+#include <stdint.h>
 typedef uint64_t rose_addr_t; /* address and size (file and memory) */
 
 // DQ (2/10/2010): Added assert.h (not clear where else it is included).
-#include "assert.h"
-
 #include "roseInternal.h"
+
+#include <assert.h>
 
 // #include "rose_attributes_list.h"
 

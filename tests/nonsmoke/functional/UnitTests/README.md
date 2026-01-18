@@ -6,7 +6,7 @@
 Common unit testing framework code is defined in `UNITS/include/rose/tests/unitTests/common.h` and must be included in your test source file:
 
 ```C
-#include <rose/tests/unitTests/common.h>
+#include "rose/tests/unitTests/common.h"
 ```
 
 Note: Your test executable must be compiled with the appropriate header include search path. In CMake,

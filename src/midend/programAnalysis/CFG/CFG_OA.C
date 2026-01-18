@@ -1,12 +1,15 @@
 // tps : Switching from rose.h to sage3 changed size from 17,7 MB to 7,4MB
 #include "sage3basic.h"
 
-#include <SAGE2OA.h>
+#include "SAGE2OA.h"
 
-#include <AstInterface_ROSE.h>
-#include <CFG.h>
-#include <OAWrap.h>
-#include <PtrMap.h>
+#include "AstInterface_ROSE.h"
+
+#include "CFG.h"
+
+#include "OAWrap.h"
+
+#include "PtrMap.h"
 
 #ifndef TEMPLATE_ONLY
 OpenAnalysis::ROSE_CFG_Wrap ::ROSE_CFG_Wrap(const AstNodePtr &_head) {

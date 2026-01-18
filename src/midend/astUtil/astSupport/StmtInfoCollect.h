@@ -3,12 +3,19 @@
 #define STMT_INFO_COLLECT_H
 
 #include "AnalysisInterface.h"
+
 #include "AstInterface.h"
+
 #include "ProcessAstTree.h"
+
 #include "SinglyLinkedList.h"
+
 #include "union_find.h"
+
 #include <list>
+
 #include <map>
+
 #include <sstream>
 
 class StmtInfoCollect : public ProcessAstTreeBase<AstInterface::AstNodePtr> {

@@ -2,8 +2,10 @@
 #ifndef GRAPH_UTILS
 #define GRAPH_UTILS
 
-#include <GraphUtils.h>
-#include <IteratorTmpl.h>
+#include "GraphUtils.h"
+
+#include "IteratorTmpl.h"
+
 #include <string>
 
 template <class Graph>

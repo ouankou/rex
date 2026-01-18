@@ -1,19 +1,25 @@
 
 #include <algorithm>
+
 #include <cctype>
+
 #include <iostream>
+
 #include <memory>
 
 #include "clang-frontend-private.hpp"
+
 #include "sage3basic.h"
 
-#include "clang_paths.h"
-#include "rose_config.h"
-
-#include "clang/Lex/Lexer.h"
-
 #include "clang-to-dot.hpp"
+
+#include "clang_paths.h"
+
 #include "ompAstConstruction.h"
+
+#include <clang/Lex/Lexer.h>
+
+#include "rose_config.h"
 
 // DQ (11/28/2020): Use this for testing the DOT graph generator.
 #define EXIT_AFTER_BUILDING_DOT_FILE 0

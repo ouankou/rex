@@ -1,8 +1,10 @@
 #include <string>
+
 #include <cstring>
+
 #include <iostream>
 
-//#include "test-01.h"
+// #include "test-01.h"
 
 #ifndef __test_01__
 #define __test_01__
@@ -10,31 +12,23 @@
 #include <string>
 
 namespace SAMRAI {
-   namespace tbox {
-      class ParallelBuffer
-         {
-         public:
-            ParallelBuffer();
-         private:
-            std::string hello;
-         };
-   };
-};
+namespace tbox {
+class ParallelBuffer {
+public:
+  ParallelBuffer();
 
+private:
+  std::string hello;
+};
+}; // namespace tbox
+}; // namespace SAMRAI
 
 #endif //__test_01__
 
-
 namespace SAMRAI {
-   namespace tbox {
-      ParallelBuffer::ParallelBuffer()
-      {
-         hello = std::string();
-      }
-   }
-}
+namespace tbox {
+ParallelBuffer::ParallelBuffer() { hello = std::string(); }
+} // namespace tbox
+} // namespace SAMRAI
 
-int main(int argc, char** argv)
-{
-   std::cout << "Howdy!" << std::endl;
-}
+int main(int argc, char **argv) { std::cout << "Howdy!" << std::endl; }

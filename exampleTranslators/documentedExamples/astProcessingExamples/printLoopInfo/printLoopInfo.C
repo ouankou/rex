@@ -2,9 +2,10 @@
 // $Id: printLoopInfo.C,v 1.2 2006/04/24 00:21:26 dquinlan Exp $
 
 #include "rose.h"
+
 #include "LoopNestingInfoProcessing.h"
 
-int main ( int argc, char** argv) {
+int main(int argc, char **argv) {
   // command line parameters are passed to legacy frontend
   // non-legacy frontend parameters are passed (through) to ROSE (and the vendor
   // compiler)
@@ -27,4 +28,4 @@ int main ( int argc, char** argv) {
   astpdfgen.generateInputFiles(root);
 
   return 0;
-}   
+}

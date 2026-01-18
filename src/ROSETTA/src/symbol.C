@@ -1,7 +1,10 @@
 #include "AstNodeClass.h"
+
 #include "ROSETTA_macros.h"
+
+#include "featureTests.h"
+
 #include "grammar.h"
-#include <featureTests.h>
 
 // What should be the behavior of the default constructor for Grammar
 

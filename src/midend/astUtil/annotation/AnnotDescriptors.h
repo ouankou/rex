@@ -3,12 +3,19 @@
 #define ANNOT_DESCRIPTORS_H
 
 #include "AnnotIO.h"
+
 #include <assert.h>
+
 #include <iostream>
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
 #include <stdio.h>
+
 #include <string>
 //! Input interface of a container
 // 'Container' contains element of 'Member' type

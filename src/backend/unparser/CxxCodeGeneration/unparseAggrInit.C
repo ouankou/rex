@@ -1,7 +1,9 @@
 
-#include "rose_config.h"
-#include "sage3basic.h"
 #include "unparser.h"
+
+#include "sage3basic.h"
+
+#include "rose_config.h"
 
 static bool sharesSameStatement(SgExpression *, SgType *expressionType) {
   // DQ (7/29/2013): This function supports the structural analysis to determine
@@ -129,7 +131,7 @@ static void removeIncludeDirective(SgLocatedNode *locatedNode) {
 }
 
 ///! Inspect the structure of this initialization is to see if it is using the
-///C++11 initialization features for structs.
+/// C++11 initialization features for structs.
 static bool uses_cxx11_initialization(SgNode *n) {
   // SgInitializer* initializerChain[3] = { NULL, NULL, NULL };
   std::vector<SgInitializer *> initializerChain;

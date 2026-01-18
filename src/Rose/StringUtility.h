@@ -1,12 +1,17 @@
 #ifndef ROSE_StringUtility_H
 #define ROSE_StringUtility_H
 
-#include <Rose/StringUtility/Convert.h>
-#include <Rose/StringUtility/Escape.h>
-#include <Rose/StringUtility/NumberToString.h>
-#include <Rose/StringUtility/Predicate.h>
-#include <Rose/StringUtility/Replace.h>
-#include <Rose/StringUtility/SplitJoin.h>
+#include "Rose/StringUtility/Convert.h"
+
+#include "Rose/StringUtility/Escape.h"
+
+#include "Rose/StringUtility/NumberToString.h"
+
+#include "Rose/StringUtility/Predicate.h"
+
+#include "Rose/StringUtility/Replace.h"
+
+#include "Rose/StringUtility/SplitJoin.h"
 
 namespace Rose {
 

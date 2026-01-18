@@ -1,10 +1,15 @@
 #include <iostream>
+
 #include <stdlib.h>
+
 #include <string>
 // #include "sage3basic.h"
 // #include "cmdline.h"
+
 #include "commandline_processing.h"
+
 #include "mlog.h"
+
 #include "plugin.h"
 using namespace std;
 

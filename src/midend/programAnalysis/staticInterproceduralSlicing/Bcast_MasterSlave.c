@@ -1,8 +1,10 @@
 // MPI program that simulates a "Master-Slave" MPI_Bcast with MPI_Sends &
 // MPI_Recv
 
-#include "mpi.h"
+#include <mpi.h>
+
 #include <stdio.h>
+
 #include <stdlib.h>
 
 int main(int argc, char **argv) {

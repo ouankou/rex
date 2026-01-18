@@ -1,9 +1,11 @@
 #ifndef PARALLELIZE_LOOP_H
 #define PARALLELIZE_LOOP_H
 
-#include <CompSliceDepGraph.h>
-#include <CompSliceLocality.h>
-#include <LoopTransformOptions.h>
+#include "CompSliceDepGraph.h"
+
+#include "CompSliceLocality.h"
+
+#include "LoopTransformOptions.h"
 
 class LoopPar {
 public:

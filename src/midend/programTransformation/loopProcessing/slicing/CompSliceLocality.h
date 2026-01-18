@@ -1,8 +1,11 @@
 #ifndef COMPSLICE_LOCALITYANAL
 #define COMPSLICE_LOCALITYANAL
-#include <CompSlice.h>
-#include <LoopTreeLocality.h>
+#include "CompSlice.h"
+
+#include "LoopTreeLocality.h"
+
 #include <iostream>
+
 #include <sstream>
 
 class CompSliceLocalityAnal {

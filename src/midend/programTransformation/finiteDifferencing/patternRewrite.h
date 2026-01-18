@@ -4,10 +4,13 @@
 // #include "config.h"
 
 // #include "rose.h"
+
 #include "rosedll.h"
 
 #include <map>
+
 #include <string>
+
 #include <vector>
 
 class SgNode;

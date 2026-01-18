@@ -1,8 +1,9 @@
 #ifndef COPY_ARRAY_ANAL
 #define COPY_ARRAY_ANAL
 
-#include <DepCompTransform.h>
-#include <LoopTransformOptions.h>
+#include "DepCompTransform.h"
+
+#include "LoopTransformOptions.h"
 
 class CopyArrayOperator : public DepCompCopyArrayToBuffer {
   /*QY: modify the collected array copy specifications in (collect)  */

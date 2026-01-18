@@ -1,6 +1,9 @@
 #include "AstInterface_ROSE.h"
+
 #include "ProcessAstTree.h"
-#include <ROSE_ASSERT.h>
+
+#include "ROSE_ASSERT.h"
+
 #include <iostream>
 
 #ifdef TEMPLATE_ONLY

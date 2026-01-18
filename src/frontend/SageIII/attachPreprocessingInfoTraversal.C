@@ -62,10 +62,11 @@ found in the directory ROSE/TESTS/KnownBugs/AttachPreprocessingInfo.
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
-#include "rose_config.h"
-
 #include "attachPreprocessingInfo.h"
+
 #include "attachPreprocessingInfoTraversal.h"
+
+#include "rose_config.h"
 
 // DQ (9/15/2018): Associated header file for the class and member function
 // declarations defined in this file. NOTE: this has been moved to be a new ROSE

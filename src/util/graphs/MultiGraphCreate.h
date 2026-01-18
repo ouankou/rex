@@ -3,7 +3,9 @@
 #define MULTI_GRAPH_CREATE
 
 #include <assert.h>
+
 #include <stdlib.h>
+
 #include <string>
 
 class MultiGraphCreate;

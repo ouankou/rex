@@ -5,8 +5,11 @@
 #define DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
 
 #include "AstProcessing.h"
+
 #include <map>
+
 #include <string>
+
 #include <vector>
 
 class TokenStreamSequenceToNodeMapping;

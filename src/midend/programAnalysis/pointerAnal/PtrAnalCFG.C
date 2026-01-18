@@ -1,4 +1,4 @@
-#include <PtrAnal.h>
+#include "PtrAnal.h"
 
 class PtrAnalBuildCFG : public BuildCFGConfig<std::list<PtrAnal::Stmt>> {
   typedef std::list<PtrAnal::Stmt> Node;

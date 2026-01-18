@@ -6,17 +6,27 @@
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <sstream>
+
 #include <string>
 
 #include "ASTtools.hh"
+
 #include "Copy.hh"
+
 #include "Outliner.hh"
+
 #include "PreprocessingInfo.hh"
+
 #include "RoseAst.h"
+
 #include "StmtRewrite.hh"
 
 // =====================================================================
@@ -94,8 +104,8 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
 //! Generates a 'friend' declaration from a given function declaration.
 // For a friend declaration, two scopes are involved.
 //'scope' is the class definition within which the friend declaration is
-//inserted. 'class_scope' is the class definition's SgClassDeclaration's scope
-//in which the function symbol should be created, if not exist.
+// inserted. 'class_scope' is the class definition's SgClassDeclaration's scope
+// in which the function symbol should be created, if not exist.
 static SgFunctionDeclaration *
 generateFriendPrototype(const SgFunctionDeclaration *full_decl,
                         SgScopeStatement *scope,

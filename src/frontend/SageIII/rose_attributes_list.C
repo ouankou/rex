@@ -1,12 +1,13 @@
-#include "errno.h"
-#include "rose_attributes_list.h"
 #include "sage3basic.h"
+
+#include "rose_attributes_list.h"
+
+#include <errno.h>
 
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
-
 // DQ (11/28/2009): I think this is equivalent to "USE_ROSE"
 // #if CAN_NOT_COMPILE_WITH_ROSE != true
 // #if (CAN_NOT_COMPILE_WITH_ROSE == 0)

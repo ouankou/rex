@@ -3,9 +3,13 @@
 // ################################################################
 
 #include "AstNodeClass.h"
+
 #include "ROSETTA_macros.h"
+
 #include "grammar.h"
+
 #include "grammarString.h"
+
 #include <sstream>
 
 using namespace std;

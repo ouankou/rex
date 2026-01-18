@@ -46,21 +46,19 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 /*
 Test if the semantics of omp_get_thread_num() is correctly recognized.
-Thread with id 0 writes numThreads while other threads read it, causing data races.
-Data race pair: numThreads@60 vs. numThreads@64.
+Thread with id 0 writes numThreads while other threads read it, causing data
+races. Data race pair: numThreads@60 vs. numThreads@64.
 */
 #include <omp.h>
+
 #include <stdio.h>
-int main()
-{
-  int numThreads=0 ; 
+int main() {
+  int numThreads = 0;
 #pragma omp parallel
   {
-    if ( omp_get_thread_num()==0 ) {
+    if (omp_get_thread_num() == 0) {
       numThreads = omp_get_num_threads();
-    }
-    else
-    {
+    } else {
       printf("numThreads=%d\n", numThreads);
     }
   }

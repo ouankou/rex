@@ -1,8 +1,11 @@
 
-#include <ArrayRewrite.h>
-#include <AstInterface.h>
-#include <DepInfoAnal.h>
-#include <DomainInfo.h>
+#include "ArrayRewrite.h"
+
+#include "AstInterface.h"
+
+#include "DepInfoAnal.h"
+
+#include "DomainInfo.h"
 
 bool RecognizeArrayOp(CPPAstInterface &fa, ArrayInterface &anal,
                       const AstNodePtr &orig) {

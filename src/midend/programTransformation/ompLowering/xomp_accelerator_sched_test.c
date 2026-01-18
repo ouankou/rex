@@ -3,7 +3,9 @@
 // across multiple threads Compile : gcc -fopenmp thisfile.c
 
 #include <assert.h>
+
 #include <omp.h>
+
 #include <stdio.h>
 
 /*

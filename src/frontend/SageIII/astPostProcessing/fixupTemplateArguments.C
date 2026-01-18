@@ -1,10 +1,11 @@
 // See header file for documentation.
 
 #include "fixupTemplateArguments.h"
+
 #include "sage3basic.h"
 
 // We need this so that BACKEND_COMPILERS will be known.
-#include <rose_config.h>
+#include "rose_config.h"
 
 using namespace std;
 

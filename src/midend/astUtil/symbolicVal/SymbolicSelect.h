@@ -2,9 +2,12 @@
 #define SYMBOLIC_SELECT
 
 #include "SymbolicExpr.h"
+
 #include "const.h"
+
+#include "mlog.h"
+
 #include <iostream>
-#include <mlog.h>
 
 class SymbolicSelect : public SymbolicExpr {
   int opt;

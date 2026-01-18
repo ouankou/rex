@@ -2,8 +2,9 @@
 #ifndef DEP_GRAPH
 #define DEP_GRAPH
 
-#include <DepInfoSet.h>
-#include <VirtualGraphCreate.h>
+#include "DepInfoSet.h"
+
+#include "VirtualGraphCreate.h"
 
 class DepInfoEdge : public MultiGraphElemTemplate<DepInfo> {
 public:

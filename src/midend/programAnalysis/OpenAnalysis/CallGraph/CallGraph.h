@@ -44,18 +44,21 @@
 //--------------------------------------------------------------------------------------------------------------------
 // standard headers
 #ifdef NO_STD_CHEADERS
+#include <cstring>
+
 #include <string.h>
 #else
-#include <cstring>
 #endif
 
 // STL headers
 #include <list>
+
 #include <map>
 
 // OpenAnalysis headers
-#include <OpenAnalysis/Interface/IRInterface.h>
-#include <OpenAnalysis/Utils/DGraph.h>
+#include "OpenAnalysis/Interface/IRInterface.h"
+
+#include "OpenAnalysis/Utils/DGraph.h"
 
 //--------------------------------------------------------------------------------------------------------------------
 

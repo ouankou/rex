@@ -4,7 +4,7 @@
 // CAUTION: This is a generated file!!!
 //**************************************************
 //
-#include "general_defs.h"
+#include <general_defs.h>
 #ifndef ROSE_FORTRAN_TOKEN_DEFS
 #define ROSE_FORTRAN_TOKEN_DEFS 1
 //

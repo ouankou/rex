@@ -2,7 +2,9 @@
    See the COPYRIGHT file for more information. */
 
 #include "oc.h"
+
 #include "ocinternal.h"
+
 #include "ocdebug.h"
 
 /*

@@ -2,7 +2,9 @@
 #define FILTEREDCFGVIEW_H
 
 #include "virtualCFG.h"
+
 #include <string>
+
 #include <vector>
 
 namespace VirtualCFG {

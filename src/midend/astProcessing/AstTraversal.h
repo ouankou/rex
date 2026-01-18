@@ -5,6 +5,7 @@
 #define ASTTRAVERSAL_H
 
 #include "TreeTraversal.h"
+
 #include <list>
 
 class SgNode;

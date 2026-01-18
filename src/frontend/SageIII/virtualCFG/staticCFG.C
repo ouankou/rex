@@ -1,4 +1,5 @@
 #include "sage3basic.h"
+
 #include "staticCFG.h"
 
 namespace StaticCFG {

@@ -1,20 +1,31 @@
 #include "rose.h"
 
+#include "AstInterface.h"
+
+#include "DefUseChain.h"
+
 #include "DependenceGraph.h"
-#include <AstInterface.h>
-#include <DefUseChain.h>
-#include <DirectedGraph.h>
-#include <ReachingDefinition.h>
-#include <StmtInfoCollect.h>
+
+#include "DirectedGraph.h"
+
+#include "ReachingDefinition.h"
+
+#include "StmtInfoCollect.h"
 
 #include "ControlFlowGraph.h"
+
 #include "CreateSlice.h"
+
 #include "DominatorTree.h"
+
 #include "SlicingInfo.h"
 
 #include "DefUseAnalysis.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <set>
 
 #define DEBUG 1

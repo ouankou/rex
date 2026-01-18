@@ -16,9 +16,13 @@
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "constantFolding.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <string>
+
 #include <unordered_set>
 
 using namespace ConstantFolding;

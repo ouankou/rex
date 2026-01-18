@@ -1,9 +1,8 @@
-// This test code generates a namespace name of _GLOBAL__N__19_test2013_apps_11_cc_b0e478c3
-// for the un-named namespace.  Any simpler test code will not generate the specially
-// named namespace.
+// This test code generates a namespace name of
+// _GLOBAL__N__19_test2013_apps_11_cc_b0e478c3 for the un-named namespace.  Any
+// simpler test code will not generate the specially named namespace.
 
-#include "vector"
-
+#include <vector>
 #if 0
 // An attempt to build a simpler vector defintion failed to generate the namespace with the special name.
 namespace std 
@@ -19,26 +18,26 @@ class vector
 namespace google {
 namespace protobuf {
 
-class DescriptorPool { public: class Tables; };
+class DescriptorPool {
+public:
+  class Tables;
+};
 
-namespace 
-   {
+namespace {
 
-     struct Symbol {};
+struct Symbol {};
 
-  // typedef std::vector<Symbol> SymbolsByNameMap;
-  // typedef vector<Symbol> SymbolsByNameMap;
-     typedef std::pair<int,Symbol> SymbolsByNameMap;
+// typedef std::vector<Symbol> SymbolsByNameMap;
+// typedef vector<Symbol> SymbolsByNameMap;
+typedef std::pair<int, Symbol> SymbolsByNameMap;
 
-   }  // anonymous namespace
+} // anonymous namespace
 
-class DescriptorPool::Tables 
-   {
+class DescriptorPool::Tables {
 
-     private:
-          SymbolsByNameMap      symbols_by_name_;
-   };
+private:
+  SymbolsByNameMap symbols_by_name_;
+};
 
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace protobuf
+} // namespace google

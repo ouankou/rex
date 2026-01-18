@@ -1,7 +1,8 @@
-#include <SinglyLinkedList.h>
+#include "SinglyLinkedList.h"
 
-#include <DGBaseGraphImpl.h>
-#include <VirtualGraphCreate.h>
+#include "DGBaseGraphImpl.h"
+
+#include "VirtualGraphCreate.h"
 
 template <class NodeImpl, class EdgeImpl>
 NodeImpl *VirtualGraphCreateTemplate<NodeImpl, EdgeImpl>::GetVirtualNode(

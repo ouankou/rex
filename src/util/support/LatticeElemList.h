@@ -2,7 +2,8 @@
 #ifndef LATTICE_ELEM_LIST_H
 #define LATTICE_ELEM_LIST_H
 
-#include <DoublyLinkedList.h>
+#include "DoublyLinkedList.h"
+
 #include <stdlib.h>
 
 template <class T> class LatticeElemMerge {

@@ -3,10 +3,15 @@
 #define ___CPP_ANNOTATION_H
 
 #include "AnnotExpr.h"
+
 #include "CPPAstInterface.h"
+
 #include "SymbolicVal.h"
+
 #include "TypeAnnotation.h"
+
 #include <list>
+
 #include <sstream>
 // No CPPAnnotation.C since only template classes are defined here.
 // Descriptor could be ArrayDefineDescriptor: is_array annotation

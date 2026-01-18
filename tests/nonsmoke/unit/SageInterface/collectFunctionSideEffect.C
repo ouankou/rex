@@ -1,27 +1,36 @@
 // testing generating function side effects
 
-#include "rose.h"
 #include "RoseAst.h"
 
+#include "rose.h"
+
 #include "CommandOptions.h"
-    
-//Array Annotation headers
-#include <CPPAstInterface.h>
-#include <ArrayAnnot.h>
-#include <ArrayRewrite.h>
-      
-//Dependence graph headers
-#include <AstInterface_ROSE.h>
-#include <LoopTransformInterface.h>
-#include <AnnotCollect.h>
-#include <OperatorAnnotation.h>
-#include <LoopTreeDepComp.h>
+
+// Array Annotation headers
+#include "ArrayAnnot.h"
+
+#include "ArrayRewrite.h"
+
+#include "CPPAstInterface.h"
+
+// Dependence graph headers
+#include "AnnotCollect.h"
+
+#include "AstInterface_ROSE.h"
+
+#include "LoopTransformInterface.h"
+
+#include "LoopTreeDepComp.h"
+
+#include "OperatorAnnotation.h"
 
 #include <iostream>
+
 #include <set>
 using namespace std;
 
-// using a log file to avoid new screen output from interfering with correctness checking
+// using a log file to avoid new screen output from interfering with correctness
+// checking
 ofstream ofile;
 bool b_sort = false; // sort variables for correctness checking using diff??
 
@@ -100,115 +109,119 @@ SgInitializedName* convertRefToInitializedName2(SgNode* current)
 
 #endif
 
+void dumpVectorNodes(vector<SgNode *> &Refs, const string &header,
+                     ofstream &ofile) {
+  // The side effect analysis internally uses a std::map with AST node's memory
+  // addresses as keys So the order of elements are not deterministic. To ensure
+  // strict correctness checking using diff, we sort the variables first.
 
-void dumpVectorNodes( vector<SgNode*>& Refs, const string & header, ofstream & ofile)
-{
-  // The side effect analysis internally uses a std::map with AST node's memory addresses as keys
-  // So the order of elements are not deterministic. 
-  // To ensure strict correctness checking using diff, we sort the variables first. 
-
-  vector<string> sorted_lines;  
-  for (vector<SgNode*>::iterator iter=Refs.begin();iter!=Refs.end();iter++)
-  {
-    stringstream ss; 
-    if (*iter)
-    {
-      SgLocatedNode* lnode = isSgLocatedNode(*iter);
-      ROSE_ASSERT (lnode);
-      ss<<"\t"<<(*iter)->class_name()<<"@" << lnode->get_file_info()->get_line()<<":"<<lnode->get_file_info()->get_col() <<  "\t";
-      if (SgInitializedName* iname= SageInterface::convertRefToInitializedName(*iter, false))
-        ss<<iname->get_qualified_name()<<endl;
+  vector<string> sorted_lines;
+  for (vector<SgNode *>::iterator iter = Refs.begin(); iter != Refs.end();
+       iter++) {
+    stringstream ss;
+    if (*iter) {
+      SgLocatedNode *lnode = isSgLocatedNode(*iter);
+      ROSE_ASSERT(lnode);
+      ss << "\t" << (*iter)->class_name() << "@"
+         << lnode->get_file_info()->get_line() << ":"
+         << lnode->get_file_info()->get_col() << "\t";
+      if (SgInitializedName *iname =
+              SageInterface::convertRefToInitializedName(*iter, false))
+        ss << iname->get_qualified_name() << endl;
       else
-        ss<<"NULL SgInitializedName"<<endl;
+        ss << "NULL SgInitializedName" << endl;
 
-    }
-    else  
-      ss<<"NULL ref"<<endl;
-   sorted_lines.push_back(ss.str());
+    } else
+      ss << "NULL ref" << endl;
+    sorted_lines.push_back(ss.str());
   }
   if (b_sort)
-    sort (sorted_lines.begin(), sorted_lines.end());
+    sort(sorted_lines.begin(), sorted_lines.end());
 
-  for (vector<string>::iterator iter = sorted_lines.begin(); iter != sorted_lines.end(); iter++)
-   {
-    if (iter== sorted_lines.begin())
-      ofile<<header<<endl; 
-    //ofile<<"read references:"<<endl; 
-    ofile<< (*iter); 
-   }
-}
-
-void dumpSetNames(set<SgInitializedName*>& Names,  const string & header, ofstream & ofile)
-{
-  set<SgInitializedName*>::iterator iter2;
-  for (iter2=Names.begin();iter2!=Names.end();iter2++)
-  {
-    if (iter2== Names.begin())
-      ofile<<header<<endl; 
-    ofile<<"\t"<<(*iter2)->get_qualified_name()<<endl;
+  for (vector<string>::iterator iter = sorted_lines.begin();
+       iter != sorted_lines.end(); iter++) {
+    if (iter == sorted_lines.begin())
+      ofile << header << endl;
+    // ofile<<"read references:"<<endl;
+    ofile << (*iter);
   }
 }
 
-int main(int argc, char * argv[])
-{
-  vector<string> remainingArgs (argv, argv+argc);
+void dumpSetNames(set<SgInitializedName *> &Names, const string &header,
+                  ofstream &ofile) {
+  set<SgInitializedName *>::iterator iter2;
+  for (iter2 = Names.begin(); iter2 != Names.end(); iter2++) {
+    if (iter2 == Names.begin())
+      ofile << header << endl;
+    ofile << "\t" << (*iter2)->get_qualified_name() << endl;
+  }
+}
 
-  b_sort = CommandlineProcessing::isOption(remainingArgs,"","-sort",true);
-   //We must processing options first, before calling frontend!!
+int main(int argc, char *argv[]) {
+  vector<string> remainingArgs(argv, argv + argc);
+
+  b_sort = CommandlineProcessing::isOption(remainingArgs, "", "-sort", true);
+  // We must processing options first, before calling frontend!!
   // work with the parser of the ArrayAbstraction module
-  //Read in annotation files after -annot 
+  // Read in annotation files after -annot
   CmdOptions::GetInstance()->SetOptions(remainingArgs);
-  bool dumpAnnot = CommandlineProcessing::isOption(remainingArgs,"","-dumpannot",true);
-  ArrayAnnotation* annot = ArrayAnnotation::get_inst();
+  bool dumpAnnot =
+      CommandlineProcessing::isOption(remainingArgs, "", "-dumpannot", true);
+  ArrayAnnotation *annot = ArrayAnnotation::get_inst();
   annot->register_annot();
   ReadAnnotation::get_inst()->read();
   if (dumpAnnot)
     annot->Dump();
-  //Strip off custom options and their values to enable backend compiler 
-  CommandlineProcessing::removeArgsWithParameters(remainingArgs,"-annot");
+  // Strip off custom options and their values to enable backend compiler
+  CommandlineProcessing::removeArgsWithParameters(remainingArgs, "-annot");
 
-  SgProject *project = frontend (remainingArgs);
+  SgProject *project = frontend(remainingArgs);
   // our tests only use one single file for now.
   SgFilePtrList fl = project->get_files();
-  SgFile* firstfile = fl[0];
-  ROSE_ASSERT (firstfile!=NULL);
+  SgFile *firstfile = fl[0];
+  ROSE_ASSERT(firstfile != NULL);
 
-  string filename = Rose::StringUtility::stripPathFromFileName (firstfile->getFileName());
-  string ofilename = filename+".collectFunctionSideEffect.output";
+  string filename =
+      Rose::StringUtility::stripPathFromFileName(firstfile->getFileName());
+  string ofilename = filename + ".collectFunctionSideEffect.output";
   ofile.open(ofilename.c_str());
 
   RoseAst ast(project);
 
   // function level side effect results
-  for (RoseAst::iterator i=ast.begin();i!=ast.end();++i)
-  {
-    SgFunctionDeclaration* func = isSgFunctionDeclaration (*i);
-    if (!func) continue;  
-    if (func->get_definition() == NULL) continue; // skip prototype declaration
-    ofile<<"--------------------------------------------------"<<endl;
-    ofile<<"Function name:"<<func->get_qualified_name()<<endl;
+  for (RoseAst::iterator i = ast.begin(); i != ast.end(); ++i) {
+    SgFunctionDeclaration *func = isSgFunctionDeclaration(*i);
+    if (!func)
+      continue;
+    if (func->get_definition() == NULL)
+      continue; // skip prototype declaration
+    ofile << "--------------------------------------------------" << endl;
+    ofile << "Function name:" << func->get_qualified_name() << endl;
 
-    vector<SgNode*> readRefs, writeRefs;
+    vector<SgNode *> readRefs, writeRefs;
     // focus on definition only
-    if (!SageInterface::collectReadWriteRefs(func->get_definition(),readRefs, writeRefs))
-    {
-      ofile<<"Warning: SageInterface::collectReadWriteRefs() returns false."<<endl;
-      continue; 
+    if (!SageInterface::collectReadWriteRefs(func->get_definition(), readRefs,
+                                             writeRefs)) {
+      ofile << "Warning: SageInterface::collectReadWriteRefs() returns false."
+            << endl;
+      continue;
     }
 
     dumpVectorNodes(readRefs, "Read references:", ofile);
     dumpVectorNodes(writeRefs, "Write references:", ofile);
-   
+
     //-------------------------------------------------------------------
-    set<SgInitializedName*> readNames, writeNames; 
-    if (!SageInterface::collectReadWriteVariables(func->get_definition(),readNames,writeNames, false))
-    {
-      ofile<<"Warning: SageInterface::collectReadWriteVariables() returns false."<<endl;
-      continue; 
+    set<SgInitializedName *> readNames, writeNames;
+    if (!SageInterface::collectReadWriteVariables(
+            func->get_definition(), readNames, writeNames, false)) {
+      ofile << "Warning: SageInterface::collectReadWriteVariables() returns "
+               "false."
+            << endl;
+      continue;
     }
 
-   dumpSetNames(readNames, "Read var names:" , ofile);
-   dumpSetNames(writeNames, "Write var names:" , ofile);
+    dumpSetNames(readNames, "Read var names:", ofile);
+    dumpSetNames(writeNames, "Write var names:", ofile);
 
 #if 0
     // read only variables  
@@ -227,38 +240,39 @@ int main(int argc, char * argv[])
   }
 
   // loop level side effect results
-  for (RoseAst::iterator i=ast.begin();i!=ast.end();++i)
-  {
-    SgForStatement* target= isSgForStatement(*i);
-    if (!target) continue;  
-    ofile<<"--------------------------------------------------"<<endl;
-    ofile<<"Loop line:"<<target->get_file_info()->get_line()<<endl;
+  for (RoseAst::iterator i = ast.begin(); i != ast.end(); ++i) {
+    SgForStatement *target = isSgForStatement(*i);
+    if (!target)
+      continue;
+    ofile << "--------------------------------------------------" << endl;
+    ofile << "Loop line:" << target->get_file_info()->get_line() << endl;
 
-    vector<SgNode*> readRefs, writeRefs;
+    vector<SgNode *> readRefs, writeRefs;
     // focus on definition only
-    if (!SageInterface::collectReadWriteRefs(target,readRefs, writeRefs))
-    {
-      ofile<<"Warning: SageInterface::collectReadWriteRefs() returns false."<<endl;
-      continue; 
+    if (!SageInterface::collectReadWriteRefs(target, readRefs, writeRefs)) {
+      ofile << "Warning: SageInterface::collectReadWriteRefs() returns false."
+            << endl;
+      continue;
     }
 
     dumpVectorNodes(readRefs, "Read references:", ofile);
     dumpVectorNodes(writeRefs, "Write references:", ofile);
-   
+
     //-------------------------------------------------------------------
-    set<SgInitializedName*> readNames, writeNames; 
-    if (!SageInterface::collectReadWriteVariables(target,readNames,writeNames, false))
-    {
-      ofile<<"Warning: SageInterface::collectReadWriteVariables() returns false."<<endl;
-      continue; 
+    set<SgInitializedName *> readNames, writeNames;
+    if (!SageInterface::collectReadWriteVariables(target, readNames, writeNames,
+                                                  false)) {
+      ofile << "Warning: SageInterface::collectReadWriteVariables() returns "
+               "false."
+            << endl;
+      continue;
     }
 
-   dumpSetNames(readNames, "Read var names:" , ofile);
-   dumpSetNames(writeNames, "Write var names:" , ofile);
+    dumpSetNames(readNames, "Read var names:", ofile);
+    dumpSetNames(writeNames, "Write var names:", ofile);
   }
 
   ofile.close();
   // Generate source code from AST and call the vendor's compiler
   return backend(project);
 }
-

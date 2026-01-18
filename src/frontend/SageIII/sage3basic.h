@@ -37,7 +37,7 @@
 // other serialization helpers that use the same names.
 #ifdef ROSE_HAVE_CEREAL
 #ifdef CEREAL_SERIALIZE_FUNCTION_NAME
-#include <rose_pragma_message.h>
+#include "rose_pragma_message.h"
 ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 #endif
 #define CEREAL_SAVE_FUNCTION_NAME cerealSave
@@ -79,7 +79,7 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <Rose/Constants.h> // defines things like Rose::UNLIMITED, Rose::INVALID_INDEX, etc.
+#include "Rose/Constants.h" // defines things like Rose::UNLIMITED, Rose::INVALID_INDEX, etc.
 
 // DQ (11/12/2011): This is support to reduce the size of ROSE so that I can
 // manage development on my laptop. This option defines a subset of ROSE as
@@ -89,7 +89,9 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 // ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 
 #include "fileoffsetbits.h"
+
 #include "rosedll.h"
+
 #include <semaphore.h>
 
 // George Vulov (Aug. 23, 2010): This macro is not available everywhere by
@@ -134,8 +136,11 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 
 // #include <cstdlib> // For abort()
 #include <algorithm>
+
 #include <cstring>
+
 #include <fstream>
+
 #include <unistd.h>
 
 // DQ (8/25/2014): Added logic to isTemplateDeclaration(a_routine_ptr) to force
@@ -162,7 +167,7 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 // processing of the Sage III AST. It is now called within the AstFixup.C.
 #define USE_RESET_TEMPLATE_NAME false
 
-#include <ROSE_DEPRECATED.h>
+#include "ROSE_DEPRECATED.h"
 
 // DQ (12/22/2007): Name of implicit Fortran "main" when building the program
 // function.
@@ -235,8 +240,10 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 
 // Include ROSE common utility function library
 #include "Escape.h"
+
 #include "FileUtility.h"
-#include <Rose/StringUtility.h>
+
+#include "Rose/StringUtility.h"
 
 // Include support for Brian Gunney's command line parser tool (nice work)
 #include "sla.h"
@@ -303,9 +310,9 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 // DQ (3/7/2013): I think that we need to use "" instead of <> and this may make
 // a difference for SWIG. DQ (9/21/2005): This is the simplest way to include
 // this here This is the definition of the Sage III IR classes (generated
-// header). #include <Cxx_Grammar.h>
-#include "Cxx_Grammar.h"
+// header). #include "Cxx_Grammar.h"
 
+#include "Cxx_Grammar.h"
 // Disable CC++ extensions (we want to support only the C++ Standard)
 #undef CCPP_EXTENSIONS_ALLOWED
 

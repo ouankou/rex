@@ -2,7 +2,9 @@
 #define ROSE_ASSERT_H
 
 #include "mlog.h"
+
 #include <assert.h>
+
 #include <stdlib.h>
 
 // ROSE_ASSERT is for internal logic checks; ROSE_ABORT is for unconditional

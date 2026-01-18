@@ -3,7 +3,6 @@
 #define ASTSHAREDMEMORYPARALLELPROCESSING_C
 
 #include "rosePublicConfig.h"
-
 #ifdef _REENTRANT // Does user want multi-thread support? (e.g., g++ -pthread)
 #ifdef ROSE_HAVE_PTHREAD_H // POSIX threads are available?
 #include <pthread.h>

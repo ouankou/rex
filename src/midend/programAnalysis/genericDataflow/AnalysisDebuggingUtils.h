@@ -1,13 +1,17 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef ROSE_ANALYSIS_DEBUGGING_UTILS_H
 #define ROSE_ANALYSIS_DEBUGGING_UTILS_H
 
 #include <fstream>
+
 #include <iostream>
+
 #include <list>
+
 #include <string>
+
 #include <vector>
 
 class printable {

@@ -3,12 +3,17 @@
 
 /******Author: Qing Yi, Andrew Long 2007 ********/
 
+#include "union_find.h"
+
 #include <assert.h>
+
 #include <iostream>
+
 #include <list>
+
 #include <map>
+
 #include <string>
-#include <union_find.h>
 
 #define BOT NULL
 

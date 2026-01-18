@@ -1,5 +1,6 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "astPostProcessing/markSharedDeclarationsForOutputInCodeGeneration.h"
+
 #include "sage3basic.h"
 
 void markSharedDeclarationsForOutputInCodeGeneration(SgNode *node) {

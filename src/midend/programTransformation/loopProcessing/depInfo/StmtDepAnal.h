@@ -1,7 +1,7 @@
 #ifndef STMT_DEP_ANAL_H
 #define STMT_DEP_ANAL_H
 
-#include <SymbolicVal.h>
+#include "SymbolicVal.h"
 
 class DepRel;
 class DepInfo;
@@ -28,5 +28,5 @@ template <class CoeffVec, class BoundVec, class BoundOp, class Dep>
 bool AnalyzeEquation(const CoeffVec &vec, const BoundVec &bounds,
                      BoundOp &boundop, Dep &result, const DepRel &rel);
 
-#include <StmtDepAnal.C>
+#include "StmtDepAnal.C"
 #endif

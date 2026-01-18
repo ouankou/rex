@@ -1,14 +1,20 @@
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <iomanip>
+
 #include <iostream>
+
 #include <string>
 // PP(14/10/20) PRE->legacy::PRE #include "pre.h"
+
+#include "AstConsistencyTests.h"
+
 #include "RoseAst.h" // using AST Iterator
 #include "rose_config.h"
-#include <AstConsistencyTests.h>
 
 // DQ (8/1/2005): test use of new static function to create
 // Sg_File_Info object that are marked as transformations
@@ -16,7 +22,9 @@
 #define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
 
 #include "inliner.h"
+
 #include "inlinerSupport.h"
+
 #include "replaceExpressionWithStatement.h"
 
 using namespace std;

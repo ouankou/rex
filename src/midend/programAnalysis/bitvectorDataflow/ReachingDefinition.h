@@ -2,11 +2,17 @@
 #define REACHING_DEFINITION_H
 
 #include "AnalysisInterface.h"
+
 #include "AstInterface.h"
+
 #include "BitVectorRepr.h"
+
 #include "DataFlowAnalysis.h"
+
 #include "StmtInfoCollect.h"
+
 #include <assert.h>
+
 #include <string>
 
 typedef BitVectorRepr ReachingDefinitions;

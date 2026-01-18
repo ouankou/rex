@@ -1,10 +1,14 @@
 // tps (01/14/2010) : Switching from rose.h to sage3
 #include "abiStuff.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <vector>
 
 #include <climits>
+
 #include <cstdint>
 
 using namespace std;
@@ -139,7 +143,8 @@ StructLayoutInfo NonpackedTypeLayoutGenerator::layoutType(SgType *t) const {
   }
   case V_SgTypeComplex: {
     //"Each complex type has the same representation and alignment requirements
-    //as an array type containing exactly two elements of the corresponding real
+    // as an array type containing exactly two elements of the corresponding
+    // real
     // type"
     StructLayoutInfo layout =
         this->beginning->layoutType(isSgTypeComplex(t)->get_base_type());

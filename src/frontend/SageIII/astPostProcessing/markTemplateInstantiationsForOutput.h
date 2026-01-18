@@ -4,6 +4,7 @@
 #include "AstProcessing.h"
 
 #include <list>
+
 #include <set>
 
 // DQ (5/27/2005):

@@ -2,7 +2,6 @@
 #define FIXUP_ENUM_VALUES_H
 
 #include "Cxx_Grammar.h"
-
 /*! \brief This traversal uses the Memory Pool traversal to fixup the enum
    declarations referenced in the enum values (SgEnumVal).
 

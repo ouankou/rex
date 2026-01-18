@@ -45,12 +45,17 @@
 
 #ifdef NO_STD_CHEADERS
 #include <assert.h>
+
+#include <cassert>
+
+#include <cstdlib>
+
+#include <cstring>
+
 #include <stdlib.h>
+
 #include <string.h>
 #else
-#include <cassert>
-#include <cstdlib>
-#include <cstring>
 using namespace std; // For compatibility with non-std C headers
 #endif
 
@@ -1147,7 +1152,9 @@ public:
 };
 
 #include <list>
+
 #include <map>
+
 #include <set>
 
 struct compareBranchCounters {

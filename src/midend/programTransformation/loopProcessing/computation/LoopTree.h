@@ -3,14 +3,20 @@
 #define LOOPTREE_H
 
 #include <stdlib.h>
+
 #include <string>
 
-#include <FunctionObject.h>
-#include <IteratorTmpl.h>
-#include <LoopTreeObserver.h>
-#include <SinglyLinkedList.h>
-#include <SymbolicVal.h>
-#include <TreeImpl.h>
+#include "FunctionObject.h"
+
+#include "IteratorTmpl.h"
+
+#include "LoopTreeObserver.h"
+
+#include "SinglyLinkedList.h"
+
+#include "SymbolicVal.h"
+
+#include "TreeImpl.h"
 
 class LoopTransformInterface;
 

@@ -1,6 +1,8 @@
 
 #include "AstNodeClass.h"
+
 #include "ROSETTA_macros.h"
+
 #include "grammar.h"
 
 // What should be the behavior of the default constructor for Grammar
@@ -976,7 +978,7 @@ void Grammar::setUpTypes() {
   // PP (10/4/22): experimentally commented out.
   //~ MemberFunctionType.setDataPrototype     ("unsigned int",
   //"ref_qualifiers","= 0", ~ CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //NO_TRAVERSAL, NO_DELETE);
+  // NO_TRAVERSAL, NO_DELETE);
 
   PartialFunctionType.setFunctionPrototype("HEADER_PARTIAL_FUNCTION_TYPE",
                                            "../Grammar/Type.code");

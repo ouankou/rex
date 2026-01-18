@@ -1,14 +1,20 @@
 
 #include "sage3basic.h"
 
-#include <AstInterface_ROSE.h>
-#include <StmtInfoCollect.h>
+#include "AstInterface_ROSE.h"
 
-#include "ptr_anal_icfg_creator.h"
-#include <CommandOptions.h>
-#include <GraphIO.h>
-#include <PtrAnal.h>
+#include "StmtInfoCollect.h"
+
+#include "GraphIO.h"
+
+#include "PtrAnal.h"
+
 #include <iostream>
+
+#include "CommandOptions.h"
+
+#include <ptr_anal_icfg_creator.h>
+
 #include <string>
 
 extern int DEBUG_ICFG;

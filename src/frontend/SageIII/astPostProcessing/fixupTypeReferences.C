@@ -1,7 +1,8 @@
 #include "fixupTypeReferences.h"
+
 #include "sage3basic.h"
 
-#include <rose_config.h>
+#include "rose_config.h"
 
 using namespace std;
 

@@ -1,7 +1,11 @@
-#include <CompSliceImpl.h>
-#include <DynamicCompSlice.h>
-#include <LoopTreeTransform.h>
+#include "CompSliceImpl.h"
+
+#include "DynamicCompSlice.h"
+
+#include "LoopTreeTransform.h"
+
 #include <assert.h>
+
 #include <stdio.h>
 
 class CondSliceStmt : public CompSliceStmt {

@@ -1,7 +1,11 @@
 #include "rose_strtoull.h"
+
 #include <cctype>
+
 #include <cerrno>
+
 #include <cstdlib>
+
 #include <cstring>
 
 uint64_t rose_strtoull(const char *nptr, char **endptr, int base) {

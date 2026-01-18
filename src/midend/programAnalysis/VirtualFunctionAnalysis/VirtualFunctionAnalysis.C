@@ -1,6 +1,9 @@
 #include "VirtualFunctionAnalysis.h"
+
 #include "sage3basic.h"
+
 #include <algorithm>
+
 #include <unordered_map>
 void VirtualFunctionAnalysis::run() {
 

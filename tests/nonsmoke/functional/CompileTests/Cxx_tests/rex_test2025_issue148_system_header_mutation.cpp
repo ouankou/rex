@@ -1,4 +1,4 @@
-#include <test_system_header.hpp>
+#include "test_system_header.hpp"
 
 int use_system_header(int value) {
   RexIssue148SystemHeaderType local;

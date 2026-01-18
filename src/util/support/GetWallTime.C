@@ -1,5 +1,7 @@
 #include <stdlib.h>
+
 #include <sys/resource.h>
+
 #include <sys/time.h>
 double GetWallTime(void) {
   struct timeval tp;

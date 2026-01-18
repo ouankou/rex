@@ -1,9 +1,12 @@
 #ifndef SELECTIVE_TESTING_DEPENDENCE_ANALYSIS
 #define SELECTIVE_TESTING_DEPENDENCE_ANALYSIS
 
+#include "CommandOptions.h"
+
 #include "dependence_table.h"
-#include <CommandOptions.h>
+
 #include <istream>
+
 #include <string>
 
 class SgNode;

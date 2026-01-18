@@ -9,20 +9,34 @@
 // Generates Fortran from the content of a parse tree, using the
 // traversal templates in parse-tree-visitor.h.
 
-#include "flang/Common/idioms.h"
-#include "flang/Common/indirection.h"
-#include "flang/Parser/characters.h"
-#include "flang/Parser/parse-tree-visitor.h"
-#include "flang/Parser/parse-tree.h"
-#include "flang/Parser/tools.h"
-#include "flang/Parser/unparse.h"
-#include "flang/Support/Fortran.h"
-#include "flang/Support/LangOptions.h"
-#include "llvm/Support/raw_ostream.h"
-#include <algorithm>
 #include <cinttypes>
+
 #include <cstddef>
+
+#include <algorithm>
+
+#include <flang/Common/idioms.h>
+
+#include <flang/Common/indirection.h>
+
+#include <flang/Parser/characters.h>
+
+#include <flang/Parser/parse-tree-visitor.h>
+
+#include <flang/Parser/parse-tree.h>
+
+#include <flang/Parser/tools.h>
+
+#include <flang/Parser/unparse.h>
+
+#include <flang/Support/Fortran.h>
+
+#include <flang/Support/LangOptions.h>
+
+#include <llvm/Support/raw_ostream.h>
+
 #include <iostream>
+
 #include <set>
 
 // don't Put(strings)
@@ -1977,7 +1991,7 @@ public:
     Word(llvm::acc::getOpenACCDirectiveName(x).str());
   }
 #define GEN_FLANG_CLAUSE_UNPARSE
-#include "llvm/Frontend/OpenACC/ACC.inc"
+#include <llvm/Frontend/OpenACC/ACC.inc>
   void Unparse(/*const*/ AccObjectListWithModifier &x) {
     Walk(std::get<std::optional<AccDataModifier>>(x.t), ":");
     Walk(std::get<AccObjectList>(x.t));
@@ -2431,7 +2445,7 @@ public:
     Walk(std::get<std::optional<Directive>>(x.t));
   }
 #define GEN_FLANG_CLAUSE_UNPARSE
-#include "llvm/Frontend/OpenMP/OMP.inc"
+#include <llvm/Frontend/OpenMP/OMP.inc>
   void Unparse(/*const*/ OmpLoopDirective &x) {
     switch (x.v) {
     case llvm::omp::Directive::OMPD_distribute:
@@ -2545,7 +2559,7 @@ public:
     default:
       break;
     }
-  }
+  } // namespace Fortran::parser
   void Unparse(/*const*/ OmpObjectList &x) { Walk(x.v, ","); }
 
   void Unparse(const common::OmpMemoryOrderType &x) {

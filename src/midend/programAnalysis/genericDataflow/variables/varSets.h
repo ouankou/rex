@@ -1,12 +1,15 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef VAR_SETS_H
 #define VAR_SETS_H
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "genericDataflowCommon.h"
+
 #include "variables.h"
 
 namespace varSets {

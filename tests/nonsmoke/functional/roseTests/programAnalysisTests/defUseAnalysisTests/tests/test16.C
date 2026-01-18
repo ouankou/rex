@@ -1,13 +1,13 @@
 
-#include <stdio.h>
-#include "mpi.h"
+#include <mpi.h>
 
+#include <stdio.h>
 #define HAND 5
 
 int main() {
-  int index,i=0;
+  int index, i = 0;
   while (i) {
     MPI_Send(&index, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
-    //printf("Hellow world", &index, &HAND);
+    // printf("Hellow world", &index, &HAND);
   }
 }

@@ -1,7 +1,7 @@
 #ifndef PRIVATIZE_SCALAR_H
 #define PRIVATIZE_SCALAR_H
 
-#include <PrePostTransformation.h>
+#include "PrePostTransformation.h"
 
 class PrivatizeScalar {
 public:

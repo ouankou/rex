@@ -1,11 +1,17 @@
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "Outliner.hh"
+
 #include "RoseAst.h"
+
 #include "omp_lowering.h"
+
 #include "rex_llvm.h"
+
 #include "sage3basic.h"
+
 #include "sageBuilder.h"
+
 #include <sstream>
 
 using namespace std;

@@ -1,11 +1,17 @@
 #include "sage3basic.h"
+
 #include "sageGeneric.h"
 
 #include "RoseAst.h"
+
 #include "SgNodeHelper.h"
+
 #include <climits>
+
 #include <limits>
+
 #include <list>
+
 #include <sstream>
 
 using namespace std;

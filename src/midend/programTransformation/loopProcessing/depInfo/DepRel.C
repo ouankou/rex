@@ -1,10 +1,13 @@
 
+#include "mlog.h"
+
 #include <fstream>
+
 #include <iostream>
-#include <mlog.h>
+
 #include <stdlib.h>
 
-#include <DepRel.h>
+#include "DepRel.h"
 
 #define ALIGN_ALL 32767
 #define MAX_ALIGN 3

@@ -1,5 +1,7 @@
 #include "FortranParserState.h"
+
 #include "fortran_support.h"
+
 #include "sage3basic.h"
 
 // DQ (10/14/2010):  This should only be included by source files that require
@@ -7,7 +9,6 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 #define SKIP_C_ACTION_IMPLEMENTATION 0
 
 using namespace Rose;
@@ -79,10 +80,11 @@ void build_implicit_program_statement_if_required() {
 extern "C" {
 #endif
 
-#include "ActionEnums.h"
-#include "FortranParserAction.h"
-#include "token.h"
+#include <ActionEnums.h>
 
+#include <FortranParserAction.h>
+
+#include <token.h>
 /**
  * TODO - change/add from C to Fortran grammar in comments and actions
  * The goal is to do this slowly, one action at a time

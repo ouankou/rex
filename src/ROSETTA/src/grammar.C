@@ -3,16 +3,27 @@
 // ################################################################
 
 #include "AstNodeClass.h"
+
+#include "featureTests.h"
+
 #include "grammar.h"
+
 #include "grammarString.h"
+
 #include "mlog.h"
-#include "rose_config.h"
-#include <algorithm>
+
 #include <cctype>
-#include <featureTests.h>
+
 #include <fstream>
+
 #include <iostream>
+
 #include <map>
+
+#include <algorithm>
+
+#include "rose_config.h"
+
 #include <sstream>
 
 using namespace std;
@@ -1928,7 +1939,9 @@ void Grammar::buildClassDefinition(
                 "#define ROSE_" +
                 node.getName() +
                 "_H\n"
+                "\n"
                 "#include <RoseFirst.h>\n"
+                "\n"
                 "#include <Cxx_GrammarDeclarations.h>\n",
             __FILE__, __LINE__));
     editedHeaderFileString.push_back(StringUtility::StringWithLineNumber(
@@ -2377,7 +2390,7 @@ void Grammar::emitForwardDeclarations(std::ostream &s) const {
 
 // Emit a declaration for each of the isSg* functions
 void Grammar::emitIsaDeclarations(std::ostream &out) {
-  out << "#include <rosedll.h>\n";
+  out << "\n#include \"rosedll.h\"\n";
   for (const auto &terminal : terminalList) {
     const std::string name = terminal->name;
     out << "ROSE_DLL_API " + name + "* is" + name + "(SgNode* node);\n"
@@ -2962,6 +2975,7 @@ void Grammar::buildCode() {
       "implementation (Gannon et. al.). \n\n\n"
       "#ifndef $IFDEF_MARKER_H \n"
       "#define $IFDEF_MARKER_H \n\n"
+      "\n"
       "#include <string>\n\n";
 
   string footerString = "\n\n\n#endif // ifndef IFDEF_MARKER_H \n\n\n";
@@ -2990,7 +3004,7 @@ void Grammar::buildCode() {
                        getGrammarName() + "Variants", ".h");
   }
   ROSE_ArrayGrammarHeaderFile
-      << "#include <" + getGrammarName() + "Variants.h>\n";
+      << "\n\n#include <" + getGrammarName() + "Variants.h>\n";
 
   // DQ (10/26/2007): Add the protytype for the Cxx_GrammarTerminalNames
   buildVariantsStringPrototype(ROSE_ArrayGrammarHeaderFile);
@@ -3007,7 +3021,7 @@ void Grammar::buildCode() {
     declarations << "#endif\n";
   }
   ROSE_ArrayGrammarHeaderFile
-      << "#include <" + getGrammarName() + "Declarations.h>\n";
+      << "\n\n#include <" + getGrammarName() + "Declarations.h>\n";
 
   // Is-a predicates
   {

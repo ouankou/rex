@@ -2,9 +2,13 @@
 #define ROSE_NODE_QUERY
 
 #include "AstProcessing.h"
+
 #include "astQuery.h"
+
 #include "rosedll.h"
+
 #include <functional>
+
 #include <type_traits>
 
 // #include "variantVector.h"

@@ -1,4 +1,5 @@
 #include "newHiddenList.h"
+
 #include "sage3basic.h"
 
 using namespace std;

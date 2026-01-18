@@ -1,6 +1,7 @@
 
-#include <CompSliceLocality.h>
-#include <InterchangeAnal.h>
+#include "CompSliceLocality.h"
+
+#include "InterchangeAnal.h"
 
 #define MAXDEPTH 20
 

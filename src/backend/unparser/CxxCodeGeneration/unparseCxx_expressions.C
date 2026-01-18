@@ -12,11 +12,14 @@
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
+
 #include "unparser.h"
+
 #include <limits>
 
 // DQ (2/21/2019): Added to support remove_substring function.
 #include <iostream>
+
 #include <string>
 
 // DQ (12/31/2005): This is OK if not declared in a header file
@@ -36,7 +39,6 @@ using namespace Rose;
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
                                                          SgUnparse_Info &info) {
   // This is the C and C++ specific expression code generation
@@ -5660,7 +5662,7 @@ static void removeIncludeDirective(SgLocatedNode *locatedNode) {
 }
 
 ///! Inspect the structure of this initialization is to see if it is using the
-///C++11 initialization features for structs.
+/// C++11 initialization features for structs.
 static bool uses_cxx11_initialization(SgNode *n) {
   // SgInitializer* initializerChain[3] = { NULL, NULL, NULL };
   std::vector<SgInitializer *> initializerChain;

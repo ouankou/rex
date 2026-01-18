@@ -1,5 +1,7 @@
 #include "previousAndNextNode.h"
+
 #include "sage3basic.h"
+
 #include "tokenStreamMapping.h"
 using namespace std;
 

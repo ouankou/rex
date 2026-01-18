@@ -1,17 +1,25 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef DOMINATOR_ANALYSIS_H
 #define DOMINATOR_ANALYSIS_H
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "printAnalysisStates.h"
 
 extern int dominatorAnalysisDebugLevel;

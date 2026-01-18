@@ -11,6 +11,7 @@
 #define INC_CPREPROC_IF_HH //!< CPreproc/If.hh included.
 
 #include <list>
+
 #include <string>
 
 class PreprocessingInfo;

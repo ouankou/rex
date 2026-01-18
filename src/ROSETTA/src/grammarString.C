@@ -3,10 +3,15 @@
 // ################################################################
 
 #include "AstNodeClass.h"
+
 #include "FileUtility.h"
+
+#include "Rose/StringUtility.h"
+
 #include "grammarString.h"
-#include <Rose/StringUtility.h>
+
 #include <sstream>
+
 #include <string>
 
 using namespace std;

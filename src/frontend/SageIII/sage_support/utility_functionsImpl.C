@@ -13,6 +13,7 @@
 #define UTILITY_FUNCTION_TEMPLATES_C
 
 #include "AstDOTGeneration.h"
+
 #include "wholeAST_API.h"
 
 template <typename ExtraNodeInfo_t, typename ExtraNodeOptions_t,

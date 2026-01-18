@@ -2,9 +2,12 @@
 #ifndef DG_BASE_GRAPH_IMPL
 #define DG_BASE_GRAPH_IMPL
 
-#include <BaseGraphCreate.h>
-#include <DAG.h>
+#include "BaseGraphCreate.h"
+
+#include "DAG.h"
+
 #include <assert.h>
+
 #include <sstream>
 
 // definition of DGBaseGraphImpl

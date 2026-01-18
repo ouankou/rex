@@ -1,4 +1,5 @@
-#if 0 /* JJW 5-22-2008 commented out because this is not portable to all platforms */
+#if 0 /* JJW 5-22-2008 commented out because this is not portable to all       \
+         platforms */
 
 // define __flexarr
 
@@ -8,7 +9,6 @@
 #define __need_size_t
 #define __need_wchar_t
 #include <stddef.h>
-
 // define __flexarr	[1]
 
 #ifndef __mbstate_t_defined

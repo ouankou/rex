@@ -2,9 +2,13 @@
 #define STATIC_CFG_H
 
 #include "AstAttributeMechanism.h"
+
 #include "virtualCFG.h"
+
 #include <map>
+
 #include <set>
+
 #include <string>
 
 class SgIncidenceDirectedGraph;

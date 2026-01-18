@@ -1,9 +1,11 @@
 #ifndef REUSE_ANALYSIS_H
 #define REUSE_ANALYSIS_H
 
-#include <DepInfo.h>
-#include <LoopTransformInterface.h>
-#include <PtrSet.h>
+#include "DepInfo.h"
+
+#include "LoopTransformInterface.h"
+
+#include "PtrSet.h"
 
 // returns whether the increase of induction variable ivarname
 // sweeps array dimension 'dim

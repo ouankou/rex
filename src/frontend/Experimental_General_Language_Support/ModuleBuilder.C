@@ -1,8 +1,11 @@
 #include "ModuleBuilder.h"
+
 #include "sage3basic.h"
 
 #include <algorithm>
+
 #include <cctype>
+
 #include <filesystem>
 
 namespace Rose {

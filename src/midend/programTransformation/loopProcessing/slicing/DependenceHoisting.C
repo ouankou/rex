@@ -1,16 +1,23 @@
 
 #include <stdlib.h>
 
-#include <CompSlice.h>
+#include "CompSlice.h"
 
-#include <CommandOptions.h>
-#include <DepCompTransform.h>
-#include <DepGraph.h>
-#include <DepRel.h>
-#include <LoopAnalysis.h>
-#include <LoopInfoInterface.h>
-#include <LoopTreeTransform.h>
-#include <SymbolicVal.h>
+#include "CommandOptions.h"
+
+#include "DepCompTransform.h"
+
+#include "DepGraph.h"
+
+#include "DepRel.h"
+
+#include "LoopAnalysis.h"
+
+#include "LoopInfoInterface.h"
+
+#include "LoopTreeTransform.h"
+
+#include "SymbolicVal.h"
 
 struct SliceInfo {
   LoopTreeNode *loop, *stmt;

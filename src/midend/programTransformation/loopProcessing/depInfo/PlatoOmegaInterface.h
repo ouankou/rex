@@ -7,27 +7,43 @@
 #ifndef PLATO_OMEGA_INTERFACE
 #define PLATO_OMEGA_INTERFACE
 
-#include <AstInterface.h>
-#include <CountRefHandle.h>
+#include "AstInterface.h"
+
+#include "CountRefHandle.h"
+
+#include "DepInfoAnal.h"
+
+#include "DepRel.h"
+
+#include "DepTestStatistics.h"
+
+#include "FunctionObject.h"
+
+#include "SymbolicBound.h"
+
+#include "SymbolicExpr.h"
+
+#include "SymbolicVal.h"
+
 #include <DDTypes.h>
-#include <DepInfoAnal.h>
-#include <DepRel.h>
-#include <DepTestStatistics.h>
-#include <FunctionObject.h>
-#include <SymbolicBound.h>
-#include <SymbolicExpr.h>
-#include <SymbolicVal.h>
+
 #include <assert.h>
+
 #include <fstream>
+
 #include <map>
+
 #include <omega.h>
+
 #include <set>
+
 #include <string>
 
-#include "DDTesting.h"
-#include "RationalExpression.h"
-#include "RationalVITestProblem.h"
+#include <DDTesting.h>
 
+#include <RationalExpression.h>
+
+#include <RationalVITestProblem.h>
 /**
  *        This Header file defines the interface to the Plato and Omega
  *        dependency testing libraries.

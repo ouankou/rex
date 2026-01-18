@@ -1,11 +1,13 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef _VARIABLESTATETRANSFER_H
 #define _VARIABLESTATETRANSFER_H
 
 #include "dataflow.h"
+
 #include "latticeFull.h"
+
 #include "liveDeadVarAnalysis.h"
 
 #include <vector>

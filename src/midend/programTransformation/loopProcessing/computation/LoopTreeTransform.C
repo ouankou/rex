@@ -1,14 +1,20 @@
 #include <sstream>
 
-#include <PtrSet.h>
-#include <SinglyLinkedList.h>
+#include "PtrSet.h"
+
+#include "SinglyLinkedList.h"
+
 #include <map>
 
-#include <LoopTree.h>
-#include <LoopTreeDummyNode.h>
-#include <LoopTreeObserver.h>
-#include <LoopTreeTransform.h>
-#include <StmtDepAnal.h>
+#include "LoopTree.h"
+
+#include "LoopTreeDummyNode.h"
+
+#include "LoopTreeObserver.h"
+
+#include "LoopTreeTransform.h"
+
+#include "StmtDepAnal.h"
 
 extern bool DebugLoopDist();
 

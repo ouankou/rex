@@ -29,8 +29,9 @@
 
 #include <stdio.h>
 
-#include "rose_config.h"
 #include "gtest/gtest.h"
+
+#include "rose_config.h"
 
 #if defined(__has_include)
 #if __has_include(<valgrind/valgrind.h>)

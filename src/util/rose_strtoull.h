@@ -2,6 +2,7 @@
 #define ROSE_strtoull_H
 
 #include "rosedll.h"
+
 #include <inttypes.h>
 
 /** Convert a string to an unsigned long integer.

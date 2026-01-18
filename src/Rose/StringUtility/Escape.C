@@ -1,8 +1,10 @@
-#include <Rose/StringUtility/Escape.h>
+#include "Rose/StringUtility/Escape.h"
 
-#include <Rose/StringUtility/Convert.h>
-#include <Rose/StringUtility/Replace.h>
-#include <Rose/StringUtility/StringToNumber.h>
+#include "Rose/StringUtility/Convert.h"
+
+#include "Rose/StringUtility/Replace.h"
+
+#include "Rose/StringUtility/StringToNumber.h"
 
 namespace Rose {
 namespace StringUtility {

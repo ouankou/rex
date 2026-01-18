@@ -1,16 +1,20 @@
-#include <sage3basic.h>
+#include "sage3basic.h"
 
 #if ROSE_WITH_LIBHARU
 #include "AstPDFGeneration.h"
 #endif
 
-#include "astGraph.h"
-#include <analysisUtils.h>
-#include <list>
-#include <shortCircuitingTransformation.h>
+#include "analysisUtils.h"
 
-#include <defaultFunctionGenerator.h>
-#include <destructorCallAnnotator.h>
+#include "astGraph.h"
+
+#include "shortCircuitingTransformation.h"
+
+#include <list>
+
+#include "defaultFunctionGenerator.h"
+
+#include "destructorCallAnnotator.h"
 
 using namespace std;
 

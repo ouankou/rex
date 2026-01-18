@@ -5,7 +5,9 @@
 #define PDFGENERATION_H
 
 #include "AstProcessing.h"
+
 #include <iostream>
+
 #include <typeinfo>
 
 #undef PACKAGE
@@ -14,8 +16,7 @@
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-#include "hpdf.h"
-
+#include <hpdf.h>
 class PDFInheritedAttribute {
 public:
   explicit PDFInheritedAttribute(HPDF_Outline currentOutline,

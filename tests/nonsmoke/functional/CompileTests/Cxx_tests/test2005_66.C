@@ -1,12 +1,14 @@
-// This ia part of a bug submitted by Brian White regarding the name mangling of 
-// overloaded operator() and operator[] which appears to not be implemented in ROSE.
-// Also "delete" appears to be mangles as "new" which is another bug!
+// This ia part of a bug submitted by Brian White regarding the name mangling of
+// overloaded operator() and operator[] which appears to not be implemented in
+// ROSE. Also "delete" appears to be mangles as "new" which is another bug!
 
 // Skip version 4.x gnu compilers
-#if ( __GNUC__ == 3 )
+#if (__GNUC__ == 3)
 
 // #include<cstdio>
+
 #include <cstddef>
+
 #include <exception>
 
 #if 0
@@ -23,134 +25,120 @@ namespace std
    }
 #endif
 
-template <typename T>
-class templateFoo
-   {
-     public:
-          templateFoo() {}
-       // templateFoo(int x) {}
-          templateFoo(T t) {}
+template <typename T> class templateFoo {
+public:
+  templateFoo() {}
+  // templateFoo(int x) {}
+  templateFoo(T t) {}
 
-       // templateFoo(foo) {}
+  // templateFoo(foo) {}
 
-          void foobar_start() {}
-          int operator()(int x) { return 0; }
-          int operator[](int x) { return 0; }
-          unsigned int operator+=(unsigned int x) { return 0; }
+  void foobar_start() {}
+  int operator()(int x) { return 0; }
+  int operator[](int x) { return 0; }
+  unsigned int operator+=(unsigned int x) { return 0; }
 
-          void foobar_new_and_delete() {}
-       // void* operator new (size_t) throw(std::bad_alloc) { return 0; }
-          void* operator new (size_t) throw() { return 0; }
-          void operator delete (void*) {}
-          void* operator new[] (size_t) { return 0; }
-          void operator delete[] (void*) {}
+  void foobar_new_and_delete() {}
+  // void* operator new (size_t) throw(std::bad_alloc) { return 0; }
+  void *operator new(size_t) throw() { return 0; }
+  void operator delete(void *) {}
+  void *operator new[](size_t) { return 0; }
+  void operator delete[](void *) {}
 
-          void foobar_new_and_delete_with_extra_parameter() {}
-          void* operator new (size_t,void*) { return 0; }
-          void operator delete (void*,void*) {}
-          void* operator new[] (size_t,void*) { return 0; }
-          void operator delete[] (void*,void*) {}
+  void foobar_new_and_delete_with_extra_parameter() {}
+  void *operator new(size_t, void *) { return 0; }
+  void operator delete(void *, void *) {}
+  void *operator new[](size_t, void *) { return 0; }
+  void operator delete[](void *, void *) {}
 
-          template <typename S>
-          void foobarTemplate(S s) {}
+  template <typename S> void foobarTemplate(S s) {}
 
-          void foobar_end() {}
+  void foobar_end() {}
+};
 
+class foo {
 
-   };
+public:
+  foo() {}
+  foo(int) {}
 
+  void foobar_start() {}
+  int operator()(int x) { return 0; }
+  int operator[](int x) { return 0; }
+  unsigned int operator+=(unsigned int x) { return 0; }
 
-class foo
-   {
+  void foobar_new_and_delete() {}
+  // void* operator new (size_t) throw(std::bad_alloc) { return 0; }
+  void *operator new(size_t) throw() { return 0; }
+  void operator delete(void *) {}
+  void *operator new[](size_t) { return 0; }
+  void operator delete[](void *) {}
 
-     public:
+  void foobar_new_and_delete_with_extra_parameter() {}
+  void *operator new(size_t, void *) { return 0; }
+  void operator delete(void *, void *) {}
+  void *operator new[](size_t, void *) { return 0; }
+  void operator delete[](void *, void *) {}
 
-          foo() {}
-          foo(int) {}
+  template <typename T> void foobarTemplate(T t) {}
 
-          void foobar_start() {}
-          int operator()(int x) { return 0; }
-          int operator[](int x) { return 0; }
-          unsigned int operator+=(unsigned int x) { return 0; }
+  void foobar_end() {}
+};
 
-          void foobar_new_and_delete() {}
-       // void* operator new (size_t) throw(std::bad_alloc) { return 0; }
-          void* operator new (size_t) throw() { return 0; }
-          void operator delete (void*) {}
-          void* operator new[] (size_t) { return 0; }
-          void operator delete[] (void*) {}
+template <typename T> class templateFoobar {
+public:
+  templateFoobar() {}
+  templateFoobar(int x) {}
+  templateFoobar(T t) {}
 
-          void foobar_new_and_delete_with_extra_parameter() {}
-          void* operator new (size_t,void*) { return 0; }
-          void operator delete (void*,void*) {}
-          void* operator new[] (size_t,void*) { return 0; }
-          void operator delete[] (void*,void*) {}
+  templateFoobar(foo f) {}
+  operator foo() {}
+};
 
-          template <typename T>
-          void foobarTemplate(T t) {}
+int main() {
+  foo f;
+  foo *fptr;
 
-          void foobar_end() {}
-   };
+  // Note that gnu g++ does not use "__" in name mangling but ROSE does (I feel
+  // more comfortable with the "__" in place).
+  f.foobar_start();
+  f(1); // __cl
+  f[1]; // __vc  (Dan: I think it should be __ix)
+  f += 1;
+  fptr = new foo; // __nw
+  delete fptr;    // __dl
 
-template <typename T>
-class templateFoobar
-   {
-     public:
-          templateFoobar() {}
-          templateFoobar(int x) {}
-          templateFoobar(T t) {}
+  // legacy frontend does not appear to distinguish "array_new" from "new" as
+  // it does for "array_delete" and "delete"
+  fptr = new foo[10]; // __na
+  delete[] fptr;      // __da
 
-          templateFoobar(foo f) {}
-          operator foo() {}
-   };
+  f.foobarTemplate<float>(0.0);
 
+  f.foobar_end();
 
-int 
-main()
-   {
-     foo f;
-     foo *fptr;
+  templateFoo<int> g;
+  templateFoo<int> *gptr;
 
-  // Note that gnu g++ does not use "__" in name mangling but ROSE does (I feel more comfortable with the "__" in place).
-     f.foobar_start();
-     f(1); // __cl
-     f[1]; // __vc  (Dan: I think it should be __ix)
-     f += 1;
-     fptr = new foo;  // __nw
-     delete fptr;     // __dl
+  g.foobar_start();
+  g(1); // __cl
+  g[1]; // __vc  (Dan: I think it should be __ix)
+  g += 1;
+  gptr = new templateFoo<int>; // __nw
+  delete gptr;                 // __dl
 
-     // legacy frontend does not appear to distinguish "array_new" from "new" as
-     // it does for "array_delete" and "delete"
-     fptr = new foo[10]; // __na
-     delete[] fptr;      // __da
+  // legacy frontend does not appear to distinguish "array_new" from "new" as
+  // it does for "array_delete" and "delete"
+  gptr = new templateFoo<int>[10]; // __na
+  delete[] gptr;                   // __da
 
-     f.foobarTemplate<float>(0.0);
+  g.foobarTemplate<float>(0.0);
 
-     f.foobar_end();
+  g.foobar_end();
 
-     templateFoo<int> g;
-     templateFoo<int> *gptr;
-
-     g.foobar_start();
-     g(1); // __cl
-     g[1]; // __vc  (Dan: I think it should be __ix)
-     g += 1;
-     gptr = new templateFoo<int>;  // __nw
-     delete gptr;     // __dl
-
-     // legacy frontend does not appear to distinguish "array_new" from "new" as
-     // it does for "array_delete" and "delete"
-     gptr = new templateFoo<int>[10]; // __na
-     delete[] gptr;      // __da
-
-     g.foobarTemplate<float>(0.0);
-
-     g.foobar_end();     
-
-     return 0;
-   }
+  return 0;
+}
 
 #else
-  #warning "Not tested on gnu 4.0 or greater versions"
+#warning "Not tested on gnu 4.0 or greater versions"
 #endif
-

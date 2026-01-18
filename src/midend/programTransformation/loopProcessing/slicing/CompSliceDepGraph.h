@@ -2,11 +2,15 @@
 #ifndef COMPSLICE_DEPGRAPH
 #define COMPSLICE_DEPGRAPH
 
-#include <CompSlice.h>
-#include <CompSliceObserver.h>
-#include <DepGraph.h>
-#include <PtrMap.h>
-#include <SinglyLinkedList.h>
+#include "CompSlice.h"
+
+#include "CompSliceObserver.h"
+
+#include "DepGraph.h"
+
+#include "PtrMap.h"
+
+#include "SinglyLinkedList.h"
 
 class CompSliceDepGraphNode : public MultiGraphElem,
                               protected CompSliceNestObserver {

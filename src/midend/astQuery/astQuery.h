@@ -4,12 +4,15 @@
 // tps (01/08/2010) Added sage3basic since this doesnt compile under gcc4.1.2
 // #include "sage3basic.h"
 // #include "sage3.h"
+
 #include "AstProcessing.h"
+
 #include "rosedll.h"
 
-#include <ROSE_ABORT.h>
+#include "ROSE_ABORT.h"
 
 #include <functional>
+
 #include <type_traits>
 // Support for operations like (SgTypeInt | SgTypeFloat)
 // note that non-terminals would be expanded into the associated terminals!
@@ -449,7 +452,6 @@ _Result queryMemoryPool(_Result (*__x)(SgNode *),
 
 }; // namespace AstQueryNamespace
 
-#include "AstQueryMemoryPool.h"
-
+#include <AstQueryMemoryPool.h>
 // endif for ROSE_NAME_QUERY
 #endif

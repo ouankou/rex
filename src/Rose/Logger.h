@@ -2,6 +2,7 @@
 #define ROSE_Logger_H
 
 #include <map>
+
 #include <string>
 
 namespace Rose {

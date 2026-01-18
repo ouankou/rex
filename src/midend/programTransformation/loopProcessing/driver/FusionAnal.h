@@ -2,8 +2,9 @@
 #ifndef FUSIONINTERFACE_H
 #define FUSIONINTERFACE_H
 
-#include <CompSliceDepGraph.h>
-#include <LoopTransformOptions.h>
+#include "CompSliceDepGraph.h"
+
+#include "LoopTransformOptions.h"
 class CompSliceNest;
 class DepInfo;
 class CompSliceLocalityRegistry;

@@ -12,7 +12,6 @@ parent and parent->parent nodes, and prints them using unparseToString().
 When run on this program, varArg.C:
 
 #include <stdarg.h>
-
 void ellipsis_int(int i, ...)
 {
     int j;
@@ -49,17 +48,11 @@ Brian
 */
 
 #include <stdarg.h>
+void ellipsis_int(int i, ...) {
+  int j;
+  va_list ap;
 
-void ellipsis_int(int i, ...)
-{
-    int j;
-    va_list ap;
-
-    j = va_arg(ap,int);
-
+  j = va_arg(ap, int);
 }
 
-int main()
-{
-  return 0;
-}
+int main() { return 0; }

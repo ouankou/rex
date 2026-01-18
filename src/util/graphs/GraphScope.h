@@ -2,7 +2,8 @@
 #ifndef GRAPH_SCOPE_H
 #define GRAPH_SCOPE_H
 
-#include <GraphAccess.h>
+#include "GraphAccess.h"
+
 #include <assert.h>
 
 template <class Graph>

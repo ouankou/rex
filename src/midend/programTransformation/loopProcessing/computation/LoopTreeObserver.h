@@ -1,9 +1,11 @@
 #ifndef OBSERVE_LOOP_TREE
 #define OBSERVE_LOOP_TREE
 
-#include <DepRel.h>
-#include <ObserveObject.h>
-#include <SymbolicBound.h>
+#include "DepRel.h"
+
+#include "ObserveObject.h"
+
+#include "SymbolicBound.h"
 
 class LoopTreeNode;
 class BlockLoopInfo;

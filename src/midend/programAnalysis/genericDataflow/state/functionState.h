@@ -1,13 +1,17 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #if !defined(FUNCTION_STATE_H) && !defined(NO_FUNCTION_STATE_H)
 #define FUNCTION_STATE_H
 
 #include "CallGraphTraverse.h"
+
 #include "analysisCommon.h"
+
 #include "nodeState.h"
+
 #include <map>
+
 #include <set>
 
 class FunctionState {

@@ -5,6 +5,7 @@
 #include "mlog.h"
 #endif
 #include <assert.h>
+
 #include <stdlib.h>
 
 // ROSE_ABORT terminates the process regardless of build type.

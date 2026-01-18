@@ -1,11 +1,10 @@
 
-class A
-   {
-     public:
-          A();
-          A(int x);
-          A(float x, float y);
-   };
+class A {
+public:
+  A();
+  A(int x);
+  A(float x, float y);
+};
 
 class B {};
 
@@ -34,20 +33,22 @@ char* copyString = new char[1];
 
 #endif
 
-A objectA6 = A(1.0,6.0);
+A objectA6 = A(1.0, 6.0);
 A objectA7 = A(1);
 
-A objectA8(1.0,6.0);
+A objectA8(1.0, 6.0);
 
-// These are not paired 
+// These are not paired
 #if 0
-#include<list>
-#include<vector>
-#include<map>
+#include <list>
+
+#include <vector>
+
+#include <map>
 
 using namespace std;
 
 list<int> integerList;
 list<int>::iterator i = integerList.begin();
-// These are not paired 
+// These are not paired
 #endif

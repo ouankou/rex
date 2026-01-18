@@ -2,8 +2,10 @@
 #ifndef TRANSDEP_GRAPH
 #define TRANSDEP_GRAPH
 
-#include <DepGraph.h>
-#include <TransAnalysis.h>
+#include "DepGraph.h"
+
+#include "TransAnalysis.h"
+
 #include <iostream>
 
 template <class Node> class TransDepAnalImpl;

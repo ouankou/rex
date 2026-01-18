@@ -2,7 +2,9 @@
 #define ANALYSIS_INTERFACE_H
 
 #include "FunctionObject.h"
+
 #include "SymbolicVal.h"
+
 #include <functional>
 
 class AstNodePtr;

@@ -1,27 +1,42 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef SCALAR_FW_DATAFLOW_H
 #define SCALAR_FW_DATAFLOW_H
 
 #include <functional>
+
 #include <iostream>
+
 #include <queue>
+
 #include <sstream>
+
 #include <string>
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "divAnalysis.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "liveDeadVarAnalysis.h"
+
 #include "rwAccessLabeler.h"
 // GB : 2011-03-05 (Removing Sign Lattice Dependence) #include "sgnAnalysis.h"
+
 #include "affineInequality.h"
 
 #include "ConstrGraph.h"

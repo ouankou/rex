@@ -5,9 +5,9 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
-#include "rose_config.h"
-
 #include "fixupCopy.h"
+
+#include "rose_config.h"
 
 // This file implementes support for the AST copy fixup.  It is specific to:
 // 1) variable reference expressions (SgVarRefExp)

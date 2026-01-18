@@ -2,11 +2,17 @@
 #define PRE_H
 
 #include "expressionTreeEqual.h"
+
 #include "inlinerSupport.h"
+
 #include "preControlFlowGraph.h"
+
 #include "replaceExpressionWithStatement.h"
+
 #include <fstream>
+
 #include <queue>
+
 #include <stdint.h>
 
 namespace legacy {

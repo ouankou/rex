@@ -9,7 +9,6 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
-
 using namespace std;
 
 // DQ (5/3/2009): We might want a version of this function expressed in terms of

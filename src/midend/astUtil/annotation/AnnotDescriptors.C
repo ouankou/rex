@@ -1,7 +1,11 @@
 #include "AnnotDescriptors.h"
+
 #include "AstInterface.h"
-#include <ROSE_ASSERT.h>
+
+#include "ROSE_ASSERT.h"
+
 #include <list>
+
 #include <sstream>
 
 // DQ (12/31/2005): This is OK if not declared in a header file

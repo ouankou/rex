@@ -1,7 +1,8 @@
 #ifndef ROSE_StringUtility_Replace_H
 #define ROSE_StringUtility_Replace_H
 
-#include <rosedll.h>
+#include "rosedll.h"
+
 #include <string>
 
 namespace Rose {

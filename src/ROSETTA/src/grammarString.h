@@ -2,10 +2,15 @@
 #define __GRAMMARSTRING_H__
 
 #include "FileUtility.h"
+
+#include "Rose/StringUtility.h"
+
 #include "grammar.h"
-#include <Rose/StringUtility.h>
+
 #include <assert.h>
+
 #include <stdio.h>
+
 #include <string>
 
 #include <iostream>

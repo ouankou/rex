@@ -1,6 +1,8 @@
 #include "ExtractFunctionArguments.h"
+
 #include "SingleStatementToBlockNormalization.h"
-#include <functionEvaluationOrderTraversal.h>
+
+#include "functionEvaluationOrderTraversal.h"
 
 using namespace std;
 

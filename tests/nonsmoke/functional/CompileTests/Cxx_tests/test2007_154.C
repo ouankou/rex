@@ -10,8 +10,9 @@ legal when compiled with gcc):
 stonea@vega ~/tmp
 $ cat test.c
 #include <stdio.h>
-#include <stdarg.h>
 
+
+#include <stdarg.h>
 void bar(va_list *args) {
     int *val;
 
@@ -56,16 +57,15 @@ Thanks,
 -Andy Stone
 */
 
-#include <stdio.h>
 #include <stdarg.h>
 
+#include <stdio.h>
 void bar(va_list *args) {
-    int *val;
+  int *val;
 #if 1
-    val = va_arg(*args, int*);
+  val = va_arg(*args, int *);
 #endif
-    printf("val = %d\n", *val);
-
+  printf("val = %d\n", *val);
 }
 
 #if 0
@@ -86,4 +86,3 @@ int main(char argc, char *argv[]) {
     foo(1, &val);
 }
 #endif
-

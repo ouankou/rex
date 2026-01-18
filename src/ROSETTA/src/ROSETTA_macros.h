@@ -18,8 +18,9 @@
 #define HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
 #endif
 
-#include <ROSE_ABORT.h>
-#include <ROSE_ASSERT.h>
+#include "ROSE_ABORT.h"
+
+#include "ROSE_ASSERT.h"
 
 #define MAX_NUMBER_OF_TERMINALS 50
 #define MAX_NUMBER_OF_NONTERMINALS 50

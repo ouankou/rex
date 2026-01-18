@@ -1,13 +1,19 @@
 
 #include <iostream>
 
-#include <BlockingAnal.h>
-#include <CommandOptions.h>
-#include <CopyArrayAnal.h>
-#include <FusionAnal.h>
-#include <InterchangeAnal.h>
-#include <LoopTransformOptions.h>
-#include <ParallelizeLoop.h>
+#include "BlockingAnal.h"
+
+#include "CommandOptions.h"
+
+#include "CopyArrayAnal.h"
+
+#include "FusionAnal.h"
+
+#include "InterchangeAnal.h"
+
+#include "LoopTransformOptions.h"
+
+#include "ParallelizeLoop.h"
 
 class DynamicTuning {
   static int dt;

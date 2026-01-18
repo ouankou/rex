@@ -1,8 +1,11 @@
 #ifndef EDEFUSE_CLASS
 #define EDEFUSE_CLASS
 // #include "rose.h"
+
 #include "DFAnalysis.h"
+
 #include "DefUseAnalysis.h"
+
 #include <vector>
 class EDefUse {
 public:

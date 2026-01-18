@@ -1,7 +1,11 @@
-#include <CompSlice.h>
-#include <CompSliceObserver.h>
-#include <GraphUpdate.h>
-#include <PtrMap.h>
+#include "CompSlice.h"
+
+#include "CompSliceObserver.h"
+
+#include "GraphUpdate.h"
+
+#include "PtrMap.h"
+
 #include <assert.h>
 
 template <class SelfInfo, class RelInfo, class Analysis>

@@ -2,18 +2,29 @@
 #ifndef LOOPTREE_DEPCOMP
 #define LOOPTREE_DEPCOMP
 
-#include <DepGraph.h>
-#include <DepInfoAnal.h>
-#include <DepRel.h>
-#include <DomainInfo.h>
-#include <GraphScope.h>
-#include <LoopTransformInterface.h>
-#include <LoopTree.h>
-#include <LoopTreeObserver.h>
-#include <MultiGraphObserve.h>
-#include <PtrMap.h>
-#include <PtrSet.h>
-#include <TransDepGraph.h>
+#include "DepGraph.h"
+
+#include "DepInfoAnal.h"
+
+#include "DepRel.h"
+
+#include "DomainInfo.h"
+
+#include "GraphScope.h"
+
+#include "LoopTransformInterface.h"
+
+#include "LoopTree.h"
+
+#include "LoopTreeObserver.h"
+
+#include "MultiGraphObserve.h"
+
+#include "PtrMap.h"
+
+#include "PtrSet.h"
+
+#include "TransDepGraph.h"
 /*
  * QY: The LoopTreeDepComp class
  *  build a LoopTree and a corresponding dep graph from an AST

@@ -1,28 +1,43 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef PARTITIONED_ANALYSIS_H
 #define PARTITIONED_ANALYSIS_H
 
-#include <sage3.h>
+#include "sage3.h"
 
 #include "LogicalCond.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "functionState.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "printAnalysisStates.h"
+
 #include "variables.h"
 
 #include <fstream>
+
 #include <iostream>
+
 #include <list>
+
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 
 // class partition

@@ -1,7 +1,7 @@
 #ifndef ROSE_StringUtility_Predicate_H
 #define ROSE_StringUtility_Predicate_H
 
-#include <rosedll.h>
+#include "rosedll.h"
 
 #include <string>
 

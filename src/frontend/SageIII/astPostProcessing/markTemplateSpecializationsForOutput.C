@@ -1,6 +1,8 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "markTemplateInstantiationsForOutput.h"
+
 #include "markTemplateSpecializationsForOutput.h"
+
 #include "sage3basic.h"
 
 void markTemplateSpecializationsForOutput(SgNode *node) {

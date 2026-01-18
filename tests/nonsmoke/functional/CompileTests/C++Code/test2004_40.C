@@ -1,6 +1,5 @@
 
-#include<test2004_40.h>
-
+#include "test2004_40.h"
 simplelist<int> integerList;
 
 #if 0
@@ -15,4 +14,3 @@ int main()
      return 0;
    }
 #endif
-

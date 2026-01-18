@@ -5,12 +5,16 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
+#include "astPostProcessing.h"
+
+#include "sageBuilder.h"
+
+#include <iomanip>
+
+#include <iostream>
+
 #include "rose_config.h"
 
-#include "astPostProcessing.h"
-#include "sageBuilder.h"
-#include <iomanip>
-#include <iostream>
 #include <vector>
 
 // DQ (8/1/2005): test use of new static function to create
@@ -19,6 +23,7 @@
 #define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
 
 #include "inlinerSupport.h"
+
 #include "replaceExpressionWithStatement.h"
 
 // DQ (12/31/2005): This is OK if not declared in a header file

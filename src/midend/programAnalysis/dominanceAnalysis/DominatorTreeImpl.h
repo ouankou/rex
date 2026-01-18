@@ -1,6 +1,9 @@
 // #include "rose.h"
+
 #include "DominatorTree.h"
+
 #include "filteredCFG.h"
+
 #include <map>
 namespace DominatorTreesAndDominanceFrontiers {
 template <typename CFGFilterFunction>

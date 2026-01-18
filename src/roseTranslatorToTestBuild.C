@@ -3,14 +3,14 @@
 #include "rose.h" // POLICY_OK because this demos a user-level program rather than being part of the ROSE library.
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#include "config.h"
 #endif
 
 #include <iomanip>
+
 #include <string>
 
-#include "AstTests.h"
-
+#include <AstTests.h>
 int main(int argc, char *argv[]) {
   RoseTestTranslator test;
   return test.translate(argc,

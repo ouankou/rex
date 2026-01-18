@@ -1,13 +1,15 @@
 
 #include <iostream>
+
 #include <memory>
 
 #include "clang-to-dot-private.hpp"
+
 #include "sage3basic.h"
 
 #include "clang_paths.h"
-#include "rose_config.h"
 
+#include "rose_config.h"
 // DQ (11/1/2020): Added to resolve types (e.g string)
 using namespace std;
 

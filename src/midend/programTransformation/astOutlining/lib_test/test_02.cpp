@@ -1,6 +1,7 @@
 #include "outlining_lib.h"
 
 #include <assert.h>
+
 #include <stdio.h>
 int abxyz;
 

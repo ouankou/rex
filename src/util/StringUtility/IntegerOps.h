@@ -2,7 +2,11 @@
 #define ROSE_INTEGEROPS_H
 
 #include <cassert>
+
+#include <cstdint>
+
 #include <limits>
+
 #include <optional>
 
 namespace IntegerOpsPrivate {

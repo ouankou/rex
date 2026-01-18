@@ -3,13 +3,12 @@
 
 #include <stdio.h>
 #ifdef _OPENMP
-#include <omp.h>
-#endif
 #include "omp_testsuite.h"
 
-int
-check_omp_num_threads (FILE * logFile)
-{
+#include <omp.h>
+#endif
+
+int check_omp_num_threads(FILE *logFile) {
   int failed = 0;
   int max_threads = 0;
   int threads;
@@ -18,28 +17,25 @@ check_omp_num_threads (FILE * logFile)
 #pragma omp parallel
   {
 #pragma omp master
-    max_threads = omp_get_num_threads ();
+    max_threads = omp_get_num_threads();
   }
 
   /* we increase the number of threads from one to maximum: */
-  for (threads = 1; threads <= max_threads; threads++)
-    {
-      nthreads = 0;
+  for (threads = 1; threads <= max_threads; threads++) {
+    nthreads = 0;
 
-#pragma omp parallel num_threads(threads) reduction(+:failed)
-      {
-	failed = failed + !(threads == omp_get_num_threads ());
+#pragma omp parallel num_threads(threads) reduction(+ : failed)
+    {
+      failed = failed + !(threads == omp_get_num_threads());
 #pragma omp atomic
-	nthreads += 1;
-      }
-      failed = failed + !(nthreads == threads);
+      nthreads += 1;
     }
+    failed = failed + !(nthreads == threads);
+  }
   return !failed;
 }
 
-int
-crosscheck_omp_num_threads (FILE * logFile)
-{
+int crosscheck_omp_num_threads(FILE *logFile) {
   int failed = 0;
   int max_threads = 0;
   int threads;
@@ -48,26 +44,24 @@ crosscheck_omp_num_threads (FILE * logFile)
 #pragma omp parallel
   {
 #pragma omp master
-    max_threads = omp_get_num_threads ();
+    max_threads = omp_get_num_threads();
   }
 
   /* we increase the number of threads from one to maximum: */
-  for (threads = 1; threads <= max_threads; threads++)
-    {
-      nthreads = 0;
+  for (threads = 1; threads <= max_threads; threads++) {
+    nthreads = 0;
 
-#pragma omp parallel reduction(+:failed)
-      {
-	failed = failed + !(threads == omp_get_num_threads ());
+#pragma omp parallel reduction(+ : failed)
+    {
+      failed = failed + !(threads == omp_get_num_threads());
 #pragma omp atomic
-	nthreads += 1;
-      }
-      failed = failed + !(nthreads == threads);
+      nthreads += 1;
     }
+    failed = failed + !(nthreads == threads);
+  }
   return !failed;
 }
 
 #else
-  #warning "Not tested on 64 bit systems"
+#warning "Not tested on 64 bit systems"
 #endif
-

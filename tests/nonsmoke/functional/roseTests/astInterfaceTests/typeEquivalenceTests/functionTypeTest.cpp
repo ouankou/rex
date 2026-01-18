@@ -3,14 +3,17 @@
  */
 
 #include "rose.h"
+
 #include "RoseAst.h"
 
 #include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <string>
-//#include "typeEquivalenceChecker.hpp"
 
+#include <fstream>
+
+#include <iostream>
+
+#include <string>
+// #include "typeEquivalenceChecker.hpp"
 
 namespace {
 bool readExpectedFromFile(const char *filename, int *expected) {
@@ -42,23 +45,21 @@ bool readExpectedFromFile(const char *filename, int *expected) {
   *expected = static_cast<int>(value);
   return true;
 }
-}  // namespace
+} // namespace
 
-class FunctionTypeAccu: public AstSimpleProcessing {
+class FunctionTypeAccu : public AstSimpleProcessing {
 
- public:
+public:
   FunctionTypeAccu();
   void visit(SgNode *node);
 
-  std::vector < SgFunctionDeclaration * >funcs_;
+  std::vector<SgFunctionDeclaration *> funcs_;
   bool profile_;
 };
 
-FunctionTypeAccu::FunctionTypeAccu() {
-}
+FunctionTypeAccu::FunctionTypeAccu() {}
 
-void
-FunctionTypeAccu::visit(SgNode *node) {
+void FunctionTypeAccu::visit(SgNode *node) {
   if (isSgFunctionDeclaration(node)) {
     SgFunctionDeclaration *func = isSgFunctionDeclaration(node);
 
@@ -67,9 +68,7 @@ FunctionTypeAccu::visit(SgNode *node) {
   return;
 }
 
-
-int
-main(int argc, char **argv) {
+int main(int argc, char **argv) {
   if (argc < 2) {
     std::cerr << "Usage: " << argv[0] << " <input file>\n";
     return 1;
@@ -84,15 +83,16 @@ main(int argc, char **argv) {
 
   bool checkEqual = false;
 
-  std::vector < SgFunctionDeclaration * >::iterator i, j;
+  std::vector<SgFunctionDeclaration *>::iterator i, j;
   for (i = t.funcs_.begin(); i != t.funcs_.end(); ++i) {
     for (j = t.funcs_.begin(); j != t.funcs_.end(); ++j) {
-      if ((*i)->get_name().getString() != "a"
-          || (*j)->get_name().getString() != "b") {
+      if ((*i)->get_name().getString() != "a" ||
+          (*j)->get_name().getString() != "b") {
         continue;
       }
       // We use the type of the initialized names here to check
-      checkEqual = SageInterface::checkTypesAreEqual((*i)->get_type(), (*j)->get_type());
+      checkEqual =
+          SageInterface::checkTypesAreEqual((*i)->get_type(), (*j)->get_type());
       if (i == j) {
         continue;
       }

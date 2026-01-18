@@ -3,17 +3,21 @@
 // Last modified, by Liao, Jan 10, 2008
 
 // includes "sageBuilder.h"
+
 #include "sage3basic.h"
 
-#include <rose_config.h>
+#include "rose_config.h"
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 #include "markLhsValues.h"
 // #include "sageBuilder.h"
+
 #include "Outliner.hh"
+
 #include <fstream>
 #else
 // #include "sageBuilder.h"
+
 #include <fstream>
 #endif
 
@@ -1470,7 +1474,7 @@ SageBuilder::buildVariableDeclaration(const SgName &name, SgType *type,
                                       SgInitializer *varInit,
                                       SgScopeStatement *scope)
 //(const SgName & name, SgType* type, SgInitializer * varInit= NULL,
-//SgScopeStatement* scope = NULL)
+// SgScopeStatement* scope = NULL)
 {
   if (scope == NULL)
     scope = SageBuilder::topScopeStack();
@@ -1614,7 +1618,7 @@ SgVariableDeclaration *SageBuilder::buildVariableDeclaration_nfi(
     SgScopeStatement *scope, bool builtFromUseOnly,
     SgStorageModifier::storage_modifier_enum sm)
 //(const SgName & name, SgType* type, SgInitializer * varInit= NULL,
-//SgScopeStatement* scope = NULL)
+// SgScopeStatement* scope = NULL)
 {
 
 #define DEBUG_BUILD_VARIABLE_DECLARATION 0
@@ -2831,8 +2835,8 @@ SgMemberFunctionType *SageBuilder::buildMemberFunctionType(
   if (typeInTable == NULL) {
     bool has_ellipses = false;
     //~ SgPartialFunctionType* partialFunctionType = new
-    //SgPartialFunctionType(return_type, has_ellipses, classType,
-    //mfunc_specifier, ref_qualifiers);
+    // SgPartialFunctionType(return_type, has_ellipses, classType,
+    // mfunc_specifier, ref_qualifiers);
     // PP (10/4/22): removing ref_qualifiers
     SgPartialFunctionType *partialFunctionType = new SgPartialFunctionType(
         return_type, has_ellipses, classType, mfunc_specifier);

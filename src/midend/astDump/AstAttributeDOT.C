@@ -2,6 +2,7 @@
 #define ASTATTRIBUTEDOT_C
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "AstAttributeDOT.h"
+
 #include "sage3basic.h"
 
 // DQ (3/19/2017): These functions do not appear to ever be called (experiment

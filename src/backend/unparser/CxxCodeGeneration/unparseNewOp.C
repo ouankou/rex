@@ -1,6 +1,8 @@
-#include "rose_config.h"
-#include "sage3basic.h"
 #include "unparser.h"
+
+#include "sage3basic.h"
+
+#include "rose_config.h"
 
 #define DEBUG_unparseNewOp 0
 

@@ -1,8 +1,7 @@
 #ifndef __JSERVER_H__
 #define __JSERVER_H__
 
-#include "jni.h"
-
+#include <jni.h>
 #define STATIC_METHOD 1
 #define REGULAR_METHOD 0
 

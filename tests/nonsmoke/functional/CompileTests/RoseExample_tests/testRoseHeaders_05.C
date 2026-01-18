@@ -3,8 +3,6 @@
 // This is the contents of sage3basic.h instead of using the #include
 // #include "sage3basic.h"
 
-
-
 /*
  * this includes the forward declarations of all the sage node classes
  * from the generated files (i.e. gives just the class names.)
@@ -21,72 +19,79 @@
 // because that can't be read early enough to effect what header files are
 // included. #define ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 
-// Much of ROSE's binary support uses the intX_t and uintX_t types (where X is a bit width), so we need to have the stdc printf
-// format macros defined for portability.  We do that here because it needs to be done before <inttypes.h> is included for the
-// first time, and we know that most source files for the ROSE library include this file (sage3basic.h) at or near the
-// beginning.  We don't want to define __STDC_FORMAT_MACROS in user code that includes "rose.h" (the user may define it), and
-// we need to define it in such a way that we won't get warning's if its already defined.  [RMP 2012-01-29]
+// Much of ROSE's binary support uses the intX_t and uintX_t types (where X is a
+// bit width), so we need to have the stdc printf format macros defined for
+// portability.  We do that here because it needs to be done before <inttypes.h>
+// is included for the first time, and we know that most source files for the
+// ROSE library include this file (sage3basic.h) at or near the beginning.  We
+// don't want to define __STDC_FORMAT_MACROS in user code that includes "rose.h"
+// (the user may define it), and we need to define it in such a way that we
+// won't get warning's if its already defined.  [RMP 2012-01-29]
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
 #include <inttypes.h>
 
 #include "fileoffsetbits.h"
+
 #include "rosedll.h"
+
 #include <semaphore.h>
 
 // George Vulov (Aug. 23, 2010): This macro is not available on some systems by
 // default
 #ifndef TEMP_FAILURE_RETRY
-#define TEMP_FAILURE_RETRY(expression) \
-    ({ \
-        long int _result; \
-        do _result = (long int) (expression); \
-        while (_result == -1L && errno == EINTR); \
-        _result; \
-    })
+#define TEMP_FAILURE_RETRY(expression)                                         \
+  ({                                                                           \
+    long int _result;                                                          \
+    do                                                                         \
+      _result = (long int)(expression);                                        \
+    while (_result == -1L && errno == EINTR);                                  \
+    _result;                                                                   \
+  })
 #endif
 
-// DQ (4/21/2009): Note that this header file will include the STL string header file 
-// which will include sys/stat.h, so the _FILE_OFFSET_BITS macro must be already set 
-// to avoid an ODR violation when using ROSE on 32-bit systems.
-// DQ (11/10/2007): Added support for ROSE specific paths to be available. These are 
-// useful for tools built using ROSE, they are not presently being used within ROSE.
-// RPM (8/22/2008): Commented out because it contains info that prevents us from making
-// optimal use of ccache. "rose_paths.h" contains info that changes every time we
-// configure. Can it be included at a finer granularity than this?
-// DQ (8/25/2008): Turn this back on since it breaks ROSE for everyone else.  We 
-// are searching for a better solution.
+// DQ (4/21/2009): Note that this header file will include the STL string header
+// file which will include sys/stat.h, so the _FILE_OFFSET_BITS macro must be
+// already set to avoid an ODR violation when using ROSE on 32-bit systems. DQ
+// (11/10/2007): Added support for ROSE specific paths to be available. These
+// are useful for tools built using ROSE, they are not presently being used
+// within ROSE. RPM (8/22/2008): Commented out because it contains info that
+// prevents us from making optimal use of ccache. "rose_paths.h" contains info
+// that changes every time we configure. Can it be included at a finer
+// granularity than this? DQ (8/25/2008): Turn this back on since it breaks ROSE
+// for everyone else.  We are searching for a better solution.
 #include "rose_paths.h"
 
-
-// DQ (5/30/2004): Added to permit warnings to be placed in the source code so that
-// issues can be addressed later but called out during development (and eliminated
-// from the final released version of the source code).
+// DQ (5/30/2004): Added to permit warnings to be placed in the source code so
+// that issues can be addressed later but called out during development (and
+// eliminated from the final released version of the source code).
 #define PRINT_DEVELOPER_WARNINGS 0
 // #define PRINT_DEVELOPER_WARNINGS 1
 
-// DQ (4/21/2009): Added test to debug use of _FILE_OFFSET_BITS macro in controling size of "struct stat"
-// #if defined(_FILE_OFFSET_BITS)
-// #warning "The _FILE_OFFSET_BITS macro should not be set yet!"
-// #endif
+// DQ (4/21/2009): Added test to debug use of _FILE_OFFSET_BITS macro in
+// controling size of "struct stat" #if defined(_FILE_OFFSET_BITS) #warning "The
+// _FILE_OFFSET_BITS macro should not be set yet!" #endif
 
 // DQ (4/21/2009): This macro is set too late!
 // Force 64-bit file offsets in struct stat
 // #define _FILE_OFFSET_BITS 64
 #include <sys/stat.h>
 
-//#include <cstdlib> // For abort()
+// #include <cstdlib> // For abort()
 #include <algorithm>
+
 #include <fstream>
 
 // DQ (9/24/2004): Try again to remove use of set parent side effect in legacy
 // frontend/Sage III connection! This works!!!
 #define REMOVE_SET_PARENT_FUNCTION
 
-// DQ (6/12/2007): Force checking for valid pointers to IR nodes being overwritten.
+// DQ (6/12/2007): Force checking for valid pointers to IR nodes being
+// overwritten.
 #define DEBUG_SAGE_ACCESS_FUNCTIONS 0
-// DQ (6/12/2007): Force assertion test to fail such cases caught when DEBUG_SAGE_ACCESS_FUNCTIONS == 1, else just report error.
+// DQ (6/12/2007): Force assertion test to fail such cases caught when
+// DEBUG_SAGE_ACCESS_FUNCTIONS == 1, else just report error.
 #define DEBUG_SAGE_ACCESS_FUNCTIONS_ASSERTION 0
 
 // DQ (10/12/2004): Remove the resetTemplateName() from use within the legacy
@@ -105,26 +110,33 @@
 // Use the new GNU attribute mechanism to add more information to the source code
 // By specifying funcations and variables as depreicated we can start the remove
 // some functions and data members from Sage III.
-#define ROSE_DEPRECATED_FUNCTION __attribute__ ((deprecated))
-#define ROSE_DEPRECATED_VARIABLE __attribute__ ((deprecated))
+#define ROSE_DEPRECATED_FUNCTION __attribute__((deprecated))
+#define ROSE_DEPRECATED_VARIABLE __attribute__((deprecated))
 #else
 // DQ (9/8/2004): Allow these to get turned of to simplify debugging while we
 // have not yet removed their use.
-#define ROSE_DEPRECATED_FUNCTION 
-#define ROSE_DEPRECATED_VARIABLE 
+#define ROSE_DEPRECATED_FUNCTION
+#define ROSE_DEPRECATED_VARIABLE
 #endif
 
-// DQ (12/22/2007): Name of implicit Fortran "main" when building the program function.
+// DQ (12/22/2007): Name of implicit Fortran "main" when building the program
+// function.
 #define ROSE_IMPLICIT_FORTRAN_PROGRAM_NAME "rose_fortran_main"
 
-// DQ (10/6/2004): We have tracked down and noted all locations where a Sage III member function modifies its input parameters.
-// The locations where this happens are marked with a print statement which this macro permits us to turn off when we want to
-// either make an intermediate release of just not see the warning messages.  Many side-effects have been removed and some are 
-// pending more details discussions internally.  I would like to goal to be a simple rule that input parameters to constructors
-// are not modified by the constructor or any function called within the constructor body.  A stronger rule would be that the
-// input parameters to any access function which gets and data member of sets a data member would not modified its input 
-// parameters. Same idea but applied to all access functions, not just constructors.  It is not clear if we need go further.
-// Clearly it might be important to have some function that modify their input parameters but a simple design would disallow it!
+// DQ (10/6/2004): We have tracked down and noted all locations where a Sage III
+// member function modifies its input parameters. The locations where this
+// happens are marked with a print statement which this macro permits us to turn
+// off when we want to either make an intermediate release of just not see the
+// warning messages.  Many side-effects have been removed and some are pending
+// more details discussions internally.  I would like to goal to be a simple
+// rule that input parameters to constructors are not modified by the
+// constructor or any function called within the constructor body.  A stronger
+// rule would be that the input parameters to any access function which gets and
+// data member of sets a data member would not modified its input parameters.
+// Same idea but applied to all access functions, not just constructors.  It is
+// not clear if we need go further. Clearly it might be important to have some
+// function that modify their input parameters but a simple design would
+// disallow it!
 #define PRINT_SIDE_EFFECT_WARNINGS false
 
 // DQ (10/21/2004): We require a relaxed level of internal error checking for
@@ -136,18 +148,20 @@
 // "TRUE" this is a work around until then.
 #define STRICT_ERROR_CHECKING false
 
-// DQ (11/7/2007): Reimplementation of "fixup" support for the AST copy mechanism.
-// This version separates the fixup into three phases:
-// Use three files to organize the separate functions (parent/scope setup, symbol table setup, and symbol references).
-// Order of operations:
+// DQ (11/7/2007): Reimplementation of "fixup" support for the AST copy
+// mechanism. This version separates the fixup into three phases: Use three
+// files to organize the separate functions (parent/scope setup, symbol table
+// setup, and symbol references). Order of operations:
 //    1) Setup scopes on all declaration (e.g. SgInitializedName objects).
 //    2) Setup the symbol table.
-//        template instantiations must be added to to the symbol tables as defined by their scope
-//        because they may be located outside of their scope (indicated by their template declaration).
-//        We might need a test and set policy.
-//        Use the help map to support error checking in the symbol table construction.  Check that 
-//        scopes are not in the original AST (not keys in the help map).
-//    3) Setup the references (SgVarRefExp objects pointers to SgVariableSymbol objects) 
+//        template instantiations must be added to to the symbol tables as
+//        defined by their scope because they may be located outside of their
+//        scope (indicated by their template declaration). We might need a test
+//        and set policy. Use the help map to support error checking in the
+//        symbol table construction.  Check that scopes are not in the original
+//        AST (not keys in the help map).
+//    3) Setup the references (SgVarRefExp objects pointers to SgVariableSymbol
+//    objects)
 #define ALT_FIXUP_COPY 1
 
 // AJ (10/21/2004) : the current version of g++ 3.2.3 has the "hash_map"
@@ -175,14 +189,14 @@
 #include "rose_attributes_list.h"
 
 // Include ROSE common utility function library
-#include "escape.h"
-#include <Rose/StringUtility.h>
+#include "Rose/StringUtility.h"
+
+#include <escape.h>
 
 // Include support for Brian Gunney's command line parser tool (nice work)
 #include "sla.h"
 
-
-// DQ (3/29/2006): I sure would like to remove this since it 
+// DQ (3/29/2006): I sure would like to remove this since it
 // has a potential to effect other files from other projects
 // used with ROSE.
 // #define INLINE
@@ -195,32 +209,32 @@
 // #define DEFAULT_CLASS_ALLOCATION_POOL_SIZE 1000
 
 // Typical values used to testing the AST File I/O are 1 or 2, but larger values
-// are required for better performance.  At some point the value should be evaluated
-// as even a value of 1000 is likely a bit small for larger whole applications.
-// #define DEFAULT_CLASS_ALLOCATION_POOL_SIZE 1000
-// #define DEFAULT_CLASS_ALLOCATION_POOL_SIZE 1
-// #define DEFAULT_CLASS_ALLOCATION_POOL_SIZE 2
+// are required for better performance.  At some point the value should be
+// evaluated as even a value of 1000 is likely a bit small for larger whole
+// applications. #define DEFAULT_CLASS_ALLOCATION_POOL_SIZE 1000 #define
+// DEFAULT_CLASS_ALLOCATION_POOL_SIZE 1 #define
+// DEFAULT_CLASS_ALLOCATION_POOL_SIZE 2
 #define DEFAULT_CLASS_ALLOCATION_POOL_SIZE 1000
 
 // DQ (3/7/2010):Added error checking.
 #if DEFAULT_CLASS_ALLOCATION_POOL_SIZE < 1
-   #error "DEFAULT_CLASS_ALLOCATION_POOL_SIZE must be greater than zero!"
+#error "DEFAULT_CLASS_ALLOCATION_POOL_SIZE must be greater than zero!"
 #endif
 
-// DQ (3/7/2010): This is no longer used (for several years) and we use an STL based implementation.
-// #define MAX_NUMBER_OF_MEMORY_BLOCKS        1000
+// DQ (3/7/2010): This is no longer used (for several years) and we use an STL
+// based implementation. #define MAX_NUMBER_OF_MEMORY_BLOCKS        1000
 
-
-// DQ (9/231/2005): Map these to the C library memory alloction/deallocation functions.
-// These could use alternative allocators which allocate on page boundaries in the future.
-// This is part of the support for memory pools for the Sage III IR nodes.
-// #define ROSE_MALLOC malloc
-// #define ROSE_FREE free
-// DQ (9/9/2008): Don't let this be confused by a member function called "free" in Robb's work.
+// DQ (9/231/2005): Map these to the C library memory alloction/deallocation
+// functions. These could use alternative allocators which allocate on page
+// boundaries in the future. This is part of the support for memory pools for
+// the Sage III IR nodes. #define ROSE_MALLOC malloc #define ROSE_FREE free DQ
+// (9/9/2008): Don't let this be confused by a member function called "free" in
+// Robb's work.
 #define ROSE_MALLOC ::malloc
 #define ROSE_FREE ::free
 
-// DQ (10/6/2006): Allow us to skip the support for caching so that we can measure the effects.
+// DQ (10/6/2006): Allow us to skip the support for caching so that we can
+// measure the effects.
 #define SKIP_BLOCK_NUMBER_CACHING 0
 #define SKIP_MANGLED_NAME_CACHING 0
 
@@ -228,26 +242,31 @@
 
 #define USING_OLD_EXECUTABLE_FORMAT_SUPPORT 0
 #if USING_OLD_EXECUTABLE_FORMAT_SUPPORT
-// DQ (12/8/2008): Build a forward declaration for the input parameter type for the 
-// SgAsmFileHeader class constructor.
-namespace Exec { namespace ELF { class ElfFileHeader; }; };
+// DQ (12/8/2008): Build a forward declaration for the input parameter type for
+// the SgAsmFileHeader class constructor.
+namespace Exec {
+namespace ELF {
+class ElfFileHeader;
+};
+}; // namespace Exec
 #endif
 
-
-// DQ (12/28/2009): Moved from Cxx_Grammar.h to simplify splitting large files generated by ROSETTA.
+// DQ (12/28/2009): Moved from Cxx_Grammar.h to simplify splitting large files
+// generated by ROSETTA.
 #include "AstAttributeMechanism.h"
 
-// DQ (12/29/2009): This permits the optional use of smaller generated header files for the IR.
-// Without this option the generated header file for the ROSE IR is nearly 300K in size, and
-// this can be a problem for some compilers.  This is part of work to optionally reduce
-// the sizes of some of the larger ROSETTA generated files in ROSE. Later this will be controled
-// using a configure command line option to ROSE (at configure time).
-// #define ROSE_USING_SMALL_GENERATED_HEADER_FILES 1
+// DQ (12/29/2009): This permits the optional use of smaller generated header
+// files for the IR. Without this option the generated header file for the ROSE
+// IR is nearly 300K in size, and this can be a problem for some compilers. This
+// is part of work to optionally reduce the sizes of some of the larger ROSETTA
+// generated files in ROSE. Later this will be controled using a configure
+// command line option to ROSE (at configure time). #define
+// ROSE_USING_SMALL_GENERATED_HEADER_FILES 1
 
 // This is an Autoconf conditional macro (so it should not be defined).
 #ifdef ROSE_USE_SMALLER_GENERATED_FILES
 // #warning "ROSE_USE_SMALLER_GENERATED_FILES is defined"
-   #define ROSE_USING_SMALL_GENERATED_HEADER_FILES 1
+#define ROSE_USING_SMALL_GENERATED_HEADER_FILES 1
 #endif
 
 #if 0
@@ -255,7 +274,7 @@ namespace Exec { namespace ELF { class ElfFileHeader; }; };
 
 // DQ (9/21/2005): This is the simplest way to include this here
 // This is the definition of the Sage III IR classes (generated header).
-#include <Cxx_Grammar.h>
+#include "Cxx_Grammar.h"
 
 // Disable CC++ extensions (we want to support only the C++ Standard)
 #undef CCPP_EXTENSIONS_ALLOWED
@@ -299,13 +318,13 @@ namespace Exec { namespace ELF { class ElfFileHeader; }; };
 // DQ (4/10/2010): Moved Dwarf and Intel Pin headers to here from rose.h.
 // DQ (11/7/2008): Added Dwarf support to ROSE AST (applies only to binary executables generated with dwarf debugging information).
 #ifdef ROSE_HAVE_LIBDWARF
-#include "dwarfSupport.h"
+#include <dwarfSupport.h>
 #endif
 
 // DQ (3/8/2009): Added support for Intel Pin (Dynamic binary Instrumentation)
 #ifdef USE_ROSE_INTEL_PIN_SUPPORT
 // Note that pin.H (in it's header files) will define "TRUE" and "FALSE" as macros.
-#include "IntelPinSupport.h"
+#include <IntelPinSupport.h>
 #endif
 
 // DQ (1/30/2013): Make this a smaller file.

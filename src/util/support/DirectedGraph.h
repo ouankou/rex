@@ -1,9 +1,12 @@
 #ifndef DIRECTED_GRAPH_IMPL
 #define DIRECTED_GRAPH_IMPL
 
+#include "DoublyLinkedList.h"
+
 #include "rosedll.h"
-#include <DoublyLinkedList.h>
+
 #include <assert.h>
+
 #include <iostream>
 
 class DirectedEdgeInterface {

@@ -2,10 +2,15 @@
 #define LOOP_TRANSFORMATION_INTERFACE_H
 
 #include "AnalysisInterface.h"
+
 #include "AstInterface.h"
+
 #include "SymbolicVal.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <string>
 
 /*************

@@ -2,12 +2,19 @@
 #define ROSE_RTIHELPERS_H
 
 #include <iomanip>
+
 #include <list>
+
 #include <set>
+
 #include <sstream>
+
 #include <string>
+
 #include <unordered_map>
+
 #include <unordered_set>
+
 #include <vector>
 
 // Helpful functions for Cxx_GrammarRTI.C
@@ -15,7 +22,9 @@
 
 #if ROSE_USE_VALGRIND
 #include <stdio.h>
+
 #include <valgrind/memcheck.h>
+
 #include <valgrind/valgrind.h>
 static void doUninitializedFieldCheck(const char *fieldName, void *fieldPointer,
                                       size_t fieldSize, void *wholeObject,

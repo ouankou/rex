@@ -7,34 +7,38 @@ ar: B
 cp: C
 cr: C
 
-Classes A and B are polymorphic; classes C and D are not. Although cp and cr refer to 
-an object of type D, typeid(*cp) and typeid(cr) return objects that represent class C.
+Classes A and B are polymorphic; classes C and D are not. Although cp and cr
+refer to an object of type D, typeid(*cp) and typeid(cr) return objects that
+represent class C.
 */
 
 // Skip version 4.x gnu compilers
 // #if ( __GNUC__ == 3 )
-#if ( defined(__clang__) == 0 && __GNUC__ == 3 )
+#if (defined(__clang__) == 0 && __GNUC__ == 3)
 
 #include <iostream>
+
 #include <typeinfo>
 using namespace std;
 
-struct A { virtual ~A() { } };
-struct B : A { };
+struct A {
+  virtual ~A() {}
+};
+struct B : A {};
 
-struct C { };
-struct D : C { };
+struct C {};
+struct D : C {};
 
 int main() {
   B bobj;
-  A* ap = &bobj;
-  A& ar = bobj;
+  A *ap = &bobj;
+  A &ar = bobj;
   cout << "ap: " << typeid(*ap).name() << endl;
   cout << "ar: " << typeid(ar).name() << endl;
 
   D dobj;
-  C* cp = &dobj;
-  C& cr = dobj;
+  C *cp = &dobj;
+  C &cr = dobj;
   cout << "cp: " << typeid(*cp).name() << endl;
   cout << "cr: " << typeid(cr).name() << endl;
 
@@ -48,6 +52,5 @@ int main() {
 }
 
 #else
-  #warning "Not tested on gnu 4.0 or greater versions"
+#warning "Not tested on gnu 4.0 or greater versions"
 #endif
-

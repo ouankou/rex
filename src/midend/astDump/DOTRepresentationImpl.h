@@ -5,14 +5,17 @@
 #define DOTREPRESENTATION_C
 
 #include "DOTRepresentation.h"
+
 #include <fstream>
+
 #include <iostream>
+
 #include <sstream>
+
 #include <typeinfo>
 
 // DQ (4/23/2006): Required for g++ 4.1.0!
-#include "assert.h"
-
+#include <assert.h>
 template <class NodeType> DOTRepresentation<NodeType>::DOTRepresentation() {
   dotout = new std::ostringstream();
   assert(dotout != NULL);

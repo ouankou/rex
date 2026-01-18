@@ -1,12 +1,19 @@
 #ifndef INTRA_PROC_ALIAS_ANALYSIS_H
 #define INTRA_PROC_ALIAS_ANALYSIS_H
 #include "CallGraph.h"
+
 #include "ClassHierarchyGraph.h"
+
 #include "IntraProcDataFlowAnalysis.h"
+
 #include "customFilteredCFG.h"
+
 #include <algorithm>
+
 #include <cstdint>
+
 #include <memory>
+
 #include <unordered_map>
 
 //~ using namespace std;
@@ -436,8 +443,8 @@ public:
   //! Apply the Transfer function to a node
   //! For an expression ‚Äö√Ñ√∫pi = qj‚Äö√Ñ√π
   //! OutC =TransferFunction(InC)
-  //!      = (InC ‚Äö√Ñ√¨ Must(Alias(p,i))  U (*a, b)where  a ≈í¬µ Alias(p,i)
-  //!      and b ≈í¬µ Alias(q,j);
+  //!      = (InC ‚Äö√Ñ√¨ Must(Alias(p,i))  U (*a, b)where  a
+  //!      ≈í¬µ Alias(p,i) and b ≈í¬µ Alias(q,j);
 
   void applyCFGTransferFunction(SgGraphNode *s);
 };

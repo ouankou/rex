@@ -7,7 +7,9 @@
 #define ASTCLEARVISITFLAGS_C
 
 #include "roseInternal.h"
+
 #include "sage3basic.h"
+
 #include <typeinfo>
 
 #include "AstClearVisitFlags.h"

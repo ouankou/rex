@@ -32,16 +32,23 @@
 #include "gtest/internal/gtest-port.h"
 
 #include <limits.h>
-#include <stdlib.h>
+
 #include <stdio.h>
+
+#include <stdlib.h>
+
 #include <string.h>
 
 #include <sys/stat.h>
+
 #include <unistd.h>
 
-#include "gtest/gtest-spi.h"
 #include "gtest/gtest-message.h"
+
+#include "gtest/gtest-spi.h"
+
 #include "gtest/internal/gtest-internal.h"
+
 #include "gtest/internal/gtest-string.h"
 
 // Indicates that this translation unit is part of Google Test's
@@ -78,12 +85,13 @@ RE::~RE() {
     regfree(&partial_regex_);
     regfree(&full_regex_);
   }
-  free(const_cast<char*>(pattern_));
+  free(const_cast<char *>(pattern_));
 }
 
 // Returns true iff regular expression re matches the entire str.
-bool RE::FullMatch(const char* str, const RE& re) {
-  if (!re.is_valid_) return false;
+bool RE::FullMatch(const char *str, const RE &re) {
+  if (!re.is_valid_)
+    return false;
 
   regmatch_t match;
   return regexec(&re.full_regex_, str, 1, &match, 0) == 0;
@@ -91,21 +99,22 @@ bool RE::FullMatch(const char* str, const RE& re) {
 
 // Returns true iff regular expression re matches a substring of str
 // (including str itself).
-bool RE::PartialMatch(const char* str, const RE& re) {
-  if (!re.is_valid_) return false;
+bool RE::PartialMatch(const char *str, const RE &re) {
+  if (!re.is_valid_)
+    return false;
 
   regmatch_t match;
   return regexec(&re.partial_regex_, str, 1, &match, 0) == 0;
 }
 
 // Initializes an RE from its string representation.
-void RE::Init(const char* regex) {
+void RE::Init(const char *regex) {
   pattern_ = posix::StrDup(regex);
 
   // Reserves enough bytes to hold the regular expression used for a
   // full match.
   const size_t full_regex_len = strlen(regex) + 10;
-  char* const full_pattern = new char[full_regex_len];
+  char *const full_pattern = new char[full_regex_len];
 
   snprintf(full_pattern, full_regex_len, "^(%s)$", regex);
   is_valid_ = regcomp(&full_regex_, full_pattern, REG_EXTENDED) == 0;
@@ -117,7 +126,7 @@ void RE::Init(const char* regex) {
   // Some implementations of POSIX regex don't accept the empty string as a
   // valid regex.  We change it to an equivalent form "()" to be safe.
   if (is_valid_) {
-    const char* const partial_regex = (*regex == '\0') ? "()" : regex;
+    const char *const partial_regex = (*regex == '\0') ? "()" : regex;
     is_valid_ = regcomp(&partial_regex_, partial_regex, REG_EXTENDED) == 0;
   }
   EXPECT_TRUE(is_valid_)
@@ -131,7 +140,7 @@ void RE::Init(const char* regex) {
 
 // Returns true iff ch appears anywhere in str (excluding the
 // terminating '\0' character).
-bool IsInSet(char ch, const char* str) {
+bool IsInSet(char ch, const char *str) {
   return ch != '\0' && strchr(str, ch) != NULL;
 }
 
@@ -146,7 +155,7 @@ bool IsRepeat(char ch) { return IsInSet(ch, "?*+"); }
 bool IsAsciiWhiteSpace(char ch) { return IsInSet(ch, " \f\n\r\t\v"); }
 bool IsAsciiWordChar(char ch) {
   return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') ||
-      ('0' <= ch && ch <= '9') || ch == '_';
+         ('0' <= ch && ch <= '9') || ch == '_';
 }
 
 // Returns true iff "\\c" is a supported escape sequence.
@@ -157,19 +166,30 @@ bool IsValidEscape(char c) {
 // Returns true iff the given atom (specified by escaped and pattern)
 // matches ch.  The result is undefined if the atom is invalid.
 bool AtomMatchesChar(bool escaped, char pattern_char, char ch) {
-  if (escaped) {  // "\\p" where p is pattern_char.
+  if (escaped) { // "\\p" where p is pattern_char.
     switch (pattern_char) {
-      case 'd': return IsAsciiDigit(ch);
-      case 'D': return !IsAsciiDigit(ch);
-      case 'f': return ch == '\f';
-      case 'n': return ch == '\n';
-      case 'r': return ch == '\r';
-      case 's': return IsAsciiWhiteSpace(ch);
-      case 'S': return !IsAsciiWhiteSpace(ch);
-      case 't': return ch == '\t';
-      case 'v': return ch == '\v';
-      case 'w': return IsAsciiWordChar(ch);
-      case 'W': return !IsAsciiWordChar(ch);
+    case 'd':
+      return IsAsciiDigit(ch);
+    case 'D':
+      return !IsAsciiDigit(ch);
+    case 'f':
+      return ch == '\f';
+    case 'n':
+      return ch == '\n';
+    case 'r':
+      return ch == '\r';
+    case 's':
+      return IsAsciiWhiteSpace(ch);
+    case 'S':
+      return !IsAsciiWhiteSpace(ch);
+    case 't':
+      return ch == '\t';
+    case 'v':
+      return ch == '\v';
+    case 'w':
+      return IsAsciiWordChar(ch);
+    case 'W':
+      return !IsAsciiWordChar(ch);
     }
     return IsAsciiPunct(pattern_char) && pattern_char == ch;
   }
@@ -178,14 +198,15 @@ bool AtomMatchesChar(bool escaped, char pattern_char, char ch) {
 }
 
 // Helper function used by ValidateRegex() to format error messages.
-std::string FormatRegexSyntaxError(const char* regex, int index) {
+std::string FormatRegexSyntaxError(const char *regex, int index) {
   return (Message() << "Syntax error at index " << index
-          << " in simple regular expression \"" << regex << "\": ").GetString();
+                    << " in simple regular expression \"" << regex << "\": ")
+      .GetString();
 }
 
 // Generates non-fatal failures and returns false if regex is invalid;
 // otherwise returns true.
-bool ValidateRegex(const char* regex) {
+bool ValidateRegex(const char *regex) {
   if (regex == NULL) {
     // TODO(wan@google.com): fix the source file location in the
     // assertion failures to match where the regex is used in user
@@ -199,7 +220,7 @@ bool ValidateRegex(const char* regex) {
   // True iff ?, *, or + can follow the previous atom.
   bool prev_repeatable = false;
   for (int i = 0; regex[i]; i++) {
-    if (regex[i] == '\\') {  // An escape sequence
+    if (regex[i] == '\\') { // An escape sequence
       i++;
       if (regex[i] == '\0') {
         ADD_FAILURE() << FormatRegexSyntaxError(regex, i - 1)
@@ -213,7 +234,7 @@ bool ValidateRegex(const char* regex) {
         is_valid = false;
       }
       prev_repeatable = true;
-    } else {  // Not an escape sequence.
+    } else { // Not an escape sequence.
       const char ch = regex[i];
 
       if (ch == '^' && i > 0) {
@@ -225,12 +246,12 @@ bool ValidateRegex(const char* regex) {
                       << "'$' can only appear at the end.";
         is_valid = false;
       } else if (IsInSet(ch, "()[]{}|")) {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
-                      << "'" << ch << "' is unsupported.";
+        ADD_FAILURE() << FormatRegexSyntaxError(regex, i) << "'" << ch
+                      << "' is unsupported.";
         is_valid = false;
       } else if (IsRepeat(ch) && !prev_repeatable) {
-        ADD_FAILURE() << FormatRegexSyntaxError(regex, i)
-                      << "'" << ch << "' can only follow a repeatable token.";
+        ADD_FAILURE() << FormatRegexSyntaxError(regex, i) << "'" << ch
+                      << "' can only follow a repeatable token.";
         is_valid = false;
       }
 
@@ -248,12 +269,10 @@ bool ValidateRegex(const char* regex) {
 // characters to be indexable by size_t, in which case the test will
 // probably time out anyway.  We are fine with this limitation as
 // std::string has it too.
-bool MatchRepetitionAndRegexAtHead(
-    bool escaped, char c, char repeat, const char* regex,
-    const char* str) {
+bool MatchRepetitionAndRegexAtHead(bool escaped, char c, char repeat,
+                                   const char *regex, const char *str) {
   const size_t min_count = (repeat == '+') ? 1 : 0;
-  const size_t max_count = (repeat == '?') ? 1 :
-      static_cast<size_t>(-1) - 1;
+  const size_t max_count = (repeat == '?') ? 1 : static_cast<size_t>(-1) - 1;
   // We cannot call numeric_limits::max() as it can conflict with
   // a max() macro from platform headers.
 
@@ -275,8 +294,8 @@ bool MatchRepetitionAndRegexAtHead(
 // Returns true iff regex matches a prefix of str.  regex must be a
 // valid simple regular expression and not start with "^", or the
 // result is undefined.
-bool MatchRegexAtHead(const char* regex, const char* str) {
-  if (*regex == '\0')  // An empty regex matches a prefix of anything.
+bool MatchRegexAtHead(const char *regex, const char *str) {
+  if (*regex == '\0') // An empty regex matches a prefix of anything.
     return true;
 
   // "$" only matches the end of a string.  Note that regex being
@@ -292,14 +311,14 @@ bool MatchRegexAtHead(const char* regex, const char* str) {
     // MatchRepetitionAndRegexAtHead() calls MatchRegexAtHead(), so
     // here's an indirect recursion.  It terminates as the regex gets
     // shorter in each recursion.
-    return MatchRepetitionAndRegexAtHead(
-        escaped, regex[0], regex[1], regex + 2, str);
+    return MatchRepetitionAndRegexAtHead(escaped, regex[0], regex[1], regex + 2,
+                                         str);
   } else {
     // regex isn't empty, isn't "$", and doesn't start with a
     // repetition.  We match the first atom of regex with the first
     // character of str and recurse.
     return (*str != '\0') && AtomMatchesChar(escaped, *regex, *str) &&
-        MatchRegexAtHead(regex + 1, str + 1);
+           MatchRegexAtHead(regex + 1, str + 1);
   }
 }
 
@@ -311,7 +330,7 @@ bool MatchRegexAtHead(const char* regex, const char* str) {
 // stack space normally.  In rare cases the time complexity can be
 // exponential with respect to the regex length + the string length,
 // but usually it's must faster (often close to linear).
-bool MatchRegexAnywhere(const char* regex, const char* str) {
+bool MatchRegexAnywhere(const char *regex, const char *str) {
   if (regex == NULL || str == NULL)
     return false;
 
@@ -329,23 +348,23 @@ bool MatchRegexAnywhere(const char* regex, const char* str) {
 // Implements the RE class.
 
 RE::~RE() {
-  free(const_cast<char*>(pattern_));
-  free(const_cast<char*>(full_pattern_));
+  free(const_cast<char *>(pattern_));
+  free(const_cast<char *>(full_pattern_));
 }
 
 // Returns true iff regular expression re matches the entire str.
-bool RE::FullMatch(const char* str, const RE& re) {
+bool RE::FullMatch(const char *str, const RE &re) {
   return re.is_valid_ && MatchRegexAnywhere(re.full_pattern_, str);
 }
 
 // Returns true iff regular expression re matches a substring of str
 // (including str itself).
-bool RE::PartialMatch(const char* str, const RE& re) {
+bool RE::PartialMatch(const char *str, const RE &re) {
   return re.is_valid_ && MatchRegexAnywhere(re.pattern_, str);
 }
 
 // Initializes an RE from its string representation.
-void RE::Init(const char* regex) {
+void RE::Init(const char *regex) {
   pattern_ = full_pattern_ = NULL;
   if (regex != NULL) {
     pattern_ = posix::StrDup(regex);
@@ -361,11 +380,11 @@ void RE::Init(const char* regex) {
   // Reserves enough bytes to hold the regular expression used for a
   // full match: we need space to prepend a '^', append a '$', and
   // terminate the string with '\0'.
-  char* buffer = static_cast<char*>(malloc(len + 3));
+  char *buffer = static_cast<char *>(malloc(len + 3));
   full_pattern_ = buffer;
 
   if (*regex != '^')
-    *buffer++ = '^';  // Makes sure full_pattern_ starts with '^'.
+    *buffer++ = '^'; // Makes sure full_pattern_ starts with '^'.
 
   // We don't use snprintf or strncpy, as they trigger a warning when
   // compiled with VC++ 8.0.
@@ -373,18 +392,18 @@ void RE::Init(const char* regex) {
   buffer += len;
 
   if (len == 0 || regex[len - 1] != '$')
-    *buffer++ = '$';  // Makes sure full_pattern_ ends with '$'.
+    *buffer++ = '$'; // Makes sure full_pattern_ ends with '$'.
 
   *buffer = '\0';
 }
 
-#endif  // GTEST_USES_POSIX_RE
+#endif // GTEST_USES_POSIX_RE
 
 const char kUnknownFile[] = "unknown file";
 
 // Formats a source file path and a line number as they would appear
 // in an error message from the compiler used to compile this code.
-GTEST_API_ ::std::string FormatFileLocation(const char* file, int line) {
+GTEST_API_ ::std::string FormatFileLocation(const char *file, int line) {
   const std::string file_name(file == NULL ? kUnknownFile : file);
 
   if (line < 0) {
@@ -394,7 +413,7 @@ GTEST_API_ ::std::string FormatFileLocation(const char* file, int line) {
   return file_name + "(" + StreamableToString(line) + "):";
 #else
   return file_name + ":" + StreamableToString(line) + ":";
-#endif  // _MSC_VER
+#endif // _MSC_VER
 }
 
 // Formats a file location for compiler-independent XML output.
@@ -402,8 +421,8 @@ GTEST_API_ ::std::string FormatFileLocation(const char* file, int line) {
 // FormatFileLocation in order to contrast the two functions.
 // Note that FormatCompilerIndependentFileLocation() does NOT append colon
 // to the file location it produces, unlike FormatFileLocation().
-GTEST_API_ ::std::string FormatCompilerIndependentFileLocation(
-    const char* file, int line) {
+GTEST_API_ ::std::string FormatCompilerIndependentFileLocation(const char *file,
+                                                               int line) {
   const std::string file_name(file == NULL ? kUnknownFile : file);
 
   if (line < 0)
@@ -412,15 +431,15 @@ GTEST_API_ ::std::string FormatCompilerIndependentFileLocation(
     return file_name + ":" + StreamableToString(line);
 }
 
-
-GTestLog::GTestLog(GTestLogSeverity severity, const char* file, int line)
+GTestLog::GTestLog(GTestLogSeverity severity, const char *file, int line)
     : severity_(severity) {
-  const char* const marker =
-      severity == GTEST_INFO ?    "[  INFO ]" :
-      severity == GTEST_WARNING ? "[WARNING]" :
-      severity == GTEST_ERROR ?   "[ ERROR ]" : "[ FATAL ]";
-  GetStream() << ::std::endl << marker << " "
-              << FormatFileLocation(file, line).c_str() << ": ";
+  const char *const marker = severity == GTEST_INFO      ? "[  INFO ]"
+                             : severity == GTEST_WARNING ? "[WARNING]"
+                             : severity == GTEST_ERROR   ? "[ ERROR ]"
+                                                         : "[ FATAL ]";
+  GetStream() << ::std::endl
+              << marker << " " << FormatFileLocation(file, line).c_str()
+              << ": ";
 }
 
 // Flushes the buffers and, if severity is GTEST_FATAL, aborts the program.
@@ -435,23 +454,21 @@ GTestLog::~GTestLog() {
 
 // Object that captures an output stream (stdout/stderr).
 class CapturedStream {
- public:
+public:
   // The ctor redirects the stream to a temporary file.
-   explicit CapturedStream(int fd) : fd_(fd), uncaptured_fd_(dup(fd)) {
-     // There's no guarantee that a test has write access to the current
-     // directory, so we create the temporary file in the /tmp directory
-     // instead.
-     char name_template[] = "/tmp/captured_stream.XXXXXX";
-     const int captured_fd = mkstemp(name_template);
-     filename_ = name_template;
-     fflush(NULL);
-     dup2(captured_fd, fd_);
-     close(captured_fd);
-   }
-
-  ~CapturedStream() {
-    remove(filename_.c_str());
+  explicit CapturedStream(int fd) : fd_(fd), uncaptured_fd_(dup(fd)) {
+    // There's no guarantee that a test has write access to the current
+    // directory, so we create the temporary file in the /tmp directory
+    // instead.
+    char name_template[] = "/tmp/captured_stream.XXXXXX";
+    const int captured_fd = mkstemp(name_template);
+    filename_ = name_template;
+    fflush(NULL);
+    dup2(captured_fd, fd_);
+    close(captured_fd);
   }
+
+  ~CapturedStream() { remove(filename_.c_str()); }
 
   std::string GetCapturedString() {
     if (uncaptured_fd_ != -1) {
@@ -462,20 +479,20 @@ class CapturedStream {
       uncaptured_fd_ = -1;
     }
 
-    FILE* const file = posix::FOpen(filename_.c_str(), "r");
+    FILE *const file = posix::FOpen(filename_.c_str(), "r");
     const std::string content = ReadEntireFile(file);
     posix::FClose(file);
     return content;
   }
 
- private:
+private:
   // Reads the entire content of a file as an std::string.
-  static std::string ReadEntireFile(FILE* file);
+  static std::string ReadEntireFile(FILE *file);
 
   // Returns the size (in bytes) of a file.
-  static size_t GetFileSize(FILE* file);
+  static size_t GetFileSize(FILE *file);
 
-  const int fd_;  // A stream to capture.
+  const int fd_; // A stream to capture.
   int uncaptured_fd_;
   // Name of the temporary file holding the stderr output.
   ::std::string filename_;
@@ -484,25 +501,26 @@ class CapturedStream {
 };
 
 // Returns the size (in bytes) of a file.
-size_t CapturedStream::GetFileSize(FILE* file) {
+size_t CapturedStream::GetFileSize(FILE *file) {
   fseek(file, 0, SEEK_END);
   return static_cast<size_t>(ftell(file));
 }
 
 // Reads the entire content of a file as a string.
-std::string CapturedStream::ReadEntireFile(FILE* file) {
+std::string CapturedStream::ReadEntireFile(FILE *file) {
   const size_t file_size = GetFileSize(file);
-  char* const buffer = new char[file_size];
+  char *const buffer = new char[file_size];
 
-  size_t bytes_last_read = 0;  // # of bytes read in the last fread()
-  size_t bytes_read = 0;       // # of bytes read so far
+  size_t bytes_last_read = 0; // # of bytes read in the last fread()
+  size_t bytes_read = 0;      // # of bytes read so far
 
   fseek(file, 0, SEEK_SET);
 
   // Keeps reading the file until we cannot read further or the
   // pre-determined file size is reached.
   do {
-    bytes_last_read = fread(buffer+bytes_read, 1, file_size-bytes_read, file);
+    bytes_last_read =
+        fread(buffer + bytes_read, 1, file_size - bytes_read, file);
     bytes_read += bytes_last_read;
   } while (bytes_last_read > 0 && bytes_read < file_size);
 
@@ -512,15 +530,15 @@ std::string CapturedStream::ReadEntireFile(FILE* file) {
   return content;
 }
 
-# ifdef _MSC_VER
-#  pragma warning(pop)
-# endif  // _MSC_VER
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif // _MSC_VER
 
-static CapturedStream* g_captured_stderr = NULL;
-static CapturedStream* g_captured_stdout = NULL;
+static CapturedStream *g_captured_stderr = NULL;
+static CapturedStream *g_captured_stdout = NULL;
 
 // Starts capturing an output stream (stdout/stderr).
-void CaptureStream(int fd, const char* stream_name, CapturedStream** stream) {
+void CaptureStream(int fd, const char *stream_name, CapturedStream **stream) {
   if (*stream != NULL) {
     GTEST_LOG_(FATAL) << "Only one " << stream_name
                       << " capturer can exist at a time.";
@@ -529,7 +547,7 @@ void CaptureStream(int fd, const char* stream_name, CapturedStream** stream) {
 }
 
 // Stops capturing the output stream and returns the captured string.
-std::string GetCapturedStream(CapturedStream** captured_stream) {
+std::string GetCapturedStream(CapturedStream **captured_stream) {
   const std::string content = (*captured_stream)->GetCapturedString();
 
   delete *captured_stream;
@@ -558,34 +576,34 @@ std::string GetCapturedStderr() {
   return GetCapturedStream(&g_captured_stderr);
 }
 
-#endif  // GTEST_HAS_STREAM_REDIRECTION
+#endif // GTEST_HAS_STREAM_REDIRECTION
 
 #if GTEST_HAS_DEATH_TEST
 
 // A copy of all command line arguments.  Set by InitGoogleTest().
 ::std::vector<testing::internal::string> g_argvs;
 
-static const ::std::vector<testing::internal::string>* g_injected_test_argvs =
-                                        NULL;  // Owned.
+static const ::std::vector<testing::internal::string> *g_injected_test_argvs =
+    NULL; // Owned.
 
-void SetInjectableArgvs(const ::std::vector<testing::internal::string>* argvs) {
+void SetInjectableArgvs(const ::std::vector<testing::internal::string> *argvs) {
   if (g_injected_test_argvs != argvs)
     delete g_injected_test_argvs;
   g_injected_test_argvs = argvs;
 }
 
-const ::std::vector<testing::internal::string>& GetInjectableArgvs() {
+const ::std::vector<testing::internal::string> &GetInjectableArgvs() {
   if (g_injected_test_argvs != NULL) {
     return *g_injected_test_argvs;
   }
   return g_argvs;
 }
-#endif  // GTEST_HAS_DEATH_TEST
+#endif // GTEST_HAS_DEATH_TEST
 
 // Returns the name of the environment variable corresponding to the
 // given flag.  For example, FlagToEnvVar("foo") will return
 // "GTEST_FOO" in the open-source version.
-static std::string FlagToEnvVar(const char* flag) {
+static std::string FlagToEnvVar(const char *flag) {
   const std::string full_flag =
       (Message() << GTEST_FLAG_PREFIX_ << flag).GetString();
 
@@ -600,10 +618,10 @@ static std::string FlagToEnvVar(const char* flag) {
 // Parses 'str' for a 32-bit signed integer.  If successful, writes
 // the result to *value and returns true; otherwise leaves *value
 // unchanged and returns false.
-bool ParseInt32(const Message& src_text, const char* str, Int32* value) {
+bool ParseInt32(const Message &src_text, const char *str, Int32 *value) {
   // Parses the environment variable as a decimal integer.
-  char* end = NULL;
-  const long long_value = strtol(str, &end, 10);  // NOLINT
+  char *end = NULL;
+  const long long_value = strtol(str, &end, 10); // NOLINT
 
   // Has strtol() consumed all characters in the string?
   if (*end != '\0') {
@@ -624,7 +642,7 @@ bool ParseInt32(const Message& src_text, const char* str, Int32* value) {
       // LONG_MAX or LONG_MIN when the input overflows.)
       result != long_value
       // The parsed value overflows as an Int32.
-      ) {
+  ) {
     Message msg;
     msg << "WARNING: " << src_text
         << " is expected to be a 32-bit integer, but actually"
@@ -642,27 +660,26 @@ bool ParseInt32(const Message& src_text, const char* str, Int32* value) {
 // the given flag; if it's not set, returns default_value.
 //
 // The value is considered true iff it's not "0".
-bool BoolFromGTestEnv(const char* flag, bool default_value) {
+bool BoolFromGTestEnv(const char *flag, bool default_value) {
   const std::string env_var = FlagToEnvVar(flag);
-  const char* const string_value = posix::GetEnv(env_var.c_str());
-  return string_value == NULL ?
-      default_value : strcmp(string_value, "0") != 0;
+  const char *const string_value = posix::GetEnv(env_var.c_str());
+  return string_value == NULL ? default_value : strcmp(string_value, "0") != 0;
 }
 
 // Reads and returns a 32-bit integer stored in the environment
 // variable corresponding to the given flag; if it isn't set or
 // doesn't represent a valid 32-bit integer, returns default_value.
-Int32 Int32FromGTestEnv(const char* flag, Int32 default_value) {
+Int32 Int32FromGTestEnv(const char *flag, Int32 default_value) {
   const std::string env_var = FlagToEnvVar(flag);
-  const char* const string_value = posix::GetEnv(env_var.c_str());
+  const char *const string_value = posix::GetEnv(env_var.c_str());
   if (string_value == NULL) {
     // The environment variable is not set.
     return default_value;
   }
 
   Int32 result = default_value;
-  if (!ParseInt32(Message() << "Environment variable " << env_var,
-                  string_value, &result)) {
+  if (!ParseInt32(Message() << "Environment variable " << env_var, string_value,
+                  &result)) {
     printf("The default value %s is used.\n",
            (Message() << default_value).GetString().c_str());
     fflush(stdout);
@@ -674,11 +691,11 @@ Int32 Int32FromGTestEnv(const char* flag, Int32 default_value) {
 
 // Reads and returns the string environment variable corresponding to
 // the given flag; if it's not set, returns default_value.
-const char* StringFromGTestEnv(const char* flag, const char* default_value) {
+const char *StringFromGTestEnv(const char *flag, const char *default_value) {
   const std::string env_var = FlagToEnvVar(flag);
-  const char* const value = posix::GetEnv(env_var.c_str());
+  const char *const value = posix::GetEnv(env_var.c_str());
   return value == NULL ? default_value : value;
 }
 
-}  // namespace internal
-}  // namespace testing
+} // namespace internal
+} // namespace testing

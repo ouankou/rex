@@ -1,13 +1,18 @@
 #ifndef ROSE_StringUtility_NumberToString_H
 #define ROSE_StringUtility_NumberToString_H
 
-#include <Rose/BitOps.h>
-#include <rosedll.h>
+#include "Rose/BitOps.h"
+
+#include "rosedll.h"
 
 #include <cassert>
+
 #include <cstdint>
+
 #include <iomanip>
+
 #include <sstream>
+
 #include <string>
 
 namespace Rose {

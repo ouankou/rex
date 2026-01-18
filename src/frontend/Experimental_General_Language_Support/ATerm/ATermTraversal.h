@@ -2,6 +2,7 @@
 #define ATERM_TRAVERSAL_H
 
 #include "PosInfo.h"
+
 #include <aterm2.h>
 
 namespace Rose {

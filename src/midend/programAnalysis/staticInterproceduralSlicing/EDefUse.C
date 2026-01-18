@@ -1,8 +1,11 @@
 // tps (1/14/2010) : Switching from rose.h to sage3 changed size from 17,6 MB to
 // 7,2MB
 #include "DFAnalysis.h"
+
 #include "DefUseAnalysis.h"
+
 #include "EDefUse.h"
+
 #include "sage3basic.h"
 using namespace std;
 EDefUse::EDefUse(SgProject *proj) { internalDefUse = new DefUseAnalysis(proj); }

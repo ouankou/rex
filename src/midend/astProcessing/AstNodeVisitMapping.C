@@ -6,7 +6,9 @@
 #define ASTNODEVISITMAPPING_C
 
 #include "AstNodeVisitMapping.h"
+
 #include "sage3basic.h"
+
 #include <sstream>
 
 // DQ (12/31/2005): This is OK if not declared in a header file

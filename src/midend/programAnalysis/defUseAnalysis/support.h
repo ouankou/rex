@@ -7,6 +7,7 @@
 #ifndef __DFAnalysis_support_HXX_LOADED__
 #define __DFAnalysis_support_HXX_LOADED__
 // #include "rose.h"
+
 #include <string>
 
 // A set of utility functions

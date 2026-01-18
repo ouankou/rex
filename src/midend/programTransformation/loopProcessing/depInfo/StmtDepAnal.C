@@ -1,13 +1,20 @@
-#include <DepRel.h>
-#include <DomainInfo.h>
-#include <FunctionObject.h>
-#include <SymbolicVal.h>
+#include "DepRel.h"
+
+#include "DomainInfo.h"
+
+#include "FunctionObject.h"
+
+#include "SymbolicVal.h"
+
 #include <iostream>
+
 #include <stdlib.h>
+
 #include <vector>
 
-#include <CommandOptions.h>
-#include <LoopTransformInterface.h>
+#include "CommandOptions.h"
+
+#include "LoopTransformInterface.h"
 
 // 2*i+1 input exp,  loop variable i, size 1 loop nest
 // the decomposed coeffecient vector is 2

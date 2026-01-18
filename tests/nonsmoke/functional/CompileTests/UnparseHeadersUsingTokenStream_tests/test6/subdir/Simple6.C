@@ -1,9 +1,4 @@
-#include "../Simple.h"
+#include <../Simple.h>
+Simple::Simple() { v1 = 15; }
 
-Simple::Simple(){
-  v1 = 15;
-}
-
-int main(int argc, char* argv[]) {
-	
-}
+int main(int argc, char *argv[]) {}

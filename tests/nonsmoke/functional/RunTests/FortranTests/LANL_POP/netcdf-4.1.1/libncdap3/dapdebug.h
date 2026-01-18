@@ -9,8 +9,9 @@
 
 #undef XX
 
-#include <stdarg.h>
 #include <assert.h>
+
+#include <stdarg.h>
 
 #undef DBG
 #undef DEBUG
@@ -30,14 +31,18 @@
 #endif
 
 #define PANIC(msg) assert(dappanic(msg));
-#define PANIC1(msg,arg) assert(dappanic(msg,arg));
-#define PANIC2(msg,arg1,arg2) assert(dappanic(msg,arg1,arg2));
+#define PANIC1(msg, arg) assert(dappanic(msg, arg));
+#define PANIC2(msg, arg1, arg2) assert(dappanic(msg, arg1, arg2));
 
-#define ASSERT(expr) if(!(expr)) {PANIC(#expr);} else {}
+#define ASSERT(expr)                                                           \
+  if (!(expr)) {                                                               \
+    PANIC(#expr);                                                              \
+  } else {                                                                     \
+  }
 
 extern int ncdap3debug;
 
-extern int dappanic(const char* fmt, ...);
+extern int dappanic(const char *fmt, ...);
 
 /*
 Provide wrapped versions of calloc and malloc.
@@ -46,14 +51,18 @@ is exhausted.  It also guarantees that the
 memory has been zero'd.
 */
 
-#define ecalloc(x,y) dapcalloc(x,y)
-#define emalloc(x)   dapcalloc(x,1)
+#define ecalloc(x, y) dapcalloc(x, y)
+#define emalloc(x) dapcalloc(x, 1)
 #define efree(x) dapfree(x)
-extern void* dapcalloc(size_t size, size_t nelems);
-extern void* dapmalloc(size_t size);
-extern void  dapfree(void*);
+extern void *dapcalloc(size_t size, size_t nelems);
+extern void *dapmalloc(size_t size);
+extern void dapfree(void *);
 
-#define MEMCHECK(var,throw) {if((var)==NULL) return (throw);}
+#define MEMCHECK(var, throw)                                                   \
+  {                                                                            \
+    if ((var) == NULL)                                                         \
+      return (throw);                                                          \
+  }
 
 #ifdef CATCHERROR
 /* Place breakpoint on dapbreakpoint to catch errors close to where they occur*/
@@ -68,4 +77,3 @@ extern int dapthrow(int err);
 #endif
 
 #endif /*DEBUG_H*/
-

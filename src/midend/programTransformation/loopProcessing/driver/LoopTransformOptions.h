@@ -2,10 +2,14 @@
 #ifndef SliceOptions_h
 #define SliceOptions_h
 
-#include <AstInterface.h>
-#include <SinglyLinkedList.h>
+#include "AstInterface.h"
+
+#include "SinglyLinkedList.h"
+
 #include <iostream>
+
 #include <string>
+
 #include <vector>
 
 class ArrangeNestingOrder;

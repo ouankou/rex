@@ -5,7 +5,7 @@
 #ifndef TRANSITIVE_ANALYSIS
 #define TRANSITIVE_ANALYSIS
 
-#include <GraphAccess.h>
+#include "GraphAccess.h"
 
 /*
 struct T

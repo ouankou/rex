@@ -3,11 +3,17 @@
 #define ___TYPE_ANNOTATION_H
 
 #include "AnnotDescriptors.h"
+
 #include "SymbolicVal.h"
+
 #include <fstream>
+
 #include <iostream>
+
 #include <map>
+
 #include <string>
+
 #include <vector>
 
 bool DebugAnnot();

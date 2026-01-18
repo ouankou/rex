@@ -1,11 +1,17 @@
 
-#include <CommandOptions.h>
-#include <DepGraph.h>
-#include <DepInfo.h>
-#include <DepRel.h>
-#include <DomainInfo.h>
-#include <LoopAnalysis.h>
-#include <TransDepGraph.h>
+#include "CommandOptions.h"
+
+#include "DepGraph.h"
+
+#include "DepInfo.h"
+
+#include "DepRel.h"
+
+#include "DomainInfo.h"
+
+#include "LoopAnalysis.h"
+
+#include "TransDepGraph.h"
 
 template <class Node>
 LoopAlignInfo

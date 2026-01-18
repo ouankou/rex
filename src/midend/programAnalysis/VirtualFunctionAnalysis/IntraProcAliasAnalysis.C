@@ -1,5 +1,7 @@
 #include "IntraProcAliasAnalysis.h"
+
 #include "sage3basic.h"
+
 #include <queue>
 
 using std::set;
@@ -1263,8 +1265,8 @@ void IntraProcAliasAnalysis::applyCFGTransferFunction(SgGraphNode *s) {
 }
 
 #define TEMPLATE_ONLY
-#include <IntraProcDataFlowAnalysis.C>
+#include "IntraProcDataFlowAnalysis.C"
 template class IntraProcDataFlowAnalysis<SgGraphNode, CompReprPtr>;
 
-#include <customFilteredCFG.C>
+#include "customFilteredCFG.C"
 template class StaticCFG::CustomFilteredCFG<AliasCfgFilter>;

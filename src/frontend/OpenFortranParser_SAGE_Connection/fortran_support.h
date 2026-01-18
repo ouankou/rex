@@ -5,7 +5,9 @@
 #include "Cxx_Grammar.h"
 
 #include <list>
+
 #include <string>
+
 #include <vector>
 
 extern SgSourceFile *OpenFortranParser_globalFilePointer;
@@ -14,10 +16,11 @@ extern SgSourceFile *OpenFortranParser_globalFilePointer;
 extern "C" {
 #endif
 
-#include "ActionEnums.h"
-#include "FortranParserAction.h"
-#include "token.h"
+#include <ActionEnums.h>
 
+#include <FortranParserAction.h>
+
+#include <token.h>
 #ifdef __cplusplus
 } /* End extern C. */
 #endif

@@ -4,16 +4,27 @@
 #define SSAANALYSIS_H
 
 #include "AstAttributeMechanism.h"
+
 #include "AstProcessing.h"
+
 #include "filteredCFG.h"
+
 #include <algorithm>
+
 #include <fstream>
+
 #include <iostream>
+
 #include <map>
+
 #include <ostream>
+
 #include <sstream>
+
 #include <string>
+
 #include <unordered_map>
+
 #include <vector>
 
 /** Class holding a unique name for a variable. Is attached to varRefs as a

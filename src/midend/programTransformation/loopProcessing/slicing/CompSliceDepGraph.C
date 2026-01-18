@@ -1,13 +1,21 @@
 
-#include <CommandOptions.h>
-#include <CompSliceDepGraph.h>
-#include <DGBaseGraphImpl.h>
-#include <DepGraphTransform.h>
-#include <DepRel.h>
-#include <GraphGroup.h>
-#include <GraphIO.h>
-#include <LoopTreeDepComp.h>
-#include <LoopTreeTransform.h>
+#include "CommandOptions.h"
+
+#include "CompSliceDepGraph.h"
+
+#include "DGBaseGraphImpl.h"
+
+#include "DepGraphTransform.h"
+
+#include "DepRel.h"
+
+#include "GraphGroup.h"
+
+#include "GraphIO.h"
+
+#include "LoopTreeDepComp.h"
+
+#include "LoopTreeTransform.h"
 
 DebugLog DebugSlice("-debugslice");
 

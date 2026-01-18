@@ -2,15 +2,22 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 // #include "HiddenList.h"
+
 #include <cstdlib>
+
 #include <fstream>
 
 // file locking support
 #include <errno.h>
+
 #include <fcntl.h>
+
 #include <stdio.h>
+
 #include <sys/resource.h>
+
 #include <sys/time.h>
+
 #include <unistd.h>
 
 #include "AstStatistics.h"

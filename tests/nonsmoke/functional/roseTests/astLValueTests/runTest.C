@@ -1,61 +1,58 @@
-#include <rose.h>
+#include "rose.h"
+
 #include <iostream>
 
-int main(int argc, char ** argv)
-{
-	// Build the AST used by ROSE
-	SgProject* project = frontend(argc, argv);
-	ROSE_ASSERT(project != NULL);
-	
-	// Only run the tests for lvalue
-	TestLValues test;
-	test.traverseInputFiles(project, preorder);
-//	AstTests::runLValueTests(project);
+int main(int argc, char **argv) {
+  // Build the AST used by ROSE
+  SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != NULL);
 
-	bool success = true;
-	std::vector<SgFunctionDeclaration*> funs = SageInterface::querySubTree<SgFunctionDeclaration>(project, V_SgFunctionDeclaration);
-	for(SgFunctionDeclaration* fun: funs)
-	{
-		std::string funName = fun->get_qualified_name().getString();
-		// every expr statement should be an lvalue
-		if (funName == "HasLValues")
-		{
-			Rose_STL_Container<SgStatement*> bodystmts = fun->get_definition()->get_body()->get_statements();
-			for(SgStatement* stmt: bodystmts)
-			{
-				if (SgExprStatement* exprstmt = isSgExprStatement(stmt))
-				{
-					SgExpression* expr = exprstmt->get_expression();
-					if (!expr->isLValue())
-					{
-						std::cerr << "Error, expression `" << expr->unparseToString() << "` is not an LValue." << std::endl;
-						success = false;
-					}
-				}
-			}
-		}
-		// no expr statement should be an lvalue
-		else if (funName == "NoLValues")
-		{
-			Rose_STL_Container<SgStatement*> bodystmts = fun->get_definition()->get_body()->get_statements();
-			for(SgStatement* stmt: bodystmts)
-			{
-				if (SgExprStatement* exprstmt = isSgExprStatement(stmt))
-				{
-					SgExpression* expr = exprstmt->get_expression();
-					if (expr->isLValue())
-					{
-						std::cerr << "Error, expression `" << expr->unparseToString() << "` is an LValue." << std::endl;
-						success = false;
-					}
-				}
-			}
-		}
-	}
-	if (!success)
-		return 1;
+  // Only run the tests for lvalue
+  TestLValues test;
+  test.traverseInputFiles(project, preorder);
+  //	AstTests::runLValueTests(project);
 
-        // TV (05/2011): remove backend call who's failing, the test purpose is still ensure.
-	return 0;
+  bool success = true;
+  std::vector<SgFunctionDeclaration *> funs =
+      SageInterface::querySubTree<SgFunctionDeclaration>(
+          project, V_SgFunctionDeclaration);
+  for (SgFunctionDeclaration *fun : funs) {
+    std::string funName = fun->get_qualified_name().getString();
+    // every expr statement should be an lvalue
+    if (funName == "HasLValues") {
+      Rose_STL_Container<SgStatement *> bodystmts =
+          fun->get_definition()->get_body()->get_statements();
+      for (SgStatement *stmt : bodystmts) {
+        if (SgExprStatement *exprstmt = isSgExprStatement(stmt)) {
+          SgExpression *expr = exprstmt->get_expression();
+          if (!expr->isLValue()) {
+            std::cerr << "Error, expression `" << expr->unparseToString()
+                      << "` is not an LValue." << std::endl;
+            success = false;
+          }
+        }
+      }
+    }
+    // no expr statement should be an lvalue
+    else if (funName == "NoLValues") {
+      Rose_STL_Container<SgStatement *> bodystmts =
+          fun->get_definition()->get_body()->get_statements();
+      for (SgStatement *stmt : bodystmts) {
+        if (SgExprStatement *exprstmt = isSgExprStatement(stmt)) {
+          SgExpression *expr = exprstmt->get_expression();
+          if (expr->isLValue()) {
+            std::cerr << "Error, expression `" << expr->unparseToString()
+                      << "` is an LValue." << std::endl;
+            success = false;
+          }
+        }
+      }
+    }
+  }
+  if (!success)
+    return 1;
+
+  // TV (05/2011): remove backend call who's failing, the test purpose is still
+  // ensure.
+  return 0;
 }
-

@@ -1,10 +1,15 @@
 
-#include <CompSliceDepGraph.h>
-#include <FusionAnal.h>
-#include <GraphScope.h>
-#include <PtrMap.h>
-#include <SinglyLinkedList.h>
-#include <TypedFusion.h>
+#include "CompSliceDepGraph.h"
+
+#include "FusionAnal.h"
+
+#include "GraphScope.h"
+
+#include "PtrMap.h"
+
+#include "SinglyLinkedList.h"
+
+#include "TypedFusion.h"
 
 // #define DEBUG 1
 

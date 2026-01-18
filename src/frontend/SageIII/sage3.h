@@ -40,6 +40,7 @@
 #else
 // DQ (11/12/2011): This is included in the omp_lowering.h and it is needed in
 // sageInterface.C. #include "astQuery.h"
+
 #include "nodeQuery.h"
 #endif
 
@@ -47,6 +48,7 @@
 // Add possibility to include Valgrind header for memcheck
 #if ROSE_USE_VALGRIND
 #include <valgrind/memcheck.h>
+
 #include <valgrind/valgrind.h>
 #endif
 

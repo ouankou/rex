@@ -1,11 +1,17 @@
 
 #include "CommandOptions.h"
+
 #include "DefUseChain.h"
+
 #include "GraphIO.h"
+
 #include "GraphUtils.h"
+
+#include "ROSE_ASSERT.h"
+
 #include "SinglyLinkedList.h"
+
 #include "StmtInfoCollect.h"
-#include <ROSE_ASSERT.h>
 
 #include <vector>
 

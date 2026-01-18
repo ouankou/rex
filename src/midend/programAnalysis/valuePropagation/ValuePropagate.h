@@ -1,9 +1,11 @@
 #ifndef VALUE_PROPAGATE_H
 #define VALUE_PROPAGATE_H
 
-#include <DefUseChain.h>
-#include <FunctionObject.h>
-#include <ValueAnnot.h>
+#include "DefUseChain.h"
+
+#include "FunctionObject.h"
+
+#include "ValueAnnot.h"
 
 class ValuePropagateNode : public DefUseChainNode {
   HasValueDescriptor desc;

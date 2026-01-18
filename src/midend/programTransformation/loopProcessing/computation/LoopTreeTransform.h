@@ -1,10 +1,14 @@
 #ifndef TRANSFORM_LOOP_TREE_H
 #define TRANSFORM_LOOP_TREE_H
 
-#include <DepRel.h>
-#include <LoopTree.h>
-#include <LoopTreeHoldNode.h>
+#include "DepRel.h"
+
+#include "LoopTree.h"
+
+#include "LoopTreeHoldNode.h"
+
 #include <list>
+
 #include <vector>
 
 class ObserveTransform;

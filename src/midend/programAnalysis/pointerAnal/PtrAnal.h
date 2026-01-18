@@ -1,9 +1,13 @@
 #ifndef PTR_ANAL_H
 #define PTR_ANAL_H
-#include <AstInterface.h>
-#include <CFG.h>
-#include <ProcessAstTree.h>
-#include <StmtInfoCollect.h>
+#include "AstInterface.h"
+
+#include "CFG.h"
+
+#include "ProcessAstTree.h"
+
+#include "StmtInfoCollect.h"
+
 #include <unordered_map>
 
 class PtrAnal : public ProcessAstTreeBase<AstNodePtr>,

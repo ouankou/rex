@@ -1,19 +1,30 @@
 #include "clang-frontend-private.hpp"
+
 #include "clang-to-rose-support.hpp"
+
 #include "sage3basic.h"
+
 #include <algorithm>
+
 #include <cctype>
+
 #include <iomanip>
+
 #include <regex>
+
 #include <sstream>
+
 #include <utility>
+
 #include <vector>
 
 #include "sageInterface.h"
-#include "clang/AST/LambdaCapture.h"
-#include "clang/Basic/TypeTraits.h"
-#include "clang/Lex/Lexer.h"
 
+#include <clang/AST/LambdaCapture.h>
+
+#include <clang/Basic/TypeTraits.h>
+
+#include <clang/Lex/Lexer.h>
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {

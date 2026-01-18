@@ -3,11 +3,14 @@
 
 // DQ (8/28/2012): Added this so that we can see where the macros
 // are used to control the use of new vs. old template support.
-#include <rose_config.h>
+#include "rose_config.h"
 
 #include "AstConsistencyTests.h"
+
 #include "astPostProcessing.h"
+
 #include "defaultFunctionGenerator.h"
+
 #include "unparser.h"
 
 // driscoll6 (01/29/2011) defaultFunctionGenerator prints a lot of debug info
@@ -625,7 +628,7 @@ user-defined constructors.
 #include <iostream>
 using namespace std;
 
-#include <sageBuilder.h>
+#include "sageBuilder.h"
 using namespace SageBuilder;
 
 #include "defaultFunctionGenerator.h"

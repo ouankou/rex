@@ -1,25 +1,40 @@
 #ifndef __INTERPROCEDURAL_INFO_H__ // added by HK
 #define __INTERPROCEDURAL_INFO_H__ // added by HK
 
+#include "AstInterface.h"
+
 #include "CallGraph.h"
+
+#include "DefUseChain.h"
+
 #include "DominanceFrontier.h"
+
+#include "ReachingDefinition.h"
+
 #include "SimpleDirectedGraph.h"
-#include <AstInterface.h>
-#include <DefUseChain.h>
-#include <ReachingDefinition.h>
-#include <StmtInfoCollect.h>
+
+#include "StmtInfoCollect.h"
+
 #include <map>
+
 #include <ostream>
+
 #include <set>
+
 #include <string>
+
 #include <utility>
 
 // #include "rose.h"
 // #include "../newImDomImpl/filteredCFG.h"
+
 #include "DominanceFrontier.h"
+
 #include "DominatorTree.h"
+
 #include "filteredCFG.h"
-#include <virtualCFG.h>
+
+#include "virtualCFG.h"
 
 // #define VERBOSE_DEBUG
 

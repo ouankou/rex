@@ -1,4 +1,5 @@
-#include <CommandOptions.h>
+#include "CommandOptions.h"
+
 #include <cassert>
 
 CmdOptions *CmdOptions::inst = 0;

@@ -1,21 +1,31 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef NODE_CONST_ANALYSIS_H
 #define NODE_CONST_ANALYSIS_H
 
 #include "CallGraphTraverse.h"
+
 #include "VirtualCFGIterator.h"
+
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "cfgUtils.h"
+
 #include "dataflow.h"
+
 #include "genUID.h"
+
 #include "genericDataflowCommon.h"
+
 #include "latticeFull.h"
+
 #include "printAnalysisStates.h"
 
 #include <string>
+
 #include <vector>
 
 extern int nodeConstAnalysisDebugLevel;

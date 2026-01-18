@@ -1,10 +1,14 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "arrIndexLabeler.h"
+
 #include "cfgUtils.h"
+
 #include "rwAccessLabeler.h"
+
 #include "variables.h"
+
 #include <set>
 
 using namespace std;

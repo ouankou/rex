@@ -14,33 +14,34 @@ It compiles fine with GCC.
 
 #endif
 
-
 // Skip version 4.x gnu compilers
 // #if ( __GNUC__ == 3 )
-#if ( defined(__clang__) == 0 && __GNUC__ == 3)
+#if (defined(__clang__) == 0 && __GNUC__ == 3)
 
 #include <stdio.h>
 #ifdef __cplusplus
-  #include <iostream.h>
-  #include <iomanip.h>
+#include <iomanip.h>
+
+#include <iostream.h>
 #else
-  #include<string.h>
+#include <string.h>
 #endif
 
 #include <strings.h>
+
 #include <sys/types.h>
+
 #include <unistd.h>
 
 // We don't include string.h directly but it
 // is included from the header files above.
 // #include<string.h>
 
-void foo()
-   {
-     char * flind;
-     strlen(flind);
-   };
+void foo() {
+  char *flind;
+  strlen(flind);
+};
 
 #else
-  #warning "Not tested on gnu 4.0 or greater versions"
+#warning "Not tested on gnu 4.0 or greater versions"
 #endif

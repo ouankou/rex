@@ -2,8 +2,11 @@
 #define CLASS_HIERARCHY_GRAPH_H
 
 #include <map>
+
 #include <unordered_map>
+
 #include <unordered_set>
+
 #include <vector>
 
 class ROSE_DLL_API ClassHierarchyWrapper {

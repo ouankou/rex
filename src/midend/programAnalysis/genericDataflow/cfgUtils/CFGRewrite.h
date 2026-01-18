@@ -1,13 +1,17 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef CFG_REWRITE_H
 #define CFG_REWRITE_H
 
 #include "DataflowCFG.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <sstream>
+
 #include <string>
 
 namespace VirtualCFG {

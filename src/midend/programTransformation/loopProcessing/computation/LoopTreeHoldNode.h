@@ -2,7 +2,8 @@
 #ifndef LOOP_TREE_HOLDNODE_OBSERVER
 #define LOOP_TREE_HOLDNODE_OBSERVER
 
-#include <LoopTreeObserver.h>
+#include "LoopTreeObserver.h"
+
 #include <stdlib.h>
 
 class HoldTreeNodeObserver : public LoopTreeObserver {

@@ -2,6 +2,7 @@
 #define DEF_USE_CHAIN_H
 
 #include "ReachingDefinition.h"
+
 #include "StmtInfoCollect.h"
 
 class DefUseChainNode : public MultiGraphElem {
@@ -71,7 +72,7 @@ void PropagateDefUseChainUpdate(DefUseChain<Node> *graph,
                                 UpdateDefUseChainNode<Node> &update);
 
 #define TEMPLATE_ONLY
-#include <DefUseChain.C>
+#include "DefUseChain.C"
 #undef TEMPLATE_ONLY
 
 #endif

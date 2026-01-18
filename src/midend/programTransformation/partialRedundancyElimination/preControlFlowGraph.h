@@ -4,6 +4,7 @@
 // #include "config.h"
 
 #include "CFG.h"
+
 #include <sstream>
 
 class SgFunctionDefinition;

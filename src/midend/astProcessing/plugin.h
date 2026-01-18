@@ -55,8 +55,11 @@ SOFTWARE.
 #define PLUGIN_H
 
 #include <cstddef>
+
 #include <map>
+
 #include <string>
+
 #include <vector>
 // #include <memory> // unique_ptr C++11 feature!!
 #include <dlfcn.h> // dlopen()

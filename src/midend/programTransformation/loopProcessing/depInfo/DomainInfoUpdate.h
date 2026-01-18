@@ -1,7 +1,7 @@
 #ifndef UPDATE_DOMAININFO
 #define UPDATE_DOMAININFO
 
-#include <depInfo/DomainInfo.h>
+#include "depInfo/DomainInfo.h"
 
 class DomainCondInsertLoop {
   int level;

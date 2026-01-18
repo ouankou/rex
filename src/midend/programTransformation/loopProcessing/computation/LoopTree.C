@@ -1,13 +1,20 @@
 #include <stdio.h>
+
 #include <stdlib.h>
 
-#include <CommandOptions.h>
-#include <LoopTransformInterface.h>
-#include <LoopTree.h>
-#include <LoopTreeBuild.h>
-#include <LoopTreeObserver.h>
-#include <ObserveObject.h>
-#include <SymbolicBound.h>
+#include "CommandOptions.h"
+
+#include "LoopTransformInterface.h"
+
+#include "LoopTree.h"
+
+#include "LoopTreeBuild.h"
+
+#include "LoopTreeObserver.h"
+
+#include "ObserveObject.h"
+
+#include "SymbolicBound.h"
 
 bool LoopTreeLoopNode ::SelfRemove() {
   LoopTreeGetVarBound f(this);

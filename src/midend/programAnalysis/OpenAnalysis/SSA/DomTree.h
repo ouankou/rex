@@ -46,11 +46,13 @@
 
 //--------------------------------------------------------------------------------------------------------------------
 // OpenAnalysis headers
-#include <OpenAnalysis/Utils/DGraph.h>
-#include <OpenAnalysis/Utils/Tree.h>
+#include "OpenAnalysis/Utils/DGraph.h"
+
+#include "OpenAnalysis/Utils/Tree.h"
 
 // STL headers
 #include <map>
+
 #include <set>
 //--------------------------------------------------------------------------------------------------------------------
 

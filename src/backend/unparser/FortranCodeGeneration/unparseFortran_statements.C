@@ -5,7 +5,9 @@
  */
 
 #include "sage3basic.h"
+
 #include "unparser.h"
+
 #include <limits>
 
 // DQ (10/14/2010):  This should only be included by source files that require
@@ -13,7 +15,6 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 #ifdef _MSC_VER
 #define strncasecmp _strnicmp
 #endif

@@ -2,16 +2,25 @@
 #define DFA_TO_DOT_H
 
 // #include "rose.h"
+
 #include <cctype>
+
 #include <iomanip>
+
 #include <iostream>
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
 #include <stdint.h>
+
 #include <string>
 
 #include "DefUseAnalysis.h"
+
 #include "filteredCFG.h"
 
 class LivenessAnalysis;

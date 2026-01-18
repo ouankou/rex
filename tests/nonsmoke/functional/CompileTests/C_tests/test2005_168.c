@@ -22,41 +22,37 @@ Compiling the code:
 */
 
 /*** generates code for sla prototypes ***/
-#define SLA_FCN_PROTO(N,T) \
-int N( int *argc \
-     , char **argv \
-     , const char *flind \
-     , const char *assop \
-     , const char *pname \
-     , T *value \
-     , int argd /* no default argument */ \
-     )
+#define SLA_FCN_PROTO(N, T)                                                    \
+  int N(int *argc, char **argv, const char *flind, const char *assop,          \
+        const char *pname, T *value, int argd /* no default argument */        \
+  )
 
 /*** For allocating and deleting memory ***/
 // #ifndef __cplusplus
 // #include <malloc.h>
 // #endif
 
-
 /*** Sla for type T (automatically uses function M to modify). ***/
-#define SLA_CNV(C) \
-  char **rr, eol='\0'; \
-  int i, nvalue; \
-  rr = (char**)malloc( (*argc)*sizeof(char*) ); \
-  for ( i=0; i<*argc; i++ ) rr[i] = &eol; \
-  nvalue = sla_str( argc, argv, flind, assop, pname, rr, argd ); \
-  if ( nvalue > 0 && value != NULL ) { \
-    if ( *pname == '*' ) { \
-      for ( i=0; i<nvalue; i++ ) value[i] = C(rr[i]); \
-    } \
-    else { \
-      for ( i=0; i<nvalue; i++ ) value[0] = C(rr[i]); \
-    } \
-  } \
-  free(rr); \
+#define SLA_CNV(C)                                                             \
+  char **rr, eol = '\0';                                                       \
+  int i, nvalue;                                                               \
+  rr = (char **)malloc((*argc) * sizeof(char *));                              \
+  for (i = 0; i < *argc; i++)                                                  \
+    rr[i] = &eol;                                                              \
+  nvalue = sla_str(argc, argv, flind, assop, pname, rr, argd);                 \
+  if (nvalue > 0 && value != NULL) {                                           \
+    if (*pname == '*') {                                                       \
+      for (i = 0; i < nvalue; i++)                                             \
+        value[i] = C(rr[i]);                                                   \
+    } else {                                                                   \
+      for (i = 0; i < nvalue; i++)                                             \
+        value[0] = C(rr[i]);                                                   \
+    }                                                                          \
+  }                                                                            \
+  free(rr);                                                                    \
   return nvalue;
 
-#include<sla.h>
+#include "sla.h"
 
 /*
   Generate additional sla for various primitive types.
@@ -66,8 +62,4 @@ int N( int *argc \
   > CC -P sla.cc
   > pgrep 's/^(int sla\s*\([^\{]*).*$/$1;/' sla.i -s
  */
-SLA_FCN_PROTO( sla_float, float )
-   {
-     SLA_CNV(atof) 
-   }
-
+SLA_FCN_PROTO(sla_float, float) { SLA_CNV(atof) }

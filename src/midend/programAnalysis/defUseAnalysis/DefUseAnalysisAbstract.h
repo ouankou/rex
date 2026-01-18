@@ -8,15 +8,24 @@
 #define __DefUseAnalysisAbstractPF_HXX_LOADED__
 
 // #include "rose.h"
+
 #include "DFAFilter.h"
+
 #include "DefUseAnalysis.h"
+
+#include "cfgToDot.h"
+
 #include "dfaToDot.h"
+
 #include "filteredCFG.h"
+
 #include "support.h"
-#include <cfgToDot.h>
+
+#include "virtualCFG.h"
+
 #include <list>
+
 #include <string>
-#include <virtualCFG.h>
 // The abstract interface for Data Flow analysis
 class DefUseAnalysisAbstract : public Support {
 protected:

@@ -8,11 +8,23 @@
 #ifndef UNPARSER_MOD_SAGE
 #define UNPARSER_MOD_SAGE
 
+#include <string>
+
+#include <utility>
+
+#include <vector>
+
 #include "unparser.h"
 class SgExpression;
 class SgType;
 class SgExprListExp;
 class SgConstructorInitializer;
+class SgDeclarationStatement;
+class SgInitializedName;
+class SgLocatedNode;
+class SgMemberFunctionRefExp;
+class SgNode;
+class SgUnparse_Info;
 
 class Unparser;
 

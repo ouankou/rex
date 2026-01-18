@@ -2,8 +2,9 @@
 #ifndef DOMAIN_DEP_INTERFACE
 #define DOMAIN_DEP_INTERFACE
 
-#include <DepInfo.h>
-#include <LatticeElemList.h>
+#include "DepInfo.h"
+
+#include "LatticeElemList.h"
 
 class DomainCond : protected DepInfo {
 public:

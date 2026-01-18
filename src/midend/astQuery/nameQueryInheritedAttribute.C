@@ -2,6 +2,7 @@
 #include "sage3basic.h"
 
 #include "nameQuery.h"
+
 #include "nameQueryInheritedAttribute.h"
 
 NameQueryInheritedAttributeType::~NameQueryInheritedAttributeType() {}

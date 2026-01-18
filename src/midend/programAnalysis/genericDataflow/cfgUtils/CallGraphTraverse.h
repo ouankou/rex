@@ -1,15 +1,21 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef CALL_GRAPH_TRAVERSE_H
 #define CALL_GRAPH_TRAVERSE_H
 
 #include "CallGraph.h"
+
+#include "sage3.h"
+
 #include <list>
+
 #include <map>
-#include <sage3.h>
+
 #include <set>
+
 #include <string>
+
 #include <utility>
 
 // namespace CallGraph

@@ -8,12 +8,10 @@ By C. Liao
 #include <omp.h>
 #endif
 
-int main(void)
-{
+int main(void) {
 #pragma omp parallel
   {
     printf("Hello,world!");
   }
   return 0;
 }
-

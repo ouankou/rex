@@ -6,7 +6,9 @@
 //===-----------------------------------------------------------------------------===//
 
 #include "Tokens.h"
+
 #include <iostream>
+
 #include <sstream>
 
 namespace Rose {

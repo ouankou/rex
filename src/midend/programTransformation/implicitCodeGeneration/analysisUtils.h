@@ -1,5 +1,8 @@
 
+#include "sage3basic.h"
+
 #include <list>
+
 #include <utility>
 
 // typedef std::pair<SgStatementPtrList *, SgStatementPtrList::iterator>

@@ -2,12 +2,17 @@
 #define _CONTROLFLOWGRAPH_H_
 
 #include "CFGImpl.h"
+
 #include "GraphDotOutput.h"
+
 #include "SimpleDirectedGraph.h"
+
 #include "virtualCFG.h"
 
 #include <map>
+
 #include <queue>
+
 #include <set>
 
 // DQ (12/30/2005): This is a Bad Bad thing to do (I can explain)

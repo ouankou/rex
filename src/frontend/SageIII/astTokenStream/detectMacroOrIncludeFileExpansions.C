@@ -1,8 +1,11 @@
 #include "previousAndNextNode.h"
+
 #include "sage3basic.h"
+
 #include "tokenStreamMapping.h"
 
 #include <algorithm>
+
 #include <cctype>
 
 using namespace std;

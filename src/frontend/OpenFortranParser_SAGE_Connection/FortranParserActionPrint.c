@@ -1,13 +1,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "ActionEnums.h"
-#include "FortranParserAction.h"
-#include "token.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <ActionEnums.h>
 
+#include <FortranParserAction.h>
+
+#include <stdio.h>
+
+#include <token.h>
+
+#include <stdlib.h>
+
+#include <string.h>
 void c_action_name(Token_t *carg_0) {
   printf("c_action_%s arguments (%d args):\n", "name", 1);
 

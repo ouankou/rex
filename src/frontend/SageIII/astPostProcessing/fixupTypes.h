@@ -2,7 +2,6 @@
 #define FIXUP_TYPES_H
 
 #include "Cxx_Grammar.h"
-
 /*! \brief This traversal uses the Memory Pool traversal to fixup types in
 declarations that can be shared but are not. (e.g SgclassDeclarations).
 

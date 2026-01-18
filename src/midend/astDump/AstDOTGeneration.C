@@ -7,7 +7,9 @@
 #define ASTDOTGENERATION_C
 
 #include "AstDOTGeneration.h"
+
 #include "sage3basic.h"
+
 #include "transformationTracking.h"
 
 // DQ (10/21/2010):  This should only be included by source files that require
@@ -15,11 +17,11 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 #define TEMPLATE_IMPLEMENTATIONS
+#include "AstConsistencyTests.h"
+
 #include "AstDOTGenerationImpl.C"
 #undef TEMPLATE_IMPLEMENTATIONS
-#include "AstConsistencyTests.h"
 
 using namespace std;  // DQ (12/31/2005): This is OK if not declared in a header
                       // file

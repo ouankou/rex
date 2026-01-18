@@ -1,5 +1,7 @@
-#include <DepInfo.h>
-#include <mlog.h>
+#include "DepInfo.h"
+
+#include "mlog.h"
+
 #include <sstream>
 
 class DepEDDTypeInfo : public DepInfoImpl {

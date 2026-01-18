@@ -1,11 +1,15 @@
 #ifndef CFG_ROSE_H
 #define CFG_ROSE_H
 
-#include <AstInterface.h>
-#include <CommandOptions.h>
-#include <ProcessAstTree.h>
-#include <PtrMap.h>
-#include <ROSE_ABORT.h>
+#include "AstInterface.h"
+
+#include "CommandOptions.h"
+
+#include "ProcessAstTree.h"
+
+#include "PtrMap.h"
+
+#include "ROSE_ABORT.h"
 
 class CFGConfig {
 public:

@@ -5,7 +5,9 @@
 #define AST_STATISTICS_H
 
 #include "AstProcessing.h"
+
 #include <iomanip>
+
 #include <string>
 
 /*! \brief This is a mechanism for reporting statistical data about the AST,

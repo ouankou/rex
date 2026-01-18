@@ -7,9 +7,9 @@
 #ifndef ASTSHAREDMEMORYPARALLELPROCESSING_H
 #define ASTSHAREDMEMORYPARALLELPROCESSING_H
 
-#include "rosePublicConfig.h"
-
 #include "AstProcessing.h"
+
+#include "rosePublicConfig.h"
 
 // Class containing all the information needed to synchronize parallelizable
 // traversals. All traversals running synchronously must have a shallow copy of

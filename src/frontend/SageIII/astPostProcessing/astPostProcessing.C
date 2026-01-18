@@ -2,6 +2,7 @@
 #include "sage3basic.h"
 
 #include "AstFixup.h"
+
 #include "astPostProcessing.h"
 
 // DQ (10/14/2010):  This should only be included by source files that require

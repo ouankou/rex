@@ -2,8 +2,9 @@
 Hi Dan,
 compiling the following code
 #include "rose.h"
-#include <stdarg.h>
 
+
+#include <stdarg.h>
 int main(){
    va_list ap;
    va_end(ap);
@@ -37,10 +38,7 @@ where the constructs is buildin.
 */
 
 #include <stdarg.h>
-
-int main()
-   {
-     va_list ap;
-     va_end(ap);
-   }
-
+int main() {
+  va_list ap;
+  va_end(ap);
+}

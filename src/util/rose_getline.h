@@ -2,8 +2,11 @@
 #define Rose_getline_H
 
 #include "rosedll.h"
+
 #include <istream>
+
 #include <stdio.h>
+
 #include <string>
 
 #include <unistd.h>

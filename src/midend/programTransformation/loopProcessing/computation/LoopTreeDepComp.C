@@ -1,13 +1,20 @@
-#include <LoopTreeBuild.h>
-#include <LoopTreeDepComp.h>
+#include "LoopTreeBuild.h"
+
+#include "LoopTreeDepComp.h"
+
 #include <sstream>
+
 #include <stdlib.h>
 
-#include <DepGraphBuild.h>
-#include <DepGraphTransform.h>
-#include <DomainInfo.h>
-#include <GraphIO.h>
-#include <LoopTreeTransform.h>
+#include "DepGraphBuild.h"
+
+#include "DepGraphTransform.h"
+
+#include "DomainInfo.h"
+
+#include "GraphIO.h"
+
+#include "LoopTreeTransform.h"
 
 void LoopTreeDepGraphCreate::AddNode(LoopTreeDepGraphNode *result) {
   LoopTreeNode *s = result->GetInfo();
@@ -375,7 +382,7 @@ LoopTreeDepCompSubtree ::LoopTreeDepCompSubtree(LoopTreeDepComp &comp,
 template class DepInfoSetGraphCreate<LoopTreeDepGraphNode>;
 template class TransDepGraphCreate<LoopTreeDepGraphNode>;
 template class SelectPtrSet<const LoopTreeDepGraphNode>;
-#include <LoopAnalysis.C>
+#include "LoopAnalysis.C"
 template class PerfectLoopSlicable<DepInfoEdge, LoopTreeDepGraph>;
 template class PerfectLoopReversible<DepInfoEdge, LoopTreeDepGraph>;
 template class TransLoopSlicable<LoopTreeDepGraphNode>;

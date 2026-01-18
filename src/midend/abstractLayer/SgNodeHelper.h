@@ -2,8 +2,11 @@
 #define SgNodeHelper_H
 
 #include <list>
+
 #include <set>
+
 #include <string>
+
 #include <vector>
 
 class SgNode;

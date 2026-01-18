@@ -1,9 +1,12 @@
 // Test code for string utility library
-#include <rose.h>
+#include "rose.h"
 
-#include <Rose/StringUtility.h>
-#include <StringUtility/StringToNumber.h>
+#include "Rose/StringUtility.h"
+
+#include "StringUtility/StringToNumber.h"
+
 #include <algorithm>
+
 #include <iostream>
 
 #define check(X) ASSERT_require(X)
@@ -16,595 +19,587 @@
 using namespace Rose;
 using namespace Rose::StringUtility;
 
-static std::string
-got(const std::string &s) {
-    return "got \"" + s + "\"";
+static std::string got(const std::string &s) { return "got \"" + s + "\""; }
+
+static void test_isLineTerminated() {
+  check(isLineTerminated("hello world\n"));
+  check(isLineTerminated("hello world\r"));
+  check(isLineTerminated("hello world\r\n"));
+  check(isLineTerminated("hello world\n\r"));
+
+  check(isLineTerminated("\n"));
+  check(isLineTerminated("\r"));
+  check(isLineTerminated("\r\n"));
+  check(isLineTerminated("\n\r"));
+
+  check(!isLineTerminated("\nhello world"));
+  check(!isLineTerminated("\rhello world"));
+  check(!isLineTerminated("\r\nhello world"));
+  check(!isLineTerminated("\n\rhello world"));
+
+  check(!isLineTerminated("hello\nworld"));
+  check(!isLineTerminated("hello\rworld"));
+  check(!isLineTerminated("hello\r\nworld"));
+  check(!isLineTerminated("hello\n\rworld"));
+
+  check(!isLineTerminated(""));
+  check(!isLineTerminated(std::string("") + '\0'));
+  check(!isLineTerminated(std::string("\n") + '\0'));
+  check(!isLineTerminated(std::string("\r") + '\0'));
+  check(!isLineTerminated(std::string("\r\n") + '\0'));
+  check(!isLineTerminated(std::string("\n\r") + '\0'));
+
+  check(isLineTerminated('\0' + std::string("\n")));
+  check(isLineTerminated('\0' + std::string("\r")));
+  check(isLineTerminated('\0' + std::string("\r\n")));
+  check(isLineTerminated('\0' + std::string("\n\r")));
 }
 
-static void
-test_isLineTerminated() {
-    check(isLineTerminated("hello world\n"));
-    check(isLineTerminated("hello world\r"));
-    check(isLineTerminated("hello world\r\n"));
-    check(isLineTerminated("hello world\n\r"));
+static void test_prefixLines() {
+  // Tests using an empty string as input. Empty lines are never modified.
+  check(prefixLines("", "L", false, false) == "");
+  check(prefixLines("", "L", true, false) == "");
+  check(prefixLines("", "L", false, true) == "");
+  check(prefixLines("", "L", true, true) == "");
 
-    check(isLineTerminated("\n"));
-    check(isLineTerminated("\r"));
-    check(isLineTerminated("\r\n"));
-    check(isLineTerminated("\n\r"));
+  // Tests without internal line termination.
+  check(prefixLines("aaa", "L", false, false) == "aaa");
+  check(prefixLines("aaa", "L", true, false) == "Laaa");
+  check(prefixLines("aaa", "L", false, true) == "aaa");
+  check(prefixLines("aaa", "L", true, true) == "Laaa");
 
-    check(!isLineTerminated("\nhello world"));
-    check(!isLineTerminated("\rhello world"));
-    check(!isLineTerminated("\r\nhello world"));
-    check(!isLineTerminated("\n\rhello world"));
+  // Tests with trailing line termination.
+  check(prefixLines("aaa\n", "L", false, false) == "aaa\n"); // LF (unix)
+  check(prefixLines("aaa\n", "L", true, false) == "Laaa\n");
+  check(prefixLines("aaa\n", "L", false, true) == "aaa\nL");
+  check(prefixLines("aaa\n", "L", true, true) == "Laaa\nL");
 
-    check(!isLineTerminated("hello\nworld"));
-    check(!isLineTerminated("hello\rworld"));
-    check(!isLineTerminated("hello\r\nworld"));
-    check(!isLineTerminated("hello\n\rworld"));
+  check(prefixLines("aaa\r", "L", false, false) == "aaa\r"); // CR only
+  check(prefixLines("aaa\r", "L", true, false) == "Laaa\r");
+  check(prefixLines("aaa\r", "L", false, true) == "aaa\rL");
+  check(prefixLines("aaa\r", "L", true, true) == "Laaa\rL");
 
-    check(!isLineTerminated(""));
-    check(!isLineTerminated(std::string("")+'\0'));
-    check(!isLineTerminated(std::string("\n")+'\0'));
-    check(!isLineTerminated(std::string("\r")+'\0'));
-    check(!isLineTerminated(std::string("\r\n")+'\0'));
-    check(!isLineTerminated(std::string("\n\r")+'\0'));
+  check(prefixLines("aaa\r\n", "L", false, false) == "aaa\r\n"); // CRLF
+  check(prefixLines("aaa\r\n", "L", true, false) == "Laaa\r\n");
+  check(prefixLines("aaa\r\n", "L", false, true) == "aaa\r\nL");
+  check(prefixLines("aaa\r\n", "L", true, true) == "Laaa\r\nL");
 
-    check(isLineTerminated('\0'+std::string("\n")));
-    check(isLineTerminated('\0'+std::string("\r")));
-    check(isLineTerminated('\0'+std::string("\r\n")));
-    check(isLineTerminated('\0'+std::string("\n\r")));
+  // Tests with internal line termination.
+  check(prefixLines("aaa\nbbb", "L", false, false) == "aaa\nLbbb"); // LF (unix)
+  check(prefixLines("aaa\nbbb", "L", true, false) == "Laaa\nLbbb");
+  check(prefixLines("aaa\nbbb", "L", false, true) == "aaa\nLbbb");
+  check(prefixLines("aaa\nbbb", "L", true, true) == "Laaa\nLbbb");
+
+  check(prefixLines("aaa\rbbb", "L", false, false) == "aaa\rLbbb"); // CR only
+  check(prefixLines("aaa\rbbb", "L", true, false) == "Laaa\rLbbb");
+  check(prefixLines("aaa\rbbb", "L", false, true) == "aaa\rLbbb");
+  check(prefixLines("aaa\rbbb", "L", true, true) == "Laaa\rLbbb");
+
+  check(prefixLines("aaa\r\nbbb", "L", false, false) == "aaa\r\nLbbb"); // CRLF
+  check(prefixLines("aaa\r\nbbb", "L", true, false) == "Laaa\r\nLbbb");
+  check(prefixLines("aaa\r\nbbb", "L", false, true) == "aaa\r\nLbbb");
+  check(prefixLines("aaa\r\nbbb", "L", true, true) == "Laaa\r\nLbbb");
+
+  // Tests for multiple lines
+  check(prefixLines("aaa\nbbb\nccc\n", "L", false, false) ==
+        "aaa\nLbbb\nLccc\n"); // LF (unix)
+  check(prefixLines("aaa\nbbb\nccc\n", "L", true, false) ==
+        "Laaa\nLbbb\nLccc\n");
+  check(prefixLines("aaa\nbbb\nccc\n", "L", false, true) ==
+        "aaa\nLbbb\nLccc\nL");
+  check(prefixLines("aaa\nbbb\nccc\n", "L", true, true) ==
+        "Laaa\nLbbb\nLccc\nL");
+
+  check(prefixLines("aaa\rbbb\rccc\r", "L", false, false) ==
+        "aaa\rLbbb\rLccc\r"); // CR only
+  check(prefixLines("aaa\rbbb\rccc\r", "L", true, false) ==
+        "Laaa\rLbbb\rLccc\r");
+  check(prefixLines("aaa\rbbb\rccc\r", "L", false, true) ==
+        "aaa\rLbbb\rLccc\rL");
+  check(prefixLines("aaa\rbbb\rccc\r", "L", true, true) ==
+        "Laaa\rLbbb\rLccc\rL");
+
+  check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", false, false) ==
+        "aaa\r\nLbbb\r\nLccc\r\n"); // CR-LF
+  check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", true, false) ==
+        "Laaa\r\nLbbb\r\nLccc\r\n");
+  check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", false, true) ==
+        "aaa\r\nLbbb\r\nLccc\r\nL");
+  check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", true, true) ==
+        "Laaa\r\nLbbb\r\nLccc\r\nL");
+
+  // Tests for default arguments
+  check(prefixLines("aaa\n", "L") == "Laaa\n");
+  check(prefixLines("aaa\nbbb\nccc\n", "L") == "Laaa\nLbbb\nLccc\n");
+
+  // Test longer prefixes
+  check(prefixLines("line1\nline2\nline3\n", "___", false, false) ==
+        "line1\n___line2\n___line3\n");
+  check(prefixLines("line1\nline2\nline3\n", "___", false, true) ==
+        "line1\n___line2\n___line3\n___");
+  check(prefixLines("line1\nline2\nline3\n", "___", true, false) ==
+        "___line1\n___line2\n___line3\n");
+  check(prefixLines("line1\nline2\nline3\n", "___", true, true) ==
+        "___line1\n___line2\n___line3\n___");
 }
 
-static void
-test_prefixLines() {
-    // Tests using an empty string as input. Empty lines are never modified.
-    check(prefixLines("", "L", false, false)    == "");
-    check(prefixLines("", "L", true, false)     == "");
-    check(prefixLines("", "L", false, true)     == "");
-    check(prefixLines("", "L", true, true)      == "");
+static void test_makeOneLine() {
+  // These test that the input does not change if it is only one line to start
+  // with.
+  check(makeOneLine("hello world") == "hello world");
+  check(makeOneLine("   hello world") == "   hello world");
+  check(makeOneLine("hello world   ") == "hello world   ");
+  check(makeOneLine("hello   world") == "hello   world");
 
-    // Tests without internal line termination.
-    check(prefixLines("aaa", "L", false, false) == "aaa");
-    check(prefixLines("aaa", "L", true, false)  == "Laaa");
-    check(prefixLines("aaa", "L", false, true)  == "aaa");
-    check(prefixLines("aaa", "L", true, true)   == "Laaa");
+  // These test cases with internal line termination and no white space around
+  // the line termination
+  check(makeOneLine("hello\nworld") == "hello world");
+  check(makeOneLine("hello\n\nworld") == "hello world");
+  check(makeOneLine("hello\rworld") == "hello world");
+  check(makeOneLine("hello\n\rworld") == "hello world");
 
-    // Tests with trailing line termination.
-    check(prefixLines("aaa\n", "L", false, false) == "aaa\n"); // LF (unix)
-    check(prefixLines("aaa\n", "L", true, false)  == "Laaa\n");
-    check(prefixLines("aaa\n", "L", false, true)  == "aaa\nL");
-    check(prefixLines("aaa\n", "L", true, true)   == "Laaa\nL");
+  // These test line termination at the beginning and end of the string.
+  check(makeOneLine("\nhello world") == "hello world");
+  check(makeOneLine("  \n  hello world") == "hello world");
+  check(makeOneLine("\n\nhello world") == "hello world");
+  check(makeOneLine("hello world\n") == "hello world");
+  check(makeOneLine("hello world  \n  ") == "hello world");
+  check(makeOneLine("hello world\n\n") == "hello world");
 
-    check(prefixLines("aaa\r", "L", false, false) == "aaa\r"); // CR only
-    check(prefixLines("aaa\r", "L", true, false)  == "Laaa\r");
-    check(prefixLines("aaa\r", "L", false, true)  == "aaa\rL");
-    check(prefixLines("aaa\r", "L", true, true)   == "Laaa\rL");
+  // These test multi-line cases with surrounding white space
+  check(makeOneLine("hello\n  world") == "hello world");
+  check(makeOneLine("hello  \nworld") == "hello world");
+  check(makeOneLine("hello  \n  world") == "hello world");
+  check(makeOneLine("hello  \n\n world") == "hello world");
 
-    check(prefixLines("aaa\r\n", "L", false, false) == "aaa\r\n"); // CRLF
-    check(prefixLines("aaa\r\n", "L", true, false)  == "Laaa\r\n");
-    check(prefixLines("aaa\r\n", "L", false, true)  == "aaa\r\nL");
-    check(prefixLines("aaa\r\n", "L", true, true)   == "Laaa\r\nL");
+  // These test blank lines (lines with just white space)
+  check(makeOneLine("hello\n   \nworld") == "hello world");
+  check(makeOneLine("hello  \n  \n  world") == "hello world");
 
-    // Tests with internal line termination.
-    check(prefixLines("aaa\nbbb", "L", false, false) == "aaa\nLbbb"); // LF (unix)
-    check(prefixLines("aaa\nbbb", "L", true, false)  == "Laaa\nLbbb");
-    check(prefixLines("aaa\nbbb", "L", false, true)  == "aaa\nLbbb");
-    check(prefixLines("aaa\nbbb", "L", true, true)   == "Laaa\nLbbb");
-
-    check(prefixLines("aaa\rbbb", "L", false, false) == "aaa\rLbbb"); // CR only
-    check(prefixLines("aaa\rbbb", "L", true, false)  == "Laaa\rLbbb");
-    check(prefixLines("aaa\rbbb", "L", false, true)  == "aaa\rLbbb");
-    check(prefixLines("aaa\rbbb", "L", true, true)   == "Laaa\rLbbb");
-
-    check(prefixLines("aaa\r\nbbb", "L", false, false) ==
-          "aaa\r\nLbbb"); // CRLF
-    check(prefixLines("aaa\r\nbbb", "L", true, false)  == "Laaa\r\nLbbb");
-    check(prefixLines("aaa\r\nbbb", "L", false, true)  == "aaa\r\nLbbb");
-    check(prefixLines("aaa\r\nbbb", "L", true, true)   == "Laaa\r\nLbbb");
-
-    // Tests for multiple lines
-    check(prefixLines("aaa\nbbb\nccc\n", "L", false, false) == "aaa\nLbbb\nLccc\n"); // LF (unix)
-    check(prefixLines("aaa\nbbb\nccc\n", "L", true, false)  == "Laaa\nLbbb\nLccc\n");
-    check(prefixLines("aaa\nbbb\nccc\n", "L", false, true)  == "aaa\nLbbb\nLccc\nL");
-    check(prefixLines("aaa\nbbb\nccc\n", "L", true, true)   == "Laaa\nLbbb\nLccc\nL");
-
-    check(prefixLines("aaa\rbbb\rccc\r", "L", false, false) == "aaa\rLbbb\rLccc\r"); // CR only
-    check(prefixLines("aaa\rbbb\rccc\r", "L", true, false)  == "Laaa\rLbbb\rLccc\r");
-    check(prefixLines("aaa\rbbb\rccc\r", "L", false, true)  == "aaa\rLbbb\rLccc\rL");
-    check(prefixLines("aaa\rbbb\rccc\r", "L", true, true)   == "Laaa\rLbbb\rLccc\rL");
-
-    check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", false, false) == "aaa\r\nLbbb\r\nLccc\r\n"); // CR-LF
-    check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", true, false)  == "Laaa\r\nLbbb\r\nLccc\r\n");
-    check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", false, true)  == "aaa\r\nLbbb\r\nLccc\r\nL");
-    check(prefixLines("aaa\r\nbbb\r\nccc\r\n", "L", true, true)   == "Laaa\r\nLbbb\r\nLccc\r\nL");
-
-    // Tests for default arguments
-    check(prefixLines("aaa\n", "L")             == "Laaa\n");
-    check(prefixLines("aaa\nbbb\nccc\n", "L")   == "Laaa\nLbbb\nLccc\n");
-
-
-    // Test longer prefixes
-    check(prefixLines("line1\nline2\nline3\n", "___", false, false) == "line1\n___line2\n___line3\n");
-    check(prefixLines("line1\nline2\nline3\n", "___", false, true)  == "line1\n___line2\n___line3\n___");
-    check(prefixLines("line1\nline2\nline3\n", "___", true, false)  == "___line1\n___line2\n___line3\n");
-    check(prefixLines("line1\nline2\nline3\n", "___", true, true)   == "___line1\n___line2\n___line3\n___");
+  // These test user-defined replacement strings
+  check(makeOneLine("hello\nworld", "[]") == "hello[]world");
+  check(makeOneLine("\nhello\n  \n  world\n", "[]") == "hello[]world");
+  check(makeOneLine("hello\n\n\n\n\nworld\n\n\n", "\n") == "hello\nworld");
 }
 
-static void
-test_makeOneLine()
-{
-    // These test that the input does not change if it is only one line to start with.
-    check(makeOneLine("hello world")            == "hello world");
-    check(makeOneLine("   hello world")         == "   hello world");
-    check(makeOneLine("hello world   ")         == "hello world   ");
-    check(makeOneLine("hello   world")          == "hello   world");
+static void test_escapes() {
+  const std::string embeddedNul("abc\0xyz", 7);
 
-    // These test cases with internal line termination and no white space around the line termination
-    check(makeOneLine("hello\nworld")           == "hello world");
-    check(makeOneLine("hello\n\nworld")         == "hello world");
-    check(makeOneLine("hello\rworld")           == "hello world");
-    check(makeOneLine("hello\n\rworld")         == "hello world");
+  // htmlEscape
+  check(htmlEscape("") == "");
+  check(htmlEscape(embeddedNul) == embeddedNul);
+  check(htmlEscape("<>") == "&lt;&gt;");
+  check(htmlEscape("-&-") == "-&amp;-");
+  check(htmlEscape("&amp;") == "&amp;amp;");
 
-    // These test line termination at the beginning and end of the string.
-    check(makeOneLine("\nhello world")          == "hello world");
-    check(makeOneLine("  \n  hello world")      == "hello world");
-    check(makeOneLine("\n\nhello world")        == "hello world");
-    check(makeOneLine("hello world\n")          == "hello world");
-    check(makeOneLine("hello world  \n  ")      == "hello world");
-    check(makeOneLine("hello world\n\n")        == "hello world");
+  // cEscape
+  check(cEscape("") == "");
+  check(cEscape(embeddedNul) == "abc\\000xyz");
+  check(cEscape("\a") == "\\a");
+  check(cEscape("\b") == "\\b");
+  check(cEscape("\t") == "\\t");
+  check(cEscape("\n") == "\\n");
+  check(cEscape("\v") == "\\v");
+  check(cEscape("\f") == "\\f");
+  check(cEscape("\r") == "\\r");
+  check(cEscape("\\") == "\\\\");
 
-    // These test multi-line cases with surrounding white space
-    check(makeOneLine("hello\n  world")         == "hello world");
-    check(makeOneLine("hello  \nworld")         == "hello world");
-    check(makeOneLine("hello  \n  world")       == "hello world");
-    check(makeOneLine("hello  \n\n world")      == "hello world");
+  // cEscape quote escapes
+  check(cEscape("\"") == "\\\"");
+  check(cEscape("'") == "'");
+  check(cEscape('"') == "\"");
+  check(cEscape('\'') == "\\'");
 
-    // These test blank lines (lines with just white space)
-    check(makeOneLine("hello\n   \nworld")      == "hello world");
-    check(makeOneLine("hello  \n  \n  world")   == "hello world");
+  check(cEscape("\"", '\'') == "\"");
+  check(cEscape("'", '\'') == "\\'");
+  check(cEscape('"', '"') == "\\\"");
+  check(cEscape('\'', '"') == "'");
 
-    // These test user-defined replacement strings
-    check(makeOneLine("hello\nworld", "[]")     == "hello[]world");
-    check(makeOneLine("\nhello\n  \n  world\n", "[]") == "hello[]world");
-    check(makeOneLine("hello\n\n\n\n\nworld\n\n\n", "\n") == "hello\nworld");
+  check(cEscape("\377") == "\\377");
+
+  check(cEscape("-\t") == "-\\t");
+  check(cEscape("\t-") == "\\t-");
+  check(cEscape("\t\t") == "\\t\\t");
+  check(cEscape("-\t-") == "-\\t-");
+
+  // C++ unescape
+  check(cUnescape("") == "");
+  check(cUnescape("a") == "a");
+  check(cUnescape("a\\0") == std::string("a") + '\0');
+  check(cUnescape("a\\0b") == std::string("a") + '\0' + "b");
+  check(cUnescape("a\\00b") == std::string("a") + '\0' + "b");
+  check(cUnescape("a\\000b") == std::string("a") + '\0' + "b");
+  check(cUnescape("a\\0000b") == std::string("a") + '\0' + "0b");
+  check(cUnescape("a\\'b") == "a'b");
+  check(cUnescape("a\\\"b") == "a\"b");
+  check(cUnescape("a\\?b") == "a?b");
+  check(cUnescape("a\\ab") == "a\ab");
+  check(cUnescape("a\\bb") == "a\bb");
+  check(cUnescape("a\\fb") == "a\fb");
+  check(cUnescape("a\\nb") == "a\nb");
+  check(cUnescape("a\\rb") == "a\rb");
+  check(cUnescape("a\\tb") == "a\tb");
+  check(cUnescape("a\\vb") == "a\vb");
+  check(cUnescape("a\\x1b") == "a\033");
+  check(cUnescape("a\\x01b") == "a\033");
+  check(cUnescape("a\\x00000000001b") == "a\033");
+  check(cUnescape("a\\x00000000001B") == "a\033");
+  check(cUnescape("a\\x00000000000g") == std::string("a") + '\0' + "g");
+  check(cUnescape("a\\u1234b") == "a\\u1234b"); // unicode not implemented
+  check(cUnescape("a\\U12345678b") ==
+        "a\\U12345678b"); // unicode not implemented
 }
 
-static void
-test_escapes() {
-    const std::string embeddedNul("abc\0xyz", 7);
+static void test_listToString() {
 
-    // htmlEscape
-    check(htmlEscape("") == "");
-    check(htmlEscape(embeddedNul) == embeddedNul);
-    check(htmlEscape("<>") == "&lt;&gt;");
-    check(htmlEscape("-&-") == "-&amp;-");
-    check(htmlEscape("&amp;") == "&amp;amp;");
-    
-    // cEscape
-    check(cEscape("") == "");
-    check(cEscape(embeddedNul) == "abc\\000xyz");
-    check(cEscape("\a") == "\\a");
-    check(cEscape("\b") == "\\b");
-    check(cEscape("\t") == "\\t");
-    check(cEscape("\n") == "\\n");
-    check(cEscape("\v") == "\\v");
-    check(cEscape("\f") == "\\f");
-    check(cEscape("\r") == "\\r");
-    check(cEscape("\\") == "\\\\");
+  // Integer lists
+  std::list<int> il;
+  const std::list<int> &cil = il;
 
-    // cEscape quote escapes
-    check(cEscape("\"") == "\\\"");
-    check(cEscape("'") == "'");
-    check(cEscape('"') == "\"");
-    check(cEscape('\'') == "\\'");
+  check(listToString(cil, false) == "");
+  check(listToString(cil, true) == "");
 
-    check(cEscape("\"", '\'') == "\"");
-    check(cEscape("'", '\'') == "\\'");
-    check(cEscape('"', '"') == "\\\"");
-    check(cEscape('\'', '"') == "'");
+  il.push_back(0);
+  check(listToString(cil, false) == "0 ");
+  check(listToString(cil, true) == "0 \n");
 
-    check(cEscape("\377") == "\\377");
+  il.push_back(1);
+  check(listToString(cil, false) == "0 1 ");
+  check(listToString(cil, true) == "0 \n1 \n");
 
-    check(cEscape("-\t") == "-\\t");
-    check(cEscape("\t-") == "\\t-");
-    check(cEscape("\t\t") == "\\t\\t");
-    check(cEscape("-\t-") == "-\\t-");
+  // String lists
+  std::list<std::string> sl;
+  const std::list<std::string> &csl = sl;
 
-    // C++ unescape
-    check(cUnescape("") == "");
-    check(cUnescape("a") == "a");
-    check(cUnescape("a\\0") == std::string("a") + '\0');
-    check(cUnescape("a\\0b") == std::string("a") + '\0' + "b");
-    check(cUnescape("a\\00b") == std::string("a") + '\0' + "b");
-    check(cUnescape("a\\000b") == std::string("a") + '\0' + "b");
-    check(cUnescape("a\\0000b") == std::string("a") + '\0' + "0b");
-    check(cUnescape("a\\'b") == "a'b");
-    check(cUnescape("a\\\"b") == "a\"b");
-    check(cUnescape("a\\?b") == "a?b");
-    check(cUnescape("a\\ab") == "a\ab");
-    check(cUnescape("a\\bb") == "a\bb");
-    check(cUnescape("a\\fb") == "a\fb");
-    check(cUnescape("a\\nb") == "a\nb");
-    check(cUnescape("a\\rb") == "a\rb");
-    check(cUnescape("a\\tb") == "a\tb");
-    check(cUnescape("a\\vb") == "a\vb");
-    check(cUnescape("a\\x1b") == "a\033");
-    check(cUnescape("a\\x01b") == "a\033");
-    check(cUnescape("a\\x00000000001b") == "a\033");
-    check(cUnescape("a\\x00000000001B") == "a\033");
-    check(cUnescape("a\\x00000000000g") == std::string("a") + '\0' + "g");
-    check(cUnescape("a\\u1234b") == "a\\u1234b");         // unicode not implemented
-    check(cUnescape("a\\U12345678b") == "a\\U12345678b"); // unicode not implemented
+  check(listToString(csl, false) == "");
+  check(listToString(csl, true) == "");
+
+  sl.push_back("a");
+  check(listToString(csl, false) == "a ");
+  check(listToString(csl, true) == "a \n");
+
+  sl.push_back("b");
+  check(listToString(csl, false) == "a b ");
+  check(listToString(csl, true) == "a \nb \n");
+
+  // String vectors (but still named "list")
+  std::vector<std::string> sv;
+  const std::vector<std::string> &csv = sv;
+
+  check(listToString(csv, false) == "");
+  check(listToString(csv, true) == "");
+
+  sv.push_back("a");
+  check(listToString(csv, false) == "a ");
+  check(listToString(csv, true) == "a \n");
+
+  sv.push_back("b");
+  check(listToString(csv, false) == "a b ");
+  check(listToString(csv, true) == "a \nb \n");
 }
 
-static void
-test_listToString() {
+static void test_stringToList() {
+  std::list<std::string> list;
 
-    // Integer lists
-    std::list<int> il;
-    const std::list<int> &cil = il;
+  // Empty strings
+  list = stringToList("");
+  check(list.empty());
 
-    check(listToString(cil, false)      == "");
-    check(listToString(cil, true)       == "");
+  // Near-empty input
+  list = stringToList("\n");
+  check(list.empty());
 
-    il.push_back(0);
-    check(listToString(cil, false)      == "0 ");
-    check(listToString(cil, true)       == "0 \n");
+  list = stringToList("\n\n");
+  check(list.empty());
 
-    il.push_back(1);
-    check(listToString(cil, false)      == "0 1 ");
-    check(listToString(cil, true)       == "0 \n1 \n");
+  // Single substrings
+  list = stringToList("a");
+  check(list.size() == 1);
+  check(list.front() == "a");
 
-    // String lists
-    std::list<std::string> sl;
-    const std::list<std::string> &csl = sl;
+  list = stringToList("a\n");
+  check(list.size() == 1);
+  check(list.front() == "a");
 
-    check(listToString(csl, false)      == "");
-    check(listToString(csl, true)       == "");
+  list = stringToList("\na");
+  check(list.size() == 1);
+  check(list.front() == "a");
 
-    sl.push_back("a");
-    check(listToString(csl, false)      == "a ");
-    check(listToString(csl, true)       == "a \n");
+  list = stringToList("\na\n");
+  check(list.size() == 1);
+  check(list.front() == "a");
 
-    sl.push_back("b");
-    check(listToString(csl, false)      == "a b ");
-    check(listToString(csl, true)       == "a \nb \n");
+  // Input resulting in two substrings
+  list = stringToList("a\nb");
+  check(list.size() == 2);
+  check(list.front() == "a");
+  check(list.back() == "b");
 
-    // String vectors (but still named "list")
-    std::vector<std::string> sv;
-    const std::vector<std::string> &csv = sv;
+  list = stringToList("a\nb\n");
+  check(list.size() == 2);
+  check(list.front() == "a");
+  check(list.back() == "b");
 
-    check(listToString(csv, false)      == "");
-    check(listToString(csv, true)       == "");
+  list = stringToList("a\n\nb\n");
+  check(list.size() == 2);
+  check(list.front() == "a");
+  check(list.back() == "b");
 
-    sv.push_back("a");
-    check(listToString(csv, false)      == "a ");
-    check(listToString(csv, true)       == "a \n");
+  list = stringToList("\n\na\n\nb\n\n");
+  check(list.size() == 2);
+  check(list.front() == "a");
+  check(list.back() == "b");
 
-    sv.push_back("b");
-    check(listToString(csv, false)      == "a b ");
-    check(listToString(csv, true)       == "a \nb \n");
+  // Input with white space
+  list = stringToList(" ");
+  check(list.size() == 1);
+  check(list.front() == " ");
+
+  list = stringToList(" \n");
+  check(list.size() == 1);
+  check(list.front() == " ");
+
+  list = stringToList("\n ");
+  check(list.size() == 1);
+  check(list.front() == " ");
+
+  list = stringToList("\n \n");
+  check(list.size() == 1);
+  check(list.front() == " ");
+
+  list = stringToList("\n\n\t\n\b\n\n");
+  check(list.size() == 2);
+  check(list.front() == "\t");
+  check(list.back() == "\b");
+
+  // Input with CR-LF termination
+  list = stringToList("\r\n");
+  check(list.size() == 1);
+  check(list.front() == "\r");
 }
 
-static void
-test_stringToList() {
-    std::list<std::string> list;
+static void test_numberToString() {
+  check(numberToString((long long)(-1)) == "-1");
+  check(numberToString((unsigned long long)1) == "1");
+  check(numberToString((long)(-1)) == "-1");
+  check(numberToString((unsigned long)1) == "1");
+  check(numberToString((int)-1) == "-1");
+  check(numberToString((unsigned int)1) == "1");
+  check(numberToString((void *)1) == "0x1");
 
-    // Empty strings
-    list = stringToList("");
-    check(list.empty());
-
-    // Near-empty input
-    list = stringToList("\n");
-    check(list.empty());
-
-    list = stringToList("\n\n");
-    check(list.empty());
-
-    // Single substrings
-    list = stringToList("a");
-    check(list.size() == 1);
-    check(list.front() == "a");
-
-    list = stringToList("a\n");
-    check(list.size() == 1);
-    check(list.front() == "a");
-
-    list = stringToList("\na");
-    check(list.size() == 1);
-    check(list.front() == "a");
-
-    list = stringToList("\na\n");
-    check(list.size() == 1);
-    check(list.front() == "a");
-
-    // Input resulting in two substrings
-    list = stringToList("a\nb");
-    check(list.size() == 2);
-    check(list.front() == "a");
-    check(list.back() == "b");
-
-    list = stringToList("a\nb\n");
-    check(list.size() == 2);
-    check(list.front() == "a");
-    check(list.back() == "b");
-
-    list = stringToList("a\n\nb\n");
-    check(list.size() == 2);
-    check(list.front() == "a");
-    check(list.back() == "b");
-
-    list = stringToList("\n\na\n\nb\n\n");
-    check(list.size() == 2);
-    check(list.front() == "a");
-    check(list.back() == "b");
-
-    // Input with white space
-    list = stringToList(" ");
-    check(list.size() == 1);
-    check(list.front() == " ");
-
-    list = stringToList(" \n");
-    check(list.size() == 1);
-    check(list.front() == " ");
-
-    list = stringToList("\n ");
-    check(list.size() == 1);
-    check(list.front() == " ");
-
-    list = stringToList("\n \n");
-    check(list.size() == 1);
-    check(list.front() == " ");
-
-    list = stringToList("\n\n\t\n\b\n\n");
-    check(list.size() == 2);
-    check(list.front() == "\t");
-    check(list.back() == "\b");
-
-    // Input with CR-LF termination
-    list = stringToList("\r\n");
-    check(list.size() == 1);
-    check(list.front() == "\r");
+  // double uses "%2.2f"
+  check(numberToString(1.0) == "1.00");
+  check(numberToString(1.0 / 32) == "0.03");
+  check(numberToString(-1.5) == "-1.50");
 }
 
-static void
-test_numberToString() {
-    check(numberToString((long long)(-1))               == "-1");
-    check(numberToString((unsigned long long)1)         == "1");
-    check(numberToString((long)(-1))                    == "-1");
-    check(numberToString((unsigned long)1)              == "1");
-    check(numberToString((int)-1)                       == "-1");
-    check(numberToString((unsigned int)1)               == "1");
-    check(numberToString((void*)1)                      == "0x1");
+static void test_numberToHexString() {
+  std::string s;
 
-    // double uses "%2.2f"
-    check(numberToString(1.0)                           == "1.00");
-    check(numberToString(1.0/32)                        == "0.03");
-    check(numberToString(-1.5)                          == "-1.50");
+  // intToHex -- only prints as many digits as necessary
+  check(intToHex((uint64_t)0) == "0x0");
+  check(intToHex((uint64_t)0xf) == "0xf");
+  check(intToHex((uint64_t)0xfff) == "0xfff");
+  check(intToHex((uint64_t)0xfedcba9f) == "0xfedcba9f");
+  check(intToHex((uint64_t)0xffffffffffffull) == "0xffffffffffff");
+
+  // toHex2 -- also prints signed and/or unsigned decimal representations
+  check(toHex2(0, 8, false, false, 0) == "0x00");
+  check(toHex2(0, 8, false, false, 0) == "0x00");
+  check(toHex2(0, 8, true, false, 0) == "0x00<0>");
+  check(toHex2(0, 8, true, true, 0) == "0x00<0>");
+
+  check(toHex2(0xff, 8, false, false, 0) == "0xff");
+  check(toHex2(0xff, 8, false, true, 0) == "0xff<-1>");
+  check(toHex2(0xff, 8, true, false, 0) == "0xff<255>");
+  check(toHex2(0xff, 8, true, true, 0) == "0xff<255,-1>");
+
+  check(toHex2(0x7ffe, 15, false, false) == "0x7ffe");
+  check(toHex2(0x7ffe, 15, false, true) == "0x7ffe<-2>");
+  check(toHex2(0x7ffe, 15, true, false) == "0x7ffe<32766>");
+  check(toHex2(0x7ffe, 15, true, true) == "0x7ffe<32766,-2>");
+
+  // shortcuts
+  check(toHex2(0x7ffe, 15) == "0x7ffe<32766,-2>");
+  check2((s = unsignedToHex((uint16_t)0xfffd)) == "0xfffd<65533>", got(s));
+  check2((s = signedToHex((uint16_t)0xfffd)) == "0xfffd<-3>", got(s));
+
+  // addrToString
+  check(addrToString(0) == "0x00000000");
+  check(addrToString(0x7fffffff) == "0x7fffffff");
+  check(addrToString(0x80000000) == "0x80000000");
+  check(addrToString(0xffffffff) == "0xffffffff");
+  check(addrToString(0x100000000ull) == "0x0000000100000000");
+  check(addrToString(0x7fffffffffffffffull) == "0x7fffffffffffffff");
+  check(addrToString(0x8000000000000000ull) == "0x8000000000000000");
+  check(addrToString(0xffffffffffffffffull) == "0xffffffffffffffff");
 }
 
-static void
-test_numberToHexString() {
-    std::string s;
+static void test_tokenize() {
+  std::list<std::string> vs;
 
-    // intToHex -- only prints as many digits as necessary
-    check(intToHex((uint64_t)0)                         == "0x0");
-    check(intToHex((uint64_t)0xf)                       == "0xf");
-    check(intToHex((uint64_t)0xfff)                     == "0xfff");
-    check(intToHex((uint64_t)0xfedcba9f)                == "0xfedcba9f");
-    check(intToHex((uint64_t)0xffffffffffffull)         == "0xffffffffffff");
+  vs = tokenize("a:bc::def:", ':');
+  check(vs.size() == 4);
 
-    // toHex2 -- also prints signed and/or unsigned decimal representations
-    check(toHex2(0, 8, false, false, 0)                 == "0x00");
-    check(toHex2(0, 8, false, false, 0)                 == "0x00");
-    check(toHex2(0, 8, true,  false, 0)                 == "0x00<0>");
-    check(toHex2(0, 8, true,  true,  0)                 == "0x00<0>");
-
-    check(toHex2(0xff, 8, false, false, 0)              == "0xff");
-    check(toHex2(0xff, 8, false, true,  0)              == "0xff<-1>");
-    check(toHex2(0xff, 8, true,  false, 0)              == "0xff<255>");
-    check(toHex2(0xff, 8, true,  true,  0)              == "0xff<255,-1>");
-
-    check(toHex2(0x7ffe, 15, false, false)              == "0x7ffe");
-    check(toHex2(0x7ffe, 15, false, true)               == "0x7ffe<-2>");
-    check(toHex2(0x7ffe, 15, true,  false)              == "0x7ffe<32766>");
-    check(toHex2(0x7ffe, 15, true,  true)               == "0x7ffe<32766,-2>");
-
-    // shortcuts
-    check(toHex2(0x7ffe, 15)                            == "0x7ffe<32766,-2>");
-    check2((s=unsignedToHex((uint16_t)0xfffd))          == "0xfffd<65533>", got(s));
-    check2((s=signedToHex((uint16_t)0xfffd))            == "0xfffd<-3>", got(s));
-
-    // addrToString
-    check(addrToString(0)                               == "0x00000000");
-    check(addrToString(0x7fffffff)                      == "0x7fffffff");
-    check(addrToString(0x80000000)                      == "0x80000000");
-    check(addrToString(0xffffffff)                      == "0xffffffff");
-    check(addrToString(0x100000000ull)                  == "0x0000000100000000");
-    check(addrToString(0x7fffffffffffffffull)           == "0x7fffffffffffffff");
-    check(addrToString(0x8000000000000000ull)           == "0x8000000000000000");
-    check(addrToString(0xffffffffffffffffull)           == "0xffffffffffffffff");
+  std::list<std::string>::iterator vi = vs.begin();
+  check(*vi++ == "a");
+  check(*vi++ == "bc");
+  check(*vi++ == "");
+  check(*vi++ == "def");
+  check(vi == vs.end());
 }
 
-static void
-test_tokenize() {
-    std::list<std::string> vs;
+static void test_hexadecimalToInt() {
+  check(hexadecimalToInt('0') == 0);
+  check(hexadecimalToInt('1') == 1);
+  check(hexadecimalToInt('2') == 2);
+  check(hexadecimalToInt('3') == 3);
+  check(hexadecimalToInt('4') == 4);
+  check(hexadecimalToInt('5') == 5);
+  check(hexadecimalToInt('6') == 6);
+  check(hexadecimalToInt('7') == 7);
+  check(hexadecimalToInt('8') == 8);
+  check(hexadecimalToInt('9') == 9);
+  check(hexadecimalToInt('a') == 10);
+  check(hexadecimalToInt('b') == 11);
+  check(hexadecimalToInt('c') == 12);
+  check(hexadecimalToInt('d') == 13);
+  check(hexadecimalToInt('e') == 14);
+  check(hexadecimalToInt('f') == 15);
+  check(hexadecimalToInt('A') == 10);
+  check(hexadecimalToInt('B') == 11);
+  check(hexadecimalToInt('C') == 12);
+  check(hexadecimalToInt('D') == 13);
+  check(hexadecimalToInt('E') == 14);
+  check(hexadecimalToInt('F') == 15);
 
-    vs = tokenize("a:bc::def:", ':');
-    check(vs.size() == 4);
-
-    std::list<std::string>::iterator vi = vs.begin();
-    check(*vi++ == "a");
-    check(*vi++ == "bc");
-    check(*vi++ == "");
-    check(*vi++ == "def");
-    check(vi == vs.end());
+  check(hexadecimalToInt('g') == 0);
+  check(hexadecimalToInt('G') == 0);
 }
 
-static void
-test_hexadecimalToInt() {
-    check(hexadecimalToInt('0') == 0);
-    check(hexadecimalToInt('1') == 1);
-    check(hexadecimalToInt('2') == 2);
-    check(hexadecimalToInt('3') == 3);
-    check(hexadecimalToInt('4') == 4);
-    check(hexadecimalToInt('5') == 5);
-    check(hexadecimalToInt('6') == 6);
-    check(hexadecimalToInt('7') == 7);
-    check(hexadecimalToInt('8') == 8);
-    check(hexadecimalToInt('9') == 9);
-    check(hexadecimalToInt('a') == 10);
-    check(hexadecimalToInt('b') == 11);
-    check(hexadecimalToInt('c') == 12);
-    check(hexadecimalToInt('d') == 13);
-    check(hexadecimalToInt('e') == 14);
-    check(hexadecimalToInt('f') == 15);
-    check(hexadecimalToInt('A') == 10);
-    check(hexadecimalToInt('B') == 11);
-    check(hexadecimalToInt('C') == 12);
-    check(hexadecimalToInt('D') == 13);
-    check(hexadecimalToInt('E') == 14);
-    check(hexadecimalToInt('F') == 15);
+static void test_removeRedundantSubstrings() {
+  check(removeRedundantSubstrings("") == "");
+  check(removeRedundantSubstrings("\n") == "");
+  check(removeRedundantSubstrings("\n\n") == "");
+  check(removeRedundantSubstrings("a") == "a ");
+  check(removeRedundantSubstrings("a\n") == "a ");
+  check(removeRedundantSubstrings("\na") == "a ");
+  check(removeRedundantSubstrings("\na\n") == "a ");
 
-    check(hexadecimalToInt('g') == 0);
-    check(hexadecimalToInt('G') == 0);
+  check(removeRedundantSubstrings("a\nb") == "a b ");
+  check(removeRedundantSubstrings("a\nb\n") == "a b ");
+  check(removeRedundantSubstrings("\na\n\nb\n") == "a b ");
+
+  check(removeRedundantSubstrings(" ") == "  ");
+  check(removeRedundantSubstrings(" \n") == "  ");
+  check(removeRedundantSubstrings("\n ") == "  ");
+  check(removeRedundantSubstrings("\n \n") == "  ");
+
+  check(removeRedundantSubstrings("a\nb\na") == "a b ");
+  check(removeRedundantSubstrings("b\na\nb") == "a b ");
+  check(removeRedundantSubstrings("a b b") == "a b b ");
 }
 
-static void
-test_removeRedundantSubstrings() {
-    check(removeRedundantSubstrings("")                 == "");
-    check(removeRedundantSubstrings("\n")               == "");
-    check(removeRedundantSubstrings("\n\n")             == "");
-    check(removeRedundantSubstrings("a")                == "a ");
-    check(removeRedundantSubstrings("a\n")              == "a ");
-    check(removeRedundantSubstrings("\na")              == "a ");
-    check(removeRedundantSubstrings("\na\n")            == "a ");
-
-    check(removeRedundantSubstrings("a\nb")             == "a b ");
-    check(removeRedundantSubstrings("a\nb\n")           == "a b ");
-    check(removeRedundantSubstrings("\na\n\nb\n")       == "a b ");
-
-    check(removeRedundantSubstrings(" ")                == "  ");
-    check(removeRedundantSubstrings(" \n")              == "  ");
-    check(removeRedundantSubstrings("\n ")              == "  ");
-    check(removeRedundantSubstrings("\n \n")            == "  ");
-
-    check(removeRedundantSubstrings("a\nb\na")          == "a b ");
-    check(removeRedundantSubstrings("b\na\nb")          == "a b ");
-    check(removeRedundantSubstrings("a b b")            == "a b b ");
+static void test_caseConversion() {
+  check(convertToLowerCase("") == "");
+  check(convertToLowerCase("abCDef") == "abcdef");
 }
 
-static void
-test_caseConversion() {
-    check(convertToLowerCase("")                        == "");
-    check(convertToLowerCase("abCDef")                  == "abcdef");
+static void test_fixLineTermination() {
+  // POSIX
+  check(fixLineTermination("") == "");
+  check(fixLineTermination("\n") == "\n");
+  check(fixLineTermination("\n\n") == "\n\n");
+  check(fixLineTermination("a\n") == "a\n");
+  check(fixLineTermination("\na") == "\na");
+  check(fixLineTermination("\na\n") == "\na\n");
+  check(fixLineTermination("a\nb") == "a\nb");
+  check(fixLineTermination("a\nb\n") == "a\nb\n");
+  check(fixLineTermination("\na\nb") == "\na\nb");
+  check(fixLineTermination("\na\nb\n") == "\na\nb\n");
+
+  // Microsoft and most other early OS neither Unix nor IBM
+  check(fixLineTermination("") == "");
+  check(fixLineTermination("\r\n") == "\n");
+  check(fixLineTermination("\r\n\r\n") == "\n\n");
+  check(fixLineTermination("a\r\n") == "a\n");
+  check(fixLineTermination("\r\na") == "\na");
+  check(fixLineTermination("\r\na\r\n") == "\na\n");
+  check(fixLineTermination("a\r\nb") == "a\nb");
+  check(fixLineTermination("a\r\nb\r\n") == "a\nb\n");
+  check(fixLineTermination("\r\na\r\nb") == "\na\nb");
+  check(fixLineTermination("\r\na\r\nb\r\n") == "\na\nb\n");
+
+  // Acorn BBC and RISC OS
+  check(fixLineTermination("") == "");
+  check(fixLineTermination("\n\r") == "\n");
+  check(fixLineTermination("\n\r\n\r") == "\n\n");
+  check(fixLineTermination("a\n\r") == "a\n");
+  check(fixLineTermination("\n\ra") == "\na");
+  check(fixLineTermination("\n\ra\n\r") == "\na\n");
+  check(fixLineTermination("a\n\rb") == "a\nb");
+  check(fixLineTermination("a\n\rb\n\r") == "a\nb\n");
+  check(fixLineTermination("\n\ra\n\rb") == "\na\nb");
+  check(fixLineTermination("\n\ra\n\rb\n\r") == "\na\nb\n");
+
+  // CR-only line endings
+  check(fixLineTermination("") == "");
+  check(fixLineTermination("\r") == "\n");
+  check(fixLineTermination("\r\r") == "\n\n");
+  check(fixLineTermination("a\r") == "a\n");
+  check(fixLineTermination("\ra") == "\na");
+  check(fixLineTermination("\ra\r") == "\na\n");
+  check(fixLineTermination("a\rb") == "a\nb");
+  check(fixLineTermination("a\rb\r") == "a\nb\n");
+  check(fixLineTermination("\ra\rb") == "\na\nb");
+  check(fixLineTermination("\ra\rb\r") == "\na\nb\n");
 }
 
-static void
-test_fixLineTermination() {
-    // POSIX
-    check(fixLineTermination("")                        == "");
-    check(fixLineTermination("\n")                      == "\n");
-    check(fixLineTermination("\n\n")                    == "\n\n");
-    check(fixLineTermination("a\n")                     == "a\n");
-    check(fixLineTermination("\na")                     == "\na");
-    check(fixLineTermination("\na\n")                   == "\na\n");
-    check(fixLineTermination("a\nb")                    == "a\nb");
-    check(fixLineTermination("a\nb\n")                  == "a\nb\n");
-    check(fixLineTermination("\na\nb")                  == "\na\nb");
-    check(fixLineTermination("\na\nb\n")                == "\na\nb\n");
-
-    // Microsoft and most other early OS neither Unix nor IBM
-    check(fixLineTermination("")                        == "");
-    check(fixLineTermination("\r\n")                    == "\n");
-    check(fixLineTermination("\r\n\r\n")                == "\n\n");
-    check(fixLineTermination("a\r\n")                   == "a\n");
-    check(fixLineTermination("\r\na")                   == "\na");
-    check(fixLineTermination("\r\na\r\n")               == "\na\n");
-    check(fixLineTermination("a\r\nb")                  == "a\nb");
-    check(fixLineTermination("a\r\nb\r\n")              == "a\nb\n");
-    check(fixLineTermination("\r\na\r\nb")              == "\na\nb");
-    check(fixLineTermination("\r\na\r\nb\r\n")          == "\na\nb\n");
-
-    // Acorn BBC and RISC OS
-    check(fixLineTermination("")                        == "");
-    check(fixLineTermination("\n\r")                    == "\n");
-    check(fixLineTermination("\n\r\n\r")                == "\n\n");
-    check(fixLineTermination("a\n\r")                   == "a\n");
-    check(fixLineTermination("\n\ra")                   == "\na");
-    check(fixLineTermination("\n\ra\n\r")               == "\na\n");
-    check(fixLineTermination("a\n\rb")                  == "a\nb");
-    check(fixLineTermination("a\n\rb\n\r")              == "a\nb\n");
-    check(fixLineTermination("\n\ra\n\rb")              == "\na\nb");
-    check(fixLineTermination("\n\ra\n\rb\n\r")          == "\na\nb\n");
-
-    // CR-only line endings
-    check(fixLineTermination("")                        == "");
-    check(fixLineTermination("\r")                      == "\n");
-    check(fixLineTermination("\r\r")                    == "\n\n");
-    check(fixLineTermination("a\r")                     == "a\n");
-    check(fixLineTermination("\ra")                     == "\na");
-    check(fixLineTermination("\ra\r")                   == "\na\n");
-    check(fixLineTermination("a\rb")                    == "a\nb");
-    check(fixLineTermination("a\rb\r")                  == "a\nb\n");
-    check(fixLineTermination("\ra\rb")                  == "\na\nb");
-    check(fixLineTermination("\ra\rb\r")                == "\na\nb\n");
-}
-
-
-
-
-
-
-// WARNING: This "test" doesn't really test anything. It just calls the functions and spits out results without checking that
+// WARNING: This "test" doesn't really test anything. It just calls the
+// functions and spits out results without checking that
 //          the results are valid.
-static bool
-stringTest(std::string s)
-{
-    std::string s_filename = StringUtility::stripPathFromFileName(s);
-    std::string s_path     = StringUtility::getPathFromFileName(s);
-    std::string s_nosuffix = StringUtility::stripFileSuffixFromFileName(s);
-    printf("s = %s s_filename = %s \n",s.c_str(),s_filename.c_str());
-    printf("s = %s s_path     = %s \n",s.c_str(),s_path.c_str());
-    printf("s = %s s_nosuffix = %s \n",s.c_str(),s_nosuffix.c_str());
-    printf("\n");
-    return true;
+static bool stringTest(std::string s) {
+  std::string s_filename = StringUtility::stripPathFromFileName(s);
+  std::string s_path = StringUtility::getPathFromFileName(s);
+  std::string s_nosuffix = StringUtility::stripFileSuffixFromFileName(s);
+  printf("s = %s s_filename = %s \n", s.c_str(), s_filename.c_str());
+  printf("s = %s s_path     = %s \n", s.c_str(), s_path.c_str());
+  printf("s = %s s_nosuffix = %s \n", s.c_str(), s_nosuffix.c_str());
+  printf("\n");
+  return true;
 }
 
-int
-main()
-{
-    
-    test_isLineTerminated();
-    test_prefixLines();
-    test_makeOneLine();
-    test_escapes();
-    test_listToString();
-    test_stringToList();
-    test_numberToString();
-    test_numberToHexString();
-    test_tokenize();
-    test_hexadecimalToInt();
-    test_removeRedundantSubstrings();
-    test_caseConversion();
-    test_fixLineTermination();
+int main() {
 
-    size_t nfailures = 0;
+  test_isLineTerminated();
+  test_prefixLines();
+  test_makeOneLine();
+  test_escapes();
+  test_listToString();
+  test_stringToList();
+  test_numberToString();
+  test_numberToHexString();
+  test_tokenize();
+  test_hexadecimalToInt();
+  test_removeRedundantSubstrings();
+  test_caseConversion();
+  test_fixLineTermination();
 
-    nfailures += stringTest("foo.h") ? 0 : 1;
-    nfailures += stringTest("/foo.h") ? 0 : 1;
-    nfailures += stringTest("//foo.h") ? 0 : 1;
-    nfailures += stringTest("///foo.h") ? 0 : 1;
-    nfailures += stringTest("////foo.h") ? 0 : 1;
-    nfailures += stringTest("./foo.h") ? 0 : 1;
-    nfailures += stringTest("../foo.h") ? 0 : 1;
-    nfailures += stringTest("//foo.h") ? 0 : 1;
-    nfailures += stringTest("path/foo.h") ? 0 : 1;
-    nfailures += stringTest("/path/foo.h") ? 0 : 1;
-    nfailures += stringTest("/pathA/pathB/foo.h") ? 0 : 1;
-    nfailures += stringTest("foo") ? 0 : 1;
-    nfailures += stringTest("/path/foo") ? 0 : 1;
+  size_t nfailures = 0;
 
-    return 0==nfailures ? 0 : 1;
+  nfailures += stringTest("foo.h") ? 0 : 1;
+  nfailures += stringTest("/foo.h") ? 0 : 1;
+  nfailures += stringTest("//foo.h") ? 0 : 1;
+  nfailures += stringTest("///foo.h") ? 0 : 1;
+  nfailures += stringTest("////foo.h") ? 0 : 1;
+  nfailures += stringTest("./foo.h") ? 0 : 1;
+  nfailures += stringTest("../foo.h") ? 0 : 1;
+  nfailures += stringTest("//foo.h") ? 0 : 1;
+  nfailures += stringTest("path/foo.h") ? 0 : 1;
+  nfailures += stringTest("/path/foo.h") ? 0 : 1;
+  nfailures += stringTest("/pathA/pathB/foo.h") ? 0 : 1;
+  nfailures += stringTest("foo") ? 0 : 1;
+  nfailures += stringTest("/path/foo") ? 0 : 1;
+
+  return 0 == nfailures ? 0 : 1;
 }

@@ -1,22 +1,34 @@
 // tps : Switching from rose.h to sage3 changed size from 19,6 MB to 9,3MB
 #include "sage3basic.h"
 
+#include "AstInterface.h"
+
+#include "DefUseChain.h"
+
 #include "DependenceGraph.h"
-#include <AstInterface.h>
-#include <DefUseChain.h>
-#include <DirectedGraph.h>
-#include <ReachingDefinition.h>
-#include <StmtInfoCollect.h>
+
+#include "DirectedGraph.h"
+
+#include "ReachingDefinition.h"
+
+#include "StmtInfoCollect.h"
 
 #include "ControlFlowGraph.h"
+
 #include "CreateSlice.h"
+
 #include "DominatorTree.h"
+
 #include "SlicingInfo.h"
 
 #include "DFAnalysis.h"
+
 #include "DefUseExtension.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <set>
 
 #define DEBUG 1

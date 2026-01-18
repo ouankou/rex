@@ -1,10 +1,12 @@
 #include <stdio.h>
+
 #include <stdlib.h>
 
-#include <LoopTreeShadow.h>
-#include <const.h>
+#include "LoopTreeShadow.h"
 
-#include <CompSlice.h>
+#include "const.h"
+
+#include "CompSlice.h"
 
 class CompSliceLoop : public LoopTreeShadowNode, public LoopTreeObserver {
   bool reversible;

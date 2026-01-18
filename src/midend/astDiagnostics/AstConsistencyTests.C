@@ -5,9 +5,9 @@
 #include "sage3basic.h"
 
 #include "rose_config.h"
-
 // tps : needed to define this here as it is defined in rose.h
 #include "AstDiagnostics.h"
+
 #include "markCompilerGenerated.h"
 
 #ifndef ASTTESTS_C
@@ -18,10 +18,13 @@
 // DQ (3/6/2003): added from AstProcessing.h to avoid referencing
 // the traversal classes in AstFixes.h before they are defined.
 // #include "sage3.h"
+
 #include "roseInternal.h"
 
 #include "AstConsistencyTests.h"
+
 #include "AstNodePtrs.h"
+
 #include "AstTraversal.h"
 
 // This controls output for debugging
@@ -31,7 +34,6 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
-
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 using namespace Rose;
@@ -5593,11 +5595,11 @@ void TestForParentsMatchingASTStructure::show_details_and_maybe_fail(
 
   for (size_t i = 0; i < stack.size(); ++i) {
     if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL) {
-      output << prefix << "    #" << std::setw(4) << std::left << i << " "
-             << stack[i]->class_name() /* stringifyVariantT(stack[i]->variantT(),
-                                          "V_") */
-             << " " << stack[i] << "; parent=" << stack[i]->get_parent()
-             << "\n";
+      output
+          << prefix << "    #" << std::setw(4) << std::left << i << " "
+          << stack[i]->class_name() /* stringifyVariantT(stack[i]->variantT(),
+                                       "V_") */
+          << " " << stack[i] << "; parent=" << stack[i]->get_parent() << "\n";
 
       // DQ (9/21/2013): Avoid redundant output of debug info.
       // printf ("   stack[i]->get_parent() = %p \n",stack[i]->get_parent());

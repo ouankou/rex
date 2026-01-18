@@ -1,4 +1,5 @@
 // #include <rose.h>
+
 #include "mlog.h"
 
 #include "IncludeDirective.h"
@@ -20,7 +21,7 @@ IncludeDirective::IncludeDirective(const string &directiveText) {
     } else // include macro
     {
       // Syntax of the accepted macros: MACRO()
-      startPos = directiveText.find("#include") + 9;
+      startPos = directiveText.find("#include ") + 9;
       while ((startPos < directiveText.size()) &&
              (directiveText[startPos] == ' '))
         startPos++;

@@ -1,8 +1,10 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #include "VirtualCFGIterator.h"
+
 #include "variables.h"
+
 #include "virtualCFG.h"
 
 #include <list>

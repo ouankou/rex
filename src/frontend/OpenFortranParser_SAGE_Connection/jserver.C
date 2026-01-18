@@ -6,14 +6,21 @@
 #include "sage3basic.h"
 
 #include <dlfcn.h>
+
 #include <filesystem>
+
 #include <stdio.h>
+
 #include <stdlib.h>
+
 #include <string.h>
+
 #include <string>
+
 #include <vector>
 
 #include "cmdline.h"
+
 #include "commandline_processing.h"
 
 #include "jserver.h"
@@ -23,7 +30,6 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 using namespace std;
 
 namespace Rose {

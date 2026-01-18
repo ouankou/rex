@@ -5,7 +5,9 @@
 #define ASTDOTGENERATION_H
 
 #include "DOTGeneration.h"
+
 #include "roseInternal.h"
+
 #include <set>
 // #include "sage3.h"
 

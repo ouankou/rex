@@ -1,9 +1,12 @@
 #ifndef CFGIMPL_H
 #define CFGIMPL_H
 
-#include <CFG.h>
-#include <VirtualGraphCreate.h>
+#include "CFG.h"
+
+#include "VirtualGraphCreate.h"
+
 #include <list>
+
 #include <sstream>
 
 template <class Node, class Edge>

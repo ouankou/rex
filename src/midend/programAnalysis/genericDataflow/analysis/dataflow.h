@@ -1,19 +1,27 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef DATAFLOW_H
 #define DATAFLOW_H
 
 #include "analysis.h"
+
 #include "analysisCommon.h"
+
 #include "functionState.h"
+
 #include "lattice.h"
+
 #include "nodeState.h"
 
 #include <map>
+
 #include <memory>
+
 #include <set>
+
 #include <string>
+
 #include <vector>
 
 // !!! NOTE: THE CURRENT INTER-/INTRA-PROCEDURAL ANALYSIS API EFFECTIVELY
@@ -217,9 +225,8 @@ public:
                         *dfAnalysis /*, std::vector<Lattice*> &initState*/) {
     this->dfAnalysis = dfAnalysis;
     this->filter =
-        dfAnalysis
-            ->filter; // Must transfer the custom CFG filter, this is tricky!!
-                      // this->initState = initState;
+        dfAnalysis->filter; // Must transfer the custom CFG filter, this is
+                            // tricky!! this->initState = initState;
   }
 
   void visit(const Function &func, const DataflowNode &n, NodeState &state);

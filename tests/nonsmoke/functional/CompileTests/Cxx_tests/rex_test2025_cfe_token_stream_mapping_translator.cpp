@@ -1,13 +1,21 @@
 #include "nodeQuery.h"
+
 #include "sage3basic.h"
+
 #include "sageInterface.h"
+
 #include "tokenStreamMapping.h"
+
 #include "utility_functions.h"
 
 #include <algorithm>
+
 #include <map>
+
 #include <set>
+
 #include <string>
+
 #include <vector>
 
 namespace {
@@ -66,8 +74,7 @@ bool isFromFile(SgLocatedNode *node, const SgSourceFile *file) {
   if (info == NULL) {
     return false;
   }
-  return baseName(info->get_filenameString()) ==
-         baseName(file->getFileName());
+  return baseName(info->get_filenameString()) == baseName(file->getFileName());
 }
 
 TokenStreamSequenceToNodeMapping *requireMapping(
@@ -94,15 +101,16 @@ void checkMappingBounds(const TokenStreamSequenceToNodeMapping *mapping,
                         int tokenLimit) {
   ROSE_ASSERT(mapping != NULL);
   ROSE_ASSERT(mapping->token_subsequence_start >= 0);
-  ROSE_ASSERT(mapping->token_subsequence_end >= mapping->token_subsequence_start);
+  ROSE_ASSERT(mapping->token_subsequence_end >=
+              mapping->token_subsequence_start);
   ROSE_ASSERT(mapping->token_subsequence_end < tokenLimit);
 
   checkOptionalRange(mapping->leading_whitespace_start,
                      mapping->leading_whitespace_end, tokenLimit);
   checkOptionalRange(mapping->trailing_whitespace_start,
                      mapping->trailing_whitespace_end, tokenLimit);
-  checkOptionalRange(mapping->else_whitespace_start, mapping->else_whitespace_end,
-                     tokenLimit);
+  checkOptionalRange(mapping->else_whitespace_start,
+                     mapping->else_whitespace_end, tokenLimit);
 
   if (mapping->leading_whitespace_start >= 0 &&
       mapping->leading_whitespace_end >= 0) {
@@ -196,8 +204,7 @@ void checkSharedIntervals(SgSourceFile *file) {
 
   ROSE_ASSERT(groups.size() == 2);
   for (std::map<TokenStreamSequenceToNodeMapping *,
-                std::vector<std::string>>::const_iterator it =
-           groups.begin();
+                std::vector<std::string>>::const_iterator it = groups.begin();
        it != groups.end(); ++it) {
     TokenStreamSequenceToNodeMapping *mapping = it->first;
     ROSE_ASSERT(mapping != NULL);
@@ -226,7 +233,8 @@ void checkElseWhitespace(SgSourceFile *file) {
     SgStatement *trueBody = stmt->get_true_body();
     ROSE_ASSERT(trueBody != NULL);
 
-    TokenStreamSequenceToNodeMapping *ifMapping = requireMapping(stmt, tokenMap);
+    TokenStreamSequenceToNodeMapping *ifMapping =
+        requireMapping(stmt, tokenMap);
     TokenStreamSequenceToNodeMapping *trueMapping =
         requireMapping(trueBody, tokenMap);
     TokenStreamSequenceToNodeMapping *falseMapping =
@@ -262,12 +270,14 @@ void checkMacroIncludes(SgProject *project, SgSourceFile *file) {
 
   SgSourceFile *headerFile = findSourceFile(project, kHeaderFile);
   if (headerFile == NULL) {
-    for (std::map<SgSourceFile *, std::map<SgNode *,
-                                          TokenStreamSequenceToNodeMapping *> *>::const_iterator
-             it = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
+    for (std::map<SgSourceFile *,
+                  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+                      *>::const_iterator it =
+             Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
          it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end(); ++it) {
       SgSourceFile *candidate = it->first;
-      if (candidate != NULL && baseName(candidate->getFileName()) == kHeaderFile) {
+      if (candidate != NULL &&
+          baseName(candidate->getFileName()) == kHeaderFile) {
         headerFile = candidate;
         break;
       }
@@ -276,12 +286,13 @@ void checkMacroIncludes(SgProject *project, SgSourceFile *file) {
 
   ROSE_ASSERT(headerFile != NULL);
 
+  std::map<SgSourceFile *, std::map<SgNode *, TokenStreamSequenceToNodeMapping
+                                                  *> *>::const_iterator mainIt =
+      Rose::tokenSubsequenceMapOfMapsBySourceFile.find(file);
   std::map<SgSourceFile *,
-           std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>::const_iterator
-      mainIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(file);
-  std::map<SgSourceFile *,
-           std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>::const_iterator
-      headerIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(headerFile);
+           std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+               *>::const_iterator headerIt =
+      Rose::tokenSubsequenceMapOfMapsBySourceFile.find(headerFile);
 
   ROSE_ASSERT(mainIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end());
   ROSE_ASSERT(headerIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end());
@@ -377,7 +388,8 @@ void checkPreprocOrdering(SgSourceFile *file) {
     }
   };
 
-  std::vector<SgNode *> statements = NodeQuery::querySubTree(file, V_SgStatement);
+  std::vector<SgNode *> statements =
+      NodeQuery::querySubTree(file, V_SgStatement);
   for (size_t i = 0; i < statements.size(); ++i) {
     SgStatement *stmt = isSgStatement(statements[i]);
     if (stmt == NULL || !isFromFile(stmt, file)) {
@@ -392,7 +404,8 @@ void checkPreprocOrdering(SgSourceFile *file) {
   }
 
   ROSE_ASSERT(sawAttachments);
-  ROSE_ASSERT(seen.count(PreprocessingInfo::CpreprocessorIncludeDeclaration) > 0);
+  ROSE_ASSERT(seen.count(PreprocessingInfo::CpreprocessorIncludeDeclaration) >
+              0);
   ROSE_ASSERT(seen.count(PreprocessingInfo::CpreprocessorIfDeclaration) > 0);
   ROSE_ASSERT(seen.count(PreprocessingInfo::CpreprocessorElifDeclaration) > 0);
   ROSE_ASSERT(seen.count(PreprocessingInfo::CpreprocessorEndifDeclaration) > 0);

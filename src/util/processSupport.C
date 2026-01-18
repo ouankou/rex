@@ -2,19 +2,23 @@
 // DQ (9/28/2017): Removed this to avoid dependence on ROSETTA generated code.
 // DQ (9/8/2017): Added header file suppport to allow for SgProject to be
 // referenced for debugging.
-#include "rosePublicConfig.h"
-// #include "rose_config.h"
+#include "rosePublicConfig.h" // #include "rose_config.h"
 // #include "sage3basic.h"
 
 #include "processSupport.h"
 
 #include <cassert>
+
 #include <sys/stat.h>
+
 #include <sys/wait.h>
+
 #include <unistd.h>
 
 #include "rosedll.h"
+
 #include <cstdlib>
+
 #include <cstring>
 
 using namespace std;

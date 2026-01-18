@@ -3,6 +3,7 @@
 #define COPY_UNPARSER_H
 
 #include <list>
+
 #include <string>
 
 class CopyUnit {

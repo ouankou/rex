@@ -14,7 +14,16 @@
    be better in the future to create a second AST containing just the nodes of
    the slice. */
 // #include "rose.h"
+
+#include "AstProcessing.h"
+
+#include "rosedll.h"
+
+#include <list>
+
 #include <set>
+
+#include <stack>
 
 class BooleanSafeKeeper {
 public:

@@ -103,7 +103,7 @@ File: udunits2lib.info,  Node: Synopsis,  Next: Why,  Prev: Top,  Up: Top
 **********
 
 Coding:
-     #include <udunits2.h>
+     #include "udunits2.h"
 
           ut_system*                 ut_read_xml(const char* PATH);
           ut_system*                 ut_new_system(void);
@@ -589,7 +589,7 @@ File: udunits2lib.info,  Node: Value Conversion,  Next: Parsing,  Prev: Unit-Sys
 You can convert numeric values in one unit to equivalent values in
 another, compatible unit by means of a converter.  For example
 
-     #include <udunits2.h>
+     #include "udunits2.h"
      ...
          ut_unit*      from = ...;
          ut_unit*      to = ...;
@@ -682,7 +682,9 @@ Here's an example of parsing a string representation of a unit into its
 binary representation:
 
      #include <stdlib.h>
-     #include <udunits2.h>
+
+
+     #include "udunits2.h"
      ...
          ut_system*   unitSystem = *note ut_read_xml(NULL): ut_read_xml().;
          const char* string = "kg.m2/s3";

@@ -1,6 +1,8 @@
 #include "libxomp.h"
+
+#include "ROSE_ABORT.h"
+
 #include "rose_config.h"
-#include <ROSE_ABORT.h>
 
 #ifdef USE_ROSE_GOMP_OPENMP_LIBRARY
 
@@ -19,13 +21,15 @@ extern int omp_get_thread_num(void);
 extern int omp_get_num_threads(void);
 
 #include <assert.h>
+
 #include <stdarg.h>
+
 #include <stdio.h>  // for getenv(), file
 #include <stdlib.h> // for getenv(), malloc(), etc
 #include <string.h> // for memcpy()
-
 /* Timing support, Liao 2/15/2013 */
 #include <sys/time.h>
+
 #include <time.h> /*current time*/
 
 int env_region_instr_val = 0;
@@ -1196,7 +1200,7 @@ bool XOMP_loop_ordered_runtime_start(long start, long end, long incr,
 }
 
 //---------------------------- loop
-//next------------------------------------------
+// next------------------------------------------
 //----- static--
 bool xomp_loop_static_next(int *l, int *u);
 #pragma weak xomp_loop_static_next_ = xomp_loop_static_next
@@ -1317,7 +1321,7 @@ bool XOMP_loop_runtime_next(long *l, long *u) {
 }
 
 //---------------------------- loop ordered
-//next------------------------------------------
+// next------------------------------------------
 //----- ordered_static--
 bool xomp_loop_ordered_static_next(int *l, int *u);
 #pragma weak xomp_loop_ordered_static_next_ = xomp_loop_ordered_static_next

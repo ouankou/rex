@@ -1,6 +1,7 @@
 #ifndef CFG_TO_DOT_H
 #define CFG_TO_DOT_H
 #include "rosedll.h"
+
 #include <string>
 
 namespace VirtualCFG {

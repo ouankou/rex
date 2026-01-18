@@ -34,9 +34,9 @@ class SgOmpTaskwaitStatement;
 class SgNamespaceDefinitionStatement;
 class SgAsmOp;
 
-#include "Cxx_Grammar.h"
-
 #include "unparseLanguageIndependentConstructs.h"
+
+#include "Cxx_Grammar.h"
 
 // using namespace std;
 class Unparser;

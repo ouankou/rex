@@ -8,31 +8,42 @@
 
 #include "config.h"
 
-#include <sys/wait.h>
-#include <sys/resource.h>
-#include <stdio.h>
-#include <signal.h>
-#include <getopt.h>
-#include <inttypes.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdnoreturn.h>
-#include <string.h>
-#include <limits.h>
-#include <unistd.h>
-#include "progname.h"
+
+#include <getopt.h>
+
+#include <inttypes.h>
+
 #include "error.h"
+
+#include <progname.h>
+
+#include <signal.h>
+
+#include <stdbool.h>
+
+#include <stdio.h>
+
+#include <stdlib.h>
+
+#include <stdnoreturn.h>
+
+#include <limits.h>
+
+#include <string.h>
+
+#include <sys/resource.h>
+
+#include <sys/wait.h>
+
+#include <unistd.h>
 #define Version VERSION
-#include "version-etc.h"
+#include <resuse.h>
 
-#include "resuse.h"
-#include "rusage-kb.h"
+#include <rusage-kb.h>
 #endif
-
-
+#include <version-etc.h>
 
 /* For now, no gettext support */
 #define _(x) (x)
 int y;
-

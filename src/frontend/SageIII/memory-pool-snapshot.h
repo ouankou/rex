@@ -2,6 +2,7 @@
 #define __ROSE_MEMPOOL_SNAPSHOT_H__
 
 #include <ostream>
+
 #include <string>
 
 namespace Rose {

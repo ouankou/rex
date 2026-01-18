@@ -1,6 +1,9 @@
-#include <VectorCommandOptions.h>
+#include "VectorCommandOptions.h"
+
+#include "general.h"
+
 #include <algorithm>
-#include <general.h>
+
 #include <iostream>
 
 using namespace std;

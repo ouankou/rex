@@ -1,9 +1,13 @@
 #ifndef VECTOR_COMMAND_OPTIONS_H
 #define VECTOR_COMMAND_OPTIONS_H
 #include <cassert>
+
 #include <iostream>
+
 #include <stdlib.h>
+
 #include <string>
+
 #include <vector>
 
 #include "rosedll.h"

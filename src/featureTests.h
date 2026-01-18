@@ -20,7 +20,7 @@
 // to be as small and fast as possible because its purpose is to be able to
 // quickly compile (by skipping over) source code that's not necessary in a
 // particular ROSE configuration.
-#include <rosePublicConfig.h>
+#include "rosePublicConfig.h"
 
 #if defined(_MSC_VER)
 // Microsoft Visual C++ Compiler erroneously advertises that it's a C++98

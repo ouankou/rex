@@ -1,20 +1,28 @@
-#include <FileUtility.h>
+#include "FileUtility.h"
 
 // Other ROSE includes
-#include <FileUtility.h>
-#include <Rose/StringUtility.h>
+#include "FileUtility.h"
+
+#include "Rose/StringUtility.h"
+
+#include "IntegerOps.h"
 
 #include "mlog.h"
-#include <IntegerOps.h>
-#include <rose_config.h>
+
+#include "rose_config.h"
 
 // Other includes
 #include <cstring>
+
 #include <errno.h> // DQ (9/29/2006): This is required for 64-bit g++ 3.4.4 compiler.
 #include <fstream>
+
 #include <inttypes.h>
+
 #include <iostream>
-#include <rose_config.h>
+
+#include "rose_config.h"
+
 #include <sstream>
 
 #include <dirent.h> /* readdir(), etc.                    */

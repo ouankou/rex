@@ -23,20 +23,34 @@
  */
 #include "sage3basic.h"
 
-#include "assert.h"
-#include "commandline_processing.h"
 #include "fortran_error_handler.h"
+
 #include "jserver.h"
+
 #include "ofp.h"
-#include "rose_config.h"
-#include "rose_paths.h"
+
+#include "commandline_processing.h"
+
+#include <assert.h>
+
 #include <filesystem>
+
+#include "rose_paths.h"
+
+#include "rose_config.h"
+
 #include <set>
+
 #include <sstream>
+
 #include <stdio.h>
+
 #include <stdlib.h>
+
 #include <string.h>
+
 #include <string>
+
 #include <vector>
 
 /* This is defined if ROSE is configured to use the JVM-based Open Fortran

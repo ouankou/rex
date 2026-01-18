@@ -5,8 +5,11 @@
 #define AST_WARNINGS_H
 
 #include "AstNodePtrs.h"
+
 #include "AstProcessing.h"
+
 #include <iomanip>
+
 #include <string>
 
 /*! \brief This is a mechanism for reporting warnings about the AST, subtrees,

@@ -1,9 +1,15 @@
-#include <Escape.h>
-#include <Replace.h>
-#include <StringToNumber.h>
+#include "Escape.h"
+
+#include "Replace.h"
+
+#include "StringToNumber.h"
+
 #include <cassert>
+
 #include <cstring>
+
 #include <iomanip>
+
 #include <sstream>
 
 namespace Rose {

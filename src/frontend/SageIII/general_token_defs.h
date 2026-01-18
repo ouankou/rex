@@ -3,6 +3,7 @@
 #define ROSE_LEX_TOKEN_DEFINITIONS 1
 
 #include <list>
+
 #include <string>
 
 class PreprocessingInfo;

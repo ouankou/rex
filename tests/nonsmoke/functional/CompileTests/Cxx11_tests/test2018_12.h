@@ -3,9 +3,8 @@
 
 #include <vector>
 
-class Class1
-   {
-     public:
-       // virtual std::vector<unsigned> method1() const = 0;
-          std::vector<unsigned> method1() const;
-   };
+class Class1 {
+public:
+  // virtual std::vector<unsigned> method1() const = 0;
+  std::vector<unsigned> method1() const;
+};

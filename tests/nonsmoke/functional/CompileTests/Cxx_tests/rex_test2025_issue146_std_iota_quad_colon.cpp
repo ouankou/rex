@@ -1,4 +1,5 @@
 #include <array>
+
 #include <numeric>
 
 int main() {

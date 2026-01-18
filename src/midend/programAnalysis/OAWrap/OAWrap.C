@@ -8,16 +8,17 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 #ifndef CXX_IS_ROSE_CODE_GENERATION
-#include <OAWrap.h>
+#include "OAWrap.h"
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
 namespace OpenAnalysis {
-#include <OpenAnalysis/CFG/CFG.C>
-#include <OpenAnalysis/Utils/BaseGraph.C>
-#include <OpenAnalysis/Utils/DGraph.C>
+#include "OpenAnalysis/CFG/CFG.C"
+
+#include "OpenAnalysis/Utils/BaseGraph.C"
+
+#include "OpenAnalysis/Utils/DGraph.C"
 }; // namespace OpenAnalysis
 #endif

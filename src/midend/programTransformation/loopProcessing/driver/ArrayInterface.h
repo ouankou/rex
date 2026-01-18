@@ -1,11 +1,15 @@
 #ifndef ARRAY_INTERFACE_H
 #define ARRAY_INTERFACE_H
 
-#include <ArrayAnnot.h>
-#include <AstInterface.h>
-#include <LoopTransformInterface.h>
-#include <StmtInfoCollect.h>
-#include <ValuePropagate.h>
+#include "ArrayAnnot.h"
+
+#include "AstInterface.h"
+
+#include "LoopTransformInterface.h"
+
+#include "StmtInfoCollect.h"
+
+#include "ValuePropagate.h"
 
 class SgFunctionDefinition;
 class ArrayInterface : public AstObserver,

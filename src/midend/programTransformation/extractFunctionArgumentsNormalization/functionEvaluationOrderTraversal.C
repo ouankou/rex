@@ -1,5 +1,6 @@
+#include "functionEvaluationOrderTraversal.h"
+
 #include "sage3basic.h" // every librose .C file must start with this
-#include <functionEvaluationOrderTraversal.h>
 
 bool IsStatusSafe(int status) {
   if (status == FunctionCallInheritedAttribute::IN_SAFE_PLACE)
