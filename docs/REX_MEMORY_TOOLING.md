@@ -110,7 +110,8 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 ### AST nodes (Sage/ROSE IR)
 - AST nodes are owned by the AST and its memory pools; do not `delete` them directly.
 - When replacing a subtree, use `SageInterface::replaceExpression` or `SageInterface::replaceStatement`.
-  The original node becomes detached, and you must delete it to avoid leaks.
+  The original node becomes detached. For `replaceStatement`, you must delete the old node to avoid leaks.
+  For `replaceExpression`, the old node is deleted by default; pass `keepOldExp=true` to take ownership and manage its deletion manually.
   To delete a detached subtree, use `SageInterface::deleteAST` (or its wrapper `SageInterface::deepDelete`).
   Note that this only deletes the AST nodes; you must handle any dangling symbols or types that result.
   Avoid raw `set_*` on child pointers unless you also delete the old subtree.
